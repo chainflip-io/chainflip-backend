@@ -140,5 +140,47 @@ mod benchmarks {
 		);
 	}
 
+	#[benchmark]
+	fn purge_balances(n: Linear<1, 100>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		let account_ids = (1u32..=n as u32)
+			.map(|_| {
+				let account_id = T::AccountRoleRegistry::whitelisted_caller_with_role(
+					AccountRole::LiquidityProvider,
+				)
+				.unwrap();
+
+				assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+					RawOrigin::Signed(account_id.clone()).into(),
+					EncodedAddress::Eth(Default::default()),
+				));
+
+				account_id
+			})
+			.collect::<Vec<_>>();
+
+		let accounts_to_purge = account_ids
+			.into_iter()
+			.enumerate()
+			.map(|(i, account_id)| {
+				let asset = match i % 3 {
+					0 => Asset::Eth,
+					1 => Asset::Flip,
+					_ => Asset::Usdc,
+				};
+				T::BalanceApi::credit_account(&account_id, asset, 1_000_000_000);
+				(account_id, asset, 500_000_000)
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::purge_balances(origin, accounts_to_purge));
+		}
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

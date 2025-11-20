@@ -30,8 +30,9 @@ use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
 
 use frame_support::{
+	fail,
 	pallet_prelude::*,
-	sp_runtime::{DispatchResult, FixedU128, Perbill},
+	sp_runtime::{traits::Zero, DispatchResult, FixedU128, Perbill},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -62,6 +63,8 @@ pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 24 * 3600 / SECONDS_PER_BLOCK; 
 pub const ALPHA_HALF_LIFE_1_DAY: Perbill = Perbill::from_parts(500_000_000);
 pub const ALPHA_HALF_LIFE_7_DAYS: Perbill = Perbill::from_parts(94_276_335);
 pub const ALPHA_HALF_LIFE_30_DAYS: Perbill = Perbill::from_parts(22_840_031);
+
+pub const MAX_NUM_ACOUNTS_TO_PURGE: u32 = 100;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -294,6 +297,20 @@ pub mod pallet {
 			to: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+		},
+		AssetBalancePurged {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			egress_id: EgressId,
+			destination_address: EncodedAddress,
+			fee: AssetAmount,
+		},
+		AssetBalancePurgeFailed {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			error: DispatchError,
 		},
 	}
 
@@ -531,6 +548,34 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Purges LP asset balances to their refund addresss via egress
+		/// Requires Governance
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::schedule_swap())]
+		//#[pallet::weight(T::WeightInfo::purge_balances(accounts.len() as u32))]
+		pub fn purge_balances(
+			origin: OriginFor<T>,
+			accounts: BoundedVec<
+				(T::AccountId, Asset, AssetAmount),
+				ConstU32<MAX_NUM_ACOUNTS_TO_PURGE>,
+			>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for (account_id, asset, amount) in accounts {
+				if let Err(error) = Self::purge_account_balance(account_id.clone(), asset, amount) {
+					Self::deposit_event(Event::<T>::AssetBalancePurgeFailed {
+						account_id,
+						asset,
+						amount,
+						error,
+					});
+				}
+			}
+
+			Ok(())
+		}
 	}
 }
 
@@ -649,6 +694,47 @@ impl<T: Config> Pallet<T> {
 
 		execution_weight
 	}
+
+	fn purge_account_balance(
+		account_id: T::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		ensure!(
+			T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::LiquidityProvider,),
+			Error::<T>::DestinationAccountNotLiquidityProvider
+		);
+
+		let Some(refund_address) =
+			LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset))
+		else {
+			fail!(Error::<T>::NoLiquidityRefundAddressRegistered);
+		};
+		ensure!(
+			refund_address.chain() == ForeignChain::from(asset),
+			Error::<T>::InvalidEgressAddress
+		);
+		let destination_address = T::AddressConverter::to_encoded_address(refund_address.clone());
+
+		// Sweep earned fees and Debit the asset from the account.
+		T::PoolApi::sweep(&account_id)?;
+		T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
+
+		let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+			T::EgressHandler::schedule_egress(asset, amount, refund_address, None)
+				.map_err(Into::into)?;
+
+		Self::deposit_event(Event::<T>::AssetBalancePurged {
+			account_id,
+			asset,
+			amount: egress_amount,
+			egress_id,
+			destination_address,
+			fee: fee_withheld,
+		});
+
+		Ok(())
+	}
 }
 
 impl<T: Config> LpRegistration for Pallet<T> {
@@ -677,10 +763,12 @@ impl<T: Config> LpStatsApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
 	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_amount: AssetAmount) {
-		LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
-			let delta_stats = maybe_stats.get_or_insert_default();
+		if usd_amount != AssetAmount::zero() {
+			LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
+				let delta_stats = maybe_stats.get_or_insert_default();
 
-			delta_stats.on_limit_order(FixedU128::from_inner(usd_amount));
-		});
+				delta_stats.on_limit_order(FixedU128::from_inner(usd_amount));
+			});
+		}
 	}
 }

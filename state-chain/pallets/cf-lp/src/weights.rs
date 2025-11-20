@@ -20,21 +20,21 @@
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 42.0.0
 //! DATE: 2025-11-28, STEPS: `20`, REPEAT: `10`, LOW RANGE: `[]`, HIGH RANGE: `[]`
 //! WORST CASE MAP SIZE: `1000000`
-//! HOSTNAME: `chainflip-benchmark-runner`, CPU: `Intel(R) Xeon(R) Platinum 8275CL CPU @ 3.00GHz`
+//! HOSTNAME: `Nadjibs-MacBook-Pro.local`, CPU: `<UNKNOWN>`
 //! EXECUTION: , WASM-EXECUTION: Compiled, CHAIN: Some("dev-3"), DB CACHE: 1024
 
 // Executed Command:
-// ./chainflip-node
+// ./target/release/chainflip-node
 // benchmark
 // pallet
-// --pallet
-// pallet_cf_lp
 // --extrinsic
 // *
+// --pallet
+// pallet_cf_lp
 // --output
 // state-chain/pallets/cf-lp/src/weights.rs
 // --steps=20
-// --repeat=10
+// --repeat=20
 // --template=state-chain/chainflip-weight-template.hbs
 // --chain=dev-3
 
@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn deregister_lp_account() -> Weight;
 	fn register_liquidity_refund_address() -> Weight;
 	fn schedule_swap() -> Weight;
+	fn purge_balances(n: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_lp using the Substrate node and recommended hardware.
@@ -205,6 +206,54 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(13_u64))
 			.saturating_add(T::DbWeight::get().writes(5_u64))
 	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:3 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:3 w:3)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
+	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:3 w:0)
+	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::NetworkFee` (r:1 w:0)
+	/// Proof: `Swapping::NetworkFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
+	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::NetworkFeeForAsset` (r:3 w:0)
+	/// Proof: `Swapping::NetworkFeeForAsset` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::ScheduledSwaps` (r:1 w:1)
+	/// Proof: `Swapping::ScheduledSwaps` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequests` (r:0 w:66)
+	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 100]`.
+	fn purge_balances(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1739`
+		//  Estimated: `10154 + n * (15 ±0)`
+		// Minimum execution time: 24_000_000 picoseconds.
+		Weight::from_parts(24_000_000, 10154)
+			// Standard Error: 106_986
+			.saturating_add(Weight::from_parts(23_793_841, 0).saturating_mul(n.into()))
+			.saturating_add(T::DbWeight::get().reads(21_u64))
+			.saturating_add(T::DbWeight::get().writes(8_u64))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 15).saturating_mul(n.into()))
+	}
 }
 
 // For backwards compatibility and tests
@@ -354,5 +403,53 @@ impl WeightInfo for () {
 		Weight::from_parts(69_824_000, 7780)
 			.saturating_add(ParityDbWeight::get().reads(13_u64))
 			.saturating_add(ParityDbWeight::get().writes(5_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityProvider::LiquidityRefundAddress` (r:1 w:0)
+	/// Proof: `LiquidityProvider::LiquidityRefundAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `LiquidityPools::Pools` (r:3 w:0)
+	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:3 w:3)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressIdCounter` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::EgressIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumChainTracking::FeeMultiplier` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::FeeMultiplier` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
+	/// Storage: `EthereumChainTracking::CurrentChainState` (r:1 w:0)
+	/// Proof: `EthereumChainTracking::CurrentChainState` (`max_values`: Some(1), `max_size`: Some(40), added: 535, mode: `MaxEncodedLen`)
+	/// Storage: `AssetBalances::WithheldAssets` (r:1 w:1)
+	/// Proof: `AssetBalances::WithheldAssets` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::EgressDustLimit` (r:3 w:0)
+	/// Proof: `EthereumIngressEgress::EgressDustLimit` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (r:1 w:1)
+	/// Proof: `EthereumIngressEgress::ScheduledEgressFetchOrTransfer` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::NetworkFee` (r:1 w:0)
+	/// Proof: `Swapping::NetworkFee` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
+	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequestIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapRequestIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::NetworkFeeForAsset` (r:3 w:0)
+	/// Proof: `Swapping::NetworkFeeForAsset` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapIdCounter` (r:1 w:1)
+	/// Proof: `Swapping::SwapIdCounter` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::ScheduledSwaps` (r:1 w:1)
+	/// Proof: `Swapping::ScheduledSwaps` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::SwapRequests` (r:0 w:66)
+	/// Proof: `Swapping::SwapRequests` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// The range of component `n` is `[1, 100]`.
+	fn purge_balances(n: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1739`
+		//  Estimated: `10154 + n * (15 ±0)`
+		// Minimum execution time: 24_000_000 picoseconds.
+		Weight::from_parts(24_000_000, 10154)
+			// Standard Error: 106_986
+			.saturating_add(Weight::from_parts(23_793_841, 0).saturating_mul(n.into()))
+			.saturating_add(ParityDbWeight::get().reads(21_u64))
+			.saturating_add(ParityDbWeight::get().writes(8_u64))
+			.saturating_add(ParityDbWeight::get().writes((1_u64).saturating_mul(n.into())))
+			.saturating_add(Weight::from_parts(0, 15).saturating_mul(n.into()))
 	}
 }

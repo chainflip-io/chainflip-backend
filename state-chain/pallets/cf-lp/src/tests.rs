@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, AggStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
+	mock::*, AggStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats, Pallet,
 	PalletSafeMode, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
 	STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
@@ -675,5 +675,64 @@ fn update_agg_stats_updates_correctly() {
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
+	});
+}
+
+#[test]
+fn test_purge_balances() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: AssetAmount = 1_000_000;
+
+		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, AMOUNT);
+		MockBalanceApi::credit_account(&LP_ACCOUNT_2, Asset::Btc, AMOUNT);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT_2),
+			EncodedAddress::Eth([0x02; 20])
+		));
+
+		// Purge balances
+		let accounts = vec![
+			(LP_ACCOUNT, Asset::Eth, AMOUNT),
+			(LP_ACCOUNT_2, Asset::Flip, AMOUNT),
+			(NON_LP_ACCOUNT, Asset::Usdc, AMOUNT),
+		]
+		.try_into()
+		.unwrap();
+		assert_ok!(Pallet::<Test>::purge_balances(RuntimeOrigin::root(), accounts));
+
+		assert_events_match!(Test,
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurged {
+			account_id: LP_ACCOUNT,
+			asset: Asset::Eth,
+			amount: AMOUNT,
+			..
+		}) => (),
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurged {
+			account_id: LP_ACCOUNT_2,
+			asset: Asset::Flip,
+			amount: AMOUNT,
+			..
+		}) => (),
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurgeFailed {
+			account_id: NON_LP_ACCOUNT,
+			asset: Asset::Usdc,
+			amount: AMOUNT,
+			..
+		}) => ()
+		);
+
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
+			.iter()
+			.all(|(_, amount)| *amount == 0));
+
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_2)
+			.iter()
+			.all(|(_, amount)| *amount == 0));
 	});
 }
