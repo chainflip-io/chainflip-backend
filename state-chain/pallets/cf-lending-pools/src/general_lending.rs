@@ -20,14 +20,6 @@ pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 
 pub use general_lending_pool::{LendingPool, WithdrawnAndRemainingAmounts};
 
-pub enum LoanRepaymentOutcome {
-	// In case of full repayment, we may have some excess amount left
-	// over which the caller of `repay_loan` will need to allocate somewhere
-	// (likely return to the borrower).
-	FullyRepaid { excess_amount: AssetAmount },
-	PartiallyRepaid,
-}
-
 /// Helps to link swap id in liquidation status to loan id
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LiquidationSwap {
@@ -384,19 +376,16 @@ impl<T: Config> LoanAccount<T> {
 			{
 				let excess_amount = match self.get_loan_and_check_asset(loan_id, to_asset) {
 					Some(loan) => {
-						match loan.repay_via_liquidation(
+						let excess_amount = loan.repay_via_liquidation(
 							swap_progress.accumulated_output_amount,
 							is_voluntary,
-						) {
-							LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
-								fully_repaid_loans.push(loan_id);
-								excess_amount
-							},
-							LoanRepaymentOutcome::PartiallyRepaid => {
-								// On partial repayment the full amount has been consumed.
-								0
-							},
+						);
+
+						if loan.owed_principal == 0 {
+							fully_repaid_loans.push(loan_id);
 						}
+
+						excess_amount
 					},
 					None => swap_progress.accumulated_output_amount,
 				};
@@ -928,12 +917,12 @@ impl<T: Config> GeneralLoan<T> {
 	}
 
 	/// Repays the loan after collecting any pending interest and deducting liquidation fee
-	/// from the provided amount.
+	/// from the provided amount. Returns any excess/unused funds.
 	fn repay_via_liquidation(
 		&mut self,
 		provided_amount: AssetAmount,
 		is_voluntary: bool,
-	) -> LoanRepaymentOutcome {
+	) -> AssetAmount {
 		let config = LendingConfig::<T>::get();
 
 		self.collect_pending_interest();
@@ -972,43 +961,24 @@ impl<T: Config> GeneralLoan<T> {
 	/// the account or received during liquidation). Returns any unused amount. The caller is
 	/// responsible for making sure that all pending interest has already been collected (via
 	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
-	fn repay_principal(&mut self, provided_amount: AssetAmount) -> LoanRepaymentOutcome {
-		if provided_amount == 0 {
-			if self.owed_principal > 0 {
-				// The name is slightly misleading, but the main point is that
-				// we don't have any excess amount left (since 0 is provided).
-				return LoanRepaymentOutcome::PartiallyRepaid;
-			} else {
-				// This covers an edge case where another liquidation swap completed earlier (rather
-				// than being aborted) and fully repaid the loan.
-				return LoanRepaymentOutcome::FullyRepaid { excess_amount: 0 };
-			}
-		}
-
+	fn repay_principal(&mut self, provided_amount: AssetAmount) -> AssetAmount {
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
 		let repayment_amount = core::cmp::min(provided_amount, self.owed_principal);
 
-		Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
-			pool.receive_repayment(repayment_amount);
-		});
+		if repayment_amount > 0 {
+			Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+				pool.receive_repayment(repayment_amount);
+			});
 
-		self.owed_principal.saturating_reduce(repayment_amount);
+			self.owed_principal.saturating_reduce(repayment_amount);
 
-		Pallet::<T>::deposit_event(Event::LoanRepaid {
-			loan_id: self.id,
-			amount: repayment_amount,
-		});
-
-		if self.owed_principal == 0 {
-			// NOTE: in some cases we may want to delay settling/removing the loan (e.g. there may
-			// be pending liquidation swaps to process), so we let the caller settle it instead
-			// of doing it here.
-			LoanRepaymentOutcome::FullyRepaid {
-				excess_amount: provided_amount.saturating_sub(repayment_amount),
-			}
-		} else {
-			LoanRepaymentOutcome::PartiallyRepaid
+			Pallet::<T>::deposit_event(Event::LoanRepaid {
+				loan_id: self.id,
+				amount: repayment_amount,
+			});
 		}
+
+		provided_amount.saturating_sub(repayment_amount)
 	}
 
 	fn charge_pending_interest_if_above_threshold(
@@ -1420,14 +1390,14 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
-			if let LoanRepaymentOutcome::FullyRepaid { excess_amount } =
-				loan.repay_principal(repayment_amount)
-			{
-				loan_account.settle_loan(loan_id, false /* not via liquidation */);
+			let excess_amount = loan.repay_principal(repayment_amount);
 
-				if excess_amount > 0 {
-					T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
-				}
+			if excess_amount > 0 {
+				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
+			}
+
+			if loan.owed_principal == 0 {
+				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 			} else {
 				ensure!(
 					price_cache.usd_value_of(loan.asset, loan.owed_principal)? >=
@@ -1647,20 +1617,10 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 					let excess_amount = match loan_account
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
 					{
-						Some(loan) => {
-							match loan.repay_via_liquidation(output_amount, is_voluntary) {
-								LoanRepaymentOutcome::FullyRepaid { excess_amount } => {
-									// NOTE: we don't need to worry about settling the loan just yet
-									// as there may be more liquidation swaps to process for the
-									// loan.
-									excess_amount
-								},
-								LoanRepaymentOutcome::PartiallyRepaid => {
-									// On partial repayment the full amount has been consumed.
-									0
-								},
-							}
-						},
+						// NOTE: this might fully repaid the loan, but we don't want to settle
+						// the loan just yet as there may be more liquidation swaps to process for
+						// the loan.
+						Some(loan) => loan.repay_via_liquidation(output_amount, is_voluntary),
 						None => {
 							// In rare cases it may be possible for the loan to no longer exist if
 							// e.g. the principal was fully covered by a prior liquidation swap.
