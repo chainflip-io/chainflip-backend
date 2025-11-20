@@ -316,7 +316,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn stats_last_updated_at)]
 	/// Last block number when stats were updated
-	pub(super) type StatsLastUpdatedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub type StatsLastUpdatedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Stores intermediate stats for liquidity providers per asset since last update
 	#[pallet::storage]
@@ -331,16 +331,15 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let mut weight_used: Weight = T::DbWeight::get().reads(2);
+			let mut weight_used: Weight = T::DbWeight::get().reads(1);
 
 			let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
 
 			if blocks_elapsed.saturated_into::<u64>() >= STATS_UPDATE_INTERVAL_IN_BLOCKS {
-				Self::update_agg_stats();
-				// TODO add proper weight benchmark
-				weight_used += T::DbWeight::get().reads_writes(10, 10);
+				weight_used += Self::update_agg_stats();
 
 				StatsLastUpdatedAt::<T>::put(current_block);
+				weight_used += T::DbWeight::get().writes(1);
 			}
 			weight_used
 		}
@@ -617,17 +616,23 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn update_agg_stats() {
+	fn update_agg_stats() -> Weight {
+		let mut execution_weight = Weight::zero();
+
 		// For every existing Lp, update their Aggregate stats from accumulated delta stats
 		for (lp, asset) in LpAggStats::<T>::iter_keys().collect::<Vec<_>>() {
+			execution_weight.saturating_accrue(T::DbWeight::get().reads(2));
+
 			let lp_delta = match LpDeltaStats::<T>::get(&lp, asset) {
 				Some(delta) => {
+					execution_weight.saturating_accrue(T::DbWeight::get().writes(1));
 					LpDeltaStats::<T>::remove(&lp, asset);
 					delta
 				},
 				None => Default::default(),
 			};
 
+			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 			LpAggStats::<T>::mutate(&lp, asset, |maybe_agg_stats| {
 				if let Some(agg_stats) = maybe_agg_stats.as_mut() {
 					agg_stats.update(&lp_delta.limit_orders_swap_usd_volume);
@@ -638,8 +643,11 @@ impl<T: Config> Pallet<T> {
 		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
 		for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
 			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta.limit_orders_swap_usd_volume));
-			LpDeltaStats::<T>::remove(&lp, asset)
+			LpDeltaStats::<T>::remove(&lp, asset);
+			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
 		}
+
+		execution_weight
 	}
 }
 
