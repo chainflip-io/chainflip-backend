@@ -207,7 +207,7 @@ async function lendingTestForAsset(
 }
 
 export async function lendingTest(testContext: TestContext): Promise<void> {
-  // Change the interest interval to 1 block and the threshold to minimum for testing
+  // Setup
   testContext.logger.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
@@ -215,6 +215,9 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
       { SetInterestCollectionThresholdUsd: 1 },
     ]),
   );
+  testContext.logger.debug(`Disabling lending pool whitelist`);
+  await submitGovernanceExtrinsic((api) => api.tx.lendingPools.updateWhitelist('SetAllowAll'));
 
+  // Run test
   await lendingTestForAsset(testContext.logger, 'Eth', 35, 'Btc', 1.8);
 }
