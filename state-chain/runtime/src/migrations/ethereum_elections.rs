@@ -1,4 +1,9 @@
-use crate::*;
+use crate::{
+	chainflip::ethereum_elections::{
+		ETHEREUM_MAINNET_SAFETY_BUFFER, FEE_HISTORY_WINDOW, PRIORITY_FEE_PERCENTILE,
+	},
+	*,
+};
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
 use crate::chainflip::ethereum_elections;
@@ -28,7 +33,7 @@ impl OnRuntimeUpgrade for Migration {
 				block_height_witnesser::BlockHeightWitnesserSettings,
 				block_witnesser::state_machine::BlockWitnesserSettings,
 			},
-			ElectoralSettings, ElectoralUnsynchronisedSettings, SharedDataReferenceLifetime,
+			ElectoralUnsynchronisedSettings, SharedDataReferenceLifetime,
 		};
 
 		let unsynchronized_settings =
@@ -69,21 +74,6 @@ impl OnRuntimeUpgrade for Migration {
 				},
 				Default::default(),
 				(),
-			))
-		);
-
-		let settings = ElectoralSettings::<Runtime, EthereumInstance>::get();
-		assert_eq!(
-			settings,
-			Some((
-				Default::default(),
-				Default::default(),
-				Default::default(),
-				Default::default(),
-				Default::default(),
-				Default::default(),
-				(FEE_HISTORY_WINDOW, PRIORITY_FEE_PERCENTILE),
-				LIVENESS_CHECK_DURATION,
 			))
 		);
 
