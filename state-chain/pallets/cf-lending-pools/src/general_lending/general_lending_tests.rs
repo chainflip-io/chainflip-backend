@@ -1,7 +1,9 @@
 use crate::mocks::*;
 use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{evm::U256, ForeignChain};
-use cf_test_utilities::{assert_event_sequence, assert_has_event, assert_matching_event_count};
+use cf_test_utilities::{
+	assert_event_sequence, assert_has_event, assert_matching_event_count, assert_no_matching_event,
+};
 use cf_traits::{
 	lending::LendingSystemApi,
 	mocks::{
@@ -351,10 +353,6 @@ fn basic_general_lending() {
 			// referencing it (e.g. OriginationFeeTaken)
 			assert_event_sequence!(
 				Test,
-				// RuntimeEvent::LendingPools(Event::<Test>::PrimaryCollateralAssetUpdated{
-				// 	borrower_id: BORROWER,
-				// 	collateral_topup_asset: COLLATERAL_ASSET,
-				// }),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					borrower_id: BORROWER,
@@ -370,6 +368,13 @@ fn basic_general_lending() {
 					loan_id: LOAN_ID,
 					..
 				})
+			);
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralTopupAssetUpdated {
+					borrower_id: BORROWER,
+					collateral_topup_asset: Some(COLLATERAL_ASSET),
+				}),
 			);
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
