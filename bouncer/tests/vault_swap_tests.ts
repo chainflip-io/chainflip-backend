@@ -31,7 +31,7 @@ async function testRefundVaultSwap(logger: Logger) {
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
   const destAddress = await newAssetAddress(destAsset);
-  const refundAddress = await newAssetAddress(Assets.Btc);
+  const refundAddress = await newAssetAddress(inputAsset);
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
