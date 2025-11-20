@@ -43,9 +43,7 @@ use frame_support::{
 	traits::HandleLifetime,
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-};
+use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use weights::WeightInfo;
 
 pub use pallet::*;
