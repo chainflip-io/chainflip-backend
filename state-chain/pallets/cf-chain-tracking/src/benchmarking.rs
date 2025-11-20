@@ -58,12 +58,7 @@ mod benchmarks {
 	}
 
 	#[cfg(test)]
-	use crate::mock::*;
+	use crate::mock::{new_test_ext, Test};
 
-	#[test]
-	fn benchmark_works() {
-		new_test_ext().execute_with(|| {
-			_update_chain_state::<Test, ()>(true);
-		});
-	}
+	impl_benchmark_test_suite!(Pallet, new_test_ext(), Test);
 }
