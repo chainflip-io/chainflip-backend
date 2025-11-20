@@ -144,21 +144,18 @@ mod benchmarks {
 	fn purge_balances(n: Linear<1, 100>) {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
-		let account_ids = (1u32..=n as u32)
-			.map(|_| {
-				let account_id = T::AccountRoleRegistry::whitelisted_caller_with_role(
-					AccountRole::LiquidityProvider,
-				)
-				.unwrap();
+		let account_ids = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			n as u32,
+		)
+		.unwrap();
 
-				assert_ok!(Pallet::<T>::register_liquidity_refund_address(
-					RawOrigin::Signed(account_id.clone()).into(),
-					EncodedAddress::Eth(Default::default()),
-				));
-
-				account_id
-			})
-			.collect::<Vec<_>>();
+		for account_id in &account_ids {
+			assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+				RawOrigin::Signed(account_id.clone()).into(),
+				EncodedAddress::Eth(Default::default()),
+			));
+		}
 
 		let accounts_to_purge = account_ids
 			.into_iter()
