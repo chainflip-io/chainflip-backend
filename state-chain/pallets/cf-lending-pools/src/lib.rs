@@ -500,6 +500,8 @@ pub mod pallet {
 		AccountHasNoLoans,
 		/// The borrower has insufficient collateral for the requested loan
 		InsufficientCollateral,
+		/// Action not allowed as it would lead to LTV that's above safe threshold
+		LtvTooHigh,
 		/// A catch-all error for invalid loan parameters where a more specific error is not
 		/// available
 		InvalidLoanParameters,

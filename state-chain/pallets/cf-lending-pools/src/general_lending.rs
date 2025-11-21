@@ -813,7 +813,7 @@ impl<T: Config> LoanAccount<T> {
 		self.loans.insert(loan.id, loan);
 
 		if self.derive_ltv(price_cache)? > config.ltv_thresholds.target.into() {
-			return Err(Error::<T>::InsufficientCollateral.into());
+			return Err(Error::<T>::LtvTooHigh.into());
 		}
 
 		if self.voluntary_liquidation_requested {
@@ -1507,7 +1507,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 			if !loan_account.loans.is_empty() &&
 				loan_account.derive_ltv(&price_cache)? > chp_config.ltv_thresholds.target.into()
 			{
-				fail!(Error::<T>::InsufficientCollateral);
+				fail!(Error::<T>::LtvTooHigh);
 			}
 
 			Self::deposit_event(Event::CollateralRemoved {
