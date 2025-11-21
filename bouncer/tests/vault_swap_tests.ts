@@ -1,8 +1,9 @@
 import assert from 'assert';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import {
+  Assets,
   createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
@@ -29,8 +30,8 @@ async function testRefundVaultSwap(logger: Logger) {
   const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
-  const refundAddress = await newAssetAddress('Btc');
+  const destAddress = await newAssetAddress(destAsset);
+  const refundAddress = await newAssetAddress(inputAsset);
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
@@ -56,7 +57,7 @@ async function testRefundVaultSwap(logger: Logger) {
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    const refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    const refundAddressBalance = await getBalance(inputAsset, refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;

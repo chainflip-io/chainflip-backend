@@ -10,10 +10,17 @@ import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
   InternalAsset as SDKAsset,
-  InternalAssets as Assets,
   assetConstants,
   chainConstants,
+  chainflipAssets,
+  chainflipChains,
 } from '@chainflip/cli';
+import {
+  chainContractId,
+  assetContractId,
+  AssetAndChain,
+  AssetSymbol,
+} from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
@@ -53,6 +60,14 @@ export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitc
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export const testInfoFile = '/tmp/chainflip/test_info.csv';
+
+export const Assets = Object.fromEntries(chainflipAssets.map((asset) => [asset, asset])) as {
+  [K in (typeof chainflipAssets)[number]]: K;
+};
+
+export const Chains = Object.fromEntries(chainflipChains.map((chain) => [chain, chain])) as {
+  [K in (typeof chainflipChains)[number]]: K;
+};
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -269,8 +284,8 @@ export function defaultAssetAmounts(asset: Asset): string {
   }
 }
 
-export function assetContractId(asset: Asset): number {
-  if (isSDKAsset(asset)) return assetConstants[asset].contractId;
+export function getAssetContractId(asset: Asset): number {
+  if (isSDKAsset(asset)) return assetContractId[asset];
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -279,8 +294,8 @@ export function assetDecimals(asset: Asset): number {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export function chainContractId(chain: Chain): number {
-  if (isSDKChain(chain)) return chainConstants[chain].contractId;
+export function getChainContractId(chain: Chain): number {
+  if (isSDKChain(chain)) return chainContractId[chain];
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -306,14 +321,6 @@ export function chainGasAsset(chain: Chain): Asset {
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
-}
-
-// State Chain uses non-unique string identifiers for assets.
-export function stateChainAssetFromAsset(asset: Asset): string {
-  if (isSDKAsset(asset)) {
-    return assetConstants[asset].asset;
-  }
-  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export async function runWithTimeout<T>(
@@ -674,6 +681,16 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
+export function stateChainAssetFromAsset(asset: Asset): AssetAndChain {
+  if (isSDKAsset(asset)) {
+    return {
+      chain: chainFromAsset(asset),
+      asset: assetConstants[asset].symbol as AssetSymbol,
+    } as AssetAndChain;
+  }
+  throw new Error(`Unsupported asset: ${asset}`);
+}
+
 // Returns an address that can hold an asset and can be used as a destination
 // address of a swap or a refund address. If it's a CCM swap or refund, the
 // returned address is a valid CCM receiver.
@@ -975,7 +992,7 @@ export async function observeCcmReceived(
         destAddress,
         'ReceivedxSwapAndCall',
         [
-          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          getChainContractId(chainFromAsset(sourceAsset)).toString(),
           sourceAddress ?? null,
           messageMetadata.message,
           getContractAddress(destChain, destAsset.toString()),
@@ -988,7 +1005,7 @@ export async function observeCcmReceived(
     case 'Solana':
       return observeSolanaCcmEvent(
         'ReceivedCcm',
-        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        getChainContractId(chainFromAsset(sourceAsset)).toString(),
         sourceAddress ?? null,
         messageMetadata,
       );
@@ -1204,14 +1221,8 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    {
-      chain: chainFromAsset(from),
-      asset: stateChainAssetFromAsset(from),
-    },
-    {
-      chain: chainFromAsset(to),
-      asset: stateChainAssetFromAsset(to),
-    },
+    stateChainAssetFromAsset(from),
+    stateChainAssetFromAsset(to),
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 

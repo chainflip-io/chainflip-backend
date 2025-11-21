@@ -1,5 +1,5 @@
-import { InternalAssets as Assets, getInternalAsset, Chains } from '@chainflip/cli';
-import { chainFromAsset, Asset, decodeModuleError } from 'shared/utils';
+import { getInternalAsset } from '@chainflip/cli';
+import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, Event, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';

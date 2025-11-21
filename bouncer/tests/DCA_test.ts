@@ -1,7 +1,8 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
+  Assets,
   newAssetAddress,
   observeBalanceIncrease,
   observeSwapRequested,

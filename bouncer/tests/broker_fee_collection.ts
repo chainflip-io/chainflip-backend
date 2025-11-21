@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 
 import Keyring from 'polkadot/keyring';
 import {
@@ -16,6 +16,7 @@ import {
   TransactionOrigin,
   defaultAssetAmounts,
   newAssetAddress,
+  Assets,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';

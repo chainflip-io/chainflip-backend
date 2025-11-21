@@ -1,5 +1,4 @@
-import { InternalAssets as Assets } from '@chainflip/cli';
-import { Asset, decodeModuleError } from 'shared/utils';
+import { Asset, Assets, decodeModuleError } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
