@@ -62,8 +62,8 @@ pub fn get_boost_pool_details<T: Config>(
 		.map(|(tier, core_pool)| {
 			let pending_boosts = core_pool
 				.get_pending_loans()
-				.iter()
-				.map(|(_loan_id, loan)| {
+				.values()
+				.map(|loan| {
 					let LoanUsage::Boost(deposit_id) = loan.usage;
 					(deposit_id, loan)
 				})

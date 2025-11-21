@@ -31,7 +31,7 @@ use frame_support::{
 	traits::{DefensiveSaturating, OnKilledAccount},
 };
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub use pallet::*;
 

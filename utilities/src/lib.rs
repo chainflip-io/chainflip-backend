@@ -280,7 +280,7 @@ where
 	struct IteratorRef<'a, T, It: Iterator<Item = T>> {
 		it: &'a mut It,
 	}
-	#[expect(clippy::needless_lifetimes)]
+
 	impl<'a, T, It: Iterator<Item = T>> Iterator for IteratorRef<'a, T, It> {
 		type Item = T;
 

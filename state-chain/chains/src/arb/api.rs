@@ -22,7 +22,7 @@ use crate::{
 	*,
 };
 use evm::api::{all_batch, set_agg_key_with_agg_key};
-use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
 use self::evm::{api::transfer_fallback, Address, EvmCrypto};
@@ -38,7 +38,7 @@ pub enum ArbitrumApi<Environment: 'static> {
 	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for ArbitrumApi<E>

@@ -3,11 +3,8 @@
 
 pub mod chainstate_simulation;
 
-use codec::{EncodeLike, WrapperTypeDecode, WrapperTypeEncode};
-use core::{fmt::Display, ops::Deref};
 use itertools::Either;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
-use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 use std::collections::{BTreeSet, VecDeque};
 
@@ -32,43 +29,6 @@ use crate::electoral_systems::{
 	},
 };
 use chainstate_simulation::*;
-
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
-struct EncodableChar(u8);
-impl Deref for EncodableChar {
-	type Target = u8;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-impl From<u8> for EncodableChar {
-	fn from(value: u8) -> Self {
-		Self(value)
-	}
-}
-impl WrapperTypeDecode for EncodableChar {
-	type Wrapped = u8;
-}
-impl WrapperTypeEncode for EncodableChar {}
-impl EncodeLike<u8> for EncodableChar {}
-impl Debug for EncodableChar {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-impl Display for EncodableChar {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-impl Validate for EncodableChar {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
 
 macro_rules! try_get {
     ($($tt:tt)+) => {

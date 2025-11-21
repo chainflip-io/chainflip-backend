@@ -819,7 +819,7 @@ fn can_non_native_signed_call() {
 				.iter()
 				.filter(|record| matches!(
 					record.event,
-					RuntimeEvent::Environment(Event::NonNativeSignedCall {})
+					RuntimeEvent::Environment(Event::NonNativeSignedCall)
 				))
 				.count() == 1
 		);
@@ -883,7 +883,7 @@ fn can_batch() {
 				.iter()
 				.filter(|record| matches!(
 					record.event,
-					RuntimeEvent::Environment(Event::BatchCompleted {})
+					RuntimeEvent::Environment(Event::BatchCompleted)
 				))
 				.count() == 1
 		);

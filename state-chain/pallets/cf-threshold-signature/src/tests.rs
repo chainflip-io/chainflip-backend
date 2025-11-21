@@ -1628,7 +1628,7 @@ mod key_rotation {
 
 			// Status is complete.
 			assert_eq!(PendingKeyRotation::<Test, _>::get(), Some(KeyRotationStatus::Complete));
-			assert_last_events!(Event::KeyRotationCompleted { .. });
+			assert_last_events!(Event::KeyRotationCompleted);
 		});
 	}
 

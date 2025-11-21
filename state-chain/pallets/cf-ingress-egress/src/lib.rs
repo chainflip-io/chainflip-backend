@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(try_blocks)]
 #![feature(stmt_expr_attributes)]

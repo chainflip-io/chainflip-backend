@@ -194,8 +194,10 @@ async fn should_report_on_invalid_blame_response() {
 
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse);
+	ceremony.complete_with_error(
+		std::slice::from_ref(&bad_node_id_1),
+		KeygenFailureReason::InvalidBlameResponse,
+	);
 }
 
 /// If party is blamed by one or more peers, its BlameResponse sent in
@@ -233,8 +235,10 @@ async fn should_report_on_incomplete_blame_response() {
 
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse);
+	ceremony.complete_with_error(
+		std::slice::from_ref(&bad_node_id_1),
+		KeygenFailureReason::InvalidBlameResponse,
+	);
 }
 
 // If one of more parties (are thought to) broadcast data inconsistently,
@@ -262,7 +266,7 @@ async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		&[bad_account_id.clone()],
+		std::slice::from_ref(bad_account_id),
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyCommitmentsBroadcast4,
@@ -289,7 +293,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm() {
 
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		&[bad_account_id.clone()],
+		std::slice::from_ref(bad_account_id),
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyHashCommitmentsBroadcast2,
@@ -362,7 +366,7 @@ async fn should_report_on_inconsistent_broadcast_complaints() {
 	let messages = ceremony.run_stage::<keygen::VerifyComplaints7, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		&[bad_account_id.clone()],
+		std::slice::from_ref(bad_account_id),
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyComplaintsBroadcastStage7,
@@ -419,7 +423,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony.complete_with_error(
-		&[bad_account_id.clone()],
+		std::slice::from_ref(bad_account_id),
 		KeygenFailureReason::BroadcastFailure(
 			BroadcastFailureReason::Inconsistency,
 			KeygenStageName::VerifyBlameResponsesBroadcastStage9,

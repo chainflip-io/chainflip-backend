@@ -933,8 +933,7 @@ impl BitcoinTransaction {
 				.as_slice(),
 		);
 		let sequences = sha2_256(
-			&core::iter::repeat(SEQUENCE_NUMBER)
-				.take(self.inputs.len())
+			&core::iter::repeat_n(SEQUENCE_NUMBER, self.inputs.len())
 				.collect::<Vec<_>>()
 				.concat(),
 		);

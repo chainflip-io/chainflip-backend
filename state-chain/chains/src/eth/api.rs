@@ -29,7 +29,7 @@ use crate::{
 use ethabi::{Address, Uint};
 use evm::api::common::*;
 use frame_support::{
-	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use sp_std::marker::PhantomData;
 
@@ -89,7 +89,7 @@ pub enum EthereumApi<Environment: 'static> {
 	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for EthereumApi<E>

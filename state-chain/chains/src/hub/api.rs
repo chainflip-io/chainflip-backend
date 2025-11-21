@@ -25,7 +25,7 @@ use crate::{
 };
 use frame_support::{
 	traits::{Defensive, Get},
-	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use hub::{AssethubExtrinsicBuilder, AssethubRuntimeCall, OutputAccountId};
 
@@ -41,7 +41,7 @@ pub enum AssethubApi<Environment: 'static> {
 	ExecuteXSwapAndCall(AssethubExtrinsicBuilder),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 pub trait AssethubEnvironment {

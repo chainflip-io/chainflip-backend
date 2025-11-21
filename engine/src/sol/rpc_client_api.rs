@@ -126,19 +126,14 @@ pub enum UiTransactionEncoding {
 	JsonParsed,
 }
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionDetails {
+	#[default]
 	Full,
 	Signatures,
 	None,
 	Accounts,
-}
-
-impl Default for TransactionDetails {
-	fn default() -> Self {
-		Self::Full
-	}
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

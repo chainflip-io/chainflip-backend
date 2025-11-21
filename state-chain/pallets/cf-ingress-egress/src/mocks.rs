@@ -349,6 +349,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 		Test: Config<I>,
 	{
 		self.then_execute_with(|_| {
+			#[expect(clippy::redundant_iter_cloned)]
 			requests
 				.iter()
 				.cloned()

@@ -428,6 +428,7 @@ pub mod signing_key {
 		}
 
 		/// Constructs a new random `Keypair` using `OsRng`
+		#[expect(clippy::new_without_default)]
 		pub fn new() -> Self {
 			let mut rng = OsRng;
 			Self::generate(&mut rng)

@@ -21,7 +21,7 @@ use super::{
 	Utxo, BITCOIN_DUST_LIMIT, CHANGE_ADDRESS_SALT,
 };
 use crate::{btc::BitcoinTransaction, *};
-use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
@@ -31,7 +31,7 @@ pub enum BitcoinApi<Environment: 'static> {
 	NoChangeTransfer(BitcoinTransaction),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 
@@ -251,7 +251,7 @@ impl<E> ApiCall<BitcoinCrypto> for BitcoinApi<E> {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.signer(),
 			BitcoinApi::NoChangeTransfer(call) =>
-				call.signer_and_signatures.as_ref().map(|(signer, _)| (*signer)),
+				call.signer_and_signatures.as_ref().map(|(signer, _)| *signer),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}

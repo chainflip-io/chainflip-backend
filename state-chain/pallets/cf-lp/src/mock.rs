@@ -16,53 +16,24 @@
 
 use crate as pallet_cf_lp;
 use crate::PalletSafeMode;
-use cf_chains::{
-	address::{AddressDerivationApi, AddressDerivationError},
-	assets::any::Asset,
-	AnyChain, Chain, Ethereum,
-};
-use cf_primitives::{chains::assets, AssetAmount, ChannelId};
-#[cfg(feature = "runtime-benchmarks")]
+use cf_chains::{assets::any::Asset, AnyChain, Ethereum};
+use cf_primitives::{chains::assets, AssetAmount};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
-		egress_handler::MockEgressHandler, fee_payment::MockFeePayment, pool_api::MockPoolApi,
+		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,
 };
-use frame_support::{
-	assert_ok, derive_impl, parameter_types, sp_runtime::app_crypto::sp_core::H160,
-};
+use frame_support::{assert_ok, derive_impl, parameter_types};
 use frame_system as system;
 use sp_runtime::{traits::IdentityLookup, Permill};
 use std::{cell::RefCell, collections::BTreeMap};
 
-use sp_std::str::FromStr;
-
 type AccountId = u64;
 
-pub struct MockAddressDerivation;
-
-impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
-	fn generate_address(
-		_source_asset: assets::eth::Asset,
-		_channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, AddressDerivationError> {
-		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())
-	}
-
-	fn generate_address_and_state(
-		source_asset: <Ethereum as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<
-		(<Ethereum as Chain>::ChainAccount, <Ethereum as Chain>::DepositChannelState),
-		AddressDerivationError,
-	> {
-		Ok((Self::generate_address(source_asset, channel_id)?, Default::default()))
-	}
-}
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
@@ -171,7 +142,7 @@ impl crate::Config for Test {
 	type PoolApi = MockPoolApi;
 	type BalanceApi = MockBalanceApi;
 	#[cfg(feature = "runtime-benchmarks")]
-	type FeePayment = MockFeePayment<Self>;
+	type FeePayment = cf_traits::mocks::fee_payment::MockFeePayment<Self>;
 	type BoostBalancesApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MinimumDeposit = MockMinimumDepositProvider;

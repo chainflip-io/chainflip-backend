@@ -45,7 +45,6 @@ use frame_support::{
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	vec,
 };
 use weights::WeightInfo;
 

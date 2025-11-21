@@ -22,7 +22,7 @@ use cf_traits::{Chainflip, FeePayment};
 use frame_benchmarking::v2::*;
 use frame_support::sp_runtime::traits::UniqueSaturatedFrom;
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
-use sp_std::collections::btree_set::BTreeSet;
+use sp_std::{collections::btree_set::BTreeSet, vec};
 
 fn generate_proposal() -> Proposal {
 	Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32])

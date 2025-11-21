@@ -182,7 +182,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 
 		let hash_elections = self
 			.queued_hash_elections
-			.extract_if(|_, _| true)
+			.extract_if(.., |_, _| true)
 			.map(|(height, hash)| (height, ByHash(hash)));
 
 		self.ongoing.extend(
@@ -407,7 +407,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 
 		// clean up the queue by removing old hashes
 		self.queued_hash_elections
-			.extract_if(|height, _| is_safe_height(height))
+			.extract_if(.., |height, _| is_safe_height(height))
 			.for_each(|(height, _)| {
 				self.queued_safe_elections.insert(height);
 			});
@@ -649,7 +649,7 @@ impl<N: Clone + SaturatingStep + Ord> CompactHeightTracker<N> {
 	where
 		N: Step,
 	{
-		self.elections.iter().flat_map(|(a, b)| (a.clone()..b.clone())).collect()
+		self.elections.iter().flat_map(|(a, b)| a.clone()..b.clone()).collect()
 	}
 }
 

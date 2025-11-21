@@ -16,7 +16,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(step_trait)]
-#![feature(extract_if)]
 #![feature(split_array)]
 #![feature(impl_trait_in_assoc_type)]
 use crate::{

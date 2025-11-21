@@ -63,8 +63,8 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi, EpochInfo,
-	FetchesTransfersLimitProvider, FundAccount, FundingInfo, GetBlockHeight, SafeMode,
+	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi,
+	EpochInfo, FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode,
 	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
@@ -2892,7 +2892,7 @@ fn additional_action_correctly_prefund_and_create_account() {
 	};
 
 	new_test_ext().execute_with(|| {
-		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), 0);
+		assert_eq!(MockFundingInfo::<Test>::bond(&LP_ACCOUNT), 0);
 		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
 			&LP_ACCOUNT
 		));
@@ -2913,7 +2913,7 @@ fn additional_action_correctly_prefund_and_create_account() {
 			&LP_ACCOUNT,
 			AccountRole::LiquidityProvider
 		));
-		assert_eq!(MockFundingInfo::<Test>::get_bond(LP_ACCOUNT), INITIAL_FLIP_FUNDING);
+		assert_eq!(MockFundingInfo::<Test>::bond(&LP_ACCOUNT), INITIAL_FLIP_FUNDING);
 	});
 }
 
