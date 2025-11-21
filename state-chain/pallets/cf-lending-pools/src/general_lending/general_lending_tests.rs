@@ -4137,6 +4137,125 @@ fn init_liquidation_swaps_test() {
 	});
 }
 
+#[test]
+fn can_add_but_not_remove_collateral_with_stale_price() {
+	const COLLATERAL_ASSET_1: Asset = Asset::Eth;
+	const COLLATERAL_ASSET_2: Asset = Asset::Btc;
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
+		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+
+		// Set one of the collateral asset prices to be stale
+		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, false);
+		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_2, true);
+
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_1, INIT_COLLATERAL);
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL);
+
+		// Should still be able to add both collateral assets
+		assert_ok!(LendingPools::add_collateral(
+			RuntimeOrigin::signed(BORROWER),
+			Some(COLLATERAL_ASSET_1),
+			BTreeMap::from([
+				(COLLATERAL_ASSET_1, INIT_COLLATERAL),
+				(COLLATERAL_ASSET_2, INIT_COLLATERAL)
+			]),
+		));
+
+		// But should not be able to remove any collateral
+		assert_noop!(
+			LendingPools::remove_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				BTreeMap::from([(COLLATERAL_ASSET_2, INIT_COLLATERAL / 2)]),
+			),
+			Error::<Test>::OraclePriceUnavailable
+		);
+	});
+}
+
+#[test]
+fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
+	const COLLATERAL_ASSET_1: Asset = Asset::Eth;
+	const COLLATERAL_ASSET_2: Asset = Asset::Sol;
+	const UNRELATED_COLLATERAL_ASSET: Asset = Asset::SolUsdc;
+
+	new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
+		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
+
+		// Start with good non-stale prices
+		MockPriceFeedApi::set_stale(LOAN_ASSET, false);
+		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, false);
+		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_2, false);
+
+		// Except for this collateral asset, just to check having an unrelated stale price
+		// doesn't interfere with things.
+		MockPriceFeedApi::set_stale(UNRELATED_COLLATERAL_ASSET, true);
+
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_1, INIT_COLLATERAL * 2);
+
+		// Create a loan while the price is fresh
+		assert_ok!(LendingPools::new_loan(
+			BORROWER,
+			LOAN_ASSET,
+			PRINCIPAL,
+			Some(COLLATERAL_ASSET_1),
+			BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL)]),
+		));
+
+		// Set the price to be stale
+		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, true);
+
+		// Should still be able to repay the loan
+		assert_ok!(LendingPools::make_repayment(
+			RuntimeOrigin::signed(BORROWER),
+			LoanId(0),
+			RepaymentAmount::Exact(PRINCIPAL / 2),
+		));
+
+		// But should not be able to expand the loan
+		assert_noop!(
+			LendingPools::expand_loan(
+				RuntimeOrigin::signed(BORROWER),
+				LoanId(0),
+				PRINCIPAL / 2,
+				BTreeMap::from([]),
+			),
+			Error::<Test>::OraclePriceUnavailable
+		);
+
+		// Or create a new loan
+		assert_noop!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET_1),
+				BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL)]),
+			),
+			Error::<Test>::OraclePriceUnavailable
+		);
+
+		// Because we have a loan open with a stale collateral price, we also cannot create a loan,
+		// even if the price for the new collateral asset and loan asset are fresh.
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET_2, INIT_COLLATERAL);
+		assert_noop!(
+			LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				Some(COLLATERAL_ASSET_2),
+				BTreeMap::from([(COLLATERAL_ASSET_2, INIT_COLLATERAL)]),
+			),
+			Error::<Test>::OraclePriceUnavailable
+		);
+	});
+}
+
 mod rpcs {
 
 	use cf_primitives::AssetAndAmount;
