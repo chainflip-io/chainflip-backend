@@ -2737,6 +2737,7 @@ dependencies = [
  "cf-traits",
  "chrono",
  "ethereum-eip712",
+ "ethers-core",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
