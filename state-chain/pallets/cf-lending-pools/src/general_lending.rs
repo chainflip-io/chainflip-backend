@@ -1101,7 +1101,7 @@ enum FetchedPrice {
 }
 
 impl<T: Config> OraclePriceCache<T> {
-	fn get_price_internal(&self, asset: Asset, allow_stale_price: bool) -> Result<Price, Error<T>> {
+	fn get_price_inner(&self, asset: Asset, allow_stale_price: bool) -> Result<Price, Error<T>> {
 		use sp_std::collections::btree_map::Entry;
 
 		// `borrow_mut` is safe because we don't create any more references while holding it
@@ -1137,64 +1137,80 @@ impl<T: Config> OraclePriceCache<T> {
 	}
 
 	pub fn get_price(&self, asset: Asset) -> Result<Price, Error<T>> {
-		self.get_price_internal(asset, false)
+		self.get_price_inner(asset, false)
 	}
 
 	pub fn get_price_allow_stale(&self, asset: Asset) -> Result<Price, Error<T>> {
-		self.get_price_internal(asset, true)
+		self.get_price_inner(asset, true)
 	}
 
-	/// Uses oracle prices to calculate the USD value of the given asset amount
-	pub(super) fn usd_value_of(
+	fn usd_value_inner(
 		&self,
 		asset: Asset,
 		amount: AssetAmount,
+		allow_stale_price: bool,
 	) -> Result<AssetAmount, Error<T>> {
-		let price_in_usd = self.get_price(asset)?;
+		let price_in_usd = if allow_stale_price {
+			self.get_price_allow_stale(asset)?
+		} else {
+			self.get_price(asset)?
+		};
 		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+	}
+
+	/// Uses oracle prices to calculate the USD value of the given asset amount
+	pub fn usd_value_of(&self, asset: Asset, amount: AssetAmount) -> Result<AssetAmount, Error<T>> {
+		self.usd_value_inner(asset, amount, false)
 	}
 
 	/// Uses oracle prices to calculate the USD value of the given asset amount, even if the price
 	/// is stale.
-	pub(super) fn usd_value_of_allow_stale(
+	pub fn usd_value_of_allow_stale(
 		&self,
 		asset: Asset,
 		amount: AssetAmount,
 	) -> Result<AssetAmount, Error<T>> {
-		let price_in_usd = self.get_price_allow_stale(asset)?;
-		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+		self.usd_value_inner(asset, amount, true)
 	}
 
-	// Uses oracle prices to calculate the total USD value of the entire map of assets
-	fn total_usd_value_of(
+	fn total_usd_value_of_inner(
 		&self,
 		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+		allow_stale_price: bool,
 	) -> Result<AssetAmount, DispatchError> {
 		let mut total_collateral_usd = 0;
 		for (asset, amount) in assets_amounts {
-			total_collateral_usd.saturating_accrue(self.usd_value_of(*asset, *amount)?);
+			if allow_stale_price {
+				total_collateral_usd
+					.saturating_accrue(self.usd_value_of_allow_stale(*asset, *amount)?);
+			} else {
+				total_collateral_usd.saturating_accrue(self.usd_value_of(*asset, *amount)?);
+			}
 		}
 
 		Ok(total_collateral_usd)
+	}
+
+	// Uses oracle prices to calculate the total USD value of the entire map of assets
+	pub fn total_usd_value_of(
+		&self,
+		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<AssetAmount, DispatchError> {
+		self.total_usd_value_of_inner(assets_amounts, false)
 	}
 
 	// Uses oracle prices to calculate the total USD value of the entire map of assets, even if one
 	// or more assets has a stale price.
-	fn total_usd_value_of_allow_stale(
+	pub fn total_usd_value_of_allow_stale(
 		&self,
 		assets_amounts: &BTreeMap<Asset, AssetAmount>,
 	) -> Result<AssetAmount, DispatchError> {
-		let mut total_collateral_usd = 0;
-		for (asset, amount) in assets_amounts {
-			total_collateral_usd.saturating_accrue(self.usd_value_of_allow_stale(*asset, *amount)?);
-		}
-
-		Ok(total_collateral_usd)
+		self.total_usd_value_of_inner(assets_amounts, true)
 	}
 
 	/// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
 	/// `amount` of USD
-	fn amount_from_usd_value(
+	pub fn amount_from_usd_value(
 		&self,
 		asset: Asset,
 		usd_value: AssetAmount,
