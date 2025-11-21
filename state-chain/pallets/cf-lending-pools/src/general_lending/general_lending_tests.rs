@@ -884,7 +884,7 @@ fn basic_loan_aggregation() {
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_COLLATERAL);
 
-		// Try to borrow more, but this time we don't have enough collateral
+		// Try to borrow more, but this time we don't have enough collateral for an acceptable LTV
 		assert_err!(
 			LendingPools::expand_loan(
 				RuntimeOrigin::signed(BORROWER),
@@ -892,7 +892,7 @@ fn basic_loan_aggregation() {
 				EXTRA_PRINCIPAL_2,
 				Default::default()
 			),
-			Error::<Test>::InsufficientCollateral
+			Error::<Test>::LtvTooHigh
 		);
 
 		// Should succeed when trying again with extra collateral
@@ -1092,6 +1092,16 @@ fn adding_and_removing_collateral() {
 			(COLLATERAL_ASSET_2, INIT_COLLATERAL_AMOUNT_2),
 		]);
 
+		// Can't add more collateral than what's in the user's free balance
+		assert_noop!(
+			LendingPools::add_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				None,
+				BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL + ORIGINATION_FEE + 1),]),
+			),
+			DispatchError::Other("Insufficient balance")
+		);
+
 		System::reset_events();
 
 		assert_ok!(LendingPools::add_collateral(
@@ -1126,6 +1136,28 @@ fn adding_and_removing_collateral() {
 			}
 		);
 
+		// Can't remove more collateral than what's available:
+		assert_noop!(
+			LendingPools::remove_collateral(
+				RuntimeOrigin::signed(BORROWER),
+				BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL + 1),]),
+			),
+			Error::<Test>::InsufficientCollateral
+		);
+
+		// Can't remove collateral if oracle prices aren't available:
+		{
+			MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, true);
+			assert_noop!(
+				LendingPools::remove_collateral(
+					RuntimeOrigin::signed(BORROWER),
+					BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL + 1),]),
+				),
+				Error::<Test>::OraclePriceUnavailable
+			);
+			MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, false);
+		}
+
 		assert_ok!(LendingPools::remove_collateral(
 			RuntimeOrigin::signed(BORROWER),
 			BTreeMap::from([
@@ -1142,6 +1174,22 @@ fn adding_and_removing_collateral() {
 		// Account is removed if all of its collateral is removed:
 		assert!(LoanAccounts::<Test>::get(BORROWER).is_none());
 	});
+}
+
+#[test]
+fn cannot_remove_collateral_if_ltv_would_exceed_safe_threshold() {
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			assert_noop!(
+				LendingPools::remove_collateral(
+					RuntimeOrigin::signed(BORROWER),
+					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL / 2),]),
+				),
+				Error::<Test>::LtvTooHigh
+			);
+		});
 }
 
 #[test]
