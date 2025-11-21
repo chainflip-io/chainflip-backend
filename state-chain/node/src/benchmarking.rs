@@ -129,6 +129,7 @@ pub fn create_benchmark_extrinsic(
 /// Generates inherent data for the `benchmark overhead` command.
 ///
 /// Note: Should only be used for benchmarking.
+#[expect(clippy::result_large_err)]
 pub fn inherent_benchmark_data() -> Result<InherentData> {
 	let mut inherent_data = InherentData::new();
 	let d = Duration::from_millis(0);

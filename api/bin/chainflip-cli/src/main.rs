@@ -132,11 +132,11 @@ async fn run_cli() -> Result<()> {
 					ValidatorSubcommands::DeregisterAccount => {
 						api.validator_api().deregister_account().await?;
 					},
-					ValidatorSubcommands::StopBidding {} => {
+					ValidatorSubcommands::StopBidding => {
 						let tx_hash = api.validator_api().stop_bidding().await?;
 						println!("Account stopped bidding, in tx {tx_hash:#x}.");
 					},
-					ValidatorSubcommands::StartBidding {} => {
+					ValidatorSubcommands::StartBidding => {
 						let tx_hash = api.validator_api().start_bidding().await?;
 						println!("Account started bidding at tx {tx_hash:#x}.");
 					},
@@ -172,29 +172,29 @@ async fn run_cli() -> Result<()> {
 				BindExecutorAddress { eth_address } => {
 					bind_executor_address(api.operator_api(), &eth_address).await?;
 				},
-				GetBoundRedeemAddress {} => {
+				GetBoundRedeemAddress => {
 					get_bound_redeem_address(api.query_api()).await?;
 				},
-				GetBoundExecutorAddress {} => {
+				GetBoundExecutorAddress => {
 					get_bound_executor_address(api.query_api()).await?;
 				},
-				Rotate {} => {
+				Rotate => {
 					let tx_hash = api.operator_api().rotate_session_keys().await?;
 					println!("Session key rotated at tx {tx_hash:#x}.");
 				},
-				StopBidding {} => {
+				StopBidding => {
 					let tx_hash = api.validator_api().stop_bidding().await?;
 					println!("Account stopped bidding, in tx {tx_hash:#x}.");
 				},
-				StartBidding {} => {
+				StartBidding => {
 					let tx_hash = api.validator_api().start_bidding().await?;
 					println!("Account started bidding at tx {tx_hash:#x}.");
 				},
 				VanityName { name } => {
 					api.operator_api().set_vanity_name(name).await?;
 				},
-				PreUpdateCheck {} => pre_update_check(api.query_api()).await?,
-				ForceRotation {} => {
+				PreUpdateCheck => pre_update_check(api.query_api()).await?,
+				ForceRotation => {
 					api.governance_api().force_rotation().await?;
 				},
 				GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),

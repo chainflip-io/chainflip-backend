@@ -19,7 +19,7 @@ use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::*, traits::StorageVersion, RuntimeDebugNoBound};
-use sp_std::{cmp::PartialEq, vec, vec::Vec};
+use sp_std::{cmp::PartialEq, vec::Vec};
 
 pub use pallet::*;
 

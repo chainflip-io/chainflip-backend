@@ -469,7 +469,7 @@ pub struct ValidAggregateKey<P: ECPoint>(pub P);
 pub fn derive_aggregate_pubkey<C: CryptoScheme>(
 	commitments: &BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 ) -> ValidAggregateKey<C::Point> {
-	let pubkey: C::Point = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+	let pubkey: C::Point = commitments.values().map(|c| c.commitments.0[0]).sum();
 
 	if check_high_degree_commitments(commitments) {
 		// Sanity check (the chance of this failing is infinitesimal due to the

@@ -224,7 +224,7 @@ mod tests {
 	fn n_times<T: Copy>(things: impl IntoIterator<Item = (usize, T)>) -> Vec<T> {
 		things
 			.into_iter()
-			.flat_map(|(n, thing)| std::iter::repeat(thing).take(n).collect::<Vec<_>>())
+			.flat_map(|(n, thing)| std::iter::repeat_n(thing, n).collect::<Vec<_>>())
 			.collect()
 	}
 

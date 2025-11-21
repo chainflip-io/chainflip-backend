@@ -55,7 +55,7 @@ pub fn map_with_parent<K: Ord, V, W>(
 	let max_key_length = this.keys().map(|key| key.len()).max().unwrap_or(0);
 	let mut processed = BTreeMap::new();
 	for length in 0..=max_key_length {
-		for (key, value) in this.extract_if(|k, _| k.len() == length) {
+		for (key, value) in this.extract_if(.., |k, _| k.len() == length) {
 			let p = if !key.is_empty() {
 				let parent_key = &key[0..key.len() - 1];
 				processed.get(parent_key)

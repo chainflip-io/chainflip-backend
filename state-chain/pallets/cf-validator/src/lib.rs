@@ -17,9 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
-#![feature(extract_if)]
 #![feature(iterator_try_collect)]
-#![feature(btree_extract_if)]
 
 mod mock;
 mod tests;

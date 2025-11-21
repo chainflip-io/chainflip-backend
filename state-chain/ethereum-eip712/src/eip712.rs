@@ -332,6 +332,8 @@ impl<'de> Deserialize<'de> for TypedData {
 
 		#[derive(Deserialize)]
 		#[serde(untagged)]
+		#[allow(clippy::allow_attributes)]
+		#[allow(clippy::large_enum_variant)]
 		enum Type {
 			Val(TypedDataHelper),
 			String(String),

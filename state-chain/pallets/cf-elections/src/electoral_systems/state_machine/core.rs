@@ -200,6 +200,8 @@ pub(crate) use defx;
 #[codec(encode_bound())]
 #[serde(bound = "")]
 #[scale_info(skip_type_params(Tag))]
+#[allow(clippy::allow_attributes)]
+#[allow(dead_code)]
 pub(crate) struct TypesFor<Tag> {
 	_phantom: sp_std::marker::PhantomData<Tag>,
 }

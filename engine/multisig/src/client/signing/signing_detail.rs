@@ -216,8 +216,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 	if invalid_idxs.is_empty() {
 		// Response shares/shards are additive, so we simply need to
 		// add them together (see step 7.c in Figure 3, page 15).
-		let z: <C::Point as ECPoint>::Scalar =
-			responses.iter().map(|(_idx, sig)| sig.clone()).sum();
+		let z: <C::Point as ECPoint>::Scalar = responses.values().cloned().sum();
 
 		Ok(C::build_signature(z, group_commitment))
 	} else {

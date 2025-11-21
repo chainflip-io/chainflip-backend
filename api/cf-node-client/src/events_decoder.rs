@@ -26,7 +26,7 @@ use subxt::{
 #[derive(thiserror::Error, Debug)]
 pub enum DynamicEventError {
 	#[error(transparent)]
-	SubxtError(#[from] subxt::Error),
+	SubxtError(Box<subxt::Error>),
 	#[error("Unexpected chain behaviour, ExtrinsicSuccess or ExtrinsicFailed event not found.")]
 	UnexpectedChainBehaviour,
 	#[error("Could not decode event, it might be because you running an old binary please consider upgrading. {0}")]
@@ -35,6 +35,12 @@ pub enum DynamicEventError {
 	EventUnknownToStaticMetadata,
 	#[error("{0} event was not found")]
 	StaticEventNotFound(&'static str),
+}
+
+impl From<subxt::Error> for DynamicEventError {
+	fn from(e: subxt::Error) -> Self {
+		DynamicEventError::SubxtError(Box::new(e))
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +52,7 @@ pub struct DynamicEvent {
 impl DynamicEvent {
 	pub fn event_static_metadata<E: StaticEvent>(
 		&self,
-	) -> Result<EventMetadataDetails, DynamicEventError> {
+	) -> Result<EventMetadataDetails<'_>, DynamicEventError> {
 		// Make sure the event is still known to the static metadata. i.e. it was not removed in a
 		// newer runtime version
 		if self.event.variant_name() != E::EVENT {
@@ -65,7 +71,7 @@ impl DynamicEvent {
 	}
 
 	pub fn as_event<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {
-		self.event.as_event::<E>().map_err(DynamicEventError::from)
+		Ok(self.event.as_event::<E>()?)
 	}
 
 	pub fn as_event_strict<E: StaticEvent>(&self) -> Result<Option<E>, DynamicEventError> {

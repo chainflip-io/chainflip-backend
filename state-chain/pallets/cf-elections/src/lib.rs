@@ -122,13 +122,11 @@
 #![feature(step_trait)]
 #![feature(trait_alias)]
 #![feature(unsized_const_params)]
-#![feature(btree_extract_if)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iter_intersperse)]
 #![feature(associated_type_defaults)]
 #![feature(generic_const_items)]
 #![feature(adt_const_params)]
-#![feature(generic_arg_infer)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -1979,7 +1977,7 @@ pub mod pallet {
 							))
 						})
 						.filter_ok(|(_election_identifier, needed)| *needed)
-						.map_ok(|(election_identifier, _needed)| (election_identifier))
+						.map_ok(|(election_identifier, _needed)| election_identifier)
 						.collect::<Result<BTreeSet<_>, _>>()
 				})
 				.unwrap_or_default()

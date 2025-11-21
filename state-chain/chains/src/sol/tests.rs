@@ -16,8 +16,6 @@
 
 #![cfg(test)]
 
-use borsh::{BorshDeserialize, BorshSerialize};
-
 use crate::{
 	sol::{
 		signing_key::SolSigningKey,
@@ -44,13 +42,6 @@ use crate::{
 };
 
 use core::str::FromStr;
-
-#[derive(BorshSerialize, BorshDeserialize)]
-enum BankInstruction {
-	Initialize,
-	Deposit { lamports: u64 },
-	Withdraw { lamports: u64 },
-}
 
 fn check_tx_encoding(serialized: Vec<u8>, expected: Vec<u8>) {
 	assert!(serialized.len() <= MAX_TRANSACTION_LENGTH);

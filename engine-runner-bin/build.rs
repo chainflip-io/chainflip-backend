@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![feature(path_add_extension)]
 use std::{
 	env,
 	error::Error,
