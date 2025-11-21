@@ -23,9 +23,6 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostBalancesApi, Chainflip,
 	DepositApi, EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
-
-use sp_std::vec;
-
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;

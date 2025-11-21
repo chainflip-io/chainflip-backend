@@ -172,7 +172,6 @@ macro_rules! loop_select {
 mod test_loop_select {
 	use futures::StreamExt;
 
-	#[expect(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn exits_loop_on_branch_failure() {
 		const BREAK_VALUE: u32 = 1;
@@ -499,7 +498,6 @@ mod test_loop_select {
 		);
 	}
 
-	#[expect(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn disabled_branches() {
 		// Break condition works

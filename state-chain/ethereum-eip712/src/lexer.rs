@@ -710,7 +710,7 @@ impl<'input> HumanReadableParser<'input> {
 	}
 }
 
-fn keyword(id: &str) -> Option<Token> {
+fn keyword(id: &str) -> Option<Token<'_>> {
 	let token = match id {
 		"address" => Token::Address,
 		"anonymous" => Token::Anonymous,

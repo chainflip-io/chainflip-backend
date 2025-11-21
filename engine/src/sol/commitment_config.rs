@@ -112,7 +112,7 @@ impl FromStr for CommitmentConfig {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "camelCase")]
 /// An attribute of a slot. It describes how finalized a block is at some point in time. For
 /// example, a slot is said to be at the max level immediately after the cluster recognizes the
@@ -161,13 +161,8 @@ pub enum CommitmentLevel {
 
 	/// The highest slot having reached max vote lockout, as recognized by a supermajority of the
 	/// cluster.
+	#[default]
 	Finalized,
-}
-
-impl Default for CommitmentLevel {
-	fn default() -> Self {
-		Self::Finalized
-	}
 }
 
 impl FromStr for CommitmentLevel {

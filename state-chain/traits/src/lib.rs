@@ -1351,9 +1351,6 @@ pub trait FundAccount {
 	type AccountId;
 	type Amount;
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_bond(_account_id: Self::AccountId) -> Self::Amount;
-
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource);
 }
 

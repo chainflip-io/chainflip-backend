@@ -179,7 +179,7 @@ where
 		}
 	}
 
-	fn finalize_current_stage(&mut self) -> BoxFuture<OptionalCeremonyReturn<Ceremony>> {
+	fn finalize_current_stage(&mut self) -> BoxFuture<'_, OptionalCeremonyReturn<Ceremony>> {
 		async {
 			// Ideally, we would pass the authorised state as a parameter
 			// as it is always present (i.e. not `None`) when this function
@@ -307,7 +307,7 @@ where
 
 	/// Process previously delayed messages (which arrived one stage too early)
 	// NOTE: Need this boxed to help with async recursion
-	fn process_delayed(&mut self) -> BoxFuture<OptionalCeremonyReturn<Ceremony>> {
+	fn process_delayed(&mut self) -> BoxFuture<'_, OptionalCeremonyReturn<Ceremony>> {
 		async {
 			let messages = std::mem::take(&mut self.delayed_messages);
 

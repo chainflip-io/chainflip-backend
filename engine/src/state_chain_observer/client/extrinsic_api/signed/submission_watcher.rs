@@ -629,7 +629,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								matching_request.until_in_block_sender
 							{
 								let _result = until_in_block_sender.send(
-									#[expect(clippy::useless_asref)]
 									result.as_ref().map(Clone::clone).map_err(
 										|error| match error {
 											ExtrinsicError::Dispatch(dispatch_error) =>
@@ -670,7 +669,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			// Remove any requests that have all their submission have expired and whose
 			// resubmission window has past.
-			for (_request_id, request) in requests.extract_if(|_request_id, request| {
+			for (_request_id, request) in requests.extract_if(.., |_request_id, request| {
 				request.pending_submissions.is_empty() &&
 					(!request.resubmit_window.contains(&(block.header.number + 1)) ||
 						request.strictly_one_submission)

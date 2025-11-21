@@ -240,14 +240,14 @@ impl<T: BWProcessorTypes> BlockProcessor<T> {
 		//--------- clean up old blocks & events ---------
 		let deleted_blocks = self
 			.blocks_data
-			.extract_if(|block_number, _| {
+			.extract_if(.., |block_number, _| {
 				block_number.saturating_forward(safety_buffer) < seen_heights_below
 			})
 			.collect();
 
 		let deleted_events = self
 			.processed_events
-			.extract_if(|_, expiry_block| *expiry_block < lowest_in_progress_height)
+			.extract_if(.., |_, expiry_block| *expiry_block < lowest_in_progress_height)
 			.map(|(a, _)| a)
 			.collect();
 

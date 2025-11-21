@@ -22,7 +22,6 @@ use std::collections::BTreeSet;
 use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
-	dot::{api::CreatePolkadotVault, PolkadotCrypto},
 	eth,
 	sol::{
 		api::{
@@ -32,7 +31,7 @@ use cf_chains::{
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
-	ApiCall, Arbitrum, Assethub, Bitcoin, Chain, ChainCrypto, ChainEnvironment, Polkadot, Solana,
+	Arbitrum, Assethub, Bitcoin, Chain, ChainEnvironment, Polkadot, Solana,
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
@@ -68,48 +67,6 @@ impl frame_system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCreatePolkadotVault;
-
-impl CreatePolkadotVault for MockCreatePolkadotVault {
-	fn new_unsigned() -> Self {
-		Self
-	}
-}
-impl ApiCall<PolkadotCrypto> for MockCreatePolkadotVault {
-	fn threshold_signature_payload(
-		&self,
-	) -> <<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::Payload {
-		unimplemented!()
-	}
-	fn chain_encoded(&self) -> Vec<u8> {
-		unimplemented!()
-	}
-	fn signed(
-		self,
-		_threshold_signature: &<<Polkadot as Chain>::ChainCrypto as cf_chains::ChainCrypto>::ThresholdSignature,
-		_signer: <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::AggKey,
-	) -> Self {
-		unimplemented!()
-	}
-	fn is_signed(&self) -> bool {
-		unimplemented!()
-	}
-
-	fn transaction_out_id(
-		&self,
-	) -> <<Polkadot as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId {
-		unimplemented!()
-	}
-
-	fn refresh_replay_protection(&mut self) {
-		unimplemented!()
-	}
-	fn signer(&self) -> Option<<PolkadotCrypto as ChainCrypto>::AggKey> {
-		unimplemented!()
-	}
-}
 
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {

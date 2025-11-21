@@ -122,13 +122,15 @@ mod benchmarks {
 			RawOrigin::Signed(validator_id.into()),
 			Box::new(
 				BoundedBTreeMap::try_from(
-					iter::repeat((
-						next_election.0,
-						AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
-							BenchmarkValue::benchmark_value(),
+					iter::repeat_n(
+						(
+							next_election.0,
+							AuthorityVoteOf::<T::ElectoralSystemRunner>::Vote(
+								BenchmarkValue::benchmark_value(),
+							),
 						),
-					))
-					.take(n as usize)
+						n as usize,
+					)
 					.collect::<BTreeMap<_, _>>(),
 				)
 				.unwrap(),
