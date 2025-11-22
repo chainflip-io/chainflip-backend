@@ -211,7 +211,9 @@ where
 /// We also return the transactions hashes of the transactions that caused the ingress, after the
 /// contract is deployed. These transaction hashes are not important for witnessing, but are used
 /// for tracing the end to end flow of the funds.
-fn eth_ingresses_at_block<Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>>(
+pub fn eth_ingresses_at_block<
+	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
+>(
 	addresses: Addresses,
 	native_events: Vec<(FetchedNativeFilter, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {

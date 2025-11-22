@@ -76,12 +76,12 @@ impl<T: BHWTypes> HookType for HookTypeFor<T, ReorgHook> {
 
 defx! {
 	#[derive(GenericTypeInfo)]
-	#[expand_name_with(T::Chain::NAME)]
+	#[expand_name_with(T::NAME)]
 	#[cfg_attr(test, derive(Arbitrary))]
-	pub struct HeightWitnesserProperties[T: BHWTypes] {
+	pub struct HeightWitnesserProperties[T: ChainTypes] {
 		/// An election starts with a given block number,
 		/// meaning that engines have to submit all blocks they know of starting with this height.
-		pub witness_from_index: <T::Chain as ChainTypes>::ChainBlockNumber,
+		pub witness_from_index: T::ChainBlockNumber,
 	}
 	validate _this (else HeightWitnesserPropertiesError) {}
 }
