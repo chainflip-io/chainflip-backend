@@ -45,7 +45,6 @@ use cf_rpc_apis::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
-use ethereum_eip712::eip712::{EIP712Domain, Types};
 use itertools::Itertools;
 use jsonrpsee::{
 	core::async_trait,
@@ -74,7 +73,6 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -115,24 +113,8 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Eip712RpcTypedData {
-	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
-	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
-	/// separator of the message.
-	#[serde(default)]
-	pub domain: EIP712Domain,
-	/// The custom types used by this message.
-	pub types: Types,
-	#[serde(rename = "primaryType")]
-	/// The type of the message.
-	pub primary_type: String,
-	// The message to be signed.
-	pub message: BTreeMap<String, Value>,
-}
-
-type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<Eip712RpcTypedData>;
+type RpcEncodedNonNativeCall =
+	EncodedNonNativeCallGeneric<ethers_core::types::transaction::eip712::TypedData>;
 
 mod chainflip_transparency {
 	use super::*;
@@ -2691,12 +2673,36 @@ where
 								))
 							})?;
 
-							RpcEncodedNonNativeCall::Eip712(Eip712RpcTypedData {
-								domain: typed_data.domain,
-								types: typed_data.types,
-								primary_type: typed_data.primary_type,
-								message: message_object.clone().into_iter().collect(),
-							})
+							RpcEncodedNonNativeCall::Eip712(
+								ethers_core::types::transaction::eip712::TypedData {
+									domain: ethers_core::types::transaction::eip712::EIP712Domain {
+										name: typed_data.domain.name,
+										version: typed_data.domain.version,
+										chain_id: typed_data.domain.chain_id,
+										verifying_contract: typed_data.domain.verifying_contract,
+										salt: typed_data.domain.salt,
+									},
+									types: typed_data
+										.types
+										.iter()
+										.map(|(s, tys)| {
+											(
+												s.clone(),
+												tys.iter()
+													.map(|t| {
+														ethers_core::types::transaction::eip712::Eip712DomainType {
+														name: t.name.clone(),
+														r#type: t.r#type.clone(),
+													}
+													})
+													.collect(),
+											)
+										})
+										.collect(),
+									primary_type: typed_data.primary_type,
+									message: message_object.clone().into_iter().collect(),
+								},
+							)
 						},
 						EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
 					};
