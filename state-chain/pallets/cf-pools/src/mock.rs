@@ -20,7 +20,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		balance_api::MockLpRegistration, egress_handler::MockEgressHandler,
-		swap_request_api::MockSwapRequestHandler,
+		lp_stats_api::MockLpStatsApi, swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry,
 };
@@ -54,6 +54,7 @@ impl pallet_cf_pools::Config for Test {
 	type LpBalance = cf_traits::mocks::balance_api::MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type LpRegistrationApi = MockLpRegistration;
+	type LpStats = MockLpStatsApi;
 	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }

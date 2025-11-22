@@ -27,7 +27,7 @@ use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
-	PoolApi, SwapRequestHandler, SwappingApi,
+	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use sp_runtime::Saturating;
 
@@ -414,6 +414,9 @@ pub mod pallet {
 
 		/// Access to the account balances.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
+
+		/// Access to the LP stats api.
+		type LpStats: LpStatsApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
@@ -1877,11 +1880,16 @@ impl<T: Config> Pallet<T> {
 			asset_pair.assets().zip(collected.fees).try_map(|(asset, collected_fees)| {
 				AssetAmount::try_from(collected_fees).map_err(Into::into).and_then(
 					|collected_fees| {
-						HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
-							*balance = balance.saturating_add(collected_fees)
-						});
-						T::LpBalance::try_credit_account(lp, asset, collected_fees)
-							.map(|()| collected_fees)
+						if collected_fees.is_zero() {
+							Ok(collected_fees)
+						} else {
+							HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
+								*balance = balance.saturating_add(collected_fees)
+							});
+
+							T::LpBalance::try_credit_account(lp, asset, collected_fees)
+								.map(|()| collected_fees)
+						}
 					},
 				)
 			})?;
@@ -2300,18 +2308,30 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let collected_fees: AssetAmount = collected.fees.try_into()?;
-		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
-			*balance = balance.saturating_add(collected_fees)
-		});
-		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
-
+		let bought_asset = asset_pair.assets()[!order.to_sold_pair()];
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
-		T::LpBalance::try_credit_account(
-			lp,
-			asset_pair.assets()[!order.to_sold_pair()],
-			bought_amount,
-		)?;
+
+		if !collected_fees.is_zero() {
+			HistoricalEarnedFees::<T>::mutate(lp, bought_asset, |balance| {
+				*balance = balance.saturating_add(collected_fees)
+			});
+			T::LpBalance::try_credit_account(lp, bought_asset, collected_fees)?;
+		}
+
+		if !bought_amount.is_zero() {
+			T::LpBalance::try_credit_account(lp, bought_asset, bought_amount)?;
+
+			// LpStats amounts are always in USD
+			if bought_asset == STABLE_ASSET {
+				T::LpStats::on_limit_order_filled(lp, &bought_asset, bought_amount);
+			} else {
+				T::LpStats::on_limit_order_filled(
+					lp,
+					&bought_asset,
+					collected.sold_amount.try_into()?,
+				);
+			}
+		}
 
 		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_pair()];
 		if position_info.amount.is_zero() {
