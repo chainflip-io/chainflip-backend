@@ -1077,68 +1077,120 @@ pub struct OraclePriceCache<T> {
 #[derive(Clone, Copy, Debug)]
 enum FetchedPrice {
 	Valid(Price),
+	Stale(Price),
 	Invalid,
 }
 
 impl<T: Config> OraclePriceCache<T> {
-	pub fn get_price(&self, asset: Asset) -> Result<Price, Error<T>> {
+	fn get_price_inner(&self, asset: Asset, allow_stale_price: bool) -> Result<Price, Error<T>> {
 		use sp_std::collections::btree_map::Entry;
 
 		// `borrow_mut` is safe because we don't create any more references while holding it
 		let cached_price = match self.cached_prices.borrow_mut().entry(asset) {
 			Entry::Vacant(entry) => {
 				// Price has never been requested this block, so we try to fetch it
-				if let Some(valid_price) = T::PriceApi::get_price(asset).and_then(|oracle_price| {
-					if oracle_price.stale || oracle_price.price == Price::zero() {
-						None
+				if let Some(oracle_price) = T::PriceApi::get_price(asset) {
+					if oracle_price.price == Price::zero() {
+						*entry.insert(FetchedPrice::Invalid)
+					} else if oracle_price.stale {
+						*entry.insert(FetchedPrice::Stale(oracle_price.price))
 					} else {
-						Some(oracle_price.price)
+						*entry.insert(FetchedPrice::Valid(oracle_price.price))
 					}
-				}) {
-					*entry.insert(FetchedPrice::Valid(valid_price))
 				} else {
-					// Store the price as "invalid" so we know not to request it again (in the same
-					// block)
 					*entry.insert(FetchedPrice::Invalid)
 				}
 			},
-			// Already requested the price earlier, only return it if it is "valid":
 			Entry::Occupied(price) => *price.get(),
 		};
 
 		match cached_price {
 			FetchedPrice::Valid(price) => Ok(price),
 			FetchedPrice::Invalid => Err(Error::<T>::OraclePriceUnavailable),
+			FetchedPrice::Stale(price) =>
+				if allow_stale_price {
+					Ok(price)
+				} else {
+					Err(Error::<T>::OraclePriceUnavailable)
+				},
 		}
 	}
 
+	pub fn get_price(&self, asset: Asset) -> Result<Price, Error<T>> {
+		self.get_price_inner(asset, false)
+	}
+
+	pub fn get_price_allow_stale(&self, asset: Asset) -> Result<Price, Error<T>> {
+		self.get_price_inner(asset, true)
+	}
+
+	fn usd_value_inner(
+		&self,
+		asset: Asset,
+		amount: AssetAmount,
+		allow_stale_price: bool,
+	) -> Result<AssetAmount, Error<T>> {
+		let price_in_usd = if allow_stale_price {
+			self.get_price_allow_stale(asset)?
+		} else {
+			self.get_price(asset)?
+		};
+		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+	}
+
 	/// Uses oracle prices to calculate the USD value of the given asset amount
-	pub(super) fn usd_value_of(
+	pub fn usd_value_of(&self, asset: Asset, amount: AssetAmount) -> Result<AssetAmount, Error<T>> {
+		self.usd_value_inner(asset, amount, false)
+	}
+
+	/// Uses oracle prices to calculate the USD value of the given asset amount, even if the price
+	/// is stale.
+	pub fn usd_value_of_allow_stale(
 		&self,
 		asset: Asset,
 		amount: AssetAmount,
 	) -> Result<AssetAmount, Error<T>> {
-		let price_in_usd = self.get_price(asset)?;
-
-		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+		self.usd_value_inner(asset, amount, true)
 	}
 
-	// Uses oracle prices to calculate the total USD value of the entire map of assets
-	fn total_usd_value_of(
+	fn total_usd_value_of_inner(
 		&self,
 		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+		allow_stale_price: bool,
 	) -> Result<AssetAmount, DispatchError> {
 		let mut total_collateral_usd = 0;
 		for (asset, amount) in assets_amounts {
-			total_collateral_usd.saturating_accrue(self.usd_value_of(*asset, *amount)?);
+			if allow_stale_price {
+				total_collateral_usd
+					.saturating_accrue(self.usd_value_of_allow_stale(*asset, *amount)?);
+			} else {
+				total_collateral_usd.saturating_accrue(self.usd_value_of(*asset, *amount)?);
+			}
 		}
 
 		Ok(total_collateral_usd)
 	}
 
+	// Uses oracle prices to calculate the total USD value of the entire map of assets
+	pub fn total_usd_value_of(
+		&self,
+		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<AssetAmount, DispatchError> {
+		self.total_usd_value_of_inner(assets_amounts, false)
+	}
+
+	// Uses oracle prices to calculate the total USD value of the entire map of assets, even if one
+	// or more assets has a stale price.
+	pub fn total_usd_value_of_allow_stale(
+		&self,
+		assets_amounts: &BTreeMap<Asset, AssetAmount>,
+	) -> Result<AssetAmount, DispatchError> {
+		self.total_usd_value_of_inner(assets_amounts, true)
+	}
+
 	/// Uses oracle prices to calculate the amount of `asset` that's equivalent in USD value to
 	/// `amount` of USD
-	fn amount_from_usd_value(
+	pub fn amount_from_usd_value(
 		&self,
 		asset: Asset,
 		usd_value: AssetAmount,
@@ -1379,7 +1431,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				RepaymentAmount::Exact(amount) => {
 					if amount < loan.owed_principal {
 						ensure!(
-							price_cache.usd_value_of(loan.asset, amount)? >=
+							price_cache.usd_value_of_allow_stale(loan.asset, amount)? >=
 								config.minimum_update_loan_amount_usd,
 							Error::<T>::AmountBelowMinimum
 						);
@@ -1403,7 +1455,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				loan_account.settle_loan(loan_id, false /* not via liquidation */);
 			} else {
 				ensure!(
-					price_cache.usd_value_of(loan.asset, loan.owed_principal)? >=
+					price_cache.usd_value_of_allow_stale(loan.asset, loan.owed_principal)? >=
 						config.minimum_loan_amount_usd,
 					Error::<T>::RemainingAmountBelowMinimum
 				);
@@ -1428,7 +1480,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let price_cache = OraclePriceCache::<T>::default();
 
 		ensure!(
-			price_cache.total_usd_value_of(&collateral)? >=
+			price_cache.total_usd_value_of_allow_stale(&collateral,)? >=
 				LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
 			Error::<T>::AmountBelowMinimum
 		);
