@@ -1,4 +1,3 @@
-
 use super::*;
 use cf_primitives::{AssetAndAmount, SwapRequestId};
 use cf_traits::lending::LoanId;
