@@ -11,10 +11,7 @@ export async function setupLpAccount(logger: Logger, uri: string) {
 
   // Check for existing role
   logger.trace(`Checking existing role for ${uri}`);
-  const role = JSON.stringify(await chainflip.query.accountRoles.accountRoles(lp.address)).replace(
-    /"/g,
-    '',
-  );
+  const role = (await chainflip.query.accountRoles.accountRoles(lp.address)).toString();
   if (role === 'LiquidityProvider') {
     logger.debug(`${lp.address} is already registered as an LP`);
     return lp;

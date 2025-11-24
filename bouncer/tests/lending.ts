@@ -1,11 +1,11 @@
 import { Logger } from 'pino';
 import assert from 'assert';
+import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { setupLpAccount } from 'shared/setup_account';
 import {
   amountToFineAmount,
   amountToFineAmountBigInt,
-  Asset,
   assetDecimals,
   ChainflipExtrinsicSubmitter,
   lpMutex,
@@ -17,6 +17,7 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { randomBytes } from 'crypto';
 import { TestContext } from 'shared/utils/test_context';
+import { setupLendingPools } from 'shared/lending';
 
 export interface Loan {
   loan_id: number;
@@ -207,17 +208,31 @@ async function lendingTestForAsset(
 }
 
 export async function lendingTest(testContext: TestContext): Promise<void> {
-  // Setup
-  testContext.logger.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
+  const logger = testContext.logger;
+
+  // Check if the lending pool exists. This can be removed after the `upgrade_test` uses the new lending pool setup.
+  await using chainflip = await getChainflipApi();
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const btcPool: any = (
+    await chainflip.query.lendingPools.generalLendingPools(Assets.Btc)
+  ).toJSON();
+  console.log(`BTC Lending Pool: ${btcPool}`);
+  if (!btcPool) {
+    logger.info('Btc lending pool not found, running setupLendingPools');
+    await setupLendingPools(logger);
+  }
+
+  // Set lending config and whitelist
+  logger.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
       { SetInterestPaymentIntervalBlocks: 1 },
       { SetInterestCollectionThresholdUsd: 1 },
     ]),
   );
-  testContext.logger.debug(`Disabling lending pool whitelist`);
+  logger.debug(`Disabling lending pool whitelist`);
   await submitGovernanceExtrinsic((api) => api.tx.lendingPools.updateWhitelist('SetAllowAll'));
 
   // Run test
-  await lendingTestForAsset(testContext.logger, 'Eth', 35, 'Btc', 1.8);
+  await lendingTestForAsset(logger, Assets.Eth, 35, Assets.Btc, 1.8);
 }

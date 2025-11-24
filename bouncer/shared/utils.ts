@@ -1476,10 +1476,16 @@ export async function submitExtrinsic(
   const account = createStateChainKeypair(uri);
   const [expectedSection, expectedMethod] = findEvent.split(':');
   const release = await mutex.acquire(uri);
-  const { promise, waiter } = waitForExt(api, logger, 'InBlock');
+  const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
   const nonce = (await api.rpc.system.accountNextIndex(account.address)) as unknown as number;
   const unsub = await extrinsic.signAndSend(account, { nonce }, waiter);
-  const events = await promise;
+  let events: EventRecord[] = [];
+  try {
+    events = await promise;
+  } catch (error) {
+    unsub();
+    throw error;
+  }
   unsub();
   release();
 
