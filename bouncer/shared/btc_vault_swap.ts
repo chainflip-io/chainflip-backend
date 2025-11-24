@@ -150,8 +150,8 @@ export async function buildAndSendInvalidBtcVaultSwap(
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
-    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
-    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    stateChainAssetFromAsset(Assets.Btc),
+    stateChainAssetFromAsset(destinationAsset),
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,

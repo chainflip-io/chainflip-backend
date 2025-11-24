@@ -183,7 +183,7 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
   const inputAsset = Assets.Btc;
   const destAsset = Assets.Usdc;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
+  const destAddress = await newAssetAddress(destAsset);
 
   const txId = await buildAndSendInvalidBtcVaultSwap(
     logger,
@@ -191,7 +191,7 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
     Number(depositAmount),
     destAsset,
     destAddress,
-    await newAssetAddress('Btc', 'BTC_VAULT_SWAP_REFUND'),
+    await newAssetAddress(inputAsset, 'BTC_VAULT_SWAP_REFUND'),
     Number(10),
   );
 
