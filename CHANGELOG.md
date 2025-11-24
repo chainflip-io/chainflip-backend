@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.12.5] - 2025-11-24
+
+- New CustomAPI methods to get all vault addresses / deposit channels.
+
 ## [1.12.4] - 2025-11-07
 
 - Increase max extrinsic length.
