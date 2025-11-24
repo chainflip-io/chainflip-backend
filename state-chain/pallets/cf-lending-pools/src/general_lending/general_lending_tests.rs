@@ -1512,6 +1512,124 @@ fn basic_liquidation() {
 }
 
 #[test]
+fn soft_liquidation_escalates_to_hard() {
+	// This is high enough to trigger soft liquidation
+	const NEW_SWAP_RATE: u128 = 24;
+
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
+
+	// The user get unfavourable swap rate here, which should trigger
+	// escalation to hard liquidation:
+	const SWAP_1_OUTPUT_AMOUNT: AssetAmount = 45 * PRINCIPAL / 100;
+	const SWAP_1_REMAINING_INPUT_AMOUNT: AssetAmount = INIT_COLLATERAL / 2;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.then_execute_with(|_| {
+			// Change oracle price to trigger liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating {
+					liquidation_swaps: BTreeMap::from([(
+						LIQUIDATION_SWAP_1,
+						LiquidationSwap {
+							loan_id: LOAN_ID,
+							from_asset: COLLATERAL_ASSET,
+							to_asset: LOAN_ASSET
+						}
+					)]),
+					liquidation_type: LiquidationType::Soft
+				}
+			);
+
+			// Process liquidation swap half way through
+			MockSwapRequestHandler::<Test>::set_swap_request_progress(
+				LIQUIDATION_SWAP_1,
+				SwapExecutionProgress {
+					remaining_input_amount: SWAP_1_REMAINING_INPUT_AMOUNT,
+					accumulated_output_amount: SWAP_1_OUTPUT_AMOUNT,
+				},
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// Due to bad swap rate, we escalate into a hard liquidation:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating {
+					liquidation_swaps: BTreeMap::from([(
+						LIQUIDATION_SWAP_2,
+						LiquidationSwap {
+							loan_id: LOAN_ID,
+							from_asset: COLLATERAL_ASSET,
+							to_asset: LOAN_ASSET
+						}
+					)]),
+					liquidation_type: LiquidationType::Hard
+				}
+			);
+
+			let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAP_1_OUTPUT_AMOUNT;
+
+			let total_owed_after_swap_1 =
+				PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 - SWAP_1_OUTPUT_AMOUNT;
+			let liquidation_fee_2 = CONFIG.liquidation_fee(LOAN_ASSET) * total_owed_after_swap_1;
+
+			// Swap 2 happens to result in exactly the amount we need to repay the loan + fees:
+			let swap_2_output_amount = total_owed_after_swap_1 + liquidation_fee_2;
+
+			// The remaining amount is fully executed:
+			LendingPools::process_loan_swap_outcome(
+				LIQUIDATION_SWAP_2,
+				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+				swap_2_output_amount,
+			);
+
+			// The account has been removed (it had no collateral and no loans)
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+
+			let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+
+			let (liquidaion_fee_1_network, liquidation_fee_1_pool) =
+				take_network_fee(liquidation_fee_1);
+
+			let (liquidaion_fee_2_network, liquidation_fee_2_pool) =
+				take_network_fee(liquidation_fee_2);
+
+			let total_amount_in_pool = INIT_POOL_AMOUNT +
+				origination_fee_pool +
+				liquidation_fee_1_pool +
+				liquidation_fee_2_pool;
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+				LendingPool {
+					// The pool's value has increased by pool's origination fee
+					total_amount: total_amount_in_pool,
+					// The available amount has been decreased not only by the loan's principal, but
+					// also by the network's origination fee (it will be by the borrower repaid at a
+					// later point)
+					available_amount: total_amount_in_pool,
+					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
+					owed_to_network: 0,
+				}
+			);
+
+			assert_eq!(
+				PendingNetworkFees::<Test>::get(LOAN_ASSET),
+				origination_fee_network + liquidaion_fee_1_network + liquidaion_fee_2_network
+			);
+		});
+}
+
+#[test]
 fn liquidation_fully_repays_loan_when_aborted() {
 	// Test a (likely rare) scenario where liquidation is aborted (due to reaching
 	// acceptable LTV), but the collateral already swapped is enough to fully cover
