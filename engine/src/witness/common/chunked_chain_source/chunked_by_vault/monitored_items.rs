@@ -63,7 +63,6 @@ fn is_header_ready<Inner: ChunkedByVault>(
 /// If CFE A does not wait until the block is ready to process it can miss witnesses and be out
 /// of sync with the other CFEs.
 #[derive(Clone)]
-#[allow(clippy::type_complexity)]
 pub struct MonitoredSCItems<Inner: ChunkedByVault, MonitoredItems, ItemFilter>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,

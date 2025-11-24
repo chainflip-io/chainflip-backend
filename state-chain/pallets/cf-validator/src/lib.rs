@@ -1609,7 +1609,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::RotationAborted);
 	}
 
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub fn run_initial_auction() -> Result<
 		(
 			AuctionOutcome<T::AccountId, T::Amount>,
@@ -1656,7 +1656,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub fn resolve_auction_iteratively() -> Result<
 		(
 			AuctionOutcome<T::AccountId, T::Amount>,
@@ -1919,7 +1919,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
 	/// validators).
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>() -> (
 		BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
 		BTreeMap<T::AccountId, T::Amount>,

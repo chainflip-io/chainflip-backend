@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::allow_attributes)]
+
 /// Implements `VoteStorage` for tuples of `VoteStorage` types.
 ///
 /// Requires a generic list of tuple identifiers. The first should be named `A` otherwise the impl

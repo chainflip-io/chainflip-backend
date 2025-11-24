@@ -118,7 +118,7 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 			match event {
 				BtcEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
 				BtcEvent::Witness(egress) => {
-					#[allow(clippy::unit_arg)]
+					#[expect(clippy::unit_arg)]
 					if let Err(err) = BitcoinBroadcaster::egress_success(
 						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 						egress.tx_out_id,

@@ -375,7 +375,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
   ).toJSON() as number;
 
   logger.info('Setting up a broker account');
-  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL`;
+  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
   const broker = createStateChainKeypair(brokerUri);
   await setupBrokerAccount(logger, brokerUri);
 

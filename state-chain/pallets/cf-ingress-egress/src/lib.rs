@@ -492,6 +492,44 @@ pub mod pallet {
 		pub boost_fee: BasisPoints,
 	}
 
+	impl<T: Config<I>, I: 'static> VaultDepositWitness<T, I> {
+		pub fn unrefundable(
+			channel_id: Option<ChannelId>,
+			deposit_address: Option<TargetChainAccount<T, I>>,
+			input_asset: TargetChainAsset<T, I>,
+			deposit_amount: <T::TargetChain as Chain>::ChainAmount,
+			tx_id: TransactionInIdFor<T, I>,
+			deposit_details: <T::TargetChain as Chain>::DepositDetails,
+		) -> Self {
+			Self {
+				input_asset,
+				output_asset: input_asset.into(),
+				deposit_amount,
+				destination_address: EncodedAddress::Eth([0; 20]),
+				tx_id,
+				deposit_details,
+				deposit_metadata: None,
+				broker_fee: None,
+				affiliate_fees: vec![].try_into().expect("Empty affiliates is always valid"),
+				refund_params: ChannelRefundParametersForChain::<T::TargetChain> {
+					// We use the burn address for the refund address,
+					// This will cause the deposit to be ingressed but without any action
+					// dispatched.
+					refund_address: <T::TargetChain as Chain>::BURN_ADDRESS,
+					retry_duration: Default::default(),
+					min_price: Default::default(),
+					refund_ccm_metadata: Default::default(),
+					max_oracle_price_slippage: Default::default(),
+				},
+				dca_params: None,
+				// We never boost wrongly encoded vault swaps
+				boost_fee: 0,
+				channel_id,
+				deposit_address,
+			}
+		}
+	}
+
 	#[derive(
 		CloneNoBound,
 		RuntimeDebugNoBound,
@@ -548,11 +586,9 @@ pub mod pallet {
 	}
 
 	/// Determines the action to take when a deposit is made to a channel.
-	#[allow(clippy::large_enum_variant)]
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[n_functor::derive_n_functor(CcmMetadata = ccm_metadata)]
 	#[scale_info(skip_type_params(C))]
-	#[allow(clippy::large_enum_variant)]
 	pub enum ChannelAction<AccountId, ChainAccount, CcmMetadata = CcmChannelMetadataChecked> {
 		Swap {
 			destination_asset: Asset,
@@ -2932,6 +2968,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
+		if refund_address == <<T as Config<I>>::TargetChain as Chain>::BURN_ADDRESS {
+			return ChannelAction::Unrefundable;
+		}
+
 		let Ok(checked_refund_params) =
 			refund_params.map_refund_address_to_foreign_chain_address().into_checked(
 				deposit_address.clone().map(|addr| addr.into_foreign_chain_address()),
@@ -3132,7 +3172,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Generates a new deposit channel for the given asset
-	#[allow(clippy::type_complexity)]
 	fn generate_new_channel(
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<DepositChannel<T::TargetChain>, DispatchError> {
@@ -3160,7 +3199,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// requester.
 	///
 	/// The requester must have enough FLIP available to pay the channel opening fee.
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	fn open_channel(
 		requester: &T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
@@ -3275,7 +3314,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the remaining amount after the fee has been withheld, and the fee itself, both
 	/// measured in units of the input asset. A swap may be scheduled to convert the fee into the
 	/// gas asset.
-	#[allow(clippy::redundant_pattern_matching)]
 	pub fn withhold_ingress_or_egress_fee(
 		ingress_or_egress: IngressOrEgress,
 		asset: TargetChainAsset<T, I>,

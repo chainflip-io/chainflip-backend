@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { InternalAssets as Assets, executeRedemption, getRedemptionDelay } from '@chainflip/cli';
+import { executeRedemption, getRedemptionDelay } from '@chainflip/cli';
 import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from 'shared/send_evm';
@@ -15,6 +15,7 @@ import {
   assetDecimals,
   createStateChainKeypair,
   getEvmWhaleKeypair,
+  Assets,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';

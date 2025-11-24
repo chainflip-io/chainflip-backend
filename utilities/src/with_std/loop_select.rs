@@ -161,6 +161,7 @@ macro_rules! inner_loop_select {
 #[macro_export]
 macro_rules! loop_select {
     ($($cases:tt)+) => {{
+		#[allow(clippy::allow_attributes)]
 		#[allow(unused, unused_mut)]
 		let mut disabled_mask = 0u64;
         $crate::inner_loop_select!(disabled_mask, 0u64, {} $($cases)+)
@@ -171,7 +172,7 @@ macro_rules! loop_select {
 mod test_loop_select {
 	use futures::StreamExt;
 
-	#[allow(clippy::unit_cmp)]
+	#[expect(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn exits_loop_on_branch_failure() {
 		const BREAK_VALUE: u32 = 1;
@@ -393,7 +394,7 @@ mod test_loop_select {
 	}
 
 	#[tokio::test]
-	#[allow(unreachable_code)]
+	#[expect(unreachable_code)]
 	async fn doesnt_run_disabled_branches() {
 		macro_rules! test {
 			($({$($branch:tt)+})+) => {
@@ -431,7 +432,7 @@ mod test_loop_select {
 		});
 	}
 
-	#[allow(unreachable_code)]
+	#[expect(unreachable_code)]
 	#[tokio::test]
 	async fn runs_enabled_branches() {
 		macro_rules! test {
@@ -498,7 +499,7 @@ mod test_loop_select {
 		);
 	}
 
-	#[allow(clippy::unit_cmp)]
+	#[expect(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn disabled_branches() {
 		// Break condition works

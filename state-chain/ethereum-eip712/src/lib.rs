@@ -81,14 +81,18 @@ pub fn recursively_construct_types(
 						"uint256".to_string(),
 						(
 							AddTypeOrNot::DontAdd,
-							stringified_unsigned_number(extract_primitive_types(comp_value)?)?,
+							stringify_primitive_integers_types(extract_primitive_types(
+								comp_value,
+							)?)?,
 						),
 					),
 					["primitive_types", "U128"] => (
 						"uint128".to_string(),
 						(
 							AddTypeOrNot::DontAdd,
-							stringified_unsigned_number(extract_primitive_types(comp_value)?)?,
+							stringify_primitive_integers_types(extract_primitive_types(
+								comp_value,
+							)?)?,
 						),
 					),
 					["primitive_types", "H128"] => (
@@ -257,42 +261,26 @@ pub fn recursively_construct_types(
 					(AddTypeOrNot::AddType { type_fields }, Value::named_composite(values)),
 				)
 			},
-			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) =>
+			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
 				match type_def_primitive {
-					TypeDefPrimitive::Bool => ("bool".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::Char => ("string".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::Str => ("string".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::U8 => (
-						"uint8".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::U16 => (
-						"uint16".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::U32 => (
-						"uint32".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::U64 => (
-						"uint64".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::U128 => (
-						"uint128".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::U256 => (
-						"uint256".to_string(),
-						(AddTypeOrNot::DontAdd, stringified_unsigned_number(v)?),
-					),
-					TypeDefPrimitive::I8 => ("int8".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::I16 => ("int16".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::I32 => ("int32".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::I64 => ("int64".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::I128 => ("int128".to_string(), (AddTypeOrNot::DontAdd, v)),
-					TypeDefPrimitive::I256 => ("int256".to_string(), (AddTypeOrNot::DontAdd, v)),
+					TypeDefPrimitive::Bool => "bool".to_string(),
+					TypeDefPrimitive::Char => "string".to_string(),
+					TypeDefPrimitive::Str => "string".to_string(),
+					TypeDefPrimitive::U8 => "uint8".to_string(),
+					TypeDefPrimitive::U16 => "uint16".to_string(),
+					TypeDefPrimitive::U32 => "uint32".to_string(),
+					TypeDefPrimitive::U64 => "uint64".to_string(),
+					TypeDefPrimitive::U128 => "uint128".to_string(),
+					TypeDefPrimitive::U256 => "uint256".to_string(),
+					TypeDefPrimitive::I8 => "int8".to_string(),
+					TypeDefPrimitive::I16 => "int16".to_string(),
+					TypeDefPrimitive::I32 => "int32".to_string(),
+					TypeDefPrimitive::I64 => "int64".to_string(),
+					TypeDefPrimitive::I128 => "int128".to_string(),
+					TypeDefPrimitive::I256 => "int256".to_string(),
 				},
+				(AddTypeOrNot::DontAdd, v),
+			),
 
 			(TypeDef::Compact(type_def_compact), _) => {
 				let (type_name, c_value) =
@@ -386,9 +374,8 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 					&hex::encode(
 						v.into_iter()
 							.map(|e| match e.value {
-								ValueDef::Primitive(Primitive::String(s)) => Ok(s
-									.parse()
-									.map_err(|_| "the string is not a valid u8 number")?),
+								ValueDef::Primitive(Primitive::U128(b)) =>
+									Ok(b.try_into().map_err(|_| "u128 to u8 conversion failed")?),
 								_ => Err("Expected u8 primitive"),
 							})
 							.collect::<Result<Vec<u8>, _>>()?,
@@ -402,7 +389,7 @@ pub fn scale_value_bytes_to_hex(v: Value) -> Result<Value, &'static str> {
 }
 
 // uints are commonly stringified due to how ethers-js encodes
-fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
+fn stringify_primitive_integers_types(v: Value) -> Result<Value, &'static str> {
 	match v.value {
 		// this corresponds to the U256 in primitive_types crate.
 		ValueDef::Composite(Composite::Unnamed(v)) => {
@@ -428,13 +415,6 @@ fn stringified_unsigned_number(v: Value) -> Result<Value, &'static str> {
 				context: (),
 			})
 		},
-		ValueDef::Primitive(Primitive::U128(u)) =>
-			Ok(Value { value: ValueDef::Primitive(Primitive::String(u.to_string())), context: () }),
-		// this case should not be possible since u256 cant be constructed in native rust. This
-		// could be possible if a type were to communicate to TypeInfo that a specific type is
-		// actually a U256 and implements conversion to it. We dont support this.
-		ValueDef::Primitive(Primitive::U256(_)) =>
-			Err("scale values mapped to U256 primitives not supported"),
 		_ => Err("unexpected value: cannot convert to stringified number"),
 	}
 }

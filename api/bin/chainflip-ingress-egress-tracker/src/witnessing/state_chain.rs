@@ -122,7 +122,7 @@ impl serde::Serialize for TrackerAddress {
 	}
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Serialize)]
 #[serde(untagged)]
 enum WitnessInformation {
@@ -785,7 +785,6 @@ mod tests {
 		}
 	}
 
-	#[allow(clippy::type_complexity)]
 	fn create_client<C: Chain>(
 		result: Option<(BroadcastId, C::ChainBlockNumber)>,
 	) -> MockStateChainClient

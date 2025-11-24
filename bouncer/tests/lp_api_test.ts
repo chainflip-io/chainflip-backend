@@ -1,4 +1,3 @@
-import { InternalAssets as Assets } from '@chainflip/cli';
 import assert from 'assert';
 import {
   isValidHexHash,
@@ -10,12 +9,12 @@ import {
   isWithinOnePercent,
   assetDecimals,
   stateChainAssetFromAsset,
-  Chain,
   handleSubstrateError,
   shortChainFromAsset,
   newAssetAddress,
   createStateChainKeypair,
   getFreeBalance,
+  Assets,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -25,16 +24,8 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, loggerChild } from 'shared/utils/logger';
 
-type RpcAsset = {
-  asset: string;
-  chain: Chain;
-};
-
 const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
-const testRpcAsset: RpcAsset = {
-  chain: chainFromAsset(testAsset),
-  asset: stateChainAssetFromAsset(testAsset),
-};
+const testRpcAsset = stateChainAssetFromAsset(testAsset);
 const testAmount = 0.1;
 const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),

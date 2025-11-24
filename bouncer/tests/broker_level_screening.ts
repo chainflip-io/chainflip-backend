@@ -12,7 +12,6 @@ import {
   isWithinOnePercent,
   amountToFineAmountBigInt,
   getEvmEndpoint,
-  chainContractId,
   chainFromAsset,
   ingressEgressPalletForChain,
   observeBalanceIncrease,
@@ -20,6 +19,7 @@ import {
   observeFetch,
   btcClientMutex,
   getBtcClient,
+  getChainContractId,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import Keyring from 'polkadot/keyring';
@@ -403,7 +403,7 @@ async function testEvmLiquidityDeposit(
   const addressReponse = (
     await chainflip.query.liquidityProvider.liquidityRefundAddress(
       lp.address,
-      chainContractId(chainFromAsset(sourceAsset)),
+      getChainContractId(chainFromAsset(sourceAsset)),
     )
   ).toJSON() as any;
   if (addressReponse === undefined) {

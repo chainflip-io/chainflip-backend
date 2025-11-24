@@ -532,7 +532,7 @@ mod benchmarks {
 	}
 
 	#[benchmark]
-	fn update_primary_collateral_asset() {
+	fn update_collateral_topup_asset() {
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let origin = RawOrigin::Signed(borrower.clone());
 		let collateral =
@@ -549,11 +549,11 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		update_primary_collateral_asset(origin, LOAN_ASSET);
+		update_collateral_topup_asset(origin, Some(LOAN_ASSET));
 
 		assert_eq!(
-			get_loan_accounts::<T>(Some(borrower)).first().unwrap().primary_collateral_asset,
-			LOAN_ASSET
+			get_loan_accounts::<T>(Some(borrower)).first().unwrap().collateral_topup_asset,
+			Some(LOAN_ASSET)
 		);
 	}
 
@@ -690,8 +690,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			loan_account
-				.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped, &price_cache);
+			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
 		}
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
 	}
@@ -715,64 +714,5 @@ mod benchmarks {
 	#[cfg(test)]
 	use crate::mocks::{new_test_ext, Test};
 
-	#[test]
-	fn benchmark_works() {
-		new_test_ext().execute_with(|| {
-			_create_lending_pool::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_add_lender_funds::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_remove_lender_funds::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_add_collateral::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_add_collateral::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_remove_collateral::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_request_loan::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_expand_loan::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_make_repayment::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_update_primary_collateral_asset::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_usd_value_of::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_initiate_network_fee_swap::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_derive_ltv::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_loan_charge_interest::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_loan_calculate_top_up_amount::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_start_liquidation_swaps::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_abort_liquidation_swaps::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_change_voluntary_liquidation::<Test>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_update_whitelist::<Test>(true);
-		});
-	}
+	impl_benchmark_test_suite!(Pallet, new_test_ext(), Test);
 }

@@ -190,6 +190,7 @@ fn generate_votes(
 }
 
 // Util to create a successful set of votes, along with the consensus expectation.
+#[allow(clippy::allow_attributes)]
 #[allow(dead_code)]
 fn create_votes_expectation(
 	consensus: BlockData,

@@ -280,7 +280,7 @@ where
 	struct IteratorRef<'a, T, It: Iterator<Item = T>> {
 		it: &'a mut It,
 	}
-	#[allow(clippy::needless_lifetimes)]
+	#[expect(clippy::needless_lifetimes)]
 	impl<'a, T, It: Iterator<Item = T>> Iterator for IteratorRef<'a, T, It> {
 		type Item = T;
 
@@ -323,12 +323,12 @@ mod test_asserts {
 
 	#[test]
 	fn test_assert_matches() {
-		#[allow(dead_code)]
+		#[expect(dead_code)]
 		struct Foo {
 			pub a: u8,
 			pub b: u8,
 		}
-		#[allow(dead_code)]
+		#[expect(dead_code)]
 		enum Bar {
 			A(u8),
 			B(String),

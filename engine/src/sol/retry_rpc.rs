@@ -121,7 +121,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.request(
 				RequestLog::new("getBlock".to_string(), Some(format!("{slot:?}, {config:?}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_block(slot, config).await })
 				}),
 			)
@@ -132,10 +131,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("getSlot".to_string(), Some(format!("{commitment:?}"))),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.get_slot(commitment).await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.get_slot(commitment).await })),
 			)
 			.await
 	}
@@ -145,7 +141,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 			.request(
 				RequestLog::new("getRecentPrioritizationFees".to_string(), None),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_recent_prioritization_fees().await })
 				}),
 			)
@@ -168,7 +163,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					let pubkeys = pubkeys.clone();
 					let config = config.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_multiple_accounts(&pubkeys, config).await })
 				}),
 			)
@@ -187,7 +181,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				),
 				Box::pin(move |client| {
 					let signatures = signatures.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_signature_statuses(&signatures).await })
 				}),
 			)
@@ -206,7 +199,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 					Some(format!("{:?}, {:?}", signature, config)),
 				),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(&signature, config).await })
 				}),
 			)
@@ -243,7 +235,7 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				),
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
-					#[allow(clippy::redundant_async_block)]
+
 					Box::pin(async move {
 						let tx_signature =
 							client.send_transaction(encoded_transaction, config).await?;
@@ -296,7 +288,6 @@ impl SolRetryRpcApi for SolRetryRpcClient {
 				Box::pin(move |client| {
 					let encoded_transaction = encoded_transaction.clone();
 					let config = config.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.simulate_transaction(encoded_transaction, config).await
 					})
@@ -325,7 +316,6 @@ impl ChainClient for SolRetryRpcClient {
 			.request(
 				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 				Box::pin(move |_client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						Ok(Header {
 							index: witness_period::block_witness_root(witness_period, index),

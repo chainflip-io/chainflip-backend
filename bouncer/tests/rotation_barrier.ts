@@ -2,10 +2,10 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { TestContext } from 'shared/utils/test_context';
 import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { InternalAssets } from '@chainflip/cli';
 import {
   amountToFineAmount,
   assetDecimals,
+  Assets,
   createStateChainKeypair,
   lpMutex,
   newAssetAddress,
@@ -18,9 +18,9 @@ export async function testRotationBarrier(testContext: TestContext) {
   const { logger } = testContext;
 
   const lpUri = process.env.LP_URI || '//LP_1';
-  const withdrawalAddress = await newAssetAddress(InternalAssets.ArbEth);
+  const withdrawalAddress = await newAssetAddress(Assets.ArbEth);
 
-  await depositLiquidity(logger, InternalAssets.ArbEth, 5, false, lpUri);
+  await depositLiquidity(logger, Assets.ArbEth, 5, false, lpUri);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   // Wait for the activation key to be created and the activation key to be sent for signing
@@ -39,13 +39,9 @@ export async function testRotationBarrier(testContext: TestContext) {
   const lp = createStateChainKeypair(lpUri);
   const nonce = Number(await api.rpc.system.accountNextIndex(lp.address));
   const unsub = await api.tx.liquidityProvider
-    .withdrawAsset(
-      amountToFineAmount('2', assetDecimals(InternalAssets.ArbEth)),
-      InternalAssets.ArbEth,
-      {
-        Arb: withdrawalAddress,
-      },
-    )
+    .withdrawAsset(amountToFineAmount('2', assetDecimals(Assets.ArbEth)), Assets.ArbEth, {
+      Arb: withdrawalAddress,
+    })
     .signAndSend(lp, { nonce }, waiter);
 
   const events = await promise;
@@ -73,7 +69,7 @@ export async function testRotationBarrier(testContext: TestContext) {
 
   logger.info(`Broadcast requested for egress ID ${egressId}. Waiting for balance increase...`);
 
-  await observeBalanceIncrease(logger, InternalAssets.ArbEth, withdrawalAddress);
+  await observeBalanceIncrease(logger, Assets.ArbEth, withdrawalAddress);
 
   await broadcastAborted.stop();
 }

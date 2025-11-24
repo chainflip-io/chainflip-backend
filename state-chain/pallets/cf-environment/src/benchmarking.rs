@@ -24,7 +24,7 @@ use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
-#[allow(clippy::multiple_bound_locations)]
+#[expect(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where
 	T: pallet_cf_flip::Config,

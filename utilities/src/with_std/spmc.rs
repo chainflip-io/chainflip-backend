@@ -34,7 +34,6 @@ pub struct Sender<T> {
 
 impl<T: Clone> Sender<T> {
 	/// Sends an item to all receivers
-	#[allow(clippy::manual_async_fn)]
 	#[track_caller]
 	pub fn send(&self, msg: T) -> impl futures::Future<Output = bool> + '_ {
 		let caller_location = core::panic::Location::caller();

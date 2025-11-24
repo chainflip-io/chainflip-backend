@@ -144,7 +144,7 @@ pub trait EvmCall {
 		.map(|(n, t)| ethabi_param(n, t))
 		.collect();
 
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		ethabi::Function {
 			name: Self::FUNCTION_NAME.into(),
 			inputs,

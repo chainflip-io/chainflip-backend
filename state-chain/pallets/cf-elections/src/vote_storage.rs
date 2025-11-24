@@ -79,7 +79,7 @@ pub trait VoteStorage: private::Sealed + Sized {
 	) -> Result<VoteComponents<Self>, CorruptStorageError>;
 
 	/// Note: If all components are `None` this *MUST* always return `None`.
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	fn components_into_authority_vote<
 		GetSharedData: FnMut(SharedDataHash) -> Result<Option<Self::SharedData>, CorruptStorageError>,
 	>(
