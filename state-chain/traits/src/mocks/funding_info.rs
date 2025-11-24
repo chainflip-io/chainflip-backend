@@ -33,7 +33,6 @@ impl<T> MockPallet for MockFundingInfo<T> {
 }
 
 const BALANCES: &[u8] = b"BALANCES";
-const BONDS: &[u8] = b"BONDS";
 
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn credit_funds(account_id: &T::AccountId, amount: T::Amount) {
@@ -109,8 +108,8 @@ impl<T: Chainflip> AccountInfo for MockFundingInfo<T> {
 	}
 
 	/// Returns the bond on the account.
-	fn bond(account_id: &Self::AccountId) -> Self::Amount {
-		<Self as MockPalletStorage>::get_storage(BONDS, account_id).unwrap_or_default()
+	fn bond(_: &Self::AccountId) -> Self::Amount {
+		panic!("MockFundingInfo does not implement bond retrieval; use MockBonder instead")
 	}
 
 	/// Returns the account's liquid funds, net of the bond.
@@ -120,21 +119,10 @@ impl<T: Chainflip> AccountInfo for MockFundingInfo<T> {
 }
 
 impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
-	type AccountId = u64;
-	type Amount = u128;
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
 
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, _source: FundingSource) {
-		<Self as MockPalletStorage>::mutate_value(
-			BONDS,
-			|storage: &mut Option<BTreeMap<Self::AccountId, Self::Amount>>| {
-				if let Some(bonds) = storage.as_mut() {
-					bonds.entry(account_id).or_default().saturating_accrue(amount);
-				} else {
-					let _ = storage.insert(BTreeMap::from_iter([(account_id, amount)]));
-				}
-				Ok::<_, Never>(())
-			},
-		)
-		.unwrap();
+		Self::credit_funds(&account_id, amount);
 	}
 }

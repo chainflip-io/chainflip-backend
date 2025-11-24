@@ -2012,7 +2012,7 @@ mod credit_flip_and_transfer {
 					}),
 				);
 				assert_eq!(
-					MockFundingInfo::<Test>::bond(&LP_ACCOUNT),
+					MockFundingInfo::<Test>::balance(&LP_ACCOUNT),
 					EXPECTED_OUTPUT_AMOUNT.saturating_sub(INITIAL_FLIP_FUNDING)
 				);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), EXPECTED_OUTPUT_AMOUNT);

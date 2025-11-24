@@ -2863,7 +2863,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 #[test]
 fn additional_action_correctly_prefund_and_create_account() {
 	const DEPOSIT_AMOUNT: AssetAmount = 1_000_000_000_000_000_000;
-	const LP_ACCOUNT: u64 = 0;
+	const NEW_ACCOUNT: u64 = 0;
 
 	let full_witness = || {
 		EthereumIngressEgress::process_full_witness_deposit_inner(
@@ -2875,7 +2875,7 @@ fn additional_action_correctly_prefund_and_create_account() {
 			0,
 			None,
 			ChannelAction::LiquidityProvision {
-				lp_account: LP_ACCOUNT,
+				lp_account: NEW_ACCOUNT,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
 				additional_action: Some(AdditionalDepositAction::FundFlip {
 					flip_amount_to_credit: FLIPPERINOS_PER_FLIP * 10,
@@ -2892,15 +2892,16 @@ fn additional_action_correctly_prefund_and_create_account() {
 	};
 
 	new_test_ext().execute_with(|| {
-		assert_eq!(MockFundingInfo::<Test>::bond(&LP_ACCOUNT), 0);
+		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), 0);
+		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 0);
 		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
-			&LP_ACCOUNT
+			&NEW_ACCOUNT
 		));
-		assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth), 0);
+		assert_eq!(MockBalance::get_balance(&NEW_ACCOUNT, Asset::Eth), 0);
 
 		assert!(full_witness().is_ok());
 
-		let credited_balance = MockBalance::get_balance(&LP_ACCOUNT, Asset::Eth);
+		let credited_balance = MockBalance::get_balance(&NEW_ACCOUNT, Asset::Eth);
 		let swapped_amount = DEPOSIT_AMOUNT.saturating_sub(credited_balance);
 
 		let funding_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
@@ -2910,10 +2911,11 @@ fn additional_action_correctly_prefund_and_create_account() {
 
 		assert_eq!(funding_swap.input_amount, swapped_amount);
 		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::has_account_role(
-			&LP_ACCOUNT,
+			&NEW_ACCOUNT,
 			AccountRole::LiquidityProvider
 		));
-		assert_eq!(MockFundingInfo::<Test>::bond(&LP_ACCOUNT), INITIAL_FLIP_FUNDING);
+		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 1);
+		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), INITIAL_FLIP_FUNDING);
 	});
 }
 
