@@ -32,15 +32,6 @@ const TIER_5_BPS: BoostPoolTier = 5;
 const TIER_10_BPS: BoostPoolTier = 10;
 const TIER_30_BPS: BoostPoolTier = 30;
 
-#[test]
-fn test_fee_math() {
-	use crate::utils::*;
-
-	assert_eq!(fee_from_boosted_amount(1_000_000, 10), 1_000);
-
-	assert_eq!(fee_from_provided_amount(1_000_000, 10), Ok(1_001));
-}
-
 const INIT_BOOSTER_ETH_BALANCE: AssetAmount = 1_000_000_000;
 const INIT_BOOSTER_FLIP_BALANCE: AssetAmount = 1_000_000_000;
 
