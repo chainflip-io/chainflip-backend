@@ -1,7 +1,7 @@
-import { InternalAssets as Assets } from '@chainflip/cli';
 import {
   amountToFineAmount,
   Asset,
+  Assets,
   assetDecimals,
   ChainflipExtrinsicSubmitter,
   createStateChainKeypair,

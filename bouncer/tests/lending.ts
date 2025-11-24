@@ -1,6 +1,5 @@
 import { Logger } from 'pino';
 import assert from 'assert';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { setupLpAccount } from 'shared/setup_account';
 import {
@@ -12,6 +11,8 @@ import {
   getFreeBalance,
   sleep,
   submitExtrinsic,
+  Asset,
+  Assets,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
