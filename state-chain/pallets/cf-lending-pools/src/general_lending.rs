@@ -1120,7 +1120,6 @@ impl<T: Config> OraclePriceCache<T> {
 					*entry.insert(FetchedPrice::Invalid)
 				}
 			},
-			// Already requested the price earlier, only return it if it is "valid":
 			Entry::Occupied(price) => *price.get(),
 		};
 
