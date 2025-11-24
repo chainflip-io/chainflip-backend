@@ -1,8 +1,9 @@
 import assert from 'assert';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import {
+  Assets,
   createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
@@ -29,8 +30,8 @@ async function testRefundVaultSwap(logger: Logger) {
   const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
-  const refundAddress = await newAssetAddress('Btc');
+  const destAddress = await newAssetAddress(destAsset);
+  const refundAddress = await newAssetAddress(inputAsset);
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
@@ -56,7 +57,7 @@ async function testRefundVaultSwap(logger: Logger) {
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    const refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    const refundAddressBalance = await getBalance(inputAsset, refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;
@@ -182,7 +183,7 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
   const inputAsset = Assets.Btc;
   const destAsset = Assets.Usdc;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
+  const destAddress = await newAssetAddress(destAsset);
 
   const txId = await buildAndSendInvalidBtcVaultSwap(
     logger,
@@ -190,7 +191,7 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
     Number(depositAmount),
     destAsset,
     destAddress,
-    await newAssetAddress('Btc', 'BTC_VAULT_SWAP_REFUND'),
+    await newAssetAddress(inputAsset, 'BTC_VAULT_SWAP_REFUND'),
     Number(10),
   );
 

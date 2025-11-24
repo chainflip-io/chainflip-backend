@@ -1,11 +1,12 @@
 import assert from 'assert';
-import { Chains } from '@chainflip/cli';
 import { sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
+  Assets,
   brokerMutex,
   chainFromAsset,
+  Chains,
   createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,
@@ -97,8 +98,8 @@ export async function buildAndSendBtcVaultSwap(
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
-    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
-    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    stateChainAssetFromAsset(Assets.Btc),
+    stateChainAssetFromAsset(destinationAsset),
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
@@ -149,8 +150,8 @@ export async function buildAndSendInvalidBtcVaultSwap(
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
-    { chain: 'Bitcoin', asset: stateChainAssetFromAsset('Btc') },
-    { chain: chainFromAsset(destinationAsset), asset: stateChainAssetFromAsset(destinationAsset) },
+    stateChainAssetFromAsset(Assets.Btc),
+    stateChainAssetFromAsset(destinationAsset),
     chainFromAsset(destinationAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,

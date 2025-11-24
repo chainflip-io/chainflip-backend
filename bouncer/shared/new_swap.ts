@@ -1,7 +1,6 @@
-import { InternalAsset as Asset, Chain, Asset as SCAsset, broker } from '@chainflip/cli';
+import { InternalAsset as Asset, broker } from '@chainflip/cli';
 import {
   decodeDotAddressForContract,
-  chainFromAsset,
   stateChainAssetFromAsset,
   isPolkadotAsset,
   newAssetAddress,
@@ -49,11 +48,9 @@ export async function newSwap(
     try {
       await broker.requestSwapDepositAddress(
         {
-          srcAsset: stateChainAssetFromAsset(sourceAsset) as SCAsset,
-          destAsset: stateChainAssetFromAsset(destAsset) as SCAsset,
-          srcChain: chainFromAsset(sourceAsset) as Chain,
+          srcAsset: stateChainAssetFromAsset(sourceAsset),
+          destAsset: stateChainAssetFromAsset(destAsset),
           destAddress: destinationAddress,
-          destChain: chainFromAsset(destAsset) as Chain,
           ccmParams: messageMetadata && {
             message: messageMetadata.message,
             gasBudget: messageMetadata.gasBudget.toString(),
