@@ -29,9 +29,13 @@ pub use general_lending::{
 		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
 		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 	},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolConfiguration,
-	LiquidationCompletionReason, LiquidationType, LtvThresholds, NetworkFeeContributions,
-	OraclePriceCache, WhitelistStatus, WhitelistUpdate, WithdrawnAndRemainingAmounts,
+	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
+	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+};
+
+pub use general_lending::config::{
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
+	NetworkFeeContributions,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
