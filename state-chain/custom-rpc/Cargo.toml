@@ -41,7 +41,7 @@ pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-lending-pools = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
 pallet-cf-elections = { workspace = true, default-features = true }
-ethereum-eip712 = { workspace = true }
+ethereum-eip712 = { workspace = true, features = ["std"] }
 ethers-core = { workspace = true }
 
 sp-api = { workspace = true, default-features = true }

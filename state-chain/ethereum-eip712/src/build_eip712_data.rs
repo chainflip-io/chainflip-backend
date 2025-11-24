@@ -54,3 +54,46 @@ pub fn build_eip712_typed_data<T: TypeInfo + Encode + 'static>(
 		message: typed_data.message,
 	})
 }
+
+#[cfg(feature = "std")]
+pub fn to_ethers_typed_data(
+	typed_data: TypedData,
+) -> Result<ethers_core::types::transaction::eip712::TypedData, String> {
+	let message_scale_value: scale_value::Value =
+		typed_data.message.clone().stringify_integers().into();
+
+	Ok(ethers_core::types::transaction::eip712::TypedData {
+		domain: ethers_core::types::transaction::eip712::EIP712Domain {
+			name: typed_data.domain.name,
+			version: typed_data.domain.version,
+			chain_id: typed_data.domain.chain_id,
+			verifying_contract: typed_data.domain.verifying_contract,
+			salt: typed_data.domain.salt,
+		},
+		types: typed_data
+			.types
+			.iter()
+			.map(|(s, tys)| {
+				(
+					s.clone(),
+					tys.iter()
+						.map(|t| ethers_core::types::transaction::eip712::Eip712DomainType {
+							name: t.name.clone(),
+							r#type: t.r#type.clone(),
+						})
+						.collect(),
+				)
+			})
+			.collect(),
+		primary_type: typed_data.primary_type,
+		message: serde_json::to_value(message_scale_value)
+			.map_err(|e| format!("Failed to serialize message to JSON: {}", e))?
+			.as_object()
+			.ok_or(
+				"the primary type is not a JSON object but one of the primitive types".to_string(),
+			)?
+			.clone()
+			.into_iter()
+			.collect(),
+	})
+}
