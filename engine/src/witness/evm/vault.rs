@@ -27,7 +27,7 @@ use super::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::{events_at_block, Event},
+	contract_common::{events_at_block2, Event},
 };
 
 use cf_chains::{
@@ -332,7 +332,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let supported_assets = supported_assets.clone();
 			let mut process_calls = vec![];
 			async move {
-				for event in events_at_block::<Inner::Chain, VaultEvents, _>(
+				for event in events_at_block2::<Inner::Chain, VaultEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,

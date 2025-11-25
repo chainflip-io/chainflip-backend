@@ -14,11 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	evm::rpc::address_checker::AddressState,
+	evm::retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
 	witness::{
 		common::block_height::{witness_headers, HeaderClient},
 		evm::{
-			contract_common::Event,
+			contract_common::{address_states, events_at_block, query_election_block, Event},
 			erc20_deposits::Erc20Events,
 			evm_deposits::eth_ingresses_at_block,
 			key_manager::{
@@ -33,29 +33,23 @@ use crate::{
 		},
 	},
 };
-use anyhow::{anyhow, ensure};
+use anyhow::anyhow;
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	arb::ArbitrumTrackedData,
-	evm::{
-		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee, H256,
-	},
+	evm::{DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
 	Arbitrum, CcmChannelMetadata, CcmDepositMetadata, ChainWitnessConfig, ForeignChain,
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount};
 use cf_utilities::task_scope::{self, Scope};
-use ethbloom::Bloom;
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::{Bytes, TransactionReceipt},
-};
-use futures::{try_join, FutureExt};
+use ethers::types::{Bytes, TransactionReceipt};
+use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainTypes},
-		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
+		block_height_witnesser::primitives::Header,
+		block_witnesser::state_machine::BWElectionProperties,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
@@ -75,10 +69,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
-		cached_rpc::{
-			AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult,
-		},
-		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
+		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		rpc::EvmRpcSigningClient,
 	},
 	state_chain_observer::client::{
@@ -176,129 +167,6 @@ impl VoterApi<ArbitrumBlockHeightWitnesserES> for ArbitrumBlockHeightWitnesserVo
 	}
 }
 
-async fn query_election_block<
-	C: ChainTypes<ChainBlockHash = H256, ChainBlockNumber = BlockWitnessRange<Arbitrum>>,
->(
-	client: &EvmCachingClient<EvmRpcSigningClient>,
-	block_height: C::ChainBlockNumber,
-	election_type: EngineElectionType<C>,
-) -> Result<(Bloom, Option<C::ChainBlockHash>, C::ChainBlockHash, C::ChainBlockHash)> {
-	match election_type {
-		EngineElectionType::ByHash(hash) => {
-			let block = client.block_by_hash(hash).await?;
-			let block_number_range =
-				block_witness_range(Arbitrum::WITNESS_PERIOD, block.number.unwrap().low_u64());
-			let beginning_block = client.block((*block_number_range.start()).into()).await?;
-
-			if let Some(block_hash) = block.hash {
-				if block_hash != hash {
-					return Err(anyhow::anyhow!(
-						"Block hash from RPC ({}) doesn't match election block hash: {}",
-						block_hash,
-						hash
-					));
-				}
-				Ok((
-					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
-					None,
-					block_hash,
-					beginning_block.parent_hash,
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {}",
-					block_height.root()
-				))
-			}
-		},
-		EngineElectionType::BlockHeight { submit_hash } => {
-			let block = client.block((*block_height.into_range_inclusive().end()).into()).await?;
-			let beginning_block = client.block((*block_height.root()).into()).await?;
-			if let (Some(block_number), Some(block_hash)) = (block.number, block.hash) {
-				if block_number.as_u64() != *block_height.into_range_inclusive().end() {
-					return Err(anyhow::anyhow!(
-						"Block number from RPC ({}) doesn't match election block height: {}",
-						block_number,
-						block_height.root()
-					));
-				}
-				Ok((
-					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
-					if submit_hash { block.hash } else { None },
-					block_hash,
-					beginning_block.parent_hash,
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {}",
-					block_height.root()
-				))
-			}
-		},
-	}
-}
-
-async fn address_states<EvmCachingClient>(
-	eth_rpc: &EvmCachingClient,
-	address_checker_address: H160,
-	parent_hash: H256,
-	hash: H256,
-	addresses: Vec<H160>,
-) -> Result<impl Iterator<Item = (H160, (AddressState, AddressState))>, anyhow::Error>
-where
-	EvmCachingClient: AddressCheckerRetryRpcApiWithResult + Send + Sync + Clone,
-{
-	let (previous_address_states, address_states) = try_join!(
-		eth_rpc.address_states(parent_hash, address_checker_address, addresses.clone()),
-		eth_rpc.address_states(hash, address_checker_address, addresses.clone())
-	)?;
-
-	ensure!(
-		addresses.len() == previous_address_states.len() &&
-			previous_address_states.len() == address_states.len()
-	);
-
-	Ok(addresses
-		.into_iter()
-		.zip(previous_address_states.into_iter().zip(address_states)))
-}
-
-pub async fn events_at_block<Chain, EventParameters, EvmCachingClient>(
-	data: Bloom,
-	block_number: Chain::ChainBlockNumber,
-	block_hash: H256,
-	contract_address: H160,
-	eth_rpc: &EvmCachingClient,
-) -> Result<Vec<Event<EventParameters>>>
-where
-	Chain: cf_chains::Chain<ChainBlockNumber = u64>,
-	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EvmCachingClient: EvmRetryRpcApiWithResult,
-{
-	assert!(Chain::is_block_witness_root(block_number));
-	if Chain::WITNESS_PERIOD == 1 {
-		let mut contract_bloom = Bloom::default();
-		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
-
-		// if we have logs for this block, fetch them.
-		if data.contains_bloom(&contract_bloom) {
-			eth_rpc.get_logs(block_hash, contract_address).await?
-		} else {
-			// we know there won't be interesting logs, so don't fetch for events
-			vec![]
-		}
-	} else {
-		eth_rpc
-			.get_logs_range(Chain::block_witness_range(block_number), contract_address)
-			.await?
-	}
-	.into_iter()
-	.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-	})
-	.collect::<anyhow::Result<Vec<_>>>()
-}
-
 #[derive(Clone)]
 pub struct ArbitrumDepositChannelWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
@@ -316,7 +184,8 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 		let BWElectionProperties {
 			block_height, properties: deposit_addresses, election_type, ..
 		} = properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 		let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
 			deposit_addresses.into_iter().fold(
 				(Vec::new(), HashMap::new()),
@@ -337,15 +206,15 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 			address_states(
 				&self.client,
 				self.address_checker_address,
-				data.3,
-				data.2,
+				block.parent_hash,
+				block.hash,
 				eth_deposit_channels.clone(),
 			)
 			.await?,
 			events_at_block::<cf_chains::Arbitrum, _, _>(
-				data.0,
+				block.bloom,
 				*block_height.root(),
-				data.2,
+				block.hash,
 				self.vault_address,
 				&self.client,
 			)
@@ -364,9 +233,9 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 		for (asset, deposit_channels) in erc20_deposit_channels {
 			let events = match asset {
 				ArbAsset::ArbUsdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
-					data.0,
+					block.bloom,
 					*block_height.root(),
-					data.2,
+					block.hash,
 					self.usdc_contract_address,
 					&self.client,
 				)
@@ -418,7 +287,7 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 				.chain(erc20_ingresses)
 				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
 				.collect(),
-			data.1,
+			return_block_hash,
 		)))
 	}
 }
@@ -454,12 +323,13 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 	) -> std::result::Result<Option<VoteOf<ArbitrumVaultDepositWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _vault, election_type, .. } =
 			properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, _>(
-			data.0,
+			block.bloom,
 			*block_height.root(),
-			data.2,
+			block.hash,
 			self.vault_address,
 			&self.client,
 		)
@@ -636,7 +506,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 				_ => {},
 			}
 		}
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 
@@ -654,12 +524,13 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 	) -> std::result::Result<Option<VoteOf<ArbitrumKeyManagerWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _key_manager, election_type, .. } =
 			properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Arbitrum, KeyManagerEvents, _>(
-			data.0,
+			block.bloom,
 			*block_height.root(),
-			data.2,
+			block.hash,
 			self.key_manager_address,
 			&self.client,
 		)
@@ -732,7 +603,7 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 			}
 		}
 
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 

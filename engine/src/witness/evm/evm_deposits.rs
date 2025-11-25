@@ -39,7 +39,7 @@ use sp_core::U256;
 
 use crate::evm::rpc::address_checker::*;
 
-use super::{contract_common::events_at_block, vault::FetchedNativeFilter};
+use super::{contract_common::events_at_block2, vault::FetchedNativeFilter};
 use crate::witness::common::chain_source::Header;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
@@ -110,7 +110,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								addresses,
 							)
 							.await?,
-							events_at_block::<Inner::Chain, VaultEvents, _>(
+							events_at_block2::<Inner::Chain, VaultEvents, _>(
 								Header {
 									index: header.index,
 									hash: header.hash,
@@ -271,7 +271,7 @@ mod tests {
 		witness::common::chain_source::Header,
 	};
 
-	use super::{super::contract_common::events_at_block, *};
+	use super::{super::contract_common::events_at_block2, *};
 	use cf_chains::{Chain, Ethereum};
 	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
@@ -444,25 +444,26 @@ mod tests {
 				.await
 				.unwrap();
 
-				let fetched_native_events = events_at_block::<cf_chains::Ethereum, VaultEvents, _>(
-					Header {
-						index: block_number,
-						parent_hash: Some(block.parent_hash),
-						hash: block.hash.unwrap(),
-						data: block.logs_bloom.unwrap(),
-					},
-					vault_address,
-					&client,
-				)
-				.await
-				.unwrap()
-				.into_iter()
-				.filter_map(|event| match event.event_parameters {
-					VaultEvents::FetchedNativeFilter(inner_event) =>
-						Some((inner_event, event.tx_hash)),
-					_ => None,
-				})
-				.collect();
+				let fetched_native_events =
+					events_at_block2::<cf_chains::Ethereum, VaultEvents, _>(
+						Header {
+							index: block_number,
+							parent_hash: Some(block.parent_hash),
+							hash: block.hash.unwrap(),
+							data: block.logs_bloom.unwrap(),
+						},
+						vault_address,
+						&client,
+					)
+					.await
+					.unwrap()
+					.into_iter()
+					.filter_map(|event| match event.event_parameters {
+						VaultEvents::FetchedNativeFilter(inner_event) =>
+							Some((inner_event, event.tx_hash)),
+						_ => None,
+					})
+					.collect();
 
 				let increases =
 					eth_ingresses_at_block(address_states, fetched_native_events).unwrap();
