@@ -94,7 +94,7 @@ pub struct NetworkFeeContributions {
 	pub from_origination_fee: Permill,
 	/// The % of the liquidation fee that should be taken as a network fee.
 	pub from_liquidation_fee: Permill,
-	/// Max value of additional interest/pentalty (at LTV approaching 0%)
+	/// Max value of additional interest/penalty (at LTV approaching 0%)
 	pub low_ltv_penalty_max: Permill,
 }
 

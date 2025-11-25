@@ -4015,6 +4015,66 @@ mod safe_mode {
 			}
 		});
 	}
+
+	#[test]
+	fn safe_mode_for_liquidations() {
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.execute_with(|| {
+				// Disable liquidations
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					liquidations_enabled: false,
+					..PalletSafeMode::code_green()
+				});
+
+				// Voluntary liquidation should be disabled
+				assert_noop!(
+					LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(BORROWER)),
+					Error::<Test>::LiquidationsDisabled
+				);
+
+				// Now set the price to trigger normal liquidation
+				set_asset_price_in_usd(LOAN_ASSET, 20 * SWAP_RATE)
+			})
+			.then_execute_at_next_block(|_| {
+				// Forced liquidation should also be disabled
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated { .. }) => 0
+				);
+
+				// Check the liquidation status hasn't changed
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+					LiquidationStatus::NoLiquidation
+				);
+
+				// Turn the liquidations back
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
+			})
+			.then_execute_at_next_block(|_| {
+				// Now the forced liquidation should proceeded as normal
+				assert_matching_event_count!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated { .. }) => 1
+				);
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+					LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							SwapRequestId(0),
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Hard
+					}
+				);
+			});
+	}
 }
 
 mod whitelisting {

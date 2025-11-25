@@ -103,6 +103,8 @@ pub struct PalletSafeMode {
 	pub add_collateral: SafeModeSet<Asset>,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
 	pub remove_collateral: SafeModeSet<Asset>,
+	// whether liquidations can be started, both voluntarily and system-initiated
+	pub liquidations_enabled: bool,
 }
 
 impl cf_traits::SafeMode for PalletSafeMode {
@@ -115,6 +117,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			withdraw_lender_funds: SafeModeSet::code_red(),
 			add_collateral: SafeModeSet::code_red(),
 			remove_collateral: SafeModeSet::code_red(),
+			liquidations_enabled: false,
 		}
 	}
 
@@ -127,6 +130,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			withdraw_lender_funds: SafeModeSet::code_green(),
 			add_collateral: SafeModeSet::code_green(),
 			remove_collateral: SafeModeSet::code_green(),
+			liquidations_enabled: true,
 		}
 	}
 }
@@ -528,6 +532,8 @@ pub mod pallet {
 		NoRefundAddressSet,
 		/// Access denied as account is not in the whitelist.
 		AccountNotWhitelisted,
+		/// Liquidations are currently disabled due to safe mode.
+		LiquidationsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -955,6 +961,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
 
 			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, true)
 		}

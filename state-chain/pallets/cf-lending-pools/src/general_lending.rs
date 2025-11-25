@@ -245,7 +245,7 @@ impl<T: Config> LoanAccount<T> {
 				// If LTV requires us to either stay in hard liquidation or deescalate to soft
 				// liquidation, we do so (this will still be a "forced" liquidation).
 				// The only time need to check voluntary liquidation flag is when we would be
-				// aborting liqiudation: if it is set, we transition to voluntary liquidation.
+				// aborting liquidation: if it is set, we transition to voluntary liquidation.
 				if ltv < config.ltv_thresholds.soft_liquidation_abort {
 					if self.voluntary_liquidation_requested {
 						LiquidationStatusChange::ChangeLiquidationType {
@@ -268,7 +268,7 @@ impl<T: Config> LoanAccount<T> {
 				// If LTV requires us to either stay in soft liquidation or escalate to hard
 				// liquidation, we do so (this will still be a "forced" liquidation).
 				// The only time need to check voluntary liquidation flag is when we would be
-				// aborting liqiudation: if it is set, we transition to voluntary liquidation.
+				// aborting liquidation: if it is set, we transition to voluntary liquidation.
 
 				if ltv > config.ltv_thresholds.hard_liquidation {
 					LiquidationStatusChange::ChangeLiquidationType {
@@ -324,6 +324,7 @@ impl<T: Config> LoanAccount<T> {
 
 		match new_status {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
+				ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
 				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
 				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());

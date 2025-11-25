@@ -1,6 +1,5 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 712
 expression: val
 ---
 {
@@ -307,7 +306,8 @@ expression: val
         "chain": "Assethub",
         "asset": "USDC"
       }
-    ]
+    ],
+    "liquidations_enabled": true
   },
   "reputation": {
     "reporting_enabled": true
