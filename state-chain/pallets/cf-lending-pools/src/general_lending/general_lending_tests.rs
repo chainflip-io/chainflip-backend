@@ -4681,7 +4681,7 @@ fn loan_minimum_is_enforced() {
 				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
 			),
-			Error::<Test>::RemainingAmountBelowMinimum
+			Error::<Test>::AmountBelowMinimum
 		);
 
 		// A loan equal to or above the minimum amount should be fine
