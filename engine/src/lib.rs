@@ -15,9 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![feature(ip)]
-#![feature(result_flattening)]
-#![feature(btree_extract_if)]
-#![feature(extract_if)]
 #![feature(map_try_insert)]
 #![feature(step_trait)]
 

@@ -14,12 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use engine_upgrade_utils::NEW_VERSION;
 
 fn assert_command_arg_for_latest_version(arg: &str) {
-	Command::cargo_bin("engine-runner")
-		.unwrap()
+	cargo_bin_cmd!("engine-runner")
 		.arg(arg)
 		.assert()
 		.success()

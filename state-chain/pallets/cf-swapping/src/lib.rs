@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extract_if)]
 
 use cf_amm::common::Side;
 use cf_chains::{

@@ -1210,11 +1210,6 @@ impl<T: Config> FundAccount for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Amount = T::Amount;
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn get_bond(account_id: Self::AccountId) -> Self::Amount {
-		T::Flip::balance(&account_id)
-	}
-
 	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, source: FundingSource) {
 		let total_balance = Self::add_funds_to_account(&account_id, amount);
 		if let FundingSource::EthTransaction { funder, .. } = source {

@@ -1943,7 +1943,7 @@ mod internal_swaps {
 #[cfg(test)]
 mod credit_flip_and_transfer {
 
-	use cf_traits::{mocks::balance_api::MockBalance, FundAccount, SwapOutputActionEncoded};
+	use cf_traits::{mocks::balance_api::MockBalance, AccountInfo, SwapOutputActionEncoded};
 
 	use super::*;
 
@@ -2012,7 +2012,7 @@ mod credit_flip_and_transfer {
 					}),
 				);
 				assert_eq!(
-					MockFundingInfo::<Test>::get_bond(LP_ACCOUNT),
+					MockFundingInfo::<Test>::balance(&LP_ACCOUNT),
 					EXPECTED_OUTPUT_AMOUNT.saturating_sub(INITIAL_FLIP_FUNDING)
 				);
 				assert_eq!(FlipToBeSentToGateway::<Test>::get(), EXPECTED_OUTPUT_AMOUNT);

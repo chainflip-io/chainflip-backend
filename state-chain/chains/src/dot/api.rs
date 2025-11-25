@@ -24,7 +24,7 @@ use super::{
 use crate::{dot::Polkadot, *};
 use frame_support::{
 	traits::{Defensive, Get},
-	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use sp_std::marker::PhantomData;
 
@@ -39,7 +39,7 @@ pub enum PolkadotApi<Environment: 'static> {
 	MigrateToAssethub(PolkadotExtrinsicBuilder),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 pub trait PolkadotEnvironment {

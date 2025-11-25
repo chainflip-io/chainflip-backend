@@ -73,6 +73,7 @@ impl SubstrateCli for Cli {
 }
 
 /// Parse and run command line arguments
+#[expect(clippy::result_large_err)]
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
 	use_chainflip_account_id_encoding();

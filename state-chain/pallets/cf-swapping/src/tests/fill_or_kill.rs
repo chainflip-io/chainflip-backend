@@ -62,7 +62,7 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 
 			let refund_parameters_encoded = REFUND_PARAMS.into_extended_params(INPUT_AMOUNT);
 
-			insert_swaps(&vec![fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
+			insert_swaps(&[fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
 
 			assert_has_matching_event!(
 				Test,
@@ -130,7 +130,7 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
-			insert_swaps(&vec![
+			insert_swaps(&[
 				fok_swap(None, is_ccm),
 				fok_swap(
 					Some(TestRefundParams {

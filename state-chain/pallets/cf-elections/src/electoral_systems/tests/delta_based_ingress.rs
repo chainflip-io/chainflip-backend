@@ -1052,7 +1052,9 @@ fn is_vote_desired_backs_off_as_expected() {
 	// allows us to make the tests a little simpler.
 	#[expect(clippy::assertions_on_constants)]
 	{
-		assert!(BACKOFF_SETTINGS.backoff_after_blocks % BACKOFF_SETTINGS.backoff_frequency == 0);
+		assert!(BACKOFF_SETTINGS
+			.backoff_after_blocks
+			.is_multiple_of(BACKOFF_SETTINGS.backoff_frequency));
 		assert!(STILL_YOUNG_ELECTION < BACKOFF_SETTINGS.backoff_after_blocks);
 	}
 

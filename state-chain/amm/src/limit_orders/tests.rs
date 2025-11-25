@@ -60,12 +60,11 @@ fn test_float() {
 		(numerator, rng_u256_inclusive_bound(rng, numerator..=U256::MAX))
 	}
 
-	for x in std::iter::repeat(()).take(16).map(|_| rng_u256(&mut rng)) {
+	for x in std::iter::repeat_n((), 16).map(|_| rng_u256(&mut rng)) {
 		assert_eq!(FloatBetweenZeroAndOne::max(), FloatBetweenZeroAndOne::max().mul_div_ceil(x, x));
 	}
 
-	for ((x, y), z) in std::iter::repeat(())
-		.take(16)
+	for ((x, y), z) in std::iter::repeat_n((), 16)
 		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
 	{
 		let f = FloatBetweenZeroAndOne::max().mul_div_ceil(x, y);

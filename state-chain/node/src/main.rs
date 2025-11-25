@@ -23,6 +23,7 @@ mod cli;
 mod command;
 mod service;
 
+#[expect(clippy::result_large_err)]
 fn main() -> sc_cli::Result<()> {
 	command::run()
 }

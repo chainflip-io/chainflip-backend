@@ -203,28 +203,28 @@ pub enum CliCommand {
 	#[clap(about = "Shows the executor address your account is bound to")]
 	GetBoundExecutorAddress,
 	#[clap(about = "Rotate your session keys")]
-	Rotate {},
+	Rotate,
 	#[clap(
 		about = "Stop bidding, thereby stop participating in auctions. [DEPRECATED - use 'validator stop-bidding' instead]"
 	)]
-	StopBidding {},
+	StopBidding,
 	#[clap(
 		about = "The account starts bidding for all future auctions, until it stops bidding. [DEPRECATED - use 'validator start-bidding' instead]"
 	)]
-	StartBidding {},
+	StartBidding,
 	#[clap(about = "Set a UTF-8 vanity name for your node (max length 64)")]
 	VanityName {
 		#[clap(help = "Name in UTF-8 (max length 64)")]
 		name: String,
 	},
 	#[clap(about = "Check if it is safe to update your node/engine")]
-	PreUpdateCheck {},
+	PreUpdateCheck,
 	#[clap(
         // This is only useful for testing. No need to show to the end user.
         hide = true,
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
-	ForceRotation {},
+	ForceRotation,
 	/// Generates the private/public keys required needed to run a Chainflip validator node. These
 	/// are the Node Key, Ethereum Key and Validator Key. The Validator Key and Ethereum Key can be
 	/// recovered using the seed phrase. The Node Key does not control any funds and therefore
