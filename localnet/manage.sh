@@ -53,8 +53,9 @@ main() {
     fi
     if [ -z $CI ]; then
       export START_TRACKER="y"
-      export START_INDEXER="y"
       get-workflow
+    else
+      export START_INDEXER="y"
     fi
 
     case "$WORKFLOW" in
