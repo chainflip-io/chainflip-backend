@@ -33,6 +33,14 @@ else
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
 
+# On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
+# In CI (and more generally Linux), host.docker.internal is not available, so we need to use the host's IP address
+if [[ $CI == true || $(uname -s) == Linux* ]]; then
+  export HOST_DOCKER_INTERNAL='172.17.0.1'
+else
+  export HOST_DOCKER_INTERNAL='host.docker.internal'
+fi
+
 echo "👋 Welcome to Chainflip localnet"
 echo "🔧 Setting up..."
 echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"
@@ -209,6 +217,11 @@ build-localnet() {
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
+  fi
+
+  if [[ $START_INDEXER == "y" ]]; then
+    echo "🗂️ Starting Indexer ..."
+    $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   fi
 
   print_success

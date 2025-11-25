@@ -38,6 +38,11 @@ get-workflow() {
     echo
     export START_TRACKER=${START_TRACKER:-"NO"}
 
+    echo "❓ Do you want to start the indexer? (Type y or leave empty)"
+    read -p "(default: NO) " START_INDEXER
+    echo
+    export START_INDEXER=${START_INDEXER:-"NO"}
+
   fi
 }
 
@@ -47,8 +52,9 @@ main() {
         npm install -g wscat
     fi
     if [ -z $CI ]; then
-      export START_TRACKER="y"
       get-workflow
+    else
+      export START_INDEXER="y"
     fi
 
     case "$WORKFLOW" in
