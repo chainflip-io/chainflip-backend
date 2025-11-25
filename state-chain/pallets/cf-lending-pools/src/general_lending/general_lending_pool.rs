@@ -106,7 +106,8 @@ where
 
 		let remaining_owed_amount = total_owed_amount.saturating_sub(amount_to_withdraw);
 
-		// Update `lender`'s share but don't take the change of the total amount into account yet:
+		// Update `lender`'s share but don't take the change of the total amount into account yet
+		// (to keep it consistent with shares of other participants):
 		*share = Perquintill::from_rational(remaining_owed_amount, old_total_amount);
 
 		if *share == Perquintill::zero() {

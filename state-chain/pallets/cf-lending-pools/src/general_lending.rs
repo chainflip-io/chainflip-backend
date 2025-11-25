@@ -780,7 +780,6 @@ impl<T: Config> LoanAccount<T> {
 			self.try_adding_collateral_from_free_balance(extra_collateral)?;
 		}
 
-		// Will need to request this much more from the pool
 		let origination_fee_total = config.origination_fee(loan.asset) * extra_principal;
 
 		let origination_fee_network =
@@ -1190,7 +1189,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		ensure!(
 			amount_to_borrow >=
 				price_cache.amount_from_usd_value(asset, config.minimum_loan_amount_usd)?,
-			Error::<T>::RemainingAmountBelowMinimum
+			Error::<T>::AmountBelowMinimum
 		);
 
 		let loan_id = NextLoanId::<T>::get();
@@ -1297,12 +1296,14 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			let config = LendingConfig::<T>::get();
 
+			let loan_asset = loan.asset;
+
 			let repayment_amount = match repayment_amount {
 				RepaymentAmount::Full => loan.owed_principal,
 				RepaymentAmount::Exact(amount) => {
 					if amount < loan.owed_principal {
 						ensure!(
-							price_cache.usd_value_of_allow_stale(loan.asset, amount)? >=
+							price_cache.usd_value_of_allow_stale(loan_asset, amount)? >=
 								config.minimum_update_loan_amount_usd,
 							Error::<T>::AmountBelowMinimum
 						);
@@ -1311,8 +1312,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 					amount
 				},
 			};
-
-			let loan_asset = loan.asset;
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
@@ -1377,7 +1376,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let price_cache = OraclePriceCache::<T>::default();
 
 		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
-			let chp_config = LendingConfig::<T>::get();
+			let config = LendingConfig::<T>::get();
 
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
 
@@ -1390,10 +1389,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 			// assets, then we are removing all collateral and do not need to check the minimum
 			// amount. Being able to specify a large (eg u128::MAX) amount for all assets lets the
 			// user avoid exact values (useful because of fees).
-			if !loan_account.collateral.iter().all(|(asset, loan_amount)| {
+			if !loan_account.collateral.iter().all(|(asset, collateral_amount)| {
 				collateral
 					.get(asset)
-					.map(|remove_amount| remove_amount >= loan_amount)
+					.map(|remove_amount| remove_amount >= collateral_amount)
 					.unwrap_or(false)
 			}) {
 				let total_collateral_usd = price_cache.total_usd_value_of(&collateral)?;
@@ -1428,7 +1427,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			// Only check LTV if there are loans:
 			if !loan_account.loans.is_empty() &&
-				loan_account.derive_ltv(&price_cache)? > chp_config.ltv_thresholds.target.into()
+				loan_account.derive_ltv(&price_cache)? > config.ltv_thresholds.target.into()
 			{
 				fail!(Error::<T>::LtvTooHigh);
 			}
