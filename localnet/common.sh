@@ -33,6 +33,14 @@ else
   additional_docker_compose_down_args="--volumes --remove-orphans"
 fi
 
+# On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
+# In CI (and more generally Linux), host.docker.internal is not available, so we need to use the host's IP address
+if [[ $CI == true || $(uname -s) == Linux* ]]; then
+  export HOST_DOCKER_INTERNAL='172.17.0.1'
+else
+  export HOST_DOCKER_INTERNAL='host.docker.internal'
+fi
+
 echo "👋 Welcome to Chainflip localnet"
 echo "🔧 Setting up..."
 echo "🕵🏻‍♂️  For full debug log, check $DEBUG_OUTPUT_DESTINATION"

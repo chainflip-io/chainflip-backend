@@ -318,7 +318,7 @@ services:
     image: subsquid/substrate-ingest:firesquid
     command: [
         "-e",
-        "ws://host.docker.internal:9944",
+        "ws://${HOST_DOCKER_INTERNAL}:9944",
         "--out",
-        "postgres://postgres:postgres@host.docker.internal:${INDEXER_DB_PORT:-5432}/squid_archive",
+        "postgres://postgres:postgres@${HOST_DOCKER_INTERNAL}:${INDEXER_DB_PORT:-5432}/squid_archive",
       ]
