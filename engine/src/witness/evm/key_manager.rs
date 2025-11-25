@@ -33,7 +33,7 @@ use super::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block,
+	contract_common::events_at_block2,
 };
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
@@ -99,7 +99,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let eth_rpc = eth_rpc.clone();
 			let mut process_calls = vec![];
 			async move {
-				for event in events_at_block::<Inner::Chain, KeyManagerEvents, _>(
+				for event in events_at_block2::<Inner::Chain, KeyManagerEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,
