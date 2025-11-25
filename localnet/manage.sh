@@ -52,7 +52,6 @@ main() {
         npm install -g wscat
     fi
     if [ -z $CI ]; then
-      export START_TRACKER="y"
       get-workflow
     else
       export START_INDEXER="y"
