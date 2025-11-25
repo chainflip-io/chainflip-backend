@@ -117,6 +117,10 @@ pub enum RequestType<Key, Participants> {
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
 	KeygenVerification { key: Key, epoch_index: EpochIndex, participants: Participants },
+	/// Uses a historical (expired) key with governance-provided participants.
+	/// This signing request will be retried but failures will not penalize participants.
+	/// Optionally broadcasts the signed transaction if broadcast is true.
+	HistoricalKey { key: Key, epoch_index: EpochIndex, participants: Participants, broadcast: bool },
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
@@ -124,6 +128,8 @@ pub enum RequestType<Key, Participants> {
 pub enum ThresholdCeremonyType {
 	Standard,
 	KeygenVerification,
+	/// Historical key signing ceremony (governance-initiated, no penalties on failure)
+	HistoricalKey,
 }
 
 #[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
@@ -739,6 +745,12 @@ pub mod pallet {
 		NoActiveRotation,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
+		/// No key exists for the specified epoch.
+		NoKeyForEpoch,
+		/// The provided key does not match the stored key for the epoch.
+		InvalidKey,
+		/// Provided participants list is empty or invalid.
+		InvalidParticipants,
 	}
 
 	#[pallet::hooks]
@@ -876,6 +888,7 @@ pub mod pallet {
 						threshold_ceremony_type,
 						key,
 						epoch,
+						candidates,
 						..
 					} = failed_ceremony_context;
 
@@ -891,6 +904,34 @@ pub mod pallet {
 								attempt_count.wrapping_add(1),
 								payload,
 								RequestType::SpecificKey(key, epoch),
+							));
+							Event::<T, I>::RetryRequested { request_id, ceremony_id }
+						},
+						ThresholdCeremonyType::HistoricalKey => {
+							// Don't penalize for historical key failures - this is best-effort
+							// recovery Retrieve the broadcast flag from the pending request
+							// instruction
+							let broadcast = if let Some(RequestInstruction {
+								request_type: RequestType::HistoricalKey { broadcast, .. },
+								..
+							}) = PendingRequestInstructions::<T, I>::get(request_id)
+							{
+								broadcast
+							} else {
+								false // Fallback if we can't retrieve the original request
+							};
+
+							// Retry with same participants and broadcast flag
+							Self::new_ceremony_attempt(RequestInstruction::new(
+								request_id,
+								attempt_count.wrapping_add(1),
+								payload,
+								RequestType::HistoricalKey {
+									key,
+									epoch_index: epoch,
+									participants: candidates,
+									broadcast,
+								},
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
@@ -1210,6 +1251,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				signer: match request_type {
 					RequestType::SpecificKey(key, _) => key,
 					RequestType::KeygenVerification { key, .. } => key,
+					RequestType::HistoricalKey { key, .. } => key,
 				},
 				signature_result: AsyncResult::Pending,
 			},
@@ -1224,34 +1266,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (maybe_epoch_key_and_participants, ceremony_type) =
-			if let RequestType::KeygenVerification { epoch_index, key, ref participants } =
-				request_instruction.request_type
-			{
+		let (maybe_epoch_key_and_participants, ceremony_type) = match &request_instruction
+			.request_type
+		{
+			RequestType::KeygenVerification { epoch_index, key, participants } => (
+				Ok((*epoch_index, *key, participants.clone())),
+				ThresholdCeremonyType::KeygenVerification,
+			),
+			RequestType::HistoricalKey { epoch_index, key, participants, .. } => {
+				// Note: broadcast flag is preserved in request_instruction but not used
+				// during ceremony
 				(
-					Ok((epoch_index, key, participants.clone())),
-					ThresholdCeremonyType::KeygenVerification,
+					Ok((*epoch_index, *key, participants.clone())),
+					ThresholdCeremonyType::HistoricalKey,
 				)
-			} else {
-				(
-					match request_instruction.request_type {
-						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
-						_ => unreachable!("RequestType::KeygenVerification is handled above"),
-					}
-					.and_then(|(key, epoch_index)| {
-						if let Some(nominees) =
-							T::ThresholdSignerNomination::threshold_nomination_with_seed(
-								(request_id, attempt_count),
-								epoch_index,
-							) {
-							Ok((epoch_index, key, nominees))
-						} else {
-							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
-						}
-					}),
-					ThresholdCeremonyType::Standard,
-				)
-			};
+			},
+			RequestType::SpecificKey(key, epoch_index) => (
+				if let Some(nominees) = T::ThresholdSignerNomination::threshold_nomination_with_seed(
+					(request_id, attempt_count),
+					*epoch_index,
+				) {
+					Ok((*epoch_index, *key, nominees))
+				} else {
+					Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
+				},
+				ThresholdCeremonyType::Standard,
+			),
+		};
 
 		Self::deposit_event(match maybe_epoch_key_and_participants {
 			Ok((epoch, key, participants)) => {
@@ -1588,6 +1629,35 @@ where
 				signature_result: AsyncResult::Void,
 			});
 		(signer_and_signature.signer, signer_and_signature.signature_result)
+	}
+
+	fn request_historical_signature_with_callback(
+		payload: PayloadFor<T, I>,
+		epoch_index: cf_primitives::EpochIndex,
+		participants: sp_std::collections::btree_set::BTreeSet<T::ValidatorId>,
+		callback_generator: impl FnOnce(cf_primitives::ThresholdSignatureRequestId) -> Self::Callback,
+	) -> Result<cf_primitives::ThresholdSignatureRequestId, Self::Error> {
+		// Validate key exists for the epoch
+		let key = Keys::<T, I>::get(epoch_index).ok_or(Error::<T, I>::NoKeyForEpoch)?;
+
+		// Validate we have participants
+		ensure!(!participants.is_empty(), Error::<T, I>::InvalidParticipants);
+
+		// Create request with HistoricalKey type
+		let request_id = Self::inner_request_signature(
+			payload,
+			RequestType::HistoricalKey {
+				key,
+				epoch_index,
+				participants,
+				broadcast: true, // This is managed by the broadcast pallet, not used here
+			},
+		);
+
+		// Register callback
+		Self::register_callback(request_id, callback_generator(request_id))?;
+
+		Ok(request_id)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

@@ -491,6 +491,21 @@ where
 		request_id
 	}
 
+	/// Request a signature using a historical (expired) key with specific participants, and
+	/// register a callback.
+	///
+	/// This is a governance-controlled recovery mechanism for signing with old keys.
+	/// The implementation should validate that the key exists and that participants are provided,
+	/// but governance takes responsibility for ensuring participants have the key shares.
+	///
+	/// Returns Err if the request cannot be initiated (e.g., key doesn't exist for epoch).
+	fn request_historical_signature_with_callback(
+		payload: C::Payload,
+		epoch_index: EpochIndex,
+		participants: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>,
+		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
+	) -> Result<ThresholdSignatureRequestId, Self::Error>;
+
 	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(

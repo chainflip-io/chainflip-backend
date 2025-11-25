@@ -206,6 +206,7 @@ pub mod pallet {
 		type ThresholdSigner: ThresholdSigner<
 			<Self::TargetChain as Chain>::ChainCrypto,
 			Callback = <Self as Config<I>>::RuntimeCall,
+			ValidatorId = <Self as Chainflip>::ValidatorId,
 		>;
 
 		/// Signer nomination.
@@ -429,6 +430,11 @@ pub mod pallet {
 		CallResigned { broadcast_id: BroadcastId },
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
+		/// A signature/broadcast with a historical (expired) key was requested via governance.
+		HistoricalBroadcastRequested {
+			broadcast_id: BroadcastId,
+			epoch_index: cf_primitives::EpochIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -694,6 +700,66 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
+
+			Ok(())
+		}
+
+		/// [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
+		///
+		/// This is a recovery mechanism for broadcasting transactions that were missed during a
+		/// key's active period. The operation will:
+		/// - Request threshold signature using governance-provided historical key and participants
+		/// - Optionally broadcast the signed transaction if `broadcast` is true
+		/// - Not penalize participants for failures (best-effort recovery)
+		///
+		/// ## Parameters
+		/// - `api_call`: The transaction to sign/broadcast
+		/// - `epoch_index`: The epoch for which the key was active
+		/// - `participants`: Validators with access to key shares (governance-selected)
+		/// - `broadcast`: If true, broadcast after signing; if false, only sign
+		///
+		/// ## Prerequisites
+		/// - The key must exist in threshold-signature pallet storage for that epoch
+		/// - Participants list must not be empty
+		/// - Governance ensures participants hold key shares and are online
+		///
+		/// Note: Governance takes full responsibility for providing valid inputs since
+		/// HistoricalAuthorities data may be purged for old epochs.
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
+		pub fn threshold_sign_and_broadcast_with_historical_key(
+			origin: OriginFor<T>,
+			api_call: Box<<T as Config<I>>::ApiCall>,
+			epoch_index: cf_primitives::EpochIndex,
+			participants: sp_std::collections::btree_set::BTreeSet<T::ValidatorId>,
+			broadcast: bool,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let broadcast_id = Self::next_broadcast_id();
+			PendingBroadcasts::<T, I>::append(broadcast_id);
+
+			// Register callback for when signature is ready
+			let _threshold_request_id =
+				T::ThresholdSigner::request_historical_signature_with_callback(
+					api_call.threshold_signature_payload(),
+					epoch_index,
+					participants.clone(),
+					|threshold_request_id| {
+						Call::on_signature_ready {
+							threshold_request_id,
+							threshold_signature_payload: api_call.threshold_signature_payload(),
+							api_call: api_call.clone(),
+							broadcast_id,
+							initiated_at: T::ChainTracking::get_block_height(),
+							should_broadcast: broadcast,
+						}
+						.into()
+					},
+				)
+				.map_err(|_| Error::<T, I>::InvalidPayload)?;
+
+			Self::deposit_event(Event::HistoricalBroadcastRequested { broadcast_id, epoch_index });
 
 			Ok(())
 		}
