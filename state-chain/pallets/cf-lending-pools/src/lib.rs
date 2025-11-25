@@ -25,12 +25,17 @@ mod utils;
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
-	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
-	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
-	LtvThresholds, NetworkFeeContributions, OraclePriceCache, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
-	WithdrawnAndRemainingAmounts,
+	rpc::{
+		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	},
+	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
+	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+};
+
+pub use general_lending::config::{
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
+	NetworkFeeContributions,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
