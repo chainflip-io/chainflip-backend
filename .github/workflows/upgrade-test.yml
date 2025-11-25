@@ -71,7 +71,7 @@ jobs:
         if: inputs.run-job
         run: |
           sudo apt update
-          sudo apt install -y bc xxd postgresql-client-15
+          sudo apt install -y bc xxd postgresql-client
 
       - name: Install wscat 🐈
         if: inputs.run-job
