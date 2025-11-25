@@ -264,6 +264,7 @@ impl Chain for Bitcoin {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 113_000_000_000u64;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 100_000_000u64;
+	const BURN_ADDRESS: Self::ChainAccount = ScriptPubkey::Taproot([0; 32]);
 
 	type ChainCrypto = BitcoinCrypto;
 	type ChainBlockNumber = BlockNumber;

@@ -95,7 +95,7 @@ mod point_impls {
 
 		// Silence clippy as addition is here by design
 		// (note that we negate the right operand first)
-		#[allow(clippy::suspicious_arithmetic_impl)]
+		#[expect(clippy::suspicious_arithmetic_impl)]
 		fn sub(self, rhs: Self) -> Self::Output {
 			// Only negate if non-zero
 			self + Point(rhs.0.map(|x| x.negate(secp256k1::SECP256K1)))
@@ -319,7 +319,7 @@ mod scalar_impls {
 
 		// Silence clippy as addition is here by design
 		// (note that we negate the right operand first)
-		#[allow(clippy::suspicious_arithmetic_impl)]
+		#[expect(clippy::suspicious_arithmetic_impl)]
 		fn sub(self, rhs: Self) -> Self::Output {
 			// according to https://github.com/bitcoin-core/secp256k1/blob/44c2452fd387f7ca604ab42d73746e7d3a44d8a2/include/secp256k1.h#L649
 			// `negate_assign` expects a valid non-zero scalar

@@ -125,7 +125,7 @@ pub enum SwapRequestTypeGeneric<Address, AccountId> {
 pub type SwapRequestType<AccountId> = SwapRequestTypeGeneric<ForeignChainAddress, AccountId>;
 pub type SwapRequestTypeEncoded<AccountId> = SwapRequestTypeGeneric<EncodedAddress, AccountId>;
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(AccountId))]
 pub enum ExpiryBehaviour<AccountId> {

@@ -185,7 +185,6 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 					"All witnesser calls must be controllable through `WitnesserCallPermission`. Call: {:?}",
 					call
 				);
-				#[allow(unreachable_code)]
 				false
 			},
 		}

@@ -14,23 +14,22 @@ pub enum MinimizedPrimitive {
 	U128(u128),
 	/// An i128 value.
 	I128(i128),
-	/// An unsigned 256 bit number (internally represented as a 32 byte array).
-	U256([u8; 32]),
-	/// A signed 256 bit number (internally represented as a 32 byte array).
-	I256([u8; 32]),
 }
 
-impl From<scale_value::Primitive> for MinimizedPrimitive {
-	fn from(p: scale_value::Primitive) -> Self {
-		match p {
+impl TryFrom<scale_value::Primitive> for MinimizedPrimitive {
+	type Error = &'static str;
+	fn try_from(p: scale_value::Primitive) -> Result<Self, Self::Error> {
+		Ok(match p {
 			scale_value::Primitive::Bool(b) => MinimizedPrimitive::Bool(b),
 			scale_value::Primitive::Char(c) => MinimizedPrimitive::Char(c as u8),
 			scale_value::Primitive::String(s) => MinimizedPrimitive::String(s),
 			scale_value::Primitive::U128(n) => MinimizedPrimitive::U128(n),
-			scale_value::Primitive::U256(bytes) => MinimizedPrimitive::U256(bytes),
+			scale_value::Primitive::U256(_) =>
+				return Err("primitive type not supported: found U256"),
 			scale_value::Primitive::I128(n) => MinimizedPrimitive::I128(n),
-			scale_value::Primitive::I256(bytes) => MinimizedPrimitive::I256(bytes),
-		}
+			scale_value::Primitive::I256(_) =>
+				return Err("primitive type not supported: found I256"),
+		})
 	}
 }
 
@@ -42,8 +41,6 @@ impl From<MinimizedPrimitive> for scale_value::Primitive {
 			MinimizedPrimitive::String(s) => scale_value::Primitive::String(s),
 			MinimizedPrimitive::U128(n) => scale_value::Primitive::U128(n),
 			MinimizedPrimitive::I128(n) => scale_value::Primitive::I128(n),
-			MinimizedPrimitive::U256(bytes) => scale_value::Primitive::U256(bytes),
-			MinimizedPrimitive::I256(bytes) => scale_value::Primitive::I256(bytes),
 		}
 	}
 }
@@ -72,7 +69,7 @@ impl TryFrom<Value> for MinimizedScaleValue {
 			)),
 			ValueDef::Variant(_) =>
 				Err("scale value with variant cannot be converted to MinimizedScaleValue"),
-			ValueDef::Primitive(p) => Ok(Self::Primitive(p.into())),
+			ValueDef::Primitive(p) => Ok(Self::Primitive(p.try_into()?)),
 			ValueDef::BitSequence(_) => Err("BitSequence not supported"),
 		}
 	}
@@ -90,12 +87,29 @@ impl MinimizedScaleValue {
 		}
 	}
 
-	#[allow(clippy::result_unit_err)]
+	#[expect(clippy::result_unit_err)]
 	pub fn extract_hex_bytes(&self) -> Result<Vec<u8>, ()> {
 		if let Self::Primitive(MinimizedPrimitive::String(s)) = self.clone() {
 			hex::decode(s).map_err(|_| ())
 		} else {
 			Err(())
+		}
+	}
+
+	pub fn stringify_integers(self) -> Self {
+		match self {
+			MinimizedScaleValue::NamedStruct(fs) => MinimizedScaleValue::NamedStruct(
+				fs.into_iter()
+					.map(|(name, v)| (name, Self::stringify_integers(v)))
+					.collect::<Vec<_>>(),
+			),
+			MinimizedScaleValue::Sequence(v) => MinimizedScaleValue::Sequence(
+				v.into_iter().map(Self::stringify_integers).collect::<Vec<Self>>(),
+			),
+			MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
+				MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n.to_string())),
+
+			MinimizedScaleValue::Primitive(p) => MinimizedScaleValue::Primitive(p),
 		}
 	}
 }

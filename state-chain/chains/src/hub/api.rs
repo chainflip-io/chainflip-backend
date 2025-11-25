@@ -261,7 +261,7 @@ impl<E: AssethubEnvironment + ReplayProtectionProvider<Assethub>> ApiCall<Polkad
 	}
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo, Eq)]
 pub enum TransferType {
 	/// should teleport `asset` to `dest`

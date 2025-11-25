@@ -439,7 +439,7 @@ impl DcaState {
 	}
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
@@ -738,7 +738,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[allow(clippy::large_enum_variant)]
+	#[expect(clippy::large_enum_variant)]
 	pub enum Event<T: Config> {
 		/// New swap has been requested
 		SwapRequested {
@@ -901,7 +901,7 @@ pub mod pallet {
 			deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
 			boost_fee: BasisPoints,
 			channel_opening_fee: T::Amount,
-			refund_address: ForeignChainAddress,
+			refund_address: EncodedAddress,
 		},
 	}
 	#[pallet::error]
@@ -1624,7 +1624,7 @@ pub mod pallet {
 				deposit_chain_expiry_block: expiry_block,
 				boost_fee,
 				channel_opening_fee,
-				refund_address: refund_address_internal,
+				refund_address: T::AddressConverter::to_encoded_address(refund_address_internal),
 			});
 
 			Ok(())
@@ -1632,7 +1632,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		#[allow(clippy::result_unit_err)]
 		pub fn get_scheduled_swap_legs(base_asset: Asset) -> Vec<(SwapLegInfo, BlockNumberFor<T>)> {
 			let mut swaps: Vec<_> = ScheduledSwaps::<T>::get()
 				.values()

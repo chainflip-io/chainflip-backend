@@ -135,7 +135,7 @@ pub mod witness_period {
 		_phantom: sp_std::marker::PhantomData<C>,
 	}
 
-	#[allow(clippy::result_unit_err)]
+	#[expect(clippy::result_unit_err)]
 	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
 		pub fn try_new(root: C::ChainBlockNumber) -> Result<Self, ()> {
 			let result = Self { root, _phantom: Default::default() };
@@ -314,6 +314,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// Number of smallest units that make up 1 full token.
 	/// For example: 1 ETH = 1_000_000_000_000_000_000 wei.
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount;
+
+	/// The burn address for the chain.
+	const BURN_ADDRESS: Self::ChainAccount;
 
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`
@@ -739,7 +742,6 @@ pub trait SetAggKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	) -> Result<Option<Self>, SetAggKeyWithAggKeyError>;
 }
 
-#[allow(clippy::result_unit_err)]
 pub trait SetGovKeyWithAggKey<C: ChainCrypto>: ApiCall<C> {
 	/// DO NOT OVERRIDE THIS METHOD.
 	///

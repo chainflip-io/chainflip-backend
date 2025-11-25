@@ -132,7 +132,7 @@ impl<T: ChainTypes> NonemptyContinuousHeaders<T> {
 		}
 		None
 	}
-	#[allow(clippy::len_without_is_empty)]
+	#[expect(clippy::len_without_is_empty)]
 	pub fn len(&self) -> usize {
 		self.headers.len() + 1usize
 	}

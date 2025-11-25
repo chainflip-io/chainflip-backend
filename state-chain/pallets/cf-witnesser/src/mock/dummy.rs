@@ -20,6 +20,7 @@
 /// Based on the substrate example template pallet
 pub use pallet::*;
 
+#[allow(clippy::allow_attributes)]
 #[allow(dead_code)]
 #[frame_support::pallet]
 pub mod pallet {

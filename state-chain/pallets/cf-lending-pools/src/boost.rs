@@ -1,3 +1,5 @@
+use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
+
 use super::*;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -76,8 +78,8 @@ pub fn get_boost_pool_details<T: Config>(
 
 					let total_owed_amount = boosted_amount.saturating_sub(network_fee);
 
-					let boosters_fee = utils::fee_from_boosted_amount(boosted_amount, tier)
-						.saturating_sub(network_fee);
+					let boosters_fee =
+						fee_from_boosted_amount(boosted_amount, tier).saturating_sub(network_fee);
 
 					let owed_amounts = loan
 						.shares
@@ -165,8 +167,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 					};
 
 					// 1. Derive the amount that needs to be borrowed:
-					let full_amount_fee =
-						utils::fee_from_boosted_amount(remaining_amount, boost_tier);
+					let full_amount_fee = fee_from_boosted_amount(remaining_amount, boost_tier);
 					let required_amount = remaining_amount.saturating_sub(full_amount_fee);
 
 					let available_amount = core_pool.get_available_amount();
@@ -177,7 +178,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 					} else {
 						// Will only borrow what is available
 						let amount_to_provide = available_amount;
-						let fee = utils::fee_from_provided_amount(amount_to_provide, boost_tier)?;
+						let fee = fee_from_provided_amount(amount_to_provide, boost_tier)?;
 
 						(amount_to_provide, fee)
 					};
@@ -304,4 +305,49 @@ impl<T: Config> cf_traits::BoostBalancesApi for Pallet<T> {
 
 		available + in_all_boosted_deposits
 	}
+}
+
+/// Boosted amount is the amount provided by the pool plus boost fee,
+/// (and the sum of all boosted amounts from each participating pool
+/// must be equal the deposit amount being boosted). The fee is payed
+/// per boosted amount, and so here we multiply by fee_bps directly.
+fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetAmount {
+	use cf_primitives::BASIS_POINTS_PER_MILLION;
+	let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
+
+	fee_permill * amount_to_boost
+}
+
+/// Unlike `fee_from_boosted_amount`, the boosted amount is not known here
+/// so we have to calculate it first from the provided amount in order to
+/// calculate the boost fee amount.
+fn fee_from_provided_amount(
+	provided_amount: AssetAmount,
+	fee_bps: u16,
+) -> Result<AssetAmount, &'static str> {
+	// Compute `boosted = provided / (1 - fee)`
+	let boosted_amount = {
+		const BASIS_POINTS_MAX: u16 = 10_000;
+
+		let inverse_fee = BASIS_POINTS_MAX.saturating_sub(fee_bps);
+
+		multiply_by_rational_with_rounding(
+			provided_amount,
+			BASIS_POINTS_MAX as u128,
+			inverse_fee as u128,
+			Rounding::Down,
+		)
+		.ok_or("invalid fee")?
+	};
+
+	let fee_amount = boosted_amount.checked_sub(provided_amount).ok_or("invalid fee")?;
+
+	Ok(fee_amount)
+}
+
+#[test]
+fn test_fee_math() {
+	assert_eq!(fee_from_boosted_amount(1_000_000, 10), 1_000);
+
+	assert_eq!(fee_from_provided_amount(1_000_000, 10), Ok(1_001));
 }

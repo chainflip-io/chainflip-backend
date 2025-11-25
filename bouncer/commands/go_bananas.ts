@@ -11,7 +11,6 @@ import {
   sleep,
   fineAmountToAmount,
   assetDecimals,
-  chainFromAsset,
   stateChainAssetFromAsset,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
@@ -133,10 +132,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
       call(
         'lp_set_limit_order',
         [
-          {
-            chain: chainFromAsset(asset),
-            asset: stateChainAssetFromAsset(asset),
-          },
+          stateChainAssetFromAsset(asset),
           {
             chain: 'Ethereum',
             asset: 'USDC',
@@ -151,10 +147,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
       call(
         'lp_set_limit_order',
         [
-          {
-            chain: chainFromAsset(asset),
-            asset: stateChainAssetFromAsset(asset),
-          },
+          stateChainAssetFromAsset(asset),
           {
             chain: 'Ethereum',
             asset: 'USDC',

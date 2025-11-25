@@ -25,12 +25,17 @@ mod utils;
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
-	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
-	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
-	LtvThresholds, NetworkFeeContributions, OraclePriceCache, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
-	WithdrawnAndRemainingAmounts,
+	rpc::{
+		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	},
+	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
+	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+};
+
+pub use general_lending::config::{
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
+	NetworkFeeContributions,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -210,7 +215,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	ltv_thresholds: LtvThresholds {
 		target: Permill::from_percent(80),
-		topup: Permill::from_percent(85),
+		topup: None,
 		soft_liquidation: Permill::from_percent(90),
 		soft_liquidation_abort: Permill::from_percent(88),
 		hard_liquidation: Permill::from_percent(95),
@@ -409,9 +414,9 @@ pub mod pallet {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
 		},
-		PrimaryCollateralAssetUpdated {
+		CollateralTopupAssetUpdated {
 			borrower_id: T::AccountId,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
@@ -504,6 +509,8 @@ pub mod pallet {
 		AccountHasNoLoans,
 		/// The borrower has insufficient collateral for the requested loan
 		InsufficientCollateral,
+		/// Action not allowed as it would lead to LTV that's above safe threshold
+		LtvTooHigh,
 		/// A catch-all error for invalid loan parameters where a more specific error is not
 		/// available
 		InvalidLoanParameters,
@@ -855,7 +862,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_collateral())]
 		pub fn add_collateral(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -865,7 +872,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			<Self as LendingApi>::add_collateral(&borrower_id, primary_collateral_asset, collateral)
+			<Self as LendingApi>::add_collateral(&borrower_id, collateral_topup_asset, collateral)
 		}
 
 		#[pallet::call_index(8)]
@@ -885,7 +892,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -899,7 +906,7 @@ pub mod pallet {
 				borrower_id,
 				loan_asset,
 				loan_amount,
-				primary_collateral_asset,
+				collateral_topup_asset,
 				extra_collateral,
 			)?;
 
@@ -907,16 +914,16 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_primary_collateral_asset())]
-		pub fn update_primary_collateral_asset(
+		#[pallet::weight(T::WeightInfo::update_collateral_topup_asset())]
+		pub fn update_collateral_topup_asset(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::update_primary_collateral_asset(
+			<Self as LendingApi>::update_collateral_topup_asset(
 				&borrower_id,
-				primary_collateral_asset,
+				collateral_topup_asset,
 			)
 		}
 

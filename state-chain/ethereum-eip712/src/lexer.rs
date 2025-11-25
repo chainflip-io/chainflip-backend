@@ -419,7 +419,7 @@ impl<'input> HumanReadableParser<'input> {
 		}
 
 		Ok(
-			#[allow(deprecated)]
+			#[expect(deprecated)]
 			Function { name: name.to_string(), inputs, outputs, constant: None, state_mutability },
 		)
 	}
@@ -917,7 +917,7 @@ mod tests {
 
 	#[test]
 	fn test_parse_function() {
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		let f = Function {
 			name: "get".to_string(),
 			inputs: vec![
@@ -949,7 +949,7 @@ mod tests {
 		.unwrap();
 		assert_eq!(f, parsed);
 
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		let f = Function {
 			name: "get".to_string(),
 			inputs: vec![
@@ -969,7 +969,7 @@ mod tests {
 
 	#[test]
 	fn test_parse_function_output() {
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		let f = Function {
 			name: "get".to_string(),
 			inputs: vec![
@@ -1007,7 +1007,7 @@ mod tests {
         )
         .unwrap();
 		assert_eq!(f, parsed);
-		#[allow(deprecated)]
+		#[expect(deprecated)]
 		let mut f = Function {
 			name: "get".to_string(),
 			inputs: vec![

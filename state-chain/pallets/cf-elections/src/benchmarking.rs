@@ -35,7 +35,6 @@ use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
 
 use crate::Call;
 
-#[allow(clippy::multiple_bound_locations)]
 #[instance_benchmarks(
 	where
 	VoteOf<<T as Config<I>>::ElectoralSystemRunner>: BenchmarkValue,

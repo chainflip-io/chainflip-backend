@@ -70,7 +70,10 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, IntoForeignChainAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	btc::{
+		api::BitcoinApi, deposit_address::DepositAddress, BitcoinCrypto, BitcoinRetryPolicy,
+		ScriptPubkey,
+	},
 	cf_parameters::build_and_encode_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -78,7 +81,7 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChainEnvironment,
 	ChannelRefundParametersUncheckedEncoded, DefaultRetryPolicy, EvmVaultSwapExtraParameters,
 	ForeignChain, Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
@@ -1554,6 +1557,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 	}
 }
 
+#[allow(clippy::allow_attributes)]
 #[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(
@@ -2652,7 +2656,7 @@ impl_runtime_apis! {
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels> {
 			use sp_std::collections::btree_set::BTreeSet;
 
-			#[allow(clippy::type_complexity)]
+			#[expect(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
 				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<(EncodedAddress, Asset)>>
 			{
@@ -2754,21 +2758,41 @@ impl_runtime_apis! {
 		}
 
 		fn cf_vault_addresses() -> VaultAddresses {
+			let bitcoin_agg_key = <BtcEnvironment as ChainEnvironment<_, cf_chains::btc::AggKey>>::lookup(());
+			let solana_api_environment = Environment::solana_api_environment();
 			VaultAddresses {
 				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
 				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
 				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
-					.flat_map(|(account_id, channel_id)| {
-						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+					.map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous: _, current } = derive_btc_vault_deposit_addresses(channel_id)
 							.with_encoded_addresses();
-						previous.into_iter().chain(core::iter::once(current))
-							.map(move |address| (account_id.clone(), address))
+						(account_id, current)
 					})
 					.collect(),
 
-				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
-				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
+				sol_vault_program: solana_api_environment.vault_program.into(),
+				sol_swap_endpoint_program_data_account: solana_api_environment.swap_endpoint_program_data_account.into(),
 				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
+				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
+				solana_usdc_token_vault_ata: solana_api_environment.usdc_token_vault_ata.into(),
+				solana_vault_swap_account: sol_prim::address_derivation::derive_swap_endpoint_native_vault_account(
+					solana_api_environment.swap_endpoint_program
+				).ok().map(|account| account.address.into()),
+				bitcoin_vault: bitcoin_agg_key.map(|agg_key| {
+					let vault_address = DepositAddress::new(agg_key.current, 0);
+					EncodedAddress::from_chain_account::<Bitcoin>(
+						vault_address.script_pubkey(),
+						Environment::network_environment(),
+					)
+				}),
+				predicted_seconds_until_next_vault_rotation: {
+					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
+					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();
+					let current_height = crate::System::block_number();
+					let blocks_left = started.saturating_add(duration).saturating_sub(current_height);
+					blocks_left as u64 * cf_primitives::SECONDS_PER_BLOCK
+				}
 			}
 		}
 
@@ -3464,7 +3488,7 @@ impl_runtime_apis! {
 			(list, storage_info)
 		}
 
-		#[allow(non_local_definitions)]
+		#[expect(non_local_definitions)]
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {

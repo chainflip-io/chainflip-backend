@@ -147,10 +147,7 @@ mod test {
 
 				let result1 = caching_client
 					.get_or_fetch(
-						Box::pin(move |client| {
-							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.request(&A).await })
-						}),
+						Box::pin(move |client| Box::pin(async move { client.request(&A).await })),
 						(),
 					)
 					.await
@@ -158,10 +155,7 @@ mod test {
 				// After the first request completes, result is stored in cache
 				let result2 = caching_client
 					.get_or_fetch(
-						Box::pin(move |client| {
-							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.request(&A).await })
-						}),
+						Box::pin(move |client| Box::pin(async move { client.request(&A).await })),
 						(),
 					)
 					.await
@@ -188,17 +182,11 @@ mod test {
 					CachingRequest::<(), u32, Client>::new(scope, client.clone());
 
 				let future1 = caching_client.get_or_fetch(
-					Box::pin(move |client| {
-						#[allow(clippy::redundant_async_block)]
-						Box::pin(async move { client.request(&B).await })
-					}),
+					Box::pin(move |client| Box::pin(async move { client.request(&B).await })),
 					(),
 				);
 				let future2 = caching_client.get_or_fetch(
-					Box::pin(move |client| {
-						#[allow(clippy::redundant_async_block)]
-						Box::pin(async move { client.request(&B).await })
-					}),
+					Box::pin(move |client| Box::pin(async move { client.request(&B).await })),
 					(),
 				);
 				// we will start both request simultaneously such that the request is still in
@@ -226,10 +214,7 @@ mod test {
 
 				let result = caching_client
 					.get_or_fetch(
-						Box::pin(move |client| {
-							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.request(&C).await })
-						}),
+						Box::pin(move |client| Box::pin(async move { client.request(&C).await })),
 						(),
 					)
 					.await
@@ -239,10 +224,7 @@ mod test {
 
 				let result2 = caching_client
 					.get_or_fetch(
-						Box::pin(move |client| {
-							#[allow(clippy::redundant_async_block)]
-							Box::pin(async move { client.request(&C).await })
-						}),
+						Box::pin(move |client| Box::pin(async move { client.request(&C).await })),
 						(),
 					)
 					.await

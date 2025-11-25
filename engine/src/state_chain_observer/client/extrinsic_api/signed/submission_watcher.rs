@@ -143,7 +143,6 @@ pub struct SubmissionWatcher<
 	scope: &'a Scope<'env, anyhow::Error>,
 	next_request_id: RequestID,
 	submissions_by_nonce: BTreeMap<Nonce, Vec<Submission>>,
-	#[allow(clippy::type_complexity)]
 	submission_status_futures:
 		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, H256)>>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
@@ -153,7 +152,7 @@ pub struct SubmissionWatcher<
 	runtime_version: sp_version::RuntimeVersion,
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: BlockNumber,
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	block_cache: VecDeque<(
 		state_chain_runtime::Hash,
 		Option<(
@@ -630,7 +629,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 								matching_request.until_in_block_sender
 							{
 								let _result = until_in_block_sender.send(
-									#[allow(clippy::useless_asref)]
+									#[expect(clippy::useless_asref)]
 									result.as_ref().map(Clone::clone).map_err(
 										|error| match error {
 											ExtrinsicError::Dispatch(dispatch_error) =>

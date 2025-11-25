@@ -1,8 +1,9 @@
 import assert from 'assert';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import {
+  Assets,
   createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
@@ -10,11 +11,11 @@ import {
   sleep,
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
-import { registerAffiliate } from 'shared/btc_vault_swap';
+import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
 import { setupBrokerAccount } from 'shared/setup_account';
 import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
@@ -29,8 +30,8 @@ async function testRefundVaultSwap(logger: Logger) {
   const destAsset = Assets.Usdc;
   const balanceObserveTimeout = 60;
   const depositAmount = defaultAssetAmounts(inputAsset);
-  const destAddress = await newAssetAddress('Usdc');
-  const refundAddress = await newAssetAddress('Btc');
+  const destAddress = await newAssetAddress(destAsset);
+  const refundAddress = await newAssetAddress(inputAsset);
   const foKParams = {
     retryDurationBlocks: 100,
     refundAddress,
@@ -56,7 +57,7 @@ async function testRefundVaultSwap(logger: Logger) {
   let btcBalance = false;
 
   for (let i = 0; i < balanceObserveTimeout; i++) {
-    const refundAddressBalance = await getBalance(Assets.Btc, refundAddress);
+    const refundAddressBalance = await getBalance(inputAsset, refundAddress);
     if (refundAddressBalance !== '0') {
       btcBalance = true;
       break;
@@ -176,6 +177,34 @@ async function testFeeCollection(
   return Promise.resolve([broker, affiliateId, refundAddress]);
 }
 
+async function testInvalidBtcVaultSwap(logger: Logger) {
+  logger.info('Starting invalid BTC vault swap test...');
+
+  const inputAsset = Assets.Btc;
+  const destAsset = Assets.Usdc;
+  const depositAmount = defaultAssetAmounts(inputAsset);
+  const destAddress = await newAssetAddress(destAsset);
+
+  const txId = await buildAndSendInvalidBtcVaultSwap(
+    logger,
+    '//BROKER_1',
+    Number(depositAmount),
+    destAsset,
+    destAddress,
+    await newAssetAddress(inputAsset, 'BTC_VAULT_SWAP_REFUND'),
+    Number(10),
+  );
+
+  logger.debug(`BTC vault swap txid is ${txId}, awaiting deposit finalised event...`);
+  await observeEvent(logger, 'bitcoinIngressEgress:DepositFinalised', {
+    test: (event) => event.data.action === 'Unrefundable',
+    timeoutSeconds: 120,
+    historicalCheckBlocks: 10,
+  }).event;
+
+  logger.info('Invalid BTC vault swap ingressed ✅.');
+}
+
 export async function testVaultSwap(testContext: TestContext) {
   await Promise.all([
     testFeeCollection(Assets.Eth, testContext),
@@ -187,4 +216,5 @@ export async function testVaultSwap(testContext: TestContext) {
   const [broker, affiliateId, refundAddress] = await testFeeCollection(Assets.Btc, testContext);
   await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
   await testRefundVaultSwap(testContext.logger);
+  await testInvalidBtcVaultSwap(testContext.logger);
 }

@@ -115,7 +115,7 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 
 #[test]
 fn test_environment_serialization() {
-	#[allow(deprecated)]
+	#[expect(deprecated)]
 	let env = RpcEnvironment {
 		swapping: SwappingEnvironment {
 			maximum_swap_amounts: any::AssetMap {
@@ -407,6 +407,11 @@ fn test_vault_addresses_custom_rpc() {
 		sol_swap_endpoint_program_data_account: EncodedAddress::Sol([2; 32]),
 		usdc_token_mint_pubkey: EncodedAddress::Sol([3; 32]),
 		sol_vault_program: EncodedAddress::Sol([4; 32]),
+		bitcoin_vault: Some(EncodedAddress::Btc([5; 32].into())),
+		solana_sol_vault: Some(EncodedAddress::Sol([6; 32])),
+		solana_usdc_token_vault_ata: EncodedAddress::Sol([7; 32]),
+		solana_vault_swap_account: Some(EncodedAddress::Sol([8; 32])),
+		predicted_seconds_until_next_vault_rotation: 9,
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -1164,7 +1169,7 @@ fn loan_account_serialization() {
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
-		primary_collateral_asset: Asset::Btc,
+		collateral_topup_asset: Some(Asset::Btc),
 		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
 		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
 		loans: vec![RpcLoan {
@@ -1210,7 +1215,7 @@ fn lending_config_serialization() {
 		ltv_thresholds: LtvThresholds {
 			low_ltv: Permill::from_percent(50),
 			target: Permill::from_percent(75),
-			topup: Permill::from_percent(80),
+			topup: Some(Permill::from_percent(80)),
 			soft_liquidation: Permill::from_percent(90),
 			soft_liquidation_abort: Permill::from_percent(88),
 			hard_liquidation: Permill::from_percent(95),

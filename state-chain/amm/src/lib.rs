@@ -514,13 +514,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		})
 	}
 
-	#[allow(clippy::type_complexity)]
 	pub fn set_range_order_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
 		self.range_orders.set_fees(fee_hundredth_pips)
 	}
 
 	/// This function exists to help with migration, and will likely be removed in the future.
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	pub fn set_limit_order_fees(
 		&mut self,
 		fee_hundredth_pips: u32,

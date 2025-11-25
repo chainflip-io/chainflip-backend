@@ -324,7 +324,6 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
-	#[allow(unused_imports)]
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
