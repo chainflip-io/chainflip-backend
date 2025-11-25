@@ -78,7 +78,7 @@ jobs:
       - name: Install system packages 💿
         run: |
           sudo apt update
-          sudo apt install -y bc xxd
+          sudo apt install -y bc xxd postgresql-client-15
 
       - name: Install wscat 🐈
         run: |
