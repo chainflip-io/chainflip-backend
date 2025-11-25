@@ -19,14 +19,6 @@ async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   return version;
 }
 
-// The javascript version of state-chain/primitives/src/lib.rs - SemVer::is_compatible_with()
-function isCompatibleWith(semVer1: string, semVer2: string) {
-  const [major1, minor1] = semVer1.split('.').map(Number);
-  const [major2, minor2] = semVer2.split('.').map(Number);
-
-  return major1 === major2 && minor1 === minor2;
-}
-
 // Create a git workspace in the tmp/ directory and check out the specified commit.
 // Remember to delete it when you're done!
 function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string) {
@@ -115,53 +107,7 @@ async function startDepositMonitor(localnetInitPath: string) {
   );
 }
 
-async function compatibleUpgrade(
-  localnetInitPath: string,
-  binaryPath: string,
-  runtimePath: string,
-  numberOfNodes: 1 | 3,
-) {
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
-
-  killOldNodes();
-
-  const KEYS_DIR = `${localnetInitPath}/keys`;
-
-  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-
-  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
-    INIT_RPC_PORT: `9944`,
-    KEYS_DIR,
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
-
-  // wait for nodes to be ready
-  await sleep(20000);
-
-  // engines crashed when node shutdown, so restart them.
-  await execWithLog(
-    `${localnetInitPath}/scripts/start-all-engines.sh`,
-    [],
-    'start-all-engines-post-upgrade',
-    {
-      INIT_RUN: 'false',
-      LOG_SUFFIX: '-post-upgrade',
-      NODE_COUNT: nodeCount,
-      SELECTED_NODES,
-      LOCALNET_INIT_DIR: localnetInitPath,
-      BINARY_ROOT_PATH: binaryPath,
-    },
-  );
-
-  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-
-  await startDepositMonitor(localnetInitPath);
-}
-
-async function incompatibleUpgradeNoBuild(
+async function UpgradeNoBuild(
   localnetInitPath: string,
   binaryPath: string,
   runtimePath: string,
@@ -172,16 +118,6 @@ async function incompatibleUpgradeNoBuild(
   logger.info('Killing the old engines');
   await killEngines();
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
-
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
-
-  logger.info(
-    'Check that the old engine has now shut down, and that the new engine is now running.',
-  );
-
-  // TODO: add some tests here. After this point. If the upgrade doesn't work.
-  // but below, we effectively restart the engine before running any tests it's possible that
-  // we don't catch the error here.
 
   // Ensure the runtime upgrade is finalised.
   await sleep(10000);
@@ -237,8 +173,7 @@ async function incompatibleUpgradeNoBuild(
   const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
   logger.info('New node PID: ' + output.toString());
 
-  // Engines crash when the node shuts down, so we need to restart them.
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
 
   await sleep(4000);
 
@@ -249,7 +184,7 @@ async function incompatibleUpgradeNoBuild(
   logger.info('Started new deposit monitor.');
 }
 
-async function incompatibleUpgrade(
+async function Upgrade(
   // could we pass localnet/init instead of this.
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
@@ -262,7 +197,7 @@ async function incompatibleUpgrade(
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
-  await incompatibleUpgradeNoBuild(
+  await UpgradeNoBuild(
     localnetInitPath,
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
@@ -272,7 +207,6 @@ async function incompatibleUpgrade(
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
-// Only the incompatible upgrade requires the number of nodes.
 export async function upgradeNetworkGit(
   toGitRef: string,
   bumpByIfEqual: SemVerLevel = 'patch',
@@ -311,21 +245,8 @@ export async function upgradeNetworkGit(
   const newToTomlVersion = await readPackageTomlVersion(path.join(nextVersionWorkspacePath));
   logger.info("Version we're upgrading to: " + newToTomlVersion);
 
-  const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
-  logger.info('Is compatible: ' + isCompatible);
-
   const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
-  if (isCompatible) {
-    logger.info('The versions are compatible.');
-    await simpleRuntimeUpgrade(logger, nextVersionWorkspacePath, true);
-
-    // TODO: Add restart nodes support, as in the prebuilt case.
-
-    logger.info('Upgrade complete.');
-  } else if (!isCompatible) {
-    logger.info('The versions are incompatible.');
-    await incompatibleUpgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
-  }
+  await Upgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
 
   logger.info('Cleaning up...');
   execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
@@ -371,12 +292,8 @@ export async function upgradeNetworkPrebuilt(
     throw Error(
       'The versions are the same. No need to upgrade. Please provide a different version.',
     );
-  } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
-    logger.info('The versions are compatible.');
-    await compatibleUpgrade(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
-    logger.info('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await UpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
   logger.info('Upgrade complete.');
