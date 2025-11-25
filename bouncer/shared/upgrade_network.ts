@@ -107,7 +107,7 @@ async function startDepositMonitor(localnetInitPath: string) {
   );
 }
 
-async function UpgradeNoBuild(
+async function upgradeNoBuild(
   localnetInitPath: string,
   binaryPath: string,
   runtimePath: string,
@@ -153,7 +153,7 @@ async function UpgradeNoBuild(
 
   await sleep(20000);
 
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
+  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test');
 
   logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
 
@@ -181,7 +181,7 @@ async function UpgradeNoBuild(
   logger.info('Started new deposit monitor.');
 }
 
-async function Upgrade(
+async function upgrade(
   // could we pass localnet/init instead of this.
   localnetInitPath: string,
   nextVersionWorkspacePath: string,
@@ -194,7 +194,7 @@ async function Upgrade(
 
   await compileBinaries('all', nextVersionWorkspacePath);
 
-  await UpgradeNoBuild(
+  await upgradeNoBuild(
     localnetInitPath,
     `${nextVersionWorkspacePath}/target/release`,
     `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
@@ -243,7 +243,7 @@ export async function upgradeNetworkGit(
   logger.info("Version we're upgrading to: " + newToTomlVersion);
 
   const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
-  await Upgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
+  await upgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
 
   logger.info('Cleaning up...');
   execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
@@ -290,7 +290,7 @@ export async function upgradeNetworkPrebuilt(
       'The versions are the same. No need to upgrade. Please provide a different version.',
     );
   } else {
-    await UpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await upgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
   logger.info('Upgrade complete.');
