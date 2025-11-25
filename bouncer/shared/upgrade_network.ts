@@ -113,11 +113,6 @@ async function UpgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  // We need to kill the engine process before starting the new engine (engine-runner)
-  // Since the new engine contains the old one.
-  logger.info('Killing the old engines');
-  await killEngines();
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
 
   // Ensure the runtime upgrade is finalised.
   await sleep(10000);
@@ -157,6 +152,8 @@ async function UpgradeNoBuild(
   });
 
   await sleep(20000);
+
+  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
 
   logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
 
