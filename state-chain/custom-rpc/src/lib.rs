@@ -45,7 +45,7 @@ use cf_rpc_apis::{
 };
 use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
-use ethereum_eip712::eip712::{EIP712Domain, Types};
+use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
 use jsonrpsee::{
 	core::async_trait,
@@ -74,7 +74,6 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sp_api::{ApiError, ApiExt, CallApiAt};
 use sp_core::U256;
 use sp_runtime::{
@@ -115,24 +114,8 @@ pub mod pool_client;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Eip712RpcTypedData {
-	/// Signing domain metadata. The signing domain is the intended context for the signature (e.g.
-	/// the dapp, protocol, etc. that it's intended for). This data is used to construct the domain
-	/// separator of the message.
-	#[serde(default)]
-	pub domain: EIP712Domain,
-	/// The custom types used by this message.
-	pub types: Types,
-	#[serde(rename = "primaryType")]
-	/// The type of the message.
-	pub primary_type: String,
-	// The message to be signed.
-	pub message: BTreeMap<String, Value>,
-}
-
-type RpcEncodedNonNativeCall = EncodedNonNativeCallGeneric<Eip712RpcTypedData>;
+type RpcEncodedNonNativeCall =
+	EncodedNonNativeCallGeneric<ethers_core::types::transaction::eip712::TypedData>;
 
 mod chainflip_transparency {
 	use super::*;
@@ -2672,32 +2655,16 @@ where
 							))
 						})?;
 					let serialized_call = match encoded_call {
-						EncodedNonNativeCall::Eip712(typed_data) => {
-							let message_scale_value: scale_value::Value =
-								typed_data.message.clone().stringify_integers().into();
-							let message_json =
-								serde_json::to_value(message_scale_value).map_err(|e| {
+						EncodedNonNativeCall::Eip712(typed_data) =>
+							RpcEncodedNonNativeCall::Eip712(
+								to_ethers_typed_data(typed_data).map_err(|e| {
 									CfApiError::ErrorObject(ErrorObject::owned(
 										ErrorCode::InternalError.code(),
-										format!("Failed to serialize message to JSON: {}", e),
+										e,
 										None::<()>,
 									))
-								})?;
-							let message_object = message_json.as_object().ok_or_else(|| {
-								CfApiError::ErrorObject(ErrorObject::owned(
-									ErrorCode::InternalError.code(),
-									"the primary type is not a JSON object but one of the primitive types",
-									None::<()>,
-								))
-							})?;
-
-							RpcEncodedNonNativeCall::Eip712(Eip712RpcTypedData {
-								domain: typed_data.domain,
-								types: typed_data.types,
-								primary_type: typed_data.primary_type,
-								message: message_object.clone().into_iter().collect(),
-							})
-						},
+								})?,
+							),
 						EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
 					};
 					// Return the `transaction_metadata` because it will need
