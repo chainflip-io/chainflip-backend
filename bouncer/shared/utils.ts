@@ -51,6 +51,7 @@ import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { Err, Ok, Result } from './utils/chainflip_io';
+import z from 'zod';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1528,4 +1529,81 @@ export async function submitExtrinsic(
     );
   }
   return eventRecord.event as unknown as Event;
+}
+
+const nodeHealthSchema = z.object({
+  peers: z.number(),
+  isSyncing: z.boolean(),
+  shouldHavePeers: z.boolean(),
+  isResponsive: z.boolean().optional().default(true),
+});
+
+export async function getNodeHealthStatus(
+  logger: Logger,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+): Promise<z.infer<typeof nodeHealthSchema>> {
+  const nodeUrl = `${nodeAddress}:${nodePort}`;
+  logger.debug(`Checking health status of node at ${nodeUrl}`);
+
+  try {
+    const response = await fetch(nodeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'system_health',
+        params: [],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const jsonResponse = await response.json();
+    const data = nodeHealthSchema.parse(jsonResponse.result);
+    logger.debug(`Node health status: ${JSON.stringify(data)}`);
+    return data;
+  } catch (error) {
+    return { peers: 0, isSyncing: false, shouldHavePeers: false, isResponsive: false };
+  }
+}
+
+export async function waitForNodeHealthy(
+  logger: Logger,
+  waitForSynced: boolean = true,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+  checkForPeers: boolean = true,
+): Promise<void> {
+  logger.info(`Waiting for node at ${nodeAddress}:${nodePort} to be healthy`);
+
+  const maxRetries = 30;
+  const retryIntervalMs = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const healthStatus = await getNodeHealthStatus(logger, nodeAddress, nodePort);
+
+    const isHealthy =
+      healthStatus.isResponsive &&
+      (!checkForPeers || !healthStatus.shouldHavePeers || healthStatus.peers > 0) &&
+      (!waitForSynced || !healthStatus.isSyncing);
+
+    if (isHealthy) {
+      logger.debug(`Node is healthy after ${attempt} attempt(s)`);
+      return;
+    }
+
+    if (attempt === maxRetries) {
+      throw new Error(
+        `Node at ${nodeAddress}:${nodePort} health check timed out after ${maxRetries} attempts. Status: ${JSON.stringify(healthStatus)}`,
+      );
+    }
+    logger.debug(
+      `Node not healthy yet (Attempt ${attempt}/${maxRetries}): ${JSON.stringify(healthStatus)}`,
+    );
+    await sleep(retryIntervalMs);
+  }
 }
