@@ -298,3 +298,27 @@ services:
       - CFDM_SOL_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_SOL_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
       - CFDM_SOL_RPC_HTTP_ENDPOINT=${CFDM_SOL_RPC_HTTP_ENDPOINT}
+
+  postgres:
+    image: postgres:15.3
+    restart: always
+    volumes:
+      - /var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: squid_archive
+    ports:
+      - "${INDEXER_DB_PORT:-5432}:5432"
+
+  indexer:
+    depends_on:
+      - postgres
+    restart: on-failure
+    image: subsquid/substrate-ingest:firesquid
+    command: [
+        "-e",
+        "ws://host.docker.internal:9944",
+        "--out",
+        "postgres://postgres:postgres@host.docker.internal:${INDEXER_DB_PORT:-5432}/squid_archive",
+      ]
