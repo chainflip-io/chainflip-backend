@@ -1466,6 +1466,7 @@ pub type PalletExecutionOrder = (
 	BitcoinElections,
 	GenericElections,
 	EthereumElections,
+	ArbitrumElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -1521,6 +1522,7 @@ type AllMigrations = (
 	migrations::housekeeping::Migration,
 	MigrationsForV2_0,
 	migrations::ethereum_elections::Migration,
+	migrations::arbitrum_elections::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -1711,6 +1713,14 @@ impl_runtime_apis! {
 
 		fn cf_ethereum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			EthereumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_arbitrum_electoral_data(account_id: AccountId) -> Vec<u8> {
+			ArbitrumElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			ArbitrumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 	}
 

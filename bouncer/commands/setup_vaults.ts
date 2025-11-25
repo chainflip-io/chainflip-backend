@@ -197,12 +197,6 @@ async function main(): Promise<void> {
   );
   await bitcoinBlocknumberSetEvent;
 
-  const arbitrumInitializedEvent = observeEvent(logger, 'environment:ArbitrumInitialized').event;
-  await submitGovernanceExtrinsic(async (chainflip) =>
-    chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
-  );
-  await arbitrumInitializedEvent;
-
   const solanaInitializedEvent = observeEvent(logger, 'environment:SolanaInitialized').event;
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),

@@ -20,7 +20,7 @@ use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
-	evm::{cached_rpc::EvmCachingClient, retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
+	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
 		chain_api::ChainApi,
@@ -32,7 +32,7 @@ use crate::{
 };
 use cf_utilities::task_scope::Scope;
 use futures::try_join;
-use state_chain_runtime::{BitcoinInstance, EthereumInstance, SolanaInstance};
+use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, SolanaInstance};
 
 use super::common::epoch_source::EpochSource;
 
@@ -46,7 +46,7 @@ use anyhow::Result;
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
-	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
@@ -63,6 +63,7 @@ where
 		+ ElectoralApi<BitcoinInstance>
 		+ ElectoralApi<()>
 		+ ElectoralApi<EthereumInstance>
+		+ ElectoralApi<ArbitrumInstance>
 		+ 'static
 		+ Send
 		+ Sync,
@@ -108,15 +109,7 @@ where
 		}
 	};
 
-	let start_arb = super::arb::start(
-		scope,
-		arb_client.clone(),
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream.clone(),
-		epoch_source.clone(),
-		db.clone(),
-	);
+	let start_arb = super::arb2::start(scope, arb_client.clone(), state_chain_client.clone());
 
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 

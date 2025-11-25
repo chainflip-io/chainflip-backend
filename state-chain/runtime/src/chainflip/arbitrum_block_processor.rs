@@ -1,7 +1,7 @@
 use crate::{
 	chainflip::{
 		arbitrum_elections::{
-			ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerWitnessing,
+			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerWitnessing,
 			ArbitrumVaultDepositWitnessing, BlockDataDepositChannel, BlockDataKeyManager,
 			BlockDataVaultDeposit, KeyManagerEvent, VaultEvents,
 		},
@@ -9,11 +9,12 @@ use crate::{
 	},
 	ArbitrumBroadcaster, ArbitrumIngressEgress, Runtime,
 };
-use cf_chains::{instances::ArbitrumInstance, Arbitrum, Chain};
+use cf_chains::{instances::ArbitrumInstance, Arbitrum};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_elections::electoral_systems::{
+	block_height_witnesser::ChainTypes,
 	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
 	state_machine::core::Hook,
 };
@@ -38,7 +39,7 @@ impl<T> ArbEvent<T> {
 type TypesDepositChannelWitnessing = TypesFor<ArbitrumDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<ArbitrumVaultDepositWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<ArbitrumKeyManagerWitnessing>;
-type BlockNumber = <Arbitrum as Chain>::ChainBlockNumber;
+type BlockNumber = <ArbitrumChain as ChainTypes>::ChainBlockNumber;
 
 /// Returns one event per deposit witness. If multiple events share the same deposit witness:
 /// - keep only the `Witness` variant,
@@ -73,7 +74,7 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 				ArbEvent::Witness(deposit) => {
 					ArbitrumIngressEgress::process_channel_deposit_full_witness(
 						deposit.clone(),
-						*block,
+						*block.root(),
 					);
 				},
 			}
@@ -91,7 +92,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 					VaultEvents::XcallNativeFilter(vault_deposit_witness) |
 					VaultEvents::XcallTokenFilter(vault_deposit_witness) => {
 						ArbitrumIngressEgress::process_vault_swap_request_full_witness(
-							*block,
+							*block.root(),
 							vault_deposit_witness.clone(),
 						);
 					},

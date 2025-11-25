@@ -13,21 +13,10 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-
 use crate::{
 	evm::rpc::address_checker::AddressState,
 	witness::{
 		common::block_height::{witness_headers, HeaderClient},
-		eth::{
-			sc_utils::{
-				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
-				DepositToVaultAndScCallFilter, ScUtilsEvents,
-			},
-			state_chain_gateway::{
-				FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
-				StateChainGatewayEvents,
-			},
-		},
 		evm::{
 			contract_common::Event,
 			erc20_deposits::Erc20Events,
@@ -49,20 +38,17 @@ use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	arb::ArbitrumTrackedData,
 	evm::{
-		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, ToAccountId32,
-		TransactionFee, H256,
+		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee, H256,
 	},
-	Arbitrum, CcmChannelMetadata, CcmDepositMetadata, ForeignChain,
+	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
+	Arbitrum, CcmChannelMetadata, CcmDepositMetadata, ChainWitnessConfig, ForeignChain,
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount};
-use cf_utilities::{
-	context,
-	task_scope::{self, Scope},
-};
+use cf_utilities::task_scope::{self, Scope};
 use ethbloom::Bloom;
 use ethers::{
 	abi::ethereum_types::BloomInput,
-	types::{Block, TransactionReceipt},
+	types::{Bytes, TransactionReceipt},
 };
 use futures::{try_join, FutureExt};
 use itertools::Itertools;
@@ -92,13 +78,14 @@ use crate::{
 		cached_rpc::{
 			AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult,
 		},
+		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
 		rpc::EvmRpcSigningClient,
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::evm::vault::vault_deposit_witness;
@@ -111,16 +98,64 @@ pub struct ArbitrumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<Block<H256>> for EvmCachingClient<EvmRpcSigningClient> {
-	async fn best_block_header(&self) -> anyhow::Result<Block<H256>> {
-		let best_number = self.get_block_number().await?;
-		let block = self.block(best_number).await?;
-		Ok(block)
+impl HeaderClient<ArbitrumChain, Arbitrum> for ArbitrumBlockHeightWitnesserVoter {
+	async fn best_block_header(&self) -> anyhow::Result<Header<ArbitrumChain>> {
+		let best_number = self.client.get_block_number().await?.low_u64();
+		let range = block_witness_range(Arbitrum::WITNESS_PERIOD, best_number);
+		let (start, end) = if *range.end() != best_number {
+			(
+				range.start().saturating_sub(Arbitrum::WITNESS_PERIOD),
+				range.start().saturating_sub(1),
+			)
+		} else {
+			(*range.start(), *range.end())
+		};
+		let futures = vec![self.client.block((start).into()), self.client.block((end).into())];
+		let [block_start, block_end]: [_; 2] = futures::future::join_all(futures)
+			.await
+			.into_iter()
+			.collect::<anyhow::Result<Vec<_>>>()?
+			.try_into()
+			.map_err(|_| anyhow::anyhow!("Failed to convert to array"))?;
+		Ok(Header {
+			block_height: BlockWitnessRange::try_new(start)
+				.map_err(|_| anyhow!("Failed to create block witness range"))?,
+			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block_start.parent_hash,
+		})
 	}
 
-	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<Block<H256>> {
-		let block = self.block(height.into()).await?;
-		Ok(block)
+	async fn block_header_by_height(
+		&self,
+		height: BlockWitnessRange<Arbitrum>,
+	) -> anyhow::Result<Header<ArbitrumChain>> {
+		let range = height.into_range_inclusive();
+		let futures = vec![
+			self.client.block((*range.start()).into()),
+			self.client.block((*range.end()).into()),
+		];
+		let [block_start, block_end]: [_; 2] = futures::future::join_all(futures)
+			.await
+			.into_iter()
+			.collect::<anyhow::Result<Vec<_>>>()?
+			.try_into()
+			.map_err(|_| anyhow::anyhow!("Failed to convert to array"))?;
+		Ok(Header {
+			block_height: height,
+			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block_start.parent_hash,
+		})
+	}
+	async fn best_block_number(&self) -> anyhow::Result<BlockWitnessRange<Arbitrum>> {
+		let best_block = self.client.get_block_number().await?.low_u64();
+		let range = block_witness_range(Arbitrum::WITNESS_PERIOD, best_block);
+		let block_witness_range =
+			BlockWitnessRange::try_new(block_witness_root(Arbitrum::WITNESS_PERIOD, best_block))
+				.map_err(|_| anyhow::anyhow!("Failed to build BlockWitnessRange"))?;
+		if best_block == *range.end() {
+			return Ok(block_witness_range);
+		}
+		Ok(block_witness_range.saturating_backward(1))
 	}
 }
 
@@ -131,27 +166,19 @@ impl VoterApi<ArbitrumBlockHeightWitnesserES> for ArbitrumBlockHeightWitnesserVo
 		_settings: <ArbitrumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<ArbitrumBlockHeightWitnesserES, _, Block<H256>, ArbitrumChain>(
-			&self.client,
+		witness_headers::<ArbitrumBlockHeightWitnesserES, _, ArbitrumChain, Arbitrum>(
+			self,
 			properties,
 			ARBITRUM_MAINNET_SAFETY_BUFFER,
-			|block| {
-				Ok(Header {
-					block_height: block
-						.number
-						.ok_or_else(|| anyhow::anyhow!("No block number"))?
-						.low_u64(),
-					hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-					parent_hash: block.parent_hash,
-				})
-			},
-			"ETH BHW",
+			"ARB BHW",
 		)
 		.await
 	}
 }
 
-async fn query_election_block<C: ChainTypes<ChainBlockHash = H256, ChainBlockNumber = u64>>(
+async fn query_election_block<
+	C: ChainTypes<ChainBlockHash = H256, ChainBlockNumber = BlockWitnessRange<Arbitrum>>,
+>(
 	client: &EvmCachingClient<EvmRpcSigningClient>,
 	block_height: C::ChainBlockNumber,
 	election_type: EngineElectionType<C>,
@@ -159,6 +186,10 @@ async fn query_election_block<C: ChainTypes<ChainBlockHash = H256, ChainBlockNum
 	match election_type {
 		EngineElectionType::ByHash(hash) => {
 			let block = client.block_by_hash(hash).await?;
+			let block_number_range =
+				block_witness_range(Arbitrum::WITNESS_PERIOD, block.number.unwrap().low_u64());
+			let beginning_block = client.block((*block_number_range.start()).into()).await?;
+
 			if let Some(block_hash) = block.hash {
 				if block_hash != hash {
 					return Err(anyhow::anyhow!(
@@ -171,35 +202,36 @@ async fn query_election_block<C: ChainTypes<ChainBlockHash = H256, ChainBlockNum
 					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
 					None,
 					block_hash,
-					block.parent_hash,
+					beginning_block.parent_hash,
 				))
 			} else {
 				Err(anyhow::anyhow!(
 					"Block number or hash is none for block number: {}",
-					block_height
+					block_height.root()
 				))
 			}
 		},
 		EngineElectionType::BlockHeight { submit_hash } => {
-			let block = client.block(block_height.into()).await?;
+			let block = client.block((*block_height.into_range_inclusive().end()).into()).await?;
+			let beginning_block = client.block((*block_height.root()).into()).await?;
 			if let (Some(block_number), Some(block_hash)) = (block.number, block.hash) {
-				if block_number.as_u64() != block_height {
+				if block_number.as_u64() != *block_height.into_range_inclusive().end() {
 					return Err(anyhow::anyhow!(
 						"Block number from RPC ({}) doesn't match election block height: {}",
 						block_number,
-						block_height
+						block_height.root()
 					));
 				}
 				Ok((
 					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
 					if submit_hash { block.hash } else { None },
 					block_hash,
-					block.parent_hash,
+					beginning_block.parent_hash,
 				))
 			} else {
 				Err(anyhow::anyhow!(
 					"Block number or hash is none for block number: {}",
-					block_height
+					block_height.root()
 				))
 			}
 		},
@@ -273,8 +305,6 @@ pub struct ArbitrumDepositChannelWitnesserVoter {
 	address_checker_address: H160,
 	vault_address: H160,
 	usdc_contract_address: H160,
-	usdt_contract_address: H160,
-	flip_contract_address: H160,
 }
 #[async_trait::async_trait]
 impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitnesserVoter {
@@ -291,7 +321,7 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 			deposit_addresses.into_iter().fold(
 				(Vec::new(), HashMap::new()),
 				|(mut eth, mut erc20), deposit_channel| {
-					if deposit_channel.asset == ArbAsset::Eth {
+					if deposit_channel.asset == ArbAsset::ArbEth {
 						eth.push(deposit_channel.address);
 					} else {
 						erc20
@@ -314,7 +344,7 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 			.await?,
 			events_at_block::<cf_chains::Arbitrum, _, _>(
 				data.0,
-				block_height,
+				*block_height.root(),
 				data.2,
 				self.vault_address,
 				&self.client,
@@ -333,41 +363,11 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 		// Handle each asset type separately with its specific event type
 		for (asset, deposit_channels) in erc20_deposit_channels {
 			let events = match asset {
-				ArbAsset::Usdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
+				ArbAsset::ArbUsdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
 					data.0,
-					block_height,
+					*block_height.root(),
 					data.2,
 					self.usdc_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				ArbAsset::Flip => events_at_block::<cf_chains::Arbitrum, FlipEvents, _>(
-					data.0,
-					block_height,
-					data.2,
-					self.flip_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				ArbAsset::Usdt => events_at_block::<cf_chains::Arbitrum, UsdtEvents, _>(
-					data.0,
-					block_height,
-					data.2,
-					self.usdt_contract_address,
 					&self.client,
 				)
 				.await?
@@ -409,7 +409,7 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 				.into_iter()
 				.map(|(to_addr, value, tx_hashes)| pallet_cf_ingress_egress::DepositWitness {
 					deposit_address: to_addr,
-					asset: ArbAsset::Eth,
+					asset: ArbAsset::ArbEth,
 					amount: value
 						.try_into()
 						.expect("Ingress witness transfer value should fit u128"),
@@ -458,7 +458,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 
 		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, _>(
 			data.0,
-			block_height,
+			*block_height.root(),
 			data.2,
 			self.vault_address,
 			&self.client,
@@ -477,10 +477,10 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 					cf_parameters,
 				}) => {
 					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
+						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
 
 					result.push(SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
-						Asset::Eth,
+						Asset::ArbEth,
 						try_into_primitive(amount)?,
 						try_into_primitive(dst_token)?,
 						try_into_encoded_address(
@@ -502,7 +502,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 					cf_parameters,
 				}) => {
 					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
+						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
 
 					result.push(SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
 						*(self
@@ -531,10 +531,10 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 					cf_parameters,
 				}) => {
 					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
+						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
 
 					result.push(SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
-						Asset::Eth,
+						Asset::ArbEth,
 						try_into_primitive(amount)?,
 						try_into_primitive(dst_token)?,
 						try_into_encoded_address(
@@ -572,7 +572,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 					cf_parameters,
 				}) => {
 					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
+						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
 
 					result.push(SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
 						*(self
@@ -609,7 +609,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 					amount,
 				}) => {
 					result.push(SCVaultEvents::TransferNativeFailedFilter {
-						asset: cf_chains::assets::eth::Asset::Eth,
+						asset: ArbAsset::ArbEth,
 						amount: try_into_primitive::<_, AssetAmount>(amount)?,
 						destination_address: recipient,
 					});
@@ -658,7 +658,7 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 
 		let events = events_at_block::<cf_chains::Arbitrum, KeyManagerEvents, _>(
 			data.0,
-			block_height,
+			*block_height.root(),
 			data.2,
 			self.key_manager_address,
 			&self.client,
@@ -677,7 +677,7 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 						new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
 							new_agg_key.serialize(),
 						),
-						block_number: block_height,
+						block_number: *block_height.root(),
 						tx_id: event.tx_hash,
 					});
 				},
@@ -744,28 +744,25 @@ pub struct ArbitrumFeeVoter {
 impl VoterApi<ArbitrumFeeTracking> for ArbitrumFeeVoter {
 	async fn vote(
 		&self,
-		settings: <ArbitrumFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		_settings: <ArbitrumFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <ArbitrumFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumFeeTracking>>, anyhow::Error> {
-		let (fee_history_window, priority_fee_percentile) = settings;
-
-		let best_block_number = self.client.get_block_number().await?;
-		let fee_history = self
+		let (_, _, l2_base_fee, l1_base_fee_estimate) = self
 			.client
-			.fee_history(
-				fee_history_window.into(),
-				best_block_number.low_u64().into(),
-				vec![priority_fee_percentile as f64],
+			.gas_estimate_components(
+				// Using zero address as a proxy destination address for the gas estimation.
+				H160::default(),
+				false,
+				// Using empty data for the gas estimation
+				Bytes::default(),
 			)
 			.await?;
 
 		Ok(Some(ArbitrumTrackedData {
-			base_fee: (*context!(fee_history.base_fee_per_gas.last())?)
+			base_fee: l2_base_fee.try_into().expect("Base fee should fit u128"),
+			l1_base_fee_estimate: l1_base_fee_estimate
 				.try_into()
-				.expect("Base fee should fit u128"),
-			priority_fee: context!(fee_history.reward.into_iter().flatten().min())?
-				.try_into()
-				.expect("Priority fee should fit u128"),
+				.expect("L1 base fee should fit u128"),
 		}))
 	}
 }
@@ -800,13 +797,7 @@ where
 		+ Send
 		+ Sync,
 {
-	tracing::debug!("Starting ETH witness");
-	let state_chain_gateway_address = state_chain_client
-        .storage_value::<pallet_cf_environment::ArbitrumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-            state_chain_client.latest_finalized_block().hash,
-        )
-        .await
-        .context("Failed to get StateChainGateway address from SC")?;
+	tracing::debug!("Starting ARB witness");
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::ArbitrumKeyManagerAddress<state_chain_runtime::Runtime>>(
@@ -837,26 +828,12 @@ where
 		.context("Failed to fetch Arbitrum supported assets")?;
 
 	let usdc_contract_address =
-		*supported_erc20_tokens.get(&ArbAsset::Usdc).context("USDC not supported")?;
-
-	let flip_contract_address =
-		*supported_erc20_tokens.get(&ArbAsset::Flip).context("FLIP not supported")?;
-
-	let usdt_contract_address =
-		*supported_erc20_tokens.get(&ArbAsset::Usdt).context("USDT not supported")?;
+		*supported_erc20_tokens.get(&ArbAsset::ArbUsdc).context("USDC not supported")?;
 
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
 		.collect();
-
-	let sc_utils_address = state_chain_client
-		.storage_value::<pallet_cf_environment::ArbitrumScUtilsAddress<state_chain_runtime::Runtime>>(
-			state_chain_client.latest_finalized_block().hash,
-		)
-		.await
-		.expect("Failed to get Sc Utils contract address from SC");
-
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {
@@ -870,26 +847,15 @@ where
 							address_checker_address,
 							vault_address,
 							usdc_contract_address,
-							usdt_contract_address,
-							flip_contract_address,
 						},
 						ArbitrumVaultDepositWitnesserVoter {
 							client: client.clone(),
 							vault_address,
 							supported_assets: supported_erc20_tokens.clone(),
 						},
-						ArbitrumStateChainGatewayWitnesserVoter {
-							client: client.clone(),
-							state_chain_gateway_address,
-						},
 						ArbitrumKeyManagerWitnesserVoter {
 							client: client.clone(),
 							key_manager_address,
-						},
-						ArbitrumScUtilsVoter {
-							client: client.clone(),
-							sc_utils_address,
-							supported_assets: supported_erc20_tokens,
 						},
 						ArbitrumFeeVoter { client: client.clone() },
 						ArbitrumLivenessVoter { client: client.clone() },

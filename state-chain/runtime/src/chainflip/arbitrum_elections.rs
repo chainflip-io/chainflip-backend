@@ -10,7 +10,7 @@ use crate::{
 use cf_chains::{
 	arb::{self, ArbitrumTrackedData},
 	instances::ArbitrumInstance,
-	witness_period::SaturatingStep,
+	witness_period::{BlockWitnessRange, SaturatingStep},
 	Arbitrum, Chain, DepositChannel,
 };
 use cf_traits::{impl_pallet_safe_mode, Chainflip};
@@ -76,7 +76,7 @@ pub type ArbitrumElectoralSystemRunner = CompositeRunner<
 pub struct ArbitrumChainTag;
 pub type ArbitrumChain = TypesFor<ArbitrumChainTag>;
 impl ChainTypes for ArbitrumChain {
-	type ChainBlockNumber = <Arbitrum as Chain>::ChainBlockNumber;
+	type ChainBlockNumber = BlockWitnessRange<Arbitrum>;
 	type ChainBlockHash = arb::H256;
 	const NAME: &'static str = "Arbitrum";
 }
@@ -85,7 +85,9 @@ pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum ArbitrumElectoralEvents {
-	ReorgDetected { reorged_blocks: RangeInclusive<<Arbitrum as Chain>::ChainBlockNumber> },
+	ReorgDetected {
+		reorged_blocks: RangeInclusive<<ArbitrumChain as ChainTypes>::ChainBlockNumber>,
+	},
 }
 
 // ------------------------ block height tracking ---------------------------
@@ -116,15 +118,15 @@ impls! {
 	}
 
 	Hook<HookTypeFor<Self, BlockHeightChangeHook>> {
-		fn run(&mut self, block_height: <Arbitrum as Chain>::ChainBlockNumber) {
-			if let Err(err) = ArbitrumChainTracking::inner_update_chain_height(block_height) {
+		fn run(&mut self, block_height: <ArbitrumChain as ChainTypes>::ChainBlockNumber) {
+			if let Err(err) = ArbitrumChainTracking::inner_update_chain_height(*block_height.root()) {
 				log::error!("Failed to update arb chain height to {block_height:?}: {:?}", err);
 			}
 		}
 	}
 
 	Hook<HookTypeFor<Self, ReorgHook>> {
-		fn run(&mut self, reorged_blocks: RangeInclusive<<Arbitrum as Chain>::ChainBlockNumber>) {
+		fn run(&mut self, reorged_blocks: RangeInclusive<<ArbitrumChain as ChainTypes>::ChainBlockNumber>) {
 			pallet_cf_elections::Pallet::<Runtime, ArbitrumInstance>::deposit_event(
 				pallet_cf_elections::Event::ElectoralEvent(ArbitrumElectoralEvents::ReorgDetected {
 					reorged_blocks
@@ -202,14 +204,14 @@ impls! {
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
 		fn run(
 			&mut self,
-			height: <Arbitrum as Chain>::ChainBlockNumber,
+			height: <ArbitrumChain as ChainTypes>::ChainBlockNumber,
 		) -> Vec<DepositChannel<Arbitrum>> {
-
+			let height = height.root();
 			ArbitrumIngressEgress::active_deposit_channels_at(
 				// we advance by SAFETY_BUFFER before checking opened_at
 				height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
 				// we don't advance for expiry
-				height
+				*height
 			).into_iter().map(|deposit_channel_details| {
 				deposit_channel_details.deposit_channel
 			}).collect()
@@ -220,10 +222,10 @@ impls! {
 	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
 		fn run(
 			&mut self,
-			up_to: <Arbitrum as Chain>::ChainBlockNumber,
+			up_to: <ArbitrumChain as ChainTypes>::ChainBlockNumber,
 		) {
 			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have been additionally processed.
-			ProcessedUpTo::<Runtime, ArbitrumInstance>::set(up_to.saturating_backward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize));
+			ProcessedUpTo::<Runtime, ArbitrumInstance>::set(up_to.root().saturating_backward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize));
 		}
 	}
 }
@@ -314,7 +316,7 @@ impls! {
 
 	/// Vault address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Arbitrum as Chain>::ChainBlockNumber) {}
+		fn run(&mut self, _block_witness_root: <ArbitrumChain as ChainTypes>::ChainBlockNumber) {}
 	}
 }
 
@@ -403,7 +405,7 @@ impls! {
 
 	/// KeyManager address doesn't change, it is read by the engine on startup
 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Arbitrum as Chain>::ChainBlockNumber) { }
+		fn run(&mut self, _block_witness_root: <ArbitrumChain as ChainTypes>::ChainBlockNumber) { }
 	}
 }
 
@@ -430,13 +432,9 @@ impl UpdateFeeHook<ArbitrumTrackedData> for ArbitrumFeeUpdateHook {
 	}
 }
 
-const FEE_HISTORY_WINDOW: u64 = 5;
-const PRIORITY_FEE_PERCENTILE: u64 = 50;
-
-/// Settings are FEE_HISTORY_WINDOW and PRIORITY_FEE_PERCENTILE (previously hardcoded in the engine)
 pub type ArbitrumFeeTracking = UnsafeMedian<
 	ArbitrumTrackedData,
-	(u64, u64),
+	(),
 	ArbitrumFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -591,7 +589,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, ArbitrumInstance> {
 			Default::default(),
 			Default::default(),
 			Default::default(),
-			(FEE_HISTORY_WINDOW, PRIORITY_FEE_PERCENTILE),
+			Default::default(),
 			LIVENESS_CHECK_DURATION,
 		),
 		shared_data_reference_lifetime: 8,

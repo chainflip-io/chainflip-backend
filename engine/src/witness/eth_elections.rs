@@ -60,10 +60,7 @@ use cf_utilities::{
 	task_scope::{self, Scope},
 };
 use ethbloom::Bloom;
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::{Block, TransactionReceipt},
-};
+use ethers::{abi::ethereum_types::BloomInput, types::TransactionReceipt};
 use futures::{try_join, FutureExt};
 use itertools::Itertools;
 use pallet_cf_elections::{
@@ -114,16 +111,27 @@ pub struct EthereumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<Block<H256>> for EvmCachingClient<EvmRpcSigningClient> {
-	async fn best_block_header(&self) -> anyhow::Result<Block<H256>> {
-		let best_number = self.get_block_number().await?;
-		let block = self.block(best_number).await?;
-		Ok(block)
+impl HeaderClient<EthereumChain, Ethereum> for EthereumBlockHeightWitnesserVoter {
+	async fn best_block_header(&self) -> anyhow::Result<Header<EthereumChain>> {
+		let best_number = self.client.get_block_number().await?;
+		let block = self.client.block(best_number).await?;
+		Ok(Header {
+			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
+			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block.parent_hash,
+		})
 	}
 
-	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<Block<H256>> {
-		let block = self.block(height.into()).await?;
-		Ok(block)
+	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<Header<EthereumChain>> {
+		let block = self.client.block(height.into()).await?;
+		Ok(Header {
+			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
+			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block.parent_hash,
+		})
+	}
+	async fn best_block_number(&self) -> anyhow::Result<u64> {
+		Ok(self.client.get_block_number().await?.low_u64())
 	}
 }
 
@@ -134,20 +142,10 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EthereumBlockHeightWitnesserVo
 		_settings: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<EthereumBlockHeightWitnesserES, _, Block<H256>, EthereumChain>(
-			&self.client,
+		witness_headers::<EthereumBlockHeightWitnesserES, _, EthereumChain, Ethereum>(
+			self,
 			properties,
 			ETHEREUM_MAINNET_SAFETY_BUFFER,
-			|block| {
-				Ok(Header {
-					block_height: block
-						.number
-						.ok_or_else(|| anyhow::anyhow!("No block number"))?
-						.low_u64(),
-					hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-					parent_hash: block.parent_hash,
-				})
-			},
 			"ETH BHW",
 		)
 		.await

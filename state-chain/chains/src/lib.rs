@@ -160,7 +160,7 @@ pub mod witness_period {
 		}
 	}
 
-	fn block_witness_floor<
+	pub fn block_witness_floor<
 		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
 	>(
 		witness_period: I,

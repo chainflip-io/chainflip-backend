@@ -1391,7 +1391,6 @@ fn max_redemption_is_net_exact_is_gross() {
 			));
 			Funding::fund_account(
 				ALICE,
-				Default::default(),
 				UNRESTRICTED_AMOUNT,
 				FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() },
 			);
