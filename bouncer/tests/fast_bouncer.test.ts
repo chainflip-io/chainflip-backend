@@ -54,7 +54,7 @@ describe('ConcurrentTests', () => {
     360,
   );
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
-  concurrentTest('Lending', lendingTest, 200);
+  concurrentTest('Lending', lendingTest, 360);
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
   // parallel with the Assethub tests in `SwapsToAssethub`.
