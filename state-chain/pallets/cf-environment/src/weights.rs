@@ -64,6 +64,8 @@ pub trait WeightInfo {
 	fn eip712_build_typed_data_simple() -> Weight;
 	fn eip712_encode_using_type_info() -> Weight;
 	fn eip712_encode_using_type_info_fast() -> Weight;
+	fn eip712_encode_realistic_call() -> Weight;
+	fn eip712_encode_realistic_call_fast() -> Weight;
 	fn eip712_step1_registry_creation() -> Weight;
 	fn eip712_step2_encode_decode() -> Weight;
 	fn eip712_step3_recursive_type_construction() -> Weight;
@@ -120,7 +122,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `391`
 		//  Estimated: `1876`
 		// Minimum execution time: 12_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1876)
+		Weight::from_parts(14_000_000, 1876)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
@@ -134,8 +136,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `430`
 		//  Estimated: `1915`
-		// Minimum execution time: 12_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1915)
+		// Minimum execution time: 11_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 1915)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -164,7 +166,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `496`
 		//  Estimated: `1981`
-		// Minimum execution time: 11_000_000 picoseconds.
+		// Minimum execution time: 12_000_000 picoseconds.
 		Weight::from_parts(13_000_000, 1981)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
@@ -181,8 +183,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `429`
 		//  Estimated: `1914`
-		// Minimum execution time: 11_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1914)
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 1914)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
@@ -236,7 +238,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `2596`
 		//  Estimated: `13486`
-		// Minimum execution time: 57_000_000 picoseconds.
+		// Minimum execution time: 62_000_000 picoseconds.
 		Weight::from_parts(65_000_000, 13486)
 			.saturating_add(T::DbWeight::get().reads(20_u64))
 			.saturating_add(T::DbWeight::get().writes(14_u64))
@@ -253,8 +255,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `796`
 		//  Estimated: `3545`
-		// Minimum execution time: 19_000_000 picoseconds.
-		Weight::from_parts(20_000_000, 3545)
+		// Minimum execution time: 20_000_000 picoseconds.
+		Weight::from_parts(22_000_000, 3545)
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -263,10 +265,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 2_000_000 picoseconds.
-		Weight::from_parts(3_445_755, 0)
-			// Standard Error: 14_169
-			.saturating_add(Weight::from_parts(1_426_207, 0).saturating_mul(c.into()))
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(3_489_482, 0)
+			// Standard Error: 12_131
+			.saturating_add(Weight::from_parts(1_444_069, 0).saturating_mul(c.into()))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:
@@ -279,64 +281,78 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 29_000_000 picoseconds.
-		Weight::from_parts(30_000_000, 0)
+		// Minimum execution time: 32_000_000 picoseconds.
+		Weight::from_parts(33_000_000, 0)
 	}
 	fn eip712_build_typed_data_simple() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(40_000_000, 0)
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(38_000_000, 0)
 	}
 	fn eip712_encode_using_type_info() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 870_000_000 picoseconds.
-		Weight::from_parts(926_000_000, 0)
+		// Minimum execution time: 878_000_000 picoseconds.
+		Weight::from_parts(933_000_000, 0)
 	}
 	fn eip712_encode_using_type_info_fast() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 30_000_000 picoseconds.
+		// Minimum execution time: 27_000_000 picoseconds.
 		Weight::from_parts(31_000_000, 0)
+	}
+	fn eip712_encode_realistic_call() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 932_000_000 picoseconds.
+		Weight::from_parts(968_000_000, 0)
+	}
+	fn eip712_encode_realistic_call_fast() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 67_000_000 picoseconds.
+		Weight::from_parts(68_000_000, 0)
 	}
 	fn eip712_step1_registry_creation() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 807_000_000 picoseconds.
-		Weight::from_parts(888_000_000, 0)
+		// Minimum execution time: 861_000_000 picoseconds.
+		Weight::from_parts(903_000_000, 0)
 	}
 	fn eip712_step2_encode_decode() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 2_000_000 picoseconds.
-		Weight::from_parts(3_000_000, 0)
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(6_000_000, 0)
 	}
 	fn eip712_step3_recursive_type_construction() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 19_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 0)
+		// Minimum execution time: 52_000_000 picoseconds.
+		Weight::from_parts(56_000_000, 0)
 	}
 	fn eip712_step4_minimized_conversion() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 1_000_000 picoseconds.
-		Weight::from_parts(1_000_000, 0)
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(3_000_000, 0)
 	}
 	fn eip712_verify_signature() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 285_000_000 picoseconds.
-		Weight::from_parts(295_000_000, 0)
+		// Minimum execution time: 264_000_000 picoseconds.
+		Weight::from_parts(294_000_000, 0)
 	}
 }
 
@@ -388,7 +404,7 @@ impl WeightInfo for () {
 		//  Measured:  `391`
 		//  Estimated: `1876`
 		// Minimum execution time: 12_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1876)
+		Weight::from_parts(14_000_000, 1876)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
@@ -402,8 +418,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `430`
 		//  Estimated: `1915`
-		// Minimum execution time: 12_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1915)
+		// Minimum execution time: 11_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 1915)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
@@ -432,7 +448,7 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `496`
 		//  Estimated: `1981`
-		// Minimum execution time: 11_000_000 picoseconds.
+		// Minimum execution time: 12_000_000 picoseconds.
 		Weight::from_parts(13_000_000, 1981)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
@@ -449,8 +465,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `429`
 		//  Estimated: `1914`
-		// Minimum execution time: 11_000_000 picoseconds.
-		Weight::from_parts(13_000_000, 1914)
+		// Minimum execution time: 13_000_000 picoseconds.
+		Weight::from_parts(14_000_000, 1914)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
@@ -504,7 +520,7 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `2596`
 		//  Estimated: `13486`
-		// Minimum execution time: 57_000_000 picoseconds.
+		// Minimum execution time: 62_000_000 picoseconds.
 		Weight::from_parts(65_000_000, 13486)
 			.saturating_add(ParityDbWeight::get().reads(20_u64))
 			.saturating_add(ParityDbWeight::get().writes(14_u64))
@@ -521,8 +537,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `796`
 		//  Estimated: `3545`
-		// Minimum execution time: 19_000_000 picoseconds.
-		Weight::from_parts(20_000_000, 3545)
+		// Minimum execution time: 20_000_000 picoseconds.
+		Weight::from_parts(22_000_000, 3545)
 			.saturating_add(ParityDbWeight::get().reads(4_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
@@ -531,10 +547,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 2_000_000 picoseconds.
-		Weight::from_parts(3_445_755, 0)
-			// Standard Error: 14_169
-			.saturating_add(Weight::from_parts(1_426_207, 0).saturating_mul(c.into()))
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(3_489_482, 0)
+			// Standard Error: 12_131
+			.saturating_add(Weight::from_parts(1_444_069, 0).saturating_mul(c.into()))
 	}
 	fn eip712_build_domain_data() -> Weight {
 		// Proof Size summary in bytes:
@@ -547,63 +563,77 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 29_000_000 picoseconds.
-		Weight::from_parts(30_000_000, 0)
+		// Minimum execution time: 32_000_000 picoseconds.
+		Weight::from_parts(33_000_000, 0)
 	}
 	fn eip712_build_typed_data_simple() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(40_000_000, 0)
+		// Minimum execution time: 34_000_000 picoseconds.
+		Weight::from_parts(38_000_000, 0)
 	}
 	fn eip712_encode_using_type_info() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 870_000_000 picoseconds.
-		Weight::from_parts(926_000_000, 0)
+		// Minimum execution time: 878_000_000 picoseconds.
+		Weight::from_parts(933_000_000, 0)
 	}
 	fn eip712_encode_using_type_info_fast() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 30_000_000 picoseconds.
+		// Minimum execution time: 27_000_000 picoseconds.
 		Weight::from_parts(31_000_000, 0)
+	}
+	fn eip712_encode_realistic_call() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 932_000_000 picoseconds.
+		Weight::from_parts(968_000_000, 0)
+	}
+	fn eip712_encode_realistic_call_fast() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 67_000_000 picoseconds.
+		Weight::from_parts(68_000_000, 0)
 	}
 	fn eip712_step1_registry_creation() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 807_000_000 picoseconds.
-		Weight::from_parts(888_000_000, 0)
+		// Minimum execution time: 861_000_000 picoseconds.
+		Weight::from_parts(903_000_000, 0)
 	}
 	fn eip712_step2_encode_decode() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 2_000_000 picoseconds.
-		Weight::from_parts(3_000_000, 0)
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(6_000_000, 0)
 	}
 	fn eip712_step3_recursive_type_construction() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 19_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 0)
+		// Minimum execution time: 52_000_000 picoseconds.
+		Weight::from_parts(56_000_000, 0)
 	}
 	fn eip712_step4_minimized_conversion() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 1_000_000 picoseconds.
-		Weight::from_parts(1_000_000, 0)
+		// Minimum execution time: 3_000_000 picoseconds.
+		Weight::from_parts(3_000_000, 0)
 	}
 	fn eip712_verify_signature() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 285_000_000 picoseconds.
-		Weight::from_parts(295_000_000, 0)
+		// Minimum execution time: 264_000_000 picoseconds.
+		Weight::from_parts(294_000_000, 0)
 	}
 }

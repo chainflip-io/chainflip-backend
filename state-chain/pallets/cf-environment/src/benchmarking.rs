@@ -24,6 +24,43 @@ use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
+/// Representative benchmark types modeled after real pallet call parameters.
+/// Based on `request_loan` from cf-lending-pools which has typical complexity.
+#[allow(dead_code)]
+pub mod benchmark_types {
+	use cf_primitives::{Asset, AssetAmount};
+	use codec::{Decode, Encode};
+	use scale_info::TypeInfo;
+	use sp_std::collections::btree_map::BTreeMap;
+
+	/// Mimics a realistic pallet call similar to `request_loan`.
+	/// Parameters: asset enum, amount (u128), optional asset, BTreeMap<Asset, Amount>
+	#[derive(TypeInfo, Clone, Encode, Decode, Debug, PartialEq, Eq)]
+	pub struct RealisticCallParams {
+		pub loan_asset: Asset,
+		pub loan_amount: AssetAmount,
+		pub collateral_topup_asset: Option<Asset>,
+		pub extra_collateral: BTreeMap<Asset, AssetAmount>,
+	}
+
+	impl Default for RealisticCallParams {
+		fn default() -> Self {
+			{
+				let mut extra_collateral = BTreeMap::new();
+				extra_collateral.insert(Asset::Eth, 1_000_000_000_000_000_000u128);
+				extra_collateral.insert(Asset::Usdc, 50_000_000_000u128);
+
+				RealisticCallParams {
+					loan_asset: Asset::Usdc,
+					loan_amount: 100_000_000_000u128,
+					collateral_topup_asset: Some(Asset::Eth),
+					extra_collateral,
+				}
+			}
+		}
+	}
+}
+
 #[expect(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where
@@ -360,6 +397,62 @@ mod benchmarks {
 		}
 	}
 
+	// Benchmarks with a deliberately complex call to stress-test registry construction.
+	// Uses benchmark_realistic_call call which embeds RealisticCallParams in the RuntimeCall type
+	// tree.
+
+	#[benchmark]
+	fn eip712_encode_realistic_call() {
+		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use ethereum_eip712::{eip712::EIP712Domain, encode_eip712_using_type_info};
+
+		// Use the benchmark_realistic_call call which embeds RealisticCallParams in RuntimeCall
+		let realistic_call =
+			crate::Call::<T>::benchmark_realistic_call { params: RealisticCallParams::default() };
+		let runtime_call: <T as Config>::RuntimeCall = realistic_call.into();
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
+		let chainflip_extrinsic = ChainflipExtrinsic { call: runtime_call, transaction_metadata };
+
+		let domain = EIP712Domain {
+			name: Some("Testnet".to_string()),
+			version: Some("1".to_string()),
+			chain_id: None,
+			verifying_contract: None,
+			salt: None,
+		};
+
+		#[block]
+		{
+			let _ = encode_eip712_using_type_info(chainflip_extrinsic, domain);
+		}
+	}
+
+	#[benchmark]
+	fn eip712_encode_realistic_call_fast() {
+		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use ethereum_eip712::{eip712::EIP712Domain, encode_eip712_using_type_info_fast};
+
+		// Use the benchmark_realistic_call call which embeds RealisticCallParams in RuntimeCall
+		let realistic_call =
+			crate::Call::<T>::benchmark_realistic_call { params: RealisticCallParams::default() };
+		let runtime_call: <T as Config>::RuntimeCall = realistic_call.into();
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
+		let chainflip_extrinsic = ChainflipExtrinsic { call: runtime_call, transaction_metadata };
+
+		let domain = EIP712Domain {
+			name: Some("Testnet".to_string()),
+			version: Some("1".to_string()),
+			chain_id: None,
+			verifying_contract: None,
+			salt: None,
+		};
+
+		#[block]
+		{
+			let _ = encode_eip712_using_type_info_fast(chainflip_extrinsic, domain);
+		}
+	}
+
 	// Individual step benchmarks for encode_eip712_using_type_info breakdown
 
 	#[benchmark]
@@ -376,14 +469,16 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step2_encode_decode() {
+		use crate::benchmarking::benchmark_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 		};
 
 		type ExtrinsicType<T> = ChainflipExtrinsic<<T as Config>::RuntimeCall>;
 
-		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
-		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let realistic_call =
+			crate::Call::<T>::benchmark_realistic_call { params: RealisticCallParams::default() };
+		let runtime_call: <T as Config>::RuntimeCall = realistic_call.into();
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
 		let chainflip_extrinsic: ExtrinsicType<T> =
 			ChainflipExtrinsic { call: runtime_call, transaction_metadata };
@@ -404,6 +499,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step3_recursive_type_construction() {
+		use crate::benchmarking::benchmark_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 			step3_recursive_type_construction,
@@ -411,8 +507,9 @@ mod benchmarks {
 
 		type ExtrinsicType<T> = ChainflipExtrinsic<<T as Config>::RuntimeCall>;
 
-		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
-		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let realistic_call =
+			crate::Call::<T>::benchmark_realistic_call { params: RealisticCallParams::default() };
+		let runtime_call: <T as Config>::RuntimeCall = realistic_call.into();
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
 		let chainflip_extrinsic: ExtrinsicType<T> =
 			ChainflipExtrinsic { call: runtime_call, transaction_metadata };
@@ -435,6 +532,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step4_minimized_conversion() {
+		use crate::benchmarking::benchmark_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 			step3_recursive_type_construction, step4_minimized_scale_value_conversion,
@@ -442,8 +540,9 @@ mod benchmarks {
 
 		type ExtrinsicType<T> = ChainflipExtrinsic<<T as Config>::RuntimeCall>;
 
-		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
-		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let realistic_call =
+			crate::Call::<T>::benchmark_realistic_call { params: RealisticCallParams::default() };
+		let runtime_call: <T as Config>::RuntimeCall = realistic_call.into();
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
 		let chainflip_extrinsic: ExtrinsicType<T> =
 			ChainflipExtrinsic { call: runtime_call, transaction_metadata };
