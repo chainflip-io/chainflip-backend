@@ -445,6 +445,62 @@ pub struct EmptySequence;
 #[derive(TypeInfo, Clone, Encode)]
 pub struct EmptyArray;
 
+/// Benchmark helper module exposing individual steps of `encode_eip712_using_type_info`.
+/// These functions are intended for performance analysis only.
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmark_helpers {
+	use super::*;
+
+	/// Step 1: Create registry and register type. Returns the portable registry and type id.
+	pub fn step1_registry_and_type_registration<T: TypeInfo + 'static>(
+	) -> (scale_info::PortableRegistry, u32) {
+		let mut registry = Registry::new();
+		let id = registry.register_type(&MetaType::new::<T>());
+		let portable_registry: scale_info::PortableRegistry = registry.into();
+		(portable_registry, id.id)
+	}
+
+	/// Step 2: Encode value and decode via type info.
+	/// Returns the decoded scale_value::Value.
+	pub fn step2_encode_decode<T: TypeInfo + Encode + 'static>(
+		value: &T,
+		portable_registry: &scale_info::PortableRegistry,
+		type_id: u32,
+	) -> Result<Value, Eip712Error> {
+		scale_value::scale::decode_as_type(&mut &value.encode()[..], type_id, portable_registry)
+			.map_err(|e| {
+				Eip712Error::Message(format!(
+					"Failed to decode the scale-encoded value into the type provided by TypeInfo: {e}"
+				))
+			})
+			.map(|v| v.remove_context())
+	}
+
+	/// Step 3: Recursively construct EIP-712 types from the decoded value.
+	/// Returns the primary type name, transformed value, and types map.
+	pub fn step3_recursive_type_construction<T: TypeInfo + 'static>(
+		value: Value,
+	) -> Result<(String, Value, BTreeMap<String, Vec<Eip712DomainType>>), Eip712Error> {
+		let mut types: BTreeMap<String, Vec<Eip712DomainType>> = BTreeMap::new();
+		let (primary_type, minimized_value) =
+			recursively_construct_types(value, MetaType::new::<T>(), &mut types).map_err(|e| {
+				Eip712Error::Message(format!("error while constructing types: {e}"))
+			})?;
+		Ok((primary_type, minimized_value, types))
+	}
+
+	/// Step 4: Convert scale_value::Value to MinimizedScaleValue.
+	pub fn step4_minimized_scale_value_conversion(
+		value: Value,
+	) -> Result<MinimizedScaleValue, Eip712Error> {
+		MinimizedScaleValue::try_from(value).map_err(|e| {
+			Eip712Error::Message(format!(
+				"Failed to convert scale value into MinimizedScaleValue: {e}"
+			))
+		})
+	}
+}
+
 #[cfg(test)]
 pub mod tests {
 
