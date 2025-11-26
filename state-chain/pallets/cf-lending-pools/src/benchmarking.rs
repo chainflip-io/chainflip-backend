@@ -658,12 +658,12 @@ mod benchmarks {
 		#[block]
 		{
 			let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
-			loan_account.init_liquidation_swaps(
+			assert_ok!(loan_account.init_liquidation_swaps(
 				&borrower,
 				collateral,
 				LiquidationType::Hard,
 				&price_cache,
-			);
+			));
 		}
 
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
@@ -680,12 +680,12 @@ mod benchmarks {
 
 		// Start the liquidation swaps
 		let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
-		loan_account.init_liquidation_swaps(
+		assert_ok!(loan_account.init_liquidation_swaps(
 			&borrower,
 			collateral,
 			LiquidationType::Hard,
 			&price_cache,
-		);
+		));
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
 
 		#[block]
