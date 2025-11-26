@@ -4420,12 +4420,12 @@ fn init_liquidation_swaps_test() {
 		let collateral = loan_account
 			.prepare_collateral_for_liquidation(&OraclePriceCache::default())
 			.unwrap();
-		loan_account.init_liquidation_swaps(
+		assert_ok!(loan_account.init_liquidation_swaps(
 			&BORROWER,
 			collateral,
 			LiquidationType::Soft,
 			&OraclePriceCache::default(),
-		);
+		));
 
 		let expected_swaps = [
 			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 417),

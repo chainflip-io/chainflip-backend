@@ -325,7 +325,12 @@ impl<T: Config> LoanAccount<T> {
 		match new_status {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
 				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
-				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
+				self.init_liquidation_swaps(
+					borrower_id,
+					collateral,
+					liquidation_type,
+					price_cache,
+				)?;
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 			},
 			LiquidationStatusChange::AbortLiquidation { reason } => {
@@ -336,7 +341,12 @@ impl<T: Config> LoanAccount<T> {
 				// Going from one liquidation type to another is always due to LTV change
 				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
 				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
-				self.init_liquidation_swaps(borrower_id, collateral, liquidation_type, price_cache);
+				self.init_liquidation_swaps(
+					borrower_id,
+					collateral,
+					liquidation_type,
+					price_cache,
+				)?;
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
@@ -634,8 +644,13 @@ impl<T: Config> LoanAccount<T> {
 		collateral: Vec<AssetCollateralForLoan>,
 		liquidation_type: LiquidationType,
 		price_cache: &OraclePriceCache<T>,
-	) {
+	) -> Result<(), Error<T>> {
 		let config = LendingConfig::<T>::get();
+
+		if self.liquidation_status != LiquidationStatus::NoLiquidation {
+			log_or_panic!("Account {:?} is already in a liquidation state", borrower_id);
+			fail!(Error::<T>::InternalInvariantViolation);
+		}
 
 		let mut liquidation_swaps = BTreeMap::new();
 
@@ -729,6 +744,8 @@ impl<T: Config> LoanAccount<T> {
 
 		self.liquidation_status =
 			LiquidationStatus::Liquidating { liquidation_swaps, liquidation_type };
+
+		Ok(())
 	}
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
@@ -1548,8 +1565,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						// the loan.
 						Some(loan) => loan.repay_via_liquidation(output_amount, is_voluntary),
 						None => {
-							// In rare cases it may be possible for the loan to no longer exist if
-							// e.g. the principal was fully covered by a prior liquidation swap.
+							// In some cases it may be possible for the loan to no longer exist if
+							// e.g. the principal was fully covered by a prior liquidation swap or
+							// by user repaying it manually.
 							output_amount
 						},
 					};
