@@ -3239,6 +3239,261 @@ fn adding_collateral_during_liquidation() {
 		});
 }
 
+/// Loan is fully repaid at the same time as liquidation swap is
+/// fully processed. Expecting the loan to be correctly settled (without
+/// liquidation fees) and the liquidation swap output should be added
+/// to the user's collateral.
+#[test]
+fn full_loan_repayment_followed_by_full_liquidation() {
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+	const SWAP_OUTPUT_AMOUNT: AssetAmount = 11 * PRINCIPAL / 10;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			// Force liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+
+			MockBalance::credit_account(&BORROWER, LOAN_ASSET, ORIGINATION_FEE);
+
+			assert_ok!(LendingPools::try_making_repayment(
+				&BORROWER,
+				LOAN_ID,
+				RepaymentAmount::Full
+			));
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
+
+			// The loan has been fully repaid, but we still have a liquidation swap:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap(),
+				LoanAccount {
+					borrower_id: BORROWER,
+					collateral_topup_asset: None,
+					collateral: Default::default(),
+					loans: Default::default(),
+					liquidation_status: LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_1,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Hard
+					},
+					voluntary_liquidation_requested: false
+				}
+			);
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+				loan_id: LOAN_ID,
+				outstanding_principal: 0,
+				via_liquidation: false,
+			}));
+
+			// No liquidation fee taken:
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
+			);
+
+			System::reset_events();
+
+			// Swap completes before we get a chance to abort it:
+			LendingPools::process_loan_swap_outcome(
+				LIQUIDATION_SWAP_1,
+				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+				SWAP_OUTPUT_AMOUNT,
+			);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::FullySwapped,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					..
+				})
+			);
+
+			// We should not emit the event the second time:
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. })
+			);
+
+			// No liquidation fee taken from the swap output (thus no event):
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
+			);
+
+			// All of swap output amount goes towards user's collateral:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap(),
+				LoanAccount {
+					borrower_id: BORROWER,
+					collateral_topup_asset: None,
+					collateral: BTreeMap::from([(LOAN_ASSET, SWAP_OUTPUT_AMOUNT)]),
+					loans: Default::default(),
+					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false
+				}
+			);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+		});
+}
+
+/// Loan is fully repaid while liquidation swaps have been partially
+/// executed. Expecting the loan to be correctly settled and the liquidation
+/// swap output and unspent input should be added to the user's collateral.
+/// The way liquidation is implemented (liquidation only repays the loan after
+/// it is aborted/copmleted), we won't charge liquidaion fee in this
+/// scenario, which should be OK.
+#[test]
+fn full_loan_repayment_during_partial_liquidation() {
+	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+	const EXECUTED_COLLATERAL: AssetAmount = INIT_COLLATERAL / 10;
+	const SWAP_OUTPUT_AMOUNT: AssetAmount = PRINCIPAL / 10;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			// Force liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			assert_matches!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Hard, .. }
+			);
+
+			MockSwapRequestHandler::<Test>::set_swap_request_progress(
+				LIQUIDATION_SWAP_1,
+				SwapExecutionProgress {
+					remaining_input_amount: INIT_COLLATERAL - EXECUTED_COLLATERAL,
+					accumulated_output_amount: SWAP_OUTPUT_AMOUNT,
+				},
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// Should still be liquidating
+			assert_matches!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Hard, .. }
+			);
+
+			// The user fully repays the loan while liquidation swap is being executed:
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
+			MockBalance::credit_account(&BORROWER, LOAN_ASSET, ORIGINATION_FEE);
+
+			assert_ok!(LendingPools::try_making_repayment(
+				&BORROWER,
+				LOAN_ID,
+				RepaymentAmount::Full
+			));
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
+				loan_id: LOAN_ID,
+				outstanding_principal: 0,
+				via_liquidation: false,
+			}));
+
+			// No liquidation fee taken:
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
+			);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
+
+			// The loan has been fully repaid, but we still have a liquidation swap:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap(),
+				LoanAccount {
+					borrower_id: BORROWER,
+					collateral_topup_asset: None,
+					collateral: Default::default(),
+					loans: Default::default(),
+					liquidation_status: LiquidationStatus::Liquidating {
+						liquidation_swaps: BTreeMap::from([(
+							LIQUIDATION_SWAP_1,
+							LiquidationSwap {
+								loan_id: LOAN_ID,
+								from_asset: COLLATERAL_ASSET,
+								to_asset: LOAN_ASSET
+							}
+						)]),
+						liquidation_type: LiquidationType::Hard
+					},
+					voluntary_liquidation_requested: false
+				}
+			);
+		})
+		.then_execute_at_next_block(|_| {
+			// Liquidation swap should have been aborted at the beginning of this block with all
+			// funds returned as collateral:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap(),
+				LoanAccount {
+					borrower_id: BORROWER,
+					collateral_topup_asset: None,
+					collateral: BTreeMap::from([
+						(COLLATERAL_ASSET, INIT_COLLATERAL - EXECUTED_COLLATERAL),
+						(LOAN_ASSET, SWAP_OUTPUT_AMOUNT)
+					]),
+					loans: Default::default(),
+					liquidation_status: LiquidationStatus::NoLiquidation,
+					voluntary_liquidation_requested: false
+				}
+			);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
+					borrower_id: BORROWER,
+					reason: LiquidationCompletionReason::LtvChange,
+				}),
+				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
+					borrower_id: BORROWER,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					..
+				})
+			);
+
+			// We should not emit the event the second time:
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. })
+			);
+
+			// No liquidation fee taken from the swap output (thus no event):
+			assert_no_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
+			);
+
+			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
+			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
+		});
+}
+
 mod voluntary_liquidation {
 
 	use super::*;
