@@ -27,6 +27,7 @@ pub mod hash;
 pub mod lexer;
 pub mod minimized_scale_value;
 pub mod serde_helpers;
+pub mod typeinfo_decoder;
 
 pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + 'static>(
 	value: T,
@@ -48,6 +49,36 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + 'static>(
 	let mut types: BTreeMap<String, Vec<Eip712DomainType>> = BTreeMap::new();
 	let (primary_type, minimized_value) =
 		recursively_construct_types(value.clone(), MetaType::new::<T>(), &mut types)
+			.map_err(|e| Eip712Error::Message(format!("error while constructing types: {e}")))?;
+
+	let minimized_scale_value = MinimizedScaleValue::try_from(minimized_value).map_err(|e| {
+		Eip712Error::Message(format!("Failed to convert scale value into MinimizedScaleValue: {e}"))
+	})?;
+	let typed_data = TypedData { domain, types, primary_type, message: minimized_scale_value };
+
+	Ok(typed_data)
+}
+
+/// Optimized version of `encode_eip712_using_type_info` that bypasses registry construction.
+///
+/// This function uses a custom decoder that traverses `TypeInfo` directly instead of
+/// building a `PortableRegistry`, which is significantly faster for large type trees.
+pub fn encode_eip712_using_type_info_fast<T: TypeInfo + Encode + 'static>(
+	value: T,
+	domain: EIP712Domain,
+) -> Result<TypedData, Eip712Error> {
+	// Decode directly using TypeInfo - no registry needed
+	let decoded_value =
+		typeinfo_decoder::decode_with_type_info::<T>(&mut &value.encode()[..]).map_err(|e| {
+			Eip712Error::Message(format!(
+				"Failed to decode using TypeInfo: {:?}",
+				e
+			))
+		})?;
+
+	let mut types: BTreeMap<String, Vec<Eip712DomainType>> = BTreeMap::new();
+	let (primary_type, minimized_value) =
+		recursively_construct_types(decoded_value, MetaType::new::<T>(), &mut types)
 			.map_err(|e| Eip712Error::Message(format!("error while constructing types: {e}")))?;
 
 	let minimized_scale_value = MinimizedScaleValue::try_from(minimized_value).map_err(|e| {
@@ -548,5 +579,241 @@ pub mod tests {
 			),
 			"336ec92e268f26ea42492c5a5d80111b76fc59ea4897eb4128f10dc7da396452"
 		);
+	}
+
+	/// Helper to test that both implementations produce identical EIP-712 hashes.
+	fn assert_implementations_equivalent<T: TypeInfo + Encode + Clone + 'static>(value: T) {
+		let domain = EIP712Domain {
+			name: Some(String::from("Test")),
+			version: Some(String::from("1")),
+			chain_id: None,
+			verifying_contract: None,
+			salt: None,
+		};
+
+		let old_result = encode_eip712_using_type_info(value.clone(), domain.clone());
+		let fast_result = encode_eip712_using_type_info_fast(value, domain);
+
+		match (old_result, fast_result) {
+			(Ok(old_typed_data), Ok(fast_typed_data)) => {
+				let old_hash = old_typed_data.encode_eip712().unwrap();
+				let fast_hash = fast_typed_data.encode_eip712().unwrap();
+				assert_eq!(
+					old_hash, fast_hash,
+					"EIP-712 hashes differ between implementations"
+				);
+				assert_eq!(
+					old_typed_data.types, fast_typed_data.types,
+					"EIP-712 types differ between implementations"
+				);
+				assert_eq!(
+					old_typed_data.primary_type, fast_typed_data.primary_type,
+					"EIP-712 primary_type differs between implementations"
+				);
+			},
+			(Err(e1), Err(e2)) => {
+				// Both failed - that's fine, they're consistent
+				panic!("Both implementations failed: old={:?}, fast={:?}", e1, e2);
+			},
+			(Ok(_), Err(e)) => panic!("Fast implementation failed but old succeeded: {:?}", e),
+			(Err(e), Ok(_)) => panic!("Old implementation failed but fast succeeded: {:?}", e),
+		}
+	}
+
+	#[test]
+	fn test_equivalence_simple_struct() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct SimpleStruct {
+			a: u32,
+			b: String,
+			c: u64,
+		}
+
+		assert_implementations_equivalent(SimpleStruct {
+			a: 42,
+			b: "hello".to_string(),
+			c: 12345,
+		});
+	}
+
+	#[test]
+	fn test_equivalence_nested_struct() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Inner {
+			x: u16,
+			y: u16,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Outer {
+			inner: Inner,
+			name: String,
+		}
+
+		assert_implementations_equivalent(Outer {
+			inner: Inner { x: 10, y: 20 },
+			name: "test".to_string(),
+		});
+	}
+
+	#[test]
+	fn test_equivalence_enum_variants() {
+		#[derive(TypeInfo, Clone, Encode)]
+		enum TestEnum {
+			Unit,
+			Tuple(u32, u64),
+			Struct { a: u8, b: u32 },
+		}
+
+		// Note: Enums must be wrapped in a struct to be used as root type in EIP-712
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WrapEnum(TestEnum);
+
+		assert_implementations_equivalent(WrapEnum(TestEnum::Unit));
+		assert_implementations_equivalent(WrapEnum(TestEnum::Tuple(1, 2)));
+		assert_implementations_equivalent(WrapEnum(TestEnum::Struct { a: 5, b: 100 }));
+	}
+
+	#[test]
+	fn test_equivalence_vec() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithVec {
+			items: Vec<u32>,
+		}
+
+		assert_implementations_equivalent(WithVec { items: vec![] });
+		assert_implementations_equivalent(WithVec { items: vec![1, 2, 3, 4, 5] });
+	}
+
+	#[test]
+	fn test_equivalence_array() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithArray {
+			data: [u16; 4],
+		}
+
+		assert_implementations_equivalent(WithArray { data: [1, 2, 3, 4] });
+	}
+
+	#[test]
+	fn test_equivalence_tuple() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithTuple {
+			pair: (u32, String),
+		}
+
+		assert_implementations_equivalent(WithTuple { pair: (42, "tuple".to_string()) });
+	}
+
+	#[test]
+	fn test_equivalence_compact() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithCompact {
+			#[codec(compact)]
+			value: u128,
+		}
+
+		assert_implementations_equivalent(WithCompact { value: 0 });
+		assert_implementations_equivalent(WithCompact { value: 63 }); // single byte
+		assert_implementations_equivalent(WithCompact { value: 16383 }); // two bytes
+		assert_implementations_equivalent(WithCompact { value: 1073741823 }); // four bytes
+		assert_implementations_equivalent(WithCompact { value: u128::MAX }); // big integer mode
+	}
+
+	#[test]
+	fn test_equivalence_bool_and_primitives() {
+		// Note: EIP-712 encoder only supports unsigned integers, not signed integers
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Primitives {
+			flag: bool,
+			small: u8,
+			medium: u32,
+			large: u128,
+		}
+
+		assert_implementations_equivalent(Primitives {
+			flag: true,
+			small: 255,
+			medium: 1000000,
+			large: u128::MAX,
+		});
+	}
+
+	#[test]
+	fn test_equivalence_option() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithOption {
+			maybe: Option<u32>,
+		}
+
+		assert_implementations_equivalent(WithOption { maybe: None });
+		assert_implementations_equivalent(WithOption { maybe: Some(42) });
+	}
+
+	#[test]
+	fn test_equivalence_nested_option() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Inner {
+			value: u32,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WithNestedOption {
+			maybe_inner: Option<Inner>,
+		}
+
+		assert_implementations_equivalent(WithNestedOption { maybe_inner: None });
+		assert_implementations_equivalent(WithNestedOption { maybe_inner: Some(Inner { value: 99 }) });
+	}
+
+	#[test]
+	fn test_equivalence_empty_struct() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Empty;
+
+		#[derive(TypeInfo, Clone, Encode)]
+		struct WrapEmpty(Empty);
+
+		assert_implementations_equivalent(WrapEmpty(Empty));
+	}
+
+	#[test]
+	fn test_equivalence_complex_nested() {
+		#[derive(TypeInfo, Clone, Encode)]
+		struct Person {
+			name: String,
+			age: u8,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		enum Status {
+			Active,
+			Inactive { reason: String },
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		struct ComplexStruct {
+			id: u64,
+			people: Vec<Person>,
+			status: Status,
+			metadata: Option<(u32, String)>,
+		}
+
+		assert_implementations_equivalent(ComplexStruct {
+			id: 123,
+			people: vec![
+				Person { name: "Alice".to_string(), age: 30 },
+				Person { name: "Bob".to_string(), age: 25 },
+			],
+			status: Status::Active,
+			metadata: Some((1, "test".to_string())),
+		});
+
+		assert_implementations_equivalent(ComplexStruct {
+			id: 456,
+			people: vec![],
+			status: Status::Inactive { reason: "maintenance".to_string() },
+			metadata: None,
+		});
 	}
 }

@@ -63,6 +63,7 @@ pub trait WeightInfo {
 	fn eip712_build_typed_data() -> Weight;
 	fn eip712_build_typed_data_simple() -> Weight;
 	fn eip712_encode_using_type_info() -> Weight;
+	fn eip712_encode_using_type_info_fast() -> Weight;
 	fn eip712_step1_registry_creation() -> Weight;
 	fn eip712_step2_encode_decode() -> Weight;
 	fn eip712_step3_recursive_type_construction() -> Weight;
@@ -294,6 +295,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `0`
 		// Minimum execution time: 870_000_000 picoseconds.
 		Weight::from_parts(926_000_000, 0)
+	}
+	fn eip712_encode_using_type_info_fast() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 30_000_000 picoseconds.
+		Weight::from_parts(31_000_000, 0)
 	}
 	fn eip712_step1_registry_creation() -> Weight {
 		// Proof Size summary in bytes:
@@ -555,6 +563,13 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 870_000_000 picoseconds.
 		Weight::from_parts(926_000_000, 0)
+	}
+	fn eip712_encode_using_type_info_fast() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `0`
+		//  Estimated: `0`
+		// Minimum execution time: 30_000_000 picoseconds.
+		Weight::from_parts(31_000_000, 0)
 	}
 	fn eip712_step1_registry_creation() -> Weight {
 		// Proof Size summary in bytes:

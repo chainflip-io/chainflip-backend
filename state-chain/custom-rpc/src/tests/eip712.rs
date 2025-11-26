@@ -78,7 +78,7 @@ fn test_build_eip712_typed_data(call: RuntimeCall) -> String {
 	};
 
 	hex::encode(ethereum_eip712::hash::keccak256(
-		ethereum_eip712::encode_eip712_using_type_info(
+		ethereum_eip712::encode_eip712_using_type_info_fast(
 			pallet_cf_environment::submit_runtime_call::ChainflipExtrinsic {
 				call,
 				transaction_metadata,

@@ -32,6 +32,7 @@ use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 mod benchmarks {
 	use cf_primitives::FLIPPERINOS_PER_FLIP;
 	use cf_traits::FeePayment;
+	use scale_info::prelude::string::ToString;
 
 	use super::*;
 
@@ -335,6 +336,31 @@ mod benchmarks {
 		}
 	}
 
+	#[benchmark]
+	fn eip712_encode_using_type_info_fast() {
+		use ethereum_eip712::{eip712::EIP712Domain, encode_eip712_using_type_info_fast};
+
+		let system_call = frame_system::Call::<T>::remark { remark: vec![] };
+		let runtime_call: <T as Config>::RuntimeCall = system_call.into();
+		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 10000u32 };
+		let chainflip_extrinsic = ChainflipExtrinsic { call: runtime_call, transaction_metadata };
+
+		let domain = EIP712Domain {
+			name: Some("Testnet".to_string()),
+			version: Some("1".to_string()),
+			chain_id: None,
+			verifying_contract: None,
+			salt: None,
+		};
+
+		#[block]
+		{
+			// Measure optimized version that bypasses registry construction
+			let _ = encode_eip712_using_type_info_fast(chainflip_extrinsic, domain);
+		}
+	}
+
+	// Individual step benchmarks for encode_eip712_using_type_info breakdown
 
 	#[benchmark]
 	fn eip712_step1_registry_creation() {

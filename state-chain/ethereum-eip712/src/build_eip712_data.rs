@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{
 	eip712::{EIP712Domain, Eip712DomainType, Eip712Error, TypedData},
-	encode_eip712_using_type_info,
+	encode_eip712_using_type_info_fast,
 };
 use codec::{alloc::string::ToString, Encode};
 use scale_info::{prelude::string::String, TypeInfo};
@@ -36,7 +36,7 @@ pub fn build_eip712_typed_data<T: TypeInfo + Encode + 'static>(
 		salt: None,
 	};
 
-	let typed_data = encode_eip712_using_type_info(chainflip_extrinsic, domain)?;
+	let typed_data = encode_eip712_using_type_info_fast(chainflip_extrinsic, domain)?;
 
 	let mut types = typed_data.types.clone();
 	types.insert(
