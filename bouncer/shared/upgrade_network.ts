@@ -4,7 +4,14 @@ import * as toml from 'toml';
 import path from 'path';
 import { SemVerLevel, bumpReleaseVersion } from 'shared/bump_release_version';
 import { simpleRuntimeUpgrade } from 'shared/simple_runtime_upgrade';
-import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from 'shared/utils';
+import {
+  compareSemVer,
+  getNodesInfo,
+  killEngines,
+  sleep,
+  startEngines,
+  waitForNodeHealthy,
+} from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
@@ -121,8 +128,6 @@ async function compatibleUpgrade(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
-
   killOldNodes();
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
@@ -139,7 +144,12 @@ async function compatibleUpgrade(
   });
 
   // wait for nodes to be ready
-  await sleep(20000);
+  await Promise.all(
+    // For each port offset, wait for the node to be responsive
+    Array.from({ length: numberOfNodes }, (_, i) => i).map(async (portOffset) => {
+      waitForNodeHealthy(logger, true, 'http:/localhost', 9944 + portOffset);
+    }),
+  );
 
   // engines crashed when node shutdown, so restart them.
   await execWithLog(
@@ -156,6 +166,11 @@ async function compatibleUpgrade(
     },
   );
 
+  // Todo: wait for engine health check.
+
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
+
+  // Broker and LP Apis crash on runtime upgrade, so restart them.
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
 
   await startDepositMonitor(localnetInitPath);
@@ -184,6 +199,7 @@ async function incompatibleUpgradeNoBuild(
   // we don't catch the error here.
 
   // Ensure the runtime upgrade is finalised.
+  // TODO wait for the updated event instead.
   await sleep(10000);
 
   // We're going to take down the node, so we don't want them to be suspended.
@@ -196,6 +212,7 @@ async function incompatibleUpgradeNoBuild(
 
   logger.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
   // Ensure extrinsic gets in.
+  // TODO: wait for event instead.
   await sleep(12000);
 
   killOldNodes();
@@ -220,6 +237,7 @@ async function incompatibleUpgradeNoBuild(
     BINARY_ROOT_PATH: binaryPath,
   });
 
+  // TODO: use health endpoint instead
   await sleep(20000);
 
   logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
