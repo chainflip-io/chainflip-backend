@@ -217,7 +217,6 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
   const btcPool: any = (
     await chainflip.query.lendingPools.generalLendingPools(Assets.Btc)
   ).toJSON();
-  console.log(`BTC Lending Pool: ${btcPool}`);
   if (!btcPool) {
     logger.info('Btc lending pool not found, running setupLendingPools');
     await setupLendingPools(logger);
