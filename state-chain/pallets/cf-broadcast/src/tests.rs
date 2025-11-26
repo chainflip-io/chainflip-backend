@@ -1586,3 +1586,74 @@ fn aborted_broadcast_is_cleaned_up_on_success() {
 		assert!(AbortedBroadcasts::<Test, Instance1>::get().is_empty());
 	});
 }
+
+#[test]
+fn threshold_sign_and_broadcast_with_historical_key_full_flow() {
+	new_test_ext().execute_with(|| {
+		// Setup: use current authorities as participants
+		let participants: BTreeSet<u64> = MockEpochInfo::current_authorities().into_iter().collect();
+		let epoch_index = 0u32;
+
+		// Call the governance extrinsic
+		assert_ok!(Broadcaster::threshold_sign_and_broadcast_with_historical_key(
+			RuntimeOrigin::root(),
+			Box::new(mock_api_call()),
+			epoch_index,
+			participants.clone(),
+			true, // broadcast = true
+		));
+
+		// Verify: HistoricalBroadcastRequested event emitted
+		let broadcast_id = 1u32; // First broadcast
+		System::assert_has_event(RuntimeEvent::Broadcaster(
+			Event::HistoricalBroadcastRequested { broadcast_id, epoch_index },
+		));
+
+		// Verify: broadcast is pending
+		assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+
+		// Mock signature success - this executes the callback (on_signature_ready)
+		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(SIG1));
+
+		// Verify: broadcast request was issued (on_signature_ready callback executed)
+		assert!(AwaitingBroadcast::<Test, Instance1>::contains_key(broadcast_id));
+
+		// Complete the broadcast by witnessing success
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			SIG1,
+			Default::default(),
+			ETH_TX_FEE,
+			MOCK_TX_METADATA,
+			0,
+		));
+
+		// Verify: BroadcastSuccess event and storage cleanup
+		System::assert_has_event(RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
+			broadcast_id,
+			transaction_out_id: SIG1,
+			transaction_ref: 0,
+		}));
+		assert_broadcast_storage_cleaned_up(broadcast_id);
+	});
+}
+
+#[test]
+fn threshold_sign_and_broadcast_with_historical_key_requires_governance() {
+	new_test_ext().execute_with(|| {
+		let participants: BTreeSet<u64> =
+			MockEpochInfo::current_authorities().into_iter().collect();
+
+		// Non-governance origin should fail
+		assert_noop!(
+			Broadcaster::threshold_sign_and_broadcast_with_historical_key(
+				RuntimeOrigin::signed(1u64),
+				Box::new(mock_api_call()),
+				0u32,
+				participants,
+				true,
+			),
+			sp_runtime::traits::BadOrigin
+		);
+	});
+}
