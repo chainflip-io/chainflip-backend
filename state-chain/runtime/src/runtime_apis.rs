@@ -526,13 +526,16 @@ pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
 	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
-
-	// Decide which ones we need:
-	// pub solana_swap_endpoint_native_vault_pda: EncodedAddress,
-	// pub solana_usdc_token_vault_ata: EncodedAddress,
 	pub sol_vault_program: EncodedAddress,
 	pub sol_swap_endpoint_program_data_account: EncodedAddress,
 	pub usdc_token_mint_pubkey: EncodedAddress,
+
+	pub bitcoin_vault: Option<EncodedAddress>,
+	pub solana_sol_vault: Option<EncodedAddress>,
+	pub solana_usdc_token_vault_ata: EncodedAddress,
+	pub solana_vault_swap_account: Option<EncodedAddress>,
+
+	pub predicted_seconds_until_next_vault_rotation: u64,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -605,6 +608,9 @@ pub struct RpcLendingConfig {
 	pub fee_swap_max_oracle_slippage: BasisPoints,
 	/// Minimum equivalent amount of principal that a loan must have at all times.
 	pub minimum_loan_amount_usd: U256,
+	/// Minimum amount of that can be added to a lending pool. When removing funds, the user
+	/// can't leave less than this amount in the pool (they should remove all funds instead).
+	pub minimum_supply_amount_usd: U256,
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: U256,

@@ -25,7 +25,7 @@ use crate::{
 };
 use frame_support::{
 	traits::{Defensive, Get},
-	CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound,
+	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
 use hub::{AssethubExtrinsicBuilder, AssethubRuntimeCall, OutputAccountId};
 
@@ -41,7 +41,7 @@ pub enum AssethubApi<Environment: 'static> {
 	ExecuteXSwapAndCall(AssethubExtrinsicBuilder),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 pub trait AssethubEnvironment {
@@ -261,7 +261,7 @@ impl<E: AssethubEnvironment + ReplayProtectionProvider<Assethub>> ApiCall<Polkad
 	}
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo, Eq)]
 pub enum TransferType {
 	/// should teleport `asset` to `dest`

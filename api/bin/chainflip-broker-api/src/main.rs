@@ -17,9 +17,9 @@
 use cf_chains::CcmChannelMetadataUnchecked;
 use cf_rpc_apis::{
 	broker::{
-		BrokerRpcApiServer, DcaParameters, GetOpenDepositChannelsQuery, RpcBytes,
-		SwapDepositAddress, TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc,
-		WithdrawFeesDetail,
+		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters,
+		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
+		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
@@ -288,6 +288,27 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		minimum_fee_bps: BasisPoints,
 	) -> RpcResult<H256> {
 		Ok(self.api.broker_api().set_vault_swap_minimum_broker_fee(minimum_fee_bps).await?)
+	}
+
+	async fn request_account_creation_deposit_address(
+		&self,
+		signature_data: SignatureData,
+		transaction_metadata: TransactionMetadata,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+		refund_address: AddressString,
+	) -> RpcResult<AccountCreationDepositAddress> {
+		Ok(self
+			.api
+			.broker_api()
+			.request_account_creation_deposit_address(
+				signature_data,
+				transaction_metadata,
+				asset,
+				boost_fee,
+				refund_address,
+			)
+			.await?)
 	}
 }
 

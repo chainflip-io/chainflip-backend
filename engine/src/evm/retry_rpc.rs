@@ -235,7 +235,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 				),
 				Box::pin(move |client| {
 					let range = range.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.get_logs(
@@ -260,7 +259,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 					Some(format!("{block_hash:?}, {contract_address:?}")),
 				),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.get_logs(
@@ -277,10 +275,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("chain_id".to_string(), None),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.chain_id().await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.chain_id().await })),
 			)
 			.await
 	}
@@ -290,7 +285,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 			.request(
 				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
 			)
@@ -301,10 +295,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.block(block_number).await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
 			)
 			.await
 	}
@@ -314,7 +305,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 			.request(
 				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_with_txs(block_number).await })
 				}),
 			)
@@ -335,7 +325,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 				),
 				Box::pin(move |client| {
 					let reward_percentiles = reward_percentiles.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.fee_history(block_count, newest_block, &reward_percentiles).await
 					})
@@ -349,7 +338,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 			.request(
 				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(tx_hash).await })
 				}),
 			)
@@ -371,7 +359,6 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 				Box::pin(move |client| {
 					let tx = tx.clone();
 					let s = s.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						let mut transaction_request = Eip1559TransactionRequest {
 							to: Some(NameOrAddress::Address(tx.contract)),
@@ -432,10 +419,7 @@ impl<Rpc: EvmRpcApi> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc> {
 		self.sub_retry_client
 			.request(
 				RequestLog::new("subscribe_blocks".to_string(), None),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.subscribe_blocks().await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.subscribe_blocks().await })),
 			)
 			.await
 	}
@@ -461,7 +445,6 @@ impl<Rpc: EvmRpcApi> ChainClient for EvmRetryRpcClient<Rpc> {
 			.request(
 				RequestLog::new("header_at_index".to_string(), Some(format!("{index}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						let witness_range =
 							witness_period::block_witness_range(witness_period, index);

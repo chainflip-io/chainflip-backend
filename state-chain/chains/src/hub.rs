@@ -58,6 +58,7 @@ impl Chain for Assethub {
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
 		REFERENCE_HUBDOT_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_DOT;
+	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -350,7 +351,7 @@ impl FeeRefundCalculator<Assethub> for PolkadotTransactionData {
 }
 
 // The Assethub Runtime type that is expected by the assethub runtime
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssethubRuntimeCall {
 	#[codec(index = 0u8)]
@@ -367,95 +368,94 @@ pub enum AssethubRuntimeCall {
 	Assets(AssetsCall),
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
-#[allow(non_camel_case_types)]
-#[allow(clippy::large_enum_variant)]
+#[expect(non_camel_case_types)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum XcmCall {
 	#[codec(index = 1u8)]
 	teleport_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
 	},
 	#[codec(index = 2u8)]
 	reserve_transfer_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
 	},
 	#[codec(index = 8u8)]
 	limited_reserve_transfer_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 9u8)]
 	limited_teleport_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 11u8)]
 	transfer_assets {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fee_asset_itme: u32,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 	#[codec(index = 13u8)]
 	transfer_assets_using_type_and_then {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		assets_transfer_type: api::TransferType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		remote_fees_id: xcm_types::hub_runtime_types::xcm::VersionedAssetId,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		fees_transfer_type: api::TransferType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		custom_xcm_on_dest: xcm_types::hub_runtime_types::xcm::VersionedXcm,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
@@ -467,9 +467,9 @@ pub enum BalancesCall {
 	/// The dispatch origin for this call must be `Signed` by the transactor.
 	#[codec(index = 0u8)]
 	transfer_allow_death {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		value: PolkadotBalance,
 	},
@@ -491,14 +491,14 @@ pub enum BalancesCall {
 	/// - O(1). Just like transfer, but reading the user's transferable balance first. #</weight>
 	#[codec(index = 4u8)]
 	transfer_all {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		keep_alive: bool,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum UtilityCall {
 	/// Send a batch of dispatch calls.
@@ -522,7 +522,7 @@ pub enum UtilityCall {
 	/// event is deposited.
 	#[codec(index = 0u8)]
 	batch {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<AssethubRuntimeCall>,
 	},
 	/// Send a call through an indexed pseudonym of the sender.
@@ -540,9 +540,9 @@ pub enum UtilityCall {
 	/// The dispatch origin for this call must be _Signed_.
 	#[codec(index = 1u8)]
 	as_derivative {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<AssethubRuntimeCall>,
 	},
 	/// Send a batch of dispatch calls and atomically execute them.
@@ -561,7 +561,7 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	batch_all {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<AssethubRuntimeCall>,
 	},
 	/// Send a batch of dispatch calls.
@@ -580,12 +580,12 @@ pub enum UtilityCall {
 	/// # </weight>
 	#[codec(index = 4u8)]
 	force_batch {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		calls: Vec<AssethubRuntimeCall>,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum ProxyCall {
 	/// Dispatch the given `call` from an account that the sender is authorised for through
@@ -605,11 +605,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 0u8)]
 	proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		force_proxy_type: Option<PolkadotProxyType>,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<AssethubRuntimeCall>,
 	},
 	/// Register a proxy account for the sender that is able to make calls on its behalf.
@@ -627,11 +627,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 1u8)]
 	add_proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
 	},
 	/// Unregister a proxy account for the sender.
@@ -647,11 +647,11 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 2u8)]
 	remove_proxy {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
 	},
 	/// Unregister all proxy accounts for the sender.
@@ -690,11 +690,11 @@ pub enum ProxyCall {
 	/// TODO: Might be over counting 1 read
 	#[codec(index = 4u8)]
 	create_pure {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delay: PolkadotBlockNumber,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
 	},
 	/// Removes a previously spawned anonymous proxy.
@@ -719,16 +719,16 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 5u8)]
 	kill_pure {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		spawner: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		proxy_type: PolkadotProxyType,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		index: u16,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		height: PolkadotBlockNumber,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		ext_index: u32,
 	},
@@ -755,9 +755,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 6u8)]
 	announce {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Remove a given announcement.
@@ -778,9 +778,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 7u8)]
 	remove_announcement {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Remove the given announcement of a delegate.
@@ -801,9 +801,9 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 8u8)]
 	reject_announcement {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call_hash: PolkadotCallHash,
 	},
 	/// Dispatch the given `call` from an account that the sender is authorized for through
@@ -825,39 +825,39 @@ pub enum ProxyCall {
 	/// # </weight>
 	#[codec(index = 9u8)]
 	proxy_announced {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		delegate: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		real: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		force_proxy_type: Option<PolkadotProxyType>,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		call: Box<AssethubRuntimeCall>,
 	},
 }
 
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssetsCall {
 	#[codec(index = 8u8)]
 	transfer {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		id: PolkadotIndex,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		value: PolkadotBalance,
 	},
 	#[codec(index = 32u8)]
 	transfer_all {
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		#[codec(compact)]
 		id: PolkadotIndex,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		dest: PolkadotAccountIdLookup,
-		#[allow(missing_docs)]
+		#[expect(missing_docs)]
 		keep_alive: bool,
 	},
 }

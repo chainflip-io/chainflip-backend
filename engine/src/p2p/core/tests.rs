@@ -114,7 +114,7 @@ async fn connect_two_nodes() {
 	// ----------------------------------------------------------------
 
 	// Node 2 only knows about itself from the startup
-	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi2.clone()]);
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), std::slice::from_ref(&pi2));
 
 	// ----------------------------------------------------------------
 	// Node 2 should start around this time, and receive a connection

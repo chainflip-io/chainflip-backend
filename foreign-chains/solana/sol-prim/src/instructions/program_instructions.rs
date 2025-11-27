@@ -329,6 +329,7 @@ macro_rules! solana_program {
 			program_id: Pubkey,
 		}
 
+		#[allow(clippy::allow_attributes)]
 		#[allow(clippy::too_many_arguments)]
 		impl $program {
 			pub fn with_id(program_id: impl Into<Pubkey>) -> Self {
@@ -1067,7 +1068,7 @@ mod idl {
 				.expect("instruction not found")
 		}
 
-		#[allow(dead_code)]
+		#[expect(dead_code)]
 		pub fn account(&self, name: &str) -> &IdlAccount {
 			self.accounts
 				.iter()

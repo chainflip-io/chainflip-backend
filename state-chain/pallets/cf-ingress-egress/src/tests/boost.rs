@@ -65,9 +65,11 @@ fn request_deposit_address(
 	let (channel_id, deposit_address, ..) =
 		EthereumIngressEgress::request_liquidity_deposit_address(
 			account_id,
+			account_id,
 			asset,
 			max_boost_fee,
 			ForeignChainAddress::Eth(Default::default()),
+			None,
 		)
 		.unwrap();
 
@@ -492,7 +494,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 
 		let (deposit_channel, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE, EthAsset::Eth,
-			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()) },
+			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()), additional_action: None },
 			TIER_5_BPS,
 		)
 		.unwrap();
@@ -590,6 +592,7 @@ fn taking_network_fee_from_boost_fee() {
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: 10,
 						accumulated_output_amount: 0,
+						dca_params: None,
 					}
 				)])
 			);
@@ -661,7 +664,10 @@ mod vault_swaps {
 					refund_ccm_metadata: Default::default(),
 					max_oracle_price_slippage: Default::default(),
 				},
-				dca_params: None,
+				dca_params: Some(DcaParameters {
+					number_of_chunks: 1,
+					chunk_interval: SWAP_DELAY_BLOCKS,
+				}),
 				boost_fee: 5,
 			};
 
@@ -700,6 +706,10 @@ mod vault_swaps {
 								},
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								dca_params: Some(DcaParameters {
+									number_of_chunks: 1,
+									chunk_interval: SWAP_DELAY_BLOCKS
+								}),
 							}
 						),
 						(
@@ -713,6 +723,7 @@ mod vault_swaps {
 								origin: SwapOrigin::Internal,
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								dca_params: None,
 							}
 						)
 					])

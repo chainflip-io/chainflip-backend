@@ -248,16 +248,14 @@ pub fn evm_vault_swap<A>(
 		ForeignChain::Ethereum => Ok(VaultSwapDetails::ethereum(EvmCallDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
-			value: (source_asset == Asset::Eth).then_some(U256::from(amount)).unwrap_or_default(),
+			value: if source_asset == Asset::Eth { U256::from(amount) } else { U256::default() },
 			to: Environment::eth_vault_address(),
 			source_token_address,
 		})),
 		ForeignChain::Arbitrum => Ok(VaultSwapDetails::arbitrum(EvmCallDetails {
 			calldata,
 			// Only return `amount` for native currently. 0 for Tokens
-			value: (source_asset == Asset::ArbEth)
-				.then_some(U256::from(amount))
-				.unwrap_or_default(),
+			value: if source_asset == Asset::ArbEth { U256::from(amount) } else { U256::default() },
 			to: Environment::arb_vault_address(),
 			source_token_address,
 		})),

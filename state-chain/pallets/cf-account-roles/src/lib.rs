@@ -16,6 +16,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![allow(clippy::allow_attributes)]
 
 mod benchmarking;
 mod mock;
@@ -216,9 +217,9 @@ pub mod pallet {
 		/// `sub_account_index`. Fees are paid by the parent account.
 		///
 		/// The call is executed with the sub-account's account id as the dispatch origin.
-		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().weight))]
+		#[allow(clippy::useless_conversion)]
 		pub fn as_sub_account(
 			origin: OriginFor<T>,
 			sub_account_index: SubAccountIndex,

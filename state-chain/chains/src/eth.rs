@@ -29,7 +29,10 @@ use assets::eth::Asset as EthAsset;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, IngressOrEgress};
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{ethereum_types::H256, Address, Hash as TxHash, Token, Uint, Word};
+pub use ethabi::{
+	ethereum_types::{H160, H256},
+	Address, Hash as TxHash, Token, Uint, Word,
+};
 use evm::api::EvmReplayProtection;
 use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
@@ -45,7 +48,7 @@ pub const CHAIN_ID_SEPOLIA: u64 = 11155111;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_200_000_000u128; //4200 usd
-pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 660_000u128; //0.66 usd
+pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 450_000u128; //0.45 usd
 pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
 
 impl Chain for Ethereum {
@@ -54,6 +57,7 @@ impl Chain for Ethereum {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_ETH_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_ETH;
+	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;

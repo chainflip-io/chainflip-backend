@@ -127,7 +127,7 @@ pub async fn proxy_added_witnessing(
 	(events, proxy_added_broadcasts)
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Polkadot, PolkadotAccountId, ()>,
 	header: Header<

@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
@@ -425,7 +424,6 @@ pub mod pallet {
 		/// - [UnauthorisedWitness](Error::UnauthorisedWitness)
 		/// - [AuthorityIndexOutOfBounds](Error::AuthorityIndexOutOfBounds)
 		/// - [DuplicateWitness](Error::DuplicateWitness)
-		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(0)]
 		#[pallet::weight((
 			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /

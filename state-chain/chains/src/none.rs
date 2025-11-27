@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use crate::eth::H160;
 use cf_primitives::chains::assets::any::AssetMap;
 use frame_support::traits::ConstBool;
 
@@ -28,6 +29,8 @@ impl Chain for NoneChain {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = 1_000_000;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
+	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(H160([0; 20]));
+
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;

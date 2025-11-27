@@ -1,45 +1,5 @@
 use super::*;
-use frame_support::sp_runtime::{
-	helpers_128bit::multiply_by_rational_with_rounding, Permill, Rounding,
-};
-
-/// Boosted amount is the amount provided by the pool plus boost fee,
-/// (and the sum of all boosted amounts from each participating pool
-/// must be equal the deposit amount being boosted). The fee is payed
-/// per boosted amount, and so here we multiply by fee_bps directly.
-pub(super) fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetAmount {
-	use cf_primitives::BASIS_POINTS_PER_MILLION;
-	let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
-
-	fee_permill * amount_to_boost
-}
-
-/// Unlike `fee_from_boosted_amount`, the boosted amount is not known here
-/// so we have to calculate it first from the provided amount in order to
-/// calculate the boost fee amount.
-pub(super) fn fee_from_provided_amount(
-	provided_amount: AssetAmount,
-	fee_bps: u16,
-) -> Result<AssetAmount, &'static str> {
-	// Compute `boosted = provided / (1 - fee)`
-	let boosted_amount = {
-		const BASIS_POINTS_MAX: u16 = 10_000;
-
-		let inverse_fee = BASIS_POINTS_MAX.saturating_sub(fee_bps);
-
-		multiply_by_rational_with_rounding(
-			provided_amount,
-			BASIS_POINTS_MAX as u128,
-			inverse_fee as u128,
-			Rounding::Down,
-		)
-		.ok_or("invalid fee")?
-	};
-
-	let fee_amount = boosted_amount.checked_sub(provided_amount).ok_or("invalid fee")?;
-
-	Ok(fee_amount)
-}
+use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 
 /// Distributes exactly `total_to_distribute` proportionally to the `distribution` map.
 pub(super) fn distribute_proportionally<'a, K, N, I>(

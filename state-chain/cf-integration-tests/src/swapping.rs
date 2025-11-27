@@ -312,7 +312,7 @@ fn set_range_order(
 	System::reset_events();
 }
 
-fn set_limit_order(
+pub fn set_limit_order(
 	account_id: &AccountId,
 	sell_asset: Asset,
 	buy_asset: Asset,

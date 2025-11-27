@@ -176,13 +176,6 @@ pub fn deposit_witnesses(
 	txs: &[VerboseTransaction],
 	deposit_addresses: &HashMap<Vec<u8>, DepositAddress>,
 ) -> Vec<DepositWitness<Bitcoin>> {
-	tracing::debug!(
-		"Scanning {} transactions for BTC deposits. {} Addresses are being monitored: {:?}. Txs = {:?}",
-		txs.len(),
-		deposit_addresses.len(),
-		deposit_addresses.keys().collect::<Vec<_>>(),
-		txs
-	);
 	txs.iter()
 		.flat_map(|tx| {
 			Iterator::zip(0.., &tx.vout)
@@ -320,6 +313,7 @@ pub mod tests {
 			action: ChannelAction::<AccountId32, <Bitcoin as cf_chains::Chain>::ChainAccount>::LiquidityProvision {
 				lp_account: AccountId32::new([0xab; 32]),
 				refund_address: ForeignChainAddress::Btc(ScriptPubkey::P2PKH([0; 20])),
+				additional_action: None,
 			},
 			boost_fee: 0,
 			boost_status: BoostStatus::NotBoosted,

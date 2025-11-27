@@ -27,7 +27,7 @@ use tracing_subscriber::Layer;
 /// Run at the start of a unit test to output all tracing logs in a CLI readable format.
 /// Do not leave this in unit tests or it will panic when running more than one at a time.
 // Allow dead code because this function is a unit test debugging tool.
-#[allow(dead_code)]
+//#[expect(dead_code)]
 pub fn init_test_logger() {
 	use tracing_subscriber::{
 		prelude::__tracing_subscriber_SubscriberExt, registry, util::SubscriberInitExt,

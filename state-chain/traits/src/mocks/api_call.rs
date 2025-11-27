@@ -17,8 +17,9 @@
 use cf_chains::{
 	btc::BitcoinCrypto, ccm_checker::DecodedCcmAdditionalData, evm::EvmCrypto, AllBatch,
 	AllBatchError, ApiCall, Bitcoin, Chain, ChainCrypto, ChainEnvironment, ConsolidationError,
-	Ethereum, ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, ForeignChainAddress,
-	RejectCall, RejectError, TransferAssetParams, TransferFallback, TransferFallbackError,
+	Ethereum, ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
+	ForeignChainAddress, RejectCall, RejectError, TransferAssetParams, TransferFallback,
+	TransferFallbackError, TransferForRejection,
 };
 use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
 use codec::{Decode, Encode};
@@ -55,10 +56,9 @@ pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	TransferFallback(MockEthTransferFallback<MockEvmEnvironment>),
 	RejectCall {
 		deposit_details: <Ethereum as Chain>::DepositDetails,
-		refund_address: <Ethereum as Chain>::ChainAccount,
-		refund_amount: Option<<Ethereum as Chain>::ChainAmount>,
 		asset: <Ethereum as Chain>::ChainAsset,
-		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
+		fetch: FetchForRejection<Ethereum>,
+		transfer: TransferForRejection<Ethereum>,
 	},
 }
 
@@ -364,10 +364,9 @@ impl AllBatch<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	fn new_unsigned(
 		_deposit_details: <Bitcoin as Chain>::DepositDetails,
-		_refund_address: <Bitcoin as Chain>::ChainAccount,
-		_refund_amount: Option<<Bitcoin as Chain>::ChainAmount>,
 		_asset: <Bitcoin as Chain>::ChainAsset,
-		_deposit_fetch_id: Option<<Bitcoin as Chain>::DepositFetchId>,
+		_fetch: FetchForRejection<Bitcoin>,
+		_transfer: TransferForRejection<Bitcoin>,
 	) -> Result<Self, RejectError> {
 		Ok(Self::RejectCall)
 	}
@@ -376,17 +375,10 @@ impl RejectCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 impl RejectCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	fn new_unsigned(
 		deposit_details: <Ethereum as Chain>::DepositDetails,
-		refund_address: <Ethereum as Chain>::ChainAccount,
-		refund_amount: Option<<Ethereum as Chain>::ChainAmount>,
 		asset: <Ethereum as Chain>::ChainAsset,
-		deposit_fetch_id: Option<<Ethereum as Chain>::DepositFetchId>,
+		fetch: FetchForRejection<Ethereum>,
+		transfer: TransferForRejection<Ethereum>,
 	) -> Result<Self, RejectError> {
-		Ok(Self::RejectCall {
-			deposit_details,
-			refund_address,
-			refund_amount,
-			asset,
-			deposit_fetch_id,
-		})
+		Ok(Self::RejectCall { deposit_details, asset, fetch, transfer })
 	}
 }

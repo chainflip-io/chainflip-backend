@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{AccountInfo, Chainflip, FundingInfo};
+use crate::{AccountInfo, Chainflip, FundAccount, FundingInfo, FundingSource};
 use frame_support::{
 	sp_runtime::{
 		traits::{CheckedSub, Zero},
@@ -33,7 +33,6 @@ impl<T> MockPallet for MockFundingInfo<T> {
 }
 
 const BALANCES: &[u8] = b"BALANCES";
-const BONDS: &[u8] = b"BONDS";
 
 impl<T: Chainflip> MockFundingInfo<T> {
 	pub fn credit_funds(account_id: &T::AccountId, amount: T::Amount) {
@@ -109,12 +108,21 @@ impl<T: Chainflip> AccountInfo for MockFundingInfo<T> {
 	}
 
 	/// Returns the bond on the account.
-	fn bond(account_id: &Self::AccountId) -> Self::Amount {
-		<Self as MockPalletStorage>::get_storage(BONDS, account_id).unwrap_or_default()
+	fn bond(_: &Self::AccountId) -> Self::Amount {
+		panic!("MockFundingInfo does not implement bond retrieval; use MockBonder instead")
 	}
 
 	/// Returns the account's liquid funds, net of the bond.
 	fn liquid_funds(account_id: &Self::AccountId) -> Self::Amount {
 		Self::balance(account_id).saturating_sub(Self::bond(account_id))
+	}
+}
+
+impl<T: Chainflip> FundAccount for MockFundingInfo<T> {
+	type AccountId = T::AccountId;
+	type Amount = T::Amount;
+
+	fn fund_account(account_id: Self::AccountId, amount: Self::Amount, _source: FundingSource) {
+		Self::credit_funds(&account_id, amount);
 	}
 }

@@ -332,6 +332,8 @@ impl<'de> Deserialize<'de> for TypedData {
 
 		#[derive(Deserialize)]
 		#[serde(untagged)]
+		#[allow(clippy::allow_attributes)]
+		#[allow(clippy::large_enum_variant)]
 		enum Type {
 			Val(TypedDataHelper),
 			String(String),
@@ -568,13 +570,14 @@ pub fn encode_field(
 						ParamType::Bytes => encode_eip712_type(Token::Bytes(
 							value.extract_hex_bytes().map_err(|_| err)?,
 						)),
-
 						ParamType::Int(_) =>
 							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
 
 						ParamType::Uint(_) => match value {
 							MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n)) =>
 								Token::Uint(U256::from_dec_str(n).map_err(|_| err)?),
+							MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
+								Token::Uint((*n).into()),
 							_ => return Err(err),
 						},
 						ParamType::Bool => encode_eip712_type(Token::Bool(

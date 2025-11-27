@@ -237,7 +237,7 @@ pub trait Statemachine: AbstractApi + 'static {
 						Just(settings),
 					)
 				})),
-				#[allow(clippy::type_complexity)]
+				#[expect(clippy::type_complexity)]
 				|(mut state, input, settings): (
 					Self::State,
 					Either<Self::Context, (Self::Query, Self::Response)>,
@@ -260,6 +260,7 @@ pub trait Statemachine: AbstractApi + 'static {
 	}
 }
 
+#[allow(clippy::allow_attributes)]
 #[allow(unused)]
 #[cfg(test)]
 pub fn run_with_timeout<

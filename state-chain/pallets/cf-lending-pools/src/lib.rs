@@ -25,11 +25,17 @@ mod utils;
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
-	rpc::{get_lending_pools, get_loan_accounts},
-	InterestRateConfiguration, LendingConfiguration, LendingPool, LendingPoolAndSupplyPositions,
-	LendingPoolConfiguration, LendingSupplyPosition, LiquidationCompletionReason, LiquidationType,
-	LtvThresholds, NetworkFeeContributions, RpcLendingPool, RpcLiquidationStatus,
-	RpcLiquidationSwap, RpcLoan, RpcLoanAccount, WhitelistStatus, WhitelistUpdate,
+	rpc::{
+		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+	},
+	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
+	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+};
+
+pub use general_lending::config::{
+	InterestRateConfiguration, LendingConfiguration, LendingPoolConfiguration, LtvThresholds,
+	NetworkFeeContributions,
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
@@ -97,6 +103,8 @@ pub struct PalletSafeMode {
 	pub add_collateral: SafeModeSet<Asset>,
 	// whether borrowers can withdraw collateral (stale oracle also disables this)
 	pub remove_collateral: SafeModeSet<Asset>,
+	// whether liquidations can be started, both voluntarily and system-initiated
+	pub liquidations_enabled: bool,
 }
 
 impl cf_traits::SafeMode for PalletSafeMode {
@@ -109,6 +117,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			withdraw_lender_funds: SafeModeSet::code_red(),
 			add_collateral: SafeModeSet::code_red(),
 			remove_collateral: SafeModeSet::code_red(),
+			liquidations_enabled: false,
 		}
 	}
 
@@ -121,6 +130,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			withdraw_lender_funds: SafeModeSet::code_green(),
 			add_collateral: SafeModeSet::code_green(),
 			remove_collateral: SafeModeSet::code_green(),
+			liquidations_enabled: true,
 		}
 	}
 }
@@ -161,6 +171,7 @@ pub enum PalletConfigUpdate {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
 		minimum_update_collateral_amount_usd: AssetAmount,
+		minimum_supply_amount_usd: AssetAmount,
 	},
 }
 
@@ -204,7 +215,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	ltv_thresholds: LtvThresholds {
 		target: Permill::from_percent(80),
-		topup: Permill::from_percent(85),
+		topup: None,
 		soft_liquidation: Permill::from_percent(90),
 		soft_liquidation_abort: Permill::from_percent(88),
 		hard_liquidation: Permill::from_percent(95),
@@ -234,6 +245,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	pool_config_overrides: BTreeMap::new(),
 	minimum_loan_amount_usd: 100_000_000,             // 100 USD
 	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
+	minimum_supply_amount_usd: 100_000_000,           // 100 USD
 	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
 };
 
@@ -402,9 +414,9 @@ pub mod pallet {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
 		},
-		PrimaryCollateralAssetUpdated {
+		CollateralTopupAssetUpdated {
 			borrower_id: T::AccountId,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
@@ -497,6 +509,8 @@ pub mod pallet {
 		AccountHasNoLoans,
 		/// The borrower has insufficient collateral for the requested loan
 		InsufficientCollateral,
+		/// Action not allowed as it would lead to LTV that's above safe threshold
+		LtvTooHigh,
 		/// A catch-all error for invalid loan parameters where a more specific error is not
 		/// available
 		InvalidLoanParameters,
@@ -509,15 +523,17 @@ pub mod pallet {
 		LiquidationInProgress,
 		/// The provided collateral amount is empty/zero.
 		EmptyCollateral,
-		/// The loan amount would be below the minimum allowed.
-		LoanBelowMinimumAmount,
-		/// The amount specified to update a loan or collateral must be at least the minimum
+		/// The loan/supplied amount would be below the minimum allowed.
+		RemainingAmountBelowMinimum,
+		/// The amount specified to update a loan/collateral/supply must be at least the minimum
 		/// allowed amount.
 		AmountBelowMinimum,
 		/// No refund address has been set for the loan asset.
 		NoRefundAddressSet,
 		/// Access denied as account is not in the whitelist.
 		AccountNotWhitelisted,
+		/// Liquidations are currently disabled due to safe mode.
+		LiquidationsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -622,11 +638,13 @@ pub mod pallet {
 							minimum_loan_amount_usd,
 							minimum_update_loan_amount_usd,
 							minimum_update_collateral_amount_usd,
+							minimum_supply_amount_usd,
 						} => {
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
 							config.minimum_update_collateral_amount_usd =
 								*minimum_update_collateral_amount_usd;
+							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -759,8 +777,14 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
+			let config = LendingConfig::<T>::get();
+
 			// - The user does not add amount that's too small
-			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+			ensure!(
+				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
+					config.minimum_supply_amount_usd,
+				Error::<T>::AmountBelowMinimum
+			);
 
 			// `try_debit_account` does not account for any unswept open positions, so we sweep to
 			// ensure we have the funds in our free balance before attempting to debit the account.
@@ -804,10 +828,23 @@ pub mod pallet {
 			let unlocked_amount = GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-				let unlocked_amount =
+				let WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount } =
 					pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;
 
-				Ok::<_, DispatchError>(unlocked_amount)
+				let config = LendingConfig::<T>::get();
+
+				// Either the user removes everything, or they have to leave at least
+				// the minimum required amount in the pool (to prevent dust amounts from
+				// accumulating):
+				ensure!(
+					remaining_amount == 0 ||
+						OraclePriceCache::<T>::default()
+							.usd_value_of(asset, remaining_amount)? >=
+							config.minimum_supply_amount_usd,
+					Error::<T>::RemainingAmountBelowMinimum
+				);
+
+				Ok::<_, DispatchError>(withdrawn_amount)
 			})?;
 
 			T::Balance::credit_account(&lender_id, asset, unlocked_amount);
@@ -825,7 +862,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_collateral())]
 		pub fn add_collateral(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -835,7 +872,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			<Self as LendingApi>::add_collateral(&borrower_id, primary_collateral_asset, collateral)
+			<Self as LendingApi>::add_collateral(&borrower_id, collateral_topup_asset, collateral)
 		}
 
 		#[pallet::call_index(8)]
@@ -855,7 +892,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
-			primary_collateral_asset: Option<Asset>,
+			collateral_topup_asset: Option<Asset>,
 			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -869,7 +906,7 @@ pub mod pallet {
 				borrower_id,
 				loan_asset,
 				loan_amount,
-				primary_collateral_asset,
+				collateral_topup_asset,
 				extra_collateral,
 			)?;
 
@@ -877,16 +914,16 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_primary_collateral_asset())]
-		pub fn update_primary_collateral_asset(
+		#[pallet::weight(T::WeightInfo::update_collateral_topup_asset())]
+		pub fn update_collateral_topup_asset(
 			origin: OriginFor<T>,
-			primary_collateral_asset: Asset,
+			collateral_topup_asset: Option<Asset>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::update_primary_collateral_asset(
+			<Self as LendingApi>::update_collateral_topup_asset(
 				&borrower_id,
-				primary_collateral_asset,
+				collateral_topup_asset,
 			)
 		}
 
@@ -924,6 +961,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::change_voluntary_liquidation())]
 		pub fn initiate_voluntary_liquidation(origin: OriginFor<T>) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+			ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
 
 			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, true)
 		}

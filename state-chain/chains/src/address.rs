@@ -129,7 +129,7 @@ pub enum EncodedAddress {
 
 pub trait AddressConverter: Sized {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress;
-	#[allow(clippy::result_unit_err)]
+	#[expect(clippy::result_unit_err)]
 	fn try_from_encoded_address(encoded_address: EncodedAddress)
 		-> Result<ForeignChainAddress, ()>;
 
@@ -356,7 +356,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	}
 }
 
-#[allow(clippy::result_unit_err)]
+#[expect(clippy::result_unit_err)]
 pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 	encoded_address: EncodedAddress,
 	network_environment: GetNetwork,

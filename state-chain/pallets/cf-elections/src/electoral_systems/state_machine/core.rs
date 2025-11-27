@@ -81,6 +81,7 @@ macro_rules! derive_error_enum {
 	) => {
 
 		#[derive_where::derive_where(Debug, PartialEq)]
+		#[allow(clippy::allow_attributes)]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamsDef)*> {
 
@@ -99,6 +100,7 @@ macro_rules! derive_error_enum {
 	) => {
 
 		#[derive_where::derive_where(Debug, PartialEq; )]
+		#[allow(clippy::allow_attributes)]
 		#[allow(non_camel_case_types)]
 		pub enum $Error<$($ParamName: $ParamType),*> {
 
@@ -198,6 +200,8 @@ pub(crate) use defx;
 #[codec(encode_bound())]
 #[serde(bound = "")]
 #[scale_info(skip_type_params(Tag))]
+#[allow(clippy::allow_attributes)]
+#[allow(dead_code)]
 pub(crate) struct TypesFor<Tag> {
 	_phantom: sp_std::marker::PhantomData<Tag>,
 }

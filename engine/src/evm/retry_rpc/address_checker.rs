@@ -66,7 +66,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.address_states(block_hash, contract_address, addresses).await
 					})
@@ -89,7 +88,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.balances(block_hash, contract_address, addresses).await
 					})
@@ -111,7 +109,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 				),
 				Box::pin(move |client| {
 					let aggregator_addresses = aggregator_addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.query_price_feeds(contract_address, aggregator_addresses).await
 					})

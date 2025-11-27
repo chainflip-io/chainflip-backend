@@ -30,7 +30,7 @@ impl PriceFeedApi for MockPriceFeedApi {
 			.and_then(|price| price.map(|price| OraclePrice { price, stale }))
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 	fn set_price(asset: cf_primitives::Asset, price: Price) {
 		Self::set_price(asset, Some(price));
 	}

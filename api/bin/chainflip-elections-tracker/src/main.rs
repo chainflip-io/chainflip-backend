@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The chainflip elections tracker.
-#![feature(btree_extract_if)]
 
 pub mod elections;
 pub mod trace;
@@ -249,7 +248,7 @@ fn push_traces<T: Tracer + Send>(
 where
 	T::Span: Span + Send + Sync + 'static,
 {
-	let traces = map_with_parent(
+	map_with_parent(
 		diff(current, new),
 		|k, p: Option<&Option<Context>>, d: NodeDiff<Context, TraceInit>| match d {
 			trace::NodeDiff::Left(context) => {
@@ -293,6 +292,5 @@ where
 	)
 	.into_iter()
 	.filter_map(|(k, v)| v.map(|v| (k, v)))
-	.collect();
-	traces
+	.collect()
 }

@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 
 import Keyring from 'polkadot/keyring';
 import {
@@ -16,6 +16,8 @@ import {
   TransactionOrigin,
   defaultAssetAmounts,
   newAssetAddress,
+  getFreeBalance,
+  Assets,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -45,13 +47,9 @@ export async function submitBrokerWithdrawal(
 const feeAsset = Assets.Usdc;
 
 export async function getEarnedBrokerFees(logger: Logger, address: string): Promise<bigint> {
-  await using chainflip = await getChainflipApi();
   logger.debug(`Getting earned broker fees for address: ${address}`);
-  // NOTE: All broker fees are collected in USDC now:
-  const feeStr = (
-    await chainflip.query.assetBalances.freeBalances(address, Assets.Usdc)
-  ).toString();
-  return BigInt(feeStr);
+  // NOTE: All broker fees are collected in USDC
+  return getFreeBalance(address, Assets.Usdc);
 }
 
 /// Runs a swap, checks that the broker fees are collected,

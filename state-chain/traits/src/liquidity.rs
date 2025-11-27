@@ -83,8 +83,7 @@ pub trait LpDepositHandler {
 pub trait LpRegistration {
 	type AccountId;
 
-	/// Register an address for an given account. This is for benchmarking purposes only.
-	#[cfg(feature = "runtime-benchmarks")]
+	/// Register a refund address for an given account.
 	fn register_liquidity_refund_address(
 		who: &Self::AccountId,
 		address: cf_chains::ForeignChainAddress,

@@ -145,7 +145,7 @@ pub fn price_at_tick(tick: Tick) -> Option<Price> {
 	}
 }
 
-/// Converts a `price` to a `tick`. Will return `None` is the price is too high or low to be
+/// Converts a `price` to a `tick`. Will return `None` if the price is too high or low to be
 /// represented by a valid tick i.e. one inside MIN_TICK..=MAX_TICK.
 ///
 /// This function never panics.

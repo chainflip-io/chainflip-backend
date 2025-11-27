@@ -42,6 +42,7 @@ pub struct MockSwapRequest {
 	pub swap_type: SwapRequestType<u64>,
 	pub broker_fees: Beneficiaries<u64>,
 	pub origin: SwapOrigin<u64>,
+	pub dca_params: Option<DcaParameters>,
 }
 
 impl<T> MockPallet for MockSwapRequestHandler<T> {
@@ -94,7 +95,7 @@ where
 		swap_type: SwapRequestType<Self::AccountId>,
 		broker_fees: Beneficiaries<Self::AccountId>,
 		_price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
-		_dca_params: Option<DcaParameters>,
+		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {
 		let swap_request_id =
@@ -112,6 +113,7 @@ where
 						origin,
 						remaining_input_amount: input_amount,
 						accumulated_output_amount: 0,
+						dca_params,
 					},
 				);
 				id
@@ -133,6 +135,9 @@ where
 				SwapOutputAction::CreditLendingPool { .. } => {
 					// do nothing: for now it is the test's responsibility to manually call
 					// process_loan_swap_outcome where required
+				},
+				SwapOutputAction::CreditFlipAndTransferToGateway { .. } => {
+					// do nothing: this behaviour is tested by the swapping pallet's tests
 				},
 			},
 			_ => { /* do nothing */ },

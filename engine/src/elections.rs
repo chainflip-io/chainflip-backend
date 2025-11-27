@@ -253,7 +253,6 @@ where
 											RequestLog::new(format!("{} | {}", self.voter_name, "vote"), Some(format!("{election_identifier:?}"))),
 											Box::pin(move |client| {
 												let election_data = election_data.clone();
-												#[allow(clippy::redundant_async_block)]
 												Box::pin(async move {
 													client.vote(
 														election_data.settings,

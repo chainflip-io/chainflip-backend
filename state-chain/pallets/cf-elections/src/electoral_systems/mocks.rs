@@ -77,6 +77,7 @@ where
 		Self { unsynchronised_state, ..self }
 	}
 
+	#[allow(clippy::allow_attributes)]
 	#[allow(dead_code)]
 	pub fn with_initial_state_map(
 		self,
@@ -88,6 +89,7 @@ where
 		Self { initial_state_map, ..self }
 	}
 
+	#[allow(clippy::allow_attributes)]
 	#[allow(dead_code)]
 	pub fn with_unsynchronised_settings(
 		self,
@@ -171,7 +173,6 @@ where
 	ES::ElectoralUnsynchronisedStateMapKey: Ord,
 {
 	/// Based on some authority count and votes, evaluate the consensus and the final state.
-	#[allow(clippy::type_complexity)]
 	#[track_caller]
 	pub fn expect_consensus(
 		self,
@@ -204,6 +205,7 @@ where
 	// TODO: factor out with above.
 	// Note: it's important that these expectations are executed in order, as some tests rely on
 	// testing that the order several elections are processed does not matter.
+	#[allow(clippy::allow_attributes)]
 	#[allow(dead_code)]
 	pub fn expect_consensus_multi(
 		self,

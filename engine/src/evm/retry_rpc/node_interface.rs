@@ -48,7 +48,6 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 				),
 				Box::pin(move |client| {
 					let tx_data = tx_data.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.gas_estimate_components(

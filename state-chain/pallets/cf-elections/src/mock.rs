@@ -115,6 +115,7 @@ impl TestSetup {
 
 #[derive(Clone, Debug)]
 pub struct TestContext {
+	#[allow(clippy::allow_attributes)]
 	#[allow(dead_code)]
 	pub setup: TestSetup,
 	pub umis: Vec<UniqueMonotonicIdentifier>,

@@ -15,14 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(extract_if)]
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
+#![allow(clippy::allow_attributes)]
 
 use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
 pub use crate::submit_runtime_call::{
-	build_domain_data, BatchedCalls, EthEncodingType, SolEncodingType, TransactionMetadata,
-	DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
+	build_domain_data, is_valid_signature, BatchedCalls, EthEncodingType, SolEncodingType,
+	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
 };
 use cf_chains::{
 	btc::{
@@ -47,8 +47,8 @@ use cf_primitives::{
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
-	Broadcaster, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider, NetworkEnvironmentProvider,
-	SafeMode, SolanaNonceWatch,
+	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
+	NetworkEnvironmentProvider, SafeMode, SolanaNonceWatch,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -97,7 +97,7 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{is_valid_signature, validate_metadata, ChainflipExtrinsic};
+	use crate::submit_runtime_call::{validate_metadata, ChainflipExtrinsic};
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
@@ -424,7 +424,6 @@ pub mod pallet {
 		/// creation transaction and the tx hash and block number of the Polkadot block the
 		/// vault creation transaction was witnessed in. This extrinsic should complete the Polkadot
 		/// initiation process and the vault should rotate successfully.
-		#[allow(unused_variables)]
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -450,7 +449,7 @@ pub mod pallet {
 
 		/// Manually witnesses the current Bitcoin block number to complete the pending vault
 		/// rotation.
-		#[allow(unused_variables)]
+		#[expect(unused_variables)]
 		#[pallet::call_index(2)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -633,7 +632,6 @@ pub mod pallet {
 		/// the assethub creation transaction and the tx hash and block number of the Assethub
 		/// block the vault creation transaction was witnessed in. This extrinsic should complete
 		/// the Assethub initiation process and the vault should rotate successfully.
-		#[allow(unused_variables)]
 		#[pallet::call_index(9)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
@@ -1099,5 +1097,11 @@ impl<T: Config> CompatibleCfeVersions for Pallet<T> {
 impl<T: Config> NetworkEnvironmentProvider for Pallet<T> {
 	fn get_network_environment() -> NetworkEnvironment {
 		Self::network_environment()
+	}
+}
+
+impl<T: Config> ChainflipNetworkInfo for Pallet<T> {
+	fn chainflip_network() -> ChainflipNetwork {
+		ChainflipNetworkName::<T>::get()
 	}
 }

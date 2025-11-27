@@ -76,7 +76,7 @@ struct FeeRateResponse {
 	feerate: Option<Amount>,
 
 	// We need it for the deserialization, but we don't use it.
-	#[allow(dead_code)]
+	#[expect(dead_code)]
 	blocks: u32,
 }
 
@@ -176,7 +176,7 @@ async fn call_rpc_raw(
 		.json::<Vec<serde_json::Value>>()
 		.await
 		.map_err(Error::Transport)
-		.and_then(|result| match params {
+		.and_then(|result| match params.clone() {
 			ReqParams::Batch(params) =>
 				if params.len() == result.len() {
 					// a bunch of json result values containing an error and a result field.
@@ -194,11 +194,20 @@ async fn call_rpc_raw(
 	response
 		.into_iter()
 		.map(|r| {
-			let error = &r["error"];
-			if !error.is_null() {
-				Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+			if r.is_object() {
+				let error = &r["error"];
+				if !error.is_null() {
+					Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+				} else {
+					Ok(r["result"].to_owned())
+				}
 			} else {
-				Ok(r["result"].to_owned())
+				tracing::warn!(
+					"The rpc response returned for {method:?} with params: {params:?}
+					was not a valid json object: {:?}",
+					r.clone()
+				);
+				Err(Error::Rpc(serde_json::from_value(r).map_err(Error::Json)?))
 			}
 		})
 		.collect::<Result<_, Error>>()
@@ -546,7 +555,7 @@ impl BtcRpcApi for BtcRpcClient {
 
 #[cfg(test)]
 mod tests {
-	use cf_utilities::{assert_panics, testing::logging::init_test_logger};
+	use cf_utilities::assert_panics;
 
 	use super::*;
 
@@ -563,8 +572,6 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "requires local node, useful for manual testing"]
 	async fn test_btc_async() {
-		init_test_logger();
-
 		let client = BtcRpcClient::new(
 			HttpBasicAuthEndpoint {
 				http_endpoint: "http://localhost:8332".into(),

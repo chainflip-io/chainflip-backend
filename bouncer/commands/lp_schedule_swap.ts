@@ -12,10 +12,10 @@
  * Example:
  * ./commands/lp_schedule_swap.ts Eth Flip 20
  */
-import { InternalAssets as Assets } from '@chainflip/cli';
 import {
   amountToFineAmount,
   assetDecimals,
+  Assets,
   createStateChainKeypair,
   handleSubstrateError,
   lpMutex,

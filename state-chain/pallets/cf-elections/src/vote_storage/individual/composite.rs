@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::allow_attributes)]
+
 macro_rules! generate_individual_vote_storage_tuple_impls {
     ($module:ident: ($($t:ident),*$(,)?)) => {
         mod $module {

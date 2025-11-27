@@ -104,7 +104,7 @@ async fn call_rpc_raw(
 		"jsonrpc": "2.0",
 		"id": 0,
 		"method": method,
-		"params": params.unwrap_or_else(|| json!([]))
+		"params": params.clone().unwrap_or_else(|| json!([]))
 	});
 
 	let response = client
@@ -118,11 +118,18 @@ async fn call_rpc_raw(
 
 	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
 
-	if json["error"].is_object() {
-		return Err(Error::Rpc(serde_json::from_value(json["error"].clone()).map_err(Error::Json)?));
-	}
+	if json.is_object() {
+		if json["error"].is_object() {
+			return Err(Error::Rpc(
+				serde_json::from_value(json["error"].clone()).map_err(Error::Json)?,
+			));
+		}
 
-	Ok(json["result"].take())
+		Ok(json["result"].take())
+	} else {
+		warn!("The rpc response returned for {method:?} with params: {params:?} was not a valid json object: {json:?}");
+		Err(Error::Rpc(serde_json::from_value(json.clone()).map_err(Error::Json)?))
+	}
 }
 
 async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Result<SolHash> {

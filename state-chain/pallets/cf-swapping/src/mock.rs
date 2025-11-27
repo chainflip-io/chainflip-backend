@@ -18,7 +18,7 @@ use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, ChannelId};
+use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -30,7 +30,7 @@ use cf_traits::{
 		lending_pools::MockLendingSystemApi, pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
+	AccountRoleRegistry, ChannelIdAllocator, GetMinimumFunding, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
@@ -174,6 +174,10 @@ impl WeightInfo for MockWeightInfo {
 	fn set_vault_swap_minimum_broker_fee() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn request_account_creation_deposit_address() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct MockChannelIdAllocator {}
@@ -203,6 +207,10 @@ impl pallet_cf_swapping::Config for Test {
 	type Bonder = MockBonderFor<Self>;
 	type PoolPriceApi = MockPoolPriceApi;
 	type PriceFeedApi = MockPriceFeedApi;
+	type FundAccount = MockFundingInfo<Test>;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = MockChainflipNetworkProvider;
+	type MinimumFunding = MockMinimumFundingProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
@@ -219,4 +227,21 @@ cf_test_utilities::impl_test_helpers! {
 			&LP_ACCOUNT,
 		).unwrap();
 	},
+}
+
+pub struct MockChainflipNetworkProvider;
+
+impl cf_traits::ChainflipNetworkInfo for MockChainflipNetworkProvider {
+	fn chainflip_network() -> ChainflipNetwork {
+		ChainflipNetwork::Development
+	}
+}
+
+pub struct MockMinimumFundingProvider;
+pub const MINIMUM_FUNDING: u128 = 100;
+
+impl GetMinimumFunding for MockMinimumFundingProvider {
+	fn get_min_funding_amount() -> AssetAmount {
+		MINIMUM_FUNDING
+	}
 }

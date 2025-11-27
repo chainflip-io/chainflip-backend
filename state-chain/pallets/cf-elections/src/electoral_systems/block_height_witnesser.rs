@@ -7,7 +7,6 @@ use super::{
 use crate::generic_tools::*;
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
-use derive_where::derive_where;
 use generic_typeinfo_derive::GenericTypeInfo;
 use primitives::NonemptyContinuousHeaders;
 #[cfg(test)]

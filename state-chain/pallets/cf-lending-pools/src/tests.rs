@@ -32,15 +32,6 @@ const TIER_5_BPS: BoostPoolTier = 5;
 const TIER_10_BPS: BoostPoolTier = 10;
 const TIER_30_BPS: BoostPoolTier = 30;
 
-#[test]
-fn test_fee_math() {
-	use crate::utils::*;
-
-	assert_eq!(fee_from_boosted_amount(1_000_000, 10), 1_000);
-
-	assert_eq!(fee_from_provided_amount(1_000_000, 10), Ok(1_001));
-}
-
 const INIT_BOOSTER_ETH_BALANCE: AssetAmount = 1_000_000_000;
 const INIT_BOOSTER_FLIP_BALANCE: AssetAmount = 1_000_000_000;
 
@@ -134,7 +125,7 @@ fn can_update_all_config_items() {
 
 		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
 			target: Permill::from_percent(61),
-			topup: Permill::from_percent(71),
+			topup: Some(Permill::from_percent(71)),
 			soft_liquidation: Permill::from_percent(81),
 			soft_liquidation_abort: Permill::from_percent(80),
 			hard_liquidation: Permill::from_percent(91),
@@ -163,6 +154,7 @@ fn can_update_all_config_items() {
 		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
 		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
+		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
 
 		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
 			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
@@ -216,6 +208,7 @@ fn can_update_all_config_items() {
 			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 			minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+			minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 		};
 
 		// Check that the default values are different from the new ones
@@ -307,6 +300,7 @@ fn can_update_all_config_items() {
 				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
 				minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+				minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
 			}
 		);

@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, InternalAssets as Assets } from '@chainflip/cli';
+import { InternalAsset as Asset } from '@chainflip/cli';
 import assert from 'assert';
 import {
   lpMutex,
@@ -12,6 +12,7 @@ import {
   createStateChainKeypair,
   chainFromAsset,
   runWithTimeout,
+  Assets,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';

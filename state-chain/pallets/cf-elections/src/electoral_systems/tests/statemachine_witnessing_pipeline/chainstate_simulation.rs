@@ -233,7 +233,7 @@ pub struct FlatChain<E> {
 pub fn make_events() -> Vec<String> {
 	let char_stream = (0..26u8)
 		.map(|x| (b'a' + x) as char)
-		.chain((0..26u8).map(|x| ((b'A' + x) as char)))
+		.chain((0..26u8).map(|x| (b'A' + x) as char))
 		.map(|x| x.to_string());
 
 	char_stream

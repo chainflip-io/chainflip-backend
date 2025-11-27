@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#![feature(btree_extract_if)]
 #![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
@@ -70,7 +69,10 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, IntoForeignChainAddress},
 	arb::api::ArbitrumApi,
 	assets::any::{AssetMap, ForeignChainAndAsset},
-	btc::{api::BitcoinApi, BitcoinCrypto, BitcoinRetryPolicy, ScriptPubkey},
+	btc::{
+		api::BitcoinApi, deposit_address::DepositAddress, BitcoinCrypto, BitcoinRetryPolicy,
+		ScriptPubkey,
+	},
 	cf_parameters::build_and_encode_cf_parameters,
 	dot::{self, PolkadotAccountId, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
@@ -78,7 +80,7 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::{SolAddress, SolanaCrypto},
-	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked,
+	Arbitrum, Assethub, Bitcoin, CcmChannelMetadataUnchecked, ChainEnvironment,
 	ChannelRefundParametersUncheckedEncoded, DefaultRetryPolicy, EvmVaultSwapExtraParameters,
 	ForeignChain, Polkadot, Solana, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
@@ -376,6 +378,10 @@ impl pallet_cf_swapping::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type PriceFeedApi = ChainlinkOracle;
 	type LendingSystemApi = LendingPools;
+	type FundAccount = Funding;
+	type MinimumFunding = Funding;
+	type RuntimeCall = RuntimeCall;
+	type ChainflipNetwork = chainflip::ChainflipNetworkProvider;
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
@@ -474,6 +480,8 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
@@ -504,6 +512,8 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
@@ -534,6 +544,8 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
@@ -564,6 +576,8 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
@@ -594,6 +608,8 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
@@ -624,6 +640,8 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type AllowTransactionReports = ConstBool<false>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
 }
 
 impl pallet_cf_pools::Config for Runtime {
@@ -690,6 +708,7 @@ impl pallet_session::historical::Config for Runtime {
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 const BLOCK_LENGTH_RATIO: Perbill = Perbill::from_percent(40);
+pub const MAX_BLOCK_LENGTH: u32 = 1024 * 1024 * 625 / 100; // 6.25 MB
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -701,7 +720,7 @@ parameter_types! {
 			NORMAL_DISPATCH_RATIO,
 		);
 	pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
-		::max_with_normal_ratio(1024 * 1024 * 625 / 100, BLOCK_LENGTH_RATIO);
+		::max_with_normal_ratio(MAX_BLOCK_LENGTH, BLOCK_LENGTH_RATIO);
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -866,7 +885,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
-	type FlipToBurn = Swapping;
+	type FlipToBurnOrMove = Swapping;
 	type EgressHandler = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type SafeMode = RuntimeSafeMode;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
@@ -1539,6 +1558,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 	}
 }
 
+#[allow(clippy::allow_attributes)]
 #[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(
@@ -2637,7 +2657,7 @@ impl_runtime_apis! {
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels> {
 			use sp_std::collections::btree_set::BTreeSet;
 
-			#[allow(clippy::type_complexity)]
+			#[expect(clippy::type_complexity)]
 			fn open_deposit_channels_for_chain_instance<T: pallet_cf_ingress_egress::Config<I>, I: 'static>()
 				-> BTreeMap<(<T as frame_system::Config>::AccountId, ChannelActionType), Vec<(EncodedAddress, Asset)>>
 			{
@@ -2739,21 +2759,41 @@ impl_runtime_apis! {
 		}
 
 		fn cf_vault_addresses() -> VaultAddresses {
+			let bitcoin_agg_key = <BtcEnvironment as ChainEnvironment<_, cf_chains::btc::AggKey>>::lookup(());
+			let solana_api_environment = Environment::solana_api_environment();
 			VaultAddresses {
 				ethereum: EncodedAddress::Eth(Environment::eth_vault_address().into()),
 				arbitrum: EncodedAddress::Arb(Environment::arb_vault_address().into()),
 				bitcoin: BrokerPrivateBtcChannels::<Runtime>::iter()
-					.flat_map(|(account_id, channel_id)| {
-						let BitcoinPrivateBrokerDepositAddresses { previous, current } = derive_btc_vault_deposit_addresses(channel_id)
+					.map(|(account_id, channel_id)| {
+						let BitcoinPrivateBrokerDepositAddresses { previous: _, current } = derive_btc_vault_deposit_addresses(channel_id)
 							.with_encoded_addresses();
-						previous.into_iter().chain(core::iter::once(current))
-							.map(move |address| (account_id.clone(), address))
+						(account_id, current)
 					})
 					.collect(),
 
-				sol_vault_program: Environment::solana_api_environment().vault_program.into(),
-				sol_swap_endpoint_program_data_account: Environment::solana_api_environment().swap_endpoint_program_data_account.into(),
+				sol_vault_program: solana_api_environment.vault_program.into(),
+				sol_swap_endpoint_program_data_account: solana_api_environment.swap_endpoint_program_data_account.into(),
 				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
+				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
+				solana_usdc_token_vault_ata: solana_api_environment.usdc_token_vault_ata.into(),
+				solana_vault_swap_account: sol_prim::address_derivation::derive_swap_endpoint_native_vault_account(
+					solana_api_environment.swap_endpoint_program
+				).ok().map(|account| account.address.into()),
+				bitcoin_vault: bitcoin_agg_key.map(|agg_key| {
+					let vault_address = DepositAddress::new(agg_key.current, 0);
+					EncodedAddress::from_chain_account::<Bitcoin>(
+						vault_address.script_pubkey(),
+						Environment::network_environment(),
+					)
+				}),
+				predicted_seconds_until_next_vault_rotation: {
+					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
+					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();
+					let current_height = crate::System::block_number();
+					let blocks_left = started.saturating_add(duration).saturating_sub(current_height);
+					blocks_left as u64 * cf_primitives::SECONDS_PER_BLOCK
+				}
 			}
 		}
 
@@ -2867,6 +2907,7 @@ impl_runtime_apis! {
 				hard_liquidation_max_oracle_slippage: config.hard_liquidation_max_oracle_slippage,
 				fee_swap_max_oracle_slippage: config.fee_swap_max_oracle_slippage,
 				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
+				minimum_supply_amount_usd: config.minimum_supply_amount_usd.into(),
 				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
 				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
 			}
@@ -3448,7 +3489,7 @@ impl_runtime_apis! {
 			(list, storage_info)
 		}
 
-		#[allow(non_local_definitions)]
+		#[expect(non_local_definitions)]
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig
 		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {

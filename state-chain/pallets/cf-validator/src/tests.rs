@@ -2645,7 +2645,7 @@ pub mod auction_optimization {
 		}
 	}
 
-	#[allow(clippy::type_complexity)]
+	#[expect(clippy::type_complexity)]
 	fn create_operator_bids_combinations<A>(
 		bid_combos: Vec<(Vec<A>, Vec<A>, Vec<ValidatorId>, A)>,
 	) -> Vec<(Vec<Bid<ValidatorId, A>>, Vec<Bid<ValidatorId, A>>, Vec<ValidatorId>, A)> {

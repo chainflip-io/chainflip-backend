@@ -22,7 +22,7 @@ use crate::{
 	*,
 };
 use evm::api::{all_batch, set_agg_key_with_agg_key};
-use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
 use self::evm::{api::transfer_fallback, Address, EvmCrypto};
@@ -38,7 +38,7 @@ pub enum ArbitrumApi<Environment: 'static> {
 	RejectCall(EvmTransactionBuilder<all_batch::AllBatch>),
 	#[doc(hidden)]
 	#[codec(skip)]
-	_Phantom(PhantomData<Environment>, Never),
+	_Phantom(PhantomData<Environment>),
 }
 
 impl<E> SetAggKeyWithAggKey<EvmCrypto> for ArbitrumApi<E>
@@ -173,19 +173,23 @@ where
 {
 	fn new_unsigned(
 		_deposit_details: <Arbitrum as Chain>::DepositDetails,
-		refund_address: <Arbitrum as Chain>::ChainAccount,
-		refund_amount: Option<<Arbitrum as Chain>::ChainAmount>,
 		asset: <Arbitrum as Chain>::ChainAsset,
-		deposit_fetch_id: Option<<Arbitrum as Chain>::DepositFetchId>,
+		fetch: FetchForRejection<Arbitrum>,
+		transfer: TransferForRejection<Arbitrum>,
 	) -> Result<Self, RejectError> {
+		use FetchForRejection::*;
+		use TransferForRejection::*;
+
 		match evm_all_batch_builder::<Arbitrum, _>(
-			deposit_fetch_id
-				.map(|id| vec![FetchAssetParams { deposit_fetch_id: id, asset }])
-				.unwrap_or_default(),
-			refund_amount
-				.map(|amount| TransferAssetParams { asset, amount, to: refund_address })
-				.into_iter()
-				.collect(),
+			match fetch {
+				Fetch { deposit_fetch_id } => vec![FetchAssetParams { deposit_fetch_id, asset }],
+				NotRequired => vec![],
+			},
+			match transfer {
+				Transfer { address, amount } =>
+					vec![TransferAssetParams { asset, amount, to: address }],
+				TransferWillBeCcmCallAndIsHandledSeparately => vec![],
+			},
 			E::token_address,
 			E::replay_protection(E::vault_address()),
 		) {

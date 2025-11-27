@@ -20,7 +20,7 @@ use crate::{mock::*, Event, LastSupplyUpdateBlock, Pallet, BURN_FEE_MULTIPLE};
 use cf_primitives::SECONDS_PER_BLOCK;
 use cf_test_utilities::{assert_has_event, assert_has_matching_event};
 use cf_traits::{
-	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnInfo},
+	mocks::{egress_handler::MockEgressHandler, flip_burn_info::MockFlipBurnOrMoveInfo},
 	SetSafeMode,
 };
 use frame_support::{
@@ -224,7 +224,7 @@ fn dont_burn_flip_below_threshold() {
 			"Expected total issuance to remain unchanged"
 		);
 		assert_eq!(
-			MockFlipBurnInfo::peek_flip_to_burn(),
+			MockFlipBurnOrMoveInfo::peek_flip_to_burn(),
 			FLIP_TO_BURN,
 			"Expected flip to remain available."
 		);
@@ -247,7 +247,7 @@ fn dont_burn_flip_below_threshold() {
 			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
 			"Expected total issuance to be reduced by net egress amount."
 		);
-		assert_eq!(MockFlipBurnInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
 	});
 }
 
@@ -262,6 +262,38 @@ fn ensure_governance_origin_checks() {
 		assert_noop!(
 			Emissions::update_supply_update_interval(non_gov_origin, 0),
 			sp_runtime::traits::BadOrigin,
+		);
+	});
+}
+
+#[test]
+fn burn_also_moves_flip_to_gateway() {
+	new_test_ext().execute_with(|| {
+		// Set a lower fee.
+		const LOW_FEE: u128 = FLIP_TO_BURN / BURN_FEE_MULTIPLE / 2;
+		MockEgressHandler::<Ethereum>::set_fee(LOW_FEE);
+		// Flip are sent to the gateway in the same egress as the burn but they are not counted in
+		// the burning
+		MockFlipBurnOrMoveInfo::set_flip_to_be_sent_to_gateway(1_000);
+
+		Pallet::<Test>::burn_flip_network_fee();
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Emissions(Event::NetworkFeeBurned {
+				amount,
+				..
+			}) if *amount == FLIP_TO_BURN - LOW_FEE,
+		);
+		assert_eq!(
+			Flip::<Test>::total_issuance(),
+			TOTAL_ISSUANCE - (FLIP_TO_BURN - LOW_FEE),
+			"Expected total issuance to be reduced by net egress amount."
+		);
+		assert_eq!(MockFlipBurnOrMoveInfo::peek_flip_to_burn(), 0, "Expected flip to be burned.");
+		assert_eq!(
+			MockFlipBurnOrMoveInfo::peek_flip_to_be_sent_to_gateway(),
+			0,
+			"Expected flip to be moved to gateway."
 		);
 	});
 }

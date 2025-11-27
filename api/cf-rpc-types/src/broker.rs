@@ -16,7 +16,7 @@
 
 use anyhow::bail;
 
-use crate::{RefundParametersRpc, H256, U256};
+use crate::{AccountId32, RefundParametersRpc, H256, U256};
 use cf_chains::{
 	sol::SolAddress, Chain, ChainCrypto, ForeignChain, VaultSwapExtraParametersEncoded,
 	VaultSwapInputEncoded,
@@ -42,6 +42,17 @@ pub struct SwapDepositAddress {
 	pub source_chain_expiry_block: NumberOrHex,
 	pub channel_opening_fee: U256,
 	pub refund_parameters: RefundParametersRpc,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AccountCreationDepositAddress {
+	pub issued_block: state_chain_runtime::BlockNumber,
+	pub channel_id: ChannelId,
+	pub address: AddressString,
+	pub requested_for: AccountId32,
+	pub deposit_chain_expiry_block: NumberOrHex,
+	pub channel_opening_fee: U256,
+	pub refund_address: AddressString,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

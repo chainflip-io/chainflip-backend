@@ -75,7 +75,6 @@ pub mod pallet {
 	/// impl Default for ChainState.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
-	#[allow(clippy::type_complexity)]
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChainState<T::TargetChain>>;
 

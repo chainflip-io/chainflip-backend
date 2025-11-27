@@ -62,7 +62,7 @@ fn both_fok_and_regular_swaps_succeed_first_try(is_ccm: bool) {
 
 			let refund_parameters_encoded = REFUND_PARAMS.into_extended_params(INPUT_AMOUNT);
 
-			insert_swaps(&vec![fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
+			insert_swaps(&[fok_swap(None, is_ccm), fok_swap(Some(REFUND_PARAMS), is_ccm)]);
 
 			assert_has_matching_event!(
 				Test,
@@ -130,7 +130,7 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
-			insert_swaps(&vec![
+			insert_swaps(&[
 				fok_swap(None, is_ccm),
 				fok_swap(
 					Some(TestRefundParams {
@@ -976,8 +976,8 @@ mod oracle_swaps {
 		const OUTPUT_AMOUNT: AssetAmount = 5200905; // 0.052 BTC
 
 		// Real price values
-		static ETH_PRICE: &str = "1564376722621961188695537"; // $4597.29
-		static BTC_PRICE: &str = "378682551463232527188289505131228391"; // $111284.80
+		static ETH_PRICE: &str = "1564376722621961188695537448999"; // $4597.29
+		static BTC_PRICE: &str = "378682551463232527188289505131228390582386"; // $111284.80
 
 		// oracle amount = 5,205,144
 		// delta = 0.00081438669% = 8.14 bps

@@ -28,14 +28,16 @@ use cf_node_client::{
 use cf_primitives::{Affiliates, Asset, BasisPoints, ChannelId};
 use cf_rpc_apis::{
 	broker::{
-		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc, BrokerRpcApiServer,
-		DcaParameters, GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
+		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
+		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters,
+		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
+use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
 use pallet_cf_swapping::AffiliateDetails;
 use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
@@ -153,6 +155,44 @@ where
 				.map_address(|refund_address| {
 					AddressString::from_encoded_address(&refund_address.0)
 				}),
+			}
+		)
+		.map_err(CfApiError::from)?)
+	}
+
+	async fn extract_account_creation_deposit_address(
+		&self,
+		block_hash: Hash,
+		tx_index: TxIndex,
+	) -> RpcResult<AccountCreationDepositAddress> {
+		let ExtrinsicData { events, header, .. } = self
+			.signed_pool_client
+			.get_extrinsic_data_dynamic(block_hash, tx_index)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(extract_from_first_matching_event!(
+			events,
+			cf_static_runtime::swapping::events::AccountCreationDepositAddressReady,
+			{
+				channel_id,
+				asset,
+				deposit_address,
+				requested_by,
+				requested_for,
+				deposit_chain_expiry_block,
+				boost_fee,
+				channel_opening_fee,
+				refund_address
+			},
+			AccountCreationDepositAddress {
+				channel_id,
+				issued_block: header.number,
+				address: AddressString::from_encoded_address(deposit_address.0),
+				requested_for: AccountId32::from(requested_for.0),
+				deposit_chain_expiry_block: deposit_chain_expiry_block.into(),
+				channel_opening_fee: channel_opening_fee.into(),
+				refund_address: AddressString::from_encoded_address(refund_address.0),
 			}
 		)
 		.map_err(CfApiError::from)?)
@@ -602,5 +642,59 @@ where
 			.map_err(CfApiError::from)?;
 
 		Ok(tx_hash)
+	}
+
+	async fn request_account_creation_deposit_address(
+		&self,
+		signature_data: SignatureData,
+		transaction_metadata: TransactionMetadata,
+		asset: Asset,
+		boost_fee: Option<BasisPoints>,
+		refund_address: AddressString,
+	) -> RpcResult<AccountCreationDepositAddress> {
+		let mut status_stream = self
+			.signed_pool_client
+			.submit_watch(
+				RuntimeCall::from(
+					pallet_cf_swapping::Call::request_account_creation_deposit_address {
+						signature_data,
+						transaction_metadata,
+						asset,
+						boost_fee: boost_fee.unwrap_or_default(),
+						refund_address: refund_address
+							.try_parse_to_encoded_address(asset.into())?,
+					},
+				),
+				true,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		// Get the pre-allocated channels from the previous finalized block
+		let pre_allocated_channels = get_preallocated_channels(
+			&self.rpc_backend,
+			self.signed_pool_client.account_id(),
+			asset.into(),
+		)?;
+
+		while let Some(status) = status_stream.next().await {
+			match status {
+				TransactionStatus::InBlock((block_hash, tx_index)) => {
+					let swap_deposit_address =
+						self.extract_account_creation_deposit_address(block_hash, tx_index).await?;
+
+					// If the extracted deposit channel was pre-allocated to this broker
+					// in the previous finalized block, we can return it immediately.
+					// Otherwise, we need to wait for the transaction to be finalized.
+					if pre_allocated_channels.contains(&swap_deposit_address.channel_id) {
+						return Ok(swap_deposit_address);
+					}
+				},
+				TransactionStatus::Finalized((block_hash, tx_index)) =>
+					return self.extract_account_creation_deposit_address(block_hash, tx_index).await,
+				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
+			}
+		}
+		Err(CfApiError::from(PoolClientError::UnexpectedEndOfStream))?
 	}
 }

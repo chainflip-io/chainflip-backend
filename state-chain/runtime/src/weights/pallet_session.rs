@@ -50,7 +50,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:2 w:4)
 	fn set_keys() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
 		(Weight::from_parts(29_000_000, 0)
 )
 			.saturating_add(T::DbWeight::get().reads(3u64))
@@ -59,7 +58,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Session NextKeys (r:1 w:1)
 	// Storage: Session KeyOwner (r:0 w:2)
 	fn purge_keys() -> Weight {
-		#[allow(clippy::unnecessary_cast)]
 		(Weight::from_parts(24_000_000, 0)
 )
 			.saturating_add(T::DbWeight::get().reads(1u64))

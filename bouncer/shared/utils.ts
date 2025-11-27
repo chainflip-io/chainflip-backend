@@ -10,10 +10,17 @@ import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
   InternalAsset as SDKAsset,
-  InternalAssets as Assets,
   assetConstants,
   chainConstants,
+  chainflipAssets,
+  chainflipChains,
 } from '@chainflip/cli';
+import {
+  chainContractId,
+  assetContractId,
+  AssetAndChain,
+  AssetSymbol,
+} from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
@@ -37,6 +44,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -53,6 +61,14 @@ export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitc
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
 export const testInfoFile = '/tmp/chainflip/test_info.csv';
+
+export const Assets = Object.fromEntries(chainflipAssets.map((asset) => [asset, asset])) as {
+  [K in (typeof chainflipAssets)[number]]: K;
+};
+
+export const Chains = Object.fromEntries(chainflipChains.map((chain) => [chain, chain])) as {
+  [K in (typeof chainflipChains)[number]]: K;
+};
 
 export type Asset = SDKAsset;
 export type Chain = SDKChain;
@@ -269,8 +285,8 @@ export function defaultAssetAmounts(asset: Asset): string {
   }
 }
 
-export function assetContractId(asset: Asset): number {
-  if (isSDKAsset(asset)) return assetConstants[asset].contractId;
+export function getAssetContractId(asset: Asset): number {
+  if (isSDKAsset(asset)) return assetContractId[asset];
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -279,8 +295,8 @@ export function assetDecimals(asset: Asset): number {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
-export function chainContractId(chain: Chain): number {
-  if (isSDKChain(chain)) return chainConstants[chain].contractId;
+export function getChainContractId(chain: Chain): number {
+  if (isSDKChain(chain)) return chainContractId[chain];
   throw new Error(`Unsupported chain: ${chain}`);
 }
 
@@ -306,14 +322,6 @@ export function chainGasAsset(chain: Chain): Asset {
 export function amountToFineAmountBigInt(amount: number | string, asset: Asset): bigint {
   const stringAmount = typeof amount === 'number' ? amount.toString() : amount;
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
-}
-
-// State Chain uses non-unique string identifiers for assets.
-export function stateChainAssetFromAsset(asset: Asset): string {
-  if (isSDKAsset(asset)) {
-    return assetConstants[asset].asset;
-  }
-  throw new Error(`Unsupported asset: ${asset}`);
 }
 
 export async function runWithTimeout<T>(
@@ -674,6 +682,16 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
+export function stateChainAssetFromAsset(asset: Asset): AssetAndChain {
+  if (isSDKAsset(asset)) {
+    return {
+      chain: chainFromAsset(asset),
+      asset: assetConstants[asset].symbol as AssetSymbol,
+    } as AssetAndChain;
+  }
+  throw new Error(`Unsupported asset: ${asset}`);
+}
+
 // Returns an address that can hold an asset and can be used as a destination
 // address of a swap or a refund address. If it's a CCM swap or refund, the
 // returned address is a valid CCM receiver.
@@ -975,7 +993,7 @@ export async function observeCcmReceived(
         destAddress,
         'ReceivedxSwapAndCall',
         [
-          chainContractId(chainFromAsset(sourceAsset)).toString(),
+          getChainContractId(chainFromAsset(sourceAsset)).toString(),
           sourceAddress ?? null,
           messageMetadata.message,
           getContractAddress(destChain, destAsset.toString()),
@@ -988,7 +1006,7 @@ export async function observeCcmReceived(
     case 'Solana':
       return observeSolanaCcmEvent(
         'ReceivedCcm',
-        chainContractId(chainFromAsset(sourceAsset)).toString(),
+        getChainContractId(chainFromAsset(sourceAsset)).toString(),
         sourceAddress ?? null,
         messageMetadata,
       );
@@ -1110,7 +1128,7 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.debug(`Extrinsic status: ${status.toString()}`);
+      logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         try {
@@ -1204,14 +1222,8 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
     'cf_swap_rate',
-    {
-      chain: chainFromAsset(from),
-      asset: stateChainAssetFromAsset(from),
-    },
-    {
-      chain: chainFromAsset(to),
-      asset: stateChainAssetFromAsset(to),
-    },
+    stateChainAssetFromAsset(from),
+    stateChainAssetFromAsset(to),
     Number(fineFromAmount).toString(16),
   )) as SwapRate;
 
@@ -1316,6 +1328,7 @@ export async function startEngines(
   localnetInitPath: string,
   binaryPath: string,
   numberOfNodes: 1 | 3,
+  logSuffix = '',
 ) {
   console.log('Starting all the engines');
 
@@ -1323,10 +1336,10 @@ export async function startEngines(
   await execWithLog(
     `${localnetInitPath}/scripts/start-all-engines.sh`,
     [],
-    'start-all-engines-pre-upgrade',
+    'start-all-engines' + logSuffix,
     {
       INIT_RUN: 'false',
-      LOG_SUFFIX: '-pre-upgrade',
+      LOG_SUFFIX: logSuffix,
       NODE_COUNT: nodeCount,
       SELECTED_NODES,
       LOCALNET_INIT_DIR: localnetInitPath,
@@ -1451,4 +1464,49 @@ export async function retryRpcCall<T>(
   }
 
   throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+}
+
+/// Returns the statechain "free balance" of an LP account for a specific asset.
+export async function getFreeBalance(accountAddress: string, asset: Asset): Promise<bigint> {
+  await using chainflip = await getChainflipApi();
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()
+  );
+}
+
+/// Submits an extrinsic and finds a specific event in the returned events.
+export async function submitExtrinsic(
+  uri: string,
+  api: ApiPromise,
+  extrinsic: SubmittableExtrinsic<'promise'>,
+  findEvent: string,
+  logger: Logger,
+  mutex = lpMutex,
+) {
+  const account = createStateChainKeypair(uri);
+  const [expectedSection, expectedMethod] = findEvent.split(':');
+  const release = await mutex.acquire(uri);
+  const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
+  const nonce = (await api.rpc.system.accountNextIndex(account.address)) as unknown as number;
+  const unsub = await extrinsic.signAndSend(account, { nonce }, waiter);
+  let events: EventRecord[] = [];
+  try {
+    events = await promise;
+  } catch (error) {
+    unsub();
+    throw error;
+  }
+  unsub();
+  release();
+
+  const eventRecord = events.find(
+    ({ event }) => event.section === expectedSection && event.method === expectedMethod,
+  )!;
+  if (!eventRecord) {
+    throw new Error(
+      `Didn't find event ${findEvent} after submitting extrinsic ${extrinsic.meta.name}`,
+    );
+  }
+  return eventRecord.event as unknown as Event;
 }

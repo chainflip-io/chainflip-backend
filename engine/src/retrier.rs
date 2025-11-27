@@ -380,7 +380,9 @@ impl RetryLimitReturn for NoRetryLimit {
 		inner: Result<BoxAny, tokio::sync::oneshot::error::RecvError>,
 		_log_message: String,
 	) -> Self::ReturnType<T> {
-		let result: BoxAny = inner.unwrap();
+		let result: BoxAny = inner.expect(
+			"Since there is no limit on the number of retries, we should eventually get a value",
+		);
 		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
 	}
 }

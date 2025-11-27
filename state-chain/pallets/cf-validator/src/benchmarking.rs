@@ -121,7 +121,7 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
-#[allow(clippy::multiple_bound_locations)]
+#[expect(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
 	use super::*;

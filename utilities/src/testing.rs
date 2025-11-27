@@ -51,9 +51,6 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
 	(tempdir, tempfile)
 }
 
-// Note: Clippy seems to throw a false positive without this.
-// (as of `clippy 0.1.73 (a17c7968 2023-07-30)`).
-#[allow(clippy::needless_pass_by_ref_mut)]
 pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
 	recv_with_custom_timeout(receiver, CHANNEL_TIMEOUT).await
 }

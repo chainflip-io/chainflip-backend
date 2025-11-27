@@ -15,7 +15,9 @@ codec = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
 
 anyhow = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 hex = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
@@ -39,7 +41,8 @@ pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-lending-pools = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
 pallet-cf-elections = { workspace = true, default-features = true }
-ethereum-eip712 = { workspace = true }
+ethereum-eip712 = { workspace = true, features = ["std"] }
+ethers-core = { workspace = true }
 
 sp-api = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }

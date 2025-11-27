@@ -67,15 +67,7 @@ mod benchmarks {
 	}
 
 	#[cfg(test)]
-	use crate::mock::*;
+	use crate::mock::{new_test_ext, Test};
 
-	#[test]
-	fn benchmark_works() {
-		new_test_ext().execute_with(|| {
-			_vault_key_rotated_externally::<Test, ()>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_initialize_chain::<Test, ()>(true);
-		});
-	}
+	impl_benchmark_test_suite!(Pallet, new_test_ext(), Test);
 }

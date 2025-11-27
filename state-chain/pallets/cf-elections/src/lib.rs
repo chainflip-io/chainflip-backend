@@ -122,13 +122,11 @@
 #![feature(step_trait)]
 #![feature(trait_alias)]
 #![feature(unsized_const_params)]
-#![feature(btree_extract_if)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iter_intersperse)]
 #![feature(associated_type_defaults)]
 #![feature(generic_const_items)]
 #![feature(adt_const_params)]
-#![feature(generic_arg_infer)]
 #![cfg_attr(test, feature(closure_track_caller))]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../README.md")]
@@ -223,7 +221,7 @@ pub mod pallet {
 
 	/// This is the information exposed via RPC to the engine each block so it can decide how and
 	/// when to vote.
-	#[allow(type_alias_bounds)]
+	#[expect(type_alias_bounds)]
 	pub type ElectoralDataFor<T: Config<I>, I: 'static> = ElectoralData<
 		ElectionIdentifierOf<T::ElectoralSystemRunner>,
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralSettings,
@@ -322,7 +320,7 @@ pub mod pallet {
 			/// create without it) so it is easier to find all locations we create the error, and so
 			/// every location will log.
 			#[track_caller]
-			#[allow(clippy::new_without_default)]
+			#[expect(clippy::new_without_default)]
 			pub fn new() -> Self {
 				log::error!(
 					"Election pallet CorruptStorageError at '{}'.",
@@ -367,7 +365,7 @@ pub mod pallet {
 		}
 	}
 
-	#[allow(type_alias_bounds)]
+	#[expect(type_alias_bounds)]
 	pub type InitialStateOf<T: Config<I>, I: 'static> = InitialState<
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedState,
 		<T::ElectoralSystemRunner as ElectoralSystemTypes>::ElectoralUnsynchronisedSettings,
@@ -377,7 +375,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		#[allow(clippy::type_complexity)]
 		pub option_initial_state: Option<InitialStateOf<T, I>>,
 	}
 
@@ -1013,7 +1010,7 @@ pub mod pallet {
 		pub struct ElectionBitmapComponents<T: Config<I>, I: 'static> {
 			#[skip_name_expansion]
 			epoch: EpochIndex,
-			#[allow(clippy::type_complexity)]
+			#[expect(clippy::type_complexity)]
 			#[skip_name_expansion]
 			pub bitmaps:
 				Vec<(BitmapComponentOf<T::ElectoralSystemRunner>, BitVec<u8, bitvec::order::Lsb0>)>,
@@ -1800,7 +1797,6 @@ pub mod pallet {
 
 		/// Returns all the current elections (with their details), the validators current votes and
 		/// if the validator should vote in each election.
-		#[allow(clippy::type_complexity)]
 		pub fn electoral_data(validator_id: &T::ValidatorId) -> Option<ElectoralDataFor<T, I>> {
 			use frame_support::traits::OriginTrait;
 
@@ -1981,7 +1977,7 @@ pub mod pallet {
 							))
 						})
 						.filter_ok(|(_election_identifier, needed)| *needed)
-						.map_ok(|(election_identifier, _needed)| (election_identifier))
+						.map_ok(|(election_identifier, _needed)| election_identifier)
 						.collect::<Result<BTreeSet<_>, _>>()
 				})
 				.unwrap_or_default()
@@ -2067,7 +2063,7 @@ pub mod pallet {
 			)
 		}
 
-		#[allow(clippy::type_complexity)]
+		#[expect(clippy::type_complexity)]
 		fn get_vote<VisitUnprovidedSharedData: FnMut(SharedDataHash)>(
 			epoch_index: EpochIndex,
 			unique_monotonic_identifier: UniqueMonotonicIdentifier,

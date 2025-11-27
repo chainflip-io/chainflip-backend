@@ -126,7 +126,7 @@ pub fn chainlink_price_to_statechain_price(
 	Some(price)
 }
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 pub fn statechain_price_to_chainlink_price(
 	price: &StatechainPrice,
 	assetpair: ChainlinkAssetpair,
@@ -198,8 +198,8 @@ mod tests {
 	use sp_core::U256;
 
 	#[test]
-	#[allow(clippy::inconsistent_digit_grouping)]
-	#[allow(clippy::identity_op)]
+	#[expect(clippy::inconsistent_digit_grouping)]
+	#[expect(clippy::identity_op)]
 	fn test_price_conversion() {
 		// chainlink prices have 8 decimals
 		assert_eq!(ChainlinkPrice::denominator(), U256::from(100_000_000u128));

@@ -53,7 +53,6 @@ impl<
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		let (inner_stream, inner_client) = self.inner_source.stream_and_client().await;
 
-		#[allow(clippy::redundant_async_block)]
 		(
 			inner_stream
 				.then(move |header| {

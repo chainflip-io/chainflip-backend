@@ -3,11 +3,8 @@
 
 pub mod chainstate_simulation;
 
-use codec::{EncodeLike, WrapperTypeDecode, WrapperTypeEncode};
-use core::{fmt::Display, ops::Deref};
 use itertools::Either;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
-use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 use std::collections::{BTreeSet, VecDeque};
 
@@ -33,50 +30,13 @@ use crate::electoral_systems::{
 };
 use chainstate_simulation::*;
 
-#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
-struct EncodableChar(u8);
-impl Deref for EncodableChar {
-	type Target = u8;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-impl From<u8> for EncodableChar {
-	fn from(value: u8) -> Self {
-		Self(value)
-	}
-}
-impl WrapperTypeDecode for EncodableChar {
-	type Wrapped = u8;
-}
-impl WrapperTypeEncode for EncodableChar {}
-impl EncodeLike<u8> for EncodableChar {}
-impl Debug for EncodableChar {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-impl Display for EncodableChar {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{}", self.0)
-	}
-}
-impl Validate for EncodableChar {
-	type Error = ();
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		Ok(())
-	}
-}
-
 macro_rules! try_get {
     ($($tt:tt)+) => {
         |x| match x {$($tt)+(x) => Some(x), _ => None}
     };
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub trait AbstractVoter<M: Statemachine> {
 	fn vote(
 		&mut self,
@@ -87,9 +47,8 @@ pub trait AbstractVoter<M: Statemachine> {
 type Event = String;
 type Types = TypesFor<(u8, u32, Vec<Event>)>;
 
-#[allow(clippy::upper_case_acronyms)]
 type BW = BWStatemachine<Types>;
-#[allow(clippy::upper_case_acronyms)]
+#[expect(clippy::upper_case_acronyms)]
 type BHW = BlockHeightWitnesser<Types>;
 
 const OFFSET: usize = 20;
@@ -205,7 +164,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	enum BWTrace<T: BWTypes, T0: BHWTypes> {
 		Input(InputOf<BWStatemachine<T>>),
 		InputBHW(InputOf<BlockHeightWitnesser<T0>>),
-		#[allow(dead_code)]
+		#[expect(dead_code)]
 		Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
 		Event(BlockProcessorEvent<T>),
 		ET(ElectionTrackerEvent<T>),

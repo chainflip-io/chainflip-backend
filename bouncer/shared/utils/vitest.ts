@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { TestContext } from 'shared/utils/test_context';
-import { runWithTimeout, testInfoFile } from 'shared/utils';
+import { runWithTimeout, sleep, testInfoFile } from 'shared/utils';
 import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
@@ -46,6 +46,7 @@ function createTestFunction(
     const tagExists = !!context.testContext.logger.bindings().tag;
 
     // Run the test with the test context
+    const start = Date.now();
     await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch(async (error) => {
       // We must catch the error here to be able to log it
       context.testContext.error(error);
@@ -69,7 +70,15 @@ function createTestFunction(
       // re-throw error with logs
       throw new Error(`${error}\n\n${fullLogs}`);
     });
-    context.testContext.logger.info(`✅ Finished test ${name}`);
+    const executionTime = (Date.now() - start) / 1000;
+    if (executionTime > timeoutSeconds * 0.9) {
+      context.testContext.logger.warn(
+        `Execution time was close to the timeout: ${executionTime}/${timeoutSeconds}s`,
+      );
+    }
+    context.testContext.logger.info(`✅ Finished test ${name} in ${Math.round(executionTime)}s`);
+    // Small delay to ensure the logs are printed to the stdout.
+    await sleep(1000);
   };
 }
 export function concurrentTest(
