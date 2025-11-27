@@ -490,6 +490,7 @@ interface BaseOptions<Z extends z.ZodTypeAny> {
   finalized?: boolean;
   historicalCheckBlocks?: number;
   timeoutSeconds?: number;
+  temporalOptions?: TemporalOptions;
   stopAfter?: { blocks: number } | 'Never' | 'Any';
   schema?: Z;
 }
@@ -512,6 +513,10 @@ type AbortableObserver<Z extends z.ZodTypeAny> = {
   stop: () => void;
   events: Promise<Event<z.output<Z>>[] | null>;
 };
+
+type TemporalOptions = {
+  startFrom: number,
+}
 
 export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
@@ -538,7 +543,8 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     timeoutSeconds = 0,
     abortable = false,
     stopAfter = 'Any',
-    schema
+    schema,
+    temporalOptions
   }: Options<Z> | AbortableOptions<Z> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -546,6 +552,24 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger.debug(`Observing event ${eventName}`);
 
   const eventSchema = createEventSchema(schema ?? z.any()) as EventSchema<Z>;
+
+  let newTestFunction: (event: Event<any>) => boolean;
+  if (schema) {
+    newTestFunction = (event: Event<any>) => {
+      return schema.safeParse(event).success;
+    };
+  } else {
+    newTestFunction = (event: Event<any>) => {
+        if (
+          event.name.section.includes(expectedSection) &&
+          event.name.method.includes(expectedMethod)
+        ) {
+          return (test(event.data))
+        } else {
+          return false
+        }
+    }
+  }
 
   const controller = abortable ? new AbortController() : undefined;
 
@@ -569,19 +593,14 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
       let stop = false;
       const foundEvents: Event[] = [];
       for (const event of events) {
-        if (
-          event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod)
-        ) {
-          if (test(eventSchema.parse(event))) {
-            logger.debug(
-              `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
-            );
-            logger.info(`${JSON.stringify(event.data)}`);
-            foundEvents.push(event);
-            if (stopAfter === 'Any') {
-              stop = true;
-            }
+        if (newTestFunction(event)) {
+          logger.debug(
+            `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
+          );
+          logger.info(`${JSON.stringify(event)}`);
+          foundEvents.push(event);
+          if (stopAfter === 'Any') {
+            stop = true;
           }
         }
       }
@@ -610,6 +629,17 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
       return foundEvents;
     }
     logger.trace(`No ${eventName} events found in the first batch.`);
+
+    //---------- check older blocks -------
+    if (temporalOptions?.startFrom) {
+      logger.info(`temporal options set!`);
+      const difference = latestResult.value.header.number.toNumber() - temporalOptions.startFrom;
+      logger.info(`difference is: ${difference}`);
+      if (difference > 0) {
+        logger.info(`We want to check starting from ${temporalOptions.startFrom}, but current block is ${difference} blocks in the future. Checking ${difference} historical blocks.`);
+        historicalCheckBlocks = difference;
+      }
+    }
 
     if (historicalCheckBlocks > 0) {
       // eslint-disable-next-line @typescript-eslint/no-shadow
@@ -699,6 +729,7 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     historicalCheckBlocks,
     timeoutSeconds = 0,
     abortable = false,
+    temporalOptions,
     schema,
   }: Options<Z> | AbortableOptions<Z> = {},
 ): SingleEventObserver<Z> | SingleEventAbortableObserver<Z> {
@@ -710,6 +741,7 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
       historicalCheckBlocks,
       timeoutSeconds,
       abortable,
+      temporalOptions,
       schema,
     });
 
@@ -726,6 +758,8 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     historicalCheckBlocks,
     timeoutSeconds,
     abortable,
+    temporalOptions,
+    schema
   });
 
   return {
