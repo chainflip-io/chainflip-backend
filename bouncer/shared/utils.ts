@@ -44,6 +44,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1127,7 +1128,7 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.debug(`Extrinsic status: ${status.toString()}`);
+      logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         try {
@@ -1463,4 +1464,49 @@ export async function retryRpcCall<T>(
   }
 
   throw new Error(`Failed to complete ${operation} after ${maxAttempts} attempts`);
+}
+
+/// Returns the statechain "free balance" of an LP account for a specific asset.
+export async function getFreeBalance(accountAddress: string, asset: Asset): Promise<bigint> {
+  await using chainflip = await getChainflipApi();
+  return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()
+  );
+}
+
+/// Submits an extrinsic and finds a specific event in the returned events.
+export async function submitExtrinsic(
+  uri: string,
+  api: ApiPromise,
+  extrinsic: SubmittableExtrinsic<'promise'>,
+  findEvent: string,
+  logger: Logger,
+  mutex = lpMutex,
+) {
+  const account = createStateChainKeypair(uri);
+  const [expectedSection, expectedMethod] = findEvent.split(':');
+  const release = await mutex.acquire(uri);
+  const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
+  const nonce = (await api.rpc.system.accountNextIndex(account.address)) as unknown as number;
+  const unsub = await extrinsic.signAndSend(account, { nonce }, waiter);
+  let events: EventRecord[] = [];
+  try {
+    events = await promise;
+  } catch (error) {
+    unsub();
+    throw error;
+  }
+  unsub();
+  release();
+
+  const eventRecord = events.find(
+    ({ event }) => event.section === expectedSection && event.method === expectedMethod,
+  )!;
+  if (!eventRecord) {
+    throw new Error(
+      `Didn't find event ${findEvent} after submitting extrinsic ${extrinsic.meta.name}`,
+    );
+  }
+  return eventRecord.event as unknown as Event;
 }

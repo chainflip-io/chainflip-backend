@@ -1,9 +1,17 @@
-import { Asset, Assets, decodeModuleError } from 'shared/utils';
+import {
+  amountToFineAmount,
+  Asset,
+  Assets,
+  assetDecimals,
+  ChainflipExtrinsicSubmitter,
+  createStateChainKeypair,
+  decodeModuleError,
+  lpMutex,
+} from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { addLenderFunds } from 'tests/lending';
 
 export type LendingPoolId = {
   asset: Asset;
@@ -59,6 +67,33 @@ export async function createLendingPools(logger: Logger, newPools: LendingPoolId
   }
 }
 
+/// Adds existing funds to the lending pool of the given asset and returns the LendingFundsAdded event.
+export async function addLenderFunds(
+  logger: Logger,
+  asset: Asset,
+  amount: number,
+  lpUri = '//LP_LENDING',
+) {
+  await using chainflip = await getChainflipApi();
+  const lp = createStateChainKeypair(lpUri);
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
+
+  const observeLendingFundsAdded = observeEvent(logger, `lendingPools:LendingFundsAdded`, {
+    test: (event) => event.data.lenderId === lp.address && event.data.asset === asset,
+  });
+
+  // Add funds to the lending pool
+  logger.debug(`Adding lender funds of ${amount} in ${asset} lending pool`);
+  await extrinsicSubmitter.submit(
+    chainflip.tx.lendingPools.addLenderFunds(
+      asset,
+      amountToFineAmount(amount.toString(), assetDecimals(asset)),
+    ),
+  );
+
+  return observeLendingFundsAdded.event;
+}
+
 /// Creates lending pools for multiple assets and funds the BTC one.
 export async function setupLendingPools(logger: Logger): Promise<void> {
   logger.info('Creating Lending Pools');
@@ -69,7 +104,7 @@ export async function setupLendingPools(logger: Logger): Promise<void> {
   logger.info('Funding BTC Lending Pool');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
 
-  const btcFundingAmount = 2;
+  const btcFundingAmount = 50;
 
   await depositLiquidity(logger, Assets.Btc, btcFundingAmount + btcIngressFee, false, '//LP_BOOST');
   await addLenderFunds(logger, Assets.Btc, btcFundingAmount, '//LP_BOOST');

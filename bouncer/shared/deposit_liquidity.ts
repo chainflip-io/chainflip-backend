@@ -20,10 +20,12 @@ import { Logger } from 'shared/utils/logger';
 export async function depositLiquidity(
   parentLogger: Logger,
   ccy: Asset,
-  amount: number,
+  givenAmount: number,
   waitForFinalization = false,
   optionLpUri?: string,
 ) {
+  const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
+
   const lpUri = optionLpUri ?? (process.env.LP_URI || '//LP_1');
   const logger = parentLogger.child({ ccy, amount, lpUri });
 

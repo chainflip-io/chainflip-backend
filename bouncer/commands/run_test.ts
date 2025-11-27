@@ -5,7 +5,7 @@
 // It will find and run the test function (using vitest) in the test file provided as an argument.
 //
 // For example: ./commands/run_test.ts ./tests/boost.ts
-// This is the equivalent of running `pnpm vitest run -t "BoostingForAsset"`
+// This is the equivalent of running `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
@@ -61,7 +61,7 @@ let matchingTestName;
 try {
   const data = readFileSync(testFile, 'utf8');
   for (const { testName, functionName } of testNamesAndFunctions) {
-    if (data.includes(`function ${functionName}`)) {
+    if (functionName !== '' && data.includes(`function ${functionName}`)) {
       // We found a match, this must be the test we want to run
       matchingTestName = testName;
       break;
@@ -77,5 +77,8 @@ if (!matchingTestName) {
   console.error('No matching test function found');
   process.exit(1);
 } else {
-  execSync(`pnpm vitest --maxConcurrency=100 run -t "${matchingTestName}"`, { stdio: 'inherit' });
+  execSync(
+    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
+    { stdio: 'inherit' },
+  );
 }

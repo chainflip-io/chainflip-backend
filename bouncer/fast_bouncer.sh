@@ -2,4 +2,4 @@
 set -e
 ./commands/observe_block.ts 5
 ./setup_for_test.sh
-NODE_COUNT=$1 LOCALNET=$LOCALNET pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+NODE_COUNT=$1 LOCALNET=$LOCALNET pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "ConcurrentTests"
