@@ -5402,16 +5402,12 @@ fn same_asset_loan() {
 			);
 
 			// Finish the swap
-			MockSwapRequestHandler::<Test>::set_swap_request_progress(
+			LendingPools::process_loan_swap_outcome(
 				SwapRequestId(0),
-				SwapExecutionProgress {
-					remaining_input_amount: 0,
-					accumulated_output_amount: SWAP_OUTPUT_AMOUNT,
-				},
+				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+				SWAP_OUTPUT_AMOUNT,
 			);
-		})
-		.then_process_next_block()
-		.then_execute_with(|_| {
+
 			// Check that the loan has been repaid and account has the correct amount left
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 				loan_id: LOAN_ID,
