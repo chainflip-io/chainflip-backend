@@ -2,7 +2,10 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		arbitrum_block_processor::ArbEvent, elections::TypesFor, ReportFailedLivenessCheck,
+		arbitrum_block_processor::ArbEvent,
+		elections::TypesFor,
+		ethereum_elections::{KeyManagerEvent, VaultEvents},
+		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
 	ArbitrumChainTracking, ArbitrumIngressEgress, Runtime,
@@ -49,11 +52,9 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, ElectoralSystemTypes, InitialState,
 	InitialStateOf, RunnerStorageAccess,
 };
-use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -237,27 +238,13 @@ pub type ArbitrumDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct ArbitrumVaultDepositWitnessing;
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub enum VaultEvents {
-	SwapNativeFilter(VaultDepositWitness<Runtime, ArbitrumInstance>),
-	SwapTokenFilter(VaultDepositWitness<Runtime, ArbitrumInstance>),
-	XcallNativeFilter(VaultDepositWitness<Runtime, ArbitrumInstance>),
-	XcallTokenFilter(VaultDepositWitness<Runtime, ArbitrumInstance>),
-	TransferNativeFailedFilter {
-		asset: cf_chains::assets::arb::Asset,
-		amount: <Arbitrum as Chain>::ChainAmount,
-		destination_address: <Arbitrum as Chain>::ChainAccount,
-	},
-	TransferTokenFailedFilter {
-		asset: cf_chains::assets::arb::Asset,
-		amount: <Arbitrum as Chain>::ChainAmount,
-		destination_address: <Arbitrum as Chain>::ChainAccount,
-	},
-}
+pub type ArbitrumVaultEvent = VaultEvents<
+	VaultDepositWitness<Runtime, ArbitrumInstance>,
+	Arbitrum,
+	cf_chains::assets::arb::Asset,
+>;
 
-pub(crate) type BlockDataVaultDeposit = Vec<VaultEvents>;
+pub(crate) type BlockDataVaultDeposit = Vec<ArbitrumVaultEvent>;
 
 impls! {
 	for TypesFor<ArbitrumVaultDepositWitnessing>:
@@ -268,7 +255,7 @@ impls! {
 
 		type BlockData = BlockDataVaultDeposit;
 
-		type Event = ArbEvent<VaultEvents>;
+		type Event = ArbEvent<ArbitrumVaultEvent>;
 		type Rules = Self;
 		type Execute = Self;
 
@@ -327,28 +314,18 @@ pub type ArbitrumVaultDepositWitnessingES =
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct ArbitrumKeyManagerWitnessing;
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-#[allow(clippy::large_enum_variant)]
-pub enum KeyManagerEvent {
-	AggKeySetByGovKey {
-		new_public_key: AggKeyFor<Runtime, ArbitrumInstance>,
-		block_number: ChainBlockNumberFor<Runtime, ArbitrumInstance>,
-		tx_id: TransactionInIdFor<Runtime, ArbitrumInstance>,
-	},
-	SignatureAccepted {
-		tx_out_id: TransactionOutIdFor<Runtime, ArbitrumInstance>,
-		signer_id: SignerIdFor<Runtime, ArbitrumInstance>,
-		tx_fee: TransactionFeeFor<Runtime, ArbitrumInstance>,
-		tx_metadata: TransactionMetadataFor<Runtime, ArbitrumInstance>,
-		transaction_ref: TransactionRefFor<Runtime, ArbitrumInstance>,
-	},
-	GovernanceAction {
-		call_hash: GovCallHash,
-	},
-}
-pub(crate) type BlockDataKeyManager = Vec<KeyManagerEvent>;
+pub type ArbitrumKeyManagerEvent = KeyManagerEvent<
+	AggKeyFor<Runtime, ArbitrumInstance>,
+	ChainBlockNumberFor<Runtime, ArbitrumInstance>,
+	TransactionInIdFor<Runtime, ArbitrumInstance>,
+	TransactionOutIdFor<Runtime, ArbitrumInstance>,
+	SignerIdFor<Runtime, ArbitrumInstance>,
+	TransactionFeeFor<Runtime, ArbitrumInstance>,
+	TransactionMetadataFor<Runtime, ArbitrumInstance>,
+	TransactionRefFor<Runtime, ArbitrumInstance>,
+>;
+
+pub(crate) type BlockDataKeyManager = Vec<ArbitrumKeyManagerEvent>;
 
 impls! {
 	for TypesFor<ArbitrumKeyManagerWitnessing>:
@@ -359,7 +336,7 @@ impls! {
 
 		type BlockData = BlockDataKeyManager;
 
-		type Event = ArbEvent<KeyManagerEvent>;
+		type Event = ArbEvent<ArbitrumKeyManagerEvent>;
 		type Rules = Self;
 		type Execute = Self;
 

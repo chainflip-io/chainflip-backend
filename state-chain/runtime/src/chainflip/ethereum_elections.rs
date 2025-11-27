@@ -241,24 +241,35 @@ pub struct EthereumVaultDepositWitnessing;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub enum VaultEvents {
-	SwapNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	SwapTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	XcallNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	XcallTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+#[serde(bound(
+	serialize = "VaultWitness: Serialize, Asset: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize",
+	deserialize = "VaultWitness: Deserialize<'de>, Asset: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>",
+))]
+#[scale_info(skip_type_params(VaultWitness, C))]
+pub enum VaultEvents<VaultWitness, C: Chain, Asset> {
+	SwapNativeFilter(VaultWitness),
+	SwapTokenFilter(VaultWitness),
+	XcallNativeFilter(VaultWitness),
+	XcallTokenFilter(VaultWitness),
 	TransferNativeFailedFilter {
-		asset: cf_chains::assets::eth::Asset,
-		amount: <Ethereum as Chain>::ChainAmount,
-		destination_address: <Ethereum as Chain>::ChainAccount,
+		asset: Asset,
+		amount: <C as Chain>::ChainAmount,
+		destination_address: <C as Chain>::ChainAccount,
 	},
 	TransferTokenFailedFilter {
-		asset: cf_chains::assets::eth::Asset,
-		amount: <Ethereum as Chain>::ChainAmount,
-		destination_address: <Ethereum as Chain>::ChainAccount,
+		asset: Asset,
+		amount: <C as Chain>::ChainAmount,
+		destination_address: <C as Chain>::ChainAccount,
 	},
 }
 
-pub(crate) type BlockDataVaultDeposit = Vec<VaultEvents>;
+pub type EthereumVaultEvent = VaultEvents<
+	VaultDepositWitness<Runtime, EthereumInstance>,
+	Ethereum,
+	cf_chains::assets::eth::Asset,
+>;
+
+pub(crate) type BlockDataVaultDeposit = Vec<EthereumVaultEvent>;
 
 impls! {
 	for TypesFor<EthereumVaultDepositWitnessing>:
@@ -269,7 +280,7 @@ impls! {
 
 		type BlockData = BlockDataVaultDeposit;
 
-		type Event = EthEvent<VaultEvents>;
+		type Event = EthEvent<EthereumVaultEvent>;
 		type Rules = Self;
 		type Execute = Self;
 
@@ -418,25 +429,47 @@ pub struct EthereumKeyManagerWitnessing;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
+#[scale_info(skip_type_params(
+	AggKey,
+	BlockNumber,
+	TxInId,
+	TxOutId,
+	SignerId,
+	TxFee,
+	TxMetadata,
+	TxRef
+))]
 #[allow(clippy::large_enum_variant)]
-pub enum KeyManagerEvent {
+pub enum KeyManagerEvent<AggKey, BlockNumber, TxInId, TxOutId, SignerId, TxFee, TxMetadata, TxRef> {
 	AggKeySetByGovKey {
-		new_public_key: AggKeyFor<Runtime, EthereumInstance>,
-		block_number: ChainBlockNumberFor<Runtime, EthereumInstance>,
-		tx_id: TransactionInIdFor<Runtime, EthereumInstance>,
+		new_public_key: AggKey,
+		block_number: BlockNumber,
+		tx_id: TxInId,
 	},
 	SignatureAccepted {
-		tx_out_id: TransactionOutIdFor<Runtime, EthereumInstance>,
-		signer_id: SignerIdFor<Runtime, EthereumInstance>,
-		tx_fee: TransactionFeeFor<Runtime, EthereumInstance>,
-		tx_metadata: TransactionMetadataFor<Runtime, EthereumInstance>,
-		transaction_ref: TransactionRefFor<Runtime, EthereumInstance>,
+		tx_out_id: TxOutId,
+		signer_id: SignerId,
+		tx_fee: TxFee,
+		tx_metadata: TxMetadata,
+		transaction_ref: TxRef,
 	},
 	GovernanceAction {
 		call_hash: GovCallHash,
 	},
 }
-pub(crate) type BlockDataKeyManager = Vec<KeyManagerEvent>;
+
+pub type EthereumKeyManagerEvent = KeyManagerEvent<
+	AggKeyFor<Runtime, EthereumInstance>,
+	ChainBlockNumberFor<Runtime, EthereumInstance>,
+	TransactionInIdFor<Runtime, EthereumInstance>,
+	TransactionOutIdFor<Runtime, EthereumInstance>,
+	SignerIdFor<Runtime, EthereumInstance>,
+	TransactionFeeFor<Runtime, EthereumInstance>,
+	TransactionMetadataFor<Runtime, EthereumInstance>,
+	TransactionRefFor<Runtime, EthereumInstance>,
+>;
+
+pub(crate) type BlockDataKeyManager = Vec<EthereumKeyManagerEvent>;
 
 impls! {
 	for TypesFor<EthereumKeyManagerWitnessing>:
@@ -447,7 +480,7 @@ impls! {
 
 		type BlockData = BlockDataKeyManager;
 
-		type Event = EthEvent<KeyManagerEvent>;
+		type Event = EthEvent<EthereumKeyManagerEvent>;
 		type Rules = Self;
 		type Execute = Self;
 

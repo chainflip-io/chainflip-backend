@@ -18,9 +18,10 @@ use crate::{
 	witness::{
 		common::block_height::{witness_headers, HeaderClient},
 		evm::{
-			contract_common::{address_states, events_at_block, query_election_block, Event},
+			contract_common::{
+				events_at_block, handle_vault_events, query_election_block, VaultEventsHandler,
+			},
 			erc20_deposits::Erc20Events,
-			evm_deposits::eth_ingresses_at_block,
 			key_manager::{
 				AggKeySetByGovKeyFilter, GovernanceActionFilter, KeyManagerEvents,
 				SignatureAcceptedFilter,
@@ -43,7 +44,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset, AssetAmount};
 use cf_utilities::task_scope::{self, Scope};
-use ethers::types::{Bytes, TransactionReceipt};
+use ethers::types::{Bloom, Bytes, TransactionReceipt};
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
@@ -53,7 +54,7 @@ use pallet_cf_elections::{
 	},
 	ElectoralSystemTypes, VoteOf,
 };
-use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_core::H160;
 use state_chain_runtime::{
 	chainflip::arbitrum_elections::{
@@ -76,7 +77,6 @@ use crate::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::usdc::UsdcEvents,
 };
 
 use super::evm::vault::vault_deposit_witness;
@@ -174,6 +174,61 @@ pub struct ArbitrumDepositChannelWitnesserVoter {
 	vault_address: H160,
 	usdc_contract_address: H160,
 }
+
+impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig
+	for ArbitrumDepositChannelWitnesserVoter
+{
+	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
+		&self.client
+	}
+
+	fn address_checker_address(&self) -> H160 {
+		self.address_checker_address
+	}
+
+	fn vault_address(&self) -> H160 {
+		self.vault_address
+	}
+}
+
+#[async_trait::async_trait]
+impl crate::witness::evm::contract_common::Erc20EventHandler<ArbAsset>
+	for ArbitrumDepositChannelWitnesserVoter
+{
+	async fn get_events_for_asset(
+		&self,
+		asset: ArbAsset,
+		bloom: Option<Bloom>,
+		block_height: u64,
+		block_hash: sp_core::H256,
+		_client: &EvmCachingClient<EvmRpcSigningClient>,
+	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
+		use crate::witness::evm::{
+			contract_common::events_at_block, erc20_deposits::usdc::UsdcEvents,
+		};
+
+		let events = match asset {
+			ArbAsset::ArbUsdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
+				bloom,
+				block_height,
+				block_hash,
+				self.usdc_contract_address,
+				&self.client,
+			)
+			.await?
+			.into_iter()
+			.map(|event| crate::witness::evm::contract_common::Event {
+				event_parameters: event.event_parameters.into(),
+				tx_hash: event.tx_hash,
+				log_index: event.log_index,
+			})
+			.collect::<Vec<_>>(),
+			_ => return Ok(None), // Skip unsupported assets
+		};
+		Ok(Some(events))
+	}
+}
+
 #[async_trait::async_trait]
 impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitnesserVoter {
 	async fn vote(
@@ -181,114 +236,33 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 		_settings: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumDepositChannelWitnessingES>>, anyhow::Error> {
+		use cf_chains::DepositChannel;
+		use state_chain_runtime::chainflip::arbitrum_elections::ArbitrumChain;
+
 		let BWElectionProperties {
 			block_height, properties: deposit_addresses, election_type, ..
 		} = properties;
-		let (block, return_block_hash) =
-			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
-		let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
-			deposit_addresses.into_iter().fold(
-				(Vec::new(), HashMap::new()),
-				|(mut eth, mut erc20), deposit_channel| {
-					if deposit_channel.asset == ArbAsset::ArbEth {
-						eth.push(deposit_channel.address);
-					} else {
-						erc20
-							.entry(deposit_channel.asset)
-							.or_insert_with(Vec::new)
-							.push(deposit_channel.address);
-					}
-					(eth, erc20)
-				},
-			);
 
-		let eth_ingresses = eth_ingresses_at_block(
-			address_states(
-				&self.client,
-				self.address_checker_address,
-				block.parent_hash,
-				block.hash,
-				eth_deposit_channels.clone(),
+		let (witnesses, return_block_hash) =
+			crate::witness::evm::contract_common::witness_deposit_channels_generic::<
+				cf_chains::Arbitrum,
+				ArbitrumChain,
+				_,
+				_,
+				_,
+				_,
+			>(
+				self,
+				block_height,
+				election_type,
+				deposit_addresses,
+				ArbAsset::ArbEth,
+				|dc: &DepositChannel<cf_chains::Arbitrum>| dc.asset,
+				|dc: &DepositChannel<cf_chains::Arbitrum>| dc.address,
 			)
-			.await?,
-			events_at_block::<cf_chains::Arbitrum, _, _>(
-				block.bloom,
-				*block_height.root(),
-				block.hash,
-				self.vault_address,
-				&self.client,
-			)
-			.await?
-			.into_iter()
-			.filter_map(|event| match event.event_parameters {
-				VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
-				_ => None,
-			})
-			.collect(),
-		)?;
+			.await?;
 
-		let mut erc20_ingresses: Vec<DepositWitness<cf_chains::Arbitrum>> = Vec::new();
-
-		// Handle each asset type separately with its specific event type
-		for (asset, deposit_channels) in erc20_deposit_channels {
-			let events = match asset {
-				ArbAsset::ArbUsdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
-					block.bloom,
-					*block_height.root(),
-					block.hash,
-					self.usdc_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				_ => continue, // Skip unsupported assets
-			};
-
-			let asset_ingresses = events
-				.into_iter()
-				.filter_map(|event| {
-					match event.event_parameters {
-						Erc20Events::TransferFilter{to, value, from: _ } if deposit_channels.contains(&to) =>
-							Some(pallet_cf_ingress_egress::DepositWitness {
-								deposit_address: to,
-								amount: value.try_into().expect(
-									"Any ERC20 tokens we support should have amounts that fit into a u128",
-								),
-								asset,
-								deposit_details: DepositDetails {
-									tx_hashes: Some(vec![event.tx_hash]),
-								},
-							}),
-						_ => None,
-					}
-				})
-				.collect::<Vec<_>>();
-
-			erc20_ingresses.extend(asset_ingresses);
-		}
-
-		Ok(Some((
-			eth_ingresses
-				.into_iter()
-				.map(|(to_addr, value, tx_hashes)| pallet_cf_ingress_egress::DepositWitness {
-					deposit_address: to_addr,
-					asset: ArbAsset::ArbEth,
-					amount: value
-						.try_into()
-						.expect("Ingress witness transfer value should fit u128"),
-					deposit_details: DepositDetails { tx_hashes },
-				})
-				.chain(erc20_ingresses)
-				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
-				.collect(),
-			return_block_hash,
-		)))
+		Ok(Some((witnesses, return_block_hash)))
 	}
 }
 
@@ -314,6 +288,173 @@ pub struct ArbitrumVaultDepositWitnesserVoter {
 	vault_address: H160,
 	supported_assets: HashMap<H160, Asset>,
 }
+
+impl VaultEventsHandler for ArbitrumVaultDepositWitnesserVoter {
+	type SCVaultEvents = SCVaultEvents;
+
+	fn handle_event(
+		&self,
+		event: VaultEvents,
+		tx_hash: sp_core::H256,
+		block_height: u64,
+	) -> Result<Option<Self::SCVaultEvents>> {
+		Ok(Some(match event {
+			VaultEvents::SwapNativeFilter(SwapNativeFilter {
+				dst_chain,
+				dst_address,
+				dst_token,
+				amount,
+				sender: _,
+				cf_parameters,
+			}) => {
+				let (vault_swap_parameters, ()) =
+					decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+				SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
+					Asset::ArbEth,
+					try_into_primitive(amount)?,
+					try_into_primitive(dst_token)?,
+					try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+					None,
+					tx_hash,
+					vault_swap_parameters
+				))
+			},
+			VaultEvents::SwapTokenFilter(SwapTokenFilter {
+				dst_chain,
+				dst_address,
+				dst_token,
+				src_token,
+				amount,
+				sender: _,
+				cf_parameters,
+			}) => {
+				let (vault_swap_parameters, ()) =
+					decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+				let asset = *self
+					.supported_assets
+					.get(&src_token)
+					.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
+
+				SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
+					asset,
+					try_into_primitive(amount)?,
+					try_into_primitive(dst_token)?,
+					try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+					None,
+					tx_hash,
+					vault_swap_parameters
+				))
+			},
+			VaultEvents::XcallNativeFilter(XcallNativeFilter {
+				dst_chain,
+				dst_address,
+				dst_token,
+				amount,
+				sender,
+				message,
+				gas_amount,
+				cf_parameters,
+			}) => {
+				let (vault_swap_parameters, ccm_additional_data) =
+					decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+				SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
+					Asset::ArbEth,
+					try_into_primitive(amount)?,
+					try_into_primitive(dst_token)?,
+					try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+					Some(CcmDepositMetadata {
+						source_chain: ForeignChain::Arbitrum,
+						source_address: Some(
+							IntoForeignChainAddress::<Arbitrum>::into_foreign_chain_address(sender)
+						),
+						channel_metadata: CcmChannelMetadata {
+							message: message.to_vec().try_into().map_err(|_| anyhow!(
+								"Failed to deposit CCM: `message` too long."
+							))?,
+							gas_budget: try_into_primitive(gas_amount)?,
+							ccm_additional_data,
+						},
+					}),
+					tx_hash,
+					vault_swap_parameters
+				))
+			},
+			VaultEvents::XcallTokenFilter(XcallTokenFilter {
+				dst_chain,
+				dst_address,
+				dst_token,
+				src_token,
+				amount,
+				sender,
+				message,
+				gas_amount,
+				cf_parameters,
+			}) => {
+				let (vault_swap_parameters, ccm_additional_data) =
+					decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+				let asset = *self
+					.supported_assets
+					.get(&src_token)
+					.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
+
+				SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
+					asset,
+					try_into_primitive(amount)?,
+					try_into_primitive(dst_token)?,
+					try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+					Some(CcmDepositMetadata {
+						source_chain: ForeignChain::Arbitrum,
+						source_address: Some(
+							IntoForeignChainAddress::<Arbitrum>::into_foreign_chain_address(sender)
+						),
+						channel_metadata: CcmChannelMetadata {
+							message: message
+								.to_vec()
+								.try_into()
+								.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
+							gas_budget: try_into_primitive(gas_amount)?,
+							ccm_additional_data,
+						},
+					}),
+					tx_hash,
+					vault_swap_parameters
+				))
+			},
+			VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
+				recipient,
+				amount,
+			}) => SCVaultEvents::TransferNativeFailedFilter {
+				asset: ArbAsset::ArbEth,
+				amount: try_into_primitive::<_, AssetAmount>(amount)?,
+				destination_address: recipient,
+			},
+			VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
+				recipient,
+				amount,
+				token,
+				reason: _,
+			}) => {
+				let asset = *self
+					.supported_assets
+					.get(&token)
+					.ok_or_else(|| anyhow!("Asset {token:?} not found"))?;
+
+				SCVaultEvents::TransferTokenFailedFilter {
+					asset: asset.try_into().expect(
+						"Asset translated from ArbitrumAddress must be supported by the chain.",
+					),
+					amount: try_into_primitive(amount)?,
+					destination_address: recipient,
+				}
+			},
+			_ => return Ok(None),
+		}))
+	}
+}
 #[async_trait::async_trait]
 impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesserVoter {
 	async fn vote(
@@ -326,186 +467,19 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 		let (block, return_block_hash) =
 			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
+		let root_block_height = *block_height.root();
+
 		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, _>(
 			block.bloom,
-			*block_height.root(),
+			root_block_height,
 			block.hash,
 			self.vault_address,
 			&self.client,
 		)
 		.await?;
 
-		let mut result = Vec::new();
-		for event in events {
-			match event.event_parameters {
-				VaultEvents::SwapNativeFilter(SwapNativeFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					amount,
-					sender: _,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
+		let result = handle_vault_events(self, events, root_block_height)?;
 
-					result.push(SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
-						Asset::ArbEth,
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						None,
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::SwapTokenFilter(SwapTokenFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					src_token,
-					amount,
-					sender: _,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
-
-					result.push(SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
-						*(self
-							.supported_assets
-							.get(&src_token)
-							.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?),
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						None,
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::XcallNativeFilter(XcallNativeFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
-
-					result.push(SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
-						Asset::ArbEth,
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						Some(CcmDepositMetadata {
-							source_chain: ForeignChain::Arbitrum,
-							source_address: Some(
-								IntoForeignChainAddress::<Arbitrum>::into_foreign_chain_address(
-									sender
-								)
-							),
-							channel_metadata: CcmChannelMetadata {
-								message: message.to_vec().try_into().map_err(|_| anyhow!(
-									"Failed to deposit CCM: `message` too long."
-								))?,
-								gas_budget: try_into_primitive(gas_amount)?,
-								ccm_additional_data,
-							},
-						}),
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::XcallTokenFilter(XcallTokenFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					src_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], *block_height.root())?;
-
-					result.push(SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
-						*(self
-							.supported_assets
-							.get(&src_token)
-							.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?),
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						Some(CcmDepositMetadata {
-							source_chain: ForeignChain::Arbitrum,
-							source_address: Some(
-								IntoForeignChainAddress::<Arbitrum>::into_foreign_chain_address(
-									sender
-								)
-							),
-							channel_metadata: CcmChannelMetadata {
-								message: message.to_vec().try_into().map_err(|_| anyhow!(
-									"Failed to deposit CCM. Message too long."
-								))?,
-								gas_budget: try_into_primitive(gas_amount)?,
-								ccm_additional_data,
-							},
-						}),
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
-					recipient,
-					amount,
-				}) => {
-					result.push(SCVaultEvents::TransferNativeFailedFilter {
-						asset: ArbAsset::ArbEth,
-						amount: try_into_primitive::<_, AssetAmount>(amount)?,
-						destination_address: recipient,
-					});
-				},
-				VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
-					recipient,
-					amount,
-					token,
-					reason: _,
-				}) => {
-					result.push(SCVaultEvents::TransferTokenFailedFilter {
-						asset: (*(self
-							.supported_assets
-							.get(&token)
-							.ok_or_else(|| anyhow!("Asset {token:?} not found"))?))
-						.try_into()
-						.expect(
-							"Asset translated from ArbitrumAddress must be supported by the chain.",
-						),
-						amount: try_into_primitive(amount)?,
-						destination_address: recipient,
-					});
-				},
-				_ => {},
-			}
-		}
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
