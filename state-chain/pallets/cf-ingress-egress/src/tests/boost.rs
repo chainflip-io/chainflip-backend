@@ -21,7 +21,8 @@ use cf_primitives::{
 	MAX_BASIS_POINTS,
 };
 use cf_traits::{
-	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi, SafeMode, SetSafeMode,
+	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi,
+	ExpiryBehaviour::RefundIfExpires, SafeMode, SetSafeMode,
 };
 use frame_support::instances::Instance1;
 use mocks::lending_pools::MockBoostApi;
@@ -592,6 +593,7 @@ fn taking_network_fee_from_boost_fee() {
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: 10,
 						accumulated_output_amount: 0,
+						price_limits_and_expiry: None,
 						dca_params: None,
 					}
 				)])
@@ -615,7 +617,8 @@ fn taking_network_fee_from_boost_fee() {
 mod vault_swaps {
 	use super::*;
 	use crate::BoostedVaultTransactions;
-	use cf_traits::SwapOutputAction;
+	use cf_chains::AccountOrAddress;
+	use cf_traits::{PriceLimitsAndExpiry, SwapOutputAction};
 
 	#[test]
 	fn vault_swap_boosting() {
@@ -706,6 +709,17 @@ mod vault_swaps {
 								},
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								price_limits_and_expiry: Some(PriceLimitsAndExpiry {
+									expiry_behaviour: RefundIfExpires {
+										retry_duration: 2,
+										refund_address: AccountOrAddress::ExternalAddress(
+											crate::ForeignChainAddress::Eth([2; 20].into())
+										),
+										refund_ccm_metadata: None
+									},
+									min_price: U256::zero(),
+									max_oracle_price_slippage: None
+								}),
 								dca_params: Some(DcaParameters {
 									number_of_chunks: 1,
 									chunk_interval: SWAP_DELAY_BLOCKS
@@ -723,6 +737,7 @@ mod vault_swaps {
 								origin: SwapOrigin::Internal,
 								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
 								accumulated_output_amount: 0,
+								price_limits_and_expiry: None,
 								dca_params: None,
 							}
 						)

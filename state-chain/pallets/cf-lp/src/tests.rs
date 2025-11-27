@@ -24,10 +24,12 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId};
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
-	AccountRoleRegistry, BalanceApi, Chainflip, SafeMode, SetSafeMode, SwapOutputAction,
-	SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip,
+	ExpiryBehaviour::RefundIfExpires,
+	PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use sp_core::U256;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -486,6 +488,15 @@ fn schedule_swap_checks() {
 				origin: cf_chains::SwapOrigin::OnChainAccount(LP_ACCOUNT),
 				remaining_input_amount: INPUT_AMOUNT,
 				accumulated_output_amount: 0,
+				price_limits_and_expiry: Some(PriceLimitsAndExpiry {
+					expiry_behaviour: RefundIfExpires {
+						retry_duration: 0,
+						refund_address: cf_chains::AccountOrAddress::InternalAccount(LP_ACCOUNT),
+						refund_ccm_metadata: None,
+					},
+					min_price: U256::zero(),
+					max_oracle_price_slippage: None,
+				}),
 				dca_params: None,
 			})])
 		);
