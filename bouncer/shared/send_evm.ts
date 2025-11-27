@@ -37,7 +37,7 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
       const txCount = await web3.eth.getTransactionCount(address);
       nextEvmNonce[chain] = txCount;
     }
-    logger.debug(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
+    logger.trace(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
     return nextEvmNonce[chain]!++;
   });
 }

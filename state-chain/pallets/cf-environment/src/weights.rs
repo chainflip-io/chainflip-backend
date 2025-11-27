@@ -24,7 +24,7 @@
 //! EXECUTION: , WASM-EXECUTION: Compiled, CHAIN: Some("dev-3"), DB CACHE: 1024
 
 // Executed Command:
-// ./target/release/chainflip-node
+// ./chainflip-node
 // benchmark
 // pallet
 // --extrinsic
