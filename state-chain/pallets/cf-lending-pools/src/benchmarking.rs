@@ -315,6 +315,7 @@ mod benchmarks {
 
 		disable_whitelist::<T>();
 
+		GeneralLendingPools::<T>::remove(LOAN_ASSET);
 		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), LOAN_ASSET));
 
 		for i in 1..=number_of_lenders {
@@ -601,7 +602,43 @@ mod benchmarks {
 
 	#[benchmark]
 	fn loan_charge_interest() {
-		const AT_BLOCK: u32 = 100;
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let mut loan = create_loan::<T>(&borrower, 100_000_000);
+
+		assert_eq!(loan.pending_interest, Default::default());
+
+		#[block]
+		{
+			loan.charge_interest(&LendingConfig::<T>::get());
+		}
+
+		// Make sure that some interest was actually charged
+		assert_ne!(loan.pending_interest, Default::default());
+	}
+
+	#[benchmark]
+	fn loan_charge_low_ltv_penalty() {
+		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
+		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
+		let mut loan = create_loan::<T>(&borrower, 100_000_000);
+
+		let ltv = FixedU64::from_rational(1, 3);
+
+		assert_eq!(loan.pending_interest, Default::default());
+
+		#[block]
+		{
+			loan.charge_low_ltv_penalty(ltv, &LendingConfig::<T>::get());
+		}
+
+		assert_ne!(loan.pending_interest, Default::default());
+	}
+
+	#[benchmark]
+	fn collect_pending_interest() {
+		use crate::general_lending::PriceCacheAndThreshold;
+
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
 		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
 		let mut loan = create_loan::<T>(&borrower, 100_000_000);
@@ -609,19 +646,20 @@ mod benchmarks {
 
 		let price_cache = get_prefilled_price_cache();
 
+		// Charge something that we can collect:
+		loan.charge_interest(&LendingConfig::<T>::get());
+		assert_ne!(loan.pending_interest, Default::default());
+
+		let threshold_usd = 1;
+
 		#[block]
 		{
-			assert_ok!(loan.charge_interest(
-				FixedU64::from_rational(75, 100),
-				AT_BLOCK.into(),
-				AT_BLOCK - 1,
-				&LendingConfig::<T>::get(),
-				&price_cache,
-			));
+			assert_ok!(loan.collect_pending_interest_if_above_threshold(Some(
+				PriceCacheAndThreshold { threshold_usd, price_cache: &price_cache }
+			)));
 		}
 
-		// Make sure that some interest was actually charged
-		assert_eq!(loan.last_interest_payment_at, AT_BLOCK.into());
+		// Make sure that some interest was actually collected
 		let total_amount_after = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
 		assert!(total_amount_after > total_amount_before);
 	}

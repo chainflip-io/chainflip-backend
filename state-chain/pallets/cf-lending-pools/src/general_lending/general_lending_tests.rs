@@ -206,34 +206,6 @@ fn lender_basic_adding_and_removing_funds() {
 	});
 }
 
-/// Derives interest amounts (pool and network portions) to be paid by the borrower
-/// per interest charge interval. Returns (pool amount, network amount).
-fn derive_interest_amounts(
-	principal: AssetAmount,
-	utilisation: Permill,
-	payment_interval_blocks: u32,
-) -> (AssetAmount, AssetAmount) {
-	let base_interest = CONFIG.derive_base_interest_rate_per_payment_interval(
-		LOAN_ASSET,
-		utilisation,
-		payment_interval_blocks,
-	);
-
-	let pool_amount =
-		(ScaledAmountHP::from_asset_amount(principal) * base_interest).into_asset_amount();
-
-	let network_interest =
-		CONFIG.derive_network_interest_rate_per_payment_interval(payment_interval_blocks);
-
-	let network_amount =
-		(ScaledAmountHP::from_asset_amount(principal) * network_interest).into_asset_amount();
-
-	// Tests aren't valid if the fees are zero (need to adjust tests parameters if this is hit)
-	assert!(pool_amount > 0 && network_amount > 0);
-
-	(pool_amount, network_amount)
-}
-
 /// Helper struct for keeping track of accrued interest with high precision
 struct Interest {
 	pool: ScaledAmountHP,
@@ -417,7 +389,6 @@ fn basic_general_lending() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
-							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE,
 							pending_interest: InterestBreakdown::default(),
 						}
@@ -435,7 +406,6 @@ fn basic_general_lending() {
 				.unwrap()
 				.clone();
 
-			assert_eq!(loan.last_interest_payment_at, first_interest_payment_block);
 			assert_eq!(
 				loan.owed_principal,
 				PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1
@@ -584,78 +554,6 @@ fn basic_general_lending() {
 					collateral: BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]),
 					loans: Default::default(),
 				})
-			);
-		});
-}
-
-#[test]
-fn dynamic_interest_payment_interval() {
-	// Testing a scenario where we fail to charge interest at the usual block
-	// (according to the regular interval) and instead a larger amount of interest will be charged
-	// at a later block.
-
-	let get_loan = || {
-		LoanAccounts::<Test>::get(BORROWER)
-			.unwrap()
-			.loans
-			.get(&LOAN_ID)
-			.unwrap()
-			.clone()
-	};
-
-	let interest_payment_first_attempt_block =
-		INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
-
-	let interest_payment_second_attempt_block =
-		INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64;
-
-	let utilisation = Permill::from_rational(PRINCIPAL + ORIGINATION_FEE, INIT_POOL_AMOUNT);
-
-	// NOTE: because the first payment will be skipped, the interest amounts are calculated using
-	// twice the regular payment interval:
-	let (pool_interest, network_interest) = derive_interest_amounts(
-		PRINCIPAL,
-		utilisation,
-		2 * CONFIG.interest_payment_interval_blocks,
-	);
-
-	let (network_origination_fee, pool_origination_fee) = take_network_fee(ORIGINATION_FEE);
-
-	new_test_ext()
-		.with_funded_pool(INIT_POOL_AMOUNT)
-		.with_default_loan()
-		.then_execute_with(|_| {
-			// Set a low collection threshold so we can more easily check the collected amount
-			assert_ok!(Pallet::<Test>::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
-			));
-
-			// Making oracle price unavailable to cause interest calculations
-			// be skipped for now:
-			MockPriceFeedApi::set_price(LOAN_ASSET, None);
-		})
-		.then_process_blocks_until_block(interest_payment_first_attempt_block)
-		.then_execute_with(|_| {
-			// No interest payment yet:
-			assert_eq!(get_loan().last_interest_payment_at, INIT_BLOCK);
-
-			// Making oracle price available will cause interest to be
-			// calculated/taken at a later point
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		})
-		.then_process_blocks_until_block(interest_payment_second_attempt_block)
-		.then_execute_with(|_| {
-			assert_eq!(get_loan().last_interest_payment_at, interest_payment_second_attempt_block);
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().total_amount,
-				INIT_POOL_AMOUNT + pool_origination_fee + pool_interest
-			);
-
-			assert_eq!(
-				PendingNetworkFees::<Test>::get(LOAN_ASSET),
-				network_origination_fee + network_interest
 			);
 		});
 }
@@ -861,7 +759,6 @@ fn basic_loan_aggregation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
-							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL +
 								EXTRA_PRINCIPAL_1 + origination_fee_pool_1 +
 								origination_fee_pool_2 + origination_fee_network_1 +
@@ -962,7 +859,6 @@ fn basic_loan_aggregation() {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
-							last_interest_payment_at: INIT_BLOCK,
 							// Loan's owed principal has been increased:
 							owed_principal: PRINCIPAL +
 								EXTRA_PRINCIPAL_1 + EXTRA_PRINCIPAL_2 +
@@ -1326,7 +1222,6 @@ fn basic_liquidation() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
-							last_interest_payment_at: INIT_BLOCK,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE -
 								repaid_amount_1,
@@ -1658,7 +1553,7 @@ fn loans_in_liquidation_pay_interest() {
 			let (pool_interest, network_interest) = {
 				let mut interest = Interest::new();
 
-				let (origination_fee_network, origination_fee_pool) =
+				let (_origination_fee_network, origination_fee_pool) =
 					take_network_fee(ORIGINATION_FEE);
 
 				let utilisation = Permill::from_rational(
@@ -2348,7 +2243,6 @@ mod multi_asset_collateral_liquidation {
 						GeneralLoan {
 							id: LOAN_ID_2,
 							asset: LOAN_ASSET_2,
-							last_interest_payment_at: INIT_BLOCK,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL_2 + ORIGINATION_FEE_2,
 							pending_interest: Default::default()
@@ -2408,7 +2302,6 @@ mod multi_asset_collateral_liquidation {
 						GeneralLoan {
 							id: LOAN_ID_2,
 							asset: LOAN_ASSET_2,
-							last_interest_payment_at: INIT_BLOCK,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL_2 + ORIGINATION_FEE_2 + liquidation_fee -
 								SWAP_OUTPUT_LOAN_2_SWAP_2 -
@@ -3263,7 +3156,6 @@ fn adding_collateral_during_liquidation() {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
-							last_interest_payment_at: INIT_BLOCK,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE -
 								RECOVERED_PRINCIPAL_1 - RECOVERED_PRINCIPAL_2,
@@ -3692,7 +3584,6 @@ mod voluntary_liquidation {
 							GeneralLoan {
 								id: LOAN_ID,
 								asset: LOAN_ASSET,
-								last_interest_payment_at: INIT_BLOCK,
 								owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL,
 								created_at_block: INIT_BLOCK,
 								pending_interest: Default::default()
@@ -3778,7 +3669,6 @@ mod voluntary_liquidation {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
-							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
 							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
@@ -3862,7 +3752,6 @@ mod voluntary_liquidation {
 						GeneralLoan {
 							id: LOAN_ID,
 							asset: LOAN_ASSET,
-							last_interest_payment_at: INIT_BLOCK,
 							owed_principal: owed_after_liquidation_2,
 							created_at_block: INIT_BLOCK,
 							pending_interest: Default::default()
@@ -4505,7 +4394,6 @@ fn init_liquidation_swaps_test() {
 					id: LOAN_ID,
 					asset: Asset::Btc,
 					created_at_block: 0,
-					last_interest_payment_at: 0,
 					owed_principal: 20,
 					pending_interest: Default::default(),
 				},
@@ -4516,7 +4404,6 @@ fn init_liquidation_swaps_test() {
 					id: LOAN_ID,
 					asset: Asset::Sol,
 					created_at_block: 0,
-					last_interest_payment_at: 0,
 					owed_principal: 2000,
 					pending_interest: Default::default(),
 				},
@@ -4894,7 +4781,7 @@ mod rpcs {
 				// Interest for loan 2 (in liquidation)
 				let mut interest_loan_2 = Interest::new();
 				{
-					let (origination_fee_network_2, origination_fee_pool_2) =
+					let (_origination_fee_network_2, origination_fee_pool_2) =
 						take_network_fee(ORIGINATION_FEE_2);
 
 					let utilisation = Permill::from_rational(

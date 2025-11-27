@@ -52,7 +52,7 @@ pub enum LiquidationStatus {
 
 /// High precision interest amounts broken down by type
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
-struct InterestBreakdown {
+pub struct InterestBreakdown {
 	network: ScaledAmountHP,
 	pool: ScaledAmountHP,
 	broker: ScaledAmountHP,
@@ -481,40 +481,46 @@ impl<T: Config> LoanAccount<T> {
 		Ok(FixedU64::from_rational(principal, collateral))
 	}
 
-	#[transactional]
-	pub fn derive_and_charge_interest(
+	pub fn check_low_ltv_penalty_and_collect_interest(
 		&mut self,
 		ltv: FixedU64,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 		weight_used: &mut Weight,
-	) -> DispatchResult {
+	) {
+		let current_block = frame_system::Pallet::<T>::block_number();
+		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
+
+		for loan in self.loans.values_mut() {
+			if loan.should_charge_interest(current_block, config) {
+				loan.charge_low_ltv_penalty(ltv, config);
+				weight_used.saturating_accrue(T::WeightInfo::loan_charge_low_ltv_penalty());
+
+				// Error can be ignored (likely due to oracle being unavailable), we will simply
+				// collect interest next time:
+				let _ = loan.collect_pending_interest_if_above_threshold(Some(
+					PriceCacheAndThreshold {
+						threshold_usd: config.interest_collection_threshold_usd,
+						price_cache,
+					},
+				));
+				weight_used.saturating_accrue(T::WeightInfo::collect_pending_interest());
+			}
+		}
+	}
+
+	pub fn derive_and_charge_interest(&mut self, weight_used: &mut Weight) {
 		let config = LendingConfig::<T>::get();
 
 		let current_block = frame_system::Pallet::<T>::block_number();
 		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 
 		for loan in self.loans.values_mut() {
-			let blocks_since_last_payment: u32 = current_block
-				.saturating_sub(loan.last_interest_payment_at)
-				.try_into()
-				.unwrap_or(u32::MAX);
-
-			if current_block.saturating_sub(loan.created_at_block) %
-				config.interest_payment_interval_blocks.into() ==
-				0u32.into()
-			{
+			if loan.should_charge_interest(current_block, &config) {
 				weight_used.saturating_accrue(T::WeightInfo::loan_charge_interest());
-				loan.charge_interest(
-					ltv,
-					current_block,
-					blocks_since_last_payment,
-					&config,
-					price_cache,
-				)?;
+				loan.charge_interest(&config);
 			}
 		}
-
-		Ok(())
 	}
 
 	/// Checks if a top up is required and if so, performs it. Returns
@@ -850,18 +856,17 @@ impl<T: Config> LoanAccount<T> {
 pub struct GeneralLoan<T: Config> {
 	pub id: LoanId,
 	pub asset: Asset,
-	pub last_interest_payment_at: BlockNumberFor<T>,
 	pub created_at_block: BlockNumberFor<T>,
 	pub owed_principal: AssetAmount,
 	/// Interest owed on the loan but not yet taken (it is below the threshold)
-	pending_interest: InterestBreakdown,
+	pub pending_interest: InterestBreakdown,
 }
 
-/// A parameter into [charge_pending_interest_if_above_threshold] grouping the threshold
+/// A parameter into [collect_pending_interest_if_above_threshold] grouping the threshold
 /// and price cache together so they can both be wrapped in an Option.
-struct PriceCacheAndThreshold<'a, T: Config> {
-	threshold_usd: AssetAmount,
-	price_cache: &'a OraclePriceCache<T>,
+pub struct PriceCacheAndThreshold<'a, T: Config> {
+	pub threshold_usd: AssetAmount,
+	pub price_cache: &'a OraclePriceCache<T>,
 }
 
 impl<T: Config> GeneralLoan<T> {
@@ -874,7 +879,7 @@ impl<T: Config> GeneralLoan<T> {
 
 	fn collect_pending_interest(&mut self) {
 		if self
-			.charge_pending_interest_if_above_threshold(None /* no threshold */)
+			.collect_pending_interest_if_above_threshold(None /* no threshold */)
 			.is_err()
 		{
 			log_or_panic!(
@@ -883,15 +888,35 @@ impl<T: Config> GeneralLoan<T> {
 		}
 	}
 
-	pub(super) fn charge_interest(
-		&mut self,
-		ltv: FixedU64,
+	pub(super) fn charge_low_ltv_penalty(&mut self, ltv: FixedU64, config: &LendingConfiguration) {
+		// Calculating interest in scaled amounts for better precision
+		let owed_principal = ScaledAmountHP::from_asset_amount(self.owed_principal);
+
+		let low_ltv_penalty_rate = config.derive_low_ltv_penalty_rate_per_payment_interval(
+			ltv,
+			config.interest_payment_interval_blocks,
+		);
+
+		let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
+
+		self.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
+	}
+
+	/// Determines whether we should charge interest (or low ltv penalty) at a given block
+	fn should_charge_interest(
+		&self,
 		current_block: BlockNumberFor<T>,
-		blocks_since_last_payment: u32,
 		config: &LendingConfiguration,
-		price_cache: &OraclePriceCache<T>,
-	) -> DispatchResult {
+	) -> bool {
+		current_block.saturating_sub(self.created_at_block) %
+			config.interest_payment_interval_blocks.into() ==
+			0u32.into()
+	}
+
+	pub(super) fn charge_interest(&mut self, config: &LendingConfiguration) {
 		let loan_asset = self.asset;
+
+		let payment_interval = config.interest_payment_interval_blocks;
 
 		let base_interest_rate = {
 			let utilisation = GeneralLendingPools::<T>::get(loan_asset)
@@ -901,38 +926,25 @@ impl<T: Config> GeneralLoan<T> {
 			config.derive_base_interest_rate_per_payment_interval(
 				loan_asset,
 				utilisation,
-				blocks_since_last_payment,
+				payment_interval,
 			)
 		};
 
 		let network_interest_rate =
-			config.derive_network_interest_rate_per_payment_interval(blocks_since_last_payment);
-
-		let low_ltv_penalty_rate =
-			config.derive_low_ltv_penalty_rate_per_payment_interval(ltv, blocks_since_last_payment);
+			config.derive_network_interest_rate_per_payment_interval(payment_interval);
 
 		// Calculating interest in scaled amounts for better precision
 		let owed_principal = ScaledAmountHP::from_asset_amount(self.owed_principal);
 
 		// Work out how much interest has accrued in loan's asset terms:
 		let network_interest_amount = owed_principal * network_interest_rate;
-		let low_ltv_penalty_amount = owed_principal * low_ltv_penalty_rate;
+
 		let pool_interest_amount = owed_principal * base_interest_rate;
 
 		// Record the accrued interest amounts. We may or may not charge these immediately
 		// depending on whether the amounts exceed some threshold.
 		self.pending_interest.network.saturating_accrue(network_interest_amount);
 		self.pending_interest.pool.saturating_accrue(pool_interest_amount);
-		self.pending_interest.low_ltv_penalty.saturating_accrue(low_ltv_penalty_amount);
-
-		self.last_interest_payment_at = current_block;
-
-		self.charge_pending_interest_if_above_threshold(Some(PriceCacheAndThreshold {
-			threshold_usd: config.interest_collection_threshold_usd,
-			price_cache,
-		}))?;
-
-		Ok(())
 	}
 
 	/// Repays the loan after collecting any pending interest and deducting liquidation fee
@@ -1000,7 +1012,8 @@ impl<T: Config> GeneralLoan<T> {
 		provided_amount.saturating_sub(repayment_amount)
 	}
 
-	fn charge_pending_interest_if_above_threshold(
+	#[transactional]
+	pub fn collect_pending_interest_if_above_threshold(
 		&mut self,
 		price_cache_and_threshold: Option<PriceCacheAndThreshold<T>>,
 	) -> DispatchResult {
@@ -1103,13 +1116,19 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		let _ = LoanAccounts::<T>::try_mutate(borrower_id, |loan_account| {
 			let loan_account = loan_account.as_mut().expect("Using keys read just above");
 
+			loan_account.derive_and_charge_interest(&mut weight_used);
+
 			// Some of these may fail due to oracle prices being unavailable, but that's
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
 			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
 			loan_account.derive_ltv(&price_cache).and_then(|ltv| {
-				let _ =
-					loan_account.derive_and_charge_interest(ltv, &price_cache, &mut weight_used);
+				loan_account.check_low_ltv_penalty_and_collect_interest(
+					ltv,
+					&price_cache,
+					&config,
+					&mut weight_used,
+				);
 
 				let new_ltv = if let Ok(true) = loan_account.process_auto_top_up(
 					borrower_id,
@@ -1219,7 +1238,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 			let loan = GeneralLoan {
 				id: loan_id,
 				asset,
-				last_interest_payment_at: frame_system::Pallet::<T>::current_block_number(),
 				created_at_block: frame_system::Pallet::<T>::current_block_number(),
 				owed_principal: 0,
 				pending_interest: Default::default(),
