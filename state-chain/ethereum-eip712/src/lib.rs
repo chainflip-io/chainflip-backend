@@ -68,13 +68,8 @@ pub fn encode_eip712_using_type_info_fast<T: TypeInfo + Encode + 'static>(
 	domain: EIP712Domain,
 ) -> Result<TypedData, Eip712Error> {
 	// Decode directly using TypeInfo - no registry needed
-	let decoded_value =
-		typeinfo_decoder::decode_with_type_info::<T>(&mut &value.encode()[..]).map_err(|e| {
-			Eip712Error::Message(format!(
-				"Failed to decode using TypeInfo: {:?}",
-				e
-			))
-		})?;
+	let decoded_value = typeinfo_decoder::decode_with_type_info::<T>(&mut &value.encode()[..])
+		.map_err(|e| Eip712Error::Message(format!("Failed to decode using TypeInfo: {:?}", e)))?;
 
 	let mut types: BTreeMap<String, Vec<Eip712DomainType>> = BTreeMap::new();
 	let (primary_type, minimized_value) =
@@ -479,6 +474,7 @@ pub struct EmptyArray;
 /// Benchmark helper module exposing individual steps of `encode_eip712_using_type_info`.
 /// These functions are intended for performance analysis only.
 #[cfg(feature = "runtime-benchmarks")]
+#[expect(clippy::type_complexity)]
 pub mod benchmark_helpers {
 	use super::*;
 
@@ -598,10 +594,7 @@ pub mod tests {
 			(Ok(old_typed_data), Ok(fast_typed_data)) => {
 				let old_hash = old_typed_data.encode_eip712().unwrap();
 				let fast_hash = fast_typed_data.encode_eip712().unwrap();
-				assert_eq!(
-					old_hash, fast_hash,
-					"EIP-712 hashes differ between implementations"
-				);
+				assert_eq!(old_hash, fast_hash, "EIP-712 hashes differ between implementations");
 				assert_eq!(
 					old_typed_data.types, fast_typed_data.types,
 					"EIP-712 types differ between implementations"
@@ -629,11 +622,7 @@ pub mod tests {
 			c: u64,
 		}
 
-		assert_implementations_equivalent(SimpleStruct {
-			a: 42,
-			b: "hello".to_string(),
-			c: 12345,
-		});
+		assert_implementations_equivalent(SimpleStruct { a: 42, b: "hello".to_string(), c: 12345 });
 	}
 
 	#[test]
@@ -763,7 +752,9 @@ pub mod tests {
 		}
 
 		assert_implementations_equivalent(WithNestedOption { maybe_inner: None });
-		assert_implementations_equivalent(WithNestedOption { maybe_inner: Some(Inner { value: 99 }) });
+		assert_implementations_equivalent(WithNestedOption {
+			maybe_inner: Some(Inner { value: 99 }),
+		});
 	}
 
 	#[test]
