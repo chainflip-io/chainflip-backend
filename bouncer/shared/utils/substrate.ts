@@ -560,6 +560,7 @@ export function observeEvents<T = any>(
             logger.debug(
               `Found matching event ${event.name.section}:${event.name.method} in block ${event.block}`,
             );
+            logger.info(`${JSON.stringify(event.data)}`);
             foundEvents.push(event);
             if (stopAfter === 'Any') {
               stop = true;
