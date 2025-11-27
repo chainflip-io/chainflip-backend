@@ -6,7 +6,7 @@
 
 use codec::{Compact, Decode};
 use scale_info::{prelude::string::ToString, Type, TypeDef, TypeDefPrimitive, TypeInfo};
-use scale_value::{Composite, Value};
+use scale_value::{Composite, Value, ValueDef};
 use sp_std::{vec, vec::Vec};
 
 /// Error type for decoding failures.
@@ -36,38 +36,41 @@ pub fn decode_with_type_info<T: TypeInfo>(input: &mut &[u8]) -> Result<Value, De
 	decode_type(input, &T::type_info())
 }
 
+/// Decode a list of fields into a Composite value (either named or unnamed).
+fn decode_fields(
+	input: &mut &[u8],
+	fields: &[scale_info::Field],
+) -> Result<Composite<()>, DecodeError> {
+	if fields.is_empty() {
+		return Ok(Composite::Unnamed(vec![]));
+	}
+
+	let is_named = fields.first().map(|f| f.name.is_some()).unwrap_or(false);
+
+	if is_named {
+		let mut named_fields = Vec::with_capacity(fields.len());
+		for field in fields {
+			let field_name = field.name.as_ref().unwrap().to_string();
+			let field_value = decode_type(input, &field.ty.type_info())?;
+			named_fields.push((field_name, field_value));
+		}
+		Ok(Composite::Named(named_fields))
+	} else {
+		let mut unnamed_fields = Vec::with_capacity(fields.len());
+		for field in fields {
+			let field_value = decode_type(input, &field.ty.type_info())?;
+			unnamed_fields.push(field_value);
+		}
+		Ok(Composite::Unnamed(unnamed_fields))
+	}
+}
+
 /// Internal recursive decoder that works with `Type` directly.
 fn decode_type(input: &mut &[u8], ty: &Type) -> Result<Value, DecodeError> {
 	match &ty.type_def {
 		TypeDef::Composite(composite) => {
-			let fields = &composite.fields;
-
-			if fields.is_empty() {
-				// Unit struct
-				return Ok(Value::unnamed_composite(vec![]));
-			}
-
-			// Check if fields are named or unnamed
-			let is_named = fields.first().map(|f| f.name.is_some()).unwrap_or(false);
-
-			if is_named {
-				let mut named_fields = Vec::with_capacity(fields.len());
-				for field in fields {
-					let field_name = field.name.as_ref().unwrap().to_string();
-					let field_type = field.ty.type_info();
-					let field_value = decode_type(input, &field_type)?;
-					named_fields.push((field_name, field_value));
-				}
-				Ok(Value::named_composite(named_fields))
-			} else {
-				let mut unnamed_fields = Vec::with_capacity(fields.len());
-				for field in fields {
-					let field_type = field.ty.type_info();
-					let field_value = decode_type(input, &field_type)?;
-					unnamed_fields.push(field_value);
-				}
-				Ok(Value::unnamed_composite(unnamed_fields))
-			}
+			let composite_value = decode_fields(input, &composite.fields)?;
+			Ok(Value::without_context(ValueDef::Composite(composite_value)))
 		},
 
 		TypeDef::Variant(variant) => {
@@ -81,33 +84,8 @@ fn decode_type(input: &mut &[u8], ty: &Type) -> Result<Value, DecodeError> {
 				.ok_or(DecodeError::InvalidVariantIndex(index))?;
 
 			let variant_name = selected_variant.name.to_string();
-
-			if selected_variant.fields.is_empty() {
-				// Unit variant
-				Ok(Value::variant(variant_name, Composite::Unnamed(vec![])))
-			} else {
-				let is_named =
-					selected_variant.fields.first().map(|f| f.name.is_some()).unwrap_or(false);
-
-				if is_named {
-					let mut named_fields = Vec::with_capacity(selected_variant.fields.len());
-					for field in &selected_variant.fields {
-						let field_name = field.name.as_ref().unwrap().to_string();
-						let field_type = field.ty.type_info();
-						let field_value = decode_type(input, &field_type)?;
-						named_fields.push((field_name, field_value));
-					}
-					Ok(Value::variant(variant_name, Composite::Named(named_fields)))
-				} else {
-					let mut unnamed_fields = Vec::with_capacity(selected_variant.fields.len());
-					for field in &selected_variant.fields {
-						let field_type = field.ty.type_info();
-						let field_value = decode_type(input, &field_type)?;
-						unnamed_fields.push(field_value);
-					}
-					Ok(Value::variant(variant_name, Composite::Unnamed(unnamed_fields)))
-				}
-			}
+			let composite_value = decode_fields(input, &selected_variant.fields)?;
+			Ok(Value::variant(variant_name, composite_value))
 		},
 
 		TypeDef::Sequence(seq) => {
