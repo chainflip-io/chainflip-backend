@@ -27,7 +27,6 @@ use cf_traits::{
 	SwapRequestHandler,
 };
 use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
 
 use frame_support::{
 	fail,
@@ -73,6 +72,7 @@ pub mod pallet {
 	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
 	use frame_support::sp_runtime::{traits::Zero, FixedU128, SaturatedConversion, Saturating};
+	use sp_std::collections::btree_map::BTreeMap;
 
 	use super::*;
 
@@ -342,7 +342,10 @@ pub mod pallet {
 	/// Stores exponential moving average stats for liquidity providers per asset
 	#[pallet::storage]
 	pub type LpAggStats<T: Config> =
-		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AggStats>;
+		StorageValue<_, BTreeMap<T::AccountId, BTreeMap<Asset, AggStats>>, ValueQuery>;
+
+	//pub type LpAggStats<T: Config> = StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat,
+	// Asset, AggStats>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -663,33 +666,32 @@ impl<T: Config> Pallet<T> {
 	fn update_agg_stats() -> Weight {
 		let mut execution_weight = Weight::zero();
 
-		// For every existing Lp, update their Aggregate stats from accumulated delta stats
-		for (lp, asset) in LpAggStats::<T>::iter_keys().collect::<Vec<_>>() {
-			execution_weight.saturating_accrue(T::DbWeight::get().reads(2));
-
-			let lp_delta = match LpDeltaStats::<T>::get(&lp, asset) {
-				Some(delta) => {
-					execution_weight.saturating_accrue(T::DbWeight::get().writes(1));
-					LpDeltaStats::<T>::remove(&lp, asset);
-					delta
-				},
-				None => Default::default(),
-			};
-
-			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-			LpAggStats::<T>::mutate(&lp, asset, |maybe_agg_stats| {
-				if let Some(agg_stats) = maybe_agg_stats.as_mut() {
+		LpAggStats::<T>::mutate(|agg_stats_map| {
+			// For every existing Lp, update their Aggregate stats from accumulated delta stats
+			for (lp, lp_stats) in agg_stats_map.iter_mut() {
+				for (asset, agg_stats) in lp_stats.iter_mut() {
+					let lp_delta = match LpDeltaStats::<T>::get(lp, asset) {
+						Some(delta) => {
+							execution_weight.saturating_accrue(T::DbWeight::get().writes(1));
+							LpDeltaStats::<T>::remove(lp, asset);
+							delta
+						},
+						None => Default::default(),
+					};
+					// TODO add weight for update function
 					agg_stats.update(&lp_delta);
 				}
-			});
-		}
+			}
 
-		// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
-		for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
-			LpAggStats::<T>::insert(&lp, asset, AggStats::new(delta));
-			LpDeltaStats::<T>::remove(&lp, asset);
-			execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
-		}
+			// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
+			for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
+				let lp_stats = agg_stats_map.entry(lp.clone()).or_default();
+				lp_stats.insert(asset, AggStats::new(delta));
+
+				LpDeltaStats::<T>::remove(&lp, asset);
+				execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
+			}
+		});
 
 		execution_weight
 	}
