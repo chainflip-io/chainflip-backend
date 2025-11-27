@@ -592,21 +592,17 @@ pub mod tests {
 
 		match (old_result, fast_result) {
 			(Ok(old_typed_data), Ok(fast_typed_data)) => {
-				let old_hash = old_typed_data.encode_eip712().unwrap();
-				let fast_hash = fast_typed_data.encode_eip712().unwrap();
-				assert_eq!(old_hash, fast_hash, "EIP-712 hashes differ between implementations");
 				assert_eq!(
-					old_typed_data.types, fast_typed_data.types,
-					"EIP-712 types differ between implementations"
-				);
-				assert_eq!(
-					old_typed_data.primary_type, fast_typed_data.primary_type,
-					"EIP-712 primary_type differs between implementations"
+					old_typed_data, fast_typed_data,
+					"EIP-712 TypedData differ between implementations"
 				);
 			},
 			(Err(e1), Err(e2)) => {
-				// Both failed - that's fine, they're consistent
-				panic!("Both implementations failed: old={:?}, fast={:?}", e1, e2);
+				assert_eq!(
+					e1.to_string(),
+					e2.to_string(),
+					"Both implementations failed, but with different errors"
+				);
 			},
 			(Ok(_), Err(e)) => panic!("Fast implementation failed but old succeeded: {:?}", e),
 			(Err(e), Ok(_)) => panic!("Old implementation failed but fast succeeded: {:?}", e),
