@@ -287,8 +287,37 @@ fn decode_compact(input: &mut &[u8], inner_type: &Type) -> Result<Value, DecodeE
 mod tests {
 	use super::*;
 	use codec::Encode;
-	use scale_info::{prelude::string::String, TypeInfo};
+	use scale_info::{prelude::string::String, PortableRegistry, TypeInfo};
 	use scale_value::ValueDef;
+
+	/// Helper function that decodes using both the new direct TypeInfo method
+	/// and the traditional PortableRegistry method, asserting that both produce
+	/// identical results.
+	fn decode_and_verify<T: TypeInfo + Encode>(value: &T) -> Value {
+		let encoded = value.encode();
+
+		// Decode using the new TypeInfo-based decoder
+		let decoded_typeinfo =
+			decode_with_type_info::<T>(&mut &encoded[..]).expect("TypeInfo decode failed");
+
+		// Decode using traditional PortableRegistry method
+		let mut registry = PortableRegistry::new();
+		let type_id = registry.register_type(&T::type_info());
+		let decoded_registry = scale_value::scale::decode_as_type(
+			&mut &encoded[..],
+			type_id.id,
+			registry.types(),
+		)
+		.expect("Registry decode failed");
+
+		// Assert both methods produce identical results
+		assert_eq!(
+			decoded_typeinfo, decoded_registry,
+			"TypeInfo and Registry decoders produced different results"
+		);
+
+		decoded_typeinfo
+	}
 
 	#[derive(TypeInfo, Encode)]
 	struct SimpleStruct {
@@ -306,24 +335,22 @@ mod tests {
 	#[test]
 	fn test_decode_simple_struct() {
 		let value = SimpleStruct { a: 42, b: "hello".to_string() };
-		let encoded = value.encode();
-		let decoded = decode_with_type_info::<SimpleStruct>(&mut &encoded[..]).unwrap();
+		let decoded = decode_and_verify(&value);
 
-		match decoded.value {
-			ValueDef::Composite(Composite::Named(fields)) => {
-				assert_eq!(fields.len(), 2);
-				assert_eq!(fields[0].0, "a");
-				assert_eq!(fields[1].0, "b");
-			},
-			_ => panic!("Expected named composite"),
-		}
+		assert_eq!(
+			decoded,
+			scale_value::value!(
+			{
+				"a": 42u32,
+				"b": "hello".to_string(),
+			})
+		);
 	}
 
 	#[test]
 	fn test_decode_enum_unit() {
 		let value = SimpleEnum::Variant1;
-		let encoded = value.encode();
-		let decoded = decode_with_type_info::<SimpleEnum>(&mut &encoded[..]).unwrap();
+		let decoded = decode_and_verify(&value);
 
 		match decoded.value {
 			ValueDef::Variant(v) => {
@@ -336,50 +363,47 @@ mod tests {
 	#[test]
 	fn test_decode_enum_tuple() {
 		let value = SimpleEnum::Variant2(123);
-		let encoded = value.encode();
-		let decoded = decode_with_type_info::<SimpleEnum>(&mut &encoded[..]).unwrap();
+		let decoded = decode_and_verify(&value);
 
-		match decoded.value {
-			ValueDef::Variant(v) => {
-				assert_eq!(v.name, "Variant2");
-			},
-			_ => panic!("Expected variant"),
-		}
+		assert_eq!(
+			decoded,
+			scale_value::Value::variant("Variant2", scale_value::Composite::Unnamed(vec![
+				scale_value::Value::u128(123)
+			]))
+		);
 	}
 
 	#[test]
 	fn test_decode_enum_struct() {
 		let value = SimpleEnum::Variant3 { x: 10, y: 20 };
-		let encoded = value.encode();
-		let decoded = decode_with_type_info::<SimpleEnum>(&mut &encoded[..]).unwrap();
+		let decoded = decode_and_verify(&value);
 
-		match decoded.value {
-			ValueDef::Variant(v) => {
-				assert_eq!(v.name, "Variant3");
-				match v.values {
-					Composite::Named(fields) => {
-						assert_eq!(fields.len(), 2);
-						assert_eq!(fields[0].0, "x");
-						assert_eq!(fields[1].0, "y");
-					},
-					_ => panic!("Expected named fields"),
-				}
-			},
-			_ => panic!("Expected variant"),
-		}
+		assert_eq!(
+			decoded,
+			scale_value::Value::variant(
+				"Variant3",
+				scale_value::Composite::Named(vec![
+					("x".to_string(), scale_value::Value::u128(10)),
+					("y".to_string(), scale_value::Value::u128(20)),
+				])
+			)
+		);
 	}
 
 	#[test]
 	fn test_decode_vec() {
 		let value: Vec<u32> = vec![1, 2, 3, 4, 5];
-		let encoded = value.encode();
-		let decoded = decode_with_type_info::<Vec<u32>>(&mut &encoded[..]).unwrap();
+		let decoded = decode_and_verify(&value);
 
-		match decoded.value {
-			ValueDef::Composite(Composite::Unnamed(elements)) => {
-				assert_eq!(elements.len(), 5);
-			},
-			_ => panic!("Expected unnamed composite"),
-		}
+		assert_eq!(
+			decoded,
+			scale_value::Value::unnamed_composite(vec![
+				scale_value::Value::u128(1),
+				scale_value::Value::u128(2),
+				scale_value::Value::u128(3),
+				scale_value::Value::u128(4),
+				scale_value::Value::u128(5),
+			])
+		);
 	}
 }
