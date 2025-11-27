@@ -490,11 +490,6 @@ impl<T: Config> LoanAccount<T> {
 	) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
 
-		if self.liquidation_status != LiquidationStatus::NoLiquidation {
-			// For simplicity, we don't charge interest during liquidations
-			return Ok(())
-		}
-
 		let current_block = frame_system::Pallet::<T>::block_number();
 		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 

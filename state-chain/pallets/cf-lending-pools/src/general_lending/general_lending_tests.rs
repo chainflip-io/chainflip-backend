@@ -1630,6 +1630,61 @@ fn soft_liquidation_escalates_to_hard() {
 }
 
 #[test]
+fn loans_in_liquidation_pay_interest() {
+	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.then_execute_with(|_| {
+			// Set a low collection threshold so we can more easily check the collected amount
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
+			));
+			// Change oracle price to trigger liquidation
+			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+		})
+		.then_execute_at_next_block(|_| {
+			// Make sure that the loan is being liquidated
+			assert_matches!(
+				LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+				LiquidationStatus::Liquidating { .. }
+			);
+		})
+		.then_process_blocks_until_block(
+			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+		)
+		.then_execute_with(|_| {
+			let (pool_interest, network_interest) = {
+				let mut interest = Interest::new();
+
+				let (origination_fee_network, origination_fee_pool) =
+					take_network_fee(ORIGINATION_FEE);
+
+				let utilisation = Permill::from_rational(
+					PRINCIPAL + ORIGINATION_FEE,
+					INIT_POOL_AMOUNT + origination_fee_pool,
+				);
+
+				interest.accrue_interest(
+					PRINCIPAL + ORIGINATION_FEE,
+					utilisation,
+					CONFIG.interest_payment_interval_blocks,
+				);
+				interest.collect()
+			};
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest,
+				network_interest,
+				broker_interest: 0,
+				low_ltv_penalty: 0,
+			}));
+		});
+}
+
+#[test]
 fn liquidation_fully_repays_loan_when_aborted() {
 	// Test a (likely rare) scenario where liquidation is aborted (due to reaching
 	// acceptable LTV), but the collateral already swapped is enough to fully cover
@@ -4702,6 +4757,7 @@ mod rpcs {
 		// (rather than waiting for fractional amounts to accumulate).
 		const PRINCIPAL: AssetAmount = 2_000_000_000_000;
 		const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
+		const INIT_POOL_AMOUNT_2: AssetAmount = INIT_POOL_AMOUNT * 2;
 
 		const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE;
 
@@ -4736,7 +4792,7 @@ mod rpcs {
 				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
 
 				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT * 2);
+				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT_2);
 
 				MockBalance::credit_account(
 					&BORROWER,
@@ -4816,29 +4872,46 @@ mod rpcs {
 					},
 				);
 
-				let mut interest = Interest::new();
+				let mut interest_loan_1 = Interest::new();
 
 				let (origination_fee_network_1, origination_fee_pool_1) =
 					take_network_fee(ORIGINATION_FEE);
 
-				let utilisation = Permill::from_rational(
-					PRINCIPAL + ORIGINATION_FEE,
-					INIT_POOL_AMOUNT + origination_fee_pool_1,
-				);
+				// Interest for loan 1
+				{
+					let utilisation = Permill::from_rational(
+						PRINCIPAL + ORIGINATION_FEE,
+						INIT_POOL_AMOUNT + origination_fee_pool_1,
+					);
 
-				// Only the first loan will pay interest
-				interest.accrue_interest(
-					PRINCIPAL + ORIGINATION_FEE,
-					utilisation,
-					CONFIG.interest_payment_interval_blocks,
-				);
+					interest_loan_1.accrue_interest(
+						PRINCIPAL + ORIGINATION_FEE,
+						utilisation,
+						CONFIG.interest_payment_interval_blocks,
+					);
+				}
 
-				let (pool_interest, network_interest) = interest.collect();
+				// Interest for loan 2 (in liquidation)
+				let mut interest_loan_2 = Interest::new();
+				{
+					let (origination_fee_network_2, origination_fee_pool_2) =
+						take_network_fee(ORIGINATION_FEE_2);
 
-				let utilisation_after_interest = Permill::from_rational(
-					PRINCIPAL + ORIGINATION_FEE + pool_interest + network_interest,
-					INIT_POOL_AMOUNT + origination_fee_pool_1 + pool_interest,
-				);
+					let utilisation = Permill::from_rational(
+						PRINCIPAL_2 + ORIGINATION_FEE_2,
+						INIT_POOL_AMOUNT_2 + origination_fee_pool_2,
+					);
+
+					interest_loan_2.accrue_interest(
+						PRINCIPAL_2 + ORIGINATION_FEE_2,
+						utilisation,
+						CONFIG.interest_payment_interval_blocks,
+					);
+				}
+
+				let (pool_interest_1, network_interest_1) = interest_loan_1.collect();
+
+				let (pool_interest_2, network_interest_2) = interest_loan_2.collect();
 
 				// Both accounts should be returned since we don't specify any:
 				assert_eq!(
@@ -4847,7 +4920,7 @@ mod rpcs {
 						RpcLoanAccount {
 							account: BORROWER_2,
 							collateral_topup_asset: Some(COLLATERAL_ASSET_2),
-							ltv_ratio: Some(FixedU64::from_rational(1_173_483_333, 1_000_000_000)),
+							ltv_ratio: Some(FixedU64::from_rational(1_173_483_514, 1_000_000_000)),
 							// NOTE: all of collateral is in liquidation swaps, but we include
 							// any amount that has not been swapped yet:
 							collateral: vec![AssetAndAmount {
@@ -4860,8 +4933,9 @@ mod rpcs {
 								created_at: INIT_BLOCK as u32,
 								// NOTE: we account for the principal asset already swapped in
 								// liquidation swaps:
-								principal_amount: PRINCIPAL_2 + ORIGINATION_FEE_2 -
-									ACCUMULATED_OUTPUT_AMOUNT,
+								principal_amount: PRINCIPAL_2 +
+									ORIGINATION_FEE_2 + pool_interest_2 +
+									network_interest_2 - ACCUMULATED_OUTPUT_AMOUNT,
 							}],
 							liquidation_status: Some(RpcLiquidationStatus {
 								liquidation_swaps: vec![RpcLiquidationSwap {
@@ -4885,23 +4959,28 @@ mod rpcs {
 								asset: LOAN_ASSET,
 								created_at: INIT_BLOCK as u32,
 								principal_amount: PRINCIPAL +
-									ORIGINATION_FEE + pool_interest +
-									network_interest,
+									ORIGINATION_FEE + pool_interest_1 +
+									network_interest_1,
 							}],
 							liquidation_status: None
 						},
 					]
 				);
 
+				let utilisation_after_interest_pool_1 = Permill::from_rational(
+					PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1,
+					INIT_POOL_AMOUNT + origination_fee_pool_1 + pool_interest_1,
+				);
+
 				assert_eq!(
 					super::rpc::get_lending_pools::<Test>(Some(LOAN_ASSET)),
 					vec![RpcLendingPool {
 						asset: LOAN_ASSET,
-						total_amount: INIT_POOL_AMOUNT + origination_fee_pool_1 + pool_interest,
+						total_amount: INIT_POOL_AMOUNT + origination_fee_pool_1 + pool_interest_1,
 						available_amount: INIT_POOL_AMOUNT -
 							PRINCIPAL - origination_fee_network_1 -
-							network_interest,
-						utilisation_rate: utilisation_after_interest,
+							network_interest_1,
+						utilisation_rate: utilisation_after_interest_pool_1,
 						current_interest_rate: Permill::from_parts(53_335), // 5.33%
 						config: CONFIG.get_config_for_asset(LOAN_ASSET).clone(),
 					}]
