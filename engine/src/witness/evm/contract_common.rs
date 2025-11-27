@@ -15,29 +15,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::evm::{
-	cached_rpc::{AddressCheckerRetryRpcApiWithResult, EvmRetryRpcApiWithResult},
-	rpc::address_checker::AddressState,
+	cached_rpc::{AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult},
+	retry_rpc::EvmRetryRpcApi,
+	rpc::{address_checker::AddressState, EvmRpcSigningClient},
 };
 use cf_chains::witness_period::SaturatingStep;
-use ethers::abi::RawLog;
+use ethers::{
+	abi::{ethereum_types::BloomInput, RawLog},
+	types::{Bloom, Log},
+};
 use futures::try_join;
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes, block_witnesser::state_machine::EngineElectionType,
 };
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
-use crate::evm::{
-	cached_rpc::EvmCachingClient, retry_rpc::EvmRetryRpcApi, rpc::EvmRpcSigningClient,
-};
-
-use super::super::common::chain_source::Header;
+use super::{super::common::chain_source::Header, vault::VaultEvents};
 use anyhow::{anyhow, ensure, Result};
 use sp_core::{H160, H256, U256};
-
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::{Bloom, Log},
-};
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
@@ -258,4 +253,199 @@ where
 		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
 	})
 	.collect::<anyhow::Result<Vec<_>>>()
+}
+
+/// Trait for handling `VaultEvents` to produce chain-specific state-chain vault events.
+pub trait VaultEventsHandler {
+	/// State-chain VaultEvents enum type for a particular chain (e.g. Ethereum or Arbitrum).
+	type SCVaultEvents;
+
+	/// Convert a low-level `VaultEvents` occurrence plus context into an optional state-chain
+	/// event.
+	///
+	/// Returning `Ok(None)` allows ignoring variants the chain does not care about.
+	fn handle_event(
+		&self,
+		event: VaultEvents,
+		tx_hash: H256,
+		block_height: u64,
+	) -> Result<Option<Self::SCVaultEvents>>;
+}
+
+/// Generic helper to process VaultEvents for different EVM chains.
+///
+/// The chain-specific behaviour is provided by the `VaultEventsHandler` implementation on the
+/// corresponding voter type.
+pub fn handle_vault_events<Handler>(
+	handler: &Handler,
+	events: Vec<Event<VaultEvents>>,
+	block_height: u64,
+) -> Result<Vec<Handler::SCVaultEvents>>
+where
+	Handler: VaultEventsHandler,
+{
+	let mut result = Vec::new();
+
+	for event in events {
+		if let Some(mapped) =
+			handler.handle_event(event.event_parameters, event.tx_hash, block_height)?
+		{
+			result.push(mapped);
+		}
+	}
+
+	Ok(result)
+}
+
+/// Trait for ERC20 event handlers
+#[async_trait::async_trait]
+pub trait Erc20EventHandler<Asset: PartialEq + Copy + std::hash::Hash + Eq> {
+	async fn get_events_for_asset(
+		&self,
+		asset: Asset,
+		bloom: Option<Bloom>,
+		block_height: u64,
+		block_hash: H256,
+		client: &EvmCachingClient<EvmRpcSigningClient>,
+	) -> Result<Option<Vec<Event<super::erc20_deposits::Erc20Events>>>>;
+}
+
+/// Trait for deposit channel witnesser configuration
+pub trait DepositChannelWitnesserConfig {
+	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
+	fn address_checker_address(&self) -> H160;
+	fn vault_address(&self) -> H160;
+}
+
+/// Generic helper function for deposit channel witnessing
+///
+/// This function handles the common logic for witnessing deposit channels on EVM chains.
+/// The chain-specific parts (native asset, ERC20 asset handling) are provided via parameters.
+pub async fn witness_deposit_channels_generic<
+	Chain: cf_chains::Chain<
+		ChainBlockNumber = u64,
+		ChainAccount = H160,
+		ChainAsset = Asset,
+		DepositDetails = cf_chains::evm::DepositDetails,
+	>,
+	CT: ChainTypes<ChainBlockHash = H256>,
+	NativeAsset: PartialEq + Copy + Into<Asset>,
+	Asset: PartialEq + Copy + std::hash::Hash + Eq + Into<Chain::ChainAsset>,
+	Config: DepositChannelWitnesserConfig + Erc20EventHandler<Asset>,
+	DepositChannel: Clone,
+>(
+	config: &Config,
+	block_height: CT::ChainBlockNumber,
+	election_type: EngineElectionType<CT>,
+	deposit_addresses: Vec<DepositChannel>,
+	native_asset: NativeAsset,
+	get_asset: impl Fn(&DepositChannel) -> Asset,
+	get_address: impl Fn(&DepositChannel) -> H160,
+) -> Result<(Vec<pallet_cf_ingress_egress::DepositWitness<Chain>>, Option<CT::ChainBlockHash>)>
+where
+	CT::ChainBlockNumber: cf_chains::witness_period::SaturatingStep,
+	Chain::ChainAmount: TryFrom<sp_core::U256>,
+	<Chain::ChainAmount as TryFrom<sp_core::U256>>::Error: std::fmt::Debug,
+{
+	use super::evm_deposits::eth_ingresses_at_block;
+	use itertools::Itertools;
+	use pallet_cf_ingress_egress::DepositWitness;
+
+	let client = config.client();
+	let address_checker_address = config.address_checker_address();
+	let vault_address = config.vault_address();
+
+	let (block, return_block_hash) =
+		query_election_block::<CT, Chain>(client, block_height, election_type).await?;
+
+	// Use SaturatingStep to get the range, then extract the start as u64
+	let block_height_range = block_height.into_range_inclusive();
+	let block_height_u64 = *block_height_range.start();
+
+	let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
+		deposit_addresses.into_iter().fold(
+			(Vec::new(), HashMap::new()),
+			|(mut eth, mut erc20), deposit_channel| {
+				let asset = get_asset(&deposit_channel);
+				let address = get_address(&deposit_channel);
+				if asset == native_asset.into() {
+					eth.push(address);
+				} else {
+					erc20.entry(asset).or_insert_with(Vec::new).push(address);
+				}
+				(eth, erc20)
+			},
+		);
+
+	let eth_ingresses = eth_ingresses_at_block(
+		address_states(
+			client,
+			address_checker_address,
+			block.parent_hash,
+			block.hash,
+			eth_deposit_channels.clone(),
+		)
+		.await?,
+		events_at_block::<Chain, VaultEvents, _>(
+			block.bloom,
+			block_height_u64,
+			block.hash,
+			vault_address,
+			client,
+		)
+		.await?
+		.into_iter()
+		.filter_map(|event| match event.event_parameters {
+			VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
+			_ => None,
+		})
+		.collect(),
+	)?;
+
+	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
+
+	// Handle each asset type separately with its specific event type
+	for (asset, deposit_channels) in erc20_deposit_channels {
+		if let Some(events) = config
+			.get_events_for_asset(asset, block.bloom, block_height_u64, block.hash, client)
+			.await?
+		{
+			let asset_ingresses = events
+			.into_iter()
+			.filter_map(|event| {
+				match event.event_parameters {
+					super::erc20_deposits::Erc20Events::TransferFilter{to, value, from: _ } if deposit_channels.contains(&to) =>
+						Some(DepositWitness {
+							deposit_address: to,
+							amount: value.try_into().expect(
+								"Any ERC20 tokens we support should have amounts that fit into a u128",
+							),
+							asset: asset.into(),
+							deposit_details: Chain::DepositDetails {
+								tx_hashes: Some(vec![event.tx_hash]),
+							},
+						}),
+					_ => None,
+				}
+			})
+			.collect::<Vec<_>>();
+
+			erc20_ingresses.extend(asset_ingresses);
+		}
+	}
+
+	Ok((
+		eth_ingresses
+			.into_iter()
+			.map(|(to_addr, value, tx_hashes)| DepositWitness {
+				deposit_address: to_addr,
+				asset: native_asset.into(),
+				amount: value.try_into().expect("Ingress witness transfer value should fit u128"),
+				deposit_details: Chain::DepositDetails { tx_hashes },
+			})
+			.chain(erc20_ingresses)
+			.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
+			.collect(),
+		return_block_hash,
+	))
 }

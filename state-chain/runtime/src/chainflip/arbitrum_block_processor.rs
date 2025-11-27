@@ -1,9 +1,9 @@
 use crate::{
 	chainflip::{
 		arbitrum_elections::{
-			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerWitnessing,
-			ArbitrumVaultDepositWitnessing, BlockDataDepositChannel, BlockDataKeyManager,
-			BlockDataVaultDeposit, KeyManagerEvent, VaultEvents,
+			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerEvent,
+			ArbitrumKeyManagerWitnessing, ArbitrumVaultDepositWitnessing, ArbitrumVaultEvent,
+			BlockDataDepositChannel, BlockDataKeyManager, BlockDataVaultDeposit,
 		},
 		elections::TypesFor,
 	},
@@ -15,7 +15,7 @@ use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes,
-	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
+	block_witnesser::state_machine::{BWProcessorTypes, ExecuteHook, HookTypeFor, RulesHook},
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::DepositWitness;
@@ -82,26 +82,26 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	}
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<VaultEvents>)>) {
+	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumVaultEvent>)>) {
 		for (block, event) in &dedup_events(events) {
 			match event {
 				ArbEvent::PreWitness(_) => {},
 				ArbEvent::Witness(call) => match call {
-					VaultEvents::SwapNativeFilter(vault_deposit_witness) |
-					VaultEvents::SwapTokenFilter(vault_deposit_witness) |
-					VaultEvents::XcallNativeFilter(vault_deposit_witness) |
-					VaultEvents::XcallTokenFilter(vault_deposit_witness) => {
+					ArbitrumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
+					ArbitrumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
+					ArbitrumVaultEvent::XcallNativeFilter(vault_deposit_witness) |
+					ArbitrumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
 						ArbitrumIngressEgress::process_vault_swap_request_full_witness(
 							*block.root(),
 							vault_deposit_witness.clone(),
 						);
 					},
-					VaultEvents::TransferNativeFailedFilter {
+					ArbitrumVaultEvent::TransferNativeFailedFilter {
 						asset,
 						amount,
 						destination_address,
 					} |
-					VaultEvents::TransferTokenFailedFilter {
+					ArbitrumVaultEvent::TransferTokenFailedFilter {
 						asset,
 						amount,
 						destination_address,
@@ -118,20 +118,20 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 	}
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<KeyManagerEvent>)>) {
+	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumKeyManagerEvent>)>) {
 		for (_, event) in dedup_events(events) {
 			match event {
 				ArbEvent::PreWitness(_) => {},
 				ArbEvent::Witness(call) => {
 					match call {
-						KeyManagerEvent::AggKeySetByGovKey {
+						ArbitrumKeyManagerEvent::AggKeySetByGovKey {
 							new_public_key,
 							block_number,
 							tx_id: _,
 						} => {
 							pallet_cf_vaults::Pallet::<Runtime, ArbitrumInstance>::inner_vault_key_rotated_externally(new_public_key, block_number);
 						},
-						KeyManagerEvent::SignatureAccepted {
+						ArbitrumKeyManagerEvent::SignatureAccepted {
 							tx_out_id,
 							signer_id,
 							tx_fee,
@@ -154,7 +154,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 								)
 							}
 						},
-						KeyManagerEvent::GovernanceAction {
+						ArbitrumKeyManagerEvent::GovernanceAction {
 							call_hash,
 							// TODO: Same as above, check that origin works and if not create inner
 							// function without origin
@@ -195,8 +195,8 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 	fn run(
 		&mut self,
 		(age, block_data, safety_margin): (Range<u32>, BlockDataVaultDeposit, u32),
-	) -> Vec<ArbEvent<VaultEvents>> {
-		let mut results: Vec<ArbEvent<VaultEvents>> = vec![];
+	) -> Vec<ArbEvent<ArbitrumVaultEvent>> {
+		let mut results: Vec<ArbEvent<ArbitrumVaultEvent>> = vec![];
 		if age.contains(&safety_margin) {
 			results.extend(
 				block_data
@@ -213,8 +213,8 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 	fn run(
 		&mut self,
 		(age, block_data, safety_margin): (Range<u32>, BlockDataKeyManager, u32),
-	) -> Vec<ArbEvent<KeyManagerEvent>> {
-		let mut results: Vec<ArbEvent<KeyManagerEvent>> = vec![];
+	) -> Vec<ArbEvent<ArbitrumKeyManagerEvent>> {
+		let mut results: Vec<ArbEvent<ArbitrumKeyManagerEvent>> = vec![];
 		// No safety margin for egress success
 		if age.contains(&0u32) {
 			results.extend(
@@ -222,9 +222,10 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 					.clone()
 					.into_iter()
 					.filter_map(|event| match event {
-						KeyManagerEvent::AggKeySetByGovKey { .. } |
-						KeyManagerEvent::GovernanceAction { .. } => None,
-						KeyManagerEvent::SignatureAccepted { .. } => Some(ArbEvent::Witness(event)),
+						ArbitrumKeyManagerEvent::AggKeySetByGovKey { .. } |
+						ArbitrumKeyManagerEvent::GovernanceAction { .. } => None,
+						ArbitrumKeyManagerEvent::SignatureAccepted { .. } =>
+							Some(ArbEvent::Witness(event)),
 					})
 					.collect::<Vec<_>>(),
 			)
@@ -234,9 +235,9 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 				block_data
 					.into_iter()
 					.filter_map(|event| match event {
-						KeyManagerEvent::AggKeySetByGovKey { .. } |
-						KeyManagerEvent::GovernanceAction { .. } => Some(ArbEvent::Witness(event)),
-						KeyManagerEvent::SignatureAccepted { .. } => None,
+						ArbitrumKeyManagerEvent::AggKeySetByGovKey { .. } |
+						ArbitrumKeyManagerEvent::GovernanceAction { .. } => Some(ArbEvent::Witness(event)),
+						ArbitrumKeyManagerEvent::SignatureAccepted { .. } => None,
 					})
 					.collect::<Vec<_>>(),
 			)
