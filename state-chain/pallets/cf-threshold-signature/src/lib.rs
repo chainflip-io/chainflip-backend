@@ -1673,7 +1673,10 @@ where
 
 		let key = Keys::<T, I>::get(epoch_index).ok_or(Error::<T, I>::NoKeyForEpoch)?;
 
-		ensure!(!participants.is_empty(), Error::<T, I>::InvalidParticipants);
+		ensure!(
+			signers_required > 0 && signers_required <= participants.len() as u32,
+			Error::<T, I>::InvalidParticipants
+		);
 
 		let request_id = Self::inner_request_signature(
 			payload,
