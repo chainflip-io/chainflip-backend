@@ -5267,7 +5267,6 @@ fn can_handle_liquidation_with_zero_collateral() {
 				id: LOAN_ID,
 				asset: Asset::Btc,
 				created_at_block: 0,
-				last_interest_payment_at: 0,
 				owed_principal: 20,
 				pending_interest: Default::default(),
 			},
