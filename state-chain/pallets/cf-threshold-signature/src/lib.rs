@@ -890,6 +890,25 @@ pub mod pallet {
 			let mut num_retries = 0;
 			let mut num_offenders = 0;
 
+			fn process_failed_ceremony<T: Config<I>, I: 'static>(
+				request_id: RequestId,
+				ceremony_id: CeremonyId,
+				offenders: Vec<<T as Chainflip>::ValidatorId>,
+			) {
+				SignerAndSignature::<T, I>::mutate(
+					request_id,
+					|maybe_signer_and_signature_result| {
+						if let Some(signer_and_signature_result) =
+							maybe_signer_and_signature_result.as_mut()
+						{
+							signer_and_signature_result.signature_result =
+								AsyncResult::Ready(Err(offenders));
+						}
+					},
+				);
+				Pallet::<T, I>::maybe_dispatch_callback(request_id, ceremony_id);
+			}
+
 			for ceremony_id in CeremonyRetryQueues::<T, I>::take(current_block) {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
 				{
@@ -942,24 +961,22 @@ pub mod pallet {
 								));
 								Event::<T, I>::RetryRequested { request_id, ceremony_id }
 							} else {
-								SignerAndSignature::<T, I>::remove(request_id);
+								process_failed_ceremony::<T, I>(
+									request_id,
+									ceremony_id,
+									Default::default(),
+								);
 
 								Event::<T, I>::MaxRetriesReachedForRequest { request_id }
 							}
 						},
 						ThresholdCeremonyType::KeygenVerification => {
-							SignerAndSignature::<T, I>::mutate(
+							process_failed_ceremony::<T, I>(
 								request_id,
-								|maybe_signer_and_signature_result| {
-									if let Some(signer_and_signature_result) =
-										maybe_signer_and_signature_result.as_mut()
-									{
-										signer_and_signature_result.signature_result =
-											AsyncResult::Ready(Err(offenders.clone()));
-									}
-								},
+								ceremony_id,
+								offenders.clone(),
 							);
-							Self::maybe_dispatch_callback(request_id, ceremony_id);
+
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
 								ceremony_id,
@@ -1308,7 +1325,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					retries_remaining: *max_retries,
 				},
 			),
-
 			RequestType::SpecificKey(key, epoch_index) => (
 				if let Some(nominees) = T::ThresholdSignerNomination::threshold_nomination_with_seed(
 					(request_id, attempt_count),
