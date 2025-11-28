@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	runtime_apis::{
+	runtime_apis::types::{
 		CcmData, DispatchErrorWithMessage, FeeTypes, SimulateSwapAdditionalOrder,
 		SimulatedSwapInformation,
 	},

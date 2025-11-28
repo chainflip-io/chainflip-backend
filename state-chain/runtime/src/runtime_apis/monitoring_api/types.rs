@@ -14,22 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	chainflip::Offence, AuctionOutcome, BTreeMap, DelegationSnapshot, DispatchErrorWithMessage,
-	ValidatorInfo,
-};
+use crate::chainflip::Offence;
 use cf_chains::{
 	dot::PolkadotAccountId,
 	sol::{api::DurableNonceAndAccount, SolAddress, SolSignature},
 };
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
-use frame_support::sp_runtime::AccountId32;
 use pallet_cf_asset_balances::VaultImbalance;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
-use sp_api::decl_runtime_apis;
-use sp_runtime::BoundedVec;
 use sp_std::vec::Vec;
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
@@ -172,41 +166,3 @@ pub struct MonitoringDataV2 {
 	pub sol_nonces: SolanaNonces,
 	pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
 }
-
-decl_runtime_apis!(
-	#[api_version(2)]
-	pub trait MonitoringRuntimeApi {
-		fn cf_authorities() -> AuthoritiesInfo;
-		fn cf_external_chains_block_height() -> ExternalChainsBlockHeight;
-		fn cf_btc_utxos() -> BtcUtxos;
-		fn cf_dot_aggkey() -> PolkadotAccountId;
-		fn cf_suspended_validators() -> Vec<(Offence, u32)>;
-		fn cf_epoch_state() -> EpochState;
-		fn cf_redemptions() -> RedemptionsInfo;
-		fn cf_pending_broadcasts_count() -> PendingBroadcasts;
-		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies;
-		fn cf_pending_swaps_count() -> u32;
-		fn cf_open_deposit_channels_count() -> OpenDepositChannels;
-		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount>;
-		fn cf_build_version() -> LastRuntimeUpgradeInfo;
-		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds;
-		fn cf_sol_nonces() -> SolanaNonces;
-		fn cf_sol_aggkey() -> SolAddress;
-		fn cf_sol_onchain_key() -> SolAddress;
-		fn cf_monitoring_data() -> MonitoringDataV2;
-		fn cf_accounts_info(
-			accounts: BoundedVec<AccountId32, sp_core::ConstU32<10>>,
-		) -> Vec<ValidatorInfo>;
-		#[allow(clippy::allow_attributes)]
-		#[allow(clippy::type_complexity)]
-		fn cf_simulate_auction() -> Result<
-			(
-				AuctionOutcome<AccountId32, AssetAmount>,
-				BTreeMap<AccountId32, DelegationSnapshot<AccountId32, AssetAmount>>,
-				Vec<AccountId32>,
-				AssetAmount,
-			),
-			DispatchErrorWithMessage,
-		>;
-	}
-);
