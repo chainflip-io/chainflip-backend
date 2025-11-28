@@ -729,6 +729,19 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Benchmark-only call with a deliberately complex nested type parameter.
+		/// This call does nothing at runtime but allows benchmarking EIP-712 encoding
+		/// with a realistic type embedded in the RuntimeCall type tree.
+		#[cfg(feature = "runtime-benchmarks")]
+		#[pallet::call_index(255)]
+		#[pallet::weight(Weight::zero())]
+		pub fn benchmark_realistic_call(
+			_origin: OriginFor<T>,
+			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
+		) -> DispatchResult {
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]

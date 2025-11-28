@@ -62,11 +62,13 @@ std = [
 	"log/std",
 	"cf-runtime-utilities/std",
 	"cf-utilities/std",
+	"pallet-cf-flip?/std",
 ]
 runtime-benchmarks = [
 	"cf-chains/runtime-benchmarks",
 	"cf-traits/runtime-benchmarks",
 	"cf-runtime-utilities/runtime-benchmarks",
+	"ethereum-eip712/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",

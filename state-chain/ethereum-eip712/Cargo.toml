@@ -41,3 +41,4 @@ std = [
     "sp-std/std",
     "ethers-core",
 ]
+runtime-benchmarks = []
