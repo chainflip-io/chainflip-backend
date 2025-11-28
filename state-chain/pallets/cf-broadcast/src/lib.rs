@@ -433,6 +433,7 @@ pub mod pallet {
 		/// A signature/broadcast with a historical (expired) key was requested via governance.
 		HistoricalBroadcastRequested {
 			broadcast_id: BroadcastId,
+			threshold_signature_request_id: ThresholdSignatureRequestId,
 			epoch_index: cf_primitives::EpochIndex,
 		},
 	}
@@ -742,7 +743,7 @@ pub mod pallet {
 			PendingBroadcasts::<T, I>::append(broadcast_id);
 
 			// Register callback for when signature is ready
-			let _threshold_request_id =
+			let threshold_signature_request_id =
 				T::ThresholdSigner::request_historical_signature_with_callback(
 					api_call.threshold_signature_payload(),
 					epoch_index,
@@ -763,7 +764,11 @@ pub mod pallet {
 				)
 				.map_err(|_| Error::<T, I>::InvalidPayload)?;
 
-			Self::deposit_event(Event::HistoricalBroadcastRequested { broadcast_id, epoch_index });
+			Self::deposit_event(Event::HistoricalBroadcastRequested {
+				broadcast_id,
+				threshold_signature_request_id,
+				epoch_index,
+			});
 
 			Ok(())
 		}
