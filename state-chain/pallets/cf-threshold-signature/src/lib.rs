@@ -1669,12 +1669,7 @@ where
 	) -> Result<cf_primitives::ThresholdSignatureRequestId, Self::Error> {
 		// Restricting historical signing only to keys we don't have access to via traditional
 		// means:
-		ensure!(
-			CurrentKeyEpoch::<T, I>::get()
-				.map(|current_epoch| epoch_index < current_epoch - 1)
-				.unwrap_or(false),
-			Error::<T, I>::EpochTooRecent
-		);
+		ensure!(epoch_index <= T::EpochInfo::last_expired_epoch(), Error::<T, I>::EpochTooRecent);
 
 		let key = Keys::<T, I>::get(epoch_index).ok_or(Error::<T, I>::NoKeyForEpoch)?;
 
