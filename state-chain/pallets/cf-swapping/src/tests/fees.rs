@@ -543,6 +543,12 @@ fn test_calculate_input_for_desired_output() {
 			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, false),
 			Some(500)
 		);
+
+		// Make sure a 2 leg swap is also correct when ignoring network fees.
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Btc, 1000, false),
+			Some(250)
+		);
 	});
 }
 

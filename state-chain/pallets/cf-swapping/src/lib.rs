@@ -3061,8 +3061,17 @@ pub mod pallet {
 				TransactionOutcome::Rollback(if with_network_fee {
 					Self::swap_with_network_fee_for_gas(input_asset, output_asset, estimation_input)
 						.map(|swap| swap.output)
-				} else {
+				} else if output_asset == STABLE_ASSET || input_asset == STABLE_ASSET {
 					T::SwappingApi::swap_single_leg(input_asset, output_asset, estimation_input)
+				} else {
+					T::SwappingApi::swap_single_leg(input_asset, STABLE_ASSET, estimation_input)
+						.and_then(|intermediary| {
+							T::SwappingApi::swap_single_leg(
+								STABLE_ASSET,
+								output_asset,
+								intermediary,
+							)
+						})
 				})
 			})
 			.ok()?;
