@@ -18,12 +18,21 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{address::AddressConverter, AccountOrAddress, AnyChain, ForeignChainAddress};
-use cf_primitives::{AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain};
+use cf_primitives::{
+	AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain, SECONDS_PER_BLOCK,
+};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostBalancesApi, Chainflip,
-	DepositApi, EgressApi, LpRegistration, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
+	DepositApi, EgressApi, LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails,
+	SwapRequestHandler,
 };
-use frame_support::{pallet_prelude::*, sp_runtime::DispatchResult};
+use serde::{Deserialize, Serialize};
+
+use frame_support::{
+	fail,
+	pallet_prelude::*,
+	sp_runtime::{traits::Zero, DispatchResult, FixedU128, Perbill},
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 
@@ -44,19 +53,139 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
 
+pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 24 * 3600 / SECONDS_PER_BLOCK; // 24 hours
+
+// Alpha half-life factors for exponential moving averages calculated as:
+// Alpha = 1 - e^(-ln 2 * sampling_interval / half_life_period)
+// using a sampling interval defined in `STATS_UPDATE_INTERVAL_IN_BLOCKS`. Make sure to update
+// these half-life values if `STATS_UPDATE_INTERVAL_IN_BLOCKS` is changed.
+pub const ALPHA_HALF_LIFE_1_DAY: Perbill = Perbill::from_parts(500_000_000);
+pub const ALPHA_HALF_LIFE_7_DAYS: Perbill = Perbill::from_parts(94_276_335);
+pub const ALPHA_HALF_LIFE_30_DAYS: Perbill = Perbill::from_parts(22_840_031);
+
+pub const MAX_NUM_ACOUNTS_TO_PURGE: u32 = 100;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::{AccountOrAddress, Chain};
 	use cf_primitives::{BlockNumber, ChannelId, EgressId, PriceLimits};
 	use cf_traits::MinimumDeposit;
+	use frame_support::sp_runtime::{traits::Zero, FixedU128, SaturatedConversion, Saturating};
+	use sp_std::collections::btree_map::BTreeMap;
 
 	use super::*;
+
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		Default,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		PartialEq,
+		Eq,
+		Deserialize,
+		Serialize,
+	)]
+	pub struct DeltaStats {
+		/// The delta in swap volume since the last sample in USD
+		pub limit_orders_swap_usd_volume: FixedU128,
+	}
+
+	impl DeltaStats {
+		pub fn reset(&mut self) {
+			self.limit_orders_swap_usd_volume = FixedU128::zero();
+		}
+
+		pub fn on_limit_order(&mut self, usd_amount: FixedU128) {
+			self.limit_orders_swap_usd_volume =
+				self.limit_orders_swap_usd_volume.saturating_add(usd_amount);
+		}
+	}
+
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		Default,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		PartialEq,
+		Eq,
+		Deserialize,
+		Serialize,
+	)]
+	pub struct WindowedEma {
+		pub one_day: FixedU128,
+		pub seven_days: FixedU128,
+		pub thirty_days: FixedU128,
+	}
+
+	impl WindowedEma {
+		pub fn new(initial_val: FixedU128) -> Self {
+			Self { one_day: initial_val, seven_days: initial_val, thirty_days: initial_val }
+		}
+
+		/// Updates the ema values using the new sample.
+		pub fn update(&mut self, sample: &FixedU128) {
+			self.one_day = Self::calculate_ema(&self.one_day, sample, ALPHA_HALF_LIFE_1_DAY);
+			self.seven_days = Self::calculate_ema(&self.seven_days, sample, ALPHA_HALF_LIFE_7_DAYS);
+			self.thirty_days =
+				Self::calculate_ema(&self.thirty_days, sample, ALPHA_HALF_LIFE_30_DAYS);
+		}
+
+		/// Ema is calculated using the formula:
+		/// EMA_t = alpha * new_sample + (1 - alpha) * EMA_(t-1)
+		fn calculate_ema(
+			current_val: &FixedU128,
+			new_val: &FixedU128,
+			alpha_perbill: Perbill,
+		) -> FixedU128 {
+			let alpha = FixedU128::from(alpha_perbill);
+			let one_minus_alpha = FixedU128::from_u32(1).saturating_sub(alpha);
+			new_val
+				.saturating_mul(alpha)
+				.saturating_add(current_val.saturating_mul(one_minus_alpha))
+		}
+	}
+
+	#[derive(
+		Copy,
+		Clone,
+		Debug,
+		Default,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		PartialEq,
+		Eq,
+		Deserialize,
+		Serialize,
+	)]
+	pub struct AggStats {
+		pub avg_limit_usd_volume: WindowedEma,
+	}
+
+	impl AggStats {
+		pub fn new(delta: DeltaStats) -> Self {
+			Self { avg_limit_usd_volume: WindowedEma::new(delta.limit_orders_swap_usd_volume) }
+		}
+
+		pub fn update(&mut self, delta: &DeltaStats) {
+			self.avg_limit_usd_volume.update(&delta.limit_orders_swap_usd_volume);
+		}
+	}
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
 		/// Because we want to emit events when there is a config change during
-		/// an runtime upgrade
+		/// a runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// API for handling asset deposits.
@@ -168,6 +297,20 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
+		AssetBalancePurged {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			egress_id: EgressId,
+			destination_address: EncodedAddress,
+			fee: AssetAmount,
+		},
+		AssetBalancePurgeFailed {
+			account_id: T::AccountId,
+			asset: Asset,
+			amount: AssetAmount,
+			error: DispatchError,
+		},
 	}
 
 	#[pallet::pallet]
@@ -185,6 +328,40 @@ pub mod pallet {
 		ForeignChain,
 		ForeignChainAddress,
 	>;
+
+	#[pallet::storage]
+	/// Last block number when stats were updated
+	pub type StatsLastUpdatedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// Stores intermediate stats for liquidity providers per asset since last update
+	#[pallet::storage]
+	pub type LpDeltaStats<T: Config> =
+		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, DeltaStats>;
+
+	/// Stores exponential moving average stats for liquidity providers per asset
+	#[pallet::storage]
+	pub type LpAggStats<T: Config> =
+		StorageValue<_, BTreeMap<T::AccountId, BTreeMap<Asset, AggStats>>, ValueQuery>;
+
+	//pub type LpAggStats<T: Config> = StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat,
+	// Asset, AggStats>;
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
+			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+
+			let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
+
+			if blocks_elapsed.saturated_into::<u64>() >= STATS_UPDATE_INTERVAL_IN_BLOCKS {
+				weight_used += Self::update_agg_stats();
+
+				StatsLastUpdatedAt::<T>::put(current_block);
+				weight_used += T::DbWeight::get().writes(1);
+			}
+			weight_used
+		}
+	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -375,6 +552,34 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Purges LP asset balances to their refund addresss via egress
+		/// Requires Governance
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::schedule_swap())]
+		//#[pallet::weight(T::WeightInfo::purge_balances(accounts.len() as u32))]
+		pub fn purge_balances(
+			origin: OriginFor<T>,
+			accounts: BoundedVec<
+				(T::AccountId, Asset, AssetAmount),
+				ConstU32<MAX_NUM_ACOUNTS_TO_PURGE>,
+			>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for (account_id, asset, amount) in accounts {
+				if let Err(error) = Self::purge_account_balance(account_id.clone(), asset, amount) {
+					Self::deposit_event(Event::<T>::AssetBalancePurgeFailed {
+						account_id,
+						asset,
+						amount,
+						error,
+					});
+				}
+			}
+
+			Ok(())
+		}
 	}
 }
 
@@ -464,6 +669,80 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
+
+	fn update_agg_stats() -> Weight {
+		let mut execution_weight = Weight::zero();
+
+		LpAggStats::<T>::mutate(|agg_stats_map| {
+			// For every existing Lp, update their Aggregate stats from accumulated delta stats
+			for (lp, lp_stats) in agg_stats_map.iter_mut() {
+				for (asset, agg_stats) in lp_stats.iter_mut() {
+					let lp_delta = match LpDeltaStats::<T>::get(lp, asset) {
+						Some(delta) => {
+							execution_weight.saturating_accrue(T::DbWeight::get().writes(1));
+							LpDeltaStats::<T>::remove(lp, asset);
+							delta
+						},
+						None => Default::default(),
+					};
+					// TODO add weight for update function
+					agg_stats.update(&lp_delta);
+				}
+			}
+
+			// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
+			for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
+				let lp_stats = agg_stats_map.entry(lp.clone()).or_default();
+				lp_stats.insert(asset, AggStats::new(delta));
+
+				LpDeltaStats::<T>::remove(&lp, asset);
+				execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
+			}
+		});
+
+		execution_weight
+	}
+
+	fn purge_account_balance(
+		account_id: T::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
+		ensure!(
+			T::AccountRoleRegistry::has_account_role(&account_id, AccountRole::LiquidityProvider,),
+			Error::<T>::DestinationAccountNotLiquidityProvider
+		);
+
+		let Some(refund_address) =
+			LiquidityRefundAddress::<T>::get(&account_id, ForeignChain::from(asset))
+		else {
+			fail!(Error::<T>::NoLiquidityRefundAddressRegistered);
+		};
+		ensure!(
+			refund_address.chain() == ForeignChain::from(asset),
+			Error::<T>::InvalidEgressAddress
+		);
+		let destination_address = T::AddressConverter::to_encoded_address(refund_address.clone());
+
+		// Sweep earned fees and Debit the asset from the account.
+		T::PoolApi::sweep(&account_id)?;
+		T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
+
+		let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+			T::EgressHandler::schedule_egress(asset, amount, refund_address, None)
+				.map_err(Into::into)?;
+
+		Self::deposit_event(Event::<T>::AssetBalancePurged {
+			account_id,
+			asset,
+			amount: egress_amount,
+			egress_id,
+			destination_address,
+			fee: fee_withheld,
+		});
+
+		Ok(())
+	}
 }
 
 impl<T: Config> LpRegistration for Pallet<T> {
@@ -485,5 +764,19 @@ impl<T: Config> LpRegistration for Pallet<T> {
 			Error::<T>::NoLiquidityRefundAddressRegistered
 		);
 		Ok(())
+	}
+}
+
+impl<T: Config> LpStatsApi for Pallet<T> {
+	type AccountId = <T as frame_system::Config>::AccountId;
+
+	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_amount: AssetAmount) {
+		if usd_amount != AssetAmount::zero() {
+			LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
+				let delta_stats = maybe_stats.get_or_insert_default();
+
+				delta_stats.on_limit_order(FixedU128::from_inner(usd_amount));
+			});
+		}
 	}
 }

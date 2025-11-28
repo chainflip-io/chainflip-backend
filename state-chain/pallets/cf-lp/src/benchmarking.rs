@@ -29,6 +29,7 @@ use frame_system::RawOrigin;
 )]
 mod benchmarks {
 	use super::*;
+	use sp_std::vec::Vec;
 
 	#[benchmark]
 	fn request_liquidity_deposit_address() {
@@ -138,6 +139,45 @@ mod benchmarks {
 			Default::default(),
 			None,
 		);
+	}
+
+	#[benchmark]
+	fn purge_balances(n: Linear<1, 100>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		let account_ids = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			n as u32,
+		)
+		.unwrap();
+
+		for account_id in &account_ids {
+			assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+				RawOrigin::Signed(account_id.clone()).into(),
+				EncodedAddress::Eth(Default::default()),
+			));
+		}
+
+		let accounts_to_purge = account_ids
+			.into_iter()
+			.enumerate()
+			.map(|(i, account_id)| {
+				let asset = match i % 3 {
+					0 => Asset::Eth,
+					1 => Asset::Flip,
+					_ => Asset::Usdc,
+				};
+				T::BalanceApi::credit_account(&account_id, asset, 1_000_000_000);
+				(account_id, asset, 500_000_000)
+			})
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::purge_balances(origin, accounts_to_purge));
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
