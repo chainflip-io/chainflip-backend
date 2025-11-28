@@ -76,17 +76,17 @@ def main():
     # Sort by absolute percentage change
     results.sort(key=lambda x: abs(x['pct']), reverse=True)
 
-    print("TOP 30 MOST SIGNIFICANT FUNCTION WEIGHT CHANGES:")
-    print("=" * 120)
-    print(f"{'Pallet':<25} {'Function':<30} {'Old (ps)':>15} {'New (ps)':>15} {'% Change':>10}")
-    print("-" * 120)
+    print("## TOP 30 MOST SIGNIFICANT FUNCTION WEIGHT CHANGES\n")
+    print("| Pallet | Function | Old (ps) | New (ps) | Change (ps) | % Change |")
+    print("|--------|----------|----------|----------|-------------|----------|")
 
     for item in results[:30]:
-        print(f"{item['pallet']:<25} {item['function']:<30} {item['old']:>15,} {item['new']:>15,} {item['pct']:>+9.2f}%")
+        print(f"| {item['pallet']} | {item['function']} | {item['old']:,} | {item['new']:,} | {item['diff']:+,} | {item['pct']:+.2f}% |")
 
     # Group by pallet
-    print("\n\nCHANGES BY PALLET:")
-    print("=" * 120)
+    print("\n## CHANGES BY PALLET\n")
+    print("| Pallet | Changes | Avg Change | Max Change |")
+    print("|--------|---------|------------|------------|")
 
     pallet_stats = {}
     for r in results:
@@ -100,17 +100,18 @@ def main():
 
     for pallet, stats in sorted(pallet_stats.items(), key=lambda x: x[1]['max_pct'], reverse=True):
         avg = stats['avg_pct'] / stats['count']
-        print(f"{pallet:<25} Changes: {stats['count']:>3}   Avg: {avg:>+7.2f}%   Max: {stats['max_pct']:>7.2f}%")
+        print(f"| {pallet} | {stats['count']} | {avg:+.2f}% | {stats['max_pct']:.2f}% |")
 
     # Show very significant changes
-    print("\n\nCHANGES > 50%:")
-    print("=" * 120)
     big_changes = [r for r in results if abs(r['pct']) > 50]
+    print("\n## CHANGES > 50%\n")
     print(f"Found {len(big_changes)} functions with >50% change\n")
+    print("| | Pallet | Function | Old (ps) | New (ps) | Change (ps) | % Change |")
+    print("|---|--------|----------|----------|----------|-------------|----------|")
 
     for item in big_changes[:20]:
-        indicator = "⚠️ " if item['pct'] > 0 else "✅"
-        print(f"{indicator} {item['pallet']:<25} {item['function']:<30} {item['old']:>15,} {item['new']:>15,} {item['pct']:>+9.2f}%")
+        indicator = "⚠️" if item['pct'] > 0 else "✅"
+        print(f"| {indicator} | {item['pallet']} | {item['function']} | {item['old']:,} | {item['new']:,} | {item['diff']:+,} | {item['pct']:+.2f}% |")
 
 if __name__ == '__main__':
     main()
