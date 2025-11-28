@@ -4,7 +4,7 @@ use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 use crate::{
 	chainflip::{
 		arbitrum_elections::ArbitrumElectionsSafeMode,
-		ethereum_elections::EthereumElectionsSafeMode, generic_elections::GenericElectionsSafeMode,
+		ethereum_elections::EthereumElectionsSafeMode,
 	},
 	Runtime,
 };

@@ -242,32 +242,28 @@ pub struct EthereumVaultDepositWitnessing;
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 #[serde(bound(
-	serialize = "VaultWitness: Serialize, Asset: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize",
-	deserialize = "VaultWitness: Deserialize<'de>, Asset: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>",
+	serialize = "VaultWitness: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize, <C as Chain>::ChainAsset: Serialize",
+	deserialize = "VaultWitness: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>, <C as Chain>::ChainAsset: Deserialize<'de>",
 ))]
 #[scale_info(skip_type_params(VaultWitness, C))]
-pub enum VaultEvents<VaultWitness, C: Chain, Asset> {
+pub enum VaultEvents<VaultWitness, C: Chain> {
 	SwapNativeFilter(VaultWitness),
 	SwapTokenFilter(VaultWitness),
 	XcallNativeFilter(VaultWitness),
 	XcallTokenFilter(VaultWitness),
 	TransferNativeFailedFilter {
-		asset: Asset,
+		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
 	},
 	TransferTokenFailedFilter {
-		asset: Asset,
+		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
 	},
 }
 
-pub type EthereumVaultEvent = VaultEvents<
-	VaultDepositWitness<Runtime, EthereumInstance>,
-	Ethereum,
-	cf_chains::assets::eth::Asset,
->;
+pub type EthereumVaultEvent = VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>;
 
 pub(crate) type BlockDataVaultDeposit = Vec<EthereumVaultEvent>;
 
@@ -855,6 +851,10 @@ impl_pallet_safe_mode! {
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(ElectionPropertiesDepositChannel),
+	Vaults(()),
+	StateChainGateway(()),
+	KeyManager(()),
+	ScUtils(()),
 }
 
 pub struct ElectoralSystemConfiguration;
@@ -884,6 +884,66 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
 				}
 			},
+			ElectionTypes::Vaults(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.2
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create vault witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::StateChainGateway(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.3
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create state chain gateway witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::KeyManager(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.4
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create key manager witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::ScUtils(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.5
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create sc utils witnessing governance election with properties for block {block_height}");
+				},
 		}
 	}
 }

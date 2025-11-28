@@ -238,11 +238,7 @@ pub type ArbitrumDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct ArbitrumVaultDepositWitnessing;
 
-pub type ArbitrumVaultEvent = VaultEvents<
-	VaultDepositWitness<Runtime, ArbitrumInstance>,
-	Arbitrum,
-	cf_chains::assets::arb::Asset,
->;
+pub type ArbitrumVaultEvent = VaultEvents<VaultDepositWitness<Runtime, ArbitrumInstance>, Arbitrum>;
 
 pub(crate) type BlockDataVaultDeposit = Vec<ArbitrumVaultEvent>;
 
@@ -582,6 +578,8 @@ impl_pallet_safe_mode! {
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(ElectionPropertiesDepositChannel),
+	Vaults(()),
+	KeyManager(()),
 }
 
 pub struct ElectoralSystemConfiguration;
@@ -611,6 +609,36 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
 				}
 			},
+			ElectionTypes::Vaults(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, ArbitrumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _)| {
+							state
+								.2
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create vault witnessing governance election with properties for block {block_height:?}");
+				},
+			ElectionTypes::KeyManager(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, ArbitrumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _)| {
+							state
+								.3
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create key manager witnessing governance election with properties for block {block_height:?}");
+				},
 		}
 	}
 }
