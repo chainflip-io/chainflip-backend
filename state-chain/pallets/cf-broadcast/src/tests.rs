@@ -1600,6 +1600,8 @@ fn threshold_sign_and_broadcast_with_historical_key_full_flow() {
 			Box::new(mock_api_call()),
 			epoch_index,
 			participants.clone(),
+			participants.len() as u32,
+			0,
 			true, // broadcast = true
 		));
 
@@ -1651,6 +1653,8 @@ fn threshold_sign_and_broadcast_with_historical_key_requires_governance() {
 				Box::new(mock_api_call()),
 				0u32,
 				participants,
+				2,
+				0,
 				true,
 			),
 			sp_runtime::traits::BadOrigin

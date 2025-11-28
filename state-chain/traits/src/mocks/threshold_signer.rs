@@ -134,6 +134,8 @@ where
 		payload: <C as ChainCrypto>::Payload,
 		_epoch_index: EpochIndex,
 		_participants: BTreeSet<Self::ValidatorId>,
+		_signers_required: u32,
+		_max_retries: u32,
 		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
 	) -> Result<ThresholdSignatureRequestId, Self::Error> {
 		// Reuse the same logic as request_signature but also register the callback

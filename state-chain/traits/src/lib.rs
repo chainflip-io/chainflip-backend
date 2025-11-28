@@ -416,6 +416,12 @@ pub trait ThresholdSignerNomination {
 	/// The id type of signers
 	type SignerId;
 
+	fn threshold_nomination_with_seed_from_candidates<H: Hashable>(
+		seed: H,
+		candidates: BTreeSet<Self::SignerId>,
+		nominees_to_select: u32,
+	) -> Option<BTreeSet<Self::SignerId>>;
+
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed<H: Hashable>(
@@ -503,6 +509,8 @@ where
 		payload: C::Payload,
 		epoch_index: EpochIndex,
 		participants: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>,
+		signers_required: u32,
+		max_retries: u32,
 		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
 	) -> Result<ThresholdSignatureRequestId, Self::Error>;
 

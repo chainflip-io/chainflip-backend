@@ -732,6 +732,8 @@ pub mod pallet {
 			api_call: Box<<T as Config<I>>::ApiCall>,
 			epoch_index: cf_primitives::EpochIndex,
 			participants: sp_std::collections::btree_set::BTreeSet<T::ValidatorId>,
+			signers_required: u32,
+			max_retries: u32,
 			broadcast: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
@@ -745,6 +747,8 @@ pub mod pallet {
 					api_call.threshold_signature_payload(),
 					epoch_index,
 					participants.clone(),
+					signers_required,
+					max_retries,
 					|threshold_request_id| {
 						Call::on_signature_ready {
 							threshold_request_id,
