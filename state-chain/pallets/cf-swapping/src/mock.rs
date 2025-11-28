@@ -18,7 +18,7 @@ use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId};
+use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId, STABLE_ASSET};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_traits::mocks::fee_payment::MockFeePayment;
 use cf_traits::{
@@ -103,6 +103,10 @@ impl SwappingApi for MockSwappingApi {
 		if Self::swaps_should_fail() {
 			return Err(DispatchError::from("Test swap failed"))
 		}
+		assert!(
+			from == STABLE_ASSET || to == STABLE_ASSET,
+			"Pool does not exist. Only swaps involving the stable asset can be used in a single leg swap"
+		);
 
 		let mut swaps = Swaps::get();
 		swaps.push((from, to, input_amount));
