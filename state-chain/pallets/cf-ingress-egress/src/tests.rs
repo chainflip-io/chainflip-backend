@@ -35,10 +35,10 @@ use cf_chains::{
 	eth::Address as EthereumAddress,
 	evm::{DepositDetails, EvmFetchId, H256},
 	mocks::MockEthereum,
-	CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain, DepositChannel,
-	DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress, SwapOrigin,
-	TransactionInIdForAnyChain, TransferAssetParams,
+	AccountOrAddress, CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
+	CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
+	DepositChannel, DepositOriginType, Ethereum, ExecutexSwapAndCall, ForeignChainAddress,
+	SwapOrigin, TransactionInIdForAnyChain, TransferAssetParams,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, AssetAmount, BasisPoints, Beneficiaries,
@@ -64,7 +64,9 @@ use cf_traits::{
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi,
-	EpochInfo, FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, SafeMode,
+	EpochInfo,
+	ExpiryBehaviour::RefundIfExpires,
+	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, PriceLimitsAndExpiry, SafeMode,
 	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use std::collections::{BTreeMap, HashSet};
@@ -97,6 +99,17 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 		refund_ccm_metadata: None,
 		max_oracle_price_slippage: None,
 	};
+const ETH_EXPECTED_EXPIRY: PriceLimitsAndExpiry<u64> = PriceLimitsAndExpiry {
+	expiry_behaviour: RefundIfExpires {
+		retry_duration: ETH_REFUND_PARAMS.retry_duration,
+		refund_address: AccountOrAddress::ExternalAddress(crate::ForeignChainAddress::Eth(
+			ETH_REFUND_PARAMS.refund_address,
+		)),
+		refund_ccm_metadata: None,
+	},
+	min_price: ETH_REFUND_PARAMS.min_price,
+	max_oracle_price_slippage: ETH_REFUND_PARAMS.max_oracle_price_slippage,
+};
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
@@ -1971,6 +1984,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						price_limits_and_expiry: None,
 						dca_params: None,
 					}
 				),
@@ -1985,6 +1999,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						price_limits_and_expiry: None,
 						dca_params: None,
 					}
 				),
@@ -1999,6 +2014,7 @@ fn test_ingress_or_egress_fee_is_withheld_or_scheduled_for_swap(test_function: i
 						origin: SwapOrigin::Internal,
 						remaining_input_amount: GAS_FEE,
 						accumulated_output_amount: 0,
+						price_limits_and_expiry: None,
 						dca_params: None,
 					}
 				)
@@ -2369,6 +2385,7 @@ fn can_request_swap_via_extrinsic() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
+					price_limits_and_expiry: Some(ETH_EXPECTED_EXPIRY),
 					dca_params: None,
 				}
 			)])
@@ -2445,6 +2462,7 @@ fn vault_swaps_support_affiliate_fees() {
 					},
 					remaining_input_amount: INPUT_AMOUNT,
 					accumulated_output_amount: 0,
+					price_limits_and_expiry: Some(ETH_EXPECTED_EXPIRY),
 					dca_params: None,
 				}
 			)]),
@@ -2553,6 +2571,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 					},
 					accumulated_output_amount: 0,
 					remaining_input_amount: INPUT_AMOUNT,
+					price_limits_and_expiry: Some(ETH_EXPECTED_EXPIRY),
 					dca_params: None,
 				}
 			)])

@@ -42,6 +42,7 @@ pub struct MockSwapRequest {
 	pub swap_type: SwapRequestType<u64>,
 	pub broker_fees: Beneficiaries<u64>,
 	pub origin: SwapOrigin<u64>,
+	pub price_limits_and_expiry: Option<PriceLimitsAndExpiry<u64>>,
 	pub dca_params: Option<DcaParameters>,
 }
 
@@ -94,7 +95,7 @@ where
 		output_asset: Asset,
 		swap_type: SwapRequestType<Self::AccountId>,
 		broker_fees: Beneficiaries<Self::AccountId>,
-		_price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
+		price_limits_and_expiry: Option<PriceLimitsAndExpiry<Self::AccountId>>,
 		dca_params: Option<DcaParameters>,
 		origin: SwapOrigin<Self::AccountId>,
 	) -> SwapRequestId {
@@ -113,6 +114,7 @@ where
 						origin,
 						remaining_input_amount: input_amount,
 						accumulated_output_amount: 0,
+						price_limits_and_expiry,
 						dca_params,
 					},
 				);
