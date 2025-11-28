@@ -67,6 +67,8 @@ pub trait WeightInfo {
 	fn initiate_network_fee_swap() -> Weight;
 	fn derive_ltv() -> Weight;
 	fn loan_charge_interest() -> Weight;
+	fn loan_charge_low_ltv_penalty() -> Weight;
+	fn collect_pending_interest() -> Weight;
 	fn loan_calculate_top_up_amount() -> Weight;
 	fn start_liquidation_swaps() -> Weight;
 	fn abort_liquidation_swaps() -> Weight;
@@ -395,23 +397,30 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `0`
 		//  Estimated: `0`
-		// Minimum execution time: 2_994_000 picoseconds.
-		Weight::from_parts(3_015_000, 0)
+		// Minimum execution time: 1_000_000 picoseconds.
+		Weight::from_parts(2_000_000, 0)
 	}
 	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
 	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::GeneralLendingPools` (r:1 w:1)
+	/// Storage: `LendingPools::GeneralLendingPools` (r:1 w:0)
 	/// Proof: `LendingPools::GeneralLendingPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::PendingNetworkFees` (r:1 w:1)
-	/// Proof: `LendingPools::PendingNetworkFees` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn loan_charge_interest() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `40326`
-		//  Estimated: `43791`
-		// Minimum execution time: 190_129_000 picoseconds.
-		Weight::from_parts(194_450_000, 43791)
-			.saturating_add(T::DbWeight::get().reads(3_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
+		//  Measured:  `40284`
+		//  Estimated: `43749`
+		// Minimum execution time: 73_000_000 picoseconds.
+		Weight::from_parts(78_000_000, 43749)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+	}
+	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
+	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn loan_charge_low_ltv_penalty() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `233`
+		//  Estimated: `1718`
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(6_000_000, 1718)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
 	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
 	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -480,6 +489,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn collect_pending_interest() -> Weight {
+		Weight::zero()
+    }
 }
 
 // For backwards compatibility and tests
@@ -808,18 +821,25 @@ impl WeightInfo for () {
 	}
 	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
 	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::GeneralLendingPools` (r:1 w:1)
+	/// Storage: `LendingPools::GeneralLendingPools` (r:1 w:0)
 	/// Proof: `LendingPools::GeneralLendingPools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::PendingNetworkFees` (r:1 w:1)
-	/// Proof: `LendingPools::PendingNetworkFees` (`max_values`: None, `max_size`: None, mode: `Measured`)
 	fn loan_charge_interest() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `40326`
-		//  Estimated: `43791`
-		// Minimum execution time: 190_129_000 picoseconds.
-		Weight::from_parts(194_450_000, 43791)
-			.saturating_add(ParityDbWeight::get().reads(3_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
+		//  Measured:  `40284`
+		//  Estimated: `43749`
+		// Minimum execution time: 73_000_000 picoseconds.
+		Weight::from_parts(78_000_000, 43749)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+	}
+	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
+	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn loan_charge_low_ltv_penalty() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `233`
+		//  Estimated: `1718`
+		// Minimum execution time: 5_000_000 picoseconds.
+		Weight::from_parts(6_000_000, 1718)
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
 	}
 	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
 	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -888,4 +908,9 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(3_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
+
+	fn collect_pending_interest() -> Weight {
+		Weight::zero()
+    }
+
 }

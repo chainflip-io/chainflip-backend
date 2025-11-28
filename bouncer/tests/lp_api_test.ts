@@ -13,6 +13,7 @@ import {
   shortChainFromAsset,
   newAssetAddress,
   createStateChainKeypair,
+  getFreeBalance,
   Assets,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
@@ -199,9 +200,7 @@ async function testTransferAsset(logger: Logger) {
   await using chainflip = await getChainflipApi();
   const amountToTransfer = testAssetAmount.toString(16);
 
-  const getLpBalance = async (account: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await chainflip.query.assetBalances.freeBalances(account, testAsset)) as any).toBigInt();
+  const getLpBalance = async (account: string) => getFreeBalance(account, testAsset);
 
   const sourceLpAccount = createStateChainKeypair('//LP_API');
   const destinationLpAccount = createStateChainKeypair('//LP_2');
@@ -477,7 +476,7 @@ async function testInternalSwap(logger: Logger) {
       event.data.accountId === lp.address &&
       Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 3,
-  });
+  }).event;
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected

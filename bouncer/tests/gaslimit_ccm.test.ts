@@ -455,6 +455,7 @@ describe('GasLimitCcmSwaps', () => {
         await testEvmInsufficientGas(ctx.logger, pair[0] as Asset, pair[1] as Asset);
       },
       300,
+      true,
     );
   }
 
@@ -479,6 +480,7 @@ describe('GasLimitCcmSwaps', () => {
         await testGasLimitSwapToEvm(ctx.logger, pair[0] as Asset, pair[1] as Asset);
       },
       300,
+      true,
     );
   }
 
@@ -495,6 +497,7 @@ describe('GasLimitCcmSwaps', () => {
         await testGasLimitSwapToSolana(ctx.logger, pair[0] as Asset, pair[1] as Asset);
       },
       300,
+      true,
     );
   }
 
