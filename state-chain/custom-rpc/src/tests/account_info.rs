@@ -1,4 +1,4 @@
-use state_chain_runtime::runtime_apis::DelegationInfo;
+use state_chain_runtime::runtime_apis::types::DelegationInfo;
 
 use super::*;
 

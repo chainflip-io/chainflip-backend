@@ -50,7 +50,8 @@ use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
 	runtime_apis::{
-		ChainAccounts, CustomRuntimeApi, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
+		custom_api::CustomRuntimeApi,
+		types::{ChainAccounts, OpenedDepositChannels, VaultAddresses, VaultSwapDetails},
 	},
 	AccountId, Hash, Nonce, RuntimeCall,
 };

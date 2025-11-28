@@ -43,7 +43,9 @@ use sp_runtime::{
 	transaction_validity::{TransactionSource, TransactionValidityError},
 	Either,
 };
-use state_chain_runtime::{runtime_apis::CustomRuntimeApi, AccountId, Hash, Nonce, RuntimeCall};
+use state_chain_runtime::{
+	runtime_apis::custom_api::CustomRuntimeApi, AccountId, Hash, Nonce, RuntimeCall,
+};
 use std::{collections::HashMap, marker::PhantomData, ops::Deref, pin::Pin, sync::Arc};
 use substrate_frame_rpc_system::{System, SystemApiServer};
 

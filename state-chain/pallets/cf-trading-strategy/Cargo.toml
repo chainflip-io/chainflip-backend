@@ -50,7 +50,6 @@ std = [
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
-	"serde/std",
 ]
 runtime-benchmarks = [
 	"cf-traits/runtime-benchmarks",

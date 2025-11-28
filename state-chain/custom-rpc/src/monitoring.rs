@@ -25,11 +25,14 @@ use serde::{Deserialize, Serialize};
 use sp_core::{bounded_vec::BoundedVec, ConstU32};
 use state_chain_runtime::{
 	chainflip::Offence,
-	monitoring_apis::{
-		ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState, ExternalChainsBlockHeight,
-		FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo, MonitoringDataV2, MonitoringRuntimeApi,
-		OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies, RedemptionsInfo,
-		SolanaNonces,
+	runtime_apis::{
+		monitoring_api::MonitoringRuntimeApi,
+		types::{
+			ActivateKeysBroadcastIds, AuthoritiesInfo, BtcUtxos, EpochState,
+			ExternalChainsBlockHeight, FeeImbalance, FlipSupply, LastRuntimeUpgradeInfo,
+			MonitoringDataV2, OpenDepositChannels, PendingBroadcasts, PendingTssCeremonies,
+			RedemptionsInfo, SolanaNonces,
+		},
 	},
 };
 

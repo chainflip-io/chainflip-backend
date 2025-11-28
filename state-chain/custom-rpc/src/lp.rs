@@ -64,8 +64,8 @@ use sp_api::CallApiAt;
 use sp_core::{crypto::AccountId32, U256};
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
-	chainflip::BlockUpdate, runtime_apis::CustomRuntimeApi, AccountId, ConstU32, Hash, Nonce,
-	RuntimeCall,
+	chainflip::BlockUpdate, runtime_apis::custom_api::CustomRuntimeApi, AccountId, ConstU32, Hash,
+	Nonce, RuntimeCall,
 };
 use std::{ops::Range, sync::Arc};
 

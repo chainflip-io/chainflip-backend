@@ -29,7 +29,7 @@ use jsonrpsee::core::ClientError;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use pallet_cf_validator::RotationPhase;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
-use state_chain_runtime::runtime_apis::FailingWitnessValidators;
+use state_chain_runtime::runtime_apis::types::FailingWitnessValidators;
 use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 use tracing::log;
 
