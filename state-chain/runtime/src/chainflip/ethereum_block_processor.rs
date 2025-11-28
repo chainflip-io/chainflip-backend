@@ -4,9 +4,9 @@ use crate::{
 		ethereum_elections::{
 			BlockDataDepositChannel, BlockDataKeyManager, BlockDataScUtils,
 			BlockDataStateChainGateway, BlockDataVaultDeposit, EthereumDepositChannelWitnessing,
-			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
-			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing, KeyManagerEvent,
-			ScUtilsCall, StateChainGatewayEvent, VaultEvents,
+			EthereumKeyManagerEvent, EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
+			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing,
+			EthereumVaultEvent, ScUtilsCall, StateChainGatewayEvent,
 		},
 	},
 	EthereumBroadcaster, EthereumIngressEgress, Runtime,
@@ -86,26 +86,26 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	}
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<VaultEvents>)>) {
+	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
 		for (block, event) in &dedup_events(events) {
 			match event {
 				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => match call {
-					VaultEvents::SwapNativeFilter(vault_deposit_witness) |
-					VaultEvents::SwapTokenFilter(vault_deposit_witness) |
-					VaultEvents::XcallNativeFilter(vault_deposit_witness) |
-					VaultEvents::XcallTokenFilter(vault_deposit_witness) => {
+					EthereumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
+					EthereumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
+					EthereumVaultEvent::XcallNativeFilter(vault_deposit_witness) |
+					EthereumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
 						EthereumIngressEgress::process_vault_swap_request_full_witness(
 							*block,
 							vault_deposit_witness.clone(),
 						);
 					},
-					VaultEvents::TransferNativeFailedFilter {
+					EthereumVaultEvent::TransferNativeFailedFilter {
 						asset,
 						amount,
 						destination_address,
 					} |
-					VaultEvents::TransferTokenFailedFilter {
+					EthereumVaultEvent::TransferTokenFailedFilter {
 						asset,
 						amount,
 						destination_address,
@@ -160,20 +160,20 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 	}
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<KeyManagerEvent>)>) {
+	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumKeyManagerEvent>)>) {
 		for (_, event) in dedup_events(events) {
 			match event {
 				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => {
 					match call {
-						KeyManagerEvent::AggKeySetByGovKey {
+						EthereumKeyManagerEvent::AggKeySetByGovKey {
 							new_public_key,
 							block_number,
 							tx_id: _,
 						} => {
 							pallet_cf_vaults::Pallet::<Runtime, EthereumInstance>::inner_vault_key_rotated_externally(new_public_key, block_number);
 						},
-						KeyManagerEvent::SignatureAccepted {
+						EthereumKeyManagerEvent::SignatureAccepted {
 							tx_out_id,
 							signer_id,
 							tx_fee,
@@ -196,7 +196,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 								)
 							}
 						},
-						KeyManagerEvent::GovernanceAction {
+						EthereumKeyManagerEvent::GovernanceAction {
 							call_hash,
 							// TODO: Same as above, check that origin works and if not create inner
 							// function without origin
@@ -264,8 +264,8 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDep
 	fn run(
 		&mut self,
 		(age, block_data, safety_margin): (Range<u32>, BlockDataVaultDeposit, u32),
-	) -> Vec<EthEvent<VaultEvents>> {
-		let mut results: Vec<EthEvent<VaultEvents>> = vec![];
+	) -> Vec<EthEvent<EthereumVaultEvent>> {
+		let mut results: Vec<EthEvent<EthereumVaultEvent>> = vec![];
 		if age.contains(&safety_margin) {
 			results.extend(
 				block_data
@@ -296,8 +296,8 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 	fn run(
 		&mut self,
 		(age, block_data, safety_margin): (Range<u32>, BlockDataKeyManager, u32),
-	) -> Vec<EthEvent<KeyManagerEvent>> {
-		let mut results: Vec<EthEvent<KeyManagerEvent>> = vec![];
+	) -> Vec<EthEvent<EthereumKeyManagerEvent>> {
+		let mut results: Vec<EthEvent<EthereumKeyManagerEvent>> = vec![];
 		// No safety margin for egress success
 		if age.contains(&0u32) {
 			results.extend(
@@ -305,9 +305,10 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 					.clone()
 					.into_iter()
 					.filter_map(|event| match event {
-						KeyManagerEvent::AggKeySetByGovKey { .. } |
-						KeyManagerEvent::GovernanceAction { .. } => None,
-						KeyManagerEvent::SignatureAccepted { .. } => Some(EthEvent::Witness(event)),
+						EthereumKeyManagerEvent::AggKeySetByGovKey { .. } |
+						EthereumKeyManagerEvent::GovernanceAction { .. } => None,
+						EthereumKeyManagerEvent::SignatureAccepted { .. } =>
+							Some(EthEvent::Witness(event)),
 					})
 					.collect::<Vec<_>>(),
 			)
@@ -317,9 +318,9 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManager
 				block_data
 					.into_iter()
 					.filter_map(|event| match event {
-						KeyManagerEvent::AggKeySetByGovKey { .. } |
-						KeyManagerEvent::GovernanceAction { .. } => Some(EthEvent::Witness(event)),
-						KeyManagerEvent::SignatureAccepted { .. } => None,
+						EthereumKeyManagerEvent::AggKeySetByGovKey { .. } |
+						EthereumKeyManagerEvent::GovernanceAction { .. } => Some(EthEvent::Witness(event)),
+						EthereumKeyManagerEvent::SignatureAccepted { .. } => None,
 					})
 					.collect::<Vec<_>>(),
 			)

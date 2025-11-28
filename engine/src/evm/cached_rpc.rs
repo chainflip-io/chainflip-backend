@@ -3,10 +3,14 @@ use std::ops::RangeInclusive;
 use crate::{
 	caching_request::CachingRequest,
 	evm::{
-		retry_rpc::EvmRetryRpcClient,
+		retry_rpc::{
+			node_interface::NodeInterfaceRetryRpcApiWithResult, EvmRetryRpcClient,
+			EvmRetrySigningRpcApi,
+		},
 		rpc::{
 			address_checker::{AddressCheckerRpcApi, AddressState},
-			EvmRpcApi,
+			node_interface::NodeInterfaceRpcApi,
+			EvmRpcApi, EvmSigningRpcApi,
 		},
 	},
 };
@@ -79,6 +83,7 @@ pub trait AddressCheckerRetryRpcApiWithResult {
 
 #[derive(Clone)]
 pub struct EvmCachingClient<Rpc: EvmRpcApi> {
+	retry_client: EvmRetryRpcClient<Rpc>,
 	get_logs: CachingRequest<(H256, H160), Vec<Log>, EvmRetryRpcClient<Rpc>>,
 	chain_id: CachingRequest<(), U256, EvmRetryRpcClient<Rpc>>,
 	transaction_receipt: CachingRequest<H256, TransactionReceipt, EvmRetryRpcClient<Rpc>>,
@@ -94,6 +99,7 @@ pub struct EvmCachingClient<Rpc: EvmRpcApi> {
 	query_price_feeds:
 		CachingRequest<(H160, Vec<H160>), (U256, U256, Vec<PriceFeedData>), EvmRetryRpcClient<Rpc>>,
 	get_block_number: CachingRequest<(), U64, EvmRetryRpcClient<Rpc>>,
+	gas_estimate_components: CachingRequest<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>,
 
 	pub cache_invalidation_senders: Vec<mpsc::Sender<()>>,
 }
@@ -149,8 +155,14 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			EvmRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (get_block_number, get_block_number_cache) =
-			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client);
+			CachingRequest::<(), U64, EvmRetryRpcClient<Rpc>>::new(scope, client.clone());
+		let (gas_estimate_components, gas_estimate_components_cache) =
+			CachingRequest::<(), (u64, u64, U256, U256), EvmRetryRpcClient<Rpc>>::new(
+				scope,
+				client.clone(),
+			);
 		EvmCachingClient {
+			retry_client: client,
 			get_logs,
 			chain_id,
 			transaction_receipt,
@@ -164,6 +176,7 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 			balances,
 			query_price_feeds,
 			get_block_number,
+			gas_estimate_components,
 			cache_invalidation_senders: vec![
 				get_logs_cache,
 				chain_id_cache,
@@ -178,6 +191,7 @@ impl<Rpc: EvmRpcApi> EvmCachingClient<Rpc> {
 				balances_cache,
 				query_price_feeds_cache,
 				get_block_number_cache,
+				gas_estimate_components_cache,
 			],
 		}
 	}
@@ -398,5 +412,46 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 				(contract_address, aggregator_addressess),
 			)
 			.await
+	}
+}
+#[async_trait::async_trait]
+impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
+	for EvmCachingClient<Rpc>
+{
+	async fn gas_estimate_components(
+		&self,
+		destination_address: H160,
+		contract_creation: bool,
+		tx_data: Bytes,
+	) -> anyhow::Result<(u64, u64, U256, U256)> {
+		self.gas_estimate_components
+			.get_or_fetch(
+				Box::pin(move |client| {
+					let tx_data = tx_data.clone();
+					#[allow(clippy::redundant_async_block)]
+					Box::pin(async move {
+						client
+							.gas_estimate_components(
+								destination_address,
+								contract_creation,
+								tx_data,
+							)
+							.await
+					})
+				}),
+				(),
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmCachingClient<Rpc> {
+	/// Estimates gas and then sends the transaction to the network.
+	async fn broadcast_transaction(
+		&self,
+		tx: cf_chains::evm::Transaction,
+	) -> anyhow::Result<TxHash> {
+		self.retry_client.broadcast_transaction(tx).await
 	}
 }

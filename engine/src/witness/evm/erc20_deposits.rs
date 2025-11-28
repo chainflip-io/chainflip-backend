@@ -36,7 +36,7 @@ use super::{
 		chain_source::Header,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block,
+	contract_common::events_at_block2,
 };
 
 #[derive(Debug)]
@@ -124,7 +124,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.map(|deposit_channel| deposit_channel.deposit_channel.address)
 					.collect::<HashSet<_>>();
 
-				let deposit_witnesses = events_at_block::<Inner::Chain, Events, _>(
+				let deposit_witnesses = events_at_block2::<Inner::Chain, Events, _>(
 					Header {
 						index: header.index,
 						hash: header.hash,

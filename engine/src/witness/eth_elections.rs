@@ -14,76 +14,49 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	evm::rpc::address_checker::AddressState,
-	witness::{
-		common::block_height::{witness_headers, HeaderClient},
-		eth::{
-			sc_utils::{
-				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
-				DepositToVaultAndScCallFilter, ScUtilsEvents,
-			},
-			state_chain_gateway::{
-				FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
-				StateChainGatewayEvents,
-			},
+use crate::witness::{
+	common::block_height::{witness_headers, HeaderClient},
+	eth::{
+		sc_utils::{
+			CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
+			DepositToVaultAndScCallFilter, ScUtilsEvents,
 		},
-		evm::{
-			contract_common::Event,
-			erc20_deposits::Erc20Events,
-			evm_deposits::eth_ingresses_at_block,
-			key_manager::{
-				AggKeySetByGovKeyFilter, GovernanceActionFilter, KeyManagerEvents,
-				SignatureAcceptedFilter,
-			},
-			vault::{
-				decode_cf_parameters, SwapNativeFilter, SwapTokenFilter,
-				TransferNativeFailedFilter, TransferTokenFailedFilter, VaultEvents,
-				XcallNativeFilter, XcallTokenFilter,
-			},
+		state_chain_gateway::{
+			FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
+			StateChainGatewayEvents,
 		},
 	},
-};
-use anyhow::{anyhow, ensure};
-use cf_chains::{
-	address::{EncodedAddress, IntoForeignChainAddress},
-	eth::EthereumTrackedData,
 	evm::{
-		DepositDetails, EvmTransactionMetadata, SchnorrVerificationComponents, ToAccountId32,
-		TransactionFee, H256,
+		contract_common::{events_at_block, query_election_block},
+		erc20_deposits::Erc20Events,
+		key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
+		vault::{handle_vault_events, VaultEventConfig, VaultEvents},
 	},
-	CcmChannelMetadata, CcmDepositMetadata, Ethereum, ForeignChain,
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset, AssetAmount};
+use cf_chains::{eth::EthereumTrackedData, evm::ToAccountId32, Ethereum, ForeignChain};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset};
 use cf_utilities::{
 	context,
 	task_scope::{self, Scope},
 };
-use ethbloom::Bloom;
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::{Block, TransactionReceipt},
-};
-use futures::{try_join, FutureExt};
+use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainTypes},
-		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
+		block_height_witnesser::primitives::Header,
+		block_witnesser::state_machine::BWElectionProperties,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
 use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
-use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use sp_core::H160;
 use state_chain_runtime::{
 	chainflip::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumDepositChannelWitnessingES,
 		EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
 		EthereumLiveness, EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
-		EthereumVaultDepositWitnessingES, KeyManagerEvent as SCKeyManagerEvent, ScUtilsCall,
-		StateChainGatewayEvent as SCStateChainGatewayEvent, VaultEvents as SCVaultEvents,
-		ETHEREUM_MAINNET_SAFETY_BUFFER,
+		EthereumVaultDepositWitnessingES, ScUtilsCall,
+		StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
 };
@@ -92,19 +65,14 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
-		cached_rpc::{
-			AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult,
-		},
+		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		rpc::EvmRpcSigningClient,
 	},
 	state_chain_observer::client::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
 };
-
-use super::evm::vault::vault_deposit_witness;
 
 use anyhow::{Context, Result};
 
@@ -114,16 +82,27 @@ pub struct EthereumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<Block<H256>> for EvmCachingClient<EvmRpcSigningClient> {
-	async fn best_block_header(&self) -> anyhow::Result<Block<H256>> {
-		let best_number = self.get_block_number().await?;
-		let block = self.block(best_number).await?;
-		Ok(block)
+impl HeaderClient<EthereumChain, Ethereum> for EthereumBlockHeightWitnesserVoter {
+	async fn best_block_header(&self) -> anyhow::Result<Header<EthereumChain>> {
+		let best_number = self.client.get_block_number().await?;
+		let block = self.client.block(best_number).await?;
+		Ok(Header {
+			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
+			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block.parent_hash,
+		})
 	}
 
-	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<Block<H256>> {
-		let block = self.block(height.into()).await?;
-		Ok(block)
+	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<Header<EthereumChain>> {
+		let block = self.client.block(height.into()).await?;
+		Ok(Header {
+			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
+			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block.parent_hash,
+		})
+	}
+	async fn best_block_number(&self) -> anyhow::Result<u64> {
+		Ok(self.client.get_block_number().await?.low_u64())
 	}
 }
 
@@ -134,140 +113,14 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EthereumBlockHeightWitnesserVo
 		_settings: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<EthereumBlockHeightWitnesserES, _, Block<H256>, EthereumChain>(
-			&self.client,
+		witness_headers::<EthereumBlockHeightWitnesserES, _, EthereumChain, Ethereum>(
+			self,
 			properties,
 			ETHEREUM_MAINNET_SAFETY_BUFFER,
-			|block| {
-				Ok(Header {
-					block_height: block
-						.number
-						.ok_or_else(|| anyhow::anyhow!("No block number"))?
-						.low_u64(),
-					hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-					parent_hash: block.parent_hash,
-				})
-			},
 			"ETH BHW",
 		)
 		.await
 	}
-}
-
-async fn query_election_block<C: ChainTypes<ChainBlockHash = H256, ChainBlockNumber = u64>>(
-	client: &EvmCachingClient<EvmRpcSigningClient>,
-	block_height: C::ChainBlockNumber,
-	election_type: EngineElectionType<C>,
-) -> Result<(Bloom, Option<C::ChainBlockHash>, C::ChainBlockHash, C::ChainBlockHash)> {
-	match election_type {
-		EngineElectionType::ByHash(hash) => {
-			let block = client.block_by_hash(hash).await?;
-			if let Some(block_hash) = block.hash {
-				if block_hash != hash {
-					return Err(anyhow::anyhow!(
-						"Block hash from RPC ({}) doesn't match election block hash: {}",
-						block_hash,
-						hash
-					));
-				}
-				Ok((
-					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
-					None,
-					block_hash,
-					block.parent_hash,
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {}",
-					block_height
-				))
-			}
-		},
-		EngineElectionType::BlockHeight { submit_hash } => {
-			let block = client.block(block_height.into()).await?;
-			if let (Some(block_number), Some(block_hash)) = (block.number, block.hash) {
-				if block_number.as_u64() != block_height {
-					return Err(anyhow::anyhow!(
-						"Block number from RPC ({}) doesn't match election block height: {}",
-						block_number,
-						block_height
-					));
-				}
-				Ok((
-					block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
-					if submit_hash { block.hash } else { None },
-					block_hash,
-					block.parent_hash,
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {}",
-					block_height
-				))
-			}
-		},
-	}
-}
-
-async fn address_states<EvmCachingClient>(
-	eth_rpc: &EvmCachingClient,
-	address_checker_address: H160,
-	parent_hash: H256,
-	hash: H256,
-	addresses: Vec<H160>,
-) -> Result<impl Iterator<Item = (H160, (AddressState, AddressState))>, anyhow::Error>
-where
-	EvmCachingClient: AddressCheckerRetryRpcApiWithResult + Send + Sync + Clone,
-{
-	let (previous_address_states, address_states) = try_join!(
-		eth_rpc.address_states(parent_hash, address_checker_address, addresses.clone()),
-		eth_rpc.address_states(hash, address_checker_address, addresses.clone())
-	)?;
-
-	ensure!(
-		addresses.len() == previous_address_states.len() &&
-			previous_address_states.len() == address_states.len()
-	);
-
-	Ok(addresses
-		.into_iter()
-		.zip(previous_address_states.into_iter().zip(address_states)))
-}
-
-pub async fn events_at_block<Chain, EventParameters, EvmCachingClient>(
-	data: Bloom,
-	block_number: Chain::ChainBlockNumber,
-	block_hash: H256,
-	contract_address: H160,
-	eth_rpc: &EvmCachingClient,
-) -> Result<Vec<Event<EventParameters>>>
-where
-	Chain: cf_chains::Chain<ChainBlockNumber = u64>,
-	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EvmCachingClient: EvmRetryRpcApiWithResult,
-{
-	assert!(Chain::is_block_witness_root(block_number));
-	if Chain::WITNESS_PERIOD == 1 {
-		let mut contract_bloom = Bloom::default();
-		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
-
-		// if we have logs for this block, fetch them.
-		if data.contains_bloom(&contract_bloom) {
-			eth_rpc.get_logs(block_hash, contract_address).await?
-		} else {
-			// we know there won't be interesting logs, so don't fetch for events
-			vec![]
-		}
-	} else {
-		eth_rpc
-			.get_logs_range(Chain::block_witness_range(block_number), contract_address)
-			.await?
-	}
-	.into_iter()
-	.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-	})
-	.collect::<anyhow::Result<Vec<_>>>()
 }
 
 #[derive(Clone)]
@@ -279,6 +132,87 @@ pub struct EthereumDepositChannelWitnesserVoter {
 	usdt_contract_address: H160,
 	flip_contract_address: H160,
 }
+
+#[async_trait::async_trait]
+impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereum>
+	for EthereumDepositChannelWitnesserVoter
+{
+	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
+		&self.client
+	}
+
+	fn address_checker_address(&self) -> H160 {
+		self.address_checker_address
+	}
+
+	fn vault_address(&self) -> H160 {
+		self.vault_address
+	}
+
+	async fn get_events_for_asset(
+		&self,
+		asset: EthAsset,
+		bloom: Option<ethers::types::Bloom>,
+		block_height: u64,
+		block_hash: sp_core::H256,
+	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
+		use crate::witness::evm::{
+			contract_common::events_at_block,
+			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+		};
+
+		let events = match asset {
+			EthAsset::Usdc => events_at_block::<cf_chains::Ethereum, UsdcEvents, _>(
+				bloom,
+				block_height,
+				block_hash,
+				self.usdc_contract_address,
+				&self.client,
+			)
+			.await?
+			.into_iter()
+			.map(|event| crate::witness::evm::contract_common::Event {
+				event_parameters: event.event_parameters.into(),
+				tx_hash: event.tx_hash,
+				log_index: event.log_index,
+			})
+			.collect::<Vec<_>>(),
+			EthAsset::Flip => events_at_block::<cf_chains::Ethereum, FlipEvents, _>(
+				bloom,
+				block_height,
+				block_hash,
+				self.flip_contract_address,
+				&self.client,
+			)
+			.await?
+			.into_iter()
+			.map(|event| crate::witness::evm::contract_common::Event {
+				event_parameters: event.event_parameters.into(),
+				tx_hash: event.tx_hash,
+				log_index: event.log_index,
+			})
+			.collect::<Vec<_>>(),
+			EthAsset::Usdt => events_at_block::<cf_chains::Ethereum, UsdtEvents, _>(
+				bloom,
+				block_height,
+				block_hash,
+				self.usdt_contract_address,
+				&self.client,
+			)
+			.await?
+			.into_iter()
+			.map(|event| crate::witness::evm::contract_common::Event {
+				event_parameters: event.event_parameters.into(),
+				tx_hash: event.tx_hash,
+				log_index: event.log_index,
+			})
+			.collect::<Vec<_>>(),
+			_ => return Ok(None), // Skip unsupported assets
+		};
+		Ok(Some(events))
+	}
+}
+
 #[async_trait::async_trait]
 impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitnesserVoter {
 	async fn vote(
@@ -286,160 +220,22 @@ impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitn
 		_settings: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumDepositChannelWitnessingES>>, anyhow::Error> {
+		use state_chain_runtime::chainflip::ethereum_elections::EthereumChain;
+
 		let BWElectionProperties {
 			block_height, properties: deposit_addresses, election_type, ..
 		} = properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
-		let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
-			deposit_addresses.into_iter().fold(
-				(Vec::new(), HashMap::new()),
-				|(mut eth, mut erc20), deposit_channel| {
-					if deposit_channel.asset == EthAsset::Eth {
-						eth.push(deposit_channel.address);
-					} else {
-						erc20
-							.entry(deposit_channel.asset)
-							.or_insert_with(Vec::new)
-							.push(deposit_channel.address);
-					}
-					(eth, erc20)
-				},
-			);
 
-		let eth_ingresses = eth_ingresses_at_block(
-			address_states(
-				&self.client,
-				self.address_checker_address,
-				data.3,
-				data.2,
-				eth_deposit_channels.clone(),
-			)
-			.await?,
-			events_at_block::<cf_chains::Ethereum, _, _>(
-				data.0,
-				block_height,
-				data.2,
-				self.vault_address,
-				&self.client,
-			)
-			.await?
-			.into_iter()
-			.filter_map(|event| match event.event_parameters {
-				VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
-				_ => None,
-			})
-			.collect(),
-		)?;
+		let (witnesses, return_block_hash) =
+			crate::witness::evm::contract_common::witness_deposit_channels_generic::<
+				cf_chains::Ethereum,
+				EthereumChain,
+				_,
+			>(self, block_height, election_type, deposit_addresses)
+			.await?;
 
-		let mut erc20_ingresses: Vec<DepositWitness<cf_chains::Ethereum>> = Vec::new();
-
-		// Handle each asset type separately with its specific event type
-		for (asset, deposit_channels) in erc20_deposit_channels {
-			let events = match asset {
-				EthAsset::Usdc => events_at_block::<cf_chains::Ethereum, UsdcEvents, _>(
-					data.0,
-					block_height,
-					data.2,
-					self.usdc_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				EthAsset::Flip => events_at_block::<cf_chains::Ethereum, FlipEvents, _>(
-					data.0,
-					block_height,
-					data.2,
-					self.flip_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				EthAsset::Usdt => events_at_block::<cf_chains::Ethereum, UsdtEvents, _>(
-					data.0,
-					block_height,
-					data.2,
-					self.usdt_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-				_ => continue, // Skip unsupported assets
-			};
-
-			let asset_ingresses = events
-				.into_iter()
-				.filter_map(|event| {
-					match event.event_parameters {
-						Erc20Events::TransferFilter{to, value, from: _ } if deposit_channels.contains(&to) =>
-							Some(pallet_cf_ingress_egress::DepositWitness {
-								deposit_address: to,
-								amount: value.try_into().expect(
-									"Any ERC20 tokens we support should have amounts that fit into a u128",
-								),
-								asset,
-								deposit_details: DepositDetails {
-									tx_hashes: Some(vec![event.tx_hash]),
-								},
-							}),
-						_ => None,
-					}
-				})
-				.collect::<Vec<_>>();
-
-			erc20_ingresses.extend(asset_ingresses);
-		}
-
-		Ok(Some((
-			eth_ingresses
-				.into_iter()
-				.map(|(to_addr, value, tx_hashes)| pallet_cf_ingress_egress::DepositWitness {
-					deposit_address: to_addr,
-					asset: EthAsset::Eth,
-					amount: value
-						.try_into()
-						.expect("Ingress witness transfer value should fit u128"),
-					deposit_details: DepositDetails { tx_hashes },
-				})
-				.chain(erc20_ingresses)
-				.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
-				.collect(),
-			data.1,
-		)))
+		Ok(Some((witnesses, return_block_hash)))
 	}
-}
-
-fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
-	from: Primitive,
-) -> Result<CfType>
-where
-	<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
-{
-	from.try_into().map_err(|err| {
-		anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
-	})
-}
-
-fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
-	EncodedAddress::from_chain_bytes(chain, bytes)
-		.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
 }
 
 #[derive(Clone)]
@@ -447,6 +243,17 @@ pub struct EthereumVaultDepositWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	vault_address: H160,
 	supported_assets: HashMap<H160, Asset>,
+}
+
+impl VaultEventConfig for EthereumVaultDepositWitnesserVoter {
+	type Chain = Ethereum;
+	type Instance = EthereumInstance;
+
+	const FOREIGN_CHAIN: ForeignChain = ForeignChain::Ethereum;
+
+	fn supported_assets(&self) -> &HashMap<H160, Asset> {
+		&self.supported_assets
+	}
 }
 #[async_trait::async_trait]
 impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesserVoter {
@@ -457,189 +264,21 @@ impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesse
 	) -> std::result::Result<Option<VoteOf<EthereumVaultDepositWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _vault, election_type, .. } =
 			properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Ethereum, VaultEvents, _>(
-			data.0,
+			block.bloom,
 			block_height,
-			data.2,
+			block.hash,
 			self.vault_address,
 			&self.client,
 		)
 		.await?;
 
-		let mut result = Vec::new();
-		for event in events {
-			match event.event_parameters {
-				VaultEvents::SwapNativeFilter(SwapNativeFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					amount,
-					sender: _,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
+		let result = handle_vault_events(self, events, block_height)?;
 
-					result.push(SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
-						Asset::Eth,
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						None,
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::SwapTokenFilter(SwapTokenFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					src_token,
-					amount,
-					sender: _,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ()) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-					result.push(SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
-						*(self
-							.supported_assets
-							.get(&src_token)
-							.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?),
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						None,
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::XcallNativeFilter(XcallNativeFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-					result.push(SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
-						Asset::Eth,
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						Some(CcmDepositMetadata {
-							source_chain: ForeignChain::Ethereum,
-							source_address: Some(
-								IntoForeignChainAddress::<Ethereum>::into_foreign_chain_address(
-									sender
-								)
-							),
-							channel_metadata: CcmChannelMetadata {
-								message: message.to_vec().try_into().map_err(|_| anyhow!(
-									"Failed to deposit CCM: `message` too long."
-								))?,
-								gas_budget: try_into_primitive(gas_amount)?,
-								ccm_additional_data,
-							},
-						}),
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::XcallTokenFilter(XcallTokenFilter {
-					dst_chain,
-					dst_address,
-					dst_token,
-					src_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				}) => {
-					let (vault_swap_parameters, ccm_additional_data) =
-						decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-					result.push(SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
-						*(self
-							.supported_assets
-							.get(&src_token)
-							.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?),
-						try_into_primitive(amount)?,
-						try_into_primitive(dst_token)?,
-						try_into_encoded_address(
-							try_into_primitive(dst_chain)?,
-							dst_address.to_vec()
-						)?,
-						Some(CcmDepositMetadata {
-							source_chain: ForeignChain::Ethereum,
-							source_address: Some(
-								IntoForeignChainAddress::<Ethereum>::into_foreign_chain_address(
-									sender
-								)
-							),
-							channel_metadata: CcmChannelMetadata {
-								message: message.to_vec().try_into().map_err(|_| anyhow!(
-									"Failed to deposit CCM. Message too long."
-								))?,
-								gas_budget: try_into_primitive(gas_amount)?,
-								ccm_additional_data,
-							},
-						}),
-						event.tx_hash,
-						vault_swap_parameters
-					)));
-				},
-				VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
-					recipient,
-					amount,
-				}) => {
-					result.push(SCVaultEvents::TransferNativeFailedFilter {
-						asset: cf_chains::assets::eth::Asset::Eth,
-						amount: try_into_primitive::<_, AssetAmount>(amount)?,
-						destination_address: recipient,
-					});
-				},
-				VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
-					recipient,
-					amount,
-					token,
-					reason: _,
-				}) => {
-					result.push(SCVaultEvents::TransferTokenFailedFilter {
-						asset: (*(self
-							.supported_assets
-							.get(&token)
-							.ok_or_else(|| anyhow!("Asset {token:?} not found"))?))
-						.try_into()
-						.expect(
-							"Asset translated from EthereumAddress must be supported by the chain.",
-						),
-						amount: try_into_primitive(amount)?,
-						destination_address: recipient,
-					});
-				},
-				_ => {},
-			}
-		}
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 
@@ -662,12 +301,13 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 			election_type,
 			..
 		} = properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Ethereum, StateChainGatewayEvents, _>(
-			data.0,
+			block.bloom,
 			block_height,
-			data.2,
+			block.hash,
 			self.state_chain_gateway_address,
 			&self.client,
 		)
@@ -712,7 +352,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 			}
 		}
 
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 
@@ -721,6 +361,16 @@ pub struct EthereumKeyManagerWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	key_manager_address: H160,
 }
+
+impl KeyManagerEventConfig for EthereumKeyManagerWitnesserVoter {
+	type Chain = Ethereum;
+	type Instance = EthereumInstance;
+
+	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
+		&self.client
+	}
+}
+
 #[async_trait::async_trait]
 impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVoter {
 	async fn vote(
@@ -730,85 +380,21 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 	) -> std::result::Result<Option<VoteOf<EthereumKeyManagerWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _key_manager, election_type, .. } =
 			properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Ethereum, KeyManagerEvents, _>(
-			data.0,
+			block.bloom,
 			block_height,
-			data.2,
+			block.hash,
 			self.key_manager_address,
 			&self.client,
 		)
 		.await?;
 
-		let mut result: Vec<SCKeyManagerEvent> = Vec::new();
+		let result = handle_key_manager_events(self, events, block_height).await?;
 
-		for event in events {
-			match event.event_parameters {
-				KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
-					new_agg_key,
-					..
-				}) => {
-					result.push(SCKeyManagerEvent::AggKeySetByGovKey {
-						new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(
-							new_agg_key.serialize(),
-						),
-						block_number: block_height,
-						tx_id: event.tx_hash,
-					});
-				},
-				KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
-					sig_data,
-					..
-				}) => {
-					let TransactionReceipt { gas_used, effective_gas_price, from, to, .. } =
-						self.client.transaction_receipt(event.tx_hash).await?;
-
-					let gas_used = gas_used
-						.ok_or_else(|| {
-							anyhow::anyhow!(
-								"No gas_used on Transaction receipt for tx_hash: {}",
-								event.tx_hash
-							)
-						})?
-						.try_into()
-						.map_err(anyhow::Error::msg)?;
-					let effective_gas_price = effective_gas_price
-						.ok_or_else(|| {
-							anyhow::anyhow!(
-								"No effective_gas_price on Transaction receipt for tx_hash: {}",
-								event.tx_hash
-							)
-						})?
-						.try_into()
-						.map_err(anyhow::Error::msg)?;
-
-					let transaction = self.client.get_transaction(event.tx_hash).await?;
-					let tx_metadata = EvmTransactionMetadata {
-						contract: to.expect("To have a contract"),
-						max_fee_per_gas: transaction.max_fee_per_gas,
-						max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
-						gas_limit: Some(transaction.gas),
-					};
-					result.push(SCKeyManagerEvent::SignatureAccepted {
-						tx_out_id: SchnorrVerificationComponents {
-							s: sig_data.sig.into(),
-							k_times_g_address: sig_data.k_times_g_address.into(),
-						},
-						signer_id: from,
-						tx_fee: TransactionFee { effective_gas_price, gas_used },
-						tx_metadata,
-						transaction_ref: transaction.hash,
-					});
-				},
-				KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message }) => {
-					result.push(SCKeyManagerEvent::GovernanceAction { call_hash: message });
-				},
-				_ => {},
-			}
-		}
-
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 
@@ -827,12 +413,13 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 	) -> std::result::Result<Option<VoteOf<EthereumScUtilsWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _sc_utils, election_type, .. } =
 			properties;
-		let data = query_election_block(&self.client, block_height, election_type).await?;
+		let (block, return_block_hash) =
+			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
 		let events = events_at_block::<cf_chains::Ethereum, ScUtilsEvents, _>(
-			data.0,
+			block.bloom,
 			block_height,
-			data.2,
+			block.hash,
 			self.sc_utils_address,
 			&self.client,
 		)
@@ -938,7 +525,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 			}
 		}
 
-		Ok(Some((result.into_iter().sorted().collect(), data.1)))
+		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 #[derive(Clone)]
