@@ -6,7 +6,7 @@ env:
 
 jobs:
   test-benchmarks:
-    runs-on: digitalocean
+    runs-on: hetzner
     timeout-minutes: 60
     steps:
       - name: Checkout 🛒

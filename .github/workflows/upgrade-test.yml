@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   upgrade_test:
-    runs-on: digitalocean
+    runs-on: hetzner
     # conservatively 1.5 hours. 2 bouncer runs need to occur.
     timeout-minutes: 90
     steps:
