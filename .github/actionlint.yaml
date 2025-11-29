@@ -2,7 +2,7 @@ self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
   labels:
     [
-      digitalocean,
+      hetzner,
       hetzner,
       namespace-profile-default,
       namespace-profile-rust-builder,
