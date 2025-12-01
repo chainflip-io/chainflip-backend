@@ -59,7 +59,8 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<20, Pallet<T>>,
+	// 20->21 is a safe mode migration.
+	PlaceholderMigration<21, Pallet<T>>,
 );
 
 #[cfg(test)]
