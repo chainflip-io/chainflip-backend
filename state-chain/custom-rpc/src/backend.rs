@@ -33,7 +33,7 @@ use sp_api::CallApiAt;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use state_chain_runtime::{
 	chainflip::{get_header_timestamp, BlockUpdate},
-	runtime_apis::CustomRuntimeApi,
+	runtime_apis::custom_api::CustomRuntimeApi,
 	Hash, Header,
 };
 use std::{marker::PhantomData, num::NonZero, sync::Arc};

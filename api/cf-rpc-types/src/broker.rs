@@ -30,8 +30,11 @@ pub use cf_chains::{address::AddressString, VaultSwapExtraParameters, VaultSwapI
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 pub use pallet_cf_swapping::AffiliateDetails;
 pub use state_chain_runtime::runtime_apis::{
-	ChainAccounts, ChannelActionType, CustomRuntimeApi, TransactionScreeningEvents, VaultAddresses,
-	VaultSwapDetails,
+	custom_api::CustomRuntimeApi,
+	types::{
+		ChainAccounts, ChannelActionType, TransactionScreeningEvents, VaultAddresses,
+		VaultSwapDetails,
+	},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

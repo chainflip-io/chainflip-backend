@@ -85,14 +85,19 @@ use state_chain_runtime::{
 	chainflip::{BlockUpdate, Offence},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-		CustomRuntimeApi, DelegationSnapshot, DispatchErrorWithMessage, ElectoralRuntimeApi,
-		EncodedNonNativeCall, EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails,
-		FailingWitnessValidators, FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo,
-		LiquidityProviderInfo, NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
-		RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
-		SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-		TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+		custom_api::CustomRuntimeApi,
+		elections_api::ElectoralRuntimeApi,
+		types::{
+			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
+			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
+			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
+			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
+			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+			VaultSwapDetails,
+		},
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -373,7 +378,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 
 pub mod account_info_before_api_v7 {
 	use super::*;
-	use state_chain_runtime::runtime_apis::validator_info_before_v7;
+	use state_chain_runtime::runtime_apis::types::validator_info_before_v7;
 
 	#[expect(clippy::large_enum_variant)]
 	#[derive(Serialize, Deserialize, Clone)]
@@ -2037,14 +2042,13 @@ where
 						side,
 						tick,
 						sell_amount,
-					} =>
-						state_chain_runtime::runtime_apis::SimulateSwapAdditionalOrder::LimitOrder {
-							base_asset,
-							quote_asset,
-							side,
-							tick,
-							sell_amount: sell_amount.unique_saturated_into(),
-						},
+					} => SimulateSwapAdditionalOrder::LimitOrder {
+						base_asset,
+						quote_asset,
+						side,
+						tick,
+						sell_amount: sell_amount.unique_saturated_into(),
+					},
 				})
 				.collect()
 		});

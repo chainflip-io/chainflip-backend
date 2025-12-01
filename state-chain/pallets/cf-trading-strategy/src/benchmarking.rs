@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 use cf_chains::ForeignChainAddress;
 use cf_primitives::Asset;
