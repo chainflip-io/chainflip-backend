@@ -1606,19 +1606,20 @@ fn threshold_sign_and_broadcast_with_historical_key_full_flow() {
 		));
 
 		// Verify: HistoricalBroadcastRequested event emitted
-		let broadcast_id = 1u32; // First broadcast
+		const BROADCAST_ID: u32 = 1; // First broadcast
+		const REQUEST_ID: u32 = 0; // First signature request
 		System::assert_has_event(RuntimeEvent::Broadcaster(
-			Event::HistoricalBroadcastRequested { broadcast_id, epoch_index },
+			Event::HistoricalBroadcastRequested { broadcast_id: BROADCAST_ID, epoch_index, threshold_signature_request_id: REQUEST_ID },
 		));
 
 		// Verify: broadcast is pending
-		assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&broadcast_id));
+		assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&BROADCAST_ID));
 
 		// Mock signature success - this executes the callback (on_signature_ready)
 		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(SIG1));
 
 		// Verify: broadcast request was issued (on_signature_ready callback executed)
-		assert!(AwaitingBroadcast::<Test, Instance1>::contains_key(broadcast_id));
+		assert!(AwaitingBroadcast::<Test, Instance1>::contains_key(BROADCAST_ID));
 
 		// Complete the broadcast by witnessing success
 		assert_ok!(Broadcaster::transaction_succeeded(
@@ -1632,11 +1633,41 @@ fn threshold_sign_and_broadcast_with_historical_key_full_flow() {
 
 		// Verify: BroadcastSuccess event and storage cleanup
 		System::assert_has_event(RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
-			broadcast_id,
+			broadcast_id: BROADCAST_ID,
 			transaction_out_id: SIG1,
 			transaction_ref: 0,
 		}));
-		assert_broadcast_storage_cleaned_up(broadcast_id);
+		assert_broadcast_storage_cleaned_up(BROADCAST_ID);
+	});
+}
+
+#[test]
+fn threshold_sign_and_broadcast_with_historical_key_signing_request_failure() {
+	new_test_ext().execute_with(|| {
+		// Setup: use current authorities as participants
+		let participants: BTreeSet<u64> = MockEpochInfo::current_authorities().into_iter().collect();
+		let epoch_index = 0u32;
+
+		// Call the governance extrinsic
+		assert_ok!(Broadcaster::threshold_sign_and_broadcast_with_historical_key(
+			RuntimeOrigin::root(),
+			Box::new(mock_api_call()),
+			epoch_index,
+			participants.clone(),
+			participants.len() as u32,
+			0,
+			true, // broadcast = true
+		));
+
+		const BROADCAST_ID: u32 = 1;
+
+		// Verify: broadcast is pending
+		assert!(PendingBroadcasts::<Test, Instance1>::get().contains(&BROADCAST_ID));
+
+		// Mock signing request failure - this executes the callback (on_signature_ready)
+		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Err(vec![]));
+
+		assert_broadcast_storage_cleaned_up(BROADCAST_ID);
 	});
 }
 
