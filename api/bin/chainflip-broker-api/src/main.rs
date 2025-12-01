@@ -30,7 +30,7 @@ use cf_utilities::{
 use chainflip_api::{
 	self,
 	primitives::{
-		state_chain_runtime::runtime_apis::{
+		state_chain_runtime::runtime_apis::types::{
 			ChainAccounts, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
 		},
 		AccountRole, AffiliateDetails, Affiliates, Asset, BasisPoints,

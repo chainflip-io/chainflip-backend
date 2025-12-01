@@ -19,7 +19,7 @@ use crate::{
 		address_derivation::btc::derive_btc_vault_deposit_addresses, AddressConverter,
 		ChainAddressConverter, EvmEnvironment, SolEnvironment,
 	},
-	runtime_apis::{DispatchErrorWithMessage, EvmCallDetails, VaultSwapDetails},
+	runtime_apis::types::{DispatchErrorWithMessage, EvmCallDetails, VaultSwapDetails},
 	AccountId, BlockNumber, Environment, Runtime, Swapping,
 };
 
