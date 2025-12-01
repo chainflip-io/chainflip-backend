@@ -2350,13 +2350,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		// We want to pass this check even if the asset is not correct -> governanceElection allows
-		// to trigger witnessing for an arbitrary asset to recover in case of asset missmatch
-		// deposit ensure!(
-		// 	deposit_channel_details.deposit_channel.asset == *asset,
-		// 	Error::<T, I>::AssetMismatch
-		// );
-
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {

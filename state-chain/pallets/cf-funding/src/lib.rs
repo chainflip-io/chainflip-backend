@@ -1038,19 +1038,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn redeemed(account_id: AccountId<T>, redeemed_amount: FlipBalance<T>) -> DispatchResult {
-		let _ =
-			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
-
-		T::Flip::finalize_redemption(&account_id)
-			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
-
-		Self::kill_account_if_zero_balance(&account_id);
-
-		Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
-		Ok(())
-	}
-
 	pub fn redemption_expired(account_id: AccountId<T>) -> DispatchResult {
 		let pending_redemption =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
@@ -1069,6 +1056,19 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+		Ok(())
+	}
+
+	pub fn redeemed(account_id: AccountId<T>, redeemed_amount: FlipBalance<T>) -> DispatchResult {
+		let _ =
+			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
+
+		T::Flip::finalize_redemption(&account_id)
+			.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+
+		Self::kill_account_if_zero_balance(&account_id);
+
+		Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
 		Ok(())
 	}
 }

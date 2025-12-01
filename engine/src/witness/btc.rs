@@ -30,7 +30,7 @@ use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{
 	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
 };
-use cf_primitives::EpochIndex;
+use cf_primitives::{chains::Bitcoin, EpochIndex};
 use futures_core::Future;
 
 use cf_utilities::task_scope::{self, Scope};
@@ -52,7 +52,6 @@ use state_chain_runtime::{
 };
 
 use crate::{
-	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
@@ -78,8 +77,8 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<BlockHeader> for BtcCachingClient {
-	async fn best_block_header(&self) -> anyhow::Result<BlockHeader> {
+impl HeaderClient<BitcoinChain, Bitcoin> for BtcCachingClient {
+	async fn best_block_header(&self) -> anyhow::Result<Header<BitcoinChain>> {
 		let best_hash = self.best_block_hash().await?;
 		let best_header = self.block_header(best_hash).await?;
 		if best_hash != best_header.hash {
@@ -88,12 +87,37 @@ impl HeaderClient<BlockHeader> for BtcCachingClient {
 				best_header.hash
 			);
 		}
-		Ok(best_header)
+		Ok(Header {
+			block_height: best_header.height,
+			hash: best_header.hash.to_byte_array().into(),
+			parent_hash: best_header
+				.previous_block_hash
+				.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+				.to_byte_array()
+				.into(),
+		})
 	}
 
-	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<BlockHeader> {
+	async fn block_header_by_height(
+		&self,
+		height: <BitcoinChain as ChainTypes>::ChainBlockNumber,
+	) -> anyhow::Result<Header<BitcoinChain>> {
 		let hash = self.block_hash(height).await?;
-		self.block_header(hash).await
+		let header = self.block_header(hash).await?;
+		Ok(Header {
+			block_height: header.height,
+			hash: header.hash.to_byte_array().into(),
+			parent_hash: header
+				.previous_block_hash
+				.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
+				.to_byte_array()
+				.into(),
+		})
+	}
+	async fn best_block_number(&self) -> anyhow::Result<u64> {
+		let best_hash = self.best_block_hash().await?;
+		let best_header = self.block_header(best_hash).await?;
+		Ok(best_header.height)
 	}
 }
 
@@ -104,21 +128,10 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<BitcoinBlockHeightWitnesserES, _, BlockHeader, BitcoinChain>(
+		witness_headers::<BitcoinBlockHeightWitnesserES, _, BitcoinChain, Bitcoin>(
 			&self.client,
 			properties,
 			BITCOIN_MAINNET_SAFETY_BUFFER,
-			|header| {
-				Ok(Header {
-					block_height: header.height,
-					hash: header.hash.to_byte_array().into(),
-					parent_hash: header
-						.previous_block_hash
-						.ok_or_else(|| anyhow::anyhow!("No parent hash"))?
-						.to_byte_array()
-						.into(),
-				})
-			},
 			"BTC BHW",
 		)
 		.await

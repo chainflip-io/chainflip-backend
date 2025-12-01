@@ -1,4 +1,4 @@
-use cf_chains::witness_period::SaturatingStep;
+use cf_chains::{witness_period::SaturatingStep, ChainWitnessConfig};
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
 		primitives::{Header, NonemptyContinuousHeaders},
@@ -9,27 +9,34 @@ use pallet_cf_elections::{
 use sp_core::bounded::alloc::collections::VecDeque;
 
 #[async_trait::async_trait]
-pub trait HeaderClient<H> {
-	async fn best_block_header(&self) -> anyhow::Result<H>;
-	async fn block_header_by_height(&self, height: u64) -> anyhow::Result<H>;
+pub trait HeaderClient<Chain: ChainTypes, WitnessConfig: ChainWitnessConfig> {
+	async fn best_block_header(&self) -> anyhow::Result<Header<Chain>>;
+	async fn block_header_by_height(
+		&self,
+		height: <Chain as ChainTypes>::ChainBlockNumber,
+	) -> anyhow::Result<Header<Chain>>;
+	async fn best_block_number(&self) -> anyhow::Result<<Chain as ChainTypes>::ChainBlockNumber>;
 }
 
-pub async fn witness_headers<ES, C, RawHeader, Chain>(
+pub async fn witness_headers<ES, C, Chain, WitnessConfig>(
 	client: &C,
 	properties: <ES as ElectoralSystemTypes>::ElectionProperties,
 	safety_buffer: u32,
-	header_conv: impl Fn(RawHeader) -> anyhow::Result<Header<Chain>>,
 	tag: &'static str,
 ) -> anyhow::Result<Option<NonemptyContinuousHeaders<Chain>>>
 where
 	ES: ElectoralSystemTypes<ElectionProperties = HeightWitnesserProperties<Chain>>,
-	C: HeaderClient<RawHeader>,
-	Chain: ChainTypes<ChainBlockNumber = u64>,
+	C: HeaderClient<Chain, WitnessConfig>,
+	Chain: ChainTypes,
+	WitnessConfig: ChainWitnessConfig,
 {
 	let HeightWitnesserProperties { witness_from_index } = properties;
 
-	let best_raw = client.best_block_header().await?;
-	let best_block_header = header_conv(best_raw)?;
+	let best_block_number = client.best_block_number().await?;
+	if best_block_number < witness_from_index {
+		return Ok(None)
+	}
+	let best_block_header = client.best_block_header().await?;
 
 	if best_block_header.block_height < witness_from_index {
 		tracing::debug!("{tag:?}: no new blocks since best block height={:?} for witness_from={witness_from_index:?}", best_block_header.block_height);
@@ -38,13 +45,13 @@ where
 
 	// The `latest_block_height == 0` is a special case for when starting up the
 	// electoral system for the first time.
-	let witness_from_index = if witness_from_index == 0u64 {
+	let witness_from_index = if witness_from_index == Default::default() {
 		tracing::debug!(
 			"{tag:?}: election_property=0, best_block_height={:?}, submitting last {:?} blocks.",
 			best_block_header.block_height,
 			safety_buffer
 		);
-		best_block_header.block_height.saturating_sub(safety_buffer as u64)
+		best_block_header.block_height.saturating_backward(safety_buffer as usize)
 	} else {
 		witness_from_index
 	};
@@ -59,13 +66,7 @@ where
 
 	// request headers for at most SAFETY_BUFFER heights, in parallel
 	let requests = (witness_from_index..highest_submitted_height)
-		.map(|index| {
-			let header_conv = &header_conv;
-			async move {
-				let raw = client.block_header_by_height(index).await?;
-				header_conv(raw)
-			}
-		})
+		.map(|index| async move { client.block_header_by_height(index).await })
 		.collect::<Vec<_>>();
 
 	let mut headers: VecDeque<_> = futures::future::join_all(requests)

@@ -24,7 +24,7 @@ use crate::{
 		chain_api::ChainApi, electoral_api::ElectoralApi,
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
-	EvmCachingClient, EvmRetryRpcClient,
+	EvmCachingClient,
 };
 use anyhow::{anyhow, Result};
 use cf_utilities::task_scope::{self, Scope};
@@ -70,7 +70,7 @@ pub fn asset_pair_from_description(description: String) -> Option<ChainlinkAsset
 
 #[derive(Clone)]
 struct OraclePriceVoter {
-	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 }
 
@@ -215,7 +215,7 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 use std::{collections::BTreeMap, sync::Arc};
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
+	arb_client: EvmCachingClient<EvmRpcSigningClient>,
 	eth_client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>

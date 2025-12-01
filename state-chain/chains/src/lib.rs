@@ -149,18 +149,12 @@ pub mod witness_period {
 	}
 
 	impl<C: ChainWitnessConfig> BlockWitnessRange<C> {
-		pub fn into_range_inclusive(self) -> RangeInclusive<C::ChainBlockNumber> {
-			self.root..=
-				self.root
-					.saturating_add(C::WITNESS_PERIOD.saturating_sub(C::ChainBlockNumber::one()))
-		}
-
 		pub fn root(&self) -> &C::ChainBlockNumber {
 			&self.root
 		}
 	}
 
-	fn block_witness_floor<
+	pub fn block_witness_floor<
 		I: Copy + Saturating + Sub<I, Output = I> + Rem<I, Output = I> + Eq + One,
 	>(
 		witness_period: I,
@@ -229,6 +223,7 @@ pub mod witness_period {
 	pub trait SaturatingStep {
 		fn saturating_forward(self, count: usize) -> Self;
 		fn saturating_backward(self, count: usize) -> Self;
+		fn into_range_inclusive(self) -> RangeInclusive<u64>;
 	}
 
 	impl<C: ChainWitnessConfig> SaturatingStep for BlockWitnessRange<C> {
@@ -241,15 +236,32 @@ pub mod witness_period {
 			self.root = self.root.saturating_sub(C::WITNESS_PERIOD * (count as u32).into());
 			self
 		}
+		fn into_range_inclusive(self) -> RangeInclusive<u64> {
+			block_witness_range(C::WITNESS_PERIOD.into(), self.root.into())
+		}
 	}
 
-	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ]; [ u64 ])]
+	#[duplicate::duplicate_item(Integer; [ u8 ]; [ u16 ]; [ u32 ])]
 	impl SaturatingStep for Integer {
 		fn saturating_forward(self, count: usize) -> Self {
 			self.saturating_add(count.saturating_cast::<Integer>())
 		}
 		fn saturating_backward(self, count: usize) -> Self {
 			self.saturating_sub(count.saturating_cast::<Integer>())
+		}
+		fn into_range_inclusive(self) -> RangeInclusive<u64> {
+			self.into()..=self.into()
+		}
+	}
+	impl SaturatingStep for u64 {
+		fn saturating_forward(self, count: usize) -> Self {
+			self.saturating_add(count.saturating_cast::<u64>())
+		}
+		fn saturating_backward(self, count: usize) -> Self {
+			self.saturating_sub(count.saturating_cast::<u64>())
+		}
+		fn into_range_inclusive(self) -> RangeInclusive<u64> {
+			self..=self
 		}
 	}
 

@@ -241,24 +241,31 @@ pub struct EthereumVaultDepositWitnessing;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
-pub enum VaultEvents {
-	SwapNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	SwapTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	XcallNativeFilter(VaultDepositWitness<Runtime, EthereumInstance>),
-	XcallTokenFilter(VaultDepositWitness<Runtime, EthereumInstance>),
+#[serde(bound(
+	serialize = "VaultWitness: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize, <C as Chain>::ChainAsset: Serialize",
+	deserialize = "VaultWitness: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>, <C as Chain>::ChainAsset: Deserialize<'de>",
+))]
+#[scale_info(skip_type_params(VaultWitness, C))]
+pub enum VaultEvents<VaultWitness, C: Chain> {
+	SwapNativeFilter(VaultWitness),
+	SwapTokenFilter(VaultWitness),
+	XcallNativeFilter(VaultWitness),
+	XcallTokenFilter(VaultWitness),
 	TransferNativeFailedFilter {
-		asset: cf_chains::assets::eth::Asset,
-		amount: <Ethereum as Chain>::ChainAmount,
-		destination_address: <Ethereum as Chain>::ChainAccount,
+		asset: <C as Chain>::ChainAsset,
+		amount: <C as Chain>::ChainAmount,
+		destination_address: <C as Chain>::ChainAccount,
 	},
 	TransferTokenFailedFilter {
-		asset: cf_chains::assets::eth::Asset,
-		amount: <Ethereum as Chain>::ChainAmount,
-		destination_address: <Ethereum as Chain>::ChainAccount,
+		asset: <C as Chain>::ChainAsset,
+		amount: <C as Chain>::ChainAmount,
+		destination_address: <C as Chain>::ChainAccount,
 	},
 }
 
-pub(crate) type BlockDataVaultDeposit = Vec<VaultEvents>;
+pub type EthereumVaultEvent = VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>;
+
+pub(crate) type BlockDataVaultDeposit = Vec<EthereumVaultEvent>;
 
 impls! {
 	for TypesFor<EthereumVaultDepositWitnessing>:
@@ -269,7 +276,7 @@ impls! {
 
 		type BlockData = BlockDataVaultDeposit;
 
-		type Event = EthEvent<VaultEvents>;
+		type Event = EthEvent<EthereumVaultEvent>;
 		type Rules = Self;
 		type Execute = Self;
 
@@ -418,25 +425,47 @@ pub struct EthereumKeyManagerWitnessing;
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
+#[scale_info(skip_type_params(
+	AggKey,
+	BlockNumber,
+	TxInId,
+	TxOutId,
+	SignerId,
+	TxFee,
+	TxMetadata,
+	TxRef
+))]
 #[allow(clippy::large_enum_variant)]
-pub enum KeyManagerEvent {
+pub enum KeyManagerEvent<AggKey, BlockNumber, TxInId, TxOutId, SignerId, TxFee, TxMetadata, TxRef> {
 	AggKeySetByGovKey {
-		new_public_key: AggKeyFor<Runtime, EthereumInstance>,
-		block_number: ChainBlockNumberFor<Runtime, EthereumInstance>,
-		tx_id: TransactionInIdFor<Runtime, EthereumInstance>,
+		new_public_key: AggKey,
+		block_number: BlockNumber,
+		tx_id: TxInId,
 	},
 	SignatureAccepted {
-		tx_out_id: TransactionOutIdFor<Runtime, EthereumInstance>,
-		signer_id: SignerIdFor<Runtime, EthereumInstance>,
-		tx_fee: TransactionFeeFor<Runtime, EthereumInstance>,
-		tx_metadata: TransactionMetadataFor<Runtime, EthereumInstance>,
-		transaction_ref: TransactionRefFor<Runtime, EthereumInstance>,
+		tx_out_id: TxOutId,
+		signer_id: SignerId,
+		tx_fee: TxFee,
+		tx_metadata: TxMetadata,
+		transaction_ref: TxRef,
 	},
 	GovernanceAction {
 		call_hash: GovCallHash,
 	},
 }
-pub(crate) type BlockDataKeyManager = Vec<KeyManagerEvent>;
+
+pub type EthereumKeyManagerEvent = KeyManagerEvent<
+	AggKeyFor<Runtime, EthereumInstance>,
+	ChainBlockNumberFor<Runtime, EthereumInstance>,
+	TransactionInIdFor<Runtime, EthereumInstance>,
+	TransactionOutIdFor<Runtime, EthereumInstance>,
+	SignerIdFor<Runtime, EthereumInstance>,
+	TransactionFeeFor<Runtime, EthereumInstance>,
+	TransactionMetadataFor<Runtime, EthereumInstance>,
+	TransactionRefFor<Runtime, EthereumInstance>,
+>;
+
+pub(crate) type BlockDataKeyManager = Vec<EthereumKeyManagerEvent>;
 
 impls! {
 	for TypesFor<EthereumKeyManagerWitnessing>:
@@ -447,7 +476,7 @@ impls! {
 
 		type BlockData = BlockDataKeyManager;
 
-		type Event = EthEvent<KeyManagerEvent>;
+		type Event = EthEvent<EthereumKeyManagerEvent>;
 		type Rules = Self;
 		type Execute = Self;
 
@@ -822,6 +851,10 @@ impl_pallet_safe_mode! {
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(ElectionPropertiesDepositChannel),
+	Vaults(()),
+	StateChainGateway(()),
+	KeyManager(()),
+	ScUtils(()),
 }
 
 pub struct ElectoralSystemConfiguration;
@@ -851,6 +884,66 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 					log::error!("{e:?}: Failed to create governance election with properties: {properties:?}");
 				}
 			},
+			ElectionTypes::Vaults(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.2
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create vault witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::StateChainGateway(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.3
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create state chain gateway witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::KeyManager(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.4
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create key manager witnessing governance election with properties for block {block_height}");
+				},
+			ElectionTypes::ScUtils(_) =>
+				if let Err(e) =
+					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
+						|state: &mut (_, _, _, _, _, _, _, _)| {
+							state
+								.5
+								.elections
+								.ongoing
+								.entry(block_height)
+								.or_insert(BWElectionType::Governance(()));
+							Ok(())
+						},
+					) {
+					log::error!("{e:?}: Failed to create sc utils witnessing governance election with properties for block {block_height}");
+				},
 		}
 	}
 }
