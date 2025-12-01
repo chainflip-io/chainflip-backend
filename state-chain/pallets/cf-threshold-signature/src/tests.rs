@@ -2033,18 +2033,14 @@ mod historical_signing {
 	// If fails, will only retry once
 	const MAX_RETRIES: u32 = 1;
 
-	const KEY_2: MockAggKey = MockAggKey(*b"key2");
-	const KEY_3: MockAggKey = MockAggKey(*b"key3");
-
 	#[test]
 	fn happy_path() {
 		new_test_ext()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.execute_with_consistency_checks(|| {
-				// Set a few new keys to make the genesis key be considered old enough:
-				EvmThresholdSigner::set_key_for_epoch(GENESIS_EPOCH + 1, KEY_2);
-				EvmThresholdSigner::set_key_for_epoch(GENESIS_EPOCH + 2, KEY_3);
+				// Expire the key so it can be used in historical signing:
+				MockEpochInfo::set_last_expired_epoch(GENESIS_EPOCH);
 
 				let request_id = EvmThresholdSigner::request_historical_signature_with_callback(
 					*PAYLOAD,
@@ -2073,9 +2069,8 @@ mod historical_signing {
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
 			.execute_with_consistency_checks(|| {
-				// Set a few new keys to make the genesis key be considered old enough:
-				EvmThresholdSigner::set_key_for_epoch(GENESIS_EPOCH + 1, KEY_2);
-				EvmThresholdSigner::set_key_for_epoch(GENESIS_EPOCH + 2, KEY_3);
+				// Expire the key so it can be used in historical signing:
+				MockEpochInfo::set_last_expired_epoch(GENESIS_EPOCH);
 
 				let request_id = EvmThresholdSigner::request_historical_signature_with_callback(
 					*PAYLOAD,
@@ -2161,6 +2156,9 @@ mod historical_signing {
 				// Check that we have cleaned up:
 				assert_eq!(PendingRequestInstructions::<Test, Instance1>::get(request_id), None);
 				assert_eq!(SignerAndSignature::<Test, Instance1>::get(request_id), None);
+
+				// Callback should have been executed:
+				assert!(MockCallback::has_executed(request_id));
 			});
 	}
 
