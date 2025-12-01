@@ -84,6 +84,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 pub mod pallet {
 	use super::*;
 	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
+	use cf_runtime_utilities::log_or_panic;
 	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
@@ -207,6 +208,7 @@ pub mod pallet {
 		type ThresholdSigner: ThresholdSigner<
 			<Self::TargetChain as Chain>::ChainCrypto,
 			Callback = <Self as Config<I>>::RuntimeCall,
+			ValidatorId = <Self as Chainflip>::ValidatorId,
 		>;
 
 		/// Signer nomination.
@@ -430,6 +432,12 @@ pub mod pallet {
 		CallResigned { broadcast_id: BroadcastId },
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
+		/// A signature/broadcast with a historical (expired) key was requested via governance.
+		HistoricalBroadcastRequested {
+			broadcast_id: BroadcastId,
+			threshold_signature_request_id: ThresholdSignatureRequestId,
+			epoch_index: cf_primitives::EpochIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -548,58 +556,74 @@ pub mod pallet {
 
 			let (signer, signature_result) =
 				T::ThresholdSigner::signature_result(threshold_request_id);
-			let signature = signature_result
-				.ready_or_else(|r| {
-					log::error!(
-						"Signature not found for threshold request {:?}. Request status: {:?}",
-						threshold_request_id,
-						r
-					);
-					Error::<T, I>::ThresholdSignatureUnavailable
-				})?
-				.expect("signature can not be unavailable");
-
-			let signed_api_call = api_call.signed(&signature, signer);
-
-			PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
-
-			// If a signed call already exists, update the storage and do not broadcast.
-			if should_broadcast {
-				let transaction_out_id = signed_api_call.transaction_out_id();
-
-				T::BroadcastReadyProvider::on_broadcast_ready(&signed_api_call);
-
-				let _ = T::ElectionEgressWitnesser::watch_for_egress_success(
-					transaction_out_id.clone(),
+			let signature_result = signature_result.ready_or_else(|r| {
+				// This should never happen, as this callback is only invoked when the signature
+				// is ready. TODO: we should refactor the trait accordingly.
+				log_or_panic!(
+					"Signature not found for threshold request {:?}. Request status: {:?}",
+					threshold_request_id,
+					r
 				);
+				Error::<T, I>::ThresholdSignatureUnavailable
+			})?;
 
-				// The Engine uses this.
-				TransactionOutIdToBroadcastId::<T, I>::insert(
-					&transaction_out_id,
-					(broadcast_id, initiated_at),
-				);
+			match signature_result {
+				Ok(signature) => {
+					let signed_api_call = api_call.signed(&signature, signer);
 
-				BroadcastIdToTransactionOutIds::<T, I>::append(broadcast_id, &transaction_out_id);
+					PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
 
-				let broadcast_data = BroadcastData::<T, I> {
-					broadcast_id,
-					transaction_payload: T::TransactionBuilder::build_transaction(&signed_api_call),
-					threshold_signature_payload,
-					transaction_out_id,
-					nominee: None,
-				};
-				AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
+					// If a signed call already exists, update the storage and do not broadcast.
+					if should_broadcast {
+						let transaction_out_id = signed_api_call.transaction_out_id();
 
-				if BroadcastBarriers::<T, I>::get()
-					.first()
-					.is_some_and(|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id)
-				{
-					Self::schedule_for_retry(broadcast_id);
-				} else {
-					Self::start_broadcast_attempt(broadcast_data);
-				}
-			} else {
-				Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
+						T::BroadcastReadyProvider::on_broadcast_ready(&signed_api_call);
+
+						let _ = T::ElectionEgressWitnesser::watch_for_egress_success(
+							transaction_out_id.clone(),
+						);
+
+						// The Engine uses this.
+						TransactionOutIdToBroadcastId::<T, I>::insert(
+							&transaction_out_id,
+							(broadcast_id, initiated_at),
+						);
+
+						BroadcastIdToTransactionOutIds::<T, I>::append(
+							broadcast_id,
+							&transaction_out_id,
+						);
+
+						let broadcast_data = BroadcastData::<T, I> {
+							broadcast_id,
+							transaction_payload: T::TransactionBuilder::build_transaction(
+								&signed_api_call,
+							),
+							threshold_signature_payload,
+							transaction_out_id,
+							nominee: None,
+						};
+						AwaitingBroadcast::<T, I>::insert(broadcast_id, broadcast_data.clone());
+
+						if BroadcastBarriers::<T, I>::get().first().is_some_and(
+							|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id,
+						) {
+							Self::schedule_for_retry(broadcast_id);
+						} else {
+							Self::start_broadcast_attempt(broadcast_data);
+						}
+					} else {
+						Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
+					}
+				},
+				Err(_offenders) => {
+					// TODO handle offenders
+					if should_broadcast {
+						PendingBroadcasts::<T, I>::mutate(|pending| {
+							pending.remove(&broadcast_id);
+						});
+					}
+				},
 			}
 
 			Ok(())
@@ -695,6 +719,70 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::PalletConfigUpdated { update });
+
+			Ok(())
+		}
+
+		/// [GOVERNANCE] Request a threshold signature/broadcast using a historical (expired) key.
+		///
+		/// This is a recovery mechanism for broadcasting transactions that were missed during a
+		/// key's active period. The operation will:
+		/// - Request threshold signature using governance-provided historical key and participants
+		/// - Optionally broadcast the signed transaction if `broadcast` is true
+		/// - Not penalize participants for failures (best-effort recovery)
+		///
+		/// ## Prerequisites
+		/// - The key must exist in threshold-signature pallet storage for that epoch
+		/// - Participants list must not be empty
+		/// - Governance ensures participants hold key shares and are online
+		///
+		/// Note: Governance takes full responsibility for providing valid inputs since
+		/// HistoricalAuthorities data may be purged for old epochs.
+		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::update_pallet_config())]
+		pub fn threshold_sign_and_broadcast_with_historical_key(
+			origin: OriginFor<T>,
+			api_call: Box<<T as Config<I>>::ApiCall>,
+			epoch_index: cf_primitives::EpochIndex,
+			participants: sp_std::collections::btree_set::BTreeSet<T::ValidatorId>,
+			signers_required: u32,
+			max_retries: u32,
+			broadcast: bool,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			let broadcast_id = Self::next_broadcast_id();
+			if broadcast {
+				PendingBroadcasts::<T, I>::append(broadcast_id);
+			}
+
+			// Register callback for when signature is ready
+			let threshold_signature_request_id =
+				T::ThresholdSigner::request_historical_signature_with_callback(
+					api_call.threshold_signature_payload(),
+					epoch_index,
+					participants.clone(),
+					signers_required,
+					max_retries,
+					|threshold_request_id| {
+						Call::on_signature_ready {
+							threshold_request_id,
+							threshold_signature_payload: api_call.threshold_signature_payload(),
+							api_call: api_call.clone(),
+							broadcast_id,
+							initiated_at: T::ChainTracking::get_block_height(),
+							should_broadcast: broadcast,
+						}
+						.into()
+					},
+				)
+				.map_err(|_| Error::<T, I>::InvalidPayload)?;
+
+			Self::deposit_event(Event::HistoricalBroadcastRequested {
+				broadcast_id,
+				threshold_signature_request_id,
+				epoch_index,
+			});
 
 			Ok(())
 		}
