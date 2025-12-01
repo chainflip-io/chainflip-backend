@@ -217,7 +217,7 @@ pub trait EvmRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-pub trait EvmRetrySigningRpcApi: EvmRetryRpcApi {
+pub trait EvmRetrySigningRpcApi: EvmRetryRpcApiWithResult {
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::evm::Transaction,
@@ -695,27 +695,31 @@ pub mod mocks {
 		}
 
 		#[async_trait::async_trait]
-		impl EvmRetryRpcApi for EvmRetryRpcClient {
-			async fn get_logs_range(&self, range: std::ops::RangeInclusive<u64>, contract_address: H160) -> Vec<Log>;
+		impl EvmRetryRpcApiWithResult for EvmRetryRpcClient {
+			async fn get_logs_range(&self, range: std::ops::RangeInclusive<u64>, contract_address: H160) -> anyhow::Result<Vec<Log>>;
 
-			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
+			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>>;
 
-			async fn chain_id(&self) -> U256;
+			async fn chain_id(&self) -> anyhow::Result<U256>;
 
-			async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt;
+			async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt>;
 
-			async fn block(&self, block_number: U64) -> Block<H256>;
+			async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
 
-			async fn block_with_txs(&self, block_number: U64) -> Block<Transaction>;
+			async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>>;
 
 			async fn fee_history(
 				&self,
 				block_count: U256,
 				newest_block: BlockNumber,
 				reward_percentiles: Vec<f64>,
-			) -> FeeHistory;
+			) -> anyhow::Result<FeeHistory>;
 
-			async fn get_transaction(&self, tx_hash: H256) -> Transaction;
+			async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction>;
+
+			async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
+
+			async fn get_block_number(&self) -> anyhow::Result<U64>;
 		}
 	}
 }
