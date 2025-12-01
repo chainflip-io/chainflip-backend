@@ -1,16 +1,21 @@
 #!/usr/bin/env -S pnpm tsx
 
 import { z } from 'zod';
-// import * as events from '../../../chainflip-product-toolkit/packages/processor/generated-new/20000/lendingPools/boostFundsAdded';
+import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 import * as something from '@chainflip/processor';
 import { globalLogger } from './utils/logger';
 
 // for exmple
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { Event, getChainflipApi, observeEvent } from './utils/substrate';
 import { amountToFineAmount, assetDecimals, ChainflipExtrinsicSubmitter, createStateChainKeypair, lpMutex, shortChainFromAsset, sleep } from './utils';
 import assert from 'assert';
+import { findEvent } from './utils/indexer';
 
+const findAwaitingActivationEvent = <Z extends z.ZodTypeAny>(chain: Chain, schema: Z) =>
+  findEvent(`${chain}Vault.AwaitingGovernanceActivation`, {
+    schema: z.object({ newPublicKey: schema }),
+  }).then((ev) => ev.args.newPublicKey!);
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
 export async function addBoostFunds(
@@ -19,7 +24,7 @@ export async function addBoostFunds(
   boostTier: number,
   amount: number,
   lpUri = '//LP_BOOST',
-): Promise<Event> {
+): Promise<string> {
   const logger = globalLogger;
   await using chainflip = await getChainflipApi();
   const lp = createStateChainKeypair(lpUri);
@@ -41,26 +46,24 @@ export async function addBoostFunds(
   const blockHeight = (result as any).blockNumber.toNumber();
   logger.info(`Blockheight is ${blockHeight}... Sleeping`);
 
-  const schema = events.lendingPoolsBoostFundsAdded;
+  const schema = lendingPoolsBoostFundsAdded;
 
-  // @ts-ignore
-  const observeBoostFundsAdded = observeEvent(logger, `lendingPools:BoostFundsAdded`, {
-    test: (event) => true,
-    schema: schema.refine((event) => 
-        event.boosterId === lp.address &&
+  const id = await findEvent(`LendingPools.BoostFundsAdded`, {
+    schema: lendingPoolsBoostFundsAdded.refine((event) => 
+        // event.boosterId === lp.address &&
         event.boostPool.asset === asset &&
         event.boostPool.tier === boostTier
-    ),
-    // schema: schema.refine((event) => event.),
-    temporalOptions: {
-        startFrom: blockHeight
-    }
-  });
+    )
+  }).then((e) => {
+    console.log('promise finished!');
+    return e.args.boosterId
+  })
 
-  const done = await observeBoostFundsAdded.event;
 
-  logger.info("Success!");
-  return done;
+  // const done = await observeBoostFundsAdded.event;
+
+  logger.info(`Success! ${id}`);
+  return id;
 }
 
 
