@@ -57,11 +57,9 @@ fn auction_repeats_after_failure_because_of_liveness() {
 			// All nodes add funds to be included in the next epoch which are witnessed on the
 			// state chain
 			for node in &nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					genesis::GENESIS_BALANCE + 1,
-					GENESIS_EPOCH,
-				);
+				testnet
+					.state_chain_gateway_contract
+					.fund_account(node.clone(), genesis::GENESIS_BALANCE + 1);
 			}
 
 			// Set the first 4 nodes offline
@@ -129,7 +127,7 @@ fn epoch_rotates() {
 		.build()
 		.execute_with(|| {
 			let mut genesis_nodes = Validator::current_authorities();
-
+			println!("Genesis nodes: {:?}", genesis_nodes);
 			let number_of_backup_nodes = MAX_SET_SIZE
 				.checked_sub(genesis_nodes.len() as AuthorityCount)
 				.expect("Max set size must be at least the number of genesis authorities");
@@ -142,22 +140,16 @@ fn epoch_rotates() {
 			// state chain
 			let funding_amount = genesis::GENESIS_BALANCE + 1;
 			for node in &testnet.live_nodes() {
-				testnet.state_chain_gateway_contract.fund_account(
-					node.clone(),
-					funding_amount,
-					GENESIS_EPOCH,
-				);
+				testnet.state_chain_gateway_contract.fund_account(node.clone(), funding_amount);
 			}
 
 			// Add two nodes which don't have session keys
 			let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
 			// Our keyless nodes also add funds
 			for keyless_node in &keyless_nodes {
-				testnet.state_chain_gateway_contract.fund_account(
-					keyless_node.clone(),
-					funding_amount,
-					GENESIS_EPOCH,
-				);
+				testnet
+					.state_chain_gateway_contract
+					.fund_account(keyless_node.clone(), funding_amount);
 			}
 
 			// A late funder which we will use after the auction.  They are yet to add funds
@@ -222,11 +214,9 @@ fn epoch_rotates() {
 
 			// A late funder comes along, they should become a backup node as long as they
 			// are sufficiently funded and have
-			testnet.state_chain_gateway_contract.fund_account(
-				late_funder.clone(),
-				funding_amount,
-				GENESIS_EPOCH + 1,
-			);
+			testnet
+				.state_chain_gateway_contract
+				.fund_account(late_funder.clone(), funding_amount);
 
 			// Register the new funds.
 			testnet.move_forward_blocks(1);

@@ -1,8 +1,13 @@
 use cf_traits::SafeMode;
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
-use crate::Runtime;
-
+use crate::{
+	chainflip::{
+		arbitrum_elections::ArbitrumElectionsSafeMode,
+		ethereum_elections::EthereumElectionsSafeMode,
+	},
+	Runtime,
+};
 pub struct SafeModeMigration;
 
 mod old {
@@ -90,6 +95,8 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
                     ingress_egress_solana: old.ingress_egress_solana,
                     ingress_egress_assethub: old.ingress_egress_assethub,
                     elections_generic: old.elections_generic,
+                    ethereum_elections: EthereumElectionsSafeMode::code_green(),
+					arbitrum_elections: ArbitrumElectionsSafeMode::code_green(),
 				})
 			},
 		).map_err(|_| {

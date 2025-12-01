@@ -50,8 +50,6 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn funded() -> Weight;
 	fn redeem() -> Weight;
-	fn redeemed() -> Weight;
-	fn redemption_expired() -> Weight;
 	fn update_minimum_funding() -> Weight;
 	fn update_redemption_tax() -> Weight;
 	fn bind_redeem_address() -> Weight;
@@ -163,64 +161,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(230_490_000, 13909)
 			.saturating_add(T::DbWeight::get().reads(34_u64))
 			.saturating_add(T::DbWeight::get().writes(14_u64))
-	}
-	/// Storage: `Funding::PendingRedemptions` (r:1 w:1)
-	/// Proof: `Funding::PendingRedemptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::PendingRedemptionsReserve` (r:1 w:1)
-	/// Proof: `Flip::PendingRedemptionsReserve` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
-	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `AccountRoles::VanityNames` (r:1 w:0)
-	/// Proof: `AccountRoles::VanityNames` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::LastHeartbeat` (r:0 w:1)
-	/// Proof: `Reputation::LastHeartbeat` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Reputations` (r:0 w:1)
-	/// Proof: `Reputation::Reputations` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::OffenceTimeSlotTracker` (r:0 w:1)
-	/// Proof: `Reputation::OffenceTimeSlotTracker` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:0 w:1)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::RestrictedBalances` (r:0 w:1)
-	/// Proof: `Funding::RestrictedBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::BoundRedeemAddress` (r:0 w:1)
-	/// Proof: `Funding::BoundRedeemAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::ParentAccount` (r:0 w:1)
-	/// Proof: `Funding::ParentAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::BoundExecutorAddress` (r:0 w:1)
-	/// Proof: `Funding::BoundExecutorAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn redeemed() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `2273`
-		//  Estimated: `5738`
-		// Minimum execution time: 98_630_000 picoseconds.
-		Weight::from_parts(99_720_000, 5738)
-			.saturating_add(T::DbWeight::get().reads(7_u64))
-			.saturating_add(T::DbWeight::get().writes(13_u64))
-	}
-	/// Storage: `Funding::PendingRedemptions` (r:1 w:1)
-	/// Proof: `Funding::PendingRedemptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::PendingRedemptionsReserve` (r:1 w:1)
-	/// Proof: `Flip::PendingRedemptionsReserve` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `Funding::RestrictedAddresses` (r:1 w:0)
-	/// Proof: `Funding::RestrictedAddresses` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn redemption_expired() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `999`
-		//  Estimated: `4464`
-		// Minimum execution time: 38_810_000 picoseconds.
-		Weight::from_parts(39_586_000, 4464)
-			.saturating_add(T::DbWeight::get().reads(5_u64))
-			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Funding::RedemptionTax` (r:1 w:0)
 	/// Proof: `Funding::RedemptionTax` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -462,64 +402,6 @@ impl WeightInfo for () {
 		Weight::from_parts(230_490_000, 13909)
 			.saturating_add(ParityDbWeight::get().reads(34_u64))
 			.saturating_add(ParityDbWeight::get().writes(14_u64))
-	}
-	/// Storage: `Funding::PendingRedemptions` (r:1 w:1)
-	/// Proof: `Funding::PendingRedemptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::PendingRedemptionsReserve` (r:1 w:1)
-	/// Proof: `Flip::PendingRedemptionsReserve` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::OffchainFunds` (r:1 w:1)
-	/// Proof: `Flip::OffchainFunds` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `AccountRoles::VanityNames` (r:1 w:0)
-	/// Proof: `AccountRoles::VanityNames` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Validator::DelegationChoice` (r:1 w:0)
-	/// Proof: `Validator::DelegationChoice` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::LastHeartbeat` (r:0 w:1)
-	/// Proof: `Reputation::LastHeartbeat` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::Reputations` (r:0 w:1)
-	/// Proof: `Reputation::Reputations` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Reputation::OffenceTimeSlotTracker` (r:0 w:1)
-	/// Proof: `Reputation::OffenceTimeSlotTracker` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AccountRoles::AccountRoles` (r:0 w:1)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::RestrictedBalances` (r:0 w:1)
-	/// Proof: `Funding::RestrictedBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::BoundRedeemAddress` (r:0 w:1)
-	/// Proof: `Funding::BoundRedeemAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::ParentAccount` (r:0 w:1)
-	/// Proof: `Funding::ParentAccount` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Funding::BoundExecutorAddress` (r:0 w:1)
-	/// Proof: `Funding::BoundExecutorAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn redeemed() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `2273`
-		//  Estimated: `5738`
-		// Minimum execution time: 98_630_000 picoseconds.
-		Weight::from_parts(99_720_000, 5738)
-			.saturating_add(ParityDbWeight::get().reads(7_u64))
-			.saturating_add(ParityDbWeight::get().writes(13_u64))
-	}
-	/// Storage: `Funding::PendingRedemptions` (r:1 w:1)
-	/// Proof: `Funding::PendingRedemptions` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Flip::PendingRedemptionsReserve` (r:1 w:1)
-	/// Proof: `Flip::PendingRedemptionsReserve` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::Account` (r:1 w:1)
-	/// Proof: `Flip::Account` (`max_values`: None, `max_size`: Some(80), added: 2555, mode: `MaxEncodedLen`)
-	/// Storage: `Flip::TotalIssuance` (r:1 w:1)
-	/// Proof: `Flip::TotalIssuance` (`max_values`: Some(1), `max_size`: Some(16), added: 511, mode: `MaxEncodedLen`)
-	/// Storage: `Funding::RestrictedAddresses` (r:1 w:0)
-	/// Proof: `Funding::RestrictedAddresses` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn redemption_expired() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `999`
-		//  Estimated: `4464`
-		// Minimum execution time: 38_810_000 picoseconds.
-		Weight::from_parts(39_586_000, 4464)
-			.saturating_add(ParityDbWeight::get().reads(5_u64))
-			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
 	/// Storage: `Funding::RedemptionTax` (r:1 w:0)
 	/// Proof: `Funding::RedemptionTax` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
