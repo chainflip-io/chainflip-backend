@@ -117,13 +117,13 @@ impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 			seed_from_hashable(seed),
 			nominees_to_select as usize,
 			eligible_authorities_from_provided_candidates(
-				Reputation::validators_suspended_for(&[
+				candidates,
+				&Reputation::validators_suspended_for(&[
 					Offence::MissedHeartbeat,
 					Offence::ParticipateSigningFailed,
 					Offence::ParticipateKeygenFailed,
 					Offence::ParticipateKeyHandoverFailed,
 				]),
-				&candidates,
 			),
 		)
 	}
