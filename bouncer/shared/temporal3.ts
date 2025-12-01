@@ -21,13 +21,31 @@ type Temporal<I,O,X> = {
 
 const Done = <I,O,X>(x: X): Temporal<I,O,X> => ({ done: x });
 
-const Then = <I,O,X, T extends z.ZodType<I>>(si: T, run: (i: z.infer<T>) => Temporal<I,O,X>): Temporal<I,O,X> => ({
+const Input = <I,O,X, T extends z.ZodType<I>>(si: T, run: (i: z.infer<T>) => Temporal<I,O,X>): Temporal<I,O,X> => ({
     input: (cont) => cont(si, run)
 });
 
 const Output = <I,O,X, T extends z.ZodType<O>>(s: T, value: z.infer<T>, rest: Temporal<I,O,X>): Temporal<I,O,X> => (
     {output: (cont) => cont(s, value, rest)}
 )
+
+const and_then = <I,O,X,Y>(t: Temporal<I,O,X>, f: (x: X) => Temporal<I,O,Y>): Temporal<I,O,Y> => {
+    if ('input' in t) {
+        return t.input((schema, run) => ({input: (cont) => cont(schema, (input) => and_then(run(input), f))}))
+    } else if ('output' in t) {
+        return t.output((schema, value, rest) => {
+            return {
+                output: <A>(cont: <T extends z.ZodType<O>>(s: T, output: z.infer<T>, rest: Temporal<I,O,Y>) => A) => {
+                    // const myout = (cont: <T extends z.ZodType<O>>(s: T, output: z.infer<T>, rest: Temporal<I,O,Y>) => A) => cont(schema, value, and_then(rest, f));
+                    // return myout(cont)
+                    return cont(schema, value, and_then(rest, f))
+                }
+            }
+        })
+    } else {
+        return f(t.done);
+    }
+};
 
 // const map = <X, Y>(f: (x: X) => Y, t: Temporal<X>): Temporal<Y> => {
 //     if ('then' in t) {
@@ -65,6 +83,12 @@ const boostFundsAdded = z.object({
         })
     })
 })
+
+const events = {
+    lendingPools: {
+        boostFundsAdded
+    }
+}
 
 const event = boostFundsAdded;
 // z.object({
@@ -106,7 +130,7 @@ type Output = z.infer<typeof output>;
 //     volume: number
 // }
 
-type ChainflipT<X> = Temporal<z.infer<typeof event>, z.infer<typeof output>, X>;
+type ChainflipT<X> = Temporal<z.infer<typeof event>, Output, X>;
 
 function test() {
     const schema = z.object({
@@ -229,6 +253,27 @@ export async function addBoostFunds(
   return done;
 }
 
+function* Await<I,O,X>(t: Temporal<I,O,X>): Generator<Temporal<I,O,X>, X, X> {
+    const value = yield t;
+    return value;
+}
+
+function sendExtrinsic<S extends z.ZodType<Output>>(schema: S, output: z.infer<S>): Generator<ChainflipT<[]>, [], []> {
+    return Await(Output(schema, output, Done([])));
+}
+
+function awaitEvent<S extends z.ZodType<z.infer<typeof event>>>(schema: S): Generator<ChainflipT<z.infer<S>>, z.infer<S>, z.infer<S>> {
+    return Await(Input(schema, (input) => Done(input)));
+}
+
+function runGenerator<I,O,X>(previousInput: any, gen: Generator<Temporal<I,O,X>, Temporal<I,O,X>, X>): Temporal<I,O,X> {
+    const val = gen.next(previousInput);
+    if (!val.done) {
+        return and_then(val.value, (input) => runGenerator(input, gen))
+    } else {
+        return val.value;
+    }
+}
 
 export async function addBoostFunds2(
 //   logger: Logger,
@@ -242,22 +287,99 @@ export async function addBoostFunds2(
 
     const result: ChainflipT<string> =
     Output(lendingPools.addBoostFunds, {
-        __kind: 'lendingPools:addBoostFunds',
-        chain: 'Btc',
-        amount: amount,
-        boostTier: boostTier,
-        lpUri 
-    }, Then(boostFundsAdded.refine((event) => 
-        event.data.boosterId === lp.address &&
-        event.data.boostPool.asset === asset &&
-        event.data.boostPool.tier === boostTier.toString(),
-    ), (input) => Done(input.data.boostPool.tier)));
+            __kind: 'lendingPools:addBoostFunds',
+            chain: 'Btc',
+            amount: amount,
+            boostTier: boostTier,
+            lpUri 
+        }, Input(
+            boostFundsAdded.refine((event) => 
+                event.data.boosterId === lp.address &&
+                event.data.boostPool.asset === asset &&
+                event.data.boostPool.tier === boostTier.toString(),
+            ),
+            (input) => Done(input.data.boostPool.tier)
+        )
+    );
 
     const done = await execute(new BouncerExecutor(), result, 0);
     console.log(`tier: ${done}`);
     return "done";
 }
 
+type ChainflipG<T> = Generator<any, ChainflipT<T>>;
+
+export function* addBoostFunds3(
+  asset: Asset,
+  boostTier: number,
+  amount: number,
+  lpUri = '//LP_BOOST',
+): ChainflipG<string> {
+    const lp = createStateChainKeypair(lpUri);
+
+    assert(boostTier > 0, 'Boost tier must be greater than 0');
+
+    yield* sendExtrinsic(lendingPools.addBoostFunds, {
+        __kind: 'lendingPools:addBoostFunds',
+        chain: 'Btc',
+        amount: amount,
+        boostTier: boostTier,
+        lpUri 
+    });
+
+    // Add funds to the boost pool
+    globalLogger.info(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
+    const result = yield* awaitEvent(
+        events.lendingPools.boostFundsAdded.refine((event) => 
+            event.data.boosterId === lp.address &&
+            event.data.boostPool.asset === asset &&
+            event.data.boostPool.tier === boostTier.toString()
+        )
+    );
+
+    return Done(result.data.boostPool.tier);
+}
+
+
+
+
+
+const niceSyntax = <T>(generator: () => Generator<ChainflipT<any>, ChainflipT<any>, T>) => {
+    return runGenerator(undefined, generator());
+}
+
+const addBoostFunds4 = (
+  asset: Asset,
+  boostTier: number,
+  amount: number,
+  lpUri = '//LP_BOOST',
+): ChainflipT<string> => niceSyntax(function*() {
+    const lp = createStateChainKeypair(lpUri);
+
+    yield* sendExtrinsic(lendingPools.addBoostFunds, {
+        __kind: 'lendingPools:addBoostFunds',
+        chain: 'Btc',
+        amount: amount,
+        boostTier: boostTier,
+        lpUri 
+    });
+
+    const result = yield* awaitEvent(
+        boostFundsAdded.refine((event) => 
+            event.data.boosterId === lp.address &&
+            event.data.boostPool.asset === asset &&
+            event.data.boostPool.tier === boostTier.toString()
+    ));
+
+    return Done(result.data.boostPool.tier);
+} ) 
+
+
+
 // ----------- RUN ------------
 
-await addBoostFunds2('Btc', 5, 0.1, '//LP_API')
+// await addBoostFunds2('Btc', 5, 0.1, '//LP_API')
+
+const temporal: ChainflipT<string> = runGenerator(undefined, addBoostFunds3('Btc', 5, 0.1, '//LP_API'));
+const done = await execute(new BouncerExecutor(), temporal, 0);
+console.log(`tier: ${JSON.stringify(done)}`);

@@ -554,22 +554,23 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   const eventSchema = createEventSchema(schema ?? z.any()) as EventSchema<Z>;
 
   let newTestFunction: (event: Event<any>) => boolean;
-  if (schema) {
-    newTestFunction = (event: Event<any>) => {
-      return schema.safeParse(event).success;
-    };
-  } else {
+  // if (schema) {
+  //   newTestFunction = (event: Event<any>) => {
+  //     return schema.safeParse(event).success;
+  //   };
+  // } else {
     newTestFunction = (event: Event<any>) => {
         if (
           event.name.section.includes(expectedSection) &&
           event.name.method.includes(expectedMethod)
         ) {
-          return (test(event.data))
+          logger.info(`parsing event ${JSON.stringify(event)}`);
+          return (test(eventSchema.parse(event)))
         } else {
           return false
         }
     }
-  }
+  // }
 
   const controller = abortable ? new AbortController() : undefined;
 

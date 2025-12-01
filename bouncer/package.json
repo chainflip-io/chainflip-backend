@@ -9,6 +9,7 @@
   "dependencies": {
     "@chainflip/cli": "1.12.1",
     "@chainflip/utils": "0.11.2",
+    "@chainflip/processor": "2.0.3",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
     "@polkadot/api": "16.1.1",
@@ -40,7 +41,7 @@
     "vitest": "3.0.3",
     "web3": "^1.10.4",
     "yargs": "^17.7.2",
-    "zod": "^3.25.67"
+    "zod": "3.25.75"
   },
   "devDependencies": {
     "@types/minimist": "^1.2.5",
