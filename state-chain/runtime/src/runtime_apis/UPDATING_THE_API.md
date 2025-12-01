@@ -14,14 +14,11 @@ If in doubt, look at the implementation of the `decl_api` macro.
 Separate API 'namespaces' are grouped into modules. Each module is structured like this:
 
 ```code
-runtime_apis
-|- mod.rs // Contains module declarations only, no code.
-|- types.rs // Common types used by the APIs
-|- {namespace}
-    |- mod.rs // Contains module declarations only, no code.
-    |- types.rs [OPTIONAL] // Type definitions unique to this namespace
-    |- decl_api.rs // The api trait declaration
-    |- impl_api.rs // The api trait implementation
+|- runtime_apis
+   |- impl_api     // The impl_api block for all runtime APIs
+   |- types        // define / re-export api-level types
+   |- *_api        // api interface declaration
+      |- types.    // API-local type definitions
 ```
 
 ## When changing an existing method
