@@ -1,5 +1,5 @@
 use super::{account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoBeforeV7, *};
-use state_chain_runtime::runtime_apis::validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7;
+use state_chain_runtime::runtime_apis::types::validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7;
 
 #[test]
 fn test_no_account_serialization() {
