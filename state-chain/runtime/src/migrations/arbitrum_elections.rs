@@ -1,7 +1,7 @@
-use crate::{chainflip::ethereum_elections::ETHEREUM_MAINNET_SAFETY_BUFFER, *};
+use crate::{chainflip::arbitrum_elections::ARBITRUM_MAINNET_SAFETY_BUFFER, *};
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
-use crate::chainflip::ethereum_elections;
+use crate::chainflip::arbitrum_elections;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
@@ -15,8 +15,8 @@ impl OnRuntimeUpgrade for Migration {
 
 	fn on_runtime_upgrade() -> Weight {
 		let _result =
-			pallet_cf_elections::Pallet::<Runtime, EthereumInstance>::internally_initialize(
-				ethereum_elections::initial_state(),
+			pallet_cf_elections::Pallet::<Runtime, ArbitrumInstance>::internally_initialize(
+				arbitrum_elections::initial_state(),
 			);
 		Weight::zero()
 	}
@@ -32,47 +32,35 @@ impl OnRuntimeUpgrade for Migration {
 		};
 
 		let unsynchronized_settings =
-			ElectoralUnsynchronisedSettings::<Runtime, EthereumInstance>::get();
+			ElectoralUnsynchronisedSettings::<Runtime, ArbitrumInstance>::get();
 		assert_eq!(
 			unsynchronized_settings,
 			Some((
-				BlockHeightWitnesserSettings { safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER },
+				BlockHeightWitnesserSettings { safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER },
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
 					safety_margin: 3,
-					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
+					safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
 					safety_margin: 3,
-					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
+					safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
 					safety_margin: 3,
-					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
-				},
-				BlockWitnesserSettings {
-					max_ongoing_elections: 15,
-					max_optimistic_elections: 1,
-					safety_margin: 3,
-					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
-				},
-				BlockWitnesserSettings {
-					max_ongoing_elections: 15,
-					max_optimistic_elections: 1,
-					safety_margin: 3,
-					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
+					safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 				},
 				Default::default(),
 				(),
 			))
 		);
 
-		let lifetime = SharedDataReferenceLifetime::<Runtime, EthereumInstance>::get();
+		let lifetime = SharedDataReferenceLifetime::<Runtime, ArbitrumInstance>::get();
 		assert_eq!(lifetime, 8);
 
 		Ok(())

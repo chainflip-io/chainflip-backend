@@ -251,7 +251,7 @@ async fn run_main(
 			scope.spawn(sol_multisig_client_backend_future);
 
 			// Create all the clients
-			let (eth_caching_client, eth_client) = {
+			let eth_client = {
 				let expected_eth_chain_id = web3::types::U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
@@ -270,7 +270,7 @@ async fn run_main(
 					"Ethereum",
 					cf_chains::Ethereum::WITNESS_PERIOD,
 				)?;
-				(EvmCachingClient::new(scope, client.clone()), client)
+				EvmCachingClient::new(scope, client)
 			};
 			let arb_client = {
 				let expected_arb_chain_id = web3::types::U256::from(
@@ -281,16 +281,19 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				EvmCachingClient::new(
 					scope,
-					settings.arb.private_key_file,
-					settings.arb.nodes,
-					expected_arb_chain_id,
-					"arb_rpc",
-					"arb_subscribe_client",
-					"Arbitrum",
-					cf_chains::Arbitrum::WITNESS_PERIOD,
-				)?
+					EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+						scope,
+						settings.arb.private_key_file,
+						settings.arb.nodes,
+						expected_arb_chain_id,
+						"arb_rpc",
+						"arb_subscribe_client",
+						"Arbitrum",
+						cf_chains::Arbitrum::WITNESS_PERIOD,
+					)?,
+				)
 			};
 
 			let btc_client = {
@@ -340,7 +343,7 @@ async fn run_main(
 
 			witness::start::start(
 				scope,
-				eth_caching_client,
+				eth_client.clone(),
 				arb_client.clone(),
 				btc_client.clone(),
 				sol_client.clone(),
