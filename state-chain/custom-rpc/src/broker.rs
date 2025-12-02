@@ -33,7 +33,7 @@ use cf_rpc_apis::{
 		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
 		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
-	call_error, CfErrorCode, NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
+	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
@@ -356,56 +356,41 @@ where
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
 		let broker = self.signed_pool_client.account_id();
-		self.rpc_backend.with_versioned_runtime_api(
-			None,
-			|api, hash, api_version| match api_version {
-				None => Err(CfApiError::from(call_error(
-					"CfApiError::UnsupportedRuntimeApiVersion",
-					CfErrorCode::UnsupportedRuntimeApiVersion,
-				))),
-				Some(v) if v < 10 => Ok::<_, CfApiError>(
-					#[expect(deprecated)]
-					api.cf_request_swap_parameter_encoding_before_version_10(
-						hash,
-						broker,
-						source_asset,
-						destination_asset,
-						destination_address
-							.try_parse_to_encoded_address(destination_asset.into())?,
-						broker_commission,
-						try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
-						channel_metadata,
-						boost_fee.unwrap_or_default(),
-						affiliate_fees.unwrap_or_default(),
-						dca_parameters,
-					)??
-					.map_btc_address(Into::into),
-				),
-				Some(_) => {
-					let network = api.cf_network_environment(hash)?.into();
-					Ok::<_, CfApiError>(
-						api.cf_request_swap_parameter_encoding(
-							hash,
-							broker,
-							source_asset,
-							destination_asset,
-							destination_address
-								.try_parse_to_encoded_address(destination_asset.into())?,
-							broker_commission,
-							try_into_swap_extra_params_encoded(
-								extra_parameters,
-								source_asset.into(),
-							)?,
-							channel_metadata,
-							boost_fee.unwrap_or_default(),
-							affiliate_fees.unwrap_or_default(),
-							dca_parameters,
-						)??
-						.map_btc_address(|pubkey| pubkey.to_address(&network).into()),
-					)
-				},
-			},
-		)
+		self.rpc_backend.with_versioned_runtime_api(None, |api, hash, api_version| {
+			Ok::<_, CfApiError>(if api_version < 10 {
+				#[expect(deprecated)]
+				api.cf_request_swap_parameter_encoding_before_version_10(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+					channel_metadata,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(Into::into)
+			} else {
+				let network = api.cf_network_environment(hash)?.into();
+				api.cf_request_swap_parameter_encoding(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+					channel_metadata,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(|pubkey| pubkey.to_address(&network).into())
+			})
+		})
 	}
 
 	async fn decode_vault_swap_parameter(
