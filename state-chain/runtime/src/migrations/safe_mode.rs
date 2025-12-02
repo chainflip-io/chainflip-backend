@@ -67,7 +67,7 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
 				maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
 					emissions: old.emissions,
 					funding: old.funding,
-					swapping: pallet_cf_swapping::PalletSafeMode { 
+					swapping: pallet_cf_swapping::PalletSafeMode {
 						deposit_enabled: true,
 						swaps_enabled: old.swapping.swaps_enabled,
 						withdrawals_enabled: old.swapping.withdrawals_enabled,
