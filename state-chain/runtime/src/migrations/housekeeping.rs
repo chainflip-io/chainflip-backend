@@ -90,10 +90,8 @@ fn f() {
 }
 
 fn delete_broadcast_from_broadcaster_pallet(id: BroadcastId) {
-	pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::remove(id);
-	pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::mutate(|broadcasts| {
-		broadcasts.remove(&id)
-	});
+	SolanaBroadcaster::remove_pending_broadcast(&id);
+	SolanaBroadcaster::clean_up_broadcast_storage(id);
 }
 
 fn resubmit_solana_rotation(
