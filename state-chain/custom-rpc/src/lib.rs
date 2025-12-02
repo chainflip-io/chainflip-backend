@@ -310,7 +310,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				role_specific: RpcAccountInfo::Broker {
 					earned_fees,
 					affiliates,
-					btc_vault_deposit_address,
+					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -398,7 +398,7 @@ pub mod account_info_before_api_v7 {
 			#[serde(skip_serializing_if = "Vec::is_empty")]
 			affiliates: Vec<RpcAffiliate>,
 			#[serde(skip_serializing_if = "Option::is_none")]
-			btc_vault_deposit_address: Option<String>,
+			btc_vault_deposit_address: Option<AddressString>,
 		},
 		LiquidityProvider {
 			balances: any::AssetMap<NumberOrHex>,
@@ -433,7 +433,7 @@ pub mod account_info_before_api_v7 {
 			}
 		}
 
-		pub fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
+		pub fn broker(broker_info: BrokerInfo<AddressString>, balance: u128) -> Self {
 			Self::Broker {
 				flip_balance: balance.into(),
 				bond: broker_info.bond.into(),
@@ -1769,9 +1769,18 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoWrapper> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, version| match version {
-				Some(v) if v < 7 => {
+		self.rpc_backend.with_versioned_runtime_api(
+			at,
+			|api, hash, api_version| match api_version {
+				None => {
+					// Can only happen if api doesn't exist
+					Err(CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::MethodNotFound.code(),
+						"cf_account_info method not available at this block.",
+						None::<()>,
+					)))
+				},
+				Some(api_version) if api_version < 7 => {
 					use account_info_before_api_v7::RpcAccountInfo;
 					let balance = api.cf_account_flip_balance(hash, &account_id)?;
 					let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
@@ -1784,18 +1793,14 @@ where
 							AccountRole::Unregistered =>
 								RpcAccountInfo::unregistered(balance, asset_balances),
 							AccountRole::Broker => {
-								let api_version = api
-									.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(
-										hash,
-									)?
-									.unwrap_or_default();
-
 								let info = if api_version < 3 {
 									#[expect(deprecated)]
 									api.cf_broker_info_before_version_3(hash, account_id.clone())?
 										.into()
 								} else {
-									api.cf_broker_info(hash, account_id.clone())?
+									#[expect(deprecated)]
+									api.cf_broker_info_before_version_10(hash, account_id.clone())?
+										.map(Into::into)
 								};
 
 								RpcAccountInfo::broker(info, balance)
@@ -1821,7 +1826,7 @@ where
 						},
 					))
 				},
-				_ => {
+				Some(api_version) => {
 					let role = api
 						.cf_account_role(hash, account_id.clone())?
 						.unwrap_or(AccountRole::Unregistered);
@@ -1846,7 +1851,15 @@ where
 									btc_vault_deposit_address,
 									affiliates,
 									..
-								} = api.cf_broker_info(hash, account_id.clone())?;
+								} = if api_version < 10 {
+									#[expect(deprecated)]
+									api.cf_broker_info_before_version_10(hash, account_id.clone())?
+										.map(Into::into)
+								} else {
+									let network = api.cf_network_environment(hash)?.into();
+									api.cf_broker_info(hash, account_id.clone())?
+										.map(|pubkey| pubkey.to_address(&network).into())
+								};
 								RpcAccountInfo::Broker {
 									earned_fees: AssetMap::from_iter_or_default(
 										earned_fees.into_iter().map(|(k, v)| (k, v.into())),
@@ -1934,7 +1947,8 @@ where
 						},
 					})
 				},
-			})
+			},
+		)
 	}
 
 	fn cf_account_info_v2(
@@ -2451,24 +2465,57 @@ where
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(
-				api.cf_request_swap_parameter_encoding(
-					hash,
-					broker,
-					source_asset,
-					destination_asset,
-					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
-					broker_commission,
-					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
-					channel_metadata,
-					boost_fee.unwrap_or_default(),
-					affiliate_fees.unwrap_or_default(),
-					dca_parameters,
-				)??
-				.map_btc_address(Into::into),
-			)
-		})
+		self.rpc_backend.with_versioned_runtime_api(
+			at,
+			|api, hash, api_version| match api_version {
+				None => Err(CfApiError::ErrorObject(ErrorObject::owned(
+					ErrorCode::MethodNotFound.code(),
+					"cf_request_swap_parameter_encoding method not available at this block.",
+					None::<()>,
+				))),
+				Some(v) if v < 10 => Ok::<_, CfApiError>(
+					#[expect(deprecated)]
+					api.cf_request_swap_parameter_encoding_before_version_10(
+						hash,
+						broker,
+						source_asset,
+						destination_asset,
+						destination_address
+							.try_parse_to_encoded_address(destination_asset.into())?,
+						broker_commission,
+						try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+						channel_metadata,
+						boost_fee.unwrap_or_default(),
+						affiliate_fees.unwrap_or_default(),
+						dca_parameters,
+					)??
+					.map_btc_address(Into::into),
+				),
+				Some(_) => {
+					let network = api.cf_network_environment(hash)?.into();
+					Ok::<_, CfApiError>(
+						api.cf_request_swap_parameter_encoding(
+							hash,
+							broker,
+							source_asset,
+							destination_asset,
+							destination_address
+								.try_parse_to_encoded_address(destination_asset.into())?,
+							broker_commission,
+							try_into_swap_extra_params_encoded(
+								extra_parameters,
+								source_asset.into(),
+							)?,
+							channel_metadata,
+							boost_fee.unwrap_or_default(),
+							affiliate_fees.unwrap_or_default(),
+							dca_parameters,
+						)??
+						.map_btc_address(|pubkey| pubkey.to_address(&network).into()),
+					)
+				},
+			},
+		)
 	}
 
 	fn cf_decode_vault_swap_parameter(

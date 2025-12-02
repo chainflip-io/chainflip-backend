@@ -1164,7 +1164,7 @@ impl_runtime_apis! {
 
 		fn cf_broker_info(
 			account_id: AccountId,
-		) -> BrokerInfo {
+		) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount> {
 			use crate::chainflip::address_derivation::btc::derive_btc_vault_deposit_addresses;
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			BrokerInfo {
@@ -1330,7 +1330,7 @@ impl_runtime_apis! {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
-		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+		) -> Result<VaultSwapDetails<<Bitcoin as Chain>::ChainAccount>, DispatchErrorWithMessage> {
 			let source_chain = ForeignChain::from(source_asset);
 			let destination_chain = ForeignChain::from(destination_asset);
 

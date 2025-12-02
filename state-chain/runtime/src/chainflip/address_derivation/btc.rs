@@ -52,6 +52,7 @@ impl BitcoinPrivateBrokerDepositAddresses<ScriptPubkey> {
 		})
 	}
 
+	#[cfg(feature = "std")]
 	pub fn current_address(&self) -> String {
 		self.current.to_address(&Environment::network_environment().into())
 	}

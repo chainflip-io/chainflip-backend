@@ -25,8 +25,9 @@ use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain, GasAmount};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
-use frame_support::sp_runtime::AccountId32;
 pub use frame_support::BoundedVec;
+use frame_support::{sp_runtime::AccountId32, DefaultNoBound};
+use n_functor::derive_n_functor;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{
@@ -374,10 +375,11 @@ pub struct LiquidityProviderInfo {
 	pub collateral_balances: Vec<(Asset, AssetAmount)>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Default)]
-pub struct BrokerInfo {
+#[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
+#[derive_n_functor]
+pub struct BrokerInfo<BtcAddress> {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
-	pub btc_vault_deposit_address: Option<String>,
+	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
 }
@@ -387,7 +389,7 @@ pub struct BrokerInfoLegacy {
 	pub earned_fees: Vec<(Asset, AssetAmount)>,
 }
 
-impl From<BrokerInfoLegacy> for BrokerInfo {
+impl<A> From<BrokerInfoLegacy> for BrokerInfo<A> {
 	fn from(legacy: BrokerInfoLegacy) -> Self {
 		BrokerInfo { earned_fees: legacy.earned_fees, ..Default::default() }
 	}
