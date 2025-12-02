@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [1.12.6] - 2025-11-24
+
+### Fixes
+
+- Solana durable nonces only in static accounts SIMD-0242 ([#6287](https://github.com/chainflip-io/chainflip-backend/issues/6287))
+
 ## [1.12.5] - 2025-11-24
 
 - New CustomAPI methods to get all vault addresses / deposit channels.
