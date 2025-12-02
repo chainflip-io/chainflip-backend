@@ -18,7 +18,7 @@ pub mod types;
 
 use crate::runtime_apis::types::*;
 
-use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
 use cf_amm::{
 	common::PoolPairsMap,
 	math::{Amount, Tick},
