@@ -16,7 +16,7 @@
 
 use crate::{
 	chainflip::SolEnvironment, BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner,
-	Runtime, RuntimeOrigin, SolanaBroadcaster, SolanaThresholdSigner,
+	Runtime, RuntimeOrigin, SolanaBroadcaster,
 };
 use cf_chains::{
 	btc::{
@@ -33,6 +33,7 @@ use cf_runtime_utilities::genesis_hashes;
 use cf_traits::{Chainflip, KeyProvider};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 use pallet_cf_broadcast::{BroadcastIdCounter, IncomingKeyAndBroadcastId};
+use pallet_cf_environment::{SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts};
 use sp_core::H256;
 use sp_runtime::AccountId32;
 #[cfg(feature = "try-runtime")]
@@ -87,6 +88,12 @@ fn f() {
 	);
 	// Check that the destination address is valid.
 	ScriptPubkey::try_from_address(DESTINATION, &cf_chains::btc::BitcoinNetwork::Mainnet).unwrap();
+}
+
+fn recover_all_solana_nonces() {
+	SolanaAvailableNonceAccounts::<Runtime>::mutate(|available| {
+		available.extend(SolanaUnavailableNonceAccounts::<Runtime>::drain())
+	});
 }
 
 fn delete_broadcast_from_broadcaster_pallet(id: BroadcastId) {
@@ -184,13 +191,6 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					CfeEvents::<Runtime>::kill();
 					RuntimeUpgradeEvents::<Runtime>::kill();
 
-					// delete the old rotation + all other stuck pending api calls
-					let broadcast_ids =
-						[2432, 2433, 2434, 2435, 2436, 2437, 2438, 2439, 2440, 2441, 2442];
-					for id in broadcast_ids {
-						delete_broadcast_from_broadcaster_pallet(id);
-					}
-
 					log::info!("🧹 Doing housekeeping.");
 					let fee_estimator = BitcoinChainTracking::chain_state()
 						.expect("Chain state always exists")
@@ -243,6 +243,16 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
 					CfeEvents::<Runtime>::kill();
 					RuntimeUpgradeEvents::<Runtime>::kill();
+
+					// recover all nonces
+					recover_all_solana_nonces();
+
+					// delete the old rotation + all other stuck pending api calls
+					let broadcast_ids =
+						[2432, 2433, 2434, 2435, 2436, 2437, 2438, 2439, 2440, 2441, 2442];
+					for id in broadcast_ids {
+						delete_broadcast_from_broadcaster_pallet(id);
+					}
 
 					resubmit_solana_rotation(
 						// new agg key, double check!
@@ -311,6 +321,9 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
 					CfeEvents::<Runtime>::kill();
 					RuntimeUpgradeEvents::<Runtime>::kill();
+
+					// recover all nonces
+					recover_all_solana_nonces();
 
 					// delete the old broadcast
 					delete_broadcast_from_broadcaster_pallet(2933);
