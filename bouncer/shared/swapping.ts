@@ -32,9 +32,10 @@ const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
 const MAX_SOL_VAULT_SWAP_CCM_MESSAGE_LENGTH = 300;
 const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 
-// Solana CCM-related parameters. These are limits in the protocol.
-const MAX_CCM_BYTES_SOL = 814; // Before Versioned transactions 694 + 32
-const MAX_CCM_BYTES_USDC = 725; // Before Versioned transactions 481 + 32
+// Solana CCM-related parameters. These are limits in the protocol downstream from
+// Solana's transaction size limits.
+const MAX_CCM_BYTES_SOL = 783;
+const MAX_CCM_BYTES_USDC = 694;
 const SOLANA_BYTES_PER_ACCOUNT = 33;
 const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
