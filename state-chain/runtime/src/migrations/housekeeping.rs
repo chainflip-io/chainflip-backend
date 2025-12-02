@@ -16,7 +16,7 @@
 
 use crate::{
 	chainflip::SolEnvironment, BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner,
-	Runtime, RuntimeOrigin, SolanaBroadcaster,
+	Runtime, RuntimeOrigin, SolanaBroadcaster, SolanaThresholdSigner,
 };
 use cf_chains::{
 	btc::{
@@ -101,11 +101,20 @@ fn resubmit_solana_rotation(
 	signers_required: u32,
 	max_retries: u32,
 ) {
+	type CurrentKeyEpoch = pallet_cf_threshold_signature::CurrentKeyEpoch<Runtime, SolanaInstance>;
+
+	// we have to build the call with the previous epochs key, so we temporarily rewind the epoch
+	let actual_epoch_index = CurrentKeyEpoch::get();
+	CurrentKeyEpoch::set(Some(epoch_index));
+
 	let rotation_call =
 		<SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<SolanaCrypto>>::new_unsigned_impl(
 			None,        // the `old_key` argument is ignored by solana
 			new_agg_key, // the new agg key we want to rotate to
 		);
+
+	// reset the epoch index to the actual value after building the call
+	CurrentKeyEpoch::set(actual_epoch_index);
 
 	match rotation_call {
 		Ok(Some(api_call)) => {
