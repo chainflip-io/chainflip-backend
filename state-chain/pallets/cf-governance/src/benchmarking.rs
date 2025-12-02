@@ -35,7 +35,10 @@ mod benchmarks {
 	fn propose_governance_extrinsic() {
 		let caller: T::AccountId = whitelisted_caller();
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
-		<Members<T>>::put(BTreeSet::from([caller.clone()]));
+		<Members<T>>::put(GovernanceCouncil {
+			members: BTreeSet::from([caller.clone()]),
+			threshold: 1,
+		});
 
 		#[extrinsic_call]
 		propose_governance_extrinsic(
@@ -51,7 +54,10 @@ mod benchmarks {
 	fn approve() {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: vec![] }.into();
 		let caller: T::AccountId = whitelisted_caller();
-		<Members<T>>::put(BTreeSet::from([caller.clone()]));
+		<Members<T>>::put(GovernanceCouncil {
+			members: BTreeSet::from([caller.clone()]),
+			threshold: 1,
+		});
 		Pallet::<T>::push_proposal(Box::new(call), ExecutionMode::Automatic);
 
 		#[extrinsic_call]
@@ -64,8 +70,15 @@ mod benchmarks {
 	fn new_membership_set() {
 		let caller: T::AccountId = whitelisted_caller();
 		let members = BTreeSet::from([caller]);
-		let call =
-			Call::<T>::new_membership_set { new_members: members.clone().into_iter().collect() };
+
+		let old_members = (0..7)
+			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
+			.collect::<BTreeSet<_>>();
+		let new_members = (4..11)
+			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
+			.collect::<BTreeSet<_>>();
+		<Members<T>>::put(GovernanceCouncil { members: old_members, threshold: 4 });
+		let call = Call::<T>::new_membership_set { new_members, new_threshold: 3 };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -73,7 +86,7 @@ mod benchmarks {
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 
-		assert_eq!(Members::<T>::get(), members);
+		assert_eq!(Members::<T>::get(), GovernanceCouncil { members, threshold: 1 });
 	}
 
 	#[benchmark]
@@ -144,8 +157,11 @@ mod benchmarks {
 		let next_nonce = 788;
 		NextGovKeyCallHashNonce::<T>::put(next_nonce);
 
-		let new_membership_set_call: <T as Config>::RuntimeCall =
-			Call::<T>::new_membership_set { new_members: Default::default() }.into();
+		let new_membership_set_call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
+			new_members: Default::default(),
+			new_threshold: Default::default(),
+		}
+		.into();
 
 		let call_hash = frame_support::Hashable::blake2_256(&(
 			new_membership_set_call.clone(),
@@ -171,9 +187,11 @@ mod benchmarks {
 	#[benchmark]
 	fn dispatch_whitelisted_call() {
 		let caller: T::AccountId = whitelisted_caller();
-		<Members<T>>::put(BTreeSet::from([caller.clone()]));
-		let call: <T as Config>::RuntimeCall =
-			Call::<T>::new_membership_set { new_members: Default::default() }.into();
+		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
+			new_members: Default::default(),
+			new_threshold: Default::default(),
+		}
+		.into();
 		Pallet::<T>::push_proposal(Box::new(call.clone()), ExecutionMode::Manual);
 		PreAuthorisedGovCalls::<T>::insert(1, call.encode());
 

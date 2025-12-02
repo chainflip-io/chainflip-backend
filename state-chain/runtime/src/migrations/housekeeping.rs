@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Runtime;
+use crate::{Runtime, RuntimeOrigin};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -39,6 +39,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
 				log::info!("🧹 No housekeeping required for Berghain.");
+				let o = RuntimeOrigin::from(pallet_cf_governance::Origin::GovernanceApproval);
 			},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");

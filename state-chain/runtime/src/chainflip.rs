@@ -144,7 +144,7 @@ impl cf_traits::WaivedFees for WaivedFees {
 
 	fn should_waive_fees(call: &Self::RuntimeCall, caller: &Self::AccountId) -> bool {
 		if matches!(call, RuntimeCall::Governance(_)) {
-			return super::Governance::members().contains(caller)
+			return pallet_cf_governance::Members::<Runtime>::get().members.contains(caller)
 		}
 		false
 	}
