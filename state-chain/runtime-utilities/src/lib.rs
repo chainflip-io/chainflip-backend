@@ -207,7 +207,7 @@ pub mod genesis_hashes {
 	/// NOTE: IF YOU USE THIS CONSTANT, MAKE SURE IT IS STILL VALID: SISYPHOS IS RELAUNCHED
 	/// FROM TIME TO TIME.
 	pub const SISYPHOS: [u8; 32] =
-		hex_literal::hex!("7db0684f891ad10fa919c801f9a9f030c0f6831aafa105b1a68e47803f91f2b6");
+		hex_literal::hex!("097d68b3b2a8c19cb0f7cffe223e83f0c317878a9c3ab8bc947d3801ce101695");
 
 	pub fn genesis_hash<T: frame_system::Config<Hash = H256>>() -> [u8; 32] {
 		frame_system::BlockHash::<T>::get(BlockNumberFor::<T>::zero()).to_fixed_bytes()
