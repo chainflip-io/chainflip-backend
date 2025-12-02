@@ -49,18 +49,21 @@ export async function addBoostFunds(
   const schema = lendingPoolsBoostFundsAdded;
 
   const id = await findEvent(`LendingPools.BoostFundsAdded`, {
-    schema: lendingPoolsBoostFundsAdded.refine((event) => 
+    schema: lendingPoolsBoostFundsAdded.refine((event) => {
+        // console.log(`testing for ${JSON.stringify(event)}`);
+
+        return event.boostPool.asset === asset &&
+        event.boostPool.tier === boostTier;
         // event.boosterId === lp.address &&
-        event.boostPool.asset === asset &&
-        event.boostPool.tier === boostTier
+    }
     )
   }).then((e) => {
     console.log('promise finished!');
-    return e.args.boosterId
-  })
+    return e.args.boosterId;
+  });
 
-
-  // const done = await observeBoostFundsAdded.event;
+  console.log(`addrses: ${lp.address}`);
+  console.log(`event ad: ${id}`)
 
   logger.info(`Success! ${id}`);
   return id;
