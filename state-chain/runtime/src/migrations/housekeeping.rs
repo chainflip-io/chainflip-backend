@@ -28,7 +28,7 @@ use cf_chains::{
 	sol::{api::SolanaApi, SolAsset, SolanaCrypto, SolanaDepositFetchId},
 	AllBatch, ChainCrypto, FetchAssetParams, SetAggKeyWithAggKey, Solana,
 };
-use cf_primitives::chains::assets::btc::Asset as BtcAsset;
+use cf_primitives::{chains::assets::btc::Asset as BtcAsset, BroadcastId};
 use cf_runtime_utilities::genesis_hashes;
 use cf_traits::{Chainflip, KeyProvider};
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -87,6 +87,13 @@ fn f() {
 	);
 	// Check that the destination address is valid.
 	ScriptPubkey::try_from_address(DESTINATION, &cf_chains::btc::BitcoinNetwork::Mainnet).unwrap();
+}
+
+fn delete_broadcast_from_broadcaster_pallet(id: BroadcastId) {
+	pallet_cf_broadcast::PendingApiCalls::<Runtime, SolanaInstance>::remove(id);
+	pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::mutate(|broadcasts| {
+		broadcasts.remove(&id)
+	});
 }
 
 fn resubmit_solana_rotation(
@@ -276,6 +283,11 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 			genesis_hashes::SISYPHOS => {
 				if crate::VERSION.spec_version == 1_12_06 {
 					log::info!("🧹 Resubmitting solana rotation tx for Sisyphos.");
+
+					// delete the old broadcast
+					delete_broadcast_from_broadcaster_pallet(2933);
+
+					// create the new one
 					resubmit_solana_rotation(
 						// new agg key, double check!
 						cf_chains::sol::SolAddress(hex_literal::hex!(
