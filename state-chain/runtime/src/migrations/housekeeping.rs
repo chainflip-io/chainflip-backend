@@ -14,16 +14,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner, Runtime};
-use cf_chains::btc::{
-	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	deposit_address::DepositAddress,
-	BitcoinOutput, ScriptPubkey, Utxo, UtxoId, BITCOIN_DUST_LIMIT,
+use crate::{
+	chainflip::SolEnvironment, BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner,
+	Runtime, SolanaBroadcaster,
 };
-use cf_primitives::chains::assets::btc::Asset as BtcAsset;
+use cf_chains::{
+	btc::{
+		api::{batch_transfer::BatchTransfer, BitcoinApi},
+		deposit_address::DepositAddress,
+		BitcoinOutput, ScriptPubkey, Utxo, UtxoId, BITCOIN_DUST_LIMIT,
+	},
+	sol::{api::SolanaApi, SolanaCrypto},
+	ChainCrypto, SetAggKeyWithAggKey,
+};
+use cf_primitives::{chains::assets::btc::Asset as BtcAsset, BroadcastId};
 use cf_runtime_utilities::genesis_hashes;
 use cf_traits::KeyProvider;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use sol_prim::Address;
 use sp_core::H256;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
@@ -78,6 +86,38 @@ fn f() {
 	);
 	// Check that the destination address is valid.
 	ScriptPubkey::try_from_address(DESTINATION, &cf_chains::btc::BitcoinNetwork::Mainnet).unwrap();
+}
+
+fn resubmit_solana_rotation(agg_key: <SolanaCrypto as ChainCrypto>::AggKey) {
+	let rotation_call =
+		<SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<SolanaCrypto>>::new_unsigned_impl(
+			// the `old_key` argument is ignored by solana
+			None, // the new agg key we want to rotate to
+			agg_key,
+		);
+
+	match rotation_call {
+		Ok(Some(rotation_call)) => {
+			use cf_traits::Broadcaster;
+
+			// we sign and submit the new rotation tx.
+			// - this does not create a new barrier if `PendingBroadcasts` is empty
+			// - this sets `IncomingKeyAndBroadcastId` to the new key
+			let (broadcast_id, tss_id) =
+				SolanaBroadcaster::threshold_sign_and_broadcast_rotation_tx(rotation_call, agg_key);
+			log::info!(
+				"Requested threshold signature ({tss_id:?}) and broadcast with id {broadcast_id:?}"
+			);
+
+			// TODO delete the old broadcast
+		},
+		Ok(None) => {
+			log::error!("Could not build rotation api call: returned None");
+		},
+		Err(err) => {
+			log::error!("Could not build rotation api call: {err:?}");
+		},
+	}
 }
 
 pub struct NetworkSpecificHousekeeping;
@@ -142,10 +182,22 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				}
 			},
 			genesis_hashes::PERSEVERANCE => {
-				log::info!("🧹 No housekeeping required for Perseverance.");
+				log::info!("🧹 Resubmitting solana rotation tx for Perseverance.");
+				resubmit_solana_rotation(
+					// new agg key, double check!
+					cf_chains::sol::SolAddress(hex_literal::hex!(
+						"f24ab9a36f9156b1e3f8920d75ebeb897e53951fc1c847056375540a102f16b9"
+					)),
+				);
 			},
 			genesis_hashes::SISYPHOS => {
-				log::info!("🧹 No housekeeping required for Sisyphos.");
+				log::info!("🧹 Resubmitting solana rotation tx for Sisyphos.");
+				resubmit_solana_rotation(
+					// new agg key, double check!
+					cf_chains::sol::SolAddress(hex_literal::hex!(
+						"beca85b4bcecd87cb6f7d76e1d2652240400e1d30d8b13468fd23c0dffa40487"
+					)),
+				);
 			},
 			_ => {},
 		}
