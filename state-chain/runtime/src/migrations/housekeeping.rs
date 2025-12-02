@@ -112,7 +112,7 @@ fn resubmit_solana_rotation(
 			// we predict the broadcast id
 			let broadcast_id = BroadcastIdCounter::<Runtime, SolanaInstance>::get() + 1;
 
-			let origin = RuntimeOrigin::root();
+			let origin = RuntimeOrigin::from(pallet_cf_governance::RawOrigin::GovernanceApproval);
 			let broadcast = true;
 			match SolanaBroadcaster::threshold_sign_and_broadcast_with_historical_key(
 				origin,
@@ -174,6 +174,13 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					// Clear out any old events.
 					CfeEvents::<Runtime>::kill();
 					RuntimeUpgradeEvents::<Runtime>::kill();
+
+					// delete the old rotation + all other stuck pending api calls
+					let broadcast_ids =
+						[2432, 2433, 2434, 2435, 2436, 2437, 2438, 2439, 2440, 2441, 2442];
+					for id in broadcast_ids {
+						delete_broadcast_from_broadcaster_pallet(id);
+					}
 
 					log::info!("🧹 Doing housekeeping.");
 					let fee_estimator = BitcoinChainTracking::chain_state()
