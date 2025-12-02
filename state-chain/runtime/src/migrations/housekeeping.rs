@@ -222,6 +222,12 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 			genesis_hashes::PERSEVERANCE => {
 				if crate::VERSION.spec_version == 1_12_06 {
 					log::info!("🧹 Resubmitting solana rotation tx for Perseverance.");
+
+					// Clear out any old events.
+					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
+					CfeEvents::<Runtime>::kill();
+					RuntimeUpgradeEvents::<Runtime>::kill();
+
 					resubmit_solana_rotation(
 						// new agg key, double check!
 						cf_chains::sol::SolAddress(hex_literal::hex!(
@@ -276,11 +282,19 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						},
 						asset: SolAsset::Sol,
 					}]);
+
+					// Move events into the runtime upgrade events.
+					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
 				}
 			},
 			genesis_hashes::SISYPHOS => {
 				if crate::VERSION.spec_version == 1_12_06 {
 					log::info!("🧹 Resubmitting solana rotation tx for Sisyphos.");
+
+					// Clear out any old events.
+					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
+					CfeEvents::<Runtime>::kill();
+					RuntimeUpgradeEvents::<Runtime>::kill();
 
 					// delete the old broadcast
 					delete_broadcast_from_broadcaster_pallet(2933);
@@ -305,6 +319,9 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						2, // required signers
 						2, // num retries
 					);
+
+					// Move events into the runtime upgrade events.
+					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
 				}
 			},
 			_ => {},
