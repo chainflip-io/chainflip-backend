@@ -114,16 +114,31 @@ pub enum RequestType<Key, Participants> {
 	/// This signing request will be retried until success.
 	SpecificKey(Key, EpochIndex),
 	/// Uses the recently generated key and the participants used to generate that key.
-	/// This signing request will only be attemped once, as failing this ought to result
+	/// This signing request will only be attempted once, as failing this ought to result
 	/// in another Keygen ceremony.
 	KeygenVerification { key: Key, epoch_index: EpochIndex, participants: Participants },
+	/// Uses a historical (expired) key with governance-provided participants.
+	/// This signing request will be retried but failures will not penalize participants.
+	HistoricalKey {
+		key: Key,
+		epoch_index: EpochIndex,
+		candidates: Participants,
+		signers_required: u32,
+		max_retries: u32,
+	},
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
 #[derive(Clone, Copy, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum ThresholdCeremonyType {
+pub enum ThresholdCeremonyType<Participants> {
 	Standard,
 	KeygenVerification,
+	/// Historical key signing ceremony (governance-initiated, no penalties on failure)
+	HistoricalKey {
+		candidates: Participants,
+		signers_required: u32,
+		retries_remaining: u32,
+	},
 }
 
 #[derive(Clone, Encode, Decode, GenericTypeInfo, PartialEq, Eq, Default, RuntimeDebug)]
@@ -294,7 +309,7 @@ pub mod pallet {
 		pub key: <T::TargetChainCrypto as ChainCrypto>::AggKey,
 		/// Determines how/if we deal with ceremony failure.
 		#[skip_name_expansion]
-		pub threshold_ceremony_type: ThresholdCeremonyType,
+		pub threshold_ceremony_type: ThresholdCeremonyType<BTreeSet<T::ValidatorId>>,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo)]
@@ -640,6 +655,10 @@ pub mod pallet {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
 		},
+		/// Bailing on historical signing after reaching the limit for the number of retries
+		MaxRetriesReachedForRequest {
+			request_id: RequestId,
+		},
 		FailureReportProcessed {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
@@ -717,6 +736,7 @@ pub mod pallet {
 		},
 	}
 
+	#[derive(PartialEq)]
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The provided ceremony id is invalid.
@@ -739,6 +759,12 @@ pub mod pallet {
 		NoActiveRotation,
 		/// The requested call is invalid based on the current rotation state.
 		InvalidRotationStatus,
+		/// No key exists for the specified epoch.
+		NoKeyForEpoch,
+		/// Provided participants list is empty or invalid.
+		InvalidParticipants,
+		/// Can't perform historical signing for a key that's too recent.
+		EpochTooRecent,
 	}
 
 	#[pallet::hooks]
@@ -746,7 +772,7 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			let mut weight = T::DbWeight::get().reads(1);
 
-			// ====== 1. Process pending rotation taskes =======
+			// ====== 1. Process pending rotation tasks =======
 
 			if Self::status() == AsyncResult::Pending {
 				match PendingKeyRotation::<T, I>::get() {
@@ -864,6 +890,25 @@ pub mod pallet {
 			let mut num_retries = 0;
 			let mut num_offenders = 0;
 
+			fn process_failed_ceremony<T: Config<I>, I: 'static>(
+				request_id: RequestId,
+				ceremony_id: CeremonyId,
+				offenders: Vec<<T as Chainflip>::ValidatorId>,
+			) {
+				SignerAndSignature::<T, I>::mutate(
+					request_id,
+					|maybe_signer_and_signature_result| {
+						if let Some(signer_and_signature_result) =
+							maybe_signer_and_signature_result.as_mut()
+						{
+							signer_and_signature_result.signature_result =
+								AsyncResult::Ready(Err(offenders));
+						}
+					},
+				);
+				Pallet::<T, I>::maybe_dispatch_callback(request_id, ceremony_id);
+			}
+
 			for ceremony_id in CeremonyRetryQueues::<T, I>::take(current_block) {
 				if let Some(failed_ceremony_context) = PendingCeremonies::<T, I>::take(ceremony_id)
 				{
@@ -894,19 +939,44 @@ pub mod pallet {
 							));
 							Event::<T, I>::RetryRequested { request_id, ceremony_id }
 						},
+						ThresholdCeremonyType::HistoricalKey {
+							candidates,
+							signers_required,
+							retries_remaining,
+						} => {
+							// Don't penalize for historical key failures - this is best-effort
+
+							if let Some(retries_remaining) = retries_remaining.checked_sub(1) {
+								Self::new_ceremony_attempt(RequestInstruction::new(
+									request_id,
+									attempt_count.wrapping_add(1),
+									payload,
+									RequestType::HistoricalKey {
+										key,
+										epoch_index: epoch,
+										candidates,
+										signers_required,
+										max_retries: retries_remaining,
+									},
+								));
+								Event::<T, I>::RetryRequested { request_id, ceremony_id }
+							} else {
+								process_failed_ceremony::<T, I>(
+									request_id,
+									ceremony_id,
+									Default::default(),
+								);
+
+								Event::<T, I>::MaxRetriesReachedForRequest { request_id }
+							}
+						},
 						ThresholdCeremonyType::KeygenVerification => {
-							SignerAndSignature::<T, I>::mutate(
+							process_failed_ceremony::<T, I>(
 								request_id,
-								|maybe_signer_and_signature_result| {
-									if let Some(signer_and_signature_result) =
-										maybe_signer_and_signature_result.as_mut()
-									{
-										signer_and_signature_result.signature_result =
-											AsyncResult::Ready(Err(offenders.clone()));
-									}
-								},
+								ceremony_id,
+								offenders.clone(),
 							);
-							Self::maybe_dispatch_callback(request_id, ceremony_id);
+
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
 								ceremony_id,
@@ -971,7 +1041,7 @@ pub mod pallet {
 		///
 		/// This is an **Unsigned** Extrinsic, meaning validation is performed in the
 		/// [ValidateUnsigned] implementation for this pallet. This means that this call can only be
-		/// triggered if the associated signature is valid, and therfore we don't need to check it
+		/// triggered if the associated signature is valid, and therefore we don't need to check it
 		/// again inside the call.
 		#[pallet::call_index(0)]
 		#[pallet::weight((T::Weights::signature_success(), DispatchClass::Operational))]
@@ -1210,6 +1280,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				signer: match request_type {
 					RequestType::SpecificKey(key, _) => key,
 					RequestType::KeygenVerification { key, .. } => key,
+					RequestType::HistoricalKey { key, .. } => key,
 				},
 				signature_result: AsyncResult::Pending,
 			},
@@ -1224,34 +1295,48 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (maybe_epoch_key_and_participants, ceremony_type) =
-			if let RequestType::KeygenVerification { epoch_index, key, ref participants } =
-				request_instruction.request_type
-			{
-				(
-					Ok((epoch_index, key, participants.clone())),
-					ThresholdCeremonyType::KeygenVerification,
-				)
-			} else {
-				(
-					match request_instruction.request_type {
-						RequestType::SpecificKey(key, epoch_index) => Ok((key, epoch_index)),
-						_ => unreachable!("RequestType::KeygenVerification is handled above"),
-					}
-					.and_then(|(key, epoch_index)| {
-						if let Some(nominees) =
-							T::ThresholdSignerNomination::threshold_nomination_with_seed(
-								(request_id, attempt_count),
-								epoch_index,
-							) {
-							Ok((epoch_index, key, nominees))
-						} else {
-							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
-						}
-					}),
-					ThresholdCeremonyType::Standard,
-				)
-			};
+		let (maybe_epoch_key_and_participants, ceremony_type) = match &request_instruction
+			.request_type
+		{
+			RequestType::KeygenVerification { epoch_index, key, participants } => (
+				Ok((*epoch_index, *key, participants.clone())),
+				ThresholdCeremonyType::KeygenVerification,
+			),
+			RequestType::HistoricalKey {
+				epoch_index,
+				key,
+				candidates,
+				signers_required,
+				max_retries,
+			} => (
+				if let Some(nominees) =
+					T::ThresholdSignerNomination::threshold_nomination_with_seed_from_candidates(
+						(request_id, attempt_count),
+						candidates.clone(),
+						*signers_required,
+					) {
+					Ok((*epoch_index, *key, nominees))
+				} else {
+					Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
+				},
+				ThresholdCeremonyType::HistoricalKey {
+					candidates: candidates.clone(),
+					signers_required: *signers_required,
+					retries_remaining: *max_retries,
+				},
+			),
+			RequestType::SpecificKey(key, epoch_index) => (
+				if let Some(nominees) = T::ThresholdSignerNomination::threshold_nomination_with_seed(
+					(request_id, attempt_count),
+					*epoch_index,
+				) {
+					Ok((*epoch_index, *key, nominees))
+				} else {
+					Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
+				},
+				ThresholdCeremonyType::Standard,
+			),
+		};
 
 		Self::deposit_event(match maybe_epoch_key_and_participants {
 			Ok((epoch, key, participants)) => {
@@ -1588,6 +1673,41 @@ where
 				signature_result: AsyncResult::Void,
 			});
 		(signer_and_signature.signer, signer_and_signature.signature_result)
+	}
+
+	fn request_historical_signature_with_callback(
+		payload: PayloadFor<T, I>,
+		epoch_index: cf_primitives::EpochIndex,
+		participants: sp_std::collections::btree_set::BTreeSet<T::ValidatorId>,
+		signers_required: u32,
+		max_retries: u32,
+		callback_generator: impl FnOnce(cf_primitives::ThresholdSignatureRequestId) -> Self::Callback,
+	) -> Result<cf_primitives::ThresholdSignatureRequestId, Self::Error> {
+		// Restricting historical signing only to keys we don't have access to via traditional
+		// means:
+		ensure!(epoch_index <= T::EpochInfo::last_expired_epoch(), Error::<T, I>::EpochTooRecent);
+
+		let key = Keys::<T, I>::get(epoch_index).ok_or(Error::<T, I>::NoKeyForEpoch)?;
+
+		ensure!(
+			signers_required > 0 && signers_required <= participants.len() as u32,
+			Error::<T, I>::InvalidParticipants
+		);
+
+		let request_id = Self::inner_request_signature(
+			payload,
+			RequestType::HistoricalKey {
+				key,
+				epoch_index,
+				candidates: participants,
+				signers_required,
+				max_retries,
+			},
+		);
+
+		Self::register_callback(request_id, callback_generator(request_id))?;
+
+		Ok(request_id)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

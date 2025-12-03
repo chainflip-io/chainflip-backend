@@ -413,6 +413,12 @@ pub trait ThresholdSignerNomination {
 	/// The id type of signers
 	type SignerId;
 
+	fn threshold_nomination_with_seed_from_candidates<H: Hashable>(
+		seed: H,
+		candidates: BTreeSet<Self::SignerId>,
+		nominees_to_select: u32,
+	) -> Option<BTreeSet<Self::SignerId>>;
+
 	/// Returns a list of live signers where the number of signers is sufficient to author a
 	/// threshold signature. The seed value is used as a source of randomness.
 	fn threshold_nomination_with_seed<H: Hashable>(
@@ -487,6 +493,23 @@ where
 		});
 		request_id
 	}
+
+	/// Request a signature using a historical (expired) key with specific participants, and
+	/// register a callback.
+	///
+	/// This is a governance-controlled recovery mechanism for signing with old keys.
+	/// The implementation should validate that the key exists and that participants are provided,
+	/// but governance takes responsibility for ensuring participants have the key shares.
+	///
+	/// Returns Err if the request cannot be initiated (e.g., key doesn't exist for epoch).
+	fn request_historical_signature_with_callback(
+		payload: C::Payload,
+		epoch_index: EpochIndex,
+		participants: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>,
+		signers_required: u32,
+		max_retries: u32,
+		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
+	) -> Result<ThresholdSignatureRequestId, Self::Error>;
 
 	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]

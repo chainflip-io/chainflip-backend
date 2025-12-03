@@ -53,6 +53,14 @@ impl ThresholdSignerNomination for MockNominator {
 	) -> Option<BTreeSet<Self::SignerId>> {
 		Self::get_nominees()
 	}
+
+	fn threshold_nomination_with_seed_from_candidates<S>(
+		_seed: S,
+		_candidates: BTreeSet<Self::SignerId>,
+		_epoch_index: EpochIndex,
+	) -> Option<BTreeSet<Self::SignerId>> {
+		Self::get_nominees()
+	}
 }
 
 // Remove some threadlocal + refcell complexity from test code
