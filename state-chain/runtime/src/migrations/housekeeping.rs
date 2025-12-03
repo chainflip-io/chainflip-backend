@@ -368,6 +368,16 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, BitcoinInstance>::get();
 				Ok(id_counter.to_le_bytes().to_vec())
 			},
+			genesis_hashes::PERSEVERANCE => {
+				let id_counter =
+					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+				Ok(id_counter.to_le_bytes().to_vec())
+			},
+			genesis_hashes::SISYPHOS => {
+				let id_counter =
+					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+				Ok(id_counter.to_le_bytes().to_vec())
+			},
 			_ => Ok(Default::default()),
 		}
 	}
@@ -392,6 +402,47 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					);
 					assert!(
 						pallet_cf_broadcast::PendingBroadcasts::<Runtime, BitcoinInstance>::get()
+							.contains(&new_id_counter),
+						"New broadcast should be pending"
+					);
+				},
+			genesis_hashes::PERSEVERANCE =>
+				if crate::VERSION.spec_version == 1_12_06 {
+					let old_id_counter = u32::from_le_bytes(
+						state
+							.try_into()
+							.map_err(|_| DispatchError::Other("Invalid pre-upgrade state"))?,
+					);
+					let new_id_counter =
+						pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+					assert!(
+						new_id_counter - old_id_counter == 2,
+						"Expected exactly two new broadcast",
+					);
+					assert!(
+						pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
+							.contains(&new_id_counter) &&
+							pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get(
+							)
+							.contains(&(new_id_counter - 1)),
+						"New broadcasts should be pending"
+					);
+				},
+			genesis_hashes::SISYPHOS =>
+				if crate::VERSION.spec_version == 1_12_06 {
+					let old_id_counter = u32::from_le_bytes(
+						state
+							.try_into()
+							.map_err(|_| DispatchError::Other("Invalid pre-upgrade state"))?,
+					);
+					let new_id_counter =
+						pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
+					assert!(
+						new_id_counter - old_id_counter == 1,
+						"Expected exactly one new broadcast",
+					);
+					assert!(
+						pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
 							.contains(&new_id_counter),
 						"New broadcast should be pending"
 					);
