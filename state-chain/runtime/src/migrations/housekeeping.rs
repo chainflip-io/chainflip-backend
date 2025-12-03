@@ -267,15 +267,17 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 							AccountId32::new(hex_literal::hex![
 								"789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"
 							]),
-							AccountId32::new(hex_literal::hex![
-								"62c3f505c6c9ff480c83942c4946153c08f02dc5e93b9431590b872296810878"
-							]),
+							// external validator:
+							// AccountId32::new(hex_literal::hex![
+							// 	"62c3f505c6c9ff480c83942c4946153c08f02dc5e93b9431590b872296810878"
+							// ]),
 							AccountId32::new(hex_literal::hex![
 								"7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"
 							]),
-							AccountId32::new(hex_literal::hex![
-								"169805dd9c7b0c1c4881fd8a3f98483b27c1c04dcea44b1f1bd502926be2a37b"
-							]),
+							// external validator:
+							// AccountId32::new(hex_literal::hex![
+							// 	"169805dd9c7b0c1c4881fd8a3f98483b27c1c04dcea44b1f1bd502926be2a37b"
+							// ]),
 							AccountId32::new(hex_literal::hex![
 								"3e666e445cb15b5469cac9cbb2e3aec6e2f88ff28435353c35e7172aaa9b7c18"
 							]),
@@ -285,16 +287,17 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 							AccountId32::new(hex_literal::hex![
 								"fea6a1ae1029da56f4df3eb886b81443c97247f350e0b7faeb805ff747d84f70"
 							]),
-							AccountId32::new(hex_literal::hex![
-								"38bfc9cb271c312e5dfc8a675e42f61f3297fce72702d9d1a3e35dc5813d9c04"
-							]),
+							// external validator:
+							// AccountId32::new(hex_literal::hex![
+							// 	"38bfc9cb271c312e5dfc8a675e42f61f3297fce72702d9d1a3e35dc5813d9c04"
+							// ]),
 							AccountId32::new(hex_literal::hex![
 								"e4905f40c45d7951d25587defefda85e0f148bdeb3fd04cb5fd8bef5af9abc21"
 							]),
 						]
 						.into_iter()
 						.collect(),
-						8, // required signers
+						7, // required signers
 						2, // num of retries
 					);
 
