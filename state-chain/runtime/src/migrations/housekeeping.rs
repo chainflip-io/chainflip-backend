@@ -297,7 +297,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						]
 						.into_iter()
 						.collect(),
-						7, // required signers
+						7,  // required signers
 						10, // num of retries
 					);
 
@@ -348,7 +348,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						]
 						.into_iter()
 						.collect(),
-						2, // required signers
+						2,  // required signers
 						10, // num retries
 					);
 
