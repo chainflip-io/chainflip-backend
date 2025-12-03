@@ -310,7 +310,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				role_specific: RpcAccountInfo::Broker {
 					earned_fees,
 					affiliates,
-					btc_vault_deposit_address,
+					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -398,7 +398,7 @@ pub mod account_info_before_api_v7 {
 			#[serde(skip_serializing_if = "Vec::is_empty")]
 			affiliates: Vec<RpcAffiliate>,
 			#[serde(skip_serializing_if = "Option::is_none")]
-			btc_vault_deposit_address: Option<String>,
+			btc_vault_deposit_address: Option<AddressString>,
 		},
 		LiquidityProvider {
 			balances: any::AssetMap<NumberOrHex>,
@@ -433,7 +433,7 @@ pub mod account_info_before_api_v7 {
 			}
 		}
 
-		pub fn broker(broker_info: BrokerInfo, balance: u128) -> Self {
+		pub fn broker(broker_info: BrokerInfo<AddressString>, balance: u128) -> Self {
 			Self::Broker {
 				flip_balance: balance.into(),
 				bond: broker_info.bond.into(),
@@ -1769,192 +1769,188 @@ where
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoWrapper> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, version| match version {
-				None => Err(CfApiError::ErrorObject(ErrorObject::owned(
-					ErrorCode::InvalidParams.code(),
-					"Unsupported runtime API version.",
-					None::<()>,
-				))),
-				Some(v) if v < 7 => {
-					use account_info_before_api_v7::RpcAccountInfo;
-					let balance = api.cf_account_flip_balance(hash, &account_id)?;
-					let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 7 {
+				use account_info_before_api_v7::RpcAccountInfo;
+				let balance = api.cf_account_flip_balance(hash, &account_id)?;
+				let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
 
-					Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
-						match api
-							.cf_account_role(hash, account_id.clone())?
-							.unwrap_or(AccountRole::Unregistered)
-						{
-							AccountRole::Unregistered =>
-								RpcAccountInfo::unregistered(balance, asset_balances),
-							AccountRole::Broker => {
-								let api_version = api
-									.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(
-										hash,
-									)?
-									.unwrap_or_default();
-
-								let info = if api_version < 3 {
-									#[expect(deprecated)]
-									api.cf_broker_info_before_version_3(hash, account_id.clone())?
-										.into()
-								} else {
-									api.cf_broker_info(hash, account_id.clone())?
-								};
-
-								RpcAccountInfo::broker(info, balance)
-							},
-							AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+				Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
+					match api
+						.cf_account_role(hash, account_id.clone())?
+						.unwrap_or(AccountRole::Unregistered)
+					{
+						AccountRole::Unregistered =>
+							RpcAccountInfo::unregistered(balance, asset_balances),
+						AccountRole::Broker => {
+							let info = if api_version < 3 {
 								#[expect(deprecated)]
+								api.cf_broker_info_before_version_3(hash, account_id.clone())?
+									.into()
+							} else {
+								#[expect(deprecated)]
+								api.cf_broker_info_before_version_10(hash, account_id.clone())?
+									.map(Into::into)
+							};
+
+							RpcAccountInfo::broker(info, balance)
+						},
+						AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+							#[expect(deprecated)]
+							api.cf_liquidity_provider_info_before_version_9(
+								hash,
+								account_id.clone(),
+							)?
+							.into(),
+							api.cf_network_environment(hash)?,
+							balance,
+						),
+						AccountRole::Validator => {
+							#[expect(deprecated)]
+							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
+
+							RpcAccountInfo::validator(info)
+						},
+						// No other roles existed before v7
+						_ =>
+							return Err(CfApiError::ErrorObject(ErrorObject::owned(
+								ErrorCode::InvalidParams.code(),
+								"Unknown Account Role.",
+								None::<()>,
+							))),
+					},
+				))
+			} else {
+				let role = api
+					.cf_account_role(hash, account_id.clone())?
+					.unwrap_or(AccountRole::Unregistered);
+				let common_items = api
+					.cf_common_account_info(hash, &account_id)?
+					.try_map_balances(TryInto::try_into)
+					.map_err(|_| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							"Unable to convert balances.",
+							None::<()>,
+						))
+					})?;
+
+				Ok(RpcAccountInfoWrapper {
+					common_items,
+					role_specific: match role {
+						AccountRole::Unregistered => RpcAccountInfo::Unregistered {},
+						AccountRole::Broker => {
+							let BrokerInfo {
+								earned_fees,
+								btc_vault_deposit_address,
+								affiliates,
+								..
+							} = if api_version < 10 {
+								#[expect(deprecated)]
+								api.cf_broker_info_before_version_10(hash, account_id.clone())?
+									.map(Into::into)
+							} else {
+								let network = api.cf_network_environment(hash)?.into();
+								api.cf_broker_info(hash, account_id.clone())?
+									.map(|pubkey| pubkey.to_address(&network))
+							};
+							RpcAccountInfo::Broker {
+								earned_fees: AssetMap::from_iter_or_default(
+									earned_fees.into_iter().map(|(k, v)| (k, v.into())),
+								),
+								affiliates: affiliates.into_iter().map(Into::into).collect(),
+								btc_vault_deposit_address,
+							}
+						},
+						AccountRole::LiquidityProvider => {
+							#[expect(deprecated)]
+							let LiquidityProviderInfo {
+								refund_addresses,
+								earned_fees,
+								boost_balances,
+								lending_positions,
+								collateral_balances,
+								..
+							} = if api_version < 9 {
 								api.cf_liquidity_provider_info_before_version_9(
 									hash,
 									account_id.clone(),
 								)?
-								.into(),
-								api.cf_network_environment(hash)?,
-								balance,
-							),
-							AccountRole::Validator => {
-								#[expect(deprecated)]
-								let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
-
-								RpcAccountInfo::validator(info)
-							},
-							// No other roles existed before v7
-							_ =>
-								return Err(CfApiError::ErrorObject(ErrorObject::owned(
-									ErrorCode::InvalidParams.code(),
-									"Unknown Account Role.",
-									None::<()>,
-								))),
+								.into()
+							} else {
+								api.cf_liquidity_provider_info(hash, account_id)?
+							};
+							let network = api.cf_network_environment(hash)?;
+							RpcAccountInfo::LiquidityProvider {
+								refund_addresses: refund_addresses
+									.into_iter()
+									.map(|(chain, address)| {
+										(chain, address.map(|a| a.to_humanreadable(network)))
+									})
+									.collect(),
+								earned_fees: earned_fees
+									.iter()
+									.map(|(asset, balance)| (asset, (*balance).into()))
+									.collect(),
+								boost_balances: boost_balances
+									.iter()
+									.map(|(asset, infos)| {
+										(asset, infos.iter().map(|info| info.into()).collect())
+									})
+									.collect(),
+								lending_positions: lending_positions
+									.into_iter()
+									.map(|pos| LendingPosition {
+										asset: pos.asset,
+										total_amount: pos.total_amount.into(),
+										available_amount: pos.available_amount.into(),
+									})
+									.collect(),
+								collateral_balances: collateral_balances
+									.into_iter()
+									.map(|(asset, amount)| AssetAndAmount {
+										asset,
+										amount: amount.into(),
+									})
+									.collect(),
+							}
 						},
-					))
-				},
-				Some(api_version) => {
-					let role = api
-						.cf_account_role(hash, account_id.clone())?
-						.unwrap_or(AccountRole::Unregistered);
-					let common_items = api
-						.cf_common_account_info(hash, &account_id)?
-						.try_map_balances(TryInto::try_into)
-						.map_err(|_| {
-							CfApiError::ErrorObject(ErrorObject::owned(
-								ErrorCode::InternalError.code(),
-								"Unable to convert balances.",
-								None::<()>,
-							))
-						})?;
-
-					Ok(RpcAccountInfoWrapper {
-						common_items,
-						role_specific: match role {
-							AccountRole::Unregistered => RpcAccountInfo::Unregistered {},
-							AccountRole::Broker => {
-								let BrokerInfo {
-									earned_fees,
-									btc_vault_deposit_address,
-									affiliates,
-									..
-								} = api.cf_broker_info(hash, account_id.clone())?;
-								RpcAccountInfo::Broker {
-									earned_fees: AssetMap::from_iter_or_default(
-										earned_fees.into_iter().map(|(k, v)| (k, v.into())),
-									),
-									affiliates: affiliates.into_iter().map(Into::into).collect(),
-									btc_vault_deposit_address,
-								}
-							},
-							AccountRole::LiquidityProvider => {
-								#[expect(deprecated)]
-								let LiquidityProviderInfo {
-									refund_addresses,
-									earned_fees,
-									boost_balances,
-									lending_positions,
-									collateral_balances,
-									..
-								} = if api_version < 9 {
-									api.cf_liquidity_provider_info_before_version_9(
-										hash,
-										account_id.clone(),
-									)?
-									.into()
-								} else {
-									api.cf_liquidity_provider_info(hash, account_id)?
-								};
-
-								let network = api.cf_network_environment(hash)?;
-								RpcAccountInfo::LiquidityProvider {
-									refund_addresses: refund_addresses
-										.into_iter()
-										.map(|(chain, address)| {
-											(chain, address.map(|a| a.to_humanreadable(network)))
-										})
-										.collect(),
-									earned_fees: earned_fees
-										.iter()
-										.map(|(asset, balance)| (asset, (*balance).into()))
-										.collect(),
-									boost_balances: boost_balances
-										.iter()
-										.map(|(asset, infos)| {
-											(asset, infos.iter().map(|info| info.into()).collect())
-										})
-										.collect(),
-									lending_positions: lending_positions
-										.into_iter()
-										.map(|pos| LendingPosition {
-											asset: pos.asset,
-											total_amount: pos.total_amount.into(),
-											available_amount: pos.available_amount.into(),
-										})
-										.collect(),
-									collateral_balances: collateral_balances
-										.into_iter()
-										.map(|(asset, amount)| AssetAndAmount {
-											asset,
-											amount: amount.into(),
-										})
-										.collect(),
-								}
-							},
-							AccountRole::Validator => {
-								let ValidatorInfo {
-									last_heartbeat,
-									reputation_points,
-									keyholder_epochs,
-									is_current_authority,
-									is_current_backup,
-									is_qualified,
-									is_online,
-									is_bidding,
-									apy_bp,
-									operator,
-									..
-								} = api.cf_validator_info(hash, &account_id)?;
-								RpcAccountInfo::Validator {
-									last_heartbeat,
-									reputation_points,
-									keyholder_epochs,
-									is_current_authority,
-									is_current_backup,
-									is_qualified,
-									is_online,
-									is_bidding,
-									apy_bp,
-									operator,
-								}
-							},
-							AccountRole::Operator => RpcAccountInfo::Operator {
-								info: api
-									.cf_operator_info(hash, &account_id)?
-									.map_amounts(NumberOrHex::from),
-							},
+						AccountRole::Validator => {
+							let ValidatorInfo {
+								last_heartbeat,
+								reputation_points,
+								keyholder_epochs,
+								is_current_authority,
+								is_current_backup,
+								is_qualified,
+								is_online,
+								is_bidding,
+								apy_bp,
+								operator,
+								..
+							} = api.cf_validator_info(hash, &account_id)?;
+							RpcAccountInfo::Validator {
+								last_heartbeat,
+								reputation_points,
+								keyholder_epochs,
+								is_current_authority,
+								is_current_backup,
+								is_qualified,
+								is_online,
+								is_bidding,
+								apy_bp,
+								operator,
+							}
 						},
-					})
-				},
-			})
+						AccountRole::Operator => RpcAccountInfo::Operator {
+							info: api
+								.cf_operator_info(hash, &account_id)?
+								.map_amounts(NumberOrHex::from),
+						},
+					},
+				})
+			}
+		})
 	}
 
 	fn cf_account_info_v2(
@@ -2106,13 +2102,10 @@ where
 			for chain in ForeignChain::iter() {
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
-				match version {
-					Some(v) if v >= 8 => {
-						ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
-						boost_delays.insert(chain, api.cf_boost_delay(hash, chain)?);
-					},
-					// Not defined before v8
-					_ => {},
+				// These fields were added in version 8 of the runtime API
+				if version >= 8 {
+					ingress_delays.insert(chain, api.cf_ingress_delay(hash, chain)?);
+					boost_delays.insert(chain, api.cf_boost_delay(hash, chain)?);
 				}
 			}
 
@@ -2471,8 +2464,25 @@ where
 		dca_parameters: Option<DcaParameters>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			Ok::<_, CfApiError>(
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			Ok::<_, CfApiError>(if api_version < 10 {
+				#[expect(deprecated)]
+				api.cf_request_swap_parameter_encoding_before_version_10(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+					channel_metadata,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(Into::into)
+			} else {
+				let network = api.cf_network_environment(hash)?.into();
 				api.cf_request_swap_parameter_encoding(
 					hash,
 					broker,
@@ -2486,8 +2496,8 @@ where
 					affiliate_fees.unwrap_or_default(),
 					dca_parameters,
 				)??
-				.map_btc_address(Into::into),
-			)
+				.map_btc_address(|pubkey| pubkey.to_address(&network).into())
+			})
 		})
 	}
 
@@ -2625,14 +2635,14 @@ where
 		operator: Option<AccountId32>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<DelegationSnapshot<AccountId32, NumberOrHex>>> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, version| match version {
-				Some(v) if v < 7 => Err(CfApiError::ErrorObject(call_error(
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 7 {
+				Err(CfApiError::ErrorObject(call_error(
 					"Delegations are not supported at this runtime api version",
 					CfErrorCode::RuntimeApiError,
-				))),
-				_ => api
-					.cf_active_delegations(hash, operator)
+				)))
+			} else {
+				api.cf_active_delegations(hash, operator)
 					.map_err(CfApiError::from)?
 					.into_iter()
 					.map(|delegation| delegation.try_map_bids(TryInto::try_into))
@@ -2643,8 +2653,9 @@ where
 							format!("Failed to convert call parameters: {s}."),
 							None::<()>,
 						))
-					}),
-			})
+					})
+			}
+		})
 	}
 
 	fn cf_encode_non_native_call(
@@ -2655,48 +2666,47 @@ where
 		encoding: EncodingType,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<(RpcEncodedNonNativeCall, TransactionMetadata)> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, version| match version {
-				Some(v) if v < 8 => Err(CfApiError::ErrorObject(call_error(
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 8 {
+				Err(CfApiError::ErrorObject(call_error(
 					"Encoding of non native calls are not supported at this runtime api version",
 					CfErrorCode::RuntimeApiError,
-				))),
-				_ => {
-					let (encoded_call, metadata) = api
-						.cf_encode_non_native_call(
-							hash,
-							call.into(),
-							blocks_to_expiry,
-							nonce_or_account,
-							encoding,
-						)
-						.map_err(CfApiError::from)?
-						.map_err(|e| {
+				)))
+			} else {
+				let (encoded_call, metadata) = api
+					.cf_encode_non_native_call(
+						hash,
+						call.into(),
+						blocks_to_expiry,
+						nonce_or_account,
+						encoding,
+					)
+					.map_err(CfApiError::from)?
+					.map_err(|e| {
+						CfApiError::ErrorObject(ErrorObject::owned(
+							ErrorCode::InternalError.code(),
+							format!("Failed to encode non native call: {}", e),
+							None::<()>,
+						))
+					})?;
+				let serialized_call = match encoded_call {
+					EncodedNonNativeCall::Eip712(typed_data) => RpcEncodedNonNativeCall::Eip712(
+						to_ethers_typed_data(typed_data).map_err(|e| {
 							CfApiError::ErrorObject(ErrorObject::owned(
 								ErrorCode::InternalError.code(),
-								format!("Failed to encode non native call: {}", e),
+								e,
 								None::<()>,
 							))
-						})?;
-					let serialized_call = match encoded_call {
-						EncodedNonNativeCall::Eip712(typed_data) =>
-							RpcEncodedNonNativeCall::Eip712(
-								to_ethers_typed_data(typed_data).map_err(|e| {
-									CfApiError::ErrorObject(ErrorObject::owned(
-										ErrorCode::InternalError.code(),
-										e,
-										None::<()>,
-									))
-								})?,
-							),
-						EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
-					};
-					// Return the `transaction_metadata` because it will need
-					// to be submitted as part of the `non_native_signed_call`
-					// and it has been modified in the runtime api.
-					Ok((serialized_call, metadata))
-				},
-			})
+						})?,
+					),
+					EncodedNonNativeCall::String(s) => RpcEncodedNonNativeCall::String(s),
+				};
+				// Return the `transaction_metadata` because it will need
+				// to be submitted as part of the `non_native_signed_call`
+				// and it has been modified in the runtime api.
+				Ok((serialized_call, metadata))
+			}
+		})
 	}
 
 	fn cf_controlled_deposit_addresses(

@@ -28,7 +28,7 @@ fn test_broker_serialization() {
 				(Asset::SolUsdc, 0),
 			],
 			btc_vault_deposit_address: Some(
-				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
+				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet).into(),
 			),
 			bond: 0,
 			affiliates: vec![(
