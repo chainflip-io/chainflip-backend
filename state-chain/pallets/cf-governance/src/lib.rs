@@ -42,7 +42,7 @@ pub use weights::WeightInfo;
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 #[cfg(test)]
 mod mock;
@@ -469,7 +469,7 @@ pub mod pallet {
 			}
 			Members::<T>::set(GovernanceCouncil {
 				members: self.members.clone(),
-				threshold: (self.members.len() as u32 + 1) / 2,
+				threshold: (self.members.len() as u32).div_ceil(2),
 			});
 			ExpiryTime::<T>::set(self.expiry_span);
 		}

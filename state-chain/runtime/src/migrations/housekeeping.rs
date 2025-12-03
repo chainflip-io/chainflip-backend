@@ -39,7 +39,6 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
 				log::info!("🧹 No housekeeping required for Berghain.");
-				let o = RuntimeOrigin::from(pallet_cf_governance::Origin::GovernanceApproval);
 			},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
