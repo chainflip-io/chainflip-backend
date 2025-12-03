@@ -349,6 +349,10 @@ impl CompiledKeys {
 				meta.is_writable |= account_meta.is_writable;
 			}
 		}
+		if let Some(nonce_pubkey) = get_nonce_pubkey(instructions) {
+			let meta = key_meta_map.entry(*nonce_pubkey).or_default();
+			meta.is_nonce = true;
+		}
 		if let Some(payer) = &payer {
 			let meta = key_meta_map.entry(*payer).or_default();
 			meta.is_signer = true;
@@ -413,11 +417,11 @@ impl CompiledKeys {
 	) -> Result<Option<(MessageAddressTableLookup, LoadedAddresses)>, CompileError> {
 		let (writable_indexes, drained_writable_keys) = self
 			.try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
-				!meta.is_signer && !meta.is_invoked && meta.is_writable
+				!meta.is_signer && !meta.is_invoked && !meta.is_nonce && meta.is_writable
 			})?;
 		let (readonly_indexes, drained_readonly_keys) = self
 			.try_drain_keys_found_in_lookup_table(&lookup_table_account.addresses, |meta| {
-				!meta.is_signer && !meta.is_invoked && !meta.is_writable
+				!meta.is_signer && !meta.is_invoked && !meta.is_nonce && !meta.is_writable
 			})?;
 
 		// Don't extract lookup if no keys were found
@@ -468,11 +472,30 @@ impl CompiledKeys {
 	}
 }
 
+// inlined to avoid solana_nonce dep
+const NONCED_TX_MARKER_IX_INDEX: usize = 0;
+// inlined to avoid solana_system_interface and bincode deps
+const ADVANCE_NONCE_PREFIX: [u8; 4] = [4, 0, 0, 0];
+
+fn get_nonce_pubkey(instructions: &[Instruction]) -> Option<&Pubkey> {
+	let ix = instructions.get(NONCED_TX_MARKER_IX_INDEX)?;
+	if consts::SYSTEM_PROGRAM_ID != ix.program_id.into() {
+		return None;
+	}
+
+	if ix.data.get(0..4) != Some(&ADVANCE_NONCE_PREFIX[..]) {
+		return None;
+	}
+
+	ix.accounts.first().map(|meta| &meta.pubkey)
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct CompiledKeyMeta {
 	is_signer: bool,
 	is_writable: bool,
 	is_invoked: bool,
+	is_nonce: bool,
 }
 
 pub fn position(keys: &[Pubkey], key: &Pubkey) -> u8 {
