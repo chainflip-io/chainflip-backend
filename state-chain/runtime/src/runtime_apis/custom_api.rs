@@ -18,7 +18,7 @@ pub mod types;
 
 use crate::runtime_apis::types::*;
 
-use crate::{chainflip::Offence, Runtime, RuntimeSafeMode};
+use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
 use cf_amm::{
 	common::PoolPairsMap,
 	math::{Amount, Tick},
@@ -30,8 +30,9 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, NetworkEnvironment, SemVer,
+	chains::Bitcoin, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
+	BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use core::{ops::Range, str};
@@ -75,7 +76,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(9)]
+	#[api_version(10)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -183,7 +184,9 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
-		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo;
+		#[changed_in(10)]
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<String>;
+		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
@@ -221,6 +224,7 @@ decl_runtime_apis!(
 			retry_duration: BlockNumber,
 			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> Result<(), DispatchErrorWithMessage>;
+		#[changed_in(10)]
 		fn cf_request_swap_parameter_encoding(
 			broker: AccountId32,
 			source_asset: Asset,
@@ -233,6 +237,18 @@ decl_runtime_apis!(
 			affiliate_fees: Affiliates<AccountId32>,
 			dca_parameters: Option<DcaParameters>,
 		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage>;
+		fn cf_request_swap_parameter_encoding(
+			broker: AccountId32,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			broker_commission: BasisPoints,
+			extra_parameters: VaultSwapExtraParametersEncoded,
+			channel_metadata: Option<CcmChannelMetadataUnchecked>,
+			boost_fee: BasisPoints,
+			affiliate_fees: Affiliates<AccountId32>,
+			dca_parameters: Option<DcaParameters>,
+		) -> Result<VaultSwapDetails<<Bitcoin as Chain>::ChainAccount>, DispatchErrorWithMessage>;
 		fn cf_decode_vault_swap_parameter(
 			broker: AccountId32,
 			vault_swap: VaultSwapDetails<String>,

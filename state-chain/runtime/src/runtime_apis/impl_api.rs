@@ -18,9 +18,11 @@ use crate::{
 	chainflip::{ethereum_sc_calls::*, *},
 	runtime_apis::{
 		custom_api::{runtime_decl_for_custom_runtime_api::CustomRuntimeApi as _, *},
+		impl_api::solana_elections::SolanaChainTrackingProvider,
 		monitoring_api::*,
 		types::*,
 	},
+	safe_mode::RuntimeSafeMode,
 	*,
 };
 use cf_amm::{
@@ -36,21 +38,21 @@ use cf_chains::{
 	cf_parameters::build_and_encode_cf_parameters,
 	eth::Address as EthereumAddress,
 	evm::{api::EvmCall, U256},
-	CcmChannelMetadataUnchecked, ChannelRefundParametersUncheckedEncoded,
+	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
 	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress, NetworkEnvironment,
-	SemVer, STABLE_ASSET,
+	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
+	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, GetBlockHeight, KeyProvider, SwapLimits,
-	SwapParameterValidation,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochKey, GetBlockHeight, KeyProvider,
+	SwapLimits, SwapParameterValidation,
 };
 use codec::{Decode, Encode};
-use core::{ops::Range, str};
+use core::ops::Range;
 use frame_support::{
 	genesis_builder_helper::build_state,
 	pallet_prelude::{TransactionSource, TransactionValidity},
@@ -71,6 +73,7 @@ use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
 	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
 };
+use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
 use pallet_cf_validator::{AssociationToOperator, DelegationAcceptance};
 use scale_info::prelude::string::String;
@@ -996,7 +999,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_min_deposit_amount(asset: Asset) -> AssetAmount {
-			chainflip::MinimumDepositProvider::get(asset)
+			<chainflip::MinimumDepositProvider as cf_traits::MinimumDeposit>::get(asset)
 		}
 
 		fn cf_egress_dust_limit(generic_asset: Asset) -> AssetAmount {
@@ -1161,7 +1164,7 @@ impl_runtime_apis! {
 
 		fn cf_broker_info(
 			account_id: AccountId,
-		) -> BrokerInfo {
+		) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount> {
 			use crate::chainflip::address_derivation::btc::derive_btc_vault_deposit_addresses;
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			BrokerInfo {
@@ -1169,7 +1172,7 @@ impl_runtime_apis! {
 					(asset, AssetBalances::get_balance(&account_id, asset))
 				).collect(),
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
-					.map(|channel| derive_btc_vault_deposit_addresses(channel).current_address()),
+					.map(|channel| derive_btc_vault_deposit_addresses(channel).current),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond()
 			}
@@ -1327,7 +1330,7 @@ impl_runtime_apis! {
 			boost_fee: BasisPoints,
 			affiliate_fees: Affiliates<AccountId>,
 			dca_parameters: Option<DcaParameters>,
-		) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+		) -> Result<VaultSwapDetails<<Bitcoin as Chain>::ChainAccount>, DispatchErrorWithMessage> {
 			let source_chain = ForeignChain::from(source_asset);
 			let destination_chain = ForeignChain::from(destination_asset);
 
