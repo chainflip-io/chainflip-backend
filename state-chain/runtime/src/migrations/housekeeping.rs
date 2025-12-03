@@ -298,7 +298,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						.into_iter()
 						.collect(),
 						7, // required signers
-						2, // num of retries
+						10, // num of retries
 					);
 
 					resubmit_solana_fetch(vec![FetchAssetParams {
@@ -349,7 +349,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						.into_iter()
 						.collect(),
 						2, // required signers
-						2, // num retries
+						10, // num retries
 					);
 
 					// Move events into the runtime upgrade events.
