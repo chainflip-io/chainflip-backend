@@ -185,7 +185,7 @@ pub mod pallet {
 
 	/// Number of proposals that have been submitted.
 	#[pallet::storage]
-	pub(super) type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
+	pub type ProposalIdCounter<T> = StorageValue<_, u32, ValueQuery>;
 
 	/// Pipeline of proposals which will get executed in the next block.
 	#[pallet::storage]
