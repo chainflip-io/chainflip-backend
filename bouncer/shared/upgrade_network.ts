@@ -112,8 +112,6 @@ async function upgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  // Ensure the runtime upgrade is finalised.
-  await sleep(10000);
 
   // We're going to take down the node, so we don't want them to be suspended.
   await submitGovernanceExtrinsic((api) =>
