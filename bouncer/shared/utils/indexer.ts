@@ -1,5 +1,11 @@
 import prisma from 'client';
-import { ChainflipExtrinsicSubmitter, createStateChainKeypair, extractExtrinsicResult, lpMutex, sleep } from 'shared/utils';
+import {
+  ChainflipExtrinsicSubmitter,
+  createStateChainKeypair,
+  extractExtrinsicResult,
+  lpMutex,
+  sleep,
+} from 'shared/utils';
 import { z } from 'zod';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import { Event } from './substrate';
@@ -16,23 +22,27 @@ export const hexString = z
 //   return new ChainflipIO(header.number.toNumber());
 // }
 
-export type Ok<T> = { ok: true; value: T, unwrap: () => T };
-export type Err<E> = { ok: false; error: E, unwrap: () => never };
+export type Ok<T> = { ok: true; value: T; unwrap: () => T };
+export type Err<E> = { ok: false; error: E; unwrap: () => never };
 export type Result<T, E> = Ok<T> | Err<E>;
 export const Ok = <T>(value: T): Ok<T> => ({ ok: true, value, unwrap: () => value });
-export const Err = <E>(error: E): Err<E> => ({ ok: false, error, unwrap: () => {
-  throw new Error(`${error}`);
-}});
+export const Err = <E>(error: E): Err<E> => ({
+  ok: false,
+  error,
+  unwrap: () => {
+    throw new Error(`${error}`);
+  },
+});
 
 // ---------------------------------
 
 export type AccountType = 'Broker' | 'Lp';
 
 export type FullAccount<T extends AccountType> = {
-  uri: `//${string}`,
-  keypair: KeyringPair,
-  type: T,
-}
+  uri: `//${string}`;
+  keypair: KeyringPair;
+  type: T;
+};
 
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
 export type WithLpAccount = WithAccount<'Lp'>;
@@ -42,7 +52,7 @@ export class ChainflipIO<Requirements> {
   readonly requirements: Requirements;
 
   constructor(requirements: Requirements) {
-    this.lastIoBlockHeight = 0; 
+    this.lastIoBlockHeight = 0;
     this.requirements = requirements;
   }
 
@@ -51,9 +61,15 @@ export class ChainflipIO<Requirements> {
     extrinsic: (api: DisposableApiPromise) => any,
   ): Promise<Result<any, string>> {
     await using chainflip = await getChainflipApi();
-    const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(this.requirements.account.keypair, lpMutex.for(this.requirements.account.uri));
+    const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
+      this.requirements.account.keypair,
+      lpMutex.for(this.requirements.account.uri),
+    );
     console.log(`Submitting extrinsic for account with uri ${this.requirements.account.uri}`);
-    const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(extrinsic(chainflip), false));
+    const result = extractExtrinsicResult(
+      chainflip,
+      await extrinsicSubmitter.submit(extrinsic(chainflip), false),
+    );
     if (result.ok) {
       console.log(`Successfully submitted`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
@@ -65,20 +81,35 @@ export class ChainflipIO<Requirements> {
 
   async eventInSameBlock<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: `${string}.${string}` | `.${string}`,
-      schema: Z
+    schema: Z,
   ): Promise<z.infer<Z>> {
-    const event = await findEvent(name, this.lastIoBlockHeight, {schema});
+    const event = await findEvent(
+      name,
+      {
+        startFromBlock: this.lastIoBlockHeight,
+        endBeforeBlock: this.lastIoBlockHeight + 1,
+      },
+      {
+        schema,
+      },
+    );
     this.lastIoBlockHeight = event.blockHeight;
 
     return event.args;
   }
 }
 
-type ValidatedEvent<Z extends z.ZodTypeAny> = Omit<Event, 'args'> & { args: z.output<Z>, blockHeight: number };
+type ValidatedEvent<Z extends z.ZodTypeAny> = Omit<Event, 'args'> & {
+  args: z.output<Z>;
+  blockHeight: number;
+};
 
 export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
   name: `${string}.${string}` | `.${string}`,
-  startFromBlock: number,
+  timing: {
+    startFromBlock: number;
+    endBeforeBlock?: number;
+  },
   {
     test = () => true,
     schema = z.any() as unknown as Z,
@@ -95,13 +126,14 @@ export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
         name: name.startsWith('.') ? { endsWith: name } : { equals: name },
         block: {
           height: {
-            gte: startFromBlock
-          }
-        }
+            gte: timing.startFromBlock,
+            lt: timing.endBeforeBlock,
+          },
+        },
       },
       include: {
-        block: true
-      }
+        block: true,
+      },
     });
 
     event = events.find((e) => {

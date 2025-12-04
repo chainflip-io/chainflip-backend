@@ -37,21 +37,23 @@ export async function stopBoosting(
   lpUri = '//LP_BOOST',
   errorOnFail: boolean = true,
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
-
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const extrinsicResult = await cf.submitExtrinsic((api) => 
-    api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier)
-  )
+  const extrinsicResult = await cf.submitExtrinsic((api) =>
+    api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
+  );
 
   if (extrinsicResult.ok) {
     logger.info('waiting for stop boosting event');
-    return cf.eventInSameBlock(`LendingPools.StoppedBoosting`, 
-      lendingPoolsStoppedBoosting.refine((event) =>
-        event.boosterId === cf.requirements.account.keypair.address &&
-        event.boostPool.asset === asset &&
-        event.boostPool.tier === boostTier,
-    ));
+    return cf.eventInSameBlock(
+      `LendingPools.StoppedBoosting`,
+      lendingPoolsStoppedBoosting.refine(
+        (event) =>
+          event.boosterId === cf.requirements.account.keypair.address &&
+          event.boostPool.asset === asset &&
+          event.boostPool.tier === boostTier,
+      ),
+    );
   } else {
     logger.info(`Already stopped boosting (${extrinsicResult.error})`);
     return undefined;
@@ -77,20 +79,22 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await cf.submitExtrinsic(
-    (api) => api.tx.lendingPools.addBoostFunds(
+  await cf.submitExtrinsic((api) =>
+    api.tx.lendingPools.addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
       boostTier,
     ),
   );
 
-  const event = await cf.eventInSameBlock('LendingPools.BoostFundsAdded', 
-    lendingPoolsBoostFundsAdded.refine((event) => 
-      event.boosterId === cf.requirements.account.keypair.address &&
-      event.boostPool.asset === asset &&
-      event.boostPool.tier === boostTier,
-    )
+  const event = await cf.eventInSameBlock(
+    'LendingPools.BoostFundsAdded',
+    lendingPoolsBoostFundsAdded.refine(
+      (event) =>
+        event.boosterId === cf.requirements.account.keypair.address &&
+        event.boostPool.asset === asset &&
+        event.boostPool.tier === boostTier,
+    ),
   );
 
   return event;
@@ -104,11 +108,13 @@ async function testBoostingForAsset(
   amount: number,
   testContext: TestContext,
 ) {
-  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({account: {
-    uri: lpUri,
-    keypair: createStateChainKeypair(lpUri),
-    type: 'Lp',
-  }});
+  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
+    account: {
+      uri: lpUri,
+      keypair: createStateChainKeypair(lpUri),
+      type: 'Lp',
+    },
+  });
 
   const logger = testContext.logger.child({ boostAsset: asset, boostFee });
   logger.debug(`Testing boosting`);
@@ -228,8 +234,7 @@ async function testBoostingForAsset(
 
   // Compare the fees collected with the expected amount
   const boostFeesCollected =
-    stoppedBoostingEvent?.unlockedAmount -
-    amountToFineAmountBigInt(amount, asset);
+    stoppedBoostingEvent?.unlockedAmount - amountToFineAmountBigInt(amount, asset);
   logger.debug('Boost fees collected:', boostFeesCollected);
   const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
   assert.strictEqual(

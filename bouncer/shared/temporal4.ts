@@ -8,7 +8,15 @@ import { globalLogger } from './utils/logger';
 // for exmple
 import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { Event, getChainflipApi, observeEvent } from './utils/substrate';
-import { amountToFineAmount, assetDecimals, ChainflipExtrinsicSubmitter, createStateChainKeypair, lpMutex, shortChainFromAsset, sleep } from './utils';
+import {
+  amountToFineAmount,
+  assetDecimals,
+  ChainflipExtrinsicSubmitter,
+  createStateChainKeypair,
+  lpMutex,
+  shortChainFromAsset,
+  sleep,
+} from './utils';
 import assert from 'assert';
 import { ChainflipIO, findEvent, FullAccount, WithAccount } from './utils/indexer';
 import { access } from 'fs';
@@ -20,7 +28,7 @@ import { access } from 'fs';
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
 export async function addBoostFunds(
-//   logger: Logger,
+  //   logger: Logger,
   asset: Asset,
   boostTier: number,
   amount: number,
@@ -37,7 +45,7 @@ export async function addBoostFunds(
   };
 
   const chainflip: ChainflipIO<WithAccount> = new ChainflipIO({
-    account: lp
+    account: lp,
   });
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
@@ -58,12 +66,15 @@ export async function addBoostFunds(
   // const blockHeight = (result as any).blockNumber.toNumber();
   // logger.info(`Blockheight is ${blockHeight}... Sleeping`);
 
-  const event = await chainflip.eventInSameBlock('LendingPools.BoostFundsAdded',
-    lendingPoolsBoostFundsAdded.refine((event) => 
-          event.boostPool.tier === boostTier &&
-          event.amount === BigInt(fineAmount) &&
-          event.boosterId === lp.keypair.address
-    ));
+  const event = await chainflip.eventInSameBlock(
+    'LendingPools.BoostFundsAdded',
+    lendingPoolsBoostFundsAdded.refine(
+      (event) =>
+        event.boostPool.tier === boostTier &&
+        event.amount === BigInt(fineAmount) &&
+        event.boosterId === lp.keypair.address,
+    ),
+  );
 
   logger.info(`Success! ${event.boosterId}`);
   return event.boosterId;
@@ -74,30 +85,28 @@ export async function addBoostFunds(
 
 // console.log(`encoded: ${val}`);
 
-
-
-function zLiteralObject<T extends Record<string, string | number | boolean | object>>(obj: T): z.AnyZodObject {
+function zLiteralObject<T extends Record<string, string | number | boolean | object>>(
+  obj: T,
+): z.AnyZodObject {
   return z.object(
     Object.fromEntries(
       Object.entries(obj).map(([k, v]) => {
         if (typeof v === 'object') {
-          return [k, zLiteralObject(v)]
+          return [k, zLiteralObject(v)];
         } else {
           return [k, z.literal(v)];
         }
-      })
-    ) as { [K in keyof T]: z.ZodLiteral<T[K]> }
+      }),
+    ) as { [K in keyof T]: z.ZodLiteral<T[K]> },
   );
 }
-
 
 type ZodObjectShape = Record<string, z.ZodTypeAny>;
 
 function literalSubsetOf<
-  S extends z.ZodObject<any>,                // original Zod schema
-  L extends Partial<z.infer<S>>,             // subset of S, type-checked
+  S extends z.ZodObject<any>, // original Zod schema
+  L extends Partial<z.infer<S>>, // subset of S, type-checked
 >(schema: S, literalObject: L) {
-
   // Runtime validation: ensure every field in L conforms to S
   // const shape = schema.shape;
   // for (const key in literalObject) {
@@ -106,7 +115,7 @@ function literalSubsetOf<
 
   // Build literal schema
   const literalShape = Object.fromEntries(
-    Object.entries(literalObject).map(([k, v]) => [k, z.literal(v)])
+    Object.entries(literalObject).map(([k, v]) => [k, z.literal(v)]),
   ) as {
     [K in keyof L]: z.ZodLiteral<L[K]>;
   };
@@ -117,9 +126,9 @@ function literalSubsetOf<
 }
 
 const schema = z.object({
-  a: z.literal("hello"),
-  b: z.number()
-})
+  a: z.literal('hello'),
+  b: z.number(),
+});
 
 // const bla = z.literal({a: 'hello'})
 
@@ -137,6 +146,5 @@ const schema = z.object({
 //   b: 3,
 //   a: "hello"
 // })
-
 
 addBoostFunds('Btc', 5, 0.1, '//LP_API');

@@ -515,8 +515,8 @@ type AbortableObserver<Z extends z.ZodTypeAny> = {
 };
 
 type TemporalOptions = {
-  startFrom: number,
-}
+  startFrom: number;
+};
 
 export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   logger: Logger,
@@ -544,7 +544,7 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     abortable = false,
     stopAfter = 'Any',
     schema,
-    temporalOptions
+    temporalOptions,
   }: Options<Z> | AbortableOptions<Z> = {},
 ) {
   const [expectedSection, expectedMethod] = eventName.split(':');
@@ -559,17 +559,17 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
   //     return schema.safeParse(event).success;
   //   };
   // } else {
-    newTestFunction = (event: Event<any>) => {
-        if (
-          event.name.section.includes(expectedSection) &&
-          event.name.method.includes(expectedMethod)
-        ) {
-          logger.info(`parsing event ${JSON.stringify(event)}`);
-          return (test(eventSchema.parse(event)))
-        } else {
-          return false
-        }
+  newTestFunction = (event: Event<any>) => {
+    if (
+      event.name.section.includes(expectedSection) &&
+      event.name.method.includes(expectedMethod)
+    ) {
+      logger.info(`parsing event ${JSON.stringify(event)}`);
+      return test(eventSchema.parse(event));
+    } else {
+      return false;
     }
+  };
   // }
 
   const controller = abortable ? new AbortController() : undefined;
@@ -637,7 +637,9 @@ export function observeEvents<Z extends z.ZodTypeAny = z.ZodTypeAny>(
       const difference = latestResult.value.header.number.toNumber() - temporalOptions.startFrom;
       logger.info(`difference is: ${difference}`);
       if (difference > 0) {
-        logger.info(`We want to check starting from ${temporalOptions.startFrom}, but current block is ${difference} blocks in the future. Checking ${difference} historical blocks.`);
+        logger.info(
+          `We want to check starting from ${temporalOptions.startFrom}, but current block is ${difference} blocks in the future. Checking ${difference} historical blocks.`,
+        );
         historicalCheckBlocks = difference;
       }
     }
@@ -760,7 +762,7 @@ export function observeEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     timeoutSeconds,
     abortable,
     temporalOptions,
-    schema
+    schema,
   });
 
   return {
