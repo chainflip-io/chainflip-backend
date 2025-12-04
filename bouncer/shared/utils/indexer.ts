@@ -51,9 +51,13 @@ export class ChainflipIO<Requirements> {
   private lastIoBlockHeight: number;
   readonly requirements: Requirements;
 
+  // state logging
+  private actions: string[];
+
   constructor(requirements: Requirements) {
     this.lastIoBlockHeight = 0;
     this.requirements = requirements;
+    this.actions = [];
   }
 
   async submitExtrinsic<Data extends Requirements & { account: FullAccount<AccountType> }>(
@@ -65,16 +69,27 @@ export class ChainflipIO<Requirements> {
       this.requirements.account.keypair,
       lpMutex.for(this.requirements.account.uri),
     );
-    console.log(`Submitting extrinsic for account with uri ${this.requirements.account.uri}`);
-    const result = extractExtrinsicResult(
-      chainflip,
-      await extrinsicSubmitter.submit(extrinsic(chainflip), false),
-    );
+    const ext = extrinsic(chainflip);
+
+    // generate readable description for logging
+    const human = ext.toHuman();
+    const section = human.method.section;
+    const method = human.method.method;
+    const args = human.method.args;
+    const readable = `${section}.${method}(${JSON.stringify(args)})`;
+
+    console.log(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
+    this.actions.push(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
+
+    // submit
+    const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(ext, false));
     if (result.ok) {
       console.log(`Successfully submitted`);
+      this.actions.push(` => Done`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
     } else {
       console.log(`Encountered error when submitting extrinsic: ${result.error}`);
+      this.actions.push(` => failed`);
     }
     return result;
   }
@@ -83,6 +98,7 @@ export class ChainflipIO<Requirements> {
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
+    this.actions.push(`Waiting for event ${name}`);
     const event = await findEvent(
       name,
       {
@@ -94,8 +110,15 @@ export class ChainflipIO<Requirements> {
       },
     );
     this.lastIoBlockHeight = event.blockHeight;
+    this.actions.push(`Done`);
 
     return event.args;
+  }
+
+  printActions() {
+    for (const action of this.actions) {
+      console.log(` - ${action}`);
+    }
   }
 }
 

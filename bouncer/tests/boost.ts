@@ -34,8 +34,6 @@ export async function stopBoosting(
   logger: Logger,
   asset: Asset,
   boostTier: number,
-  lpUri = '//LP_BOOST',
-  errorOnFail: boolean = true,
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
@@ -67,15 +65,8 @@ export async function addBoostFunds(
   asset: Asset,
   boostTier: number,
   amount: number,
-  lpUri = '//LP_BOOST',
 ): Promise<z.infer<typeof lendingPoolsBoostFundsAdded>> {
-  // await using chainflip = await getChainflipApi();
-  // const lp = createStateChainKeypair(lpUri);
-  // const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
-
   assert(boostTier > 0, 'Boost tier must be greater than 0');
-
-  // const events = await eventsStartingFromNow();
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
@@ -120,7 +111,7 @@ async function testBoostingForAsset(
   logger.debug(`Testing boosting`);
 
   // Start with a clean slate by stopping boosting before the test
-  const preTestStopBoostingEvent = await stopBoosting(cf, logger, asset, boostFee, lpUri, false);
+  const preTestStopBoostingEvent = await stopBoosting(cf, logger, asset, boostFee);
   assert.strictEqual(
     preTestStopBoostingEvent?.pendingBoosts.length ?? 0,
     0,
@@ -139,7 +130,7 @@ async function testBoostingForAsset(
 
   // Add boost funds
   await depositLiquidity(logger, asset, amount * 1.01, false, lpUri);
-  await addBoostFunds(cf, logger, asset, boostFee, amount, lpUri);
+  await addBoostFunds(cf, logger, asset, boostFee, amount);
 
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
@@ -224,7 +215,7 @@ async function testBoostingForAsset(
   );
 
   // Stop boosting
-  const stoppedBoostingEvent = await stopBoosting(cf, logger, asset, boostFee, lpUri)!;
+  const stoppedBoostingEvent = await stopBoosting(cf, logger, asset, boostFee)!;
   logger.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
     stoppedBoostingEvent?.pendingBoosts.length,
@@ -242,6 +233,8 @@ async function testBoostingForAsset(
     expectedIncrease,
     'Unexpected amount of fees earned from boosting',
   );
+
+  cf.printActions();
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
