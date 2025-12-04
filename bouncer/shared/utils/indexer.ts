@@ -1,40 +1,80 @@
 import prisma from 'client';
-import { sleep } from 'shared/utils';
+import { ChainflipExtrinsicSubmitter, createStateChainKeypair, extractExtrinsicResult, lpMutex, sleep } from 'shared/utils';
 import { z } from 'zod';
-import { getChainflipApi } from './substrate';
+import { DisposableApiPromise, getChainflipApi } from './substrate';
+import { Event } from './substrate';
+import { globalLogger } from './logger';
+import { KeyringPair } from '@polkadot/keyring/types';
 
 export const hexString = z
   .string()
   .refine((v): v is `0x${string}` => /^0x[0-9a-fA-F]*$/.test(v), { message: 'Invalid hex string' });
 
-export async function eventsFromCurrentBlock(): Promise<EventsFromBlock> {
-  await using chainflip = await getChainflipApi();
-  const header = await chainflip.rpc.chain.getHeader();
-  return new EventsFromBlock(header.number.toNumber());
+// export async function eventsFromCurrentBlock(): Promise<ChainflipIO> {
+//   await using chainflip = await getChainflipApi();
+//   const header = await chainflip.rpc.chain.getHeader();
+//   return new ChainflipIO(header.number.toNumber());
+// }
+
+export type Ok<T> = { ok: true; value: T, unwrap: () => T };
+export type Err<E> = { ok: false; error: E, unwrap: () => never };
+export type Result<T, E> = Ok<T> | Err<E>;
+export const Ok = <T>(value: T): Ok<T> => ({ ok: true, value, unwrap: () => value });
+export const Err = <E>(error: E): Err<E> => ({ ok: false, error, unwrap: () => {
+  throw new Error(`${error}`);
+}});
+
+// ---------------------------------
+
+export type AccountType = 'Broker' | 'Lp';
+
+export type FullAccount<T extends AccountType> = {
+  uri: `//${string}`,
+  keypair: KeyringPair,
+  type: T,
 }
 
-export class EventsFromBlock {
-  startFrom: number;
-  constructor(startFrom: number) {
-    this.startFrom = startFrom;
+export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
+export type WithLpAccount = WithAccount<'Lp'>;
+
+export class ChainflipIO<Requirements> {
+  private lastIoBlockHeight: number;
+  readonly requirements: Requirements;
+
+  constructor(requirements: Requirements) {
+    this.lastIoBlockHeight = 0; 
+    this.requirements = requirements;
   }
-  async find<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+
+  async submitExtrinsic<Data extends Requirements & { account: FullAccount<AccountType> }>(
+    this: ChainflipIO<Data>,
+    extrinsic: (api: DisposableApiPromise) => any,
+  ): Promise<Result<any, string>> {
+    await using chainflip = await getChainflipApi();
+    const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(this.requirements.account.keypair, lpMutex.for(this.requirements.account.uri));
+    console.log(`Submitting extrinsic for account with uri ${this.requirements.account.uri}`);
+    const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(extrinsic(chainflip), false));
+    if (result.ok) {
+      console.log(`Successfully submitted`);
+      this.lastIoBlockHeight = result.value.blockNumber.toNumber();
+    } else {
+      console.log(`Encountered error when submitting extrinsic: ${result.error}`);
+    }
+    return result;
+  }
+
+  async eventInSameBlock<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: `${string}.${string}` | `.${string}`,
-    // {
-      // test = () => true,
-      // schema = z.any() as unknown as Z,
-    // }
-    // : {
-      // test?: (data: z.output<Z>) => boolean;
       schema: Z
-    // } = {},
-  ): Promise<ValidatedEvent<Z>> {
-    const event = await findEvent(name, this.startFrom, {schema});
-    return event;
+  ): Promise<z.infer<Z>> {
+    const event = await findEvent(name, this.lastIoBlockHeight, {schema});
+    this.lastIoBlockHeight = event.blockHeight;
+
+    return event.args;
   }
 }
 
-type ValidatedEvent<Z extends z.ZodTypeAny> = Omit<Event, 'args'> & { args: z.output<Z> };
+type ValidatedEvent<Z extends z.ZodTypeAny> = Omit<Event, 'args'> & { args: z.output<Z>, blockHeight: number };
 
 export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
   name: `${string}.${string}` | `.${string}`,
@@ -59,6 +99,9 @@ export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
           }
         }
       },
+      include: {
+        block: true
+      }
     });
 
     event = events.find((e) => {
@@ -71,6 +114,7 @@ export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
 
   // return parsed args and replace
   event.args = schema.parse(event.args);
+  event.height = event.block.height;
 
-  return event.args as unknown as ValidatedEvent<Z>;
+  return event as unknown as ValidatedEvent<Z>;
 };

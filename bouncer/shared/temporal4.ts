@@ -10,7 +10,8 @@ import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { Event, getChainflipApi, observeEvent } from './utils/substrate';
 import { amountToFineAmount, assetDecimals, ChainflipExtrinsicSubmitter, createStateChainKeypair, lpMutex, shortChainFromAsset, sleep } from './utils';
 import assert from 'assert';
-import { findEvent } from './utils/indexer';
+import { ChainflipIO, findEvent, FullAccount, WithAccount } from './utils/indexer';
+import { access } from 'fs';
 
 // const findAwaitingActivationEvent = <Z extends z.ZodTypeAny>(chain: Chain, schema: Z) =>
 //   findEvent(`${chain}Vault.AwaitingGovernanceActivation`, {
@@ -23,12 +24,21 @@ export async function addBoostFunds(
   asset: Asset,
   boostTier: number,
   amount: number,
-  lpUri = '//LP_BOOST',
+  lpUri: `//${string}` = '//LP_BOOST',
 ): Promise<string> {
   const logger = globalLogger;
-  await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
+  // await using chainflip = await getChainflipApi();
+  // const lp = createStateChainKeypair(lpUri);
+  // const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
+  const lp: FullAccount = {
+    uri: lpUri,
+    keypair: createStateChainKeypair(lpUri),
+    type: 'Lp',
+  };
+
+  const chainflip: ChainflipIO<WithAccount> = new ChainflipIO({
+    account: lp
+  });
 
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
@@ -36,45 +46,27 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  const result = await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.addBoostFunds(
+
+  await chainflip.submitExtrinsic((api) =>
+    api.tx.lendingPools.addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       fineAmount,
       boostTier,
     ),
   );
-  logger.info(`Extrinsic result is: ${JSON.stringify(result)}`);
-  const blockHeight = (result as any).blockNumber.toNumber();
-  logger.info(`Blockheight is ${blockHeight}... Sleeping`);
+  // logger.info(`Extrinsic result is: ${JSON.stringify(result)}`);
+  // const blockHeight = (result as any).blockNumber.toNumber();
+  // logger.info(`Blockheight is ${blockHeight}... Sleeping`);
 
-  const schema = lendingPoolsBoostFundsAdded;
-
-  const id = await findEvent(`LendingPools.BoostFundsAdded`, blockHeight, {
-    schema: lendingPoolsBoostFundsAdded.refine((event) => {
-        return event.boostPool.asset === asset &&
+  const event = await chainflip.eventInSameBlock('LendingPools.BoostFundsAdded',
+    lendingPoolsBoostFundsAdded.refine((event) => 
           event.boostPool.tier === boostTier &&
           event.amount === BigInt(fineAmount) &&
-          event.boosterId === lp.address;
-    },
-    ),
-    test: (args) => {
-      logger.info(`testing ${args.boosterId}, ${args.amount}, ${args.boostPool.asset}`);
-      // logger.info(`testing ${event.boosterId} vs ${lp.address}`);
+          event.boosterId === lp.keypair.address
+    ));
 
-      return true; // event.boosterId === lp.address;
-    }
-  }
-).then((e) => {
-    console.log('promise finished!');
-    logger.info(`promise finished with: ${e.args}`);
-    return e.args.boosterId;
-  });
-
-  console.log(`addrses: ${lp.address}`);
-  console.log(`event ad: ${id}`)
-
-  logger.info(`Success! ${id}`);
-  return id;
+  logger.info(`Success! ${event.boosterId}`);
+  return event.boosterId;
 }
 
 // import * as ss58 from '@chainflip/utils/ss58';
