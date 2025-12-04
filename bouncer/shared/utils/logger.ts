@@ -110,12 +110,12 @@ export const globalLogger: Logger = pino(
   ]),
 );
 
-process.on('uncaughtException', (err) => {
-  globalLogger.error(err);
-});
-process.on('unhandledRejection', (reason, promise) => {
-  globalLogger.error({ reason, promise });
-});
+// process.on('uncaughtException', (err) => {
+//   globalLogger.error(err);
+// });
+// process.on('unhandledRejection', (reason, promise) => {
+//   globalLogger.error({ reason, promise });
+// });
 
 // Creates a child logger and appends the module name to any existing module names on the logger
 export function loggerChild(parentLogger: Logger, name: string): Logger {
@@ -138,3 +138,13 @@ export function loggerError(parentLogger: Logger, error: Error): Error {
 export function throwError(parentLogger: Logger, error: Error): never {
   throw loggerError(parentLogger, error);
 }
+
+declare global {
+  interface BigInt {
+    toJSON(): string;
+  }
+}
+
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
