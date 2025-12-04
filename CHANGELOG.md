@@ -6,6 +6,7 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Features
 
+- Solana nonces only in static accounts simd-0242 (#6291)
 - Historical signing ([#6276](https://github.com/chainflip-io/chainflip-backend/issues/6276))
 - Faster EIP encoding implementation ([#6277](https://github.com/chainflip-io/chainflip-backend/issues/6277))
 - Oracle prices not required for interest payments ([#6280](https://github.com/chainflip-io/chainflip-backend/issues/6280))
