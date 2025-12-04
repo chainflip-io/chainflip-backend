@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	retrier::{Attempt, RequestLog, RetrierClient},
+	retrier::{Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
 	settings::{HttpEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -74,6 +74,7 @@ impl SolRetryRpcClient {
 				rpc_client,
 				backup_rpc_client,
 				SOLANA_RPC_TIMEOUT,
+				MAX_RPC_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			witness_period,

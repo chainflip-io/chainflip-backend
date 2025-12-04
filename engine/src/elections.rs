@@ -17,7 +17,7 @@
 pub mod voter_api;
 
 use crate::{
-	retrier::{RequestLog, RetrierClient},
+	retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
 	state_chain_observer::client::{
 		chain_api::ChainApi,
 		electoral_api::ElectoralApi,
@@ -89,6 +89,7 @@ where
 				futures::future::ready(voter),
 				None,
 				INITIAL_VOTER_REQUEST_TIMEOUT,
+				MAX_RPC_RETRY_DELAY,
 				MAXIMUM_CONCURRENT_VOTER_REQUESTS,
 			),
 			voter_name,

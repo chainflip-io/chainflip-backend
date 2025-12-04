@@ -27,7 +27,9 @@ use futures_core::Future;
 
 use crate::{
 	evm::rpc::{EvmRpcApi, EvmSigningRpcApi},
-	retrier::{Attempt, RequestLog, RetrierClient},
+	retrier::{
+		Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY,
+	},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -84,6 +86,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 				rpc_client,
 				backup_rpc_client,
 				ETHERS_RPC_TIMEOUT,
+				MAX_RPC_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
@@ -92,6 +95,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 				futures::future::ready(sub_client),
 				backup_sub_client.map(futures::future::ready),
 				ETHERS_RPC_TIMEOUT,
+				MAX_SUBSCRIPTION_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			chain_name,

@@ -57,6 +57,9 @@ pub enum RetryLimit {
 	Limit(Attempt),
 }
 
+pub const MAX_RPC_RETRY_DELAY: Duration = Duration::from_secs(10 * 60);
+pub const MAX_SUBSCRIPTION_RETRY_DELAY: Duration = Duration::from_secs(60);
+
 pub(crate) type TypedFutureGenerator<T, Client> = Pin<
 	Box<
 		dyn Fn(Client) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>>
@@ -94,7 +97,7 @@ impl fmt::Display for RequestLog {
 	}
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 pub enum PrimaryOrBackup {
 	Primary,
 	Backup,
@@ -207,11 +210,12 @@ impl SubmissionHolder {
 		next_output
 	}
 }
-
-const MAX_DELAY_TIME_MILLIS: Duration = Duration::from_secs(10 * 60);
-
-fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Duration {
-	min(MAX_DELAY_TIME_MILLIS, initial_request_timeout.saturating_mul(2u32.saturating_pow(attempt)))
+fn max_sleep_duration(
+	initial_request_timeout: Duration,
+	max_retry_delay: Duration,
+	attempt: u32,
+) -> Duration {
+	min(max_retry_delay, initial_request_timeout.saturating_mul(2u32.saturating_pow(attempt)))
 }
 
 // Creates a future of a particular submission.
@@ -223,6 +227,7 @@ fn submission_future<Client: Clone + Send + Sync + 'static>(
 	request_id: RequestId,
 	initial_request_timeout: Duration,
 	attempt: Attempt,
+	max_retry_delay: Duration,
 	primary_or_backup: PrimaryOrBackup,
 ) -> SubmissionFuture {
 	let submission_fut = submission_fn(client);
@@ -234,7 +239,7 @@ fn submission_future<Client: Clone + Send + Sync + 'static>(
 			retry_limit,
 			primary_or_backup,
 			match tokio::time::timeout(
-				max_sleep_duration(initial_request_timeout, attempt),
+				max_sleep_duration(initial_request_timeout, max_retry_delay, attempt),
 				submission_fut,
 			)
 			.await
@@ -417,6 +422,7 @@ where
 		primary_client_fut: ClientFut,
 		backup_client_fut: Option<ClientFut>,
 		initial_request_timeout: Duration,
+		max_retry_delay: Duration,
 		maximum_concurrent_submissions: u32,
 	) -> Self {
 		let (request_sender, mut request_receiver) = mpsc::channel::<RequestSent<Client>>(1);
@@ -439,7 +445,7 @@ where
 
 					if let Some((client, primary_or_backup)) = client_selector.select_client(retry_limit).await {
 						tracing::debug!("Retrier {name}: Received request `{request_log}` assigning request_id `{request_id}` and requesting with `{primary_or_backup:?}`");
-						submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, primary_or_backup));
+						submission_holder.push(submission_future(client, request_log, retry_limit, &closure, request_id, initial_request_timeout, 0, max_retry_delay, primary_or_backup));
 						request_holder.insert(request_id, (response_sender, closure));
 					} else {
 						tracing::warn!("Retrier {name}: No clients available for request when received `{request_log}` with id `{request_id}`. Dropping request.");
@@ -456,7 +462,7 @@ where
 						Err((e, attempt)) => {
 							// Apply exponential back off with jitter to the retries.
 							// We avoid small delays by always having a time of at least half.
-							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
+							let half_max = max_sleep_duration(initial_request_timeout, max_retry_delay, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
 
 							let error_message = format!("Retrier {name}: Error for request `{request_log}` with id `{request_id}` requested with `{primary_or_backup:?}`, attempt `{attempt}`: {e}. Delaying for {:?}", sleep_duration);
@@ -497,7 +503,7 @@ where
 								// This await should always return immediately since we must already have a client if we've already made a request.
 								if let Some((next_client, next_primary_or_backup)) = client_selector.select_client(retry_limit).await {
 									tracing::trace!("Retrier {name}: Retrying request `{request_log}` with id `{request_id}` and client `{next_primary_or_backup:?}`, attempt `{next_attempt}`");
-									submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, next_primary_or_backup));
+									submission_holder.push(submission_future(next_client, request_log, retry_limit, closure, request_id, initial_request_timeout, next_attempt, max_retry_delay, next_primary_or_backup));
 								} else {
 									tracing::warn!("Retrier {name}: No clients available for request `{request_log}` with id `{request_id}`. Dropping request.");
 									request_holder.remove(&request_id);
@@ -563,7 +569,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use std::any::Any;
+	use std::{any::Any, collections::BTreeSet};
 
 	use cf_utilities::task_scope::task_scope;
 	use fmt::Debug;
@@ -598,14 +604,30 @@ mod tests {
 		assert_eq!(downcasted, &expected);
 	}
 
+	#[test]
+	fn subscription_delay_is_valid() {
+		// Because subscription client only make a single request at a time (`subscribe`),
+		// if the parameters are set incorrectly, it is possible for them to get into a state where
+		// backup client is never used due to `TRY_PRIMARY_AFTER` being shorter than the delay
+		// between two consecutive requests.
+		assert!(MAX_SUBSCRIPTION_RETRY_DELAY < TRY_PRIMARY_AFTER);
+	}
+
 	#[tokio::test]
 	async fn requests_pulled_in_different_order_works() {
 		task_scope(|scope| {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -654,8 +676,15 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -692,8 +721,15 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -731,8 +767,15 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -776,8 +819,15 @@ mod tests {
 
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 2);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					2,
+				);
 
 				// Requests 1 and 2 fill the future buffer.
 				const REQUEST_1: u32 = 32;
@@ -854,8 +904,15 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				retrier_client
 					.request_with_limit(
@@ -892,6 +949,7 @@ mod tests {
 					get_client(false),
 					Some(get_client(true)),
 					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
 					100,
 				);
 
@@ -985,6 +1043,7 @@ mod tests {
 					get_client_primary_or_backup(PrimaryOrBackup::Primary),
 					Some(get_client_primary_or_backup(PrimaryOrBackup::Backup)),
 					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
 					100,
 				);
 
@@ -1063,6 +1122,96 @@ mod tests {
 		.unwrap();
 	}
 
+	/// This test demonstrates that we continue trying backup even after it failed a large number of
+	/// times as long as max retry duration does not exceed `TRY_PRIMARY_AFTER`.
+	#[tokio::test(start_paused = true)]
+	async fn backup_does_get_retried_after_many_failures() {
+		thread_local! {
+			pub static ATTEMPTED: std::cell::RefCell<u32> = std::cell::RefCell::new(0);
+			pub static TRIED_CLIENTS: std::cell::RefCell<Vec<PrimaryOrBackup >> = std::cell::RefCell::new(Vec::new());
+		}
+
+		fn specific_fut_closure_err_after_one(
+			timeout: Duration,
+		) -> TypedFutureGenerator<(), PrimaryOrBackup> {
+			Box::pin(move |client| {
+				Box::pin(async move {
+					// We need to delay in the tests, else we'll resolve immediately, meaning the
+					// channel is sent down, and can theoretically be replaced using the same
+					// request id and the tests will still work despite there potentially being a
+					// bug in the implementation.
+					tokio::time::sleep(timeout).await;
+
+					let attempts = ATTEMPTED.with(|cell| *cell.borrow());
+
+					let return_val = if attempts < 100 {
+						Err(anyhow::anyhow!("Sorry, this just doesn't work."))
+					} else {
+						Ok(())
+					};
+
+					// Update attempt after attempted
+					ATTEMPTED.with(|cell| {
+						let mut attempted = cell.borrow_mut();
+						*attempted += 1;
+					});
+
+					TRIED_CLIENTS.with(|cell| {
+						let mut tried_clients = cell.borrow_mut();
+						tried_clients.push(client);
+					});
+
+					return_val
+				})
+			})
+		}
+
+		// === TEST ===
+
+		task_scope(|scope| {
+			async move {
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(300);
+
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					std::future::ready(PrimaryOrBackup::Primary),
+					Some(std::future::ready(PrimaryOrBackup::Backup)),
+					INITIAL_TIMEOUT,
+					MAX_SUBSCRIPTION_RETRY_DELAY,
+					100,
+				);
+
+				// The first request will fail, and the second request will succeed using the
+				// backup. Then the next two requests will use the backup.
+				retrier_client
+					.request(
+						RequestLog::new(1.to_string(), None),
+						specific_fut_closure_err_after_one(INITIAL_TIMEOUT),
+					)
+					.await;
+
+				tokio::time::advance(10 * MAX_SUBSCRIPTION_RETRY_DELAY).await;
+				tokio::time::resume();
+
+				// Assert that backup is among the two clients we tried at the end (after many
+				// failures):
+				assert!(TRIED_CLIENTS
+					.with(|cell| cell.borrow().clone())
+					.into_iter()
+					.rev()
+					.take(2)
+					.collect::<BTreeSet<_>>()
+					.contains(&PrimaryOrBackup::Backup));
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
 	// When we startup the clients may be initialising. If both clients are initialising than we
 	// want to exit rather than waiting forever, in the case of requests with a retry limit set such
 	// as broadcasts.
@@ -1078,6 +1227,7 @@ mod tests {
 					futures::future::pending::<()>(),
 					Some(futures::future::pending::<()>()),
 					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
 					100,
 				);
 
@@ -1106,8 +1256,15 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client =
-					RetrierClient::new(scope, "test", async move {}, None, INITIAL_TIMEOUT, 100);
+				let retrier_client = RetrierClient::new(
+					scope,
+					"test",
+					async move {},
+					None,
+					INITIAL_TIMEOUT,
+					MAX_RPC_RETRY_DELAY,
+					100,
+				);
 
 				retrier_client
 					.request(
