@@ -2,7 +2,11 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [1.12.6] - 2025-11-24
+## [1.12.7] - 2025-12-05
+
+- Revert a prior change to maintain engine compatibility.
+
+## [1.12.6] - 2025-12-03
 
 ### Fixes
 
