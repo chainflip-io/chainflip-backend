@@ -130,21 +130,6 @@ where
 		)
 	}
 
-	fn request_historical_signature_with_callback(
-		payload: <C as ChainCrypto>::Payload,
-		_epoch_index: EpochIndex,
-		_participants: BTreeSet<Self::ValidatorId>,
-		_signers_required: u32,
-		_max_retries: u32,
-		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
-	) -> Result<ThresholdSignatureRequestId, Self::Error> {
-		// Reuse the same logic as request_signature but also register the callback
-		let req_id = Self::request_signature(payload);
-		let callback = callback_generator(req_id);
-		Self::register_callback(req_id, callback)?;
-		Ok(req_id)
-	}
-
 	#[cfg(feature = "runtime-benchmarks")]
 	fn insert_signature(
 		request_id: ThresholdSignatureRequestId,

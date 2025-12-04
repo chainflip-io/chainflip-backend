@@ -63,21 +63,16 @@ fn seed_from_hashable<H: Hashable>(value: H) -> u64 {
 	u64::from_be_bytes(bytes)
 }
 
-fn eligible_authorities_from_provided_candidates(
-	candidates: BTreeSet<<Runtime as Chainflip>::ValidatorId>,
-	exclude_ids: &BTreeSet<<Runtime as Chainflip>::ValidatorId>,
-) -> BTreeSet<<Runtime as Chainflip>::ValidatorId> {
-	candidates.difference(exclude_ids).cloned().collect()
-}
-
 fn eligible_authorities(
 	at_epoch: EpochIndex,
 	exclude_ids: &BTreeSet<<Runtime as Chainflip>::ValidatorId>,
 ) -> BTreeSet<<Runtime as Chainflip>::ValidatorId> {
-	eligible_authorities_from_provided_candidates(
-		HistoricalAuthorities::<Runtime>::get(at_epoch).into_iter().collect(),
-		exclude_ids,
-	)
+	HistoricalAuthorities::<Runtime>::get(at_epoch)
+		.into_iter()
+		.collect::<BTreeSet<_>>()
+		.difference(exclude_ids)
+		.cloned()
+		.collect()
 }
 
 /// Nominates pseudo-random signers based on the provided seed.
@@ -108,16 +103,17 @@ impl cf_traits::BroadcastNomination for RandomSignerNomination {
 impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 	type SignerId = <Runtime as Chainflip>::ValidatorId;
 
-	fn threshold_nomination_with_seed_from_candidates<H: Hashable>(
+	fn threshold_nomination_with_seed<H: Hashable>(
 		seed: H,
-		candidates: BTreeSet<Self::SignerId>,
-		nominees_to_select: u32,
+		epoch_index: EpochIndex,
 	) -> Option<BTreeSet<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
-			nominees_to_select as usize,
-			eligible_authorities_from_provided_candidates(
-				candidates,
+			cf_utilities::success_threshold_from_share_count(Validator::authority_count_at_epoch(
+				epoch_index,
+			)?) as usize,
+			eligible_authorities(
+				epoch_index,
 				&Reputation::validators_suspended_for(&[
 					Offence::MissedHeartbeat,
 					Offence::ParticipateSigningFailed,
@@ -126,18 +122,6 @@ impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 				]),
 			),
 		)
-	}
-
-	fn threshold_nomination_with_seed<H: Hashable>(
-		seed: H,
-		epoch_index: EpochIndex,
-	) -> Option<BTreeSet<Self::SignerId>> {
-		let candidates = HistoricalAuthorities::<Runtime>::get(epoch_index).into_iter().collect();
-		let nominees_to_select = cf_utilities::success_threshold_from_share_count(
-			Validator::authority_count_at_epoch(epoch_index)?,
-		);
-
-		Self::threshold_nomination_with_seed_from_candidates(seed, candidates, nominees_to_select)
 	}
 }
 

@@ -14,31 +14,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-	chainflip::SolEnvironment, BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner,
-	Runtime, RuntimeOrigin, SolanaBroadcaster,
+use crate::{BitcoinBroadcaster, BitcoinChainTracking, BitcoinThresholdSigner, Runtime};
+use cf_chains::btc::{
+	api::{batch_transfer::BatchTransfer, BitcoinApi},
+	deposit_address::DepositAddress,
+	BitcoinOutput, ScriptPubkey, Utxo, UtxoId, BITCOIN_DUST_LIMIT,
 };
-use cf_chains::{
-	btc::{
-		api::{batch_transfer::BatchTransfer, BitcoinApi},
-		deposit_address::DepositAddress,
-		BitcoinOutput, ScriptPubkey, Utxo, UtxoId, BITCOIN_DUST_LIMIT,
-	},
-	instances::SolanaInstance,
-	sol::{api::SolanaApi, SolAsset, SolanaCrypto, SolanaDepositFetchId},
-	AllBatch, ChainCrypto, FetchAssetParams, SetAggKeyWithAggKey, Solana,
-};
-use cf_primitives::{chains::assets::btc::Asset as BtcAsset, BroadcastId};
+use cf_primitives::chains::assets::btc::Asset as BtcAsset;
 use cf_runtime_utilities::genesis_hashes;
-use cf_traits::{Chainflip, KeyProvider};
+use cf_traits::KeyProvider;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
-use pallet_cf_broadcast::{BroadcastIdCounter, IncomingKeyAndBroadcastId};
-use pallet_cf_environment::{SolanaAvailableNonceAccounts, SolanaUnavailableNonceAccounts};
 use sp_core::H256;
-use sp_runtime::AccountId32;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
-use sp_std::{vec, vec::Vec};
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
@@ -88,90 +78,6 @@ fn f() {
 	);
 	// Check that the destination address is valid.
 	ScriptPubkey::try_from_address(DESTINATION, &cf_chains::btc::BitcoinNetwork::Mainnet).unwrap();
-}
-
-fn recover_all_solana_nonces() {
-	SolanaAvailableNonceAccounts::<Runtime>::mutate(|available| {
-		available.extend(SolanaUnavailableNonceAccounts::<Runtime>::drain())
-	});
-}
-
-fn delete_broadcast_from_broadcaster_pallet(id: BroadcastId) {
-	SolanaBroadcaster::remove_pending_broadcast(&id);
-	SolanaBroadcaster::clean_up_broadcast_storage(id);
-}
-
-fn resubmit_solana_rotation(
-	new_agg_key: <SolanaCrypto as ChainCrypto>::AggKey,
-	epoch_index: cf_primitives::EpochIndex,
-	participants: sp_std::collections::btree_set::BTreeSet<<Runtime as Chainflip>::ValidatorId>,
-	signers_required: u32,
-	max_retries: u32,
-) {
-	type CurrentKeyEpoch = pallet_cf_threshold_signature::CurrentKeyEpoch<Runtime, SolanaInstance>;
-
-	// we have to build the call with the previous epochs key, so we temporarily rewind the epoch
-	let actual_epoch_index = CurrentKeyEpoch::get();
-	CurrentKeyEpoch::set(Some(epoch_index));
-
-	let rotation_call =
-		<SolanaApi<SolEnvironment> as SetAggKeyWithAggKey<SolanaCrypto>>::new_unsigned_impl(
-			None,        // the `old_key` argument is ignored by solana
-			new_agg_key, // the new agg key we want to rotate to
-		);
-
-	// reset the epoch index to the actual value after building the call
-	CurrentKeyEpoch::set(actual_epoch_index);
-
-	match rotation_call {
-		Ok(Some(api_call)) => {
-			// we predict the broadcast id
-			let broadcast_id = BroadcastIdCounter::<Runtime, SolanaInstance>::get() + 1;
-
-			let origin = RuntimeOrigin::from(pallet_cf_governance::RawOrigin::GovernanceApproval);
-			let broadcast = true;
-			match SolanaBroadcaster::threshold_sign_and_broadcast_with_historical_key(
-				origin,
-				scale_info::prelude::boxed::Box::new(api_call),
-				epoch_index,
-				participants,
-				signers_required,
-				max_retries,
-				broadcast,
-			) {
-				Ok(_) => log::info!("successfully executed runtime call"),
-				Err(err) => log::error!("encountered error: {err:?}"),
-			}
-
-			// update the incoming key and broadcast request
-			IncomingKeyAndBroadcastId::<Runtime, SolanaInstance>::put((new_agg_key, broadcast_id));
-		},
-		Ok(None) => {
-			log::error!("Could not build rotation api call: returned None");
-		},
-		Err(err) => {
-			log::error!("Could not build rotation api call: {err:?}");
-		},
-	}
-}
-
-fn resubmit_solana_fetch(fetches: Vec<FetchAssetParams<Solana>>) {
-	let fetch_calls =
-		<SolanaApi<SolEnvironment> as AllBatch<Solana>>::new_unsigned_impl(fetches, vec![]);
-
-	match fetch_calls {
-		Ok(fetch_calls) =>
-			for (fetch_call, egress_id) in fetch_calls {
-				let (broadcast_id, ts_id) =
-					SolanaBroadcaster::threshold_sign_and_broadcast(fetch_call, None, |_| None);
-				log::info!(
-					"signed fetch call for egress ids {egress_id:?}: {broadcast_id}:{ts_id}"
-				);
-			},
-		Err(err) => {
-			log::error!("Could not build fetch api call: {err:?}");
-		},
-	}
 }
 
 pub struct NetworkSpecificHousekeeping;
@@ -236,125 +142,10 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				}
 			},
 			genesis_hashes::PERSEVERANCE => {
-				if crate::VERSION.spec_version == 1_12_06 {
-					log::info!("🧹 Resubmitting solana rotation tx for Perseverance.");
-
-					// Clear out any old events.
-					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
-					CfeEvents::<Runtime>::kill();
-					RuntimeUpgradeEvents::<Runtime>::kill();
-
-					// recover all nonces
-					recover_all_solana_nonces();
-
-					// delete the old rotation + all other stuck pending api calls
-					let broadcast_ids =
-						[2432, 2433, 2434, 2435, 2436, 2437, 2438, 2439, 2440, 2441, 2442];
-					for id in broadcast_ids {
-						delete_broadcast_from_broadcaster_pallet(id);
-					}
-
-					resubmit_solana_rotation(
-						// new agg key, double check!
-						cf_chains::sol::SolAddress(hex_literal::hex!(
-							"f24ab9a36f9156b1e3f8920d75ebeb897e53951fc1c847056375540a102f16b9"
-						)),
-						769, // the current epoch is 770, we want to sign for the previous one
-						[
-							AccountId32::new(hex_literal::hex![
-								"54550938f444501c7bfe162806226cb2329a573077bb8bb8d52a770e2c6eae12"
-							]),
-							AccountId32::new(hex_literal::hex![
-								"789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"
-							]),
-							// external validator:
-							// AccountId32::new(hex_literal::hex![
-							// 	"62c3f505c6c9ff480c83942c4946153c08f02dc5e93b9431590b872296810878"
-							// ]),
-							AccountId32::new(hex_literal::hex![
-								"7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"
-							]),
-							// external validator:
-							// AccountId32::new(hex_literal::hex![
-							// 	"169805dd9c7b0c1c4881fd8a3f98483b27c1c04dcea44b1f1bd502926be2a37b"
-							// ]),
-							AccountId32::new(hex_literal::hex![
-								"3e666e445cb15b5469cac9cbb2e3aec6e2f88ff28435353c35e7172aaa9b7c18"
-							]),
-							AccountId32::new(hex_literal::hex![
-								"7a467c9e1722b35408618a0cffc87c1e8433798e9c5a79339a10d71ede9e9d79"
-							]),
-							AccountId32::new(hex_literal::hex![
-								"fea6a1ae1029da56f4df3eb886b81443c97247f350e0b7faeb805ff747d84f70"
-							]),
-							// external validator:
-							// AccountId32::new(hex_literal::hex![
-							// 	"38bfc9cb271c312e5dfc8a675e42f61f3297fce72702d9d1a3e35dc5813d9c04"
-							// ]),
-							AccountId32::new(hex_literal::hex![
-								"e4905f40c45d7951d25587defefda85e0f148bdeb3fd04cb5fd8bef5af9abc21"
-							]),
-						]
-						.into_iter()
-						.collect(),
-						7,  // required signers
-						10, // num of retries
-					);
-
-					resubmit_solana_fetch(vec![FetchAssetParams {
-						deposit_fetch_id: SolanaDepositFetchId {
-							channel_id: 2333,
-							address: sol_prim::consts::const_address(
-								"HV99NDRovJpGyty6DfHwh7Rj37abLCceXeFysKkxhnvD",
-							),
-							bump: 251,
-						},
-						asset: SolAsset::Sol,
-					}]);
-
-					// Move events into the runtime upgrade events.
-					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
-				}
+				log::info!("🧹 No housekeeping required for Perseverance.");
 			},
 			genesis_hashes::SISYPHOS => {
-				if crate::VERSION.spec_version == 1_12_06 {
-					log::info!("🧹 Resubmitting solana rotation tx for Sisyphos.");
-
-					// Clear out any old events.
-					use pallet_cf_cfe_interface::{CfeEvents, RuntimeUpgradeEvents};
-					CfeEvents::<Runtime>::kill();
-					RuntimeUpgradeEvents::<Runtime>::kill();
-
-					// recover all nonces
-					recover_all_solana_nonces();
-
-					// delete the old broadcast
-					delete_broadcast_from_broadcaster_pallet(2933);
-
-					// create the new one
-					resubmit_solana_rotation(
-						// new agg key, double check!
-						cf_chains::sol::SolAddress(hex_literal::hex!(
-							"beca85b4bcecd87cb6f7d76e1d2652240400e1d30d8b13468fd23c0dffa40487"
-						)),
-						4733, // current epoch is 4734
-						[
-							AccountId32::new(hex_literal::hex![
-								"7a47312f9bd71d480b1e8f927fe8958af5f6345ac55cb89ef87cff5befcb0949"
-							]),
-							AccountId32::new(hex_literal::hex![
-								"7a46817c60dff154901510e028f865300452a8d7a528f573398313287c689929"
-							]),
-						]
-						.into_iter()
-						.collect(),
-						2,  // required signers
-						10, // num retries
-					);
-
-					// Move events into the runtime upgrade events.
-					RuntimeUpgradeEvents::<Runtime>::put(CfeEvents::<Runtime>::take());
-				}
+				log::info!("🧹 No housekeeping required for Sisyphos.");
 			},
 			_ => {},
 		}
@@ -369,16 +160,6 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 			genesis_hashes::BERGHAIN => {
 				let id_counter =
 					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, BitcoinInstance>::get();
-				Ok(id_counter.to_le_bytes().to_vec())
-			},
-			genesis_hashes::PERSEVERANCE => {
-				let id_counter =
-					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
-				Ok(id_counter.to_le_bytes().to_vec())
-			},
-			genesis_hashes::SISYPHOS => {
-				let id_counter =
-					pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
 				Ok(id_counter.to_le_bytes().to_vec())
 			},
 			_ => Ok(Default::default()),
@@ -405,47 +186,6 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					);
 					assert!(
 						pallet_cf_broadcast::PendingBroadcasts::<Runtime, BitcoinInstance>::get()
-							.contains(&new_id_counter),
-						"New broadcast should be pending"
-					);
-				},
-			genesis_hashes::PERSEVERANCE =>
-				if crate::VERSION.spec_version == 1_12_06 {
-					let old_id_counter = u32::from_le_bytes(
-						state
-							.try_into()
-							.map_err(|_| DispatchError::Other("Invalid pre-upgrade state"))?,
-					);
-					let new_id_counter =
-						pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
-					assert!(
-						new_id_counter - old_id_counter == 2,
-						"Expected exactly two new broadcast",
-					);
-					assert!(
-						pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
-							.contains(&new_id_counter) &&
-							pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get(
-							)
-							.contains(&(new_id_counter - 1)),
-						"New broadcasts should be pending"
-					);
-				},
-			genesis_hashes::SISYPHOS =>
-				if crate::VERSION.spec_version == 1_12_06 {
-					let old_id_counter = u32::from_le_bytes(
-						state
-							.try_into()
-							.map_err(|_| DispatchError::Other("Invalid pre-upgrade state"))?,
-					);
-					let new_id_counter =
-						pallet_cf_broadcast::BroadcastIdCounter::<Runtime, SolanaInstance>::get();
-					assert!(
-						new_id_counter - old_id_counter == 1,
-						"Expected exactly one new broadcast",
-					);
-					assert!(
-						pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::get()
 							.contains(&new_id_counter),
 						"New broadcast should be pending"
 					);

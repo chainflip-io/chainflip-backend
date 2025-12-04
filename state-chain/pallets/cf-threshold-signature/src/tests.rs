@@ -35,7 +35,7 @@ use cf_traits::{
 		signer_nomination::MockNominator,
 	},
 	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider,
-	KeyRotationStatusOuter, KeyRotator, SetSafeMode, ThresholdSigner, VaultActivator,
+	KeyRotationStatusOuter, KeyRotator, SetSafeMode, VaultActivator,
 };
 use cf_utilities::assert_matches;
 pub use frame_support::traits::Get;
@@ -547,6 +547,7 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
 	use cf_chains::{mocks::MockAggKey, ChainCrypto};
+	use cf_traits::ThresholdSigner;
 	use frame_support::{pallet_prelude::InvalidTransaction, unsigned::TransactionSource};
 	use sp_runtime::traits::ValidateUnsigned;
 
@@ -2013,173 +2014,4 @@ fn can_update_all_config_items() {
 			);
 		}
 	});
-}
-
-mod historical_signing {
-
-	use crate::{
-		PendingCeremonies, PendingRequestInstructions, SignerAndSignature, ThresholdCeremonyType,
-	};
-
-	use super::*;
-
-	const AUTHORITIES: [u64; 3] = [1, 2, 3];
-	const NOMINEES: [u64; 2] = [1, 2];
-	const PAYLOAD: &[u8; 4] = b"HIST";
-
-	const HISTORICAL_EPOCH: u32 = GENESIS_EPOCH;
-	const SIGNERS_REQUIRED: u32 = 2;
-
-	// If fails, will only retry once
-	const MAX_RETRIES: u32 = 1;
-
-	#[test]
-	fn happy_path() {
-		new_test_ext()
-			.with_authorities(AUTHORITIES)
-			.with_nominees(NOMINEES)
-			.execute_with_consistency_checks(|| {
-				// Expire the key so it can be used in historical signing:
-				MockEpochInfo::set_last_expired_epoch(GENESIS_EPOCH);
-
-				let request_id = EvmThresholdSigner::request_historical_signature_with_callback(
-					*PAYLOAD,
-					HISTORICAL_EPOCH,
-					AUTHORITIES.into(),
-					SIGNERS_REQUIRED,
-					MAX_RETRIES,
-					MockCallback::new,
-				)
-				.unwrap();
-
-				let ceremony_id = current_ceremony_id();
-
-				run_cfes_on_sc_events(&[MockCfe { id: 1, behaviour: CfeBehaviour::Success }]);
-
-				// No pending ceremonies:
-				assert!(EvmThresholdSigner::pending_ceremonies(ceremony_id).is_none());
-
-				assert!(MockCallback::has_executed(request_id));
-			});
-	}
-
-	#[test]
-	fn failing_and_retrying() {
-		new_test_ext()
-			.with_authorities(AUTHORITIES)
-			.with_nominees(NOMINEES)
-			.execute_with_consistency_checks(|| {
-				// Expire the key so it can be used in historical signing:
-				MockEpochInfo::set_last_expired_epoch(GENESIS_EPOCH);
-
-				let request_id = EvmThresholdSigner::request_historical_signature_with_callback(
-					*PAYLOAD,
-					HISTORICAL_EPOCH,
-					AUTHORITIES.into(),
-					SIGNERS_REQUIRED,
-					MAX_RETRIES,
-					MockCallback::new,
-				)
-				.unwrap();
-
-				let ceremony_id = current_ceremony_id();
-
-				assert_eq!(
-					PendingCeremonies::<Test, Instance1>::get(ceremony_id)
-						.unwrap()
-						.threshold_ceremony_type,
-					ThresholdCeremonyType::HistoricalKey {
-						candidates: BTreeSet::from_iter(AUTHORITIES.into_iter()),
-						signers_required: SIGNERS_REQUIRED,
-						retries_remaining: 1
-					}
-				);
-
-				run_cfes_on_sc_events(&[
-					MockCfe { id: 1, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-					MockCfe { id: 2, behaviour: CfeBehaviour::ReportFailure(vec![1]) },
-				]);
-
-				// Node is blamed, but won't be reported:
-				assert_eq!(
-					EvmThresholdSigner::pending_ceremonies(ceremony_id).unwrap().blame_counts,
-					BTreeMap::from_iter([(1, 2)])
-				);
-
-				MockOffenceReporter::assert_reported(
-					PalletOffence::ParticipateSigningFailed,
-					vec![],
-				);
-
-				let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout();
-
-				System::set_block_number(retry_block);
-				<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
-
-				let ceremony_id_2 = current_ceremony_id();
-
-				// This is a new ceremony:
-				assert_ne!(ceremony_id, ceremony_id_2);
-
-				// This is the last attempt:
-				assert_eq!(
-					PendingCeremonies::<Test, Instance1>::get(ceremony_id_2)
-						.unwrap()
-						.threshold_ceremony_type,
-					ThresholdCeremonyType::HistoricalKey {
-						candidates: BTreeSet::from_iter(AUTHORITIES.into_iter()),
-						signers_required: SIGNERS_REQUIRED,
-						retries_remaining: 0
-					}
-				);
-
-				let retry_block = frame_system::Pallet::<Test>::current_block_number() +
-					EvmThresholdSigner::threshold_signature_response_timeout();
-
-				System::set_block_number(retry_block);
-				<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(retry_block);
-
-				// We haven't started another ceremony:
-				assert_eq!(current_ceremony_id(), ceremony_id_2);
-
-				System::assert_has_event(RuntimeEvent::EvmThresholdSigner(
-					Event::MaxRetriesReachedForRequest { request_id },
-				));
-
-				// No authority is reported:
-				MockOffenceReporter::assert_reported(
-					PalletOffence::ParticipateSigningFailed,
-					vec![],
-				);
-
-				// Check that we have cleaned up:
-				assert_eq!(PendingRequestInstructions::<Test, Instance1>::get(request_id), None);
-				assert_eq!(SignerAndSignature::<Test, Instance1>::get(request_id), None);
-
-				// Callback should have been executed:
-				assert!(MockCallback::has_executed(request_id));
-			});
-	}
-
-	/// Check that only historical (expired) keys can be used this way
-	#[test]
-	fn requires_historical_key() {
-		new_test_ext()
-			.with_authorities(AUTHORITIES)
-			.with_nominees(NOMINEES)
-			.execute_with_consistency_checks(|| {
-				assert_noop!(
-					EvmThresholdSigner::request_historical_signature_with_callback(
-						*PAYLOAD,
-						HISTORICAL_EPOCH,
-						AUTHORITIES.into(),
-						SIGNERS_REQUIRED,
-						MAX_RETRIES,
-						MockCallback::new,
-					),
-					Error::<Test, Instance1>::EpochTooRecent
-				);
-			});
-	}
 }
