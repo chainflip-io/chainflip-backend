@@ -68,9 +68,6 @@ mod benchmarks {
 
 	#[benchmark]
 	fn new_membership_set() {
-		let caller: T::AccountId = whitelisted_caller();
-		let members = BTreeSet::from([caller]);
-
 		let old_members = (0..7)
 			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
 			.collect::<BTreeSet<_>>();
@@ -78,7 +75,8 @@ mod benchmarks {
 			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
 			.collect::<BTreeSet<_>>();
 		<Members<T>>::put(GovernanceCouncil { members: old_members, threshold: 4 });
-		let call = Call::<T>::new_membership_set { new_members, new_threshold: 3 };
+		let call =
+			Call::<T>::new_membership_set { new_members: new_members.clone(), new_threshold: 3 };
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
 		#[block]
@@ -86,7 +84,7 @@ mod benchmarks {
 			assert_ok!(call.dispatch_bypass_filter(origin));
 		}
 
-		assert_eq!(Members::<T>::get(), GovernanceCouncil { members, threshold: 1 });
+		assert_eq!(Members::<T>::get(), GovernanceCouncil { members: new_members, threshold: 3 });
 	}
 
 	#[benchmark]
@@ -186,9 +184,13 @@ mod benchmarks {
 
 	#[benchmark]
 	fn dispatch_whitelisted_call() {
-		let caller: T::AccountId = whitelisted_caller();
+		let members = (0..2)
+			.map(|i| account::<T::AccountId>("whitelisted_caller", 0, i))
+			.collect::<BTreeSet<_>>();
+		<Members<T>>::put(GovernanceCouncil { members: members.clone(), threshold: 1 });
+		let caller = members.first().cloned().unwrap();
 		let call: <T as Config>::RuntimeCall = Call::<T>::new_membership_set {
-			new_members: Default::default(),
+			new_members: [caller.clone()].into_iter().collect(),
 			new_threshold: Default::default(),
 		}
 		.into();
