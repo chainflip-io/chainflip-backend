@@ -109,8 +109,17 @@ fn state_of_genesis_is_as_expected() {
 			"Global signature nonce should be 0"
 		);
 
-		assert!(Governance::members().contains(&AccountId::from(ERIN)), "expected governor");
-		assert_eq!(Governance::proposal_id_counter(), 0, "no proposal for governance");
+		assert!(
+			pallet_cf_governance::Members::<Runtime>::get()
+				.members
+				.contains(&AccountId::from(ERIN)),
+			"expected governor"
+		);
+		assert_eq!(
+			pallet_cf_governance::ProposalIdCounter::<Runtime>::get(),
+			0,
+			"no proposal for governance"
+		);
 
 		assert_eq!(
 			Emissions::current_authority_emission_inflation(),
