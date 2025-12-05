@@ -32,13 +32,10 @@ pub use configs::*;
 use crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS;
 use codec::{Decode, Encode};
 // use constants::common::*;
-use frame_support::{
-	migrations::VersionedMigration,
-	sp_runtime::{
-		create_runtime_str,
-		traits::{BlakeTwo256, IdentifyAccount, Verify},
-		MultiSignature,
-	},
+use frame_support::sp_runtime::{
+	create_runtime_str,
+	traits::{BlakeTwo256, IdentifyAccount, Verify},
+	MultiSignature,
 };
 use pallet_session::historical as session_historical;
 use sp_runtime::generic;
@@ -100,7 +97,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("chainflip-node"),
 	impl_name: create_runtime_str!("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_00_00,
+	spec_version: 2_01_00,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -373,7 +370,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV2_0,
+	MigrationsForV2_1,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -468,31 +465,8 @@ macro_rules! instanced_migrations {
 	}
 }
 
-type MigrationsForV2_0 = (
-	VersionedMigration<
-		19,
-		20,
-		migrations::safe_mode::SafeModeMigration,
-		pallet_cf_environment::Pallet<Runtime>,
-		<Runtime as frame_system::Config>::DbWeight,
-	>,
-	instanced_migrations!(
-		module: pallet_cf_ingress_egress,
-		migration: migrations::ingress_delay::IngressEgressDelay,
-		from: 28,
-		to: 29,
-		include_instances: [
-			SolanaInstance,
-		],
-		exclude_instances: [
-			EthereumInstance,
-			PolkadotInstance,
-			BitcoinInstance,
-			ArbitrumInstance,
-			AssethubInstance
-		]
-	),
-);
+// Add version-specific migrations here.
+type MigrationsForV2_1 = ();
 
 #[cfg(test)]
 mod test {
