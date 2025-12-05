@@ -43,8 +43,8 @@ export async function stopBoosting(
 
   if (extrinsicResult.ok) {
     logger.info('waiting for stop boosting event');
-    return cf.eventInSameBlock(
-      `LendingPools.StoppedBoosting`,
+    return cf.findEventInSameBlock(
+      'LendingPools.StoppedBoosting',
       lendingPoolsStoppedBoosting.refine(
         (event) =>
           event.boosterId === cf.requirements.account.keypair.address &&
@@ -78,7 +78,7 @@ export async function addBoostFunds(
     ),
   );
 
-  const event = await cf.eventInSameBlock(
+  const event = await cf.findEventInSameBlock(
     'LendingPools.BoostFundsAdded',
     lendingPoolsBoostFundsAdded.refine(
       (event) =>

@@ -66,7 +66,7 @@ export async function addBoostFunds(
   // const blockHeight = (result as any).blockNumber.toNumber();
   // logger.info(`Blockheight is ${blockHeight}... Sleeping`);
 
-  const event = await chainflip.eventInSameBlock(
+  const event = await chainflip.findEventInSameBlock(
     'LendingPools.BoostFundsAdded',
     lendingPoolsBoostFundsAdded.refine(
       (event) =>

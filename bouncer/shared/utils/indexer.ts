@@ -94,7 +94,7 @@ export class ChainflipIO<Requirements> {
     return result;
   }
 
-  async eventInSameBlock<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+  async findEventInSameBlock<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
