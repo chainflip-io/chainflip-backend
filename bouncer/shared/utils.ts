@@ -37,7 +37,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import { DisposableApiPromise, getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -45,6 +45,7 @@ import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logg
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { Err, Ok, Result } from './utils/chainflip_io';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1233,6 +1234,25 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   return outputPrice;
 }
 
+export function extractExtrinsicResult(
+  chainflipApi: DisposableApiPromise,
+  extrinsicResult: any,
+): Result<any, string> {
+  if (extrinsicResult.dispatchError) {
+    let error;
+    if (extrinsicResult.dispatchError.isModule) {
+      const { docs, name, section } = chainflipApi.registry.findMetaError(
+        extrinsicResult.dispatchError.asModule,
+      );
+      error = section + '.' + name + ': ' + docs;
+    } else {
+      error = extrinsicResult.dispatchError.toString();
+    }
+    return Err(`Extrinsic failed: ${error}`);
+  }
+  return Ok(extrinsicResult);
+}
+
 /// Submits an extrinsic and waits for it to be included in a block.
 /// Returning the extrinsic result or throwing the dispatchError.
 export async function submitChainflipExtrinsic(
@@ -1256,17 +1276,11 @@ export async function submitChainflipExtrinsic(
   while (!extrinsicResult) {
     await sleep(100);
   }
-  if (extrinsicResult.dispatchError && errorOnFail) {
-    let error;
-    if (extrinsicResult.dispatchError.isModule) {
-      const { docs, name, section } = chainflipApi.registry.findMetaError(
-        extrinsicResult.dispatchError.asModule,
-      );
-      error = section + '.' + name + ': ' + docs;
-    } else {
-      error = extrinsicResult.dispatchError.toString();
+  if (errorOnFail) {
+    const extracted = extractExtrinsicResult(chainflipApi, extrinsicResult);
+    if (!extracted.ok) {
+      throw new Error(extracted.error);
     }
-    throw new Error(`Extrinsic failed: ${error}`);
   }
   return extrinsicResult;
 }
