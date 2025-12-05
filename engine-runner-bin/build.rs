@@ -181,13 +181,15 @@ fn main() {
 		.try_into()
 		.unwrap();
 
-	let mut flat_deb_assets = deb_assets.iter().flatten();
+	let flat_deb_assets = deb_assets.iter().flatten().collect::<Vec<_>>();
 
-	let mut check_version_suffix = |suffix: &String| {
+	let check_version_suffix = |suffix: &String| {
+		let count = flat_deb_assets.iter().filter(|asset| asset.contains(suffix)).count();
 		assert!(
-			flat_deb_assets.any(|item| item.contains(suffix)),
-			"Expected to find a deb asset with the version suffix: {}",
-			suffix
+			count == 2,
+			"Expected to find two deb assets with the version suffix '{}' in the Cargo.toml but found {}.",
+			suffix,
+			count,
 		);
 	};
 
