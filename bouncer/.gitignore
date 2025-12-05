@@ -1,1 +1,4 @@
 pnpm-lock.yaml
+.idea
+tmp
+/generated/prisma
