@@ -1,11 +1,9 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import assert from 'assert';
 import {
-  lpMutex,
   shortChainFromAsset,
   amountToFineAmount,
   assetDecimals,
-  ChainflipExtrinsicSubmitter,
   calculateFeeWithBps,
   amountToFineAmountBigInt,
   newAssetAddress,
@@ -22,90 +20,103 @@ import { jsonRpc } from 'shared/json_rpc';
 import { observeEvent, Event, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
+import z from 'zod';
+import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
+import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stoppedBoosting';
+import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
+
+/// TEMP
+export const numericString = z
+  .string()
+  .regex(/^[\d,]+$/)
+  .transform((n) => Number(n.replaceAll(',', '')));
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export async function stopBoosting<T = any>(
+export async function stopBoosting(
+  cf: ChainflipIO<WithLpAccount>,
   logger: Logger,
   asset: Asset,
   boostTier: number,
-  lpUri = '//LP_BOOST',
-  errorOnFail: boolean = true,
-): Promise<Event<T> | undefined> {
-  await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
-
+): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const observeStoppedBoosting = observeEvent(logger, `lendingPools:StoppedBoosting`, {
-    test: (event) =>
-      event.data.boosterId === lp.address &&
-      event.data.boostPool.asset === asset &&
-      event.data.boostPool.tier === boostTier.toString(),
-  }).event;
-
-  const extrinsicResult: any = await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-    errorOnFail,
+  const extrinsicResult = await cf.submitExtrinsic((api) =>
+    api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
   );
-  if (!extrinsicResult?.dispatchError) {
-    logger.debug('waiting for stop boosting event');
-    return observeStoppedBoosting;
+
+  if (extrinsicResult.ok) {
+    logger.info('waiting for stop boosting event');
+    return cf.findEventInSameBlock(
+      'LendingPools.StoppedBoosting',
+      lendingPoolsStoppedBoosting.refine(
+        (event) =>
+          event.boosterId === cf.requirements.account.keypair.address &&
+          event.boostPool.asset === asset &&
+          event.boostPool.tier === boostTier,
+      ),
+    );
+  } else {
+    logger.info(`Already stopped boosting (${extrinsicResult.error})`);
+    return undefined;
   }
-  logger.debug('Already stopped boosting');
-  return undefined;
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
 export async function addBoostFunds(
+  cf: ChainflipIO<WithLpAccount>,
   logger: Logger,
   asset: Asset,
   boostTier: number,
   amount: number,
-  lpUri = '//LP_BOOST',
-): Promise<Event> {
-  await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
-
+): Promise<z.infer<typeof lendingPoolsBoostFundsAdded>> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
-
-  const observeBoostFundsAdded = observeEvent(logger, `lendingPools:BoostFundsAdded`, {
-    test: (event) =>
-      event.data.boosterId === lp.address &&
-      event.data.boostPool.asset === asset &&
-      event.data.boostPool.tier === boostTier.toString(),
-  });
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.addBoostFunds(
+  await cf.submitExtrinsic((api) =>
+    api.tx.lendingPools.addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
       boostTier,
     ),
   );
 
-  return observeBoostFundsAdded.event;
+  const event = await cf.findEventInSameBlock(
+    'LendingPools.BoostFundsAdded',
+    lendingPoolsBoostFundsAdded.refine(
+      (event) =>
+        event.boosterId === cf.requirements.account.keypair.address &&
+        event.boostPool.asset === asset &&
+        event.boostPool.tier === boostTier,
+    ),
+  );
+
+  return event;
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
 async function testBoostingForAsset(
   asset: Asset,
   boostFee: number,
-  lpUri: string,
+  lpUri: `//${string}`,
   amount: number,
   testContext: TestContext,
 ) {
+  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
+    account: {
+      uri: lpUri,
+      keypair: createStateChainKeypair(lpUri),
+      type: 'Lp',
+    },
+  });
+
   const logger = testContext.logger.child({ boostAsset: asset, boostFee });
   logger.debug(`Testing boosting`);
 
   // Start with a clean slate by stopping boosting before the test
-  const preTestStopBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri, false);
+  const preTestStopBoostingEvent = await stopBoosting(cf, logger, asset, boostFee);
   assert.strictEqual(
-    preTestStopBoostingEvent?.data?.pendingBoosts?.length ?? 0,
+    preTestStopBoostingEvent?.pendingBoosts.length ?? 0,
     0,
     'Stopped boosting but, the test cannot start with pending boosts.',
   );
@@ -122,7 +133,7 @@ async function testBoostingForAsset(
 
   // Add boost funds
   await depositLiquidity(logger, asset, amount * 1.01, false, lpUri);
-  await addBoostFunds(logger, asset, boostFee, amount, lpUri);
+  await addBoostFunds(cf, logger, asset, boostFee, amount);
 
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
@@ -157,7 +168,7 @@ async function testBoostingForAsset(
       logger,
       `${chainFromAsset(asset).toLowerCase()}IngressEgress:${eventName}`,
       {
-        test: (event) => event.data.channelId === swapRequest.channelId.toString(),
+        test: (event) => numericString.parse(event.data.channelId) === swapRequest.channelId,
       },
     ).event.then((event) => {
       logger.trace(`${eventName} event:`, JSON.stringify(event));
@@ -206,18 +217,17 @@ async function testBoostingForAsset(
   );
 
   // Stop boosting
-  const stoppedBoostingEvent = await stopBoosting(logger, asset, boostFee, lpUri)!;
+  const stoppedBoostingEvent = await stopBoosting(cf, logger, asset, boostFee)!;
   logger.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
-    stoppedBoostingEvent?.data.pendingBoosts.length,
+    stoppedBoostingEvent?.pendingBoosts.length,
     0,
     'Unexpected pending boosts. Did another test run with a boostable swap at the same time?',
   );
 
   // Compare the fees collected with the expected amount
   const boostFeesCollected =
-    BigInt(stoppedBoostingEvent?.data.unlockedAmount.replaceAll(',', '')) -
-    amountToFineAmountBigInt(amount, asset);
+    stoppedBoostingEvent?.unlockedAmount - amountToFineAmountBigInt(amount, asset);
   logger.debug('Boost fees collected:', boostFeesCollected);
   const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
   assert.strictEqual(
@@ -225,6 +235,8 @@ async function testBoostingForAsset(
     expectedIncrease,
     'Unexpected amount of fees earned from boosting',
   );
+
+  cf.printActions();
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
