@@ -24,7 +24,7 @@ export const Err = <E>(error: E): Err<E> => ({
 
 // ---------------------------------
 
-export type AccountType = 'Broker' | 'Lp';
+export type AccountType = 'Broker' | 'LP';
 
 export type FullAccount<T extends AccountType> = {
   uri: `//${string}`;
@@ -33,7 +33,7 @@ export type FullAccount<T extends AccountType> = {
 };
 
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
-export type WithLpAccount = WithAccount<'Lp'>;
+export type WithLpAccount = WithAccount<'LP'>;
 
 export function fullAccountFromUri<A extends AccountType>(
   uri: `//${string}`,

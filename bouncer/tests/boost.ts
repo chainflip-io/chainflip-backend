@@ -106,7 +106,7 @@ async function testBoostingForAsset(
     account: {
       uri: lpUri,
       keypair: createStateChainKeypair(lpUri),
-      type: 'Lp',
+      type: 'LP',
     },
   });
 
