@@ -4,4 +4,4 @@ import * as path from 'path';
 
 const generatedDir = path.join(import.meta.dirname, '..', 'generated', 'events');
 
-generate(generatedDir);
+await generate(generatedDir);

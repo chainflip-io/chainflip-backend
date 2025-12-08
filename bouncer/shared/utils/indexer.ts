@@ -1,18 +1,7 @@
-import prisma from './prisma_client';
-import {
-  ChainflipExtrinsicSubmitter,
-  createStateChainKeypair,
-  extractExtrinsicResult,
-  lpMutex,
-  sleep,
-} from 'shared/utils';
 import { z } from 'zod';
-import { DisposableApiPromise, getChainflipApi } from './substrate';
+import { sleep } from 'shared/utils';
+import prisma from './prisma_client';
 import { Event } from './substrate';
-import { globalLogger } from './logger';
-import { KeyringPair } from '@polkadot/keyring/types';
-
-
 
 type ValidatedEvent<Z extends z.ZodTypeAny> = Omit<Event, 'args'> & {
   args: z.output<Z>;
