@@ -60,7 +60,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for FixThresholdCalculation<T> {
 		let old_council = BTreeSet::<T::AccountId>::decode(&mut &state[..])
 			.map_err(|_| DispatchError::Other("Failed to decode member count"))?;
 		let council = Members::<T>::get();
-		let expected_threshold = members.len() as u32 / 2 + 1;
+		let expected_threshold = council.members.len() as u32 / 2 + 1;
 		assert_eq!(
 			council.members, old_council,
 			"Members should be {:?} but are {:?}",
