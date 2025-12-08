@@ -5,6 +5,9 @@ import { getChainflipApi, Event, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
+import { ChainflipIO, full_account_from_uri, WithLpAccount } from './utils/chainflip_io';
+import z from 'zod';
+import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -77,6 +80,12 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
   }
   await createBoostPools(logger, newPools);
 
+  // create CFIO instance, this could be done further outside,
+  // but temporarily it's here
+  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
+    account: full_account_from_uri('//LP_BOOST', 'Lp')
+  });
+
   // Add some boost funds to each Btc boost tier
   logger.info('Funding BTC Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
@@ -87,10 +96,10 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
     false,
     '//LP_BOOST',
   );
-  const fundBoostPoolsPromises: Promise<Event>[] = [];
+  const fundBoostPoolsPromises: Promise<z.infer<typeof lendingPoolsBoostFundsAdded>>[] = [];
   for (const tier of boostPoolTiers) {
     fundBoostPoolsPromises.push(
-      addBoostFunds(logger, Assets.Btc, tier, fundBtcBoostPoolsAmount, '//LP_BOOST'),
+      addBoostFunds(cf, logger, Assets.Btc, tier, fundBtcBoostPoolsAmount),
     );
   }
   await Promise.all(fundBoostPoolsPromises);

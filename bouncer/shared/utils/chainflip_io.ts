@@ -1,5 +1,6 @@
 import {
   ChainflipExtrinsicSubmitter,
+  createStateChainKeypair,
   extractExtrinsicResult,
   lpMutex,
 } from 'shared/utils';
@@ -34,6 +35,14 @@ export type FullAccount<T extends AccountType> = {
 
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
 export type WithLpAccount = WithAccount<'Lp'>;
+
+export function full_account_from_uri<A extends AccountType>(uri: `//${string}`, type: A): FullAccount<A> {
+  return {
+    uri,
+    keypair: createStateChainKeypair(uri),
+    type
+  }
+}
 
 export class ChainflipIO<Requirements> {
   private lastIoBlockHeight: number;

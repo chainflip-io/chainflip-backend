@@ -59,9 +59,11 @@ export const findEvent = async <Z extends z.ZodTypeAny = z.ZodTypeAny>(
     await sleep(250);
   }
 
-  // return parsed args and replace
-  event.args = schema.parse(event.args);
-  event.height = event.block.height;
+  const result = event as unknown as ValidatedEvent<Z>;
+
+  // parse results from events and put them into the result
+  result.args = schema.parse(event.args);
+  result.blockHeight = event.block.height;
 
   return event as unknown as ValidatedEvent<Z>;
 };
