@@ -14,14 +14,19 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { addBoostFunds } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+
+const cf = new ChainflipIO({
+  account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'Lp'),
+});
 
 await runWithTimeoutAndExit(
   addBoostFunds(
+    cf,
     globalLogger,
     process.argv[2] as Asset,
     Number(process.argv[3]),
     Number(process.argv[4]),
-    process.argv[5],
   ),
   80,
 );
