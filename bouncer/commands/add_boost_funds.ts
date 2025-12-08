@@ -17,7 +17,7 @@ import { globalLogger } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 const cf = new ChainflipIO({
-  account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'Lp'),
+  account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
 await runWithTimeoutAndExit(
