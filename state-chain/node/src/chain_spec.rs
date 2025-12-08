@@ -108,6 +108,7 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
 	eth_usdt_address: [u8; 20],
+	eth_wbtc_address: [u8; 20],
 	state_chain_gateway_address: [u8; 20],
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
@@ -168,6 +169,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, ETH_USDT_ADDRESS, eth_usdt_address);
+	from_env_var!(clean_hex_address, ETH_WBTC_ADDRESS, eth_wbtc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, eth_key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
@@ -268,6 +270,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
@@ -351,6 +354,7 @@ pub fn inner_cf_development_config(
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
@@ -403,6 +407,7 @@ pub fn inner_cf_development_config(
 				flip_token_address: flip_token_address.into(),
 				eth_usdc_address: eth_usdc_address.into(),
 				eth_usdt_address: eth_usdt_address.into(),
+				eth_wbtc_address: eth_wbtc_address.into(),
 				state_chain_gateway_address: state_chain_gateway_address.into(),
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
@@ -512,6 +517,7 @@ macro_rules! network_spec {
 					flip_token_address,
 					eth_usdc_address,
 					eth_usdt_address,
+					eth_wbtc_address,
 					state_chain_gateway_address,
 					eth_key_manager_address,
 					eth_vault_address,
@@ -594,6 +600,7 @@ macro_rules! network_spec {
 							flip_token_address: flip_token_address.into(),
 							eth_usdc_address: eth_usdc_address.into(),
 							eth_usdt_address: eth_usdt_address.into(),
+							eth_wbtc_address: eth_wbtc_address.into(),
 							state_chain_gateway_address: state_chain_gateway_address.into(),
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),

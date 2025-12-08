@@ -7,7 +7,8 @@ expression: val
     "ETH": "0x1f4",
     "FLIP": "0x1f4",
     "USDC": "0x1f4",
-    "USDT": "0x1f4"
+    "USDT": "0x1f4",
+    "WBTC": "0x1f4"
   },
   "Polkadot": {
     "DOT": "0x1f4"

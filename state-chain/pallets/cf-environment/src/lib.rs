@@ -71,7 +71,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(20);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(21);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -814,6 +814,7 @@ pub mod pallet {
 		pub flip_token_address: EvmAddress,
 		pub eth_usdc_address: EvmAddress,
 		pub eth_usdt_address: EvmAddress,
+		pub eth_wbtc_address: EvmAddress,
 		pub state_chain_gateway_address: EvmAddress,
 		pub eth_key_manager_address: EvmAddress,
 		pub eth_vault_address: EvmAddress,
@@ -851,6 +852,7 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdt, self.eth_usdt_address);
+			EthereumSupportedAssets::<T>::insert(EthAsset::Wbtc, self.eth_wbtc_address);
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);

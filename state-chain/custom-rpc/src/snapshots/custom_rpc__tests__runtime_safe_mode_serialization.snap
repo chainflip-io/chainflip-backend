@@ -89,6 +89,10 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
       }
     ],
     "add_lender_funds": [
@@ -143,6 +147,10 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
       }
     ],
     "withdraw_lender_funds": [
@@ -197,6 +205,10 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
       }
     ],
     "add_collateral": [
@@ -251,6 +263,10 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
       }
     ],
     "remove_collateral": [
@@ -305,6 +321,10 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
       }
     ],
     "liquidations_enabled": true

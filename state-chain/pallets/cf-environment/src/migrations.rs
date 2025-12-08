@@ -24,6 +24,7 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 mod chainflip_network_name_environment;
+mod wbtc;
 
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
@@ -59,7 +60,14 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<20, Pallet<T>>,
+	VersionedMigration<
+		20,
+		21,
+		wbtc::WbtcMigration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<21, Pallet<T>>,
 );
 
 #[cfg(test)]
