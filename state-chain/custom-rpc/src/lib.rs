@@ -1766,6 +1766,11 @@ where
 	) -> RpcResult<RpcAccountInfoWrapper> {
 		self.rpc_backend
 			.with_versioned_runtime_api(at, |api, hash, version| match version {
+				None => Err(CfApiError::ErrorObject(ErrorObject::owned(
+					ErrorCode::InvalidParams.code(),
+					"Unsupported runtime API version.",
+					None::<()>,
+				))),
 				Some(v) if v < 7 => {
 					use account_info_before_api_v7::RpcAccountInfo;
 					let balance = api.cf_account_flip_balance(hash, &account_id)?;
@@ -1795,11 +1800,16 @@ where
 
 								RpcAccountInfo::broker(info, balance)
 							},
-							AccountRole::LiquidityProvider => {
-								let info = api.cf_liquidity_provider_info(hash, account_id)?;
-
-								RpcAccountInfo::lp(info, api.cf_network_environment(hash)?, balance)
-							},
+							AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_9(
+									hash,
+									account_id.clone(),
+								)?
+								.into(),
+								api.cf_network_environment(hash)?,
+								balance,
+							),
 							AccountRole::Validator => {
 								#[expect(deprecated)]
 								let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
@@ -1816,7 +1826,7 @@ where
 						},
 					))
 				},
-				_ => {
+				Some(api_version) => {
 					let role = api
 						.cf_account_role(hash, account_id.clone())?
 						.unwrap_or(AccountRole::Unregistered);
@@ -1851,6 +1861,7 @@ where
 								}
 							},
 							AccountRole::LiquidityProvider => {
+								#[expect(deprecated)]
 								let LiquidityProviderInfo {
 									refund_addresses,
 									earned_fees,
@@ -1858,7 +1869,16 @@ where
 									lending_positions,
 									collateral_balances,
 									..
-								} = api.cf_liquidity_provider_info(hash, account_id.clone())?;
+								} = if api_version < 9 {
+									api.cf_liquidity_provider_info_before_version_9(
+										hash,
+										account_id.clone(),
+									)?
+									.into()
+								} else {
+									api.cf_liquidity_provider_info(hash, account_id)?
+								};
+
 								let network = api.cf_network_environment(hash)?;
 								RpcAccountInfo::LiquidityProvider {
 									refund_addresses: refund_addresses

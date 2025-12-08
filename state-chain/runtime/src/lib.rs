@@ -2182,24 +2182,28 @@ impl_runtime_apis! {
 						})
 					}).collect()
 				}),
-				lending_positions: Asset::all().filter_map(|asset| {
-					pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset).and_then(|pool| {
-						pool.lender_shares.get(&account_id).map(|share| {
-							(*share * pool.total_amount, pool.available_amount)
-						})
-					}).map(|(total_amount, available_amount)| {
-						LendingPosition {
-							asset,
-							total_amount,
-							available_amount: core::cmp::min(total_amount, available_amount),
-						}
+				lending_positions: Asset::all()
+					.filter_map(|asset| {
+						pallet_cf_lending_pools::GeneralLendingPools::<Runtime>::get(asset)
+							.and_then(|pool| {
+								pool.lender_shares.get(&account_id).map(|share| {
+									(*share * pool.total_amount, pool.available_amount)
+								})
+							})
+							.map(|(total_amount, available_amount)| {
+								LendingPosition {
+									asset,
+									total_amount,
+									available_amount: core::cmp::min(total_amount, available_amount),
+								}
+							})
 					})
-
-				}).collect(),
-				collateral_balances:
-					pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+					.collect(),
+				collateral_balances: pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id)
+					.map(|loan_account| {
 						loan_account.get_total_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
-					}).unwrap_or_default(),
+					})
+					.unwrap_or_default(),
 			}
 		}
 

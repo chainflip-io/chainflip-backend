@@ -58,7 +58,7 @@ use pallet_cf_witnesser::CallHash;
 use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_core::U256;
+use sp_core::{RuntimeDebug, U256};
 use sp_runtime::{DispatchError, Permill};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
@@ -341,7 +341,7 @@ pub struct AuctionState {
 	pub min_active_bid: Option<u128>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, RuntimeDebug)]
 pub struct LiquidityProviderBoostPoolInfo {
 	pub fee_tier: u16,
 	pub total_balance: AssetAmount,
@@ -350,7 +350,31 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub is_withdrawing: bool,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub mod before_version_9 {
+	use super::*;
+
+	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, RuntimeDebug, Default)]
+	pub struct LiquidityProviderInfo {
+		pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+		pub balances: Vec<(Asset, AssetAmount)>,
+		pub earned_fees: AssetMap<AssetAmount>,
+		pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	}
+
+	impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
+		fn from(old: LiquidityProviderInfo) -> Self {
+			Self {
+				refund_addresses: old.refund_addresses,
+				balances: old.balances,
+				earned_fees: old.earned_fees,
+				boost_balances: old.boost_balances,
+				..Default::default()
+			}
+		}
+	}
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, RuntimeDebug, Default)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,
@@ -785,6 +809,10 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Vec<(SwapLegInfo, BlockNumber)>;
+		#[changed_in(9)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_9::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
