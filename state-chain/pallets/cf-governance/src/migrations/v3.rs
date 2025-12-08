@@ -32,7 +32,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for FixThresholdCalculation<T> {
 		let _ = crate::Members::<T>::translate::<BTreeSet<T::AccountId>, _>(|old| {
 			old.map(|members| {
 				// We want to change the threshold to 3 on mainnet (previously 4 of 6).
-				let threshold = core::cmp::min(3, (members.len() as u32).div_ceil(2));
+				let threshold = (members.len() as u32).div_ceil(2);
 				log::info!(
 					"Upgrading governance council with members {:?}, setting threshold to {}",
 					members,
@@ -61,7 +61,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for FixThresholdCalculation<T> {
 		let old_council = BTreeSet::<T::AccountId>::decode(&mut &state[..])
 			.map_err(|_| DispatchError::Other("Failed to decode member count"))?;
 		let council = Members::<T>::get();
-		let expected_threshold = core::cmp::min(3, (council.members.len() as u32).div_ceil(2));
+		let expected_threshold = (council.members.len() as u32).div_ceil(2);
 		assert_eq!(
 			council.members, old_council,
 			"Members should be {:?} but are {:?}",
