@@ -25,7 +25,6 @@ pub use safe_mode::*;
 pub mod lending;
 mod swapping;
 
-use sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
 pub use swapping::{
 	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
@@ -1044,7 +1043,16 @@ pub trait AssetConverter {
 	fn calculate_input_for_gas_output<C: Chain>(
 		input_asset: C::ChainAsset,
 		required_gas: C::ChainAmount,
-	) -> C::ChainAmount;
+	) -> C::ChainAmount {
+		let input_asset_generic: Asset = input_asset.into();
+		C::ChainAmount::try_from(Self::calculate_input_for_desired_output(
+			input_asset_generic,
+			C::GAS_ASSET.into(),
+			required_gas.into(),
+			true,
+		))
+		.unwrap_or_default()
+	}
 
 	/// Calculate the amount that is required to receive the given amount of a different asset after
 	/// a swap.
@@ -1055,59 +1063,7 @@ pub trait AssetConverter {
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,
 		with_network_fee: bool,
-	) -> Option<AssetAmount>;
-
-	fn input_asset_amount_using_oracle_or_reference_gas_asset_price<C: Chain, T: PriceFeedApi>(
-		input_asset: C::ChainAsset,
-		required_gas: C::ChainAmount,
-	) -> C::ChainAmount {
-		if input_asset == C::GAS_ASSET {
-			return required_gas;
-		}
-		match Into::<Asset>::into(input_asset) {
-			Asset::ArbUsdc |
-			Asset::SolUsdc |
-			Asset::Usdt |
-			Asset::Usdc |
-			Asset::HubUsdc |
-			Asset::HubUsdt => {
-				if let Some(relative_price) =
-					T::get_relative_price(C::GAS_ASSET.into(), input_asset.into())
-				{
-					cf_amm::math::output_amount_ceil(required_gas.into(), relative_price.price)
-						.try_into()
-						.unwrap_or(0u32.into())
-				} else {
-					multiply_by_rational_with_rounding(
-						required_gas.into(),
-						C::REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD.into(),
-						C::FINE_AMOUNT_PER_UNIT.into(),
-						sp_runtime::Rounding::Up,
-					)
-					.and_then(|x| x.try_into().ok())
-					.unwrap_or(0u32.into())
-				}
-			},
-			Asset::Flip => multiply_by_rational_with_rounding(
-				required_gas.into(),
-				T::get_price(C::GAS_ASSET.into())
-					.and_then(|price| {
-						cf_amm::math::output_amount_ceil(
-							cf_primitives::FLIPPERINOS_PER_FLIP.into(),
-							price.price,
-						)
-						.try_into()
-						.ok()
-					})
-					.unwrap_or(C::REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD.into()),
-				cf_chains::eth::REFERENCE_FLIP_PRICE_IN_USD,
-				sp_runtime::Rounding::Up,
-			)
-			.and_then(|x| x.try_into().ok())
-			.unwrap_or(0u32.into()),
-			_ => 0u32.into(),
-		}
-	}
+	) -> AssetAmount;
 }
 
 pub trait IngressEgressFeeApi<C: Chain> {

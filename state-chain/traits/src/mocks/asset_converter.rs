@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{mocks::price_feed_api::MockPriceFeedApi, AssetConverter};
+use crate::AssetConverter;
 use cf_chains::Chain;
 use cf_primitives::{Asset, AssetAmount};
 use frame_support::sp_runtime::traits::{UniqueSaturatedInto, Zero};
@@ -44,19 +44,13 @@ impl AssetConverter for MockAssetConverter {
 	) -> C::ChainAmount {
 		let input_asset_generic: Asset = input_asset.into();
 
-		Self::calculate_input_for_desired_output(
+		C::ChainAmount::try_from(Self::calculate_input_for_desired_output(
 			input_asset_generic,
 			C::GAS_ASSET.into(),
 			required_gas.into(),
 			true,
-		)
-		.and_then(|amount| C::ChainAmount::try_from(amount).ok())
-		.unwrap_or_else(|| {
-			Self::input_asset_amount_using_oracle_or_reference_gas_asset_price::<C, MockPriceFeedApi>(
-				input_asset,
-				required_gas,
-			)
-		})
+		))
+		.unwrap()
 	}
 
 	fn calculate_input_for_desired_output(
@@ -64,20 +58,23 @@ impl AssetConverter for MockAssetConverter {
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,
 		_with_network_fee: bool,
-	) -> Option<AssetAmount> {
+	) -> AssetAmount {
 		// The following check is copied from the implementation in the swapping pallet
 		if desired_output_amount.is_zero() {
-			return Some(Zero::zero())
+			return 0;
 		}
 
 		if input_asset == output_asset {
-			return Some(desired_output_amount)
+			return desired_output_amount;
 		}
 
 		// Note: the network fee is not taken into account.
 		let required_input = Self::get_price(input_asset, output_asset)
-			.map(|price| desired_output_amount * price)?;
+			.map(|price| desired_output_amount * price)
+			.unwrap_or_else(|| {
+				panic!("Price must be set in the mock asset converter. {input_asset:?} to {output_asset:?}")
+			});
 
-		Some(required_input.unique_saturated_into())
+		required_input.unique_saturated_into()
 	}
 }

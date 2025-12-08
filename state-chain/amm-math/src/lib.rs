@@ -18,6 +18,7 @@
 
 pub mod test_utilities;
 
+use cf_primitives::{BasisPoints, MAX_BASIS_POINTS};
 pub use cf_primitives::{Price, Tick, PRICE_FRACTIONAL_BITS};
 use sp_core::{U256, U512};
 
@@ -106,6 +107,25 @@ pub fn invert_price(price: Price) -> Price {
 
 pub fn output_amount_ceil(input: Amount, price: Price) -> Amount {
 	mul_div_ceil(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
+}
+
+pub fn price_from_usd_fine_amount(fine_amount: Amount) -> Price {
+	Price::from(fine_amount) << PRICE_FRACTIONAL_BITS
+}
+
+pub fn price_from_usd(dollar_amount: u32, decimals: u32) -> Price {
+	if decimals == 0 || dollar_amount == 0 {
+		return U256::zero();
+	}
+	const USD_DECIMALS: u32 = 6;
+	(U256::from(dollar_amount as u128).saturating_mul(U256::from(10u128.pow(USD_DECIMALS))) <<
+		PRICE_FRACTIONAL_BITS) /
+		10u128.pow(decimals)
+}
+
+pub fn adjust_price_by_bps(price: Price, bps: BasisPoints, increase: bool) -> Price {
+	let adjusted_bps = if increase { MAX_BASIS_POINTS + bps } else { MAX_BASIS_POINTS - bps };
+	mul_div_floor(price, U256::from(adjusted_bps), MAX_BASIS_POINTS)
 }
 
 /// Converts from a [SqrtPriceQ64F96] to a [Price].
