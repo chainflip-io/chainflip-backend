@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.1] - 2025-12-07
+
+### Fixes
+
+- Make cf_liquidity_provider_info RPC backwards-compatible.
+
 ## [2.0.0] - 2025-12-01
 
 ### Features
