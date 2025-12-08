@@ -83,7 +83,7 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
   // create CFIO instance, this could be done further outside,
   // but temporarily it's here
   const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
-    account: fullAccountFromUri('//LP_BOOST', 'Lp'),
+    account: fullAccountFromUri('//LP_BOOST', 'LP'),
   });
 
   // Add some boost funds to each Btc boost tier
