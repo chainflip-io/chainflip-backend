@@ -1,13 +1,13 @@
+import z from 'zod';
 import { getInternalAsset } from '@chainflip/cli';
 import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipApi, Event, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { ChainflipIO, full_account_from_uri, WithLpAccount } from './utils/chainflip_io';
-import z from 'zod';
 import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
+import { ChainflipIO, fullAccountFromUri, WithLpAccount } from './utils/chainflip_io';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -83,7 +83,7 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
   // create CFIO instance, this could be done further outside,
   // but temporarily it's here
   const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
-    account: full_account_from_uri('//LP_BOOST', 'Lp')
+    account: fullAccountFromUri('//LP_BOOST', 'Lp'),
   });
 
   // Add some boost funds to each Btc boost tier
