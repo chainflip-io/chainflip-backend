@@ -1,3 +1,4 @@
+import z from 'zod';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import assert from 'assert';
 import {
@@ -17,10 +18,9 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { requestNewSwap } from 'shared/perform_swap';
 import { createBoostPools } from 'shared/setup_boost_pools';
 import { jsonRpc } from 'shared/json_rpc';
-import { observeEvent, Event, getChainflipApi } from 'shared/utils/substrate';
+import { observeEvent, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
-import z from 'zod';
 import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stoppedBoosting';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
@@ -55,10 +55,10 @@ export async function stopBoosting(
           event.boostPool.tier === boostTier,
       ),
     );
-  } else {
-    logger.info(`Already stopped boosting (${extrinsicResult.error})`);
-    return undefined;
   }
+
+  logger.info(`Already stopped boosting (${extrinsicResult.error})`);
+  return undefined;
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
@@ -81,7 +81,7 @@ export async function addBoostFunds(
     ),
   );
 
-  const event = await cf.findEventInSameBlock(
+  const result = await cf.findEventInSameBlock(
     'LendingPools.BoostFundsAdded',
     lendingPoolsBoostFundsAdded.refine(
       (event) =>
@@ -91,7 +91,7 @@ export async function addBoostFunds(
     ),
   );
 
-  return event;
+  return result;
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
@@ -121,9 +121,8 @@ async function testBoostingForAsset(
     'Stopped boosting but, the test cannot start with pending boosts.',
   );
 
-  const boostPoolDetails = (
-    (await jsonRpc(logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any
-  )[0];
+  const boostPoolDetails = // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((await jsonRpc(logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any)[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
     boostPoolDetails.available_amounts.length,
@@ -227,7 +226,7 @@ async function testBoostingForAsset(
 
   // Compare the fees collected with the expected amount
   const boostFeesCollected =
-    stoppedBoostingEvent?.unlockedAmount - amountToFineAmountBigInt(amount, asset);
+    stoppedBoostingEvent.unlockedAmount - amountToFineAmountBigInt(amount, asset);
   logger.debug('Boost fees collected:', boostFeesCollected);
   const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
   assert.strictEqual(
@@ -235,8 +234,6 @@ async function testBoostingForAsset(
     expectedIncrease,
     'Unexpected amount of fees earned from boosting',
   );
-
-  cf.printActions();
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
@@ -245,6 +242,7 @@ export async function testBoostingSwap(testContext: TestContext) {
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
   const boostPoolTier = 4;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const boostPool: any = (
     await chainflip.query.lendingPools.boostPools(Assets.Btc, boostPoolTier)
   ).toJSON();

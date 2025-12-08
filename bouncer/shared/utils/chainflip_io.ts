@@ -5,8 +5,9 @@ import {
   lpMutex,
 } from 'shared/utils';
 import { z } from 'zod';
+// eslint-disable-next-line no-restricted-imports
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
-import { KeyringPair } from '@polkadot/keyring/types';
 import { findEvent } from './indexer';
 
 export type Ok<T> = { ok: true; value: T; unwrap: () => T };
@@ -21,8 +22,6 @@ export const Err = <E>(error: E): Err<E> => ({
   },
 });
 
-
-
 // ---------------------------------
 
 export type AccountType = 'Broker' | 'Lp';
@@ -36,30 +35,37 @@ export type FullAccount<T extends AccountType> = {
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
 export type WithLpAccount = WithAccount<'Lp'>;
 
-export function full_account_from_uri<A extends AccountType>(uri: `//${string}`, type: A): FullAccount<A> {
+export function fullAccountFromUri<A extends AccountType>(
+  uri: `//${string}`,
+  type: A,
+): FullAccount<A> {
   return {
     uri,
     keypair: createStateChainKeypair(uri),
-    type
-  }
+    type,
+  };
 }
 
 export class ChainflipIO<Requirements> {
+  /// The last block height at which either an input or an output operation happened,
+  /// (that is either an extrinsic was submitted or an event was found)
   private lastIoBlockHeight: number;
-  readonly requirements: Requirements;
 
-  // state logging
-  private actions: string[];
+  /// Methods can contain additional requirements that they have, that is additional
+  /// data that should be available when calling them. For example, submitting an
+  /// extrinsic requires a statechain account.
+  readonly requirements: Requirements;
 
   constructor(requirements: Requirements) {
     this.lastIoBlockHeight = 0;
     this.requirements = requirements;
-    this.actions = [];
   }
 
   async submitExtrinsic<Data extends Requirements & { account: FullAccount<AccountType> }>(
     this: ChainflipIO<Data>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     extrinsic: (api: DisposableApiPromise) => any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<Result<any, string>> {
     await using chainflip = await getChainflipApi();
     const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
@@ -76,17 +82,14 @@ export class ChainflipIO<Requirements> {
     const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
     console.log(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
-    this.actions.push(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
 
     // submit
     const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(ext, false));
     if (result.ok) {
       console.log(`Successfully submitted`);
-      this.actions.push(` => Done`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
     } else {
       console.log(`Encountered error when submitting extrinsic: ${result.error}`);
-      this.actions.push(` => failed`);
     }
     return result;
   }
@@ -95,7 +98,6 @@ export class ChainflipIO<Requirements> {
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
-    this.actions.push(`Waiting for event ${name}`);
     const event = await findEvent(
       name,
       {
@@ -107,15 +109,8 @@ export class ChainflipIO<Requirements> {
       },
     );
     this.lastIoBlockHeight = event.blockHeight;
-    this.actions.push(`Done`);
 
     return event.args;
-  }
-
-  printActions() {
-    for (const action of this.actions) {
-      console.log(` - ${action}`);
-    }
   }
 }
 
@@ -125,6 +120,7 @@ declare global {
     toJSON(): string;
   }
 }
+// eslint-disable-next-line no-extend-native, func-names
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };

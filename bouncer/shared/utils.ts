@@ -37,7 +37,12 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { DisposableApiPromise, getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import {
+  DisposableApiPromise,
+  getChainflipApi,
+  observeBadEvent,
+  observeEvent,
+} from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -1236,7 +1241,9 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
 
 export function extractExtrinsicResult(
   chainflipApi: DisposableApiPromise,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   extrinsicResult: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Result<any, string> {
   if (extrinsicResult.dispatchError) {
     let error;
