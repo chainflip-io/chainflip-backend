@@ -187,7 +187,7 @@ fn main() {
 		let count = flat_deb_assets.iter().filter(|asset| asset.contains(suffix)).count();
 		assert!(
 			count == 2,
-			"Expected to find two deb assets with the version suffix '{}' in the Cargo.toml but found {}.",
+			"Expected to find two deb asset paths with the version suffix '{}' in the Cargo.toml but found {}.",
 			suffix,
 			count,
 		);
