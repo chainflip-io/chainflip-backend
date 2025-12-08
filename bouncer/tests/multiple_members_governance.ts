@@ -9,7 +9,7 @@ import { Codec } from '@polkadot/types/types';
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
 
-  const { members, threshold: _ } = (await chainflip.query.governance.members()) as unknown as {
+  const { members } = (await chainflip.query.governance.members()) as unknown as {
     members: Codec;
     threshold: number;
   };
