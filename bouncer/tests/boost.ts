@@ -26,12 +26,6 @@ import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 
-/// TEMP
-export const numericString = z
-  .string()
-  .regex(/^[\d,]+$/)
-  .transform((n) => Number(n.replaceAll(',', '')));
-
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 export async function stopBoosting(
   cf: ChainflipIO<WithLpAccount>,
