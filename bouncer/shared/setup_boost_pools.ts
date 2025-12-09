@@ -82,7 +82,7 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
 
   // create CFIO instance, this could be done further outside,
   // but temporarily it's here
-  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO({
+  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO(logger, {
     account: fullAccountFromUri('//LP_BOOST', 'LP'),
   });
 
@@ -98,9 +98,7 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
   );
   const fundBoostPoolsPromises: Promise<z.infer<typeof lendingPoolsBoostFundsAdded>>[] = [];
   for (const tier of boostPoolTiers) {
-    fundBoostPoolsPromises.push(
-      addBoostFunds(cf, logger, Assets.Btc, tier, fundBtcBoostPoolsAmount),
-    );
+    fundBoostPoolsPromises.push(addBoostFunds(cf, Assets.Btc, tier, fundBtcBoostPoolsAmount));
   }
   await Promise.all(fundBoostPoolsPromises);
 
