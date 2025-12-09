@@ -41,7 +41,7 @@ use cf_primitives::{
 };
 
 use state_chain_runtime::{
-	runtime_apis::{
+	runtime_apis::types::{
 		BrokerRejectionEventFor, ChannelActionType, EvmCallDetails, LendingPosition,
 		NetworkFeeDetails, OpenedDepositChannels,
 	},

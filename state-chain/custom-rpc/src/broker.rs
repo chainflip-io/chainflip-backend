@@ -50,7 +50,8 @@ use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
 	runtime_apis::{
-		ChainAccounts, CustomRuntimeApi, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
+		custom_api::CustomRuntimeApi,
+		types::{ChainAccounts, OpenedDepositChannels, VaultAddresses, VaultSwapDetails},
 	},
 	AccountId, Hash, Nonce, RuntimeCall,
 };
@@ -354,26 +355,42 @@ where
 		affiliate_fees: Option<Affiliates<AccountId32>>,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<VaultSwapDetails<AddressString>> {
-		Ok(self
-			.rpc_backend
-			.client
-			.runtime_api()
-			.cf_request_swap_parameter_encoding(
-				self.rpc_backend.client.info().best_hash,
-				self.signed_pool_client.account_id(),
-				source_asset,
-				destination_asset,
-				destination_address.try_parse_to_encoded_address(destination_asset.into())?,
-				broker_commission,
-				try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
-				channel_metadata,
-				boost_fee.unwrap_or_default(),
-				affiliate_fees.unwrap_or_default(),
-				dca_parameters,
-			)
-			.map_err(CfApiError::from)?
-			.map_err(CfApiError::from)?
-			.map_btc_address(Into::into))
+		let broker = self.signed_pool_client.account_id();
+		self.rpc_backend.with_versioned_runtime_api(None, |api, hash, api_version| {
+			Ok::<_, CfApiError>(if api_version < 10 {
+				#[expect(deprecated)]
+				api.cf_request_swap_parameter_encoding_before_version_10(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+					channel_metadata,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(Into::into)
+			} else {
+				let network = api.cf_network_environment(hash)?.into();
+				api.cf_request_swap_parameter_encoding(
+					hash,
+					broker,
+					source_asset,
+					destination_asset,
+					destination_address.try_parse_to_encoded_address(destination_asset.into())?,
+					broker_commission,
+					try_into_swap_extra_params_encoded(extra_parameters, source_asset.into())?,
+					channel_metadata,
+					boost_fee.unwrap_or_default(),
+					affiliate_fees.unwrap_or_default(),
+					dca_parameters,
+				)??
+				.map_btc_address(|pubkey| pubkey.to_address(&network).into())
+			})
+		})
 	}
 
 	async fn decode_vault_swap_parameter(

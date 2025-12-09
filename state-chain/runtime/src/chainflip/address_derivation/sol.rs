@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use super::AddressDerivation;
+use crate::chainflip::SolEnvironment;
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	sol::{
@@ -22,9 +24,6 @@ use cf_chains::{
 	},
 	Solana,
 };
-
-use super::AddressDerivation;
-use crate::SolEnvironment;
 
 impl AddressDerivationApi<Solana> for AddressDerivation {
 	fn generate_address(

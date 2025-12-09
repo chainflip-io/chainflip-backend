@@ -23,9 +23,8 @@ use frame_support::{migrations::VersionedMigration, traits::OnRuntimeUpgrade};
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
-mod chainflip_network_name_environment;
-mod wbtc;
 
+mod wbtc;
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
@@ -53,13 +52,6 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 }
 
 pub type PalletMigration<T> = (
-	VersionedMigration<
-		19,
-		20,
-		chainflip_network_name_environment::CfNetworkNameEnvironmentMigration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
 	VersionedMigration<
 		20,
 		21,

@@ -22,7 +22,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::arb, ChannelId};
 
-use crate::{Environment, EvmEnvironment};
+use crate::{chainflip::EvmEnvironment, Environment};
 use cf_chains::evm::api::EvmEnvironmentProvider;
 
 use super::AddressDerivation;
