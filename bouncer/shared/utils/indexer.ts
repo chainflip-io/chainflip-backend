@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { sleep } from 'shared/utils';
 import prisma from './prisma_client';
 
-type EventName = `${string}.${string}` | `.${string}`;
+export type EventName = `${string}.${string}` | `.${string}`;
 type EventTime = {
   startFromBlock: number;
   endBeforeBlock?: number;
