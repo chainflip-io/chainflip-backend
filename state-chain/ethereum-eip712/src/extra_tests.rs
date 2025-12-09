@@ -1,16 +1,19 @@
 use crate::{
 	build_eip712_data::{build_eip712_typed_data, to_ethers_typed_data},
-	eip712::Eip712,
+	eip712::{Eip712, TypedData},
 	*,
 };
 
 use core::marker::PhantomData;
-
-use ethers_core::types::{transaction::eip712::Eip712 as EthersEip712, H256, U128, U256};
+use ethers_core::types::{H256, U128, U256};
 use scale_info::prelude::string::String;
+use serde::Deserialize;
+use std::{
+	io::Write,
+	process::{Command, Stdio},
+};
 
 mod test_types {
-
 	use super::*;
 	#[derive(TypeInfo, Encode)]
 	pub enum TestEnum<T, S> {
@@ -67,31 +70,167 @@ mod test_types {
 	#[derive(Encode, TypeInfo)]
 	pub struct TetsPrimitiveTypeH256(pub H256);
 
-	// #[derive(Encode, TypeInfo)]
-	// pub struct TestI128(pub i128);
+	#[derive(Encode, TypeInfo)]
+	pub struct TestI128(pub i128);
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum HasherResponse {
+	Success {
+		library: String,
+		#[serde(rename = "signingHash")]
+		signing_hash: H256,
+	},
+	Error {
+		error: String,
+	},
+}
+
+const LIBRARIES: &[&str] = &["ethers", "viem", "eth-sig-util"];
+const TS_SIGNER_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/ts-signer");
+
+#[derive(Clone)]
+enum JsRuntime {
+	/// Pre-compiled standalone binary (fastest)
+	CompiledBinary(String),
+	/// Run via bun
+	Bun,
+	/// Run via npx tsx (Node.js)
+	Node,
+}
+
+fn get_compiled_binary_path() -> Option<String> {
+	#[cfg(target_os = "linux")]
+	let binary_name = "eip712-signer-linux-x64";
+	#[cfg(target_os = "macos")]
+	let binary_name = "eip712-signer-darwin-arm64";
+	#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+	let binary_name = "";
+
+	let path = std::path::Path::new(TS_SIGNER_DIR).join("dist").join(binary_name);
+
+	if path.exists() {
+		path.to_str().map(String::from)
+	} else {
+		None
+	}
+}
+
+fn detect_js_runtime() -> Option<JsRuntime> {
+	// First, check for pre-compiled binary (fastest)
+	if let Some(binary_path) = get_compiled_binary_path() {
+		return Some(JsRuntime::CompiledBinary(binary_path));
+	}
+
+	// Check if node_modules exists (dependencies installed)
+	let node_modules = std::path::Path::new(TS_SIGNER_DIR).join("node_modules");
+	if !node_modules.exists() {
+		return None;
+	}
+
+	if Command::new("bun").arg("--version").output().is_ok() {
+		Some(JsRuntime::Bun)
+	} else if Command::new("npx").arg("--version").output().is_ok() {
+		Some(JsRuntime::Node)
+	} else {
+		None
+	}
+}
+
+fn hash_with_ts_lib(
+	typed_data: &TypedData,
+	library: &str,
+	js_runtime: &JsRuntime,
+) -> HasherResponse {
+	let ethers_typed_data =
+		to_ethers_typed_data(typed_data.clone()).expect("Failed to convert to ethers typed data");
+	let typed_data_json =
+		serde_json::to_string(&ethers_typed_data).expect("Failed to serialize typed data to JSON");
+
+	let mut child = match js_runtime {
+		JsRuntime::CompiledBinary(path) => Command::new(path)
+			.args(["--library", library])
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.expect("Failed to spawn compiled binary"),
+		JsRuntime::Bun => Command::new("bun")
+			.args(["run", "src/main.ts", "--library", library])
+			.current_dir(TS_SIGNER_DIR)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.expect("Failed to spawn bun process"),
+		JsRuntime::Node => Command::new("npx")
+			.args(["tsx", "src/main.ts", "--library", library])
+			.current_dir(TS_SIGNER_DIR)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.expect("Failed to spawn npx tsx process"),
+	};
+
+	child
+		.stdin
+		.as_mut()
+		.expect("Failed to open stdin")
+		.write_all(typed_data_json.as_bytes())
+		.expect("Failed to write to stdin");
+
+	let output = child.wait_with_output().expect("Failed to wait for eip712-hasher");
+
+	if !output.status.success() {
+		let stderr =
+			std::string::String::from_utf8(output.stderr).expect("Invalid UTF-8 in stderr");
+		panic!("eip712-hasher failed with status {}: {}", output.status, stderr);
+	}
+
+	serde_json::from_slice(&output.stdout).expect("Failed to parse eip712-hasher output")
 }
 
 macro_rules! eip712_test {
 	($name:ident, $expr:expr) => {
 		#[test]
 		fn $name() {
+			let Some(runtime) = detect_js_runtime() else {
+				panic!("Skipping test: neither bun nor node/npx is installed");
+			};
+
 			let test_value = $expr;
 			let typed_data =
 				build_eip712_typed_data(test_value, "Chainflip-Mainnet".to_string(), 1)
 					.expect("Failed to build EIP-712 typed data");
-			let ethers_typed_data = to_ethers_typed_data(typed_data.clone())
-				.expect("Failed to convert to ethers typed data");
-			assert_eq!(
-				ethers_typed_data.encode_eip712().expect("Failed to encode ethers typed data"),
-				keccak256(typed_data.encode_eip712().expect("Failed to encode typed data"))
-			);
+
+			let rust_encoded = typed_data.encode_eip712().expect("Failed to encode typed data");
+			let rust_hash = H256(keccak256(&rust_encoded));
+
+			for library in LIBRARIES {
+				let response = hash_with_ts_lib(&typed_data, library, &runtime);
+
+				match response {
+					HasherResponse::Success { library: lib, signing_hash } => {
+						assert_eq!(
+							rust_hash, signing_hash,
+							"Hash mismatch with {} library.\nRust: 0x{}\nJS:   0x{}",
+							lib, rust_hash, signing_hash,
+						);
+					},
+					HasherResponse::Error { error } => {
+						panic!("eip712-hasher ({}) returned error: {}", library, error);
+					},
+				}
+			}
 		}
 	};
 }
 
-// eip712_test!(test_i32_small_pos, test_types::TestI128(12345));
-// eip712_test!(test_i32_small_neg, test_types::TestI128(-12345));
-// eip712_test!(test_enum_a_i32, test_types::TestEnum::<i32, ()>::A(-12345));
+eip712_test!(test_i128_small_pos, test_types::TestI128(12345));
+eip712_test!(test_i128_small_neg, test_types::TestI128(-12345));
+eip712_test!(test_enum_a_i32, test_types::TestEnum::<i32, ()>::A(-12345));
 eip712_test!(test_enum_a_u32, test_types::TestEnum::<u32, u8>::A(5));
 eip712_test!(test_enum_b_u8, test_types::TestEnum::<u32, u8>::B(6));
 eip712_test!(test_enum_c_vec, test_types::TestEnum::<u32, u8>::C(vec![7]));
@@ -176,7 +315,7 @@ eip712_test!(
 	test_vec_mixed_large_u128,
 	test_types::TestVec(vec![JS_MAX_SAFE_INTEGER, JS_MAX_SAFE_INTEGER + 1, u128::MAX])
 );
-// eip712_test!(test_i128_min, test_types::TestI128(i128::MIN));
-// eip712_test!(test_i128_max, test_types::TestI128(i128::MAX));
-// eip712_test!(test_i128_negative_large, test_types::TestI128(-(JS_MAX_SAFE_INTEGER as i128 + 1)));
-// eip712_test!(test_enum_negative_large, test_types::TestEnum::<i32, ()>::A(i32::MIN));
+eip712_test!(test_i128_min, test_types::TestI128(i128::MIN));
+eip712_test!(test_i128_max, test_types::TestI128(i128::MAX));
+eip712_test!(test_i128_negative_large, test_types::TestI128(-(JS_MAX_SAFE_INTEGER as i128 + 1)));
+eip712_test!(test_enum_negative_large, test_types::TestEnum::<i32, ()>::A(i32::MIN));
