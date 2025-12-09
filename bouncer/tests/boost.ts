@@ -41,13 +41,13 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const extrinsicResult = await cf.submitExtrinsic((api) =>
+  const extrinsicResult = await cf.stepToExtrinsicIncluded((api) =>
     api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
   );
 
   if (extrinsicResult.ok) {
     logger.info('waiting for stop boosting event');
-    return cf.expectEventInSameBlock(
+    return cf.expectEvent(
       'LendingPools.StoppedBoosting',
       lendingPoolsStoppedBoosting.refine(
         (event) =>
@@ -74,7 +74,7 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   logger.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await cf.submitExtrinsic((api) =>
+  await cf.stepToExtrinsicIncluded((api) =>
     api.tx.lendingPools.addBoostFunds(
       shortChainFromAsset(asset).toUpperCase(),
       amountToFineAmount(amount.toString(), assetDecimals(asset)),
@@ -82,7 +82,7 @@ export async function addBoostFunds(
     ),
   );
 
-  const result = await cf.forwardToEvent(
+  const result = await cf.expectEvent(
     'LendingPools.BoostFundsAdded',
     lendingPoolsBoostFundsAdded.refine(
       (event) =>
@@ -156,7 +156,7 @@ async function testBoostingForAsset(
   // Boost can fail if there is not enough liquidity in the boost pool, in which case it will emit an
   // InsufficientBoostLiquidity event. If the asset is not boosted, we will get a DepositFinalized event
   // instead.
-  const event = await cf.forwardToEitherEvent({
+  const firstEvent = await cf.stepUntilOneEventOf({
     boosted: {
       name: `${chainFromAsset(asset)}IngressEgress.DepositBoosted`,
       schema: bitcoinIngressEgressDepositBoosted.refine(
@@ -177,16 +177,16 @@ async function testBoostingForAsset(
     },
   });
 
-  if (event.key != 'boosted') {
+  if (firstEvent.key !== 'boosted') {
     throwError(
       logger,
-      new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(event.data)}`),
+      new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent.data)}`),
     );
   }
 
   // Check that the swap was finalized after being boosted
-  await cf.nextBlock();
-  await cf.forwardToEvent(
+  await cf.stepOneBlock();
+  await cf.stepUntilEvent(
     `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
     bitcoinIngressEgressDepositFinalised.refine(
       (event) => event.channelId === BigInt(swapRequest.channelId),
