@@ -46,28 +46,33 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       },
     });
 
-    foundEventsKeyAndData = matchingEvents.flatMap((event) => {
-      const schemas = Object.entries(descriptions).flatMap(([key, d]) =>
-        event.name.includes(d.name) ? [{ key, schema: d.schema }] : [],
-      );
-      if (schemas.length === 0) {
-        throw new Error(
-          `Unexpected internal error in 'findOneOfMany': there where no event descriptions found matching the chosen event ${JSON.stringify(event)}. The database query might be off.`,
+    if (matchingEvents) {
+      foundEventsKeyAndData = matchingEvents.flatMap((event) => {
+        const schemas = Object.entries(descriptions).flatMap(([key, d]) =>
+          event.name.includes(d.name) ? [{ key, schema: d.schema }] : [],
         );
-      }
-      const parsingResults = schemas.map(({ key, schema }) => {
-        const r = schema.parse(event.args);
-        return { key, data: r, blockHeight: event.block.height };
+        if (schemas.length === 0) {
+          throw new Error(
+            `Unexpected internal error in 'findOneOfMany': there where no event descriptions found matching the chosen event ${JSON.stringify(event)}. The database query might be off.`,
+          );
+        }
+
+        // Even though we found all events that match the given names, we have to check whether they
+        // also match the given schema.
+        const parsingResults = schemas.flatMap(({ key, schema }) => {
+          const r = schema.safeParse(event.args);
+          return r.success ? [{ key, data: r.data, blockHeight: event.block.height }] : [];
+        });
+
+        if (parsingResults.length > 1) {
+          throw new Error(
+            `Single event successfully matched against multiple event descriptions.\n\nevent:${JSON.stringify(event)}\n\ndescription keys:${JSON.stringify(parsingResults.map((r) => r.key))}`,
+          );
+        }
+
+        return parsingResults;
       });
-
-      if (parsingResults.length > 1) {
-        throw new Error(
-          `Single event successfully matched against multiple event descriptions.\n\nevent:${JSON.stringify(event)}\n\ndescription keys:${JSON.stringify(parsingResults.map((r) => r.key))}`,
-        );
-      }
-
-      return parsingResults;
-    });
+    }
 
     await sleep(2000);
   }

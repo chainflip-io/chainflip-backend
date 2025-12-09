@@ -192,10 +192,10 @@ async function testBoostingForAsset(
   );
 
   // Stop boosting
-  const stoppedBoostingEvent = await stopBoosting(cf, asset, boostFee)!;
+  const stoppedBoostingEvent = (await stopBoosting(cf, asset, boostFee))!;
   logger.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
-    stoppedBoostingEvent?.pendingBoosts.length,
+    stoppedBoostingEvent.pendingBoosts.length,
     0,
     'Unexpected pending boosts. Did another test run with a boostable swap at the same time?',
   );
