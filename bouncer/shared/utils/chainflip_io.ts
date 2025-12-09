@@ -8,7 +8,7 @@ import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
-import { ChooseSingleEvent, EventDescription, findOneEventOfMany } from './indexer';
+import { ChooseSingleEvent, EventDescription, EventName, findOneEventOfMany } from './indexer';
 import { Logger } from './logger';
 
 export class ChainflipIO<Requirements> {
@@ -68,7 +68,7 @@ export class ChainflipIO<Requirements> {
   }
 
   async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
-    name: `${string}.${string}` | `.${string}`,
+    name: EventName,
     schema: Z,
   ): Promise<z.infer<Z>> {
     this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
@@ -83,7 +83,7 @@ export class ChainflipIO<Requirements> {
   }
 
   async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
-    name: `${string}.${string}` | `.${string}`,
+    name: EventName,
     schema: Z,
   ): Promise<z.infer<Z>> {
     this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
