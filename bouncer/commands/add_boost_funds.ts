@@ -16,17 +16,11 @@ import { addBoostFunds } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
-const cf = new ChainflipIO({
+const cf = new ChainflipIO(globalLogger, {
   account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
 await runWithTimeoutAndExit(
-  addBoostFunds(
-    cf,
-    globalLogger,
-    process.argv[2] as Asset,
-    Number(process.argv[3]),
-    Number(process.argv[4]),
-  ),
+  addBoostFunds(cf, process.argv[2] as Asset, Number(process.argv[3]), Number(process.argv[4])),
   80,
 );

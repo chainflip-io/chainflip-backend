@@ -15,17 +15,12 @@ import { stopBoosting } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
-const cf = new ChainflipIO({
+const cf = new ChainflipIO(globalLogger, {
   account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
 async function main(): Promise<void> {
-  const event = await stopBoosting(
-    cf,
-    globalLogger,
-    process.argv[2] as Asset,
-    Number(process.argv[3]),
-  );
+  const event = await stopBoosting(cf, process.argv[2] as Asset, Number(process.argv[3]));
   globalLogger.info(`Stopped boosting event: ${JSON.stringify(event)}`);
 }
 

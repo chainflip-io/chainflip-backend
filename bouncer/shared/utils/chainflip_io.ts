@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import { ChooseSingleEvent, EventDescription, findOneEventOfMany } from './indexer';
+import { Logger } from './logger';
 
 export class ChainflipIO<Requirements> {
   /// The last block height at which either an input or an output operation happened,
@@ -20,9 +21,13 @@ export class ChainflipIO<Requirements> {
   /// extrinsic requires a statechain account.
   readonly requirements: Requirements;
 
-  constructor(requirements: Requirements) {
+  /// This class also exposes logger functionality
+  readonly logger: Logger;
+
+  constructor(logger: Logger, requirements: Requirements) {
     this.lastIoBlockHeight = 0;
     this.requirements = requirements;
+    this.logger = logger;
   }
 
   async stepToExtrinsicIncluded<Data extends Requirements & { account: FullAccount<AccountType> }>(
@@ -45,15 +50,15 @@ export class ChainflipIO<Requirements> {
     const args = human.method.args;
     const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
-    console.log(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
+    this.logger.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
 
     // submit
     const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(ext, false));
     if (result.ok) {
-      console.log(`Successfully submitted`);
+      this.logger.debug(`Successfully submitted`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
     } else {
-      console.log(`Encountered error when submitting extrinsic: ${result.error}`);
+      this.logger.debug(`Encountered error when submitting extrinsic: ${result.error}`);
     }
     return result;
   }
@@ -66,6 +71,7 @@ export class ChainflipIO<Requirements> {
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
+    this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
       { event: { name, schema } },
       {
@@ -80,6 +86,7 @@ export class ChainflipIO<Requirements> {
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
+    this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
       { event: { name, schema } },
       {
@@ -95,15 +102,41 @@ export class ChainflipIO<Requirements> {
   async stepUntilOneEventOf<S extends Record<string, EventDescription>>(
     descriptions: S,
   ): Promise<ChooseSingleEvent<S>> {
-    console.log(
-      `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))}`,
+    this.logger.debug(
+      `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
-    console.log(`starting from block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(descriptions, {
       startFromBlock: this.lastIoBlockHeight,
     });
     this.lastIoBlockHeight = event.blockHeight;
     return event;
+  }
+
+  // --------------- logger functionality ------------------
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  trace(msg: string, ...args: any[]) {
+    this.logger.trace(msg, ...args);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  debug(msg: string, ...args: any[]) {
+    this.logger.debug(msg, ...args);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  info(msg: string, ...args: any[]) {
+    this.logger.info(msg, ...args);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  warn(msg: string, ...args: any[]) {
+    this.logger.warn(msg, ...args);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  error(msg: string, ...args: any[]) {
+    this.logger.error(msg, ...args);
   }
 }
 
