@@ -42,7 +42,7 @@ use crate::{
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED},
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents},
 };
 
 use super::{
@@ -124,6 +124,9 @@ where
 
 	let usdt_contract_address =
 		*supported_erc20_tokens.get(&EthAsset::Usdt).context("USDT not supported")?;
+
+	let wbtc_contract_address =
+		*supported_erc20_tokens.get(&EthAsset::Wbtc).context("WBTC not supported")?;
 
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
@@ -219,6 +222,19 @@ where
 		.await?
 		.continuous("USDTDeposits".to_string(), db.clone())
 		.logging("USDTDeposits")
+		.spawn(scope);
+
+	eth_safe_vault_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, WbtcEvents>(
+			process_call.clone(),
+			eth_client.clone(),
+			EthAsset::Wbtc,
+			wbtc_contract_address,
+		)
+		.await?
+		.continuous("WBTCDeposits".to_string(), db.clone())
+		.logging("WBTCDeposits")
 		.spawn(scope);
 
 	eth_safe_vault_source_deposit_addresses

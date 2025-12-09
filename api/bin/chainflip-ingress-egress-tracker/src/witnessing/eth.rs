@@ -32,7 +32,7 @@ use chainflip_engine::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		eth::EthCallBuilder,
 		evm::{
-			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents},
 			source::EvmSource,
 		},
 	},
@@ -117,6 +117,18 @@ where
 		)
 		.await?
 		.logging("witnessing USDTDeposits")
+		.spawn(scope);
+
+	eth_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, WbtcEvents>(
+			witness_call.clone(),
+			eth_client.clone(),
+			EthAsset::Wbtc,
+			env_params.eth_wbtc_contract_address,
+		)
+		.await?
+		.logging("witnessing WBTCDeposits")
 		.spawn(scope);
 
 	eth_source_deposit_addresses
