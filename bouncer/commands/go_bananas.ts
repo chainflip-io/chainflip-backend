@@ -213,7 +213,7 @@ async function launchTornado() {
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
-  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc'];
   for (let i = 0; i < 10; i++) {
     const index1 = Math.floor(Math.random() * assets.length);
     const index2 = Math.floor(Math.random() * assets.length);
@@ -235,13 +235,14 @@ const swapAmount = new Map<Asset, string>([
   ['Btc', '0.006'],
   ['Usdc', '30'],
   ['Usdt', '12'],
+  ['Wbtc', '0.006'],
   ['Flip', '3'],
   ['ArbEth', '0.03'],
   ['ArbUsdc', '30'],
 ]);
 
 async function playSwapper() {
-  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Usdt', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc'];
   for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
@@ -258,6 +259,7 @@ const price = new Map<Asset, number>([
   ['Btc', 10000],
   ['Usdc', 1],
   ['Usdt', 1],
+  ['Wbtc', 10000],
   ['Flip', 10],
   ['ArbEth', 1000],
   ['ArbUsdc', 1],
@@ -271,6 +273,7 @@ async function bananas() {
     createLpPool(logger, 'Btc', price.get('Btc')!),
     createLpPool(logger, 'Flip', price.get('Flip')!),
     createLpPool(logger, 'Usdt', price.get('Usdt')!),
+    createLpPool(logger, 'Wbtc', price.get('Wbtc')!),
     createLpPool(logger, 'ArbEth', price.get('ArbEth')!),
     createLpPool(logger, 'ArbUsdc', price.get('ArbUsdc')!),
   ]);
@@ -281,6 +284,7 @@ async function bananas() {
     depositLiquidity(logger, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
     depositLiquidity(logger, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
     depositLiquidity(logger, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    depositLiquidity(logger, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
     depositLiquidity(logger, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
     depositLiquidity(logger, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
   ]);
@@ -305,6 +309,11 @@ async function bananas() {
       'Usdt',
       price.get('Usdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Usdt')),
       liquidityUsdc,
+    ),
+    playLp(
+        'Wbtc',
+        price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
+        liquidityUsdc,
     ),
     playLp(
       'ArbEth',

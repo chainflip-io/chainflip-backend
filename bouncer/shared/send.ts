@@ -41,6 +41,7 @@ export async function send(
       return sendSol(logger, address, amount);
     case 'Usdc':
     case 'Usdt':
+    case 'Wbtc':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
       return sendErc20(logger, 'Ethereum', address, contractAddress, amount);

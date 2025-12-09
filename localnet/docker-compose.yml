@@ -1,6 +1,6 @@
 services:
   eth-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/localnet-initial-state:v1.4.0-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: init
     platform: linux/amd64
@@ -18,7 +18,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   arb-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.4.0-${NODE_COUNT}
     restart: always
     container_name: arb-init
     pull_policy: if_not_present
@@ -34,7 +34,7 @@ services:
       - "/tmp/chainflip/data/redis-data:/data"
 
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.3.2-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v1.4.0-${NODE_COUNT}
     container_name: geth
     platform: linux/amd64
     ports:
@@ -288,6 +288,7 @@ services:
       - CFDM_ETH_FLIP_ADDRESS=0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26
       - CFDM_ETH_USDC_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
       - CFDM_ETH_USDT_ADDRESS=0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
+      - CFDM_ETH_WBTC_ADDRESS=0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e
 
       - CFDM_ARB_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_ARB_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300

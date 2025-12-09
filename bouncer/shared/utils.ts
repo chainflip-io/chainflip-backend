@@ -144,6 +144,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
         case 'Usdt':
           return process.env.ETH_USDT_ADDRESS ?? '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        case 'Wbtc':
+          return process.env.ETH_WBTC_ADDRESS ?? '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e';
         case 'CFTESTER':
           return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         case 'GATEWAY':
@@ -234,6 +236,7 @@ export function shortChainFromAsset(asset: Asset) {
     case 'Flip':
     case 'Usdc':
     case 'Usdt':
+    case 'Wbtc':
       return 'Eth';
     case 'Btc':
       return 'Btc';
@@ -263,6 +266,7 @@ export function fineAmountToAmount(fineAmount: string, decimals: number | string
 export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
     case 'Btc':
+    case 'Wbtc':
       return '0.05';
     case 'Eth':
     case 'ArbEth':
@@ -292,6 +296,10 @@ export function getAssetContractId(asset: Asset): number {
 
 export function assetDecimals(asset: Asset): number {
   if (isSDKAsset(asset)) return assetConstants[asset].decimals;
+
+  // TODO change once WBTC support is added to Chainflip SDK
+  if (asset === 'Wbtc') return 8;
+
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

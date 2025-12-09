@@ -42,7 +42,9 @@ use crate::{
 		storage_api::StorageApi,
 		stream_api::{StreamApi, FINALIZED},
 	},
-	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents},
+	witness::evm::erc20_deposits::{
+		flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
+	},
 };
 
 use super::{

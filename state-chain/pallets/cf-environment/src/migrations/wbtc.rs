@@ -15,7 +15,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for WbtcMigration<T> {
 			NetworkEnvironment::Testnet =>
 				hex_literal::hex!("b060796D171EeEdA5Fb99df6B2847DA6D4613CAd").into(),
 			NetworkEnvironment::Development =>
-				hex_literal::hex!("b060796D171EeEdA5Fb99df6B2847DA6D4613CAd").into(),
+				hex_literal::hex!("B7f8BC63BbcaD18155201308C8f3540b07f84F5e").into(),
 		};
 		EthereumSupportedAssets::<T>::insert(EthAsset::Wbtc, wbtc_address);
 
@@ -47,7 +47,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for WbtcMigration<T> {
 			),
 			NetworkEnvironment::Development => assert_eq!(
 				wbtc_address,
-				hex_literal::hex!("b060796D171EeEdA5Fb99df6B2847DA6D4613CAd").into()
+				hex_literal::hex!("B7f8BC63BbcaD18155201308C8f3540b07f84F5e").into()
 			),
 		};
 

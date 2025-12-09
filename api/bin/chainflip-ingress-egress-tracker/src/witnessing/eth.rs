@@ -32,7 +32,9 @@ use chainflip_engine::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		eth::EthCallBuilder,
 		evm::{
-			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents},
+			erc20_deposits::{
+				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
+			},
 			source::EvmSource,
 		},
 	},
