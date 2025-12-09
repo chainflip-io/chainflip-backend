@@ -34,6 +34,9 @@ jobs:
         with:
           cache: rust
 
+      - name: Install unzip
+        run: apt-get update && apt-get install -y unzip
+
       - name: Install Bun Runtime
         uses: oven-sh/setup-bun@v1
         with:
@@ -68,6 +71,9 @@ jobs:
         uses: namespacelabs/nscloud-cache-action@v1
         with:
           cache: rust
+
+      - name: Install unzip
+        run: apt-get update && apt-get install -y unzip
 
       - name: Install Bun Runtime
         uses: oven-sh/setup-bun@v1
