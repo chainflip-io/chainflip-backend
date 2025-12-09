@@ -8,43 +8,7 @@ import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
-import { findEvent, findGoodOrBadEvent, findOneEventOfMany } from './indexer';
-
-export type Ok<T> = { ok: true; value: T; unwrap: () => T };
-export type Err<E> = { ok: false; error: E; unwrap: () => never };
-export type Result<T, E> = Ok<T> | Err<E>;
-export const Ok = <T>(value: T): Ok<T> => ({ ok: true, value, unwrap: () => value });
-export const Err = <E>(error: E): Err<E> => ({
-  ok: false,
-  error,
-  unwrap: () => {
-    throw new Error(`${error}`);
-  },
-});
-
-// ---------------------------------
-
-export type AccountType = 'Broker' | 'LP';
-
-export type FullAccount<T extends AccountType> = {
-  uri: `//${string}`;
-  keypair: KeyringPair;
-  type: T;
-};
-
-export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
-export type WithLpAccount = WithAccount<'LP'>;
-
-export function fullAccountFromUri<A extends AccountType>(
-  uri: `//${string}`,
-  type: A,
-): FullAccount<A> {
-  return {
-    uri,
-    keypair: createStateChainKeypair(uri),
-    type,
-  };
-}
+import { ChooseSingleEvent, EventDescription, findOneEventOfMany } from './indexer';
 
 export class ChainflipIO<Requirements> {
   /// The last block height at which either an input or an output operation happened,
@@ -61,7 +25,7 @@ export class ChainflipIO<Requirements> {
     this.requirements = requirements;
   }
 
-  async submitExtrinsic<Data extends Requirements & { account: FullAccount<AccountType> }>(
+  async stepToExtrinsicIncluded<Data extends Requirements & { account: FullAccount<AccountType> }>(
     this: ChainflipIO<Data>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     extrinsic: (api: DisposableApiPromise) => any,
@@ -94,11 +58,11 @@ export class ChainflipIO<Requirements> {
     return result;
   }
 
-  async nextBlock() {
+  async stepOneBlock() {
     this.lastIoBlockHeight += 1;
   }
 
-  async forwardToEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+  async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
@@ -112,24 +76,23 @@ export class ChainflipIO<Requirements> {
     return event.data;
   }
 
-  async expectEventInSameBlock<Z extends z.ZodTypeAny = z.ZodTypeAny>(
+  async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: `${string}.${string}` | `.${string}`,
     schema: Z,
   ): Promise<z.infer<Z>> {
-    const event = await findEvent(
-      name,
+    const event = await findOneEventOfMany(
+      { event: { name, schema } },
       {
         startFromBlock: this.lastIoBlockHeight,
         endBeforeBlock: this.lastIoBlockHeight + 1,
       },
-      schema,
     );
     this.lastIoBlockHeight = event.blockHeight;
 
-    return event.args;
+    return event.data;
   }
 
-  async forwardToEitherEvent<S extends Record<string, EventDescription>>(
+  async stepUntilOneEventOf<S extends Record<string, EventDescription>>(
     descriptions: S,
   ): Promise<ChooseSingleEvent<S>> {
     console.log(
@@ -144,53 +107,40 @@ export class ChainflipIO<Requirements> {
   }
 }
 
-// the following fixes the "TypeError: Do not know how to serialize a BigInt" error
-declare global {
-  interface BigInt {
-    toJSON(): string;
-  }
-}
-// eslint-disable-next-line no-extend-native, func-names
-BigInt.prototype.toJSON = function () {
-  return this.toString();
+// ------------ Account types  ---------------
+
+export type AccountType = 'Broker' | 'LP';
+
+export type FullAccount<T extends AccountType> = {
+  uri: `//${string}`;
+  keypair: KeyringPair;
+  type: T;
 };
 
-export type EventDescription = { name: string; schema: z.ZodTypeAny };
+export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
+export type WithLpAccount = WithAccount<'LP'>;
 
-export type EventDescriptions = Record<string, EventDescription>;
-
-export type ChooseSingleEvent<S extends Record<string, EventDescription>> = {
-  [K in keyof S]: {
-    key: K;
-    data: z.infer<S[K]['schema']>;
-    blockHeight: number;
+export function fullAccountFromUri<A extends AccountType>(
+  uri: `//${string}`,
+  type: A,
+): FullAccount<A> {
+  return {
+    uri,
+    keypair: createStateChainKeypair(uri),
+    type,
   };
-}[keyof S];
-
-function chooseValue<S extends EventDescriptions>(schemas: S): ChooseSingleEvent<S> {
-  // implementation chooses one schema at runtime
-  const keys = Object.keys(schemas);
-  const randomKey = keys[Math.floor(Math.random() * keys.length)] as keyof S;
-
-  // parse something ...
-  return schemas[randomKey].schema.parse(undefined as any);
 }
 
-function test() {
-  const x = chooseValue({
-    one: {
-      name: `bla`,
-      schema: z.number(),
-    },
-    other: {
-      name: 'hello',
-      schema: z.literal('hello'),
-    },
-  });
+// ------------ Result type ---------------
 
-  if (x.key === 'one') {
-    console.log(x.data);
-  } else {
-    console.log(x.data);
-  }
-}
+export type Ok<T> = { ok: true; value: T; unwrap: () => T };
+export type Err<E> = { ok: false; error: E; unwrap: () => never };
+export type Result<T, E> = Ok<T> | Err<E>;
+export const Ok = <T>(value: T): Ok<T> => ({ ok: true, value, unwrap: () => value });
+export const Err = <E>(error: E): Err<E> => ({
+  ok: false,
+  error,
+  unwrap: () => {
+    throw new Error(`${error}`);
+  },
+});
