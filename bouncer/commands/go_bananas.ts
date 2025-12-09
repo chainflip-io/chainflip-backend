@@ -311,9 +311,9 @@ async function bananas() {
       liquidityUsdc,
     ),
     playLp(
-        'Wbtc',
-        price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
-        liquidityUsdc,
+      'Wbtc',
+      price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
+      liquidityUsdc,
     ),
     playLp(
       'ArbEth',

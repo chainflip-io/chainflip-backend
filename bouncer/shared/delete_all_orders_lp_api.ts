@@ -41,10 +41,10 @@ export async function DeleteAllOrdersLpApi(logger: Logger) {
   );
   logger.info(`WBTC pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc(
-      'cf_pool_orders',
-      { chain: 'Ethereum', asset: 'WBTC' },
-      'WBTC',
-      lp.address,
+    'cf_pool_orders',
+    { chain: 'Ethereum', asset: 'WBTC' },
+    'WBTC',
+    lp.address,
   );
   logger.info(`WBTC pool: ${JSON.stringify(orders)}`);
 
@@ -83,10 +83,10 @@ export async function DeleteAllOrdersLpApi(logger: Logger) {
   );
   logger.info(`FLIP pool: ${JSON.stringify(orders)}`);
   orders = await chainflip.rpc(
-      'cf_pool_orders',
-      { chain: 'Ethereum', asset: 'WBTC' },
-      'WBTC',
-      lp.address,
+    'cf_pool_orders',
+    { chain: 'Ethereum', asset: 'WBTC' },
+    'WBTC',
+    lp.address,
   );
   logger.info(`WBTC pool: ${JSON.stringify(orders)}`);
 }
