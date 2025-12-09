@@ -60,45 +60,123 @@ mod test_types {
 
 	#[derive(Encode, TypeInfo)]
 	pub struct TetsPrimitiveTypeU256(pub U256);
+
 	#[derive(Encode, TypeInfo)]
 	pub struct TetsPrimitiveTypeU128(pub U128);
+
 	#[derive(Encode, TypeInfo)]
 	pub struct TetsPrimitiveTypeH256(pub H256);
+
+	// #[derive(Encode, TypeInfo)]
+	// pub struct TestI128(pub i128);
 }
 
-fn eip712_hash_matches_ethers<T: TypeInfo + Encode + 'static>(test_value: T) {
-	let typed_data =
-		build_eip712_typed_data(test_value, "Chainflip-Mainnet".to_string(), 1).unwrap();
-	let ethers_typed_data = to_ethers_typed_data(typed_data.clone()).unwrap();
-	assert_eq!(
-		ethers_typed_data.encode_eip712().unwrap(),
-		keccak256(typed_data.encode_eip712().unwrap())
-	);
+macro_rules! eip712_test {
+	($name:ident, $expr:expr) => {
+		#[test]
+		fn $name() {
+			let test_value = $expr;
+			let typed_data =
+				build_eip712_typed_data(test_value, "Chainflip-Mainnet".to_string(), 1)
+					.expect("Failed to build EIP-712 typed data");
+			let ethers_typed_data = to_ethers_typed_data(typed_data.clone())
+				.expect("Failed to convert to ethers typed data");
+			assert_eq!(
+				ethers_typed_data.encode_eip712().expect("Failed to encode ethers typed data"),
+				keccak256(typed_data.encode_eip712().expect("Failed to encode typed data"))
+			);
+		}
+	};
 }
 
-#[test]
-fn test_eip_encoding_matches_ethers() {
-	eip712_hash_matches_ethers(test_types::TestEnum::<u32, u8>::A(5));
-	eip712_hash_matches_ethers(test_types::TestEnum::<u32, u8>::B(6));
-	eip712_hash_matches_ethers(test_types::TestEnum::<u32, u8>::C(vec![7]));
-	eip712_hash_matches_ethers(test_types::TestEnum::<u32, u8>::D { dd: 8 });
-	eip712_hash_matches_ethers(test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Aaaaa));
-	eip712_hash_matches_ethers(test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Bbbbb));
-	eip712_hash_matches_ethers(test_types::TestCompact { a: 5u8, b: 6u32, c: 7 });
-	eip712_hash_matches_ethers(test_types::TestEmpty);
-	eip712_hash_matches_ethers(test_types::TestEmptyNested(test_types::TestEmpty));
-	eip712_hash_matches_ethers(test_types::Abs((8, 9)));
-	eip712_hash_matches_ethers(
-		test_types::TestEmptyGeneric::<test_types::Mail>(Default::default()),
-	);
-	eip712_hash_matches_ethers(test_types::TestVec::<u8>(vec![]));
-	eip712_hash_matches_ethers(test_types::TestVec::<u128>(vec![]));
-	eip712_hash_matches_ethers(test_types::TestVec(vec![5u128, 6u128]));
-	eip712_hash_matches_ethers(test_types::TestVec(vec![5u8, 6u8]));
+// eip712_test!(test_i32_small_pos, test_types::TestI128(12345));
+// eip712_test!(test_i32_small_neg, test_types::TestI128(-12345));
+// eip712_test!(test_enum_a_i32, test_types::TestEnum::<i32, ()>::A(-12345));
+eip712_test!(test_enum_a_u32, test_types::TestEnum::<u32, u8>::A(5));
+eip712_test!(test_enum_b_u8, test_types::TestEnum::<u32, u8>::B(6));
+eip712_test!(test_enum_c_vec, test_types::TestEnum::<u32, u8>::C(vec![7]));
+eip712_test!(test_enum_d_struct, test_types::TestEnum::<u32, u8>::D { dd: 8 });
+eip712_test!(
+	test_wrapped_empty_enum_a,
+	test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Aaaaa)
+);
+eip712_test!(
+	test_wrapped_empty_enum_b,
+	test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Bbbbb)
+);
+eip712_test!(test_compact, test_types::TestCompact { a: 5u8, b: 6u32, c: 7 });
+eip712_test!(test_empty, test_types::TestEmpty);
+eip712_test!(test_empty_nested, test_types::TestEmptyNested(test_types::TestEmpty));
+eip712_test!(test_abs_tuple, test_types::Abs((8, 9)));
+eip712_test!(
+	test_empty_generic,
+	test_types::TestEmptyGeneric::<test_types::Mail>(Default::default())
+);
+eip712_test!(test_vec_u8_empty, test_types::TestVec::<u8>(vec![]));
+eip712_test!(test_vec_u128_empty, test_types::TestVec::<u128>(vec![]));
+eip712_test!(test_vec_u128, test_types::TestVec(vec![5u128, 6u128]));
+eip712_test!(test_vec_u8, test_types::TestVec(vec![5u8, 6u8]));
+eip712_test!(test_array_u16, test_types::TestArray([5u16; 10]));
+eip712_test!(test_primitive_u256, test_types::TetsPrimitiveTypeU256(U256([1, 2, 3, 4])));
+eip712_test!(test_primitive_u128, test_types::TetsPrimitiveTypeU128(U128([1, 2])));
+eip712_test!(test_primitive_h256, test_types::TetsPrimitiveTypeH256(H256([5u8; 32])));
+eip712_test!(test_tuple_with_abs, (12u128, test_types::Abs((8, 10))));
 
-	eip712_hash_matches_ethers(test_types::TestArray([5u16; 10]));
-	eip712_hash_matches_ethers(test_types::TetsPrimitiveTypeU256(U256([1, 2, 3, 4])));
-	eip712_hash_matches_ethers(test_types::TetsPrimitiveTypeU128(U128([1, 2])));
-	eip712_hash_matches_ethers(test_types::TetsPrimitiveTypeH256(H256([5u8; 32])));
-	eip712_hash_matches_ethers((12u128, test_types::Abs((8, 10))));
-}
+eip712_test!(
+	test_enum_nested_enum,
+	test_types::TestEnum::<test_types::TestEmptyEnum, u8>::A(test_types::TestEmptyEnum::Aaaaa)
+);
+eip712_test!(
+	test_enum_with_struct_a,
+	test_types::TestEnum::<test_types::Abs, test_types::TestEmpty>::A(test_types::Abs((1, 2)))
+);
+eip712_test!(
+	test_enum_with_struct_b,
+	test_types::TestEnum::<test_types::Abs, test_types::TestEmpty>::B(test_types::TestEmpty)
+);
+eip712_test!(
+	test_vec_of_structs,
+	test_types::TestVec(vec![test_types::Abs((1, 2)), test_types::Abs((3, 4))])
+);
+eip712_test!(
+	test_compact_with_structs,
+	test_types::TestCompact { a: test_types::TestEmpty, b: test_types::Abs((1, 2)), c: 100 }
+);
+eip712_test!(
+	test_mail,
+	test_types::Mail {
+		from: "alice@example.com".to_string(),
+		to: "bob@example.com".to_string(),
+		message: "Hello!".to_string()
+	}
+);
+eip712_test!(
+	test_mail_empty_strings,
+	test_types::Mail { from: "".to_string(), to: "".to_string(), message: "".to_string() }
+);
+eip712_test!(
+	test_vec_nested_structs,
+	test_types::TestVec(vec![test_types::TestEmptyNested(test_types::TestEmpty)])
+);
+eip712_test!(test_primitive_u256_zero, test_types::TetsPrimitiveTypeU256(U256::zero()));
+eip712_test!(test_primitive_u128_zero, test_types::TetsPrimitiveTypeU128(U128::zero()));
+eip712_test!(test_primitive_h256_zero, test_types::TetsPrimitiveTypeH256(H256::zero()));
+
+// Large integer tests (beyond JavaScript's MAX_SAFE_INTEGER = 2^53 - 1 = 9007199254740991)
+const JS_MAX_SAFE_INTEGER: u128 = 2u128.pow(53) - 1;
+
+eip712_test!(test_u64_max, test_types::TestVec(vec![u64::MAX]));
+eip712_test!(test_u128_large, test_types::TestVec(vec![u128::MAX]));
+eip712_test!(test_u128_beyond_js_safe, test_types::TestVec(vec![JS_MAX_SAFE_INTEGER + 1]));
+eip712_test!(test_compact_large_value, test_types::TestCompact { a: 1u8, b: 2u32, c: u128::MAX });
+eip712_test!(test_abs_large_u128, test_types::Abs((255, u128::MAX)));
+eip712_test!(test_primitive_u256_large, test_types::TetsPrimitiveTypeU256(U256::MAX));
+eip712_test!(test_primitive_u128_max, test_types::TetsPrimitiveTypeU128(U128::MAX));
+eip712_test!(
+	test_vec_mixed_large_u128,
+	test_types::TestVec(vec![JS_MAX_SAFE_INTEGER, JS_MAX_SAFE_INTEGER + 1, u128::MAX])
+);
+// eip712_test!(test_i128_min, test_types::TestI128(i128::MIN));
+// eip712_test!(test_i128_max, test_types::TestI128(i128::MAX));
+// eip712_test!(test_i128_negative_large, test_types::TestI128(-(JS_MAX_SAFE_INTEGER as i128 + 1)));
+// eip712_test!(test_enum_negative_large, test_types::TestEnum::<i32, ()>::A(i32::MIN));
