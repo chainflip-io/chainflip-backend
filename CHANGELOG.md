@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.2] - 2025-12-09
+
+### Fixes
+
+- Revert Polkadot-SDK blocks pruning.
+
 ## [2.0.1] - 2025-12-07
 
 ### Fixes
