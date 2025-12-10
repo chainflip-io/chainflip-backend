@@ -34,6 +34,19 @@ jobs:
         with:
           cache: rust
 
+      - name: Install unzip
+        run: apt-get update && apt-get install -y unzip
+
+      - name: Install Bun Runtime
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "latest"
+
+      - name: Build TypeScript Signer for Ethereum EIP712 tests
+        working-directory: state-chain/ethereum-eip712/ts-signer
+        run: |
+          bun install
+
       - name: cargo cf-test-ci --locked
         run: |
           cargo cf-test-ci --locked
@@ -58,6 +71,20 @@ jobs:
         uses: namespacelabs/nscloud-cache-action@v1
         with:
           cache: rust
+
+      - name: Install unzip
+        run: apt-get update && apt-get install -y unzip
+
+      - name: Install Bun Runtime
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "latest"
+
+      - name: Build TypeScript Signer for Ethereum EIP712 tests
+        working-directory: state-chain/ethereum-eip712/ts-signer
+        run: |
+          bun install
+          bun run build
 
       - name: Install cargo-llvm-cov 💿
         uses: taiki-e/install-action@c2648687d6fe1a5a70a4b65c84715cafab1f3451
