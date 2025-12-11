@@ -17,6 +17,7 @@
 #![cfg(test)]
 mod network;
 
+mod amm;
 mod broadcasting;
 mod mock_runtime;
 mod signer_nomination;

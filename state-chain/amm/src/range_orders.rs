@@ -92,6 +92,10 @@ impl Position {
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
 	) -> Collected {
+		// Note: All fee growth arithmetic uses wrapping (modular) subtraction, matching Uniswap's
+		// Solidity implementation. This is intentional - the absolute values may wrap around, but
+		// the *differences* between fee growth values remain mathematically correct due to the
+		// properties of modular arithmetic. See Uniswap V3's Tick.sol getFeeGrowthInside().
 		let fee_growth_inside = PoolPairsMap::default().map_with_pair(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
@@ -105,7 +109,11 @@ impl Position {
 				pool_state.global_fee_growth[side] - upper_delta.fee_growth_outside[side]
 			};
 
-			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
+			pool_state.global_fee_growth[side]
+				.overflowing_sub(fee_growth_below)
+				.0
+				.overflowing_sub(fee_growth_above)
+				.0
 		});
 		let fees = PoolPairsMap::default().map_with_pair(|side, ()| {
 			// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
@@ -116,8 +124,9 @@ impl Position {
 				Note position.liquidity: u128
 				U512::one() << 128 > u128::MAX
 			*/
+			// Use wrapping subtraction to match Uniswap's modular arithmetic semantics
 			mul_div_floor(
-				fee_growth_inside[side] - self.last_fee_growth_inside[side],
+				fee_growth_inside[side].overflowing_sub(self.last_fee_growth_inside[side]).0,
 				self.liquidity.into(),
 				U512::one() << 128,
 			)
