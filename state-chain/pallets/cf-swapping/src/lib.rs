@@ -510,7 +510,7 @@ where
 
 #[frame_support::pallet]
 pub mod pallet {
-	use core::cmp::max;
+	use core::{cmp::max, panic};
 
 	use cf_amm::math::{
 		adjust_price_by_bps, invert_price, mul_div_floor, output_amount_ceil, output_amount_floor,
@@ -530,7 +530,7 @@ pub mod pallet {
 		SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
-	use sp_runtime::SaturatedConversion;
+	use sp_runtime::{FixedPointNumber, FixedU64, SaturatedConversion};
 
 	use super::*;
 	#[pallet::config]
@@ -2597,38 +2597,6 @@ pub mod pallet {
 			});
 		}
 
-		pub fn estimate_price_using_simulated_swap(asset: Asset, side: Side) -> Option<Price> {
-			let (input_asset, output_asset) =
-				if side == Side::Buy { (STABLE_ASSET, asset) } else { (asset, STABLE_ASSET) };
-			let estimation_input = utilities::estimated_20usd_input(input_asset);
-
-			let estimation_output = with_transaction_unchecked(|| {
-				TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
-					input_asset,
-					output_asset,
-					estimation_input,
-				))
-			})
-			.ok()?;
-
-			if estimation_output == 0 {
-				None
-			} else {
-				// Get price in terms of `output_asset per input_asset`
-				let price = mul_div_floor(
-					estimation_output.into(),
-					U256::one() << PRICE_FRACTIONAL_BITS,
-					estimation_input,
-				);
-				// Convert the price to terms of `asset per usdc`
-				if side == Side::Buy {
-					Some(invert_price(price))
-				} else {
-					Some(price)
-				}
-			}
-		}
-
 		fn egress_for_swap(
 			swap_request_id: SwapRequestId,
 			amount: AssetAmount,
@@ -3034,46 +3002,90 @@ pub mod pallet {
 				Permill::zero()
 			};
 
-			if input_asset == output_asset {
-				// Network fee will still be taken on a same asset swap
-				return desired_output_amount + network_fee * desired_output_amount;
-			}
-
-			// Get the price of both assets using oracles or simulated swap, both with fallback to
-			// hard coded prices
-			let get_price = |asset, side: Side| -> Price {
-				if asset == Asset::Flip || asset == Asset::Dot {
-					Self::estimate_price_using_simulated_swap(input_asset, side)
-				} else {
-					// Using stale prices here is fine as its just for fees/gas
-					T::PriceFeedApi::get_price(asset).map(|price_data| {
-						// Apply a hard coded slippage in the correct direction
-						let slippage_bps = if asset == STABLE_ASSET {
-							0
-						} else if asset == Asset::Usdc ||
-							asset == Asset::Usdt || asset == Asset::SolUsdc ||
-							asset == Asset::HubUsdc ||
-							asset == Asset::HubUsdt ||
-							asset == Asset::ArbUsdc
-						{
-							ORACLE_SLIPPAGE_STABLE
+			let required_input = if input_asset == output_asset {
+				desired_output_amount
+			} else {
+				// Get the price of both assets using oracles or simulated swap, both with fallback
+				// to hard coded prices
+				let get_price = |asset, side: Side| -> Price {
+					if asset == Asset::Flip || asset == Asset::Dot {
+						// Estimate price via swap simulation
+						let (input_asset, output_asset) = if side == Side::Buy {
+							(STABLE_ASSET, asset)
 						} else {
-							ORACLE_SLIPPAGE
+							(asset, STABLE_ASSET)
 						};
-						adjust_price_by_bps(price_data.price, slippage_bps, side == Side::Buy)
-					})
-				}
-				.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
-			};
-			let relative_price = relative_price(
-				get_price(output_asset, Side::Buy),
-				get_price(input_asset, Side::Sell),
-			);
+						let estimation_input = utilities::estimated_20usd_input(input_asset);
 
-			// Finally calculate the required input amount minus the network fee
-			let required_input = output_amount_ceil(desired_output_amount.into(), relative_price)
-				.saturated_into::<AssetAmount>();
-			required_input + network_fee * required_input
+						let estimation_output = with_transaction_unchecked(|| {
+							TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
+								input_asset,
+								output_asset,
+								estimation_input,
+							))
+						})
+						.ok();
+
+						match estimation_output {
+							Some(0) => None,
+							Some(output) => Some(output),
+							None => None,
+						}
+						.map(|estimation_output| {
+							// Get price in terms of `output_asset per input_asset`
+							let price = mul_div_floor(
+								estimation_output.into(),
+								U256::one() << PRICE_FRACTIONAL_BITS,
+								estimation_input,
+							);
+							// Convert the price to terms of `asset per usdc`
+							if side == Side::Buy {
+								invert_price(price)
+							} else {
+								price
+							}
+						})
+					} else {
+						// Using stale prices here is fine as its just for fees/gas
+						T::PriceFeedApi::get_price(asset).map(|price_data| {
+							// Apply a hard coded slippage in the correct direction
+							let slippage_bps = if asset == STABLE_ASSET {
+								0
+							} else if asset.is_stablecoin() {
+								ORACLE_SLIPPAGE_STABLE
+							} else {
+								ORACLE_SLIPPAGE
+							};
+							adjust_price_by_bps(price_data.price, slippage_bps, side == Side::Buy)
+						})
+					}
+					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
+				};
+				let output_price = get_price(output_asset, Side::Buy);
+				let input_price = get_price(input_asset, Side::Sell);
+				if input_price.is_zero() || output_price.is_zero() {
+					log_or_panic!(
+					"Estimated Price for input or output asset is zero: {input_asset:?} = {input_price:?}, {output_asset:?} = {output_price:?}"
+				);
+					return 0;
+				}
+				let relative_price = relative_price(output_price, input_price);
+
+				// Finally calculate the required input amount
+				output_amount_ceil(desired_output_amount.into(), relative_price)
+					.saturated_into::<AssetAmount>()
+			};
+
+			// Adjust for network fee
+			if network_fee.is_one() {
+				0
+			} else {
+				FixedU64::from_rational(
+					MAX_BASIS_POINTS as u128,
+					MAX_BASIS_POINTS as u128 - network_fee * (MAX_BASIS_POINTS as u128),
+				)
+				.saturating_mul_int(required_input)
+			}
 		}
 	}
 }
@@ -3196,7 +3208,7 @@ pub mod utilities {
 	// These prices are rough approximations of real market prices and should be updated
 	// occasionally if the prices move significantly.
 	pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
-		use cf_primitives::FLIP_DECIMALS;
+		use cf_primitives::{FLIP_DECIMALS, USD_DECIMALS};
 		const ETH_DECIMALS: u32 = 18;
 		const DOT_DECIMALS: u32 = 10;
 		const BTC_DECIMALS: u32 = 8;
@@ -3208,7 +3220,7 @@ pub mod utilities {
 			Asset::ArbUsdc |
 			Asset::SolUsdc |
 			Asset::HubUsdc |
-			Asset::HubUsdt => U256::one() << PRICE_FRACTIONAL_BITS, // $1
+			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1
 			Asset::Flip => price_from_usd(4, FLIP_DECIMALS) / 10, // ~$0.40
 			Asset::Eth | Asset::ArbEth => price_from_usd(2_800, ETH_DECIMALS), // ~$2,800
 			Asset::Dot | Asset::HubDot => price_from_usd(2, DOT_DECIMALS), // ~$2
@@ -3217,10 +3229,10 @@ pub mod utilities {
 		}
 	}
 
-	/// The amount of a non-gas asset to be used for transaction fee estimation.
+	/// Returns the equivalent to $20 USD of the input asset using hard coded prices. This is used
+	/// for fee and gas estimation.
 	///
 	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
-	///
 	/// The value should be large enough to allow a good estimation of the fee, but small enough
 	/// to not exhaust the pool liquidity.
 	pub fn estimated_20usd_input(asset: Asset) -> AssetAmount {

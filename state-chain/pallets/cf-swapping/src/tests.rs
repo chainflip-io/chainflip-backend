@@ -27,7 +27,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
-use cf_amm::math::PRICE_FRACTIONAL_BITS;
+use cf_amm::math::{price_from_usd_fine_amount, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -1291,7 +1291,7 @@ fn test_get_scheduled_swap_legs_fallback() {
 		MockPoolPriceApi::set_pool_price(
 			Asset::Flip,
 			STABLE_ASSET,
-			U256::from(PRICE) << PRICE_FRACTIONAL_BITS,
+			price_from_usd_fine_amount(PRICE),
 		);
 
 		assert_eq!(

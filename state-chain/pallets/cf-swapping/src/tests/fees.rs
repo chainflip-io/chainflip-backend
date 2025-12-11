@@ -487,10 +487,10 @@ fn test_network_fee_calculation() {
 	});
 }
 
-#[test]
 // Test Swap simulation,
 // Flip and Dot don't use the price oracle, so we use swap simulation to estimate prices for
 // them.
+#[test]
 fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	new_test_ext().execute_with(|| {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
@@ -528,9 +528,9 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	});
 }
 
-#[test]
 // Test hard coded fallback prices.
 // These test values will need to be updated every time the hard coded prices are updated.
+#[test]
 fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 	new_test_ext().execute_with(|| {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
@@ -567,13 +567,13 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				2 * 10u128.pow(18),
 				true // With network fee
 			),
-			6473989 + 64740 // Same as above + 1% network fee
+			6539382 // Same as above + 1% network fee
 		);
 	});
 }
 
-#[test]
 // Test the use of the price oracle in calculating fees/gas.
+#[test]
 fn test_calculate_input_for_desired_output_using_oracle_prices() {
 	new_test_ext().execute_with(|| {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
@@ -622,7 +622,8 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				10u128.pow(8),
 				true // With network fee
 			),
-			30_000_000_000 + 120_000_000 + 301_200_000 // $30k + 40bps + 1% network fee
+			// $30k + 40bps + 1% network fee - precision error
+			30_000_000_000 + 120_000_000 + 304242424 - 3
 		);
 
 		// Using both a hard coded price (Sol) and an oracle price (Btc)
@@ -647,6 +648,26 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 			),
 			(15_000 + 60) * 10u128.pow(FLIP_DECIMALS) + 1 // ~=15k + 40bps + rounding error
 		);
+
+		// Check that the network fee is still applied when using the same asset as the input and
+		// output
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Btc,
+				Asset::Btc,
+				10u128.pow(8),
+				true // With network fee
+			),
+			100_000_000 + 1010101 // output + 1% network fee
+		);
+
+		// Make sure it can handle extreme edge cases
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, 0, true),
+			0
+		);
+		let _ =
+			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, u128::MAX, true);
 	});
 }
 
