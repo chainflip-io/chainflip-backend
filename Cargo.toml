@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [workspace]
 resolver = "2"
 
@@ -383,3 +385,13 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
+
+# IMPORTANT: this makes sure that when compiling for production, we enable
+# the `production` feature. This is used to ensure that 'turbo bouncer' mode
+# is not accidentally enabled on a live network. 
+#
+# See state-chain/primitives/src/lib.rs, to check out how we make sure that
+# the features 'production' and 'turbo' are mutually exclusive.
+#
+# DO NOT CHANGE OR REMOVE THIS LINE.
+rustflags = ["--cfg 'feature=\"production\"'"]
