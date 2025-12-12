@@ -216,7 +216,7 @@ async function main(): Promise<void> {
   // Confirmation
   logger.info('Waiting for new epoch...');
   await observeEvent(logger, 'validator:NewEpoch', {
-    historicalCheckBlocks: 10,
+    historicalCheckBlocks: 100,
   }).event;
 
   logger.info('New Epoch');
