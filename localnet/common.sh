@@ -214,14 +214,12 @@ build-localnet() {
   additional_docker_compose_up_args=$additional_docker_compose_up_args \
   ./$LOCALNET_INIT_DIR/scripts/start-deposit-monitor.sh
 
+  echo "🗂️ Starting Indexer ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
-  if [[ $START_INDEXER == "y" ]]; then
-    echo "🗂️ Starting Indexer ..."
-    $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   fi
 
   print_success
