@@ -1801,11 +1801,16 @@ where
 
 							RpcAccountInfo::broker(info, balance)
 						},
-						AccountRole::LiquidityProvider => {
-							let info = api.cf_liquidity_provider_info(hash, account_id)?;
-
-							RpcAccountInfo::lp(info, api.cf_network_environment(hash)?, balance)
-						},
+						AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+							#[expect(deprecated)]
+							api.cf_liquidity_provider_info_before_version_9(
+								hash,
+								account_id.clone(),
+							)?
+							.into(),
+							api.cf_network_environment(hash)?,
+							balance,
+						),
 						AccountRole::Validator => {
 							#[expect(deprecated)]
 							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
@@ -1864,6 +1869,7 @@ where
 							}
 						},
 						AccountRole::LiquidityProvider => {
+							#[expect(deprecated)]
 							let LiquidityProviderInfo {
 								refund_addresses,
 								earned_fees,
@@ -1871,7 +1877,16 @@ where
 								lending_positions,
 								collateral_balances,
 								..
-							} = api.cf_liquidity_provider_info(hash, account_id.clone())?;
+							} = if api_version < 9 {
+								api.cf_liquidity_provider_info_before_version_9(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else {
+								api.cf_liquidity_provider_info(hash, account_id)?
+							};
+
 							let network = api.cf_network_environment(hash)?;
 							RpcAccountInfo::LiquidityProvider {
 								refund_addresses: refund_addresses

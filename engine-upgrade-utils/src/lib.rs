@@ -26,8 +26,8 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "1.12.4";
-pub const NEW_VERSION: &str = "2.0.0";
+pub const OLD_VERSION: &str = "2.0.0";
+pub const NEW_VERSION: &str = "2.1.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
