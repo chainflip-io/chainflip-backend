@@ -1,6 +1,6 @@
 #!/bin/bash
 
-./chainflip-node --chain=$CHAINSPEC_PATH &
+./chainflip-node --dev &
 
 # Wait for node to start
 echo -e "🚀 Starting chainflip-node..."
