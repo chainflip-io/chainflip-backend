@@ -29,6 +29,8 @@ sp-std = { workspace = true }
 
 cf-runtime-utilities = { workspace = true }
 
+log = { workspace = true }
+
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }

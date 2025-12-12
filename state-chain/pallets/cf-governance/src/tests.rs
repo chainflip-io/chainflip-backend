@@ -33,13 +33,14 @@ const DUMMY_WASM_BLOB: Vec<u8> = vec![];
 fn mock_extrinsic() -> Box<RuntimeCall> {
 	Box::new(RuntimeCall::Governance(pallet_cf_governance::Call::<Test>::new_membership_set {
 		new_members: BTreeSet::from_iter([EVE, PETER, MAX]),
+		new_threshold: 2,
 	}))
 }
 
 #[test]
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
-		let genesis_members = Members::<Test>::get();
+		let genesis_members = Members::<Test>::get().members;
 		assert!(genesis_members.contains(&ALICE));
 		assert!(genesis_members.contains(&BOB));
 		assert!(genesis_members.contains(&CHARLES));
@@ -100,7 +101,7 @@ fn propose_a_governance_extrinsic_and_expect_execution() {
 				crate::mock::RuntimeEvent::Governance(Event::Executed(1)),
 			);
 			// Check the new governance set
-			let genesis_members = Members::<Test>::get();
+			let genesis_members = Members::<Test>::get().members;
 			assert!(genesis_members.contains(&EVE));
 			assert!(genesis_members.contains(&PETER));
 			// Check if the storage was cleaned up
@@ -367,7 +368,7 @@ fn whitelisted_gov_call() {
 #[test]
 fn replacing_governance_members() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([ALICE, BOB, CHARLES]));
+		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([ALICE, BOB, CHARLES]));
 		assert_eq!(System::sufficients(&ALICE), 1);
 		assert_eq!(System::sufficients(&BOB), 1);
 		assert_eq!(System::sufficients(&CHARLES), 1);
@@ -379,17 +380,35 @@ fn replacing_governance_members() {
 		assert_noop!(
 			Governance::new_membership_set(
 				RuntimeOrigin::signed(ALICE),
-				BTreeSet::from_iter([EVE, PETER, MAX])
+				BTreeSet::from_iter([EVE, PETER, MAX]),
+				2,
 			),
 			sp_runtime::traits::BadOrigin
+		);
+		assert_noop!(
+			Governance::new_membership_set(
+				crate::RawOrigin::GovernanceApproval.into(),
+				BTreeSet::from_iter([EVE, PETER, MAX]),
+				4,
+			),
+			Error::<Test>::InvalidCouncil
+		);
+		assert_noop!(
+			Governance::new_membership_set(
+				crate::RawOrigin::GovernanceApproval.into(),
+				Default::default(),
+				Default::default(),
+			),
+			Error::<Test>::InvalidCouncil
 		);
 
 		assert_ok!(Governance::new_membership_set(
 			crate::RawOrigin::GovernanceApproval.into(),
-			BTreeSet::from_iter([EVE, PETER, MAX])
+			BTreeSet::from_iter([EVE, PETER, MAX]),
+			2,
 		));
 
-		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([EVE, PETER, MAX]));
+		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([EVE, PETER, MAX]));
 		assert_eq!(System::sufficients(&ALICE), 0);
 		assert_eq!(System::sufficients(&BOB), 0);
 		assert_eq!(System::sufficients(&CHARLES), 0);
@@ -399,9 +418,10 @@ fn replacing_governance_members() {
 
 		assert_ok!(Governance::new_membership_set(
 			crate::RawOrigin::GovernanceApproval.into(),
-			BTreeSet::from_iter([ALICE, EVE, PETER])
+			BTreeSet::from_iter([ALICE, EVE, PETER]),
+			2,
 		));
-		assert_eq!(Members::<Test>::get(), BTreeSet::from_iter([ALICE, EVE, PETER]));
+		assert_eq!(Members::<Test>::get().members, BTreeSet::from_iter([ALICE, EVE, PETER]));
 		assert_eq!(System::sufficients(&ALICE), 1);
 		assert_eq!(System::sufficients(&BOB), 0);
 		assert_eq!(System::sufficients(&CHARLES), 0);
