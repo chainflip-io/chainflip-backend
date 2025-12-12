@@ -48,3 +48,5 @@ std = [
 	"strum/std",
 ]
 test = ["dep:proptest-derive", "dep:proptest"]
+turbo = []
+production = []
