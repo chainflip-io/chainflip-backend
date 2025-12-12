@@ -95,16 +95,17 @@ async function testBoostingForAsset(
   amount: number,
   testContext: TestContext,
 ) {
-  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(testContext.logger, {
-    account: {
-      uri: lpUri,
-      keypair: createStateChainKeypair(lpUri),
-      type: 'LP',
+  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(
+    testContext.logger.child({ boostAsset: asset, boostFee }),
+    {
+      account: {
+        uri: lpUri,
+        keypair: createStateChainKeypair(lpUri),
+        type: 'LP',
+      },
     },
-  });
-
-  const logger = testContext.logger.child({ boostAsset: asset, boostFee });
-  logger.debug(`Testing boosting`);
+  );
+  cf.debug(`Testing boosting`);
 
   // Start with a clean slate by stopping boosting before the test
   const preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
@@ -115,7 +116,7 @@ async function testBoostingForAsset(
   );
 
   const boostPoolDetails = // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((await jsonRpc(logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any)[0];
+    ((await jsonRpc(cf.logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any)[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
   assert.strictEqual(
     boostPoolDetails.available_amounts.length,
@@ -130,9 +131,9 @@ async function testBoostingForAsset(
   // Do a swap
   const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const destAddress = await newAssetAddress(swapAsset, 'LP_BOOST');
-  logger.debug(`Swap destination address: ${destAddress}`);
+  cf.debug(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
-    logger,
+    cf.logger,
     asset,
     swapAsset,
     destAddress,
@@ -142,8 +143,8 @@ async function testBoostingForAsset(
   );
 
   // Send asset to boosted channel
-  await send(logger, asset, swapRequest.depositAddress, amount.toString());
-  logger.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
+  await send(cf.logger, asset, swapRequest.depositAddress, amount.toString());
+  cf.debug(`Sent ${amount} ${asset} to ${swapRequest.depositAddress}`);
 
   // Boost can fail if there is not enough liquidity in the boost pool, in which case it will emit an
   // InsufficientBoostLiquidity event. If the asset is not boosted, we will get a DepositFinalized event
@@ -171,7 +172,7 @@ async function testBoostingForAsset(
 
   if (firstEvent.key !== 'boosted') {
     throwError(
-      logger,
+      cf.logger,
       new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent.data)}`),
     );
   }
@@ -187,7 +188,7 @@ async function testBoostingForAsset(
 
   // Stop boosting
   const stoppedBoostingEvent = (await stopBoosting(cf, asset, boostFee))!;
-  logger.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
+  cf.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
     stoppedBoostingEvent.pendingBoosts.length,
     0,
@@ -197,7 +198,7 @@ async function testBoostingForAsset(
   // Compare the fees collected with the expected amount
   const boostFeesCollected =
     stoppedBoostingEvent.unlockedAmount - amountToFineAmountBigInt(amount, asset);
-  logger.debug('Boost fees collected:', boostFeesCollected);
+  cf.debug('Boost fees collected:', boostFeesCollected);
   const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
   assert.strictEqual(
     boostFeesCollected,
