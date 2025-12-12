@@ -177,7 +177,7 @@ build-localnet() {
       ((RPC_PORT++))
   done
   SLOT_DURATION="$(curl --silent -H "Content-Type: application/json" -d '{ "jsonrpc":"2.0", "id":"1", "method":"cf_slot_duration", "params":{} }' http://localhost:9944 | jq '.result')"
-  echo "🏃‍➡️ Chainflip node block time is ${SLOT_DURATION}ms."
+  echo "🕐 Block time is ${SLOT_DURATION}ms."
 
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
