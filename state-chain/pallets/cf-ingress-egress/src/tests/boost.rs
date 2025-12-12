@@ -623,6 +623,7 @@ mod vault_swaps {
 	#[test]
 	fn vault_swap_boosting() {
 		new_test_ext().execute_with(|| {
+			MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 			let output_address = ForeignChainAddress::Eth([1; 20].into());
 
 			let block_height = 10;
@@ -634,6 +635,7 @@ mod vault_swaps {
 
 			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
 			const INGRESS_FEE: AssetAmount = 1000000;
+			const EGRESS_FEE: AssetAmount = INGRESS_FEE;
 			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 			const PREWITNESS_DEPOSIT_ID_2: PrewitnessedDepositId = PrewitnessedDepositId(2);
 			const CHANNEL_ID: ChannelId = 1;
@@ -727,15 +729,16 @@ mod vault_swaps {
 							}
 						),
 						(
+							// Egress fee swap request
 							SwapRequestId(1),
 							MockSwapRequest {
 								input_asset: OUTPUT_ASSET,
 								output_asset: Asset::Eth,
-								input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								input_amount: EGRESS_FEE,
 								swap_type: SwapRequestType::IngressEgressFee,
 								broker_fees: bounded_vec![],
 								origin: SwapOrigin::Internal,
-								remaining_input_amount: DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE,
+								remaining_input_amount: EGRESS_FEE,
 								accumulated_output_amount: 0,
 								price_limits_and_expiry: None,
 								dca_params: None,
@@ -1038,6 +1041,7 @@ mod delayed_boosting {
 		setup_with_boost_pools()
 			.with_prewitnessed_vault_deposit()
 			.then_execute_with(|deposit| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 				// EDGE CASE: full witness arrives before the delayed prewitness is processed,
 				//
 				EthereumIngressEgress::process_vault_swap_request_full_witness_inner(
@@ -1083,6 +1087,7 @@ mod delayed_boosting {
 		setup_with_boost_pools()
 			.with_prewitnessed_vault_deposit()
 			.then_execute_with(|deposit| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 				let tx_id: H256 = [9u8; 32].into();
 				assert_eq!(
 					BoostedVaultTransactions::<Test, Instance1>::get(tx_id),
@@ -1139,6 +1144,7 @@ mod delayed_boosting {
 				refund_address: Default::default(),
 			}])
 			.then_execute_with(|details| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 				let (_, _, deposit_address) = details[0];
 
 				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
@@ -1228,6 +1234,7 @@ mod delayed_boosting {
 				refund_address: Default::default(),
 			}])
 			.then_execute_with(|details| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 				let (_, _, deposit_address) = details[0];
 
 				assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
@@ -1319,7 +1326,7 @@ mod delayed_boosting {
 
 	#[test]
 	fn second_deposit_before_pending_boost_would_be_processed() {
-		const OTHER_AMONT: AssetAmount = 1;
+		const OTHER_AMOUNT: AssetAmount = 1;
 
 		setup_with_boost_pools()
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
@@ -1329,6 +1336,7 @@ mod delayed_boosting {
 				refund_address: Default::default(),
 			}])
 			.then_execute_with(|details| {
+				MockAssetConverter::set_price(Asset::Flip, Asset::Eth, 1);
 				let (_, _, deposit_address) = details[0];
 
 				prewitness_deposit(deposit_address, INPUT_ASSET, DEPOSIT_AMOUNT);
@@ -1367,7 +1375,7 @@ mod delayed_boosting {
 				// Immediately we receive another prewitness on the same channel, but it shouldn't
 				// interfere with the first prewitness since we already cleaned up any associated
 				// state:
-				prewitness_deposit(deposit_address, INPUT_ASSET, OTHER_AMONT);
+				prewitness_deposit(deposit_address, INPUT_ASSET, OTHER_AMOUNT);
 
 				assert_eq!(
 					PendingPrewitnessedDeposits::<Test, Instance1>::get(PROCESSED_AT_BLOCK).len(),
@@ -1379,7 +1387,7 @@ mod delayed_boosting {
 						.unwrap()
 						.boost_status,
 					BoostStatus::BoostPending {
-						amount: OTHER_AMONT,
+						amount: OTHER_AMOUNT,
 						process_at_block: PROCESSED_AT_BLOCK
 					}
 				);
@@ -1403,7 +1411,7 @@ mod delayed_boosting {
 					"Pending prewitnessed deposits should have been cleared"
 				);
 
-				witness_deposit(deposit_address, INPUT_ASSET, OTHER_AMONT);
+				witness_deposit(deposit_address, INPUT_ASSET, OTHER_AMOUNT);
 
 				assert_eq!(
 					DepositChannelLookup::<Test, Instance1>::get(deposit_address)

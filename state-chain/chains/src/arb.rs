@@ -45,8 +45,6 @@ impl Chain for Arbitrum {
 	const NAME: &'static str = "Arbitrum";
 	const GAS_ASSET: Self::ChainAsset = assets::arb::Asset::ArbEth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
-	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount =
-		eth::REFERENCE_ETH_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
 

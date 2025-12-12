@@ -99,8 +99,6 @@ pub const MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES: usize = 5;
 pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
-pub const REFERENCE_SOL_PRICE_IN_USD: u64 = 220_000_000u64; //220 usd
-
 // Use serialized transaction
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct SolanaTransactionData {
@@ -133,7 +131,6 @@ impl Chain for Solana {
 	const NAME: &'static str = "Solana";
 	const GAS_ASSET: Self::ChainAsset = assets::sol::Asset::Sol;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 15;
-	const REFERENCE_NATIVE_TOKEN_PRICE_IN_FINE_USD: Self::ChainAmount = REFERENCE_SOL_PRICE_IN_USD;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
 	const BURN_ADDRESS: Self::ChainAccount =
 		const_address("1nc1nerator11111111111111111111111111111111");

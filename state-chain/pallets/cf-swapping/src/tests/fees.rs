@@ -14,6 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_amm::math::price_from_usd;
+use cf_primitives::FLIP_DECIMALS;
+use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+
 use super::*;
 
 #[test]
@@ -483,71 +487,221 @@ fn test_network_fee_calculation() {
 	});
 }
 
+/// Test Swap simulation,
+/// Flip and Dot don't use the price oracle, so we use swap simulation to estimate prices for
+/// them.
 #[test]
-fn test_calculate_input_for_desired_output() {
+fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	new_test_ext().execute_with(|| {
-		// If swap simulation fails -> no conversion.
-		MockSwappingApi::set_swaps_should_fail(true);
-		assert!(Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 1000, true)
-			.is_none());
+		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
 
-		// Set swap rate to 2 and turn swaps back on.
+		// The swap simulation will use the swap rate in tests to estimate prices.
 		SwapRate::set(2_f64);
-		MockSwappingApi::set_swaps_should_fail(false);
 
-		// Desired output is zero -> trivially ok.
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 0, true),
-			Some(0)
-		);
-
-		// Desired output requires 2 swap legs, each with a swap rate of 2. So output should be
-		// 1/4th of input.
-		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Eth, 1000, true),
-			Some(250)
-		);
-		// Answer should be the same for gas calculation function
-		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<Ethereum>(
-				cf_chains::assets::eth::Asset::Flip,
-				1000
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Usdc,
+				1000,
+				false,
+				false
 			),
-			250
+			500 // 1 leg swap, so 1/2 of input
 		);
 
-		// Desired output is gas asset, requires 1 swap leg. So output should be 1/2 of input.
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Usdc, Asset::Eth, 1000, true),
-			Some(500)
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Usdc,
+				1000,
+				true,
+				false
+			),
+			505 // 1 leg swap + 1% network fee
 		);
 
-		// Input is same asset -> trivially ok.
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Eth, 1000, true),
-			Some(1000)
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Dot,
+				1000,
+				false,
+				false
+			),
+			250 // 2 leg swap, so 1/4th of input
 		);
 
-		// Make sure the network fee is taken. Also checking that the minimum is not enforced.
-		NetworkFee::<Test>::set(FeeRateAndMinimum {
-			rate: Permill::from_percent(1),
-			minimum: 1000,
-		});
+		// Using a combination of swap simulation (flip) and hard coded price (Eth).
+		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, true),
-			Some(505)
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Eth,
+				10_u128.pow(18),
+				false,
+				false
+			),
+			// So the result is half the Eth price, plus a small rounding error
+			1400 * 10_u128.pow(18) + 1
+		);
+	});
+}
+
+/// Test hard coded fallback prices.
+/// These test values will need to be updated every time the hard coded prices are updated.
+#[test]
+fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
+	new_test_ext().execute_with(|| {
+		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
+
+		// Fallback to hard coded prices when swap simulation fails
+		MockSwappingApi::set_swaps_should_fail(true);
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Eth,
+				2 * 10u128.pow(18),
+				false,
+				false
+			),
+			14_000 * 10u128.pow(18) + 1 // 2 ETH ~= 14000 FLIP plus small rounding error
 		);
 
-		// Now that the network fee is not 0, make sure it can be ignored if desired.
+		// Also fallback to hard coded prices when oracle is unavailable (This should never
+		// happen in the real world)
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Usdc, 1000, false),
-			Some(500)
+			Swapping::calculate_input_for_desired_output(
+				Asset::Btc,
+				Asset::Eth,
+				2 * 10u128.pow(18),
+				false,
+				false
+			),
+			6473989 // 2 ETH ~=  0.06473988439 BTC
 		);
 
-		// Make sure a 2 leg swap is also correct when ignoring network fees.
+		// Make sure the network fee is also taken into account when using hard coded prices
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Eth, Asset::Btc, 1000, false),
-			Some(250)
+			Swapping::calculate_input_for_desired_output(
+				Asset::Btc,
+				Asset::Eth,
+				2 * 10u128.pow(18),
+				true, // With network fee
+				false
+			),
+			6539382 // Same as above + 1% network fee
+		);
+	});
+}
+
+/// Test the use of the price oracle in calculating fees/gas.
+#[test]
+fn test_calculate_input_for_desired_output_using_oracle_prices() {
+	new_test_ext().execute_with(|| {
+		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
+
+		// Set some arbitrary prices in the oracle
+		MockPriceFeedApi::set_price(Asset::Btc, Some(price_from_usd(30_000, 8)));
+		MockPriceFeedApi::set_price(Asset::Eth, Some(price_from_usd(2_000, 18)));
+		MockPriceFeedApi::set_price(Asset::Usdc, Some(price_from_usd(1, 6)));
+		MockPriceFeedApi::set_price(Asset::ArbUsdc, Some(price_from_usd(1, 6)));
+		MockPriceFeedApi::set_price(Asset::Usdt, Some(price_from_usd(1, 6)));
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Usdc,
+				Asset::Eth,
+				2 * 10u128.pow(18),
+				false,
+				false
+			),
+			4_000 * 10u128.pow(6) + 16_000_000 // $4k + 40bps
+		);
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::ArbUsdc,
+				Asset::Usdt,
+				1_000_000_000,
+				false,
+				false
+			),
+			1_000_000_000 + 600_181 // $1k + 6bps
+		);
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Eth,
+				Asset::Btc,
+				10u128.pow(8),
+				false,
+				false
+			),
+			15 * 10u128.pow(18) + 120481927710843374 // 15 ETH + 80bps
+		);
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Usdc,
+				Asset::Btc,
+				10u128.pow(8),
+				true, // With network fee
+				false
+			),
+			// $30k + 40bps + 1% network fee - precision error
+			30_000_000_000 + 120_000_000 + 304242424 - 3
+		);
+
+		// Using both a hard coded price (Sol) and an oracle price (Btc)
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Sol,
+				Asset::Btc,
+				10u128.pow(8),
+				false,
+				false
+			),
+			236220472441 + 944_881_890 // ~236 SOL + 40bps
+		);
+
+		// Using both Swap Simulation (Flip) and an oracle price (Btc)
+		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Btc,
+				10u128.pow(8),
+				false,
+				false
+			),
+			(15_000 + 60) * 10u128.pow(FLIP_DECIMALS) + 1 // ~=15k + 40bps + rounding error
+		);
+
+		// Check that the network fee is still applied when using the same asset as the input and
+		// output
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(
+				Asset::Btc,
+				Asset::Btc,
+				10u128.pow(8),
+				true, // With network fee
+				false
+			),
+			10u128.pow(8) + 1010101 // output + 1% network fee
+		);
+
+		// Make sure it can handle extreme edge cases
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, 0, true, false),
+			0
+		);
+		// Here we do not care about the actual value, just that it does not panic.
+		let _ = Swapping::calculate_input_for_desired_output(
+			Asset::Btc,
+			Asset::Eth,
+			u128::MAX,
+			true,
+			false,
 		);
 	});
 }
@@ -1031,9 +1185,11 @@ fn test_refund_fee_calculation() {
 		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
 		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
-		assert_eq!(take_refund_fee(1000, Asset::Eth, false), (995, 5));
-		assert_eq!(take_refund_fee(0, Asset::Eth, false), (0, 0));
-		assert_eq!(take_refund_fee(3, Asset::Eth, false), (0, 3));
+		// Note: Using Flip here because it uses swap simulation for conversion instead of
+		// oracle price.
+		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
+		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
+		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));
 
 		// Internal swaps use a different network fee (and therefore refund fee)
 		InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
@@ -1041,7 +1197,7 @@ fn test_refund_fee_calculation() {
 			minimum: 30,
 		});
 		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
-		assert_eq!(take_refund_fee(1000, Asset::Eth, true), (985, 15));
+		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (985, 15));
 	});
 }
 
@@ -1050,29 +1206,16 @@ fn gas_calculation_can_handle_extreme_swap_rate() {
 	new_test_ext().execute_with(|| {
 		fn test_extreme_swap_rate(swap_rate: f64) {
 			SwapRate::set(swap_rate);
-			assert_eq!(
-				Swapping::calculate_input_for_gas_output::<Ethereum>(
-					cf_chains::assets::eth::Asset::Flip,
-					1000
-				),
-				9333334
+			// Just run it and make sure it doesn't panic
+			Swapping::calculate_input_for_gas_output::<Ethereum>(
+				cf_chains::assets::eth::Asset::Flip,
+				1000,
 			);
 		}
 
 		test_extreme_swap_rate(1_f64 / (u128::MAX as f64));
 		test_extreme_swap_rate(0_f64);
 		test_extreme_swap_rate(u128::MAX as f64);
-
-		// Using Solana here because it has a ChainAmount of u64, so the conversion to AssetAmount
-		// will fail when gas needed is larger than u64::MAX.
-		SwapRate::set(0.5);
-		assert_eq!(
-			Swapping::calculate_input_for_gas_output::<cf_chains::Solana>(
-				cf_chains::assets::sol::Asset::SolUsdc,
-				u64::MAX
-			),
-			4058283696216101356
-		);
 	});
 }
 

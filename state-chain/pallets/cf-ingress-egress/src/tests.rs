@@ -2911,6 +2911,7 @@ fn additional_action_correctly_prefund_and_create_account() {
 	};
 
 	new_test_ext().execute_with(|| {
+		MockAssetConverter::set_price(Asset::Eth, Asset::Flip, 1);
 		assert_eq!(MockFundingInfo::<Test>::balance(&NEW_ACCOUNT), 0);
 		assert_eq!(frame_system::Pallet::<Test>::account_nonce(NEW_ACCOUNT), 0);
 		assert!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::is_unregistered(
