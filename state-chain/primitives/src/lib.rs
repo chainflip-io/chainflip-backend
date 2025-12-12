@@ -239,14 +239,14 @@ pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 16;
 pub const MILLISECONDS_PER_BLOCK: u64 = 6000;
 
 /// For 'turbo' bouncer we set the block time to 1000ms.
-/// 
+///
 /// WARNING: This MUST NOT be used in production builds,
 /// as changing the block time on a live network will cause it to
 /// stop. It should ONLY EVER BE USED for LOCALNET.
-/// 
+///
 /// The feature guard makes sure that the 'turbo' and 'production'
 /// features are mutually exclusive.
-/// 
+///
 /// DO NOT TRY TO RUN 'turbo' ON A LIVE NETWORK. It will brick it.
 #[cfg(all(feature = "turbo", not(feature = "production")))]
 pub const MILLISECONDS_PER_BLOCK: u64 = 1000;

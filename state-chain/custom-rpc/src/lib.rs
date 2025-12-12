@@ -1342,10 +1342,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
 	#[method(name = "slot_duration")]
-	fn cf_slot_duration(
-		&self,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<u64>;
+	fn cf_slot_duration(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 }
 
 /// An RPC extension for the state chain node.
