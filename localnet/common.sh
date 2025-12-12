@@ -176,6 +176,9 @@ build-localnet() {
       echo "💚 $NODE's chainflip-node is running!"
       ((RPC_PORT++))
   done
+  SLOT_DURATION="$(curl --silent -H "Content-Type: application/json" -d '{ "jsonrpc":"2.0", "id":"1", "method":"cf_slot_duration", "params":{} }' http://localhost:9944 | jq '.result')"
+  echo "🕐 Block time is ${SLOT_DURATION}ms."
+
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
   SC_RPC_PORT=$INIT_RPC_PORT \
@@ -214,14 +217,12 @@ build-localnet() {
   additional_docker_compose_up_args=$additional_docker_compose_up_args \
   ./$LOCALNET_INIT_DIR/scripts/start-deposit-monitor.sh
 
+  echo "🗂️ Starting Indexer ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
-  if [[ $START_INDEXER == "y" ]]; then
-    echo "🗂️ Starting Indexer ..."
-    $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   fi
 
   print_success
