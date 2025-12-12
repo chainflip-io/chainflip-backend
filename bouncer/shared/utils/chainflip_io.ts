@@ -24,8 +24,10 @@ export class ChainflipIO<Requirements> {
   /// This class also exposes logger functionality
   readonly logger: Logger;
 
-  constructor(logger: Logger, requirements: Requirements) {
-    this.lastIoBlockHeight = 0;
+  /// Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
+  /// to automatically initialize to the current block height, use `newChainflipIO` instead.
+  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number) {
+    this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
   }
@@ -138,6 +140,18 @@ export class ChainflipIO<Requirements> {
   error(msg: string, ...args: any[]) {
     this.logger.error(msg, ...args);
   }
+}
+
+/// Constructor for `ChainflipIO` objects. This initializes the internally tracked
+/// block height to the latest height. To do this, it has to use async and thus cannot
+/// be part of the official constructor.
+export async function newChainflipIO<Requirements>(logger: Logger, requirements: Requirements) {
+  // find out current block height
+  await using chainflip = await getChainflipApi();
+  const currentBlockHeight = (await chainflip.rpc.chain.getHeader()).number.toNumber();
+
+  // initialize with this height, meaning that we'll only search for events from this height on
+  return new ChainflipIO(logger, requirements, currentBlockHeight);
 }
 
 // ------------ Account types  ---------------

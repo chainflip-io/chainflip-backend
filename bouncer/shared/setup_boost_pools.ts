@@ -7,7 +7,12 @@ import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
 import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
-import { ChainflipIO, fullAccountFromUri, WithLpAccount } from './utils/chainflip_io';
+import {
+  ChainflipIO,
+  fullAccountFromUri,
+  newChainflipIO,
+  WithLpAccount,
+} from './utils/chainflip_io';
 
 export type BoostPoolId = {
   asset: Asset;
@@ -82,7 +87,7 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
 
   // create CFIO instance, this could be done further outside,
   // but temporarily it's here
-  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO(logger, {
+  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(logger, {
     account: fullAccountFromUri('//LP_BOOST', 'LP'),
   });
 

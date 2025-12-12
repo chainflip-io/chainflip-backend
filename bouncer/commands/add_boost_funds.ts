@@ -14,9 +14,9 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { addBoostFunds } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
-import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
-const cf = new ChainflipIO(globalLogger, {
+const cf = await newChainflipIO(globalLogger, {
   account: fullAccountFromUri((process.argv[5] as `//LP${string}`) ?? '//LP_BOOST', 'LP'),
 });
 
