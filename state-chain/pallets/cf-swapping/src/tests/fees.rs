@@ -487,9 +487,9 @@ fn test_network_fee_calculation() {
 	});
 }
 
-// Test Swap simulation,
-// Flip and Dot don't use the price oracle, so we use swap simulation to estimate prices for
-// them.
+/// Test Swap simulation,
+/// Flip and Dot don't use the price oracle, so we use swap simulation to estimate prices for
+/// them.
 #[test]
 fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	new_test_ext().execute_with(|| {
@@ -499,17 +499,35 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		SwapRate::set(2_f64);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Usdc, 1000, false),
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Usdc,
+				1000,
+				false,
+				false
+			),
 			500 // 1 leg swap, so 1/2 of input
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Usdc, 1000, true),
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Usdc,
+				1000,
+				true,
+				false
+			),
 			505 // 1 leg swap + 1% network fee
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Flip, Asset::Dot, 1000, false),
+			Swapping::calculate_input_for_desired_output(
+				Asset::Flip,
+				Asset::Dot,
+				1000,
+				false,
+				false
+			),
 			250 // 2 leg swap, so 1/4th of input
 		);
 
@@ -520,6 +538,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				Asset::Flip,
 				Asset::Eth,
 				10_u128.pow(18),
+				false,
 				false
 			),
 			// So the result is half the Eth price, plus a small rounding error
@@ -528,8 +547,8 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 	});
 }
 
-// Test hard coded fallback prices.
-// These test values will need to be updated every time the hard coded prices are updated.
+/// Test hard coded fallback prices.
+/// These test values will need to be updated every time the hard coded prices are updated.
 #[test]
 fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 	new_test_ext().execute_with(|| {
@@ -542,6 +561,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Flip,
 				Asset::Eth,
 				2 * 10u128.pow(18),
+				false,
 				false
 			),
 			14_000 * 10u128.pow(18) + 1 // 2 ETH ~= 14000 FLIP plus small rounding error
@@ -554,6 +574,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Btc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
+				false,
 				false
 			),
 			6473989 // 2 ETH ~=  0.06473988439 BTC
@@ -565,14 +586,15 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Btc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
-				true // With network fee
+				true, // With network fee
+				false
 			),
 			6539382 // Same as above + 1% network fee
 		);
 	});
 }
 
-// Test the use of the price oracle in calculating fees/gas.
+/// Test the use of the price oracle in calculating fees/gas.
 #[test]
 fn test_calculate_input_for_desired_output_using_oracle_prices() {
 	new_test_ext().execute_with(|| {
@@ -590,6 +612,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Usdc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
+				false,
 				false
 			),
 			4_000 * 10u128.pow(6) + 16_000_000 // $4k + 40bps
@@ -600,6 +623,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::ArbUsdc,
 				Asset::Usdt,
 				1_000_000_000,
+				false,
 				false
 			),
 			1_000_000_000 + 600_181 // $1k + 6bps
@@ -610,6 +634,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Eth,
 				Asset::Btc,
 				10u128.pow(8),
+				false,
 				false
 			),
 			15 * 10u128.pow(18) + 120481927710843374 // 15 ETH + 80bps
@@ -620,7 +645,8 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Usdc,
 				Asset::Btc,
 				10u128.pow(8),
-				true // With network fee
+				true, // With network fee
+				false
 			),
 			// $30k + 40bps + 1% network fee - precision error
 			30_000_000_000 + 120_000_000 + 304242424 - 3
@@ -632,6 +658,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Sol,
 				Asset::Btc,
 				10u128.pow(8),
+				false,
 				false
 			),
 			236220472441 + 944_881_890 // ~236 SOL + 40bps
@@ -644,6 +671,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Flip,
 				Asset::Btc,
 				10u128.pow(8),
+				false,
 				false
 			),
 			(15_000 + 60) * 10u128.pow(FLIP_DECIMALS) + 1 // ~=15k + 40bps + rounding error
@@ -656,18 +684,25 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				Asset::Btc,
 				10u128.pow(8),
-				true // With network fee
+				true, // With network fee
+				false
 			),
-			100_000_000 + 1010101 // output + 1% network fee
+			10u128.pow(8) + 1010101 // output + 1% network fee
 		);
 
 		// Make sure it can handle extreme edge cases
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, 0, true),
+			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, 0, true, false),
 			0
 		);
-		let _ =
-			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, u128::MAX, true);
+		// Here we do not care about the actual value, just that it does not panic.
+		let _ = Swapping::calculate_input_for_desired_output(
+			Asset::Btc,
+			Asset::Eth,
+			u128::MAX,
+			true,
+			false,
+		);
 	});
 }
 

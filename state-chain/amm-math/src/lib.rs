@@ -113,7 +113,9 @@ pub fn price_from_usd_fine_amount(price_usd: AssetAmount) -> Price {
 	Price::from(price_usd) << PRICE_FRACTIONAL_BITS
 }
 
-pub fn price_from_usd(dollar_amount: AssetAmount, decimals: u32) -> Price {
+/// Get the price of an asset given its dollar amount and decimals.
+/// Using u32 for dollar_amount so it is type safe against fine amounts (u128).
+pub fn price_from_usd(dollar_amount: u32, decimals: u32) -> Price {
 	if decimals == 0 || dollar_amount == 0 {
 		return U256::zero();
 	}

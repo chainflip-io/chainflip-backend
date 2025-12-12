@@ -2597,6 +2597,48 @@ pub mod pallet {
 			});
 		}
 
+		pub fn estimate_price_using_simulated_swap(asset: Asset, side: Side) -> Option<Price> {
+			let (input_asset, output_asset) =
+				if side == Side::Buy { (STABLE_ASSET, asset) } else { (asset, STABLE_ASSET) };
+
+			// Using $20 for swap simulation, large enough to allow a good estimation of the fee,
+			// but small enough to not exhaust the pool liquidity.
+			let estimation_input = output_amount_floor(
+				20_000_000u128.into(),
+				invert_price(utilities::hard_coded_price_for_asset(asset)),
+			)
+			.saturated_into();
+
+			let estimation_output = with_transaction_unchecked(|| {
+				TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
+					input_asset,
+					output_asset,
+					estimation_input,
+				))
+			})
+			.ok();
+
+			match estimation_output {
+				Some(0) => None,
+				Some(output) => Some(output),
+				None => None,
+			}
+			.map(|estimation_output| {
+				// Get price in terms of `output_asset per input_asset`
+				let price = mul_div_floor(
+					estimation_output.into(),
+					U256::one() << PRICE_FRACTIONAL_BITS,
+					estimation_input,
+				);
+				// Convert the price to terms of `asset per usdc`
+				if side == Side::Buy {
+					invert_price(price)
+				} else {
+					price
+				}
+			})
+		}
+
 		fn egress_for_swap(
 			swap_request_id: SwapRequestId,
 			amount: AssetAmount,
@@ -2669,7 +2711,8 @@ pub mod pallet {
 				input_asset,
 				STABLE_ASSET,
 				refund_fee_usdc,
-				false, /* Without network fee */
+				false, // Without network fee
+				false, // Not internal
 			);
 
 			let refund_fee =
@@ -2983,6 +3026,7 @@ pub mod pallet {
 			output_asset: Asset,
 			desired_output_amount: AssetAmount,
 			with_network_fee: bool,
+			is_internal_swap: bool,
 		) -> AssetAmount {
 			// Approximate one sided slippage adjustments for oracle prices
 			const ORACLE_SLIPPAGE: BasisPoints = 40;
@@ -2993,8 +3037,11 @@ pub mod pallet {
 			}
 
 			let network_fee = if with_network_fee {
-				let fee_rate_and_minimum =
-					Pallet::<T>::get_network_fee_for_swap(input_asset, output_asset, false);
+				let fee_rate_and_minimum = Pallet::<T>::get_network_fee_for_swap(
+					input_asset,
+					output_asset,
+					is_internal_swap,
+				);
 				// Ignoring the minimum network fee because this function is only used for fees and
 				// gas (no minimum).
 				fee_rate_and_minimum.rate
@@ -3009,49 +3056,14 @@ pub mod pallet {
 				// to hard coded prices
 				let get_price = |asset, side: Side| -> Price {
 					if asset == Asset::Flip || asset == Asset::Dot {
-						// Estimate price via swap simulation
-						let (input_asset, output_asset) = if side == Side::Buy {
-							(STABLE_ASSET, asset)
-						} else {
-							(asset, STABLE_ASSET)
-						};
-						let estimation_input = utilities::estimated_20usd_input(input_asset);
-
-						let estimation_output = with_transaction_unchecked(|| {
-							TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
-								input_asset,
-								output_asset,
-								estimation_input,
-							))
-						})
-						.ok();
-
-						match estimation_output {
-							Some(0) => None,
-							Some(output) => Some(output),
-							None => None,
-						}
-						.map(|estimation_output| {
-							// Get price in terms of `output_asset per input_asset`
-							let price = mul_div_floor(
-								estimation_output.into(),
-								U256::one() << PRICE_FRACTIONAL_BITS,
-								estimation_input,
-							);
-							// Convert the price to terms of `asset per usdc`
-							if side == Side::Buy {
-								invert_price(price)
-							} else {
-								price
-							}
-						})
+						Self::estimate_price_using_simulated_swap(asset, side)
 					} else {
 						// Using stale prices here is fine as its just for fees/gas
 						T::PriceFeedApi::get_price(asset).map(|price_data| {
 							// Apply a hard coded slippage in the correct direction
 							let slippage_bps = if asset == STABLE_ASSET {
 								0
-							} else if asset.is_stablecoin() {
+							} else if asset.is_usd_stablecoin() {
 								ORACLE_SLIPPAGE_STABLE
 							} else {
 								ORACLE_SLIPPAGE
@@ -3199,8 +3211,7 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 }
 
 pub mod utilities {
-	use cf_amm::math::{invert_price, output_amount_floor, price_from_usd};
-	use sp_runtime::SaturatedConversion;
+	use cf_amm::math::price_from_usd;
 
 	use super::*;
 
@@ -3227,17 +3238,6 @@ pub mod utilities {
 			Asset::Btc => price_from_usd(86_500, BTC_DECIMALS),   // ~$86,500
 			Asset::Sol => price_from_usd(127, SOL_DECIMALS),      // ~$127
 		}
-	}
-
-	/// Returns the equivalent to $20 USD of the input asset using hard coded prices. This is used
-	/// for fee and gas estimation.
-	///
-	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
-	/// The value should be large enough to allow a good estimation of the fee, but small enough
-	/// to not exhaust the pool liquidity.
-	pub fn estimated_20usd_input(asset: Asset) -> AssetAmount {
-		output_amount_floor(20_000_000u128.into(), invert_price(hard_coded_price_for_asset(asset)))
-			.saturated_into()
 	}
 
 	pub(super) fn split_off_highest_impact_swap<T: Config>(

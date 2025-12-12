@@ -564,7 +564,7 @@ pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
 		Asset::all()
-			.filter(|asset| asset.is_stablecoin())
+			.filter(|asset| asset.is_usd_stablecoin())
 			.map(|asset| (asset, N))
 			.collect()
 	}

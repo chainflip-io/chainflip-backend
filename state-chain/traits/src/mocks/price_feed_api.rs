@@ -1,5 +1,5 @@
 use cf_amm::math::price_from_usd_fine_amount;
-use cf_primitives::{Asset, Price};
+use cf_primitives::{Asset, AssetAmount, Price};
 
 use super::{MockPallet, MockPalletStorage};
 use crate::{OraclePrice, PriceFeedApi};
@@ -24,7 +24,7 @@ impl MockPriceFeedApi {
 	}
 
 	// A helper function to update asset prices (in atomic USD units)
-	pub fn set_price_usd(asset: cf_primitives::Asset, price_usd: u128) {
+	pub fn set_price_usd(asset: cf_primitives::Asset, price_usd: AssetAmount) {
 		Self::set_price(asset, Some(price_from_usd_fine_amount(price_usd)));
 	}
 }

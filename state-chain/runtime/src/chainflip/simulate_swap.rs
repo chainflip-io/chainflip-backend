@@ -123,6 +123,7 @@ pub fn simulate_swap(
 				Asset::Usdc,
 				network_fee.minimum,
 				false, // Do not apply network fee to this calculation
+				false, // Not internal
 			);
 		let network_fee_input_asset = network_fee.rate * amount_to_swap;
 		if min_network_fee_input_asset > network_fee_input_asset {
