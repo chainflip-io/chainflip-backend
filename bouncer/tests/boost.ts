@@ -22,7 +22,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { throwError } from 'shared/utils/logger';
 import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stoppedBoosting';
-import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
+import { ChainflipIO, newChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 
@@ -95,7 +95,7 @@ async function testBoostingForAsset(
   amount: number,
   testContext: TestContext,
 ) {
-  const cf: ChainflipIO<WithLpAccount> = new ChainflipIO(testContext.logger, {
+  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(testContext.logger, {
     account: {
       uri: lpUri,
       keypair: createStateChainKeypair(lpUri),
