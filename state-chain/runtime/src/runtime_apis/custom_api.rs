@@ -181,6 +181,10 @@ decl_runtime_apis!(
 			base_asset: Asset,
 			quote_asset: Asset,
 		) -> Vec<(SwapLegInfo, BlockNumber)>;
+		#[changed_in(9)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_9::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;

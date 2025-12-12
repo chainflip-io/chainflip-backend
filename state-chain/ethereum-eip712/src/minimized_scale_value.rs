@@ -108,7 +108,8 @@ impl MinimizedScaleValue {
 			),
 			MinimizedScaleValue::Primitive(MinimizedPrimitive::U128(n)) =>
 				MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n.to_string())),
-
+			MinimizedScaleValue::Primitive(MinimizedPrimitive::I128(n)) =>
+				MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n.to_string())),
 			MinimizedScaleValue::Primitive(p) => MinimizedScaleValue::Primitive(p),
 		}
 	}
