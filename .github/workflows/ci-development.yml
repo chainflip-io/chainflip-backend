@@ -43,6 +43,7 @@ jobs:
       upload-name: "chainflip-backend-bin-benchmarks"
       binary-subdir: release
   check-blocktime:
+    needs: [build]
     uses: ./.github/workflows/_22_check_blocktime.yml
     secrets: inherit
   docker:
