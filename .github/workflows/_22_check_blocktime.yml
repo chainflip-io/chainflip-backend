@@ -1,0 +1,29 @@
+name: Check block time for production builds
+
+on:
+  workflow_call:
+
+permissions:
+  packages: read
+  contents: read
+
+jobs:
+  chainspec-compatibility:
+    runs-on: namespace-profile-default
+    strategy:
+      fail-fast: true
+      matrix:
+        network: [sisyphos, perseverance, berghain]
+    steps:
+      - name: Download Binaries 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-backend-bin
+
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
+
+      - name: Run Test 🧪
+        shell: bash
+        run: ./ci/scripts/check_blocktime.sh --binary-root-path .
