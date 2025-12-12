@@ -453,7 +453,7 @@ pub struct Collected {
 	pub original_sqrt_price: SqrtPriceQ64F96,
 }
 
-#[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen, Clone)]
 pub enum Size {
 	Liquidity { liquidity: Liquidity },
 	Amount { maximum: PoolPairsMap<Amount>, minimum: PoolPairsMap<Amount> },
