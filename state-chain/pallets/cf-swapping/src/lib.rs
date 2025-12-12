@@ -3229,12 +3229,14 @@ pub mod utilities {
 		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
 		const DOT_ESTIMATION_CAP: u128 = 7 * 10u128.pow(DOT_DECIMALS);
 		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
+		const WBTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(ETH_DECIMALS - 4);
 		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
 
 		match asset {
 			Asset::Flip => FLIP_ESTIMATION_CAP,
 			Asset::Usdc => USD_ESTIMATION_CAP,
 			Asset::Usdt => USD_ESTIMATION_CAP,
+			Asset::Wbtc => WBTC_ESTIMATION_CAP,
 			Asset::ArbUsdc => USD_ESTIMATION_CAP,
 			Asset::SolUsdc => USD_ESTIMATION_CAP,
 			Asset::Eth => ETH_ESTIMATION_CAP,
