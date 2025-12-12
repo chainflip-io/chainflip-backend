@@ -268,6 +268,9 @@ runtime-integration-tests = [
 	"pallet-cf-elections/runtime-integration-tests",
 ]
 
-# IMPORTANT: These two are required to for 'turbo bouncer'. DON'T REMOVE.
+# IMPORTANT: These two are required to make sure that 'turbo bouncer' works and also
+# that it's *not* used for live networks.
+#
+# DO NOT REMOVE.
 turbo = ["cf-primitives/turbo"]
 production = ["cf-primitives/production"]
