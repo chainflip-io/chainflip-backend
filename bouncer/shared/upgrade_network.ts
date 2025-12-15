@@ -112,7 +112,6 @@ async function upgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-
   // We're going to take down the node, so we don't want them to be suspended.
   await submitGovernanceExtrinsic((api) =>
     api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
