@@ -43,10 +43,10 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				log::info!("🧹 No housekeeping required for Berghain.");
 			},
 			genesis_hashes::PERSEVERANCE => {
-				log::info!("🧹 Clearing Solana EgressWitnessing elections for Perseverance.");
+				log::info!("🧹 Clearing Solana EgressWitnessing and NonceWitnessing elections for Perseverance.");
 			},
 			genesis_hashes::SISYPHOS => {
-				log::info!("🧹 Clearing Solana EgressWitnessing elections for Sisyphos.");
+				log::info!("🧹 Clearing Solana EgressWitnessing and NonceWitnessing elections for Sisyphos.");
 			},
 			_ => {},
 		}

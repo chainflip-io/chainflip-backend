@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes included in each Chainflip release will be documented in this file.
+## [2.0.3] - 2025-12-15
+
+### Fixes
+
+- Delete old stale solana elections on sisyphos/perseverance (Egress witnessing and Nonce witnessing)
 
 ## [2.0.2] - 2025-12-09
 
