@@ -22,6 +22,7 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod clear_solana_egress_witnessing_elections;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
 
@@ -41,10 +42,12 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				log::info!("🧹 No housekeeping required for Berghain.");
 			},
 			genesis_hashes::PERSEVERANCE => {
-				log::info!("🧹 No housekeeping required for Perseverance.");
+				log::info!("🧹 Clearing Solana EgressWitnessing elections for Perseverance.");
+				clear_solana_egress_witnessing_elections::ClearSolanaEgressWitnessingElections::on_runtime_upgrade();
 			},
 			genesis_hashes::SISYPHOS => {
-				log::info!("🧹 No housekeeping required for Sisyphos.");
+				log::info!("🧹 Clearing Solana EgressWitnessing elections for Sisyphos.");
+				clear_solana_egress_witnessing_elections::ClearSolanaEgressWitnessingElections::on_runtime_upgrade();
 			},
 			_ => {},
 		}
