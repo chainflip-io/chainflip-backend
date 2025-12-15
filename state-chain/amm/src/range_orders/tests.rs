@@ -265,6 +265,25 @@ mod fee_growth {
 		assert!(collected.fees < MAX_EXPECTED_FEES);
 	}
 
+	#[track_caller]
+	fn close_position_with_checks(
+		pool: &mut PoolState,
+		lp: &LiquidityProvider,
+		lower_tick: Tick,
+		upper_tick: Tick,
+	) {
+		let (_, _, collected, _) = pool
+			.collect_and_burn(
+				lp,
+				lower_tick,
+				upper_tick,
+				Size::Amount { maximum: MAX_LIQUIDITY, minimum: Default::default() },
+			)
+			.unwrap();
+
+		assert!(collected.fees < MAX_EXPECTED_FEES);
+	}
+
 	/// Check if provided value has underflowed by checking if it is is *much* closer to U256::MAX
 	/// than 0
 	#[track_caller]
@@ -290,11 +309,6 @@ mod fee_growth {
 		let lp3 = LiquidityProvider::from([3; 32]);
 
 		let mut pool = PoolState::new(1000, sqrt_price_at_tick(0)).unwrap();
-
-		let max_liquidity =
-			PoolPairsMap { base: 10_000_000_000u128.into(), quote: 10_000_000_000u128.into() };
-
-		let size = Size::Amount { maximum: max_liquidity, minimum: Default::default() };
 
 		create_new_position(&mut pool, &lp1, 0, 100);
 		create_new_position(&mut pool, &lp2, 0, 200);
@@ -330,12 +344,8 @@ mod fee_growth {
 
 		// Collect all positions other than that of LP3 (and as a sanity check, make sure that fees
 		// are smaller than the liquidity added):
-		assert!(
-			pool.collect_and_burn(&lp1, 0, 100, size.clone()).unwrap().2.fees < MAX_EXPECTED_FEES
-		);
-		assert!(
-			pool.collect_and_burn(&lp2, 0, 200, size.clone()).unwrap().2.fees < MAX_EXPECTED_FEES
-		);
+		close_position_with_checks(&mut pool, &lp1, 0, 100);
+		close_position_with_checks(&mut pool, &lp2, 0, 200);
 
 		// Perform swaps to generate fees within [25, 100] range (no tick crossings)
 		swap_until_tick(&mut pool, 75);
@@ -369,6 +379,62 @@ mod fee_growth {
 
 		ensure_underflowed(
 			pool.positions.get(&(lp1.clone(), 0, 25)).unwrap().last_fee_growth_inside,
+		);
+	}
+
+	/// Similar to the test above, except that the new tick is above the current tick,
+	/// which means it will be initialised with 0, however it will still lead to an underflow.
+	#[test]
+	fn fee_growth_inside_underflow_new_tick_above_current() {
+		let lp1 = LiquidityProvider::from([1; 32]);
+		let lp2 = LiquidityProvider::from([2; 32]);
+		let lp3 = LiquidityProvider::from([3; 32]);
+
+		const NEW_TICK: Tick = 40;
+
+		let mut pool = PoolState::new(1000, sqrt_price_at_tick(0)).unwrap();
+
+		create_new_position(&mut pool, &lp1, 0, 100);
+		create_new_position(&mut pool, &lp2, 0, 200);
+
+		swap_until_tick(&mut pool, 150);
+		swap_until_tick(&mut pool, 30);
+
+		// Now tick 100's fee_growth_outside = positive value (fees while price was above 100)
+		let tick_100_outside = pool.liquidity_map.get(&100).unwrap().fee_growth_outside;
+		assert!(tick_100_outside > Default::default());
+
+		create_new_position(&mut pool, &lp3, NEW_TICK, 100);
+
+		// By convention, fee growth outside has been initialised to global fee growth
+		assert_eq!(
+			pool.liquidity_map.get(&NEW_TICK).unwrap().fee_growth_outside,
+			Default::default()
+		);
+
+		// Making sure that underflow did occur (the number is very close to U256::MAX):
+		ensure_underflowed(
+			pool.positions
+				.get(&(lp3.clone(), NEW_TICK, 100))
+				.unwrap()
+				.last_fee_growth_inside,
+		);
+
+		// Perform swaps to generate fees
+		for _ in 0..2 {
+			swap_until_tick(&mut pool, 100);
+			swap_until_tick(&mut pool, 20);
+		}
+
+		// Make sure collected fees are reasonable:
+		collect_from_position_with_checks(&mut pool, &lp3, NEW_TICK, 100);
+
+		// Accrued fees should help us "recover" from the underflow
+		ensure_closer_to_zero(
+			pool.positions
+				.get(&(lp3.clone(), NEW_TICK, 100))
+				.unwrap()
+				.last_fee_growth_inside,
 		);
 	}
 }
