@@ -167,7 +167,7 @@ async function upgradeNoBuild(
 
   await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
 
-  await sleep(30000);
+  await sleep(20000);
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
   logger.info('Started new broker and lp-api.');
