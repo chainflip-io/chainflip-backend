@@ -234,7 +234,7 @@ mod fee_growth {
 	) {
 		let (_, _, collected, _) = pool
 			.collect_and_mint(
-				&lp,
+				lp,
 				lower_tick,
 				upper_tick,
 				Size::Amount { maximum: MAX_LIQUIDITY, minimum: Default::default() },
@@ -254,7 +254,7 @@ mod fee_growth {
 	) {
 		let (_, _, collected, _) = pool
 			.collect_and_mint(
-				&lp,
+				lp,
 				lower_tick,
 				upper_tick,
 				Size::Liquidity { liquidity: 0 },
@@ -278,7 +278,8 @@ mod fee_growth {
 		assert!(x < PoolPairsMap { base: U256::MAX / 1000000, quote: U256::MAX / 1000000 })
 	}
 
-	/// This test reproduces underflow in `collect_fees` (used to cause a panic) that occurs when:
+	/// This test reproduces underflow in `collect_fees` (used to cause a panic) that occurs, for
+	/// example, when:
 	/// - A new position is created where the lower tick is NEW (doesn't exist)
 	/// - The upper tick already EXISTS with `fee_growth_outside > 0`
 	/// - The current price is between lower and upper
@@ -293,7 +294,7 @@ mod fee_growth {
 		let max_liquidity =
 			PoolPairsMap { base: 10_000_000_000u128.into(), quote: 10_000_000_000u128.into() };
 
-		let size = Size::Amount { maximum: max_liquidity.clone(), minimum: Default::default() };
+		let size = Size::Amount { maximum: max_liquidity, minimum: Default::default() };
 
 		create_new_position(&mut pool, &lp1, 0, 100);
 		create_new_position(&mut pool, &lp2, 0, 200);
@@ -305,7 +306,7 @@ mod fee_growth {
 		let tick_100_outside = pool.liquidity_map.get(&100).unwrap().fee_growth_outside;
 		assert!(tick_100_outside > Default::default());
 
-		// Step 7: Create a NEW position [25, 100] for lp3
+		// Create a NEW position [25, 100] for lp3
 		// This is where the underflow would occur:
 		// - Tick 25 is NEW (doesn't exist), current >= 25, so fee_growth_outside = global
 		// - Tick 100 EXISTS with fee_growth_outside = X > 0
