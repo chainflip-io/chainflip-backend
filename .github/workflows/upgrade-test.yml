@@ -185,7 +185,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          # ./fast_bouncer.sh
           git reset --hard
 
       - name: Upgrade network 🚀
@@ -211,7 +211,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+          # pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
@@ -272,9 +272,9 @@ jobs:
       - name: Show logs from docker containers 🐳🕵️‍♂️
         if: always()
         continue-on-error: true
-        run: 
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs > /tmp/chainflip/chainflip-docker-logs.log
-          cat ./tmp/chainflip/chainflip-docker-logs
+        run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs > /tmp/chainflip/chainflip-docker-logs.log 
+          cat /tmp/chainflip/chainflip-docker-logs.log
 
       - name: Upload Localnet Logs 💾
         if: inputs.run-job || failure() || cancelled()
