@@ -59,33 +59,41 @@ impl OnRuntimeUpgrade for ClearSolanaEgressWitnessingElections {
 			genesis_hashes::SISYPHOS => 9_346_659u64,
 			_ => return Weight::zero(),
 		};
-		// Collect all EgressWitnessing election identifiers (those with extra D)
-		let egress_witnessing_elections: Vec<_> =
-			ElectionProperties::<Runtime, SolanaInstance>::iter_keys()
-				.filter(|id| matches!(id.extra(), CompositeElectionIdentifierExtra::D(_)))
-				.collect();
 
-		let nonce_witnessing_elections: Vec<_> =
-			ElectionProperties::<Runtime, SolanaInstance>::iter_keys()
-				.filter(|id| matches!(id.extra(), CompositeElectionIdentifierExtra::C(_)))
-				.collect();
+		if crate::VERSION.spec_version == 2_00_03 {
+			// Collect all EgressWitnessing election identifiers (those with extra D)
+			let egress_witnessing_elections: Vec<_> =
+				ElectionProperties::<Runtime, SolanaInstance>::iter_keys()
+					.filter(|id| matches!(id.extra(), CompositeElectionIdentifierExtra::D(_)))
+					.collect();
 
-		for election_identifier in nonce_witnessing_elections {
-			// Skip newly created elections (we just want to delete old stale elections)
-			if *election_identifier.unique_monotonic() > next_election_id.into() {
-				continue;
+			let nonce_witnessing_elections: Vec<_> =
+				ElectionProperties::<Runtime, SolanaInstance>::iter_keys()
+					.filter(|id| matches!(id.extra(), CompositeElectionIdentifierExtra::C(_)))
+					.collect();
+
+			for election_identifier in nonce_witnessing_elections {
+				// Skip newly created elections (we just want to delete old stale elections)
+				if *election_identifier.unique_monotonic() > next_election_id.into() {
+					continue;
+				}
+				RunnerStorageAccess::<Runtime, SolanaInstance>::delete_election(
+					election_identifier,
+				);
 			}
-			RunnerStorageAccess::<Runtime, SolanaInstance>::delete_election(election_identifier);
-		}
-		for election_identifier in egress_witnessing_elections {
-			// Skip newly created elections (we just want to delete old stale elections)
-			if *election_identifier.unique_monotonic() > next_election_id.into() {
-				continue;
+			for election_identifier in egress_witnessing_elections {
+				// Skip newly created elections (we just want to delete old stale elections)
+				if *election_identifier.unique_monotonic() > next_election_id.into() {
+					continue;
+				}
+				RunnerStorageAccess::<Runtime, SolanaInstance>::delete_election(
+					election_identifier,
+				);
 			}
-			RunnerStorageAccess::<Runtime, SolanaInstance>::delete_election(election_identifier);
+
+			log::info!("✅ Successfully cleared EgressWitnessing and NonceWitnessing elections");
 		}
 
-		log::info!("✅ Successfully cleared EgressWitnessing and NonceWitnessing elections");
 		Weight::zero()
 	}
 

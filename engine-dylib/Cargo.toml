@@ -3,12 +3,12 @@ authors = ["Chainflip team <https://github.com/chainflip-io>"]
 build = "build.rs"
 edition = "2021"
 name = "cf-engine-dylib"
-version = "2.0.2"
+version = "2.0.3"
 license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib"]
-name = "chainflip_engine_v2_0_2"
+name = "chainflip_engine_v2_0_3"
 path = "src/lib.rs"
 
 [dependencies]
