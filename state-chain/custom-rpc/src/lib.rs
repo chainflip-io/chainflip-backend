@@ -1642,6 +1642,7 @@ where
 						asset: pool.asset,
 						total_amount: pool.total_amount.into(),
 						available_amount: pool.available_amount.into(),
+						owed_to_network: pool.owed_to_network.into(),
 						utilisation_rate: pool.utilisation_rate,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
