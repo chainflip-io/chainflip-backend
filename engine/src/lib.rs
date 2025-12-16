@@ -260,17 +260,19 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				let client = EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				EvmCachingClient::new(
 					scope,
-					settings.eth.private_key_file,
-					settings.eth.nodes,
-					expected_eth_chain_id,
-					"eth_rpc",
-					"eth_subscribe_client",
-					"Ethereum",
-					cf_chains::Ethereum::WITNESS_PERIOD,
-				)?;
-				EvmCachingClient::new(scope, client)
+					EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+						scope,
+						settings.eth.private_key_file,
+						settings.eth.nodes,
+						expected_eth_chain_id,
+						"eth_rpc",
+						"eth_subscribe_client",
+						"Ethereum",
+						cf_chains::Ethereum::WITNESS_PERIOD,
+					)?,
+				)
 			};
 			let arb_client = {
 				let expected_arb_chain_id = web3::types::U256::from(

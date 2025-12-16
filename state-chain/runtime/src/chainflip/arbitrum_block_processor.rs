@@ -19,21 +19,13 @@ use pallet_cf_elections::electoral_systems::{
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 pub enum ArbEvent<T> {
-	PreWitness(T),
 	Witness(T),
-}
-impl<T> ArbEvent<T> {
-	fn inner_witness(&self) -> &T {
-		match self {
-			ArbEvent::PreWitness(w) | ArbEvent::Witness(w) => w,
-		}
-	}
 }
 
 type TypesDepositChannelWitnessing = TypesFor<ArbitrumDepositChannelWitnessing>;
@@ -41,39 +33,15 @@ type TypesVaultDepositWitnessing = TypesFor<ArbitrumVaultDepositWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<ArbitrumKeyManagerWitnessing>;
 type BlockNumber = <ArbitrumChain as ChainTypes>::ChainBlockNumber;
 
-/// Returns one event per deposit witness. If multiple events share the same deposit witness:
-/// - keep only the `Witness` variant,
-fn dedup_events<T: Ord + Clone>(
-	events: Vec<(BlockNumber, ArbEvent<T>)>,
-) -> Vec<(BlockNumber, ArbEvent<T>)> {
-	let mut chosen: BTreeMap<T, (BlockNumber, ArbEvent<T>)> = BTreeMap::new();
-
-	for (block, event) in events {
-		let witness = event.inner_witness().clone();
-
-		// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
-		if !chosen.contains_key(&witness) ||
-			(matches!(chosen.get(&witness), Some((_, ArbEvent::PreWitness(_)))) &&
-				matches!(event, ArbEvent::Witness(_)))
-		{
-			chosen.insert(witness, (block, event));
-		}
-	}
-
-	chosen.into_values().collect()
-}
-
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	for TypesDepositChannelWitnessing
 {
 	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<DepositWitness<Arbitrum>>)>) {
-		let deduped_events = dedup_events(events);
-		for (block, event) in &deduped_events {
+		for (block, event) in events {
 			match event {
-				ArbEvent::PreWitness(_) => {},
 				ArbEvent::Witness(deposit) => {
 					ArbitrumIngressEgress::process_channel_deposit_full_witness(
-						deposit.clone(),
+						deposit,
 						*block.root(),
 					);
 				},
@@ -83,9 +51,8 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumVaultEvent>)>) {
-		for (block, event) in &dedup_events(events) {
+		for (block, event) in events {
 			match event {
-				ArbEvent::PreWitness(_) => {},
 				ArbEvent::Witness(call) => match call {
 					ArbitrumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
 					ArbitrumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
@@ -93,7 +60,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 					ArbitrumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
 						ArbitrumIngressEgress::process_vault_swap_request_full_witness(
 							*block.root(),
-							vault_deposit_witness.clone(),
+							vault_deposit_witness,
 						);
 					},
 					ArbitrumVaultEvent::TransferNativeFailedFilter {
@@ -107,9 +74,9 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 						destination_address,
 					} => {
 						ArbitrumIngressEgress::vault_transfer_failed_inner(
-							*asset,
-							*amount,
-							*destination_address,
+							asset,
+							amount,
+							destination_address,
 						);
 					},
 				},
@@ -119,9 +86,8 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumKeyManagerEvent>)>) {
-		for (_, event) in dedup_events(events) {
+		for (_, event) in events {
 			match event {
-				ArbEvent::PreWitness(_) => {},
 				ArbEvent::Witness(call) => {
 					match call {
 						ArbitrumKeyManagerEvent::AggKeySetByGovKey {

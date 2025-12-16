@@ -23,6 +23,7 @@ use crate::{
 	},
 	Runtime,
 };
+use cf_traits::SafeMode;
 pub struct SafeModeMigration;
 
 mod old {
@@ -71,8 +72,6 @@ mod old {
 		pub elections_generic: crate::chainflip::generic_elections::GenericElectionsSafeMode,
 	}
 }
-
-pub struct SafeModeMigration;
 
 impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
 	fn on_runtime_upgrade() -> Weight {

@@ -15,6 +15,7 @@ use cf_chains::{
 };
 use cf_traits::{impl_pallet_safe_mode, Chainflip};
 use frame_system::pallet_prelude::BlockNumberFor;
+use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
 };
@@ -239,14 +240,24 @@ pub type EthereumDepositChannelWitnessingES =
 pub struct EthereumVaultDepositWitnessing;
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	GenericTypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 #[serde(bound(
 	serialize = "VaultWitness: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize, <C as Chain>::ChainAsset: Serialize",
 	deserialize = "VaultWitness: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>, <C as Chain>::ChainAsset: Deserialize<'de>",
 ))]
-#[scale_info(skip_type_params(VaultWitness, C))]
-pub enum VaultEvents<VaultWitness, C: Chain> {
+#[expand_name_with(C::NAME)]
+pub enum VaultEvents<VaultWitness: 'static + TypeInfo, C: Chain> {
 	SwapNativeFilter(VaultWitness),
 	SwapTokenFilter(VaultWitness),
 	XcallNativeFilter(VaultWitness),

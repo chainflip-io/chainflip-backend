@@ -21,21 +21,13 @@ use pallet_cf_elections::electoral_systems::{
 	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
+use sp_std::{vec, vec::Vec};
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
 )]
 pub enum EthEvent<T> {
-	PreWitness(T),
 	Witness(T),
-}
-impl<T> EthEvent<T> {
-	fn inner_witness(&self) -> &T {
-		match self {
-			EthEvent::PreWitness(w) | EthEvent::Witness(w) => w,
-		}
-	}
 }
 
 type TypesDepositChannelWitnessing = TypesFor<EthereumDepositChannelWitnessing>;
@@ -45,41 +37,14 @@ type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-/// Returns one event per deposit witness. If multiple events share the same deposit witness:
-/// - keep only the `Witness` variant,
-fn dedup_events<T: Ord + Clone>(
-	events: Vec<(BlockNumber, EthEvent<T>)>,
-) -> Vec<(BlockNumber, EthEvent<T>)> {
-	let mut chosen: BTreeMap<T, (BlockNumber, EthEvent<T>)> = BTreeMap::new();
-
-	for (block, event) in events {
-		let witness = event.inner_witness().clone();
-
-		// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
-		if !chosen.contains_key(&witness) ||
-			(matches!(chosen.get(&witness), Some((_, EthEvent::PreWitness(_)))) &&
-				matches!(event, EthEvent::Witness(_)))
-		{
-			chosen.insert(witness, (block, event));
-		}
-	}
-
-	chosen.into_values().collect()
-}
-
 impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 	for TypesDepositChannelWitnessing
 {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<DepositWitness<Ethereum>>)>) {
-		let deduped_events = dedup_events(events);
-		for (block, event) in &deduped_events {
+		for (block, event) in events {
 			match event {
-				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(deposit) => {
-					EthereumIngressEgress::process_channel_deposit_full_witness(
-						deposit.clone(),
-						*block,
-					);
+					EthereumIngressEgress::process_channel_deposit_full_witness(deposit, block);
 				},
 			}
 		}
@@ -87,17 +52,16 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
-		for (block, event) in &dedup_events(events) {
+		for (block, event) in events {
 			match event {
-				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => match call {
 					EthereumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
 					EthereumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
 					EthereumVaultEvent::XcallNativeFilter(vault_deposit_witness) |
 					EthereumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
 						EthereumIngressEgress::process_vault_swap_request_full_witness(
-							*block,
-							vault_deposit_witness.clone(),
+							block,
+							vault_deposit_witness,
 						);
 					},
 					EthereumVaultEvent::TransferNativeFailedFilter {
@@ -111,9 +75,9 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 						destination_address,
 					} => {
 						EthereumIngressEgress::vault_transfer_failed_inner(
-							*asset,
-							*amount,
-							*destination_address,
+							asset,
+							amount,
+							destination_address,
 						);
 					},
 				},
@@ -125,9 +89,8 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 	for TypesStateChainGatewayWitnessing
 {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<StateChainGatewayEvent>)>) {
-		for (_, event) in dedup_events(events) {
+		for (_, event) in events {
 			match event {
-				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => {
 					match call {
 						StateChainGatewayEvent::Funded { account_id, amount, funder, tx_hash } =>
@@ -161,9 +124,8 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumKeyManagerEvent>)>) {
-		for (_, event) in dedup_events(events) {
+		for (_, event) in events {
 			match event {
-				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => {
 					match call {
 						EthereumKeyManagerEvent::AggKeySetByGovKey {
@@ -217,9 +179,8 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 
 impl Hook<HookTypeFor<TypesScUtilsWitnessing, ExecuteHook>> for TypesScUtilsWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<ScUtilsCall>)>) {
-		for (_, event) in dedup_events(events) {
+		for (_, event) in events {
 			match event {
-				EthEvent::PreWitness(_) => {},
 				EthEvent::Witness(call) => {
 					if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::execute_sc_call(
 						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
