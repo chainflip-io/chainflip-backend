@@ -38,7 +38,8 @@ use cf_traits::SwapLimits;
 use core::{ops::Range, str};
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::{
-	chainlink::OraclePrice, price::PriceAsset,
+	chainlink::{OraclePrice, OraclePriceLegacy},
+	price::PriceAsset,
 };
 pub use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
@@ -76,7 +77,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(10)]
+	#[api_version(11)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -286,9 +287,6 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		fn cf_network_fees() -> NetworkFees;
-		fn cf_oracle_prices(
-			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
-		) -> Vec<OraclePrice>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
@@ -301,6 +299,13 @@ decl_runtime_apis!(
 			caller: EthereumAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
+		#[changed_in(11)]
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		) -> Vec<OraclePriceLegacy>;
+		fn cf_oracle_prices(
+			base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		) -> Vec<OraclePrice>;
 		#[changed_in(6)]
 		fn cf_evm_calldata();
 		#[changed_in(7)]
