@@ -1604,7 +1604,6 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_lending_config() -> RpcLendingConfig,
-		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
@@ -2842,6 +2841,25 @@ where
 		}
 
 		Ok(result)
+	}
+
+	fn cf_oracle_prices(
+		&self,
+		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<OraclePrice>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			Ok::<_, CfApiError>(if version < 11 {
+				#[expect(deprecated)]
+				api.cf_oracle_prices_before_version_11(hash, base_and_quote_asset)
+					.map_err(CfApiError::from)?
+					.into_iter()
+					.map(Into::into)
+					.collect()
+			} else {
+				api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from)?
+			})
+		})
 	}
 }
 
