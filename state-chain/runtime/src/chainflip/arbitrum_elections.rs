@@ -539,19 +539,19 @@ pub fn initial_state() -> InitialStateOf<Runtime, ArbitrumInstance> {
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 3,
+				safety_margin: 1,
 				safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 3,
+				safety_margin: 1,
 				safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 3,
+				safety_margin: 1,
 				safety_buffer: ARBITRUM_MAINNET_SAFETY_BUFFER,
 			},
 			Default::default(),
