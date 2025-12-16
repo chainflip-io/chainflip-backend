@@ -30,7 +30,9 @@ use crate::{
 		cached_rpc::EvmRetryRpcApiWithResult,
 		rpc::{EvmRpcApi, EvmSigningRpcApi},
 	},
-	retrier::{Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY},
+	retrier::{
+		Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY,
+	},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
