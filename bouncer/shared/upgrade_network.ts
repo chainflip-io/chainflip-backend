@@ -172,6 +172,8 @@ async function upgradeNoBuild(
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
   logger.info('Started new broker and lp-api.');
 
+  await sleep(20000);
+
   await startDepositMonitor(localnetInitPath);
   logger.info('Started new deposit monitor.');
 }
