@@ -199,11 +199,11 @@ pub fn evm_vault_swap<A>(
 				)
 				.abi_encoded_payload())
 			},
-		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc => {
+		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
-					Asset::Flip | Asset::Usdc | Asset::Usdt =>
+					Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc =>
 						<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
 							source_asset.try_into().expect("Only Ethereum asset is processed here"),
 						),
