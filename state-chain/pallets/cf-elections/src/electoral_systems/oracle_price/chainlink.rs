@@ -149,6 +149,29 @@ pub struct OraclePrice {
 	pub updated_at_statechain_block: u32,
 	pub base_asset: PriceAsset,
 	pub quote_asset: PriceAsset,
+	pub price_status: PriceStatus,
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct OraclePriceLegacy {
+	pub price: Price,
+	pub updated_at_oracle_timestamp: u64,
+	pub updated_at_statechain_block: u32,
+	pub base_asset: PriceAsset,
+	pub quote_asset: PriceAsset,
+}
+
+impl From<OraclePriceLegacy> for OraclePrice {
+	fn from(legacy: OraclePriceLegacy) -> Self {
+		Self {
+			price: legacy.price,
+			updated_at_oracle_timestamp: legacy.updated_at_oracle_timestamp,
+			updated_at_statechain_block: legacy.updated_at_statechain_block,
+			base_asset: legacy.base_asset,
+			quote_asset: legacy.quote_asset,
+			price_status: PriceStatus::default(),
+		}
+	}
 }
 
 // Used by the RPC
@@ -184,6 +207,7 @@ where
 				updated_at_statechain_block: asset_state.updated_at_statechain_block,
 				base_asset: from_unit.base_asset,
 				quote_asset: from_unit.quote_asset,
+				price_status: asset_state.price_status,
 			})
 		})
 	})
