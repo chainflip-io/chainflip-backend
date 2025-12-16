@@ -664,6 +664,7 @@ export async function testBrokerLevelScreening(
       testEvm(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
       testEvm(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+      testEvm(testContext, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     ]
       .concat(await testBitcoin(testContext, false))
       .concat(testBoostedDeposits ? await testBitcoin(testContext, true) : []),
@@ -678,11 +679,14 @@ export async function testBrokerLevelScreening(
     testEvmLiquidityDeposit(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmLiquidityDeposit(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmLiquidityDeposit(testContext, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
 
     // --- vault swaps ---
     // testBitcoinVaultSwap(testContext),
     testEvmVaultSwap(testContext, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmVaultSwap(testContext, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     testEvmVaultSwap(testContext, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    testEvmVaultSwap(testContext, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     testSolVaultSwap(testContext, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     testSolVaultSwap(testContext, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
