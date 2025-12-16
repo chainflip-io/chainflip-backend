@@ -23,6 +23,7 @@ check_deposit_monitor_health() {
   while true; do
     echo "🩺 Checking deposit-monitor's health ..."
     REPLY=$(check_endpoint_health 'http://localhost:6060/health')
+    echo $REPLY
     starting=$(echo $REPLY | jq .starting)
     all_healthy=$(echo $REPLY | jq .all_processors)
 
