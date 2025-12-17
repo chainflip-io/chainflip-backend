@@ -149,7 +149,9 @@ impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled, start_bidding
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, RotationBroadcastsPending};
+	use cf_traits::{
+		AccountRoleRegistry, GetMinimumFunding, KeyRotationStatusOuter, RotationBroadcastsPending,
+	};
 	use frame_support::sp_runtime::app_crypto::RuntimePublic;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 
@@ -198,6 +200,8 @@ pub mod pallet {
 		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
 		type CfePeerRegistration: CfePeerRegistration<Self>;
+
+		type MinimumFunding: GetMinimumFunding;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -510,6 +514,8 @@ pub mod pallet {
 		AccountDoesNotExist,
 		/// The operator already manages the maximum number of validators.
 		TooManyValidators,
+		/// Delegation amount must be at least as large as minimum funding amount.
+		DelegationAmountBelowMinimum,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -1235,7 +1241,7 @@ pub mod pallet {
 					DelegationChoice::<T>::get(&delegator)
 				{
 					if current_operator != operator {
-						(Some(current_operator), (Some(operator.clone())), current_max_bid)
+						(Some(current_operator), Some(operator.clone()), current_max_bid)
 					} else {
 						(None, None, current_max_bid)
 					}
@@ -1271,6 +1277,12 @@ pub mod pallet {
 					max_bid: new_max_bid,
 				});
 			}
+
+			ensure!(
+				new_max_bid.into() >= T::MinimumFunding::get_min_funding_amount(),
+				Error::<T>::DelegationAmountBelowMinimum
+			);
+
 			DelegationChoice::<T>::insert(&delegator, (operator.clone(), new_max_bid));
 
 			Ok(())
@@ -1309,6 +1321,11 @@ pub mod pallet {
 					max_bid: current_max_bid,
 				});
 			} else {
+				ensure!(
+					new_max_bid.into() >= T::MinimumFunding::get_min_funding_amount(),
+					Error::<T>::DelegationAmountBelowMinimum
+				);
+
 				DelegationChoice::<T>::mutate(&delegator, |choice| {
 					if let Some((_, ref mut max_bid)) = choice {
 						*max_bid = new_max_bid;

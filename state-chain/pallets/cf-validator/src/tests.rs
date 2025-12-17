@@ -25,9 +25,10 @@ use cf_traits::{
 		bonding::MockBonderFor,
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		key_rotator::MockKeyRotatorA,
+		minimum_funding::MockMinimumFundingProvider,
 		reputation_resetter::MockReputationResetter,
 	},
-	AccountRoleRegistry, SafeMode, SetSafeMode,
+	AccountRoleRegistry, GetMinimumFunding, SafeMode, SetSafeMode,
 };
 use cf_utilities::{assert_matches, success_threshold_from_share_count};
 use frame_support::{
@@ -1855,6 +1856,9 @@ mod operator {
 				OPERATOR_SETTINGS,
 				vanity()
 			));
+
+			MockFlip::credit_funds(&BOB, MockMinimumFundingProvider::get_min_funding_amount());
+
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(BOB),
 				ALICE,
@@ -2019,6 +2023,9 @@ mod delegation {
 				},
 				vanity()
 			));
+
+			MockFlip::credit_funds(&BOB, MockMinimumFundingProvider::get_min_funding_amount());
+
 			assert_noop!(
 				ValidatorPallet::delegate(OriginTrait::signed(BOB), ALICE, DelegationAmount::Max),
 				Error::<Test>::DelegatorBlocked
@@ -2043,6 +2050,9 @@ mod delegation {
 				},
 				vanity()
 			));
+
+			MockFlip::credit_funds(&BOB, MockMinimumFundingProvider::get_min_funding_amount());
+
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(BOB),
 				ALICE,
@@ -2069,8 +2079,8 @@ mod delegation {
 	#[test]
 	fn delegations_are_getting_used_in_auction_to_increase_mab() {
 		const OPERATOR: u64 = 123;
-		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 20;
-		const MAX_BID_OF_DELEGATOR: u128 = 10;
+		const AVAILABLE_BALANCE_OF_DELEGATOR: u128 = 2000;
+		const MAX_BID_OF_DELEGATOR: u128 = 1000;
 		const DELEGATORS: [u64; 4] = [21, 22, 23, 24];
 
 		new_test_ext()
@@ -2320,8 +2330,75 @@ mod delegation {
 	}
 
 	#[test]
+	fn min_bid_enforced_when_delegating() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			const DELEGATION_AMOUNT: u128 = 50;
+			MockFlip::credit_funds(&DELEGATOR, 200);
+
+			let min_bid = MockMinimumFundingProvider::get_min_funding_amount();
+
+			assert!(DELEGATION_AMOUNT < min_bid);
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+
+			assert_noop!(
+				ValidatorPallet::delegate(
+					OriginTrait::signed(DELEGATOR),
+					BOB,
+					DelegationAmount::Some(DELEGATION_AMOUNT)
+				),
+				Error::<Test>::DelegationAmountBelowMinimum
+			);
+		});
+	}
+
+	#[test]
+	fn min_bid_enforced_when_undelegating() {
+		new_test_ext().execute_with(|| {
+			const DELEGATOR: u64 = 5000;
+			MockFlip::credit_funds(&DELEGATOR, 200);
+
+			let min_bid = MockMinimumFundingProvider::get_min_funding_amount();
+
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(BOB),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+
+			// Initial delegation should succeed.
+			assert_ok!(ValidatorPallet::delegate(
+				OriginTrait::signed(DELEGATOR),
+				BOB,
+				DelegationAmount::Some(min_bid)
+			));
+
+			// Should not be able to undelegate leaving dust amount
+			assert_noop!(
+				ValidatorPallet::undelegate(
+					OriginTrait::signed(DELEGATOR),
+					DelegationAmount::Some(min_bid - 1)
+				),
+				Error::<Test>::DelegationAmountBelowMinimum
+			);
+
+			// Undelegating everything should still work though:
+			assert_ok!(ValidatorPallet::undelegate(
+				OriginTrait::signed(DELEGATOR),
+				DelegationAmount::Some(min_bid)
+			));
+		});
+	}
+
+	#[test]
 	fn delegate_with_max_bid() {
-		const BALANCE: u128 = 150;
+		const BALANCE: u128 = 300;
+		const DELEGATION_AMOUNT: u128 = 125;
 		new_test_ext().execute_with(|| {
 			const DELEGATOR: u64 = 5000;
 			MockFlip::credit_funds(&DELEGATOR, BALANCE);
@@ -2337,19 +2414,19 @@ mod delegation {
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(DELEGATOR),
 				BOB,
-				DelegationAmount::Some(50)
+				DelegationAmount::Some(DELEGATION_AMOUNT)
 			));
-			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some((BOB, 50)));
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some((BOB, DELEGATION_AMOUNT)));
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::ValidatorPallet(Event::MaxBidUpdated {
 					delegator: DELEGATOR,
-					change: Change::Increase(50)
+					change: Change::Increase(DELEGATION_AMOUNT)
 				}),
 				RuntimeEvent::ValidatorPallet(Event::Delegated {
 					delegator: DELEGATOR,
 					operator: BOB,
-					max_bid: 50
+					max_bid: DELEGATION_AMOUNT
 				}),
 			);
 
@@ -2358,11 +2435,14 @@ mod delegation {
 			assert_ok!(ValidatorPallet::delegate(
 				OriginTrait::signed(DELEGATOR),
 				BOB,
-				DelegationAmount::Some(50)
+				DelegationAmount::Some(DELEGATION_AMOUNT)
 			));
 
 			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::MaxBidUpdated { delegator: DELEGATOR, change: Change::Increase(50) },
+				Event::MaxBidUpdated {
+					delegator: DELEGATOR,
+					change: Change::Increase(DELEGATION_AMOUNT),
+				},
 			));
 
 			// Delegate to different operator with no increase in max_bid
@@ -2376,13 +2456,24 @@ mod delegation {
 				ALICE,
 				DelegationAmount::Some(0)
 			));
-			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some((ALICE, 100)));
+			assert_eq!(
+				DelegationChoice::<Test>::get(DELEGATOR),
+				Some((ALICE, DELEGATION_AMOUNT * 2))
+			);
 
 			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::Undelegated { delegator: DELEGATOR, operator: BOB, max_bid: 100 },
+				Event::Undelegated {
+					delegator: DELEGATOR,
+					operator: BOB,
+					max_bid: DELEGATION_AMOUNT * 2,
+				},
 			));
 			cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
-				Event::Delegated { delegator: DELEGATOR, operator: ALICE, max_bid: 100 },
+				Event::Delegated {
+					delegator: DELEGATOR,
+					operator: ALICE,
+					max_bid: DELEGATION_AMOUNT * 2,
+				},
 			));
 		});
 	}
