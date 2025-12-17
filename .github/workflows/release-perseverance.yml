@@ -32,6 +32,10 @@ jobs:
       profile: "production"
       binary-subdir: "production"
       ci-runner: "rust-builder-m2-no-cache"
+  check-blocktime:
+    needs: [build]
+    uses: ./.github/workflows/_22_check_blocktime.yml
+    secrets: inherit
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml

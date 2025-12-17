@@ -26,7 +26,7 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
-      profile: "release"
+      profile: "release-turbo"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml

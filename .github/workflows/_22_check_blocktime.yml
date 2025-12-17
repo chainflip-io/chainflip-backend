@@ -1,0 +1,28 @@
+name: Ensure block time is 6000ms for production builds
+
+on:
+  workflow_call:
+
+permissions:
+  packages: read
+  contents: read
+
+jobs:
+  check-blocktime:
+    runs-on: namespace-profile-default
+    steps:
+      - name: Checkout chainflip-backend 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Download Binaries 📥
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-backend-bin
+
+      - name: Make Binaries Executable 🛠️
+        run: |
+          chmod +x chainflip-*
+
+      - name: Run Test 🧪
+        shell: bash
+        run: ./ci/scripts/check_blocktime.sh

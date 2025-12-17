@@ -1341,6 +1341,8 @@ pub trait CustomApi {
 		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
+	#[method(name = "slot_duration")]
+	fn cf_slot_duration(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1605,6 +1607,7 @@ where
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_lending_config() -> RpcLendingConfig,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
+		cf_slot_duration() -> u64,
 	}
 
 	pass_through_and_flatten! {
