@@ -19,7 +19,7 @@ use crate::{
 		address_derivation::btc::derive_btc_vault_deposit_addresses, AddressConverter,
 		ChainAddressConverter, EvmEnvironment, SolEnvironment,
 	},
-	runtime_apis::{DispatchErrorWithMessage, EvmCallDetails, VaultSwapDetails},
+	runtime_apis::types::{DispatchErrorWithMessage, EvmCallDetails, VaultSwapDetails},
 	AccountId, BlockNumber, Environment, Runtime, Swapping,
 };
 
@@ -36,7 +36,7 @@ use cf_chains::{
 		sol_tx_core::address_derivation::derive_associated_token_account, DecodedXSwapParams,
 		SolAmount, SolInstruction, SolPubkey,
 	},
-	Arbitrum, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
+	Arbitrum, Bitcoin, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, Chain,
 	ChannelRefundParametersUncheckedEncoded, Ethereum, ForeignChain, VaultSwapExtraParameters,
 	VaultSwapInputEncoded,
 };
@@ -46,7 +46,6 @@ use cf_primitives::{
 };
 use cf_traits::{AffiliateRegistry, SwapParameterValidation};
 use codec::Decode;
-use scale_info::prelude::string::String;
 
 use frame_support::pallet_prelude::DispatchError;
 use sp_core::U256;
@@ -105,7 +104,7 @@ pub fn bitcoin_vault_swap(
 	affiliate_fees: Affiliates<AccountId>,
 	dca_parameters: Option<DcaParameters>,
 	max_oracle_price_slippage: Option<u8>,
-) -> Result<VaultSwapDetails<String>, DispatchErrorWithMessage> {
+) -> Result<VaultSwapDetails<<Bitcoin as Chain>::ChainAccount>, DispatchErrorWithMessage> {
 	let private_channel_id =
 		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::get(&broker_id)
 			.ok_or(pallet_cf_swapping::Error::<Runtime>::NoPrivateChannelExistsForBroker)?;
@@ -142,7 +141,7 @@ pub fn bitcoin_vault_swap(
 
 	Ok(VaultSwapDetails::Bitcoin {
 		nulldata_payload: encode_swap_params_in_nulldata_payload(params),
-		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).current_address(),
+		deposit_address: derive_btc_vault_deposit_addresses(private_channel_id).current,
 	})
 }
 

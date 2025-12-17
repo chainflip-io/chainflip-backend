@@ -17,7 +17,7 @@
 use crate::{
 	common::option_inner,
 	dot::http_rpc::DotRpcClientBuilder,
-	retrier::{Attempt, RetryLimitReturn},
+	retrier::{Attempt, RetryLimitReturn, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY},
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
@@ -88,6 +88,7 @@ impl DotRetryRpcClient {
 				futures::future::ready(rpc_client),
 				backup_rpc_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,
+				MAX_RPC_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			sub_retry_client: RetrierClient::new(
@@ -96,6 +97,7 @@ impl DotRetryRpcClient {
 				futures::future::ready(sub_client),
 				backup_sub_client.map(futures::future::ready),
 				POLKADOT_RPC_TIMEOUT,
+				MAX_SUBSCRIPTION_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 		})

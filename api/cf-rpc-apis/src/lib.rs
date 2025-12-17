@@ -59,6 +59,7 @@ pub enum CfErrorCode {
 	SubstrateClientError = -32023,
 	PoolClientError = -32024,
 	DynamicEventsError = -32025,
+	UnsupportedRuntimeApiVersion = -32026,
 }
 
 pub type RpcResult<T> = Result<T, RpcApiError>;

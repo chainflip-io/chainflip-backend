@@ -1,4 +1,5 @@
-use crate::{chainflip::TypeInfo, Decode, Encode, EthereumAddress, Runtime, RuntimeCall};
+use crate::{chainflip::TypeInfo, Decode, Encode, Runtime, RuntimeCall};
+use cf_chains::evm::Address as EthereumAddress;
 use cf_primitives::FlipBalance;
 use codec::MaxEncodedLen;
 use frame_support::{
