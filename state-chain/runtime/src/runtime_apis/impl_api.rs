@@ -1998,9 +1998,5 @@ impl_runtime_apis! {
 
 			Ok((encoded_data, transaction_metadata))
 		}
-
-		fn cf_slot_duration() -> u64 {
-			<Runtime as pallet_aura::Config>::SlotDuration::get()
-		}
 	}
 }
