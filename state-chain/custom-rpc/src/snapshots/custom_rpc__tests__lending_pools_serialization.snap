@@ -9,6 +9,7 @@ expression: pool
   },
   "total_amount": "0x7d0",
   "available_amount": "0x5dc",
+  "owed_to_network": "0x9b",
   "utilisation_rate": 900000,
   "current_interest_rate": 80000,
   "origination_fee": 100,
