@@ -12,50 +12,70 @@ import { ChooseSingleEvent, EventDescription, EventName, findOneEventOfMany } fr
 import { Logger } from './logger';
 
 export class ChainflipIO<Requirements> {
-  /// The last block height at which either an input or an output operation happened,
-  /// (that is either an extrinsic was submitted or an event was found)
+  /**
+   * The last block height at which either an input or an output operation happened,
+   * (that is either an extrinsic was submitted or an event was found)
+   */
   private lastIoBlockHeight: number;
 
-  /// Methods can contain additional requirements that they have, that is additional
-  /// data that should be available when calling them. For example, submitting an
-  /// extrinsic requires a statechain account.
+  /**
+   * Methods can contain additional requirements that they have, that is, additional
+   * data that should be available when calling them. For example, submitting an
+   * extrinsic requires a statechain account.
+   */
   readonly requirements: Requirements;
 
-  /// This class also exposes logger functionality
+  /** This class also exposes logger functionality. */
   readonly logger: Logger;
 
-  /// Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
-  /// to automatically initialize to the current block height, use `newChainflipIO` instead.
-  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number) {
+  /** A long-living chainflip api object. Reused by all functions that interact with the state-chain. */
+  private chainflipApi: DisposableApiPromise;
+
+  /**
+   * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
+   * to automatically initialize to the current block height, use `newChainflipIO` instead.
+   */
+  constructor(
+    logger: Logger,
+    requirements: Requirements,
+    lastIoBlockHeight: number,
+    chainflipApi: DisposableApiPromise,
+  ) {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
+    this.chainflipApi = chainflipApi;
   }
 
+  /**
+   * Submits an extrinsic and updates the `lastIoBlockHeight` to the block height were the extrinsic was included.
+   * @param this Automatically provided by typescript when called as a method on a ChainflipIO object.
+   * @param extrinsic Function that takes a `DisposableApiPromise` and builds the extrinsic that should be submitted.
+   * @returns The result of submitting the extrinsic if successful, or a string containing the failure reason.
+   */
   async stepToExtrinsicIncluded<Data extends Requirements & { account: FullAccount<AccountType> }>(
     this: ChainflipIO<Data>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     extrinsic: (api: DisposableApiPromise) => any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<Result<any, string>> {
-    await using chainflip = await getChainflipApi();
     const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
       this.requirements.account.keypair,
       lpMutex.for(this.requirements.account.uri),
     );
-    const ext = extrinsic(chainflip);
+    const ext = extrinsic(this.chainflipApi);
 
     // generate readable description for logging
-    const human = ext.toHuman();
-    const section = human.method.section;
-    const method = human.method.method;
-    const args = human.method.args;
+    const { section, method, args } = ext.toHuman().method;
     const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
     this.logger.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
 
     // submit
-    const result = extractExtrinsicResult(chainflip, await extrinsicSubmitter.submit(ext, false));
+    const result = extractExtrinsicResult(
+      this.chainflipApi,
+      await extrinsicSubmitter.submit(ext, false),
+    );
     if (result.ok) {
       this.logger.debug(`Successfully submitted`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
@@ -65,10 +85,22 @@ export class ChainflipIO<Requirements> {
     return result;
   }
 
+  /**
+   * Advance the current chainflip block height by one block.
+   */
   async stepOneBlock() {
     this.lastIoBlockHeight += 1;
   }
 
+  /**
+   * Advance the current chainflip block height until an event
+   * is found that matches the provided name and schema.
+   * @param name Name of the event to search for. Can be provided with, or without pallet name.
+   * @param schema Expected zod schema that the event data should match. This describes both
+   * the shape of the data (e.g. which fields of which types exist), but can also require
+   * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
+   * @returns The data of the first matching event, well-typed according to the provided schema.
+   */
   async stepUntilEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: EventName,
     schema: Z,
@@ -84,6 +116,15 @@ export class ChainflipIO<Requirements> {
     return event.data;
   }
 
+  /**
+   * Find event with the provided name and schema in the current chainflip block. This method
+   * does not update the current chainflip block height.
+   * @param name Name of the event to search for. Can be provided with, or without pallet name.
+   * @param schema Expected zod schema that the event data should match. This describes both
+   * the shape of the data (e.g. which fields of which types exist), but can also require
+   * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
+   * @returns The data of the first matching event, well-typed according to the provided schema.
+   */
   async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: EventName,
     schema: Z,
@@ -96,11 +137,17 @@ export class ChainflipIO<Requirements> {
         endBeforeBlock: this.lastIoBlockHeight + 1,
       },
     );
-    this.lastIoBlockHeight = event.blockHeight;
 
     return event.data;
   }
 
+  /**
+   * Advance the current chainflip block height until an event that matches one of the given
+   * event descriptions (name and schema).
+   * @param descriptions Record containing an arbitrary number of event descriptions (name and schema).
+   * @returns Object containing the key and data of the found event, as well as the block height at which
+   * it was found.
+   */
   async stepUntilOneEventOf<S extends Record<string, EventDescription>>(
     descriptions: S,
   ): Promise<ChooseSingleEvent<S>> {
@@ -142,16 +189,23 @@ export class ChainflipIO<Requirements> {
   }
 }
 
-/// Constructor for `ChainflipIO` objects. This initializes the internally tracked
-/// block height to the latest height. To do this, it has to use async and thus cannot
-/// be part of the official constructor.
+/**
+ * Constructor for `ChainflipIO` objects. This initializes the internally tracked
+ * block height to the latest height. To do this, it has to use async and thus cannot
+ * be part of the official constructor.
+ * @param logger Logger object that should be used for the exposed logging functionality.
+ * @param requirements Possibly required additional data. This depends on which methods
+ * are going to be called on the ChainflipIO object. Its type `Requirements` should
+ * be automatically inferred and guide you to provide the correct fields.
+ * @returns Newly initialized ChainflipIO object.
+ */
 export async function newChainflipIO<Requirements>(logger: Logger, requirements: Requirements) {
   // find out current block height
-  await using chainflip = await getChainflipApi();
-  const currentBlockHeight = (await chainflip.rpc.chain.getHeader()).number.toNumber();
+  const chainflipApi = await getChainflipApi();
+  const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
 
   // initialize with this height, meaning that we'll only search for events from this height on
-  return new ChainflipIO(logger, requirements, currentBlockHeight);
+  return new ChainflipIO(logger, requirements, currentBlockHeight, chainflipApi);
 }
 
 // ------------ Account types  ---------------
