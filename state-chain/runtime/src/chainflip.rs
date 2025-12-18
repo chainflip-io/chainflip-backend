@@ -98,7 +98,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
-	ChannelId, DcaParameters,
+	ChannelId, DcaParameters, MAX_BASIS_POINTS,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
@@ -122,6 +122,7 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
+use sp_runtime::Permill;
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 
 impl Chainflip for Runtime {
@@ -938,22 +939,25 @@ impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualifica
 // Calculates the APY of a given account, returned in Basis Points (1 b.p. = 0.01%)
 // Returns Some(APY) if the account is an Authority, otherwise returns None.
 pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
-	if pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(account_id) {
-		// Authority: reward is earned by authoring a block.
-		Some(
+	pallet_cf_validator::CurrentAuthorities::<Runtime>::get()
+		.contains(account_id)
+		.then(|| {
+			// Authority: reward is earned by authoring a block.
 			Emissions::current_authority_emission_per_block() * YEAR as u128 /
 				pallet_cf_validator::CurrentAuthorities::<Runtime>::decode_non_dedup_len()
-					.expect("Current authorities must exists and non-empty.") as u128,
-		)
-	} else {
-		None
-	}
-	.map(|reward_pa| {
-		// Convert APY to Basis Point.
-		FixedU64::from_rational(reward_pa, Flip::balance(account_id))
-			.checked_mul_int(10_000u32)
-			.unwrap_or_default()
-	})
+					.expect("Current authorities must exists and non-empty.") as u128
+		})
+		.map(|total_reward_pa| {
+			let mab = pallet_cf_validator::Bond::<Runtime>::get();
+
+			let validator_reward_pa =
+				Permill::from_rational(Flip::bond(account_id), mab) * total_reward_pa;
+
+			let apy = FixedU64::from_rational(validator_reward_pa, Flip::balance(account_id));
+
+			// Convert APY to Basis Point.
+			apy.checked_mul_int(MAX_BASIS_POINTS as u32).unwrap_or_default()
+		})
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Encode, Decode)]
