@@ -2378,20 +2378,17 @@ mod delegation {
 				DelegationAmount::Some(min_bid)
 			));
 
-			// Should not be able to undelegate leaving dust amount
-			assert_noop!(
-				ValidatorPallet::undelegate(
-					OriginTrait::signed(DELEGATOR),
-					DelegationAmount::Some(min_bid - 1)
-				),
-				Error::<Test>::DelegationAmountBelowMinimum
-			);
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), Some((BOB, min_bid)));
 
-			// Undelegating everything should still work though:
+			// If we are about to reduce out delegation so it is below the minimum,
+			// the amount will be "rounded down" to 0 and we won't end up with a dust
+			// delegation entry:
 			assert_ok!(ValidatorPallet::undelegate(
 				OriginTrait::signed(DELEGATOR),
-				DelegationAmount::Some(min_bid)
+				DelegationAmount::Some(min_bid - 1)
 			));
+
+			assert_eq!(DelegationChoice::<Test>::get(DELEGATOR), None);
 		});
 	}
 

@@ -1300,7 +1300,16 @@ pub mod pallet {
 				DelegationChoice::<T>::get(&delegator).ok_or(Error::<T>::AccountIsNotDelegating)?;
 
 			let new_max_bid = match decrease {
-				DelegationAmount::Some(decr) => current_max_bid.saturating_sub(decr),
+				DelegationAmount::Some(decr) => {
+					let max_bid = current_max_bid.saturating_sub(decr);
+
+					// If new max_bid would fall below the minimum, reduce it all the way to zero:
+					if max_bid.into() >= T::MinimumFunding::get_min_funding_amount() {
+						max_bid
+					} else {
+						T::Amount::zero()
+					}
+				},
 				DelegationAmount::Max => T::Amount::zero(),
 			};
 
@@ -1321,11 +1330,6 @@ pub mod pallet {
 					max_bid: current_max_bid,
 				});
 			} else {
-				ensure!(
-					new_max_bid.into() >= T::MinimumFunding::get_min_funding_amount(),
-					Error::<T>::DelegationAmountBelowMinimum
-				);
-
 				DelegationChoice::<T>::mutate(&delegator, |choice| {
 					if let Some((_, ref mut max_bid)) = choice {
 						*max_bid = new_max_bid;
