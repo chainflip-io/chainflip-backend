@@ -46,8 +46,8 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::crypto::Pair;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
-	Flip, Funding, Governance, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin,
-	SolanaVault, System, Validator, Witnesser,
+	Flip, Funding, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin, SolanaVault,
+	System, Validator, Witnesser,
 };
 
 type NodeId = AccountId32;

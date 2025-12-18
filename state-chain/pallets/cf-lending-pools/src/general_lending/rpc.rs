@@ -14,8 +14,16 @@ pub struct RpcLoan<Amount> {
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcLendingPool<Amount> {
 	pub asset: Asset,
+	/// Total amount collectively owed to lenders
 	pub total_amount: Amount,
+	/// The amount available for borrowing. Could be larger than `total_amount` in a rare edge case
+	/// where `total_owed_to_network` is not 0 despite all loans having been fully repaid (in
+	/// which case `available_amount` == `total_amount` + `total_owed_to_network`).
 	pub available_amount: Amount,
+	/// Amount owed to network due to network fees. Expected to be 0 most of the time except when
+	/// pool's utilisation is 100% and the network was unable to collect the fees immediately. The
+	/// network is expected to collect the fees when `available_amount` becomes > 0.
+	pub owed_to_network: Amount,
 	pub utilisation_rate: Permill,
 	pub current_interest_rate: Permill,
 	#[serde(flatten)]
@@ -154,6 +162,7 @@ fn build_rpc_lending_pool<T: Config>(
 		asset,
 		total_amount: pool.total_amount,
 		available_amount: pool.available_amount,
+		owed_to_network: pool.owed_to_network,
 		utilisation_rate: utilisation,
 		current_interest_rate,
 		config: config.get_config_for_asset(asset).clone(),
