@@ -27,10 +27,10 @@ use cf_traits::{
 		address_converter::MockAddressConverter, balance_api::MockBalance, bonding::MockBonderFor,
 		deposit_handler::MockDepositHandler, egress_handler::MockEgressHandler,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
-		lending_pools::MockLendingSystemApi, pool_price_api::MockPoolPriceApi,
-		price_feed_api::MockPriceFeedApi,
+		lending_pools::MockLendingSystemApi, minimum_funding::MockMinimumFundingProvider,
+		pool_price_api::MockPoolPriceApi, price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, ChannelIdAllocator, GetMinimumFunding, SwappingApi,
+	AccountRoleRegistry, ChannelIdAllocator, SwappingApi,
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
@@ -238,14 +238,5 @@ pub struct MockChainflipNetworkProvider;
 impl cf_traits::ChainflipNetworkInfo for MockChainflipNetworkProvider {
 	fn chainflip_network() -> ChainflipNetwork {
 		ChainflipNetwork::Development
-	}
-}
-
-pub struct MockMinimumFundingProvider;
-pub const MINIMUM_FUNDING: u128 = 100;
-
-impl GetMinimumFunding for MockMinimumFundingProvider {
-	fn get_min_funding_amount() -> AssetAmount {
-		MINIMUM_FUNDING
 	}
 }

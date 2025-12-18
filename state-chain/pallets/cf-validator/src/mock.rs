@@ -24,7 +24,8 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
+		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
+		reputation_resetter::MockReputationResetter,
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
@@ -154,6 +155,7 @@ impl Config for Test {
 	type KeygenQualification = QualifyAll<ValidatorId>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ValidatorWeightInfo = ();
+	type MinimumFunding = MockMinimumFundingProvider;
 	type CfePeerRegistration = MockCfeInterface;
 }
 
