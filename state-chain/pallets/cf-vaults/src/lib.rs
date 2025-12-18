@@ -158,11 +158,8 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
-		/// the only thing we can do is to halt and wait for further governance
-		/// intervention.
-		///
-		/// This function activates CODE RED for the runtime's safe mode, which halts
-		/// many functions on the statechain.
+		/// the only thing we can do is to update the vault key to be sure we can continue
+		/// to properly sign transactions.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vault_key_rotated_externally())]
 		pub fn vault_key_rotated_externally(
@@ -173,9 +170,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::activate_new_key_for_chain(block_number);
-
-			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
+			Self::inner_vault_key_rotated_externally(new_public_key, block_number);
 
 			Ok(())
 		}
@@ -233,6 +228,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<T::Chain as Chain>::saturating_block_witness_next(block_number),
 		);
 		Self::deposit_event(Event::VaultActivationCompleted);
+	}
+
+	pub fn inner_vault_key_rotated_externally(
+		new_public_key: AggKeyFor<T, I>,
+		block_number: ChainBlockNumberFor<T, I>,
+	) {
+		Self::activate_new_key_for_chain(block_number);
+
+		Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 	}
 }
 

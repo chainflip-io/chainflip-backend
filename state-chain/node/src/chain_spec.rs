@@ -43,7 +43,7 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::{
-		bitcoin_elections,
+		arbitrum_elections, bitcoin_elections, ethereum_elections,
 		generic_elections::{self, ChainlinkOraclePriceSettings},
 		solana_elections, Offence,
 	},
@@ -52,8 +52,9 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, BitcoinElectionsConfig, BlockNumber, FlipBalance, GenericElectionsConfig,
-	SetSizeParameters, Signature, SolanaElectionsConfig, WASM_BINARY,
+	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber,
+	EthereumElectionsConfig, FlipBalance, GenericElectionsConfig, SetSizeParameters, Signature,
+	SolanaElectionsConfig, WASM_BINARY,
 };
 
 use cf_utilities::clean_hex_address;
@@ -489,6 +490,12 @@ pub fn inner_cf_development_config(
 					chainlink_oracle_price_settings.convert(ArrayToVector),
 				)),
 			},
+			EthereumElectionsConfig {
+				option_initial_state: Some(ethereum_elections::initial_state()),
+			},
+			ArbitrumElectionsConfig {
+				option_initial_state: Some(arbitrum_elections::initial_state()),
+			},
 		))
 		.build())
 }
@@ -681,6 +688,12 @@ macro_rules! network_spec {
 								chainlink_oracle_price_settings.convert(ArrayToVector),
 							)),
 						},
+						EthereumElectionsConfig {
+							option_initial_state: Some(ethereum_elections::initial_state()),
+						},
+						ArbitrumElectionsConfig {
+							option_initial_state: Some(arbitrum_elections::initial_state()),
+						},
 					))
 					.build())
 			}
@@ -736,6 +749,8 @@ fn testnet_genesis(
 	solana_elections: state_chain_runtime::SolanaElectionsConfig,
 	bitcoin_elections: state_chain_runtime::BitcoinElectionsConfig,
 	generic_elections: state_chain_runtime::GenericElectionsConfig,
+	ethereum_elections: state_chain_runtime::EthereumElectionsConfig,
+	arbitrum_elections: state_chain_runtime::ArbitrumElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -1006,6 +1021,9 @@ fn testnet_genesis(
 
 		generic_elections,
 
+		ethereum_elections,
+
+		arbitrum_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.
