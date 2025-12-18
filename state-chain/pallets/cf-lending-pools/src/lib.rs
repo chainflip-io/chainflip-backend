@@ -195,7 +195,7 @@ pub enum CollateralAddedActionType {
 	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
-	SystemLiquidationExcessAmount,
+	SystemLiquidationExcessAmount { loan_id: LoanId },
 }
 
 pub struct LendingConfigDefault {}
