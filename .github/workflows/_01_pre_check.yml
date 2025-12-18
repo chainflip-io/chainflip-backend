@@ -68,12 +68,12 @@ jobs:
           version: 10
 
       - name: Configure NodeJS 🛠️
-        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        uses: actions/setup-node@v6
         with:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           registry-url: "https://npm.pkg.github.com"
-          cache-dependency-path: "bouncer/pnpm-lock.yaml"
+          cache-dependency-path: "./bouncer/pnpm-lock.yaml"
 
       - name: Install node dependencies 📦
         working-directory: bouncer
