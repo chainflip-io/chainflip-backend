@@ -341,7 +341,7 @@ pub fn test_all() {
 		// Default is: 256
 		// Value useful for development is: 256 * 60
 		// Value for quick CI: 100
-		cases: 100,
+		cases: 256 * 60,
 		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
 			"proptest-regressions-full-pipeline",
 		))),
@@ -384,6 +384,72 @@ fn test_delayed_election_result_after_reorg_is_handled() {
 	for _ in 0..25 {
 		blocks.push(ForkedBlock::Block(FilledBlock {
 			block_id: 3,
+			data: vec![],
+			data_delays: vec![0, 0, 0, 0, 0],
+			resolution_delay: 0,
+		}));
+	}
+
+	run_simulation(ForkedFilledChain { blocks });
+}
+
+
+/// A fork is reorged away and replaced by a shorter chain.
+/// 
+/// This test case is covered by proptesting if `max_data_delay` >= 4
+/// and `time_steps_per_block` contains 0..=8.
+#[test]
+fn test_reorg_into_shorter_chain() {
+	let mut blocks = vec![
+		ForkedBlock::Block(FilledBlock {
+			block_id: 0,
+			data: vec![],
+			data_delays: vec![0],
+			resolution_delay: 0,
+		}),
+		ForkedBlock::Fork(vec![ForkedBlock::Block(FilledBlock {
+			block_id: 1,
+			data: vec!["b".to_string(), "c".into(), "d".into()],
+			data_delays: vec![0, 0, 0, 0, 0, 0],
+			resolution_delay: 0,
+		})]),
+		ForkedBlock::Block(FilledBlock {
+			block_id: 2,
+			data: vec!["a".into(), "b".into(), "c".into()],
+			data_delays: vec![],
+			resolution_delay: 0,
+		}),
+		ForkedBlock::Block(FilledBlock {
+			block_id: 3,
+			data: vec![],
+			// These data delays have the following effect:
+			// when the time of the chain that ends at this block comes,
+			// it is queried 2 times with delay 0, that is, it actually
+			// returns this state of the chain. Then after that, for 5 queries,
+			// it has delay 3, i.e., it will return the state of the chain
+			// at block_id: 0. That's a 1 block chain.
+			//
+			// So effectively we create the following scenario:
+			// post-fork, the BHW queries the highest block, gets block_id 3 at height 2 with
+			// parent block_id 2 at height 1. It currently knows that block_id 1 should
+			// be at height 1. This means it recognized that we have a reorg at our hands.
+			//
+			// Then it forces a requerying of all known blocks. Since we set the delay
+			// to 3, this means that the engines will get a chain that's 3 steps in the past,
+			// Which is in our case the chain that only contains block_id 0.
+			// 
+			// This means that the BHW will get a merge_info with added = [], and removed = {[block_id 1, height 1]}
+			//
+			// This was a critical case that broke the BHW, because it didn't forward the reorg information
+			// in case of `added` being empty.
+			data_delays: vec![0, 0, 3, 3, 3, 3, 3, 3],
+			resolution_delay: 0,
+		}),
+	];
+
+	for _ in 0..25 {
+		blocks.push(ForkedBlock::Block(FilledBlock {
+			block_id: 4,
 			data: vec![],
 			data_delays: vec![0, 0, 0, 0, 0],
 			resolution_delay: 0,

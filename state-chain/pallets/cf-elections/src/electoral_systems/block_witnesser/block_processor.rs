@@ -512,4 +512,77 @@ pub(crate) mod tests {
 			vec![vec![(101u8, MockBtcEvent::PreWitness(1u8)),]]
 		);
 	}
+
+	/// Regression test: Inserting block data twice for the same block (e.g., when an optimistic
+	/// block's hash is confirmed) should NOT cause duplicate event execution.
+	///
+	/// This simulates the scenario where:
+	/// 1. An optimistic election completes and block data is inserted
+	/// 2. Events are processed (PreWitness at age 0)
+	/// 3. The block height witnesser confirms the hash matches, causing the same data to be
+	///    inserted again via schedule_range
+	/// 4. Events should NOT be re-executed
+	#[test]
+	fn reinserting_same_block_data_does_not_cause_duplicate_events() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		// Step 1: Insert block data (simulating optimistic election completion)
+		processor.insert_block_data(100, vec![1, 2, 3], SAFETY_MARGIN);
+
+		// Step 2: Process - this should generate PreWitness events at age 0
+		processor.process_blocks_up_to(101, 101, SAFETY_BUFFER);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![vec![
+				(100u8, MockBtcEvent::PreWitness(1u8)),
+				(100u8, MockBtcEvent::PreWitness(2u8)),
+				(100u8, MockBtcEvent::PreWitness(3u8)),
+			]]
+		);
+
+		// Step 3: Re-insert the same block data (simulating hash confirmation in schedule_range)
+		// This is what happens when the optimistic block's hash matches the confirmed header
+		processor.insert_block_data(100, vec![1, 2, 3], SAFETY_MARGIN);
+
+		// Step 4: Process again - NO duplicate events should be generated
+		processor.process_blocks_up_to(101, 101, SAFETY_BUFFER);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![Vec::<(u8, MockBtcEvent<u8>)>::new()], // Should be empty - no duplicates!
+			"Reinserting the same block data caused duplicate PreWitness events!"
+		);
+	}
+
+	/// Regression test: Same as above but also verifying that Witness events are not duplicated
+	/// when the block ages past the safety margin.
+	#[test]
+	fn reinserting_block_data_does_not_cause_duplicate_witness_events() {
+		let mut processor = BlockProcessor::<Types>::default();
+
+		// Insert and process block 100
+		processor.insert_block_data(100, vec![1], SAFETY_MARGIN);
+		processor.process_blocks_up_to(101, 101, SAFETY_BUFFER);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![vec![(100u8, MockBtcEvent::PreWitness(1u8)),]]
+		);
+
+		// Process until Witness event is triggered (age reaches SAFETY_MARGIN)
+		processor.process_blocks_up_to(100 + SAFETY_MARGIN as u8 + 1, 101, SAFETY_BUFFER);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![vec![(100u8, MockBtcEvent::Witness(1u8)),]]
+		);
+
+		// Now re-insert the same block data
+		processor.insert_block_data(100, vec![1], SAFETY_MARGIN);
+
+		// Process again - should NOT re-trigger PreWitness or Witness
+		processor.process_blocks_up_to(100 + SAFETY_MARGIN as u8 + 2, 101, SAFETY_BUFFER);
+		assert_eq!(
+			processor.execute.take_history(),
+			vec![Vec::<(u8, MockBtcEvent<u8>)>::new()],
+			"Reinserting block data after full processing caused duplicate events!"
+		);
+	}
 }

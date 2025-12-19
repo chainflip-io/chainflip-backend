@@ -131,6 +131,15 @@ register_checks! {
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
 		},
+		block_processor_is(pre, post, n: usize) {
+			let state = post.unsynchronised_state.block_processor.clone();
+			println!("state is: {state:?}");
+
+			// let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
+			// 	state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(age, _data, _event)| age.contains(&0)).count()
+			// };
+			// assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
+		},
 		emitted_prewitness_events(pre, post, events: Vec<(ChainBlockNumber, Vec<u8>)>) {
 			let get_events = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
 				state.unsynchronised_state.block_processor.execute.call_history.iter().flatten().cloned().collect::<Vec<_>>()
@@ -444,6 +453,130 @@ fn creates_multiple_elections_limited_by_maximum() {
 				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
 					MAX_CONCURRENT_ELECTIONS,
 				),
+			],
+		);
+}
+
+
+#[test]
+fn reorg_that_shortens_chain_is_processed_correctly() {
+	const HEADERS_RECEIVED: [Header<Types>; MAX_CONCURRENT_ELECTIONS as usize] = [
+		Header { block_height: 11, hash: 11, parent_hash: 10 },
+		Header { block_height: 12, hash: 12, parent_hash: 11 },
+		Header { block_height: 13, hash: 13, parent_hash: 12 },
+		Header { block_height: 14, hash: 14, parent_hash: 13 },
+		Header { block_height: 15, hash: 15, parent_hash: 14 },
+	];
+	const NEXT_HEADER_RECEIVED: [Header<Types>; 1] =
+		[Header { block_height: 16, hash: 16, parent_hash: 15 }];
+	const REORG_LENGTH: usize = 0;
+	const REORG_HEADERS_REMOVED: RangeInclusive<ChainBlockNumber> = 16..=16;
+	const REORG_NEW_HEADERS_RECEIVED: [Header<Types>; REORG_LENGTH] = [];
+	const POST_REORG_HEADER_RECEIVED: [Header<Types>; 1] =
+		[Header { block_height: 1, hash: 160, parent_hash: 15 }];
+
+	const PRE_REORG_RECEIVED_TXS: [Range<u8>; MAX_CONCURRENT_ELECTIONS as usize] =
+		[5..8, 8..11, 11..14, 14..17, 17..20];
+
+	// there's a special tx that only appears post-reorg in a reorged block
+	const SPECIAL_POST_REORG_TX: u8 = 200;
+	assert!(PRE_REORG_RECEIVED_TXS
+		.iter()
+		.all(|range| !range.contains(&SPECIAL_POST_REORG_TX)));
+
+	let all_votes = PRE_REORG_RECEIVED_TXS
+		.iter()
+		.map(|range| create_votes_expectation(range.clone().collect()))
+		.collect::<Vec<_>>();
+
+	TestSetup::<SimpleBlockWitnesser>::default()
+		.with_unsynchronised_settings(BlockWitnesserSettings {
+			max_ongoing_elections: MAX_CONCURRENT_ELECTIONS,
+			safety_margin: SAFETY_MARGIN as u32,
+			safety_buffer: SAFETY_BUFFER as u32,
+			max_optimistic_elections: 0,
+		})
+		.build()
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: HEADERS_RECEIVED.into(), removed: None })],
+			|_| {},
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					MAX_CONCURRENT_ELECTIONS as u8,
+				),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(
+					MAX_CONCURRENT_ELECTIONS,
+				),
+				// No reorg, so we try processing any unprocessed state (there would be none at
+				// this point though, since no elections have resolved).
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(0),
+			],
+		)
+		.then(|| println!("We about to come to consensus on some blocks."))
+		.expect_consensus_multi(all_votes)
+		// Process votes as normal, progressing by one block, storing the state
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: NEXT_HEADER_RECEIVED.into(), removed: None })],
+			|_| {},
+			vec![
+				// We've already processed the other elections, so we only have to create a new
+				// election for the new block.
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				Check::<SimpleBlockWitnesser>::rules_hook_called_n_times_for_age_zero(5),
+
+				// Ensure that we emit prewitness events for all txs from all the votes that reached consensus
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![
+					(11, vec![5,6,7]),
+					(12, vec![8,9,10]),
+					(13, vec![11,12,13]),
+					(14, vec![14,15,16]),
+					(15, vec![17,18,19]),
+					]
+				),
+
+				Check::<SimpleBlockWitnesser>::block_processor_is(0)
+			],
+		)
+		.then(|| println!("We're about to come to consensus on a block that will trigger a reorg."))
+		// Reorg occurs
+		.test_on_finalize(
+			&vec![Some(ChainProgress {
+				headers: REORG_NEW_HEADERS_RECEIVED.into(),
+				removed: Some(REORG_HEADERS_REMOVED),
+			})],
+			|_| {},
+			// We reopen an election for reorged blocks
+			vec![
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(
+					// REORG_LENGTH more than the last time we checked.
+					REORG_LENGTH as u8,
+				),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(REORG_LENGTH as u16),
+
+				Check::<SimpleBlockWitnesser>::block_processor_is(0)
+			],
+		)
+		.then(|| {
+			println!("We're about to come to consensus and the deposits end up in another block, there's also a new one")
+		})
+		.expect_consensus_multi(vec![
+			create_votes_expectation(vec![14, 15, SPECIAL_POST_REORG_TX]),
+			create_votes_expectation(vec![18]),
+			create_votes_expectation(vec![19, 16]),
+		])
+		.test_on_finalize(
+			&vec![Some(ChainProgress { headers: POST_REORG_HEADER_RECEIVED.into(), removed: None })],
+			|_| {},
+			vec![
+				//we proceed as normal and open election for the new header
+				Check::<SimpleBlockWitnesser>::generate_election_properties_called_n_times(1),
+				Check::<SimpleBlockWitnesser>::number_of_open_elections_is(1),
+				// Emit only prewitness events for the one deposit that is new post-reorg
+				// All other deposits have been prewitnessed before.
+				Check::<SimpleBlockWitnesser>::emitted_prewitness_events(vec![
+					(14, vec![SPECIAL_POST_REORG_TX])
+				])
 			],
 		);
 }

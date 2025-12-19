@@ -176,6 +176,10 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
+					// if merge_info.added.len() == 0 && merge_info.removed.len() > 0 {
+					// 	panic!("got a case!");
+					// }
+
 					Ok(NonemptyContinuousHeaders::try_new(merge_info.added)
 						.map(|cont_headers| ChainProgress {
 							headers: cont_headers,

@@ -260,8 +260,12 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 			take: 3..5,
 			max_drop: 1,
 			max_ignore: 2,
-			time_steps_per_block: 1..=3,
-			max_data_delay: 2,
+			// Time steps per block should be possibly relatively high, to allow a simulation of
+			// `reorg_into_shorter_chain`. See the test of the same name.
+			time_steps_per_block: 0..=8, 
+ 			// A data delay of at least 3 is required to simulate a `reorg_into_shorter_chain`.
+			// See the test of the same name.
+			max_data_delay: 4,
 			max_resolution_delay: 24,
 			resolution_delay_probability_weight: 100,
 		},
