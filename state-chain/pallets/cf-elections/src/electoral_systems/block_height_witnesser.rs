@@ -5,8 +5,7 @@ use super::{
 	state_machine::core::{defx, Hook, HookType, Validate},
 };
 use crate::{
-	electoral_systems::block_height_witnesser::primitives::{ContinuousHeaders, Header},
-	generic_tools::*,
+	electoral_systems::block_height_witnesser::primitives::ContinuousHeaders, generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
@@ -17,7 +16,7 @@ use proptest::prelude::Arbitrary;
 use proptest_derive::Arbitrary;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::{collections::vec_deque::VecDeque, fmt::Debug};
+use sp_std::fmt::Debug;
 
 pub mod consensus;
 pub mod primitives;
