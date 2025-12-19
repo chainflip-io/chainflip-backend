@@ -2,7 +2,7 @@ name: Release Chainflip Sisyphos
 on:
   push:
     branches:
-      - "release/[0-9]+.[0-9]+"
+      - "release/[0-9]+.[0-9]+.[0-9]+"
 
 concurrency:
   group: ${{ github.ref }}-release-sisyphos
