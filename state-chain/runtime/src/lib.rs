@@ -17,6 +17,7 @@
 #![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
+#![feature(iter_array_chunks)]
 pub mod chainflip;
 pub mod constants;
 pub mod migrations;
@@ -92,7 +93,7 @@ use cf_primitives::{
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, DummyEgressSuccessWitnesser,
 	DummyIngressSource, EpochKey, GetBlockHeight, KeyProvider, MinimumDeposit, NoLimit, SwapLimits,
-	SwapParameterValidation,
+	SwapParameterValidation, TransferLimits,
 };
 use codec::{alloc::string::ToString, Decode, Encode};
 use core::ops::Range;
@@ -537,7 +538,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	type SwapRequestHandler = Swapping;
 	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
 	type AssetWithholding = AssetBalances;
-	type FetchesTransfersLimitProvider = NoLimit;
+	type FetchesTransfersLimitProvider = TransferLimits<5, 0, 0>;
 	type SafeMode = RuntimeSafeMode;
 	type SwapParameterValidation = Swapping;
 	type AffiliateRegistry = Swapping;

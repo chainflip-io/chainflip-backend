@@ -1136,6 +1136,36 @@ pub trait FetchesTransfersLimitProvider {
 	}
 }
 
+pub struct TransferLimits<const TRANSFER: usize, const CCM: usize, const FETCHES: usize>;
+
+impl<const TRANSFER: usize, const CCM: usize, const FETCHES: usize> FetchesTransfersLimitProvider
+	for TransferLimits<TRANSFER, CCM, FETCHES>
+{
+	fn maybe_transfers_limit() -> Option<usize> {
+		if TRANSFER == 0 {
+			None
+		} else {
+			Some(TRANSFER)
+		}
+	}
+
+	fn maybe_ccm_limit() -> Option<usize> {
+		if CCM == 0 {
+			None
+		} else {
+			Some(CCM)
+		}
+	}
+
+	fn maybe_fetches_limit() -> Option<usize> {
+		if FETCHES == 0 {
+			None
+		} else {
+			Some(FETCHES)
+		}
+	}
+}
+
 pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
 

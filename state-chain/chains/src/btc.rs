@@ -466,7 +466,9 @@ impl DepositDetailsToTransactionInId<BitcoinCrypto> for Utxo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq, PartialOrd, Ord,
+)]
 pub struct BitcoinOutput {
 	pub amount: u64,
 	pub script_pubkey: ScriptPubkey,

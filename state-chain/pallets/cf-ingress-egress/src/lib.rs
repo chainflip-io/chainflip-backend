@@ -3428,6 +3428,28 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 			.collect()
 	}
+
+	// TEMPORARY: Used for migration
+	// Identical to schedule_egress but does not withhold fees and does not support ccm.
+	pub fn schedule_egress_no_fees(
+		asset: TargetChainAsset<T, I>,
+		amount: TargetChainAmount<T, I>,
+		destination_address: TargetChainAccount<T, I>,
+	) {
+		EgressIdCounter::<T, I>::mutate(|id_counter| {
+			*id_counter = id_counter.saturating_add(1);
+			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
+
+			ScheduledEgressFetchOrTransfer::<T, I>::append({
+				FetchOrTransfer::<T::TargetChain>::Transfer {
+					asset,
+					destination_address: destination_address.clone(),
+					amount,
+					egress_id,
+				}
+			});
+		});
+	}
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
