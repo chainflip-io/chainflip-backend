@@ -3215,9 +3215,9 @@ pub mod utilities {
 
 	use super::*;
 
-	// Provides a static price that can be used as a fallback when estimating fees/gas.
-	// These prices are rough approximations of real market prices and should be updated
-	// occasionally if the prices move significantly.
+	/// Provides a static price that can be used as a fallback when estimating fees/gas.
+	/// These prices are rough approximations of real market prices and should be updated
+	/// occasionally if the prices move significantly.
 	pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
 		use cf_primitives::{FLIP_DECIMALS, USD_DECIMALS};
 		const ETH_DECIMALS: u32 = 18;
