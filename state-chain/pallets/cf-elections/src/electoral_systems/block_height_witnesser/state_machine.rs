@@ -4,7 +4,7 @@ use super::{
 	BHWTypes, ChainBlockNumberOf, ChainProgress, ChainTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::{
-	block_height_witnesser::BlockHeightWitnesserSettings,
+	block_height_witnesser::{primitives::ContinuousHeaders, BlockHeightWitnesserSettings},
 	state_machine::{
 		core::{defx, Hook},
 		state_machine::AbstractApi,
@@ -160,7 +160,7 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					headers: new_headers.clone(),
 					witness_from: new_headers.last().block_height.saturating_forward(1),
 				};
-				Ok(Some(ChainProgress { headers: new_headers, removed: None }))
+				Ok(Some(ChainProgress { headers: new_headers.into(), removed: None }))
 			},
 			BHWPhase::Running { headers, witness_from } => match headers.merge(new_headers) {
 				Ok(merge_info) => {
@@ -176,17 +176,23 @@ impl<T: BHWTypes> Statemachine for BlockHeightWitnesser<T> {
 					s.block_height_update.run(highest_seen);
 					*witness_from = highest_seen.saturating_forward(1);
 
-					Ok(NonemptyContinuousHeaders::try_new(merge_info.added)
-						.map(|cont_headers| ChainProgress {
-							headers: cont_headers,
+					match ContinuousHeaders::try_new(merge_info.added) {
+						Ok(added_headers) => Ok(Some(ChainProgress {
+							headers: added_headers,
 							removed: merge_info.removed.front().and_then(|f| {
 								merge_info.removed.back().map(|l| {
 									s.on_reorg.run(f.block_height..=l.block_height);
 									f.block_height..=l.block_height
 								})
 							}),
-						})
-						.ok())
+						})),
+						Err(err) => {
+							// this case should never happen. the logic of the BHW should ensure
+							// that merge_info.added is always a continuous chain of headers
+							log::error!("encountered `merge_info.added` which is not a continuous chain of headers! {err:?}");
+							Err("encountered `merge_info.added` which is not a continuous chain of headers!")
+						},
+					}
 				},
 				Err(MergeFailure::Reorg) => {
 					*witness_from = headers.first().block_height;
@@ -215,9 +221,10 @@ pub mod tests {
 	use crate::{
 		electoral_systems::{
 			block_height_witnesser::{
-				primitives::NonemptyContinuousHeaders, BlockHeightChangeHook,
-				BlockHeightWitnesserSettings, ChainBlockHashOf, ChainBlockHashTrait,
-				ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes, ReorgHook,
+				primitives::{ContinuousHeaders, NonemptyContinuousHeaders},
+				BlockHeightChangeHook, BlockHeightWitnesserSettings, ChainBlockHashOf,
+				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
+				ReorgHook,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::{hook_test_utils::MockHook, TypesFor},
@@ -241,6 +248,29 @@ pub mod tests {
 		},
 		BHWPhase, BlockHeightWitnesser,
 	};
+
+	impl<C: ChainTypes> Arbitrary for ContinuousHeaders<C> {
+		type Parameters = (ChainBlockNumberOf<C>, usize);
+
+		fn arbitrary_with((witness_from_index, length): Self::Parameters) -> Self::Strategy {
+			prop_do! {
+				let header_data in prop::collection::vec(any::<ChainBlockHashOf<C>>(), 1..(length+3));
+				let random_index in any::<ChainBlockNumberOf<C>>();
+				let first_height = if witness_from_index == Default::default() { random_index } else { witness_from_index };
+				return {
+					let headers =
+						header_data.iter().zip(header_data.iter().skip(1)).enumerate().map(|(ix, (h0, h1))| Header {
+							block_height: first_height.saturating_forward(ix),
+							hash: h1.clone(),
+							parent_hash: h0.clone(),
+						});
+					headers.into()
+				}
+			}
+		}
+
+		type Strategy = impl Strategy<Value = ContinuousHeaders<C>> + Clone + Send;
+	}
 
 	impl<C: ChainTypes> Arbitrary for NonemptyContinuousHeaders<C> {
 		type Parameters = (ChainBlockNumberOf<C>, usize);
