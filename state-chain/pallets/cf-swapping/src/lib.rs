@@ -20,14 +20,15 @@ use cf_amm::common::Side;
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
+	evm::U256,
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
 	SwapOrigin,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, Price, PriceLimits, SwapId, SwapLeg,
 	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
-	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	PRICE_FRACTIONAL_BITS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -44,7 +45,7 @@ use frame_support::{
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
-	traits::{Defensive, HandleLifetime},
+	traits::HandleLifetime,
 	transactional, CloneNoBound, Hashable,
 };
 use frame_system::pallet_prelude::*;
@@ -509,16 +510,19 @@ where
 
 #[frame_support::pallet]
 pub mod pallet {
-	use core::cmp::max;
+	use core::{cmp::max, panic};
 
-	use cf_amm::math::{output_amount_ceil, output_amount_floor};
+	use cf_amm::math::{
+		adjust_price_by_bps, invert_price, mul_div_floor, output_amount_ceil, output_amount_floor,
+		relative_price,
+	};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 		Chain,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		PriceLimits, SwapId, SwapOutput, SwapRequestId,
+		Price, PriceLimits, SwapId, SwapRequestId,
 	};
 	use cf_traits::{
 		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
@@ -526,7 +530,7 @@ pub mod pallet {
 		SwapExecutionProgress,
 	};
 	use frame_system::WeightInfo as SystemWeightInfo;
-	use sp_runtime::SaturatedConversion;
+	use sp_runtime::{FixedPointNumber, FixedU64, SaturatedConversion};
 
 	use super::*;
 	#[pallet::config]
@@ -2593,47 +2597,45 @@ pub mod pallet {
 			});
 		}
 
-		#[transactional]
-		/// Must be called within a rollback. Used to simulate a swap for calculating gas amounts.
-		/// Note: Network fees are taken into account, but not collected.
-		pub fn swap_with_network_fee_for_gas(
-			from: Asset,
-			to: Asset,
-			input_amount: AssetAmount,
-		) -> Result<SwapOutput, DispatchError> {
-			let mut network_fee_tracker =
-				NetworkFeeTracker::new_without_minimum(NetworkFee::<T>::get());
-			Ok(match (from, to) {
-				(_, STABLE_ASSET) => {
-					let FeeTaken { remaining_amount: output, fee } = network_fee_tracker
-						.take_fee(T::SwappingApi::swap_single_leg(from, to, input_amount)?);
+		pub fn estimate_price_using_simulated_swap(asset: Asset, side: Side) -> Option<Price> {
+			let (input_asset, output_asset) =
+				if side == Side::Buy { (STABLE_ASSET, asset) } else { (asset, STABLE_ASSET) };
 
-					SwapOutput { intermediary: None, output, network_fee: fee }
-				},
-				(STABLE_ASSET, _) => {
-					let FeeTaken { remaining_amount: input_amount, fee } =
-						network_fee_tracker.take_fee(input_amount);
+			// Using $20 for swap simulation, large enough to allow a good estimation of the fee,
+			// but small enough to not exhaust the pool liquidity.
+			let estimation_input = output_amount_floor(
+				20_000_000u128.into(),
+				invert_price(utilities::hard_coded_price_for_asset(asset)),
+			)
+			.saturated_into();
 
-					SwapOutput {
-						intermediary: None,
-						output: T::SwappingApi::swap_single_leg(from, to, input_amount)?,
-						network_fee: fee,
-					}
-				},
-				_ => {
-					let FeeTaken { remaining_amount: intermediary, fee } = network_fee_tracker
-						.take_fee(T::SwappingApi::swap_single_leg(
-							from,
-							STABLE_ASSET,
-							input_amount,
-						)?);
+			let estimation_output = with_transaction_unchecked(|| {
+				TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
+					input_asset,
+					output_asset,
+					estimation_input,
+				))
+			})
+			.ok();
 
-					SwapOutput {
-						intermediary: Some(intermediary),
-						output: T::SwappingApi::swap_single_leg(STABLE_ASSET, to, intermediary)?,
-						network_fee: fee,
-					}
-				},
+			match estimation_output {
+				Some(0) => None,
+				Some(output) => Some(output),
+				None => None,
+			}
+			.map(|estimation_output| {
+				// Get price in terms of `output_asset per input_asset`
+				let price = mul_div_floor(
+					estimation_output.into(),
+					U256::one() << PRICE_FRACTIONAL_BITS,
+					estimation_input,
+				);
+				// Convert the price to terms of `asset per usdc`
+				if side == Side::Buy {
+					invert_price(price)
+				} else {
+					price
+				}
 			})
 		}
 
@@ -2709,9 +2711,9 @@ pub mod pallet {
 				input_asset,
 				STABLE_ASSET,
 				refund_fee_usdc,
-				false, /* Without network fee */
-			)
-			.ok_or(DispatchError::Other("Invalid fee estimation"))?;
+				false, // Without network fee
+				false, // Not internal
+			);
 
 			let refund_fee =
 				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
@@ -3019,80 +3021,82 @@ pub mod pallet {
 	}
 
 	impl<T: Config> AssetConverter for Pallet<T> {
-		fn calculate_input_for_gas_output<C: Chain>(
-			input_asset: C::ChainAsset,
-			required_gas: C::ChainAmount,
-		) -> C::ChainAmount {
-			let input_asset_generic: Asset = input_asset.into();
-			Self::calculate_input_for_desired_output(
-				input_asset_generic,
-				C::GAS_ASSET.into(),
-				required_gas.into(),
-				true,
-			)
-			.and_then(|amount| C::ChainAmount::try_from(amount).ok())
-			.unwrap_or_else(|| {
-				Self::input_asset_amount_using_oracle_or_reference_gas_asset_price::<
-					C,
-					T::PriceFeedApi,
-				>(input_asset, required_gas)
-			})
-		}
-
 		fn calculate_input_for_desired_output(
 			input_asset: Asset,
 			output_asset: Asset,
 			desired_output_amount: AssetAmount,
 			with_network_fee: bool,
-		) -> Option<AssetAmount> {
-			use frame_support::sp_runtime::helpers_128bit::multiply_by_rational_with_rounding;
+			is_internal_swap: bool,
+		) -> AssetAmount {
+			// Approximate one sided slippage adjustments for oracle prices
+			const ORACLE_SLIPPAGE: BasisPoints = 40;
+			const ORACLE_SLIPPAGE_STABLE: BasisPoints = 3;
 
 			if desired_output_amount.is_zero() {
-				return Some(Zero::zero())
+				return 0;
 			}
 
-			if input_asset == output_asset {
-				return Some(desired_output_amount)
-			}
-
-			let estimation_input = utilities::estimated_20usd_input(input_asset);
-
-			let estimation_output = with_transaction_unchecked(|| {
-				TransactionOutcome::Rollback(if with_network_fee {
-					Self::swap_with_network_fee_for_gas(input_asset, output_asset, estimation_input)
-						.map(|swap| swap.output)
-				} else if output_asset == STABLE_ASSET || input_asset == STABLE_ASSET {
-					T::SwappingApi::swap_single_leg(input_asset, output_asset, estimation_input)
-				} else {
-					T::SwappingApi::swap_single_leg(input_asset, STABLE_ASSET, estimation_input)
-						.and_then(|intermediary| {
-							T::SwappingApi::swap_single_leg(
-								STABLE_ASSET,
-								output_asset,
-								intermediary,
-							)
-						})
-				})
-			})
-			.ok()?;
-
-			if estimation_output == 0 {
-				None
+			let network_fee = if with_network_fee {
+				let fee_rate_and_minimum = Pallet::<T>::get_network_fee_for_swap(
+					input_asset,
+					output_asset,
+					is_internal_swap,
+				);
+				// Ignoring the minimum network fee because this function is only used for fees and
+				// gas (no minimum).
+				fee_rate_and_minimum.rate
 			} else {
-				let input_amount_to_convert = multiply_by_rational_with_rounding(
-					desired_output_amount,
-					estimation_input,
-					estimation_output,
-					sp_arithmetic::Rounding::Down,
-				)
-				.defensive_proof(
-					"Unexpected overflow occurred during asset conversion. Please report this to Chainflip Labs."
-				)?;
-				if input_amount_to_convert.is_zero() {
-					None
-				} else {
-					Some(input_amount_to_convert.unique_saturated_into())
+				Permill::zero()
+			};
+
+			let required_input = if input_asset == output_asset {
+				desired_output_amount
+			} else {
+				// Get the price of both assets using oracles or simulated swap, both with fallback
+				// to hard coded prices
+				let get_price = |asset, side: Side| -> Price {
+					if asset == Asset::Flip || asset == Asset::Dot {
+						Self::estimate_price_using_simulated_swap(asset, side)
+					} else {
+						// Using stale prices here is fine as its just for fees/gas
+						T::PriceFeedApi::get_price(asset).map(|price_data| {
+							// Apply a hard coded slippage in the correct direction
+							let slippage_bps = if asset == STABLE_ASSET {
+								0
+							} else if asset.is_usd_stablecoin() {
+								ORACLE_SLIPPAGE_STABLE
+							} else {
+								ORACLE_SLIPPAGE
+							};
+							adjust_price_by_bps(price_data.price, slippage_bps, side == Side::Buy)
+						})
+					}
+					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
+				};
+				let output_price = get_price(output_asset, Side::Buy);
+				let input_price = get_price(input_asset, Side::Sell);
+				if input_price.is_zero() || output_price.is_zero() {
+					log_or_panic!(
+					"Estimated Price for input or output asset is zero: {input_asset:?} = {input_price:?}, {output_asset:?} = {output_price:?}"
+				);
+					return 0;
 				}
+				let relative_price = relative_price(output_price, input_price);
+
+				// Finally calculate the required input amount
+				output_amount_ceil(desired_output_amount.into(), relative_price)
+					.saturated_into::<AssetAmount>()
+			};
+
+			// Adjust for network fee
+			if network_fee.is_one() {
+				0
+			} else {
+				FixedU64::from_rational(
+					MAX_BASIS_POINTS as u128,
+					MAX_BASIS_POINTS as u128 - network_fee * (MAX_BASIS_POINTS as u128),
+				)
+				.saturating_mul_int(required_input)
 			}
 		}
 	}
@@ -3207,44 +3211,32 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 }
 
 pub mod utilities {
+	use cf_amm::math::price_from_usd;
+
 	use super::*;
 
-	/// The amount of a non-gas asset to be used for transaction fee estimation.
-	///
-	/// This should be of a similar order of magnitude to expected fees to get an accurate result.
-	///
-	/// The value should be large enough to allow a good estimation of the fee, but small enough
-	/// to not exhaust the pool liquidity.
-	pub fn estimated_20usd_input(asset: Asset) -> u128 {
-		use cf_primitives::FLIPPERINOS_PER_FLIP;
-
+	/// Provides a static price that can be used as a fallback when estimating fees/gas.
+	/// These prices are rough approximations of real market prices and should be updated
+	/// occasionally if the prices move significantly.
+	pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
+		use cf_primitives::{FLIP_DECIMALS, USD_DECIMALS};
 		const ETH_DECIMALS: u32 = 18;
 		const DOT_DECIMALS: u32 = 10;
 		const BTC_DECIMALS: u32 = 8;
 		const SOL_DECIMALS: u32 = 9;
 
-		/// ~20 Dollars.
-		const FLIP_ESTIMATION_CAP: u128 = 50 * FLIPPERINOS_PER_FLIP;
-		const USD_ESTIMATION_CAP: u128 = 20_000_000;
-		const ETH_ESTIMATION_CAP: u128 = 5 * 10u128.pow(ETH_DECIMALS - 3);
-		const DOT_ESTIMATION_CAP: u128 = 7 * 10u128.pow(DOT_DECIMALS);
-		const BTC_ESTIMATION_CAP: u128 = 2 * 10u128.pow(BTC_DECIMALS - 4);
-		const SOL_ESTIMATION_CAP: u128 = 10 * 10u128.pow(SOL_DECIMALS - 2);
-
 		match asset {
-			Asset::Flip => FLIP_ESTIMATION_CAP,
-			Asset::Usdc => USD_ESTIMATION_CAP,
-			Asset::Usdt => USD_ESTIMATION_CAP,
-			Asset::ArbUsdc => USD_ESTIMATION_CAP,
-			Asset::SolUsdc => USD_ESTIMATION_CAP,
-			Asset::Eth => ETH_ESTIMATION_CAP,
-			Asset::Dot => DOT_ESTIMATION_CAP,
-			Asset::ArbEth => ETH_ESTIMATION_CAP,
-			Asset::Btc => BTC_ESTIMATION_CAP,
-			Asset::Sol => SOL_ESTIMATION_CAP,
-			Asset::HubDot => DOT_ESTIMATION_CAP,
-			Asset::HubUsdc => USD_ESTIMATION_CAP,
-			Asset::HubUsdt => USD_ESTIMATION_CAP,
+			Asset::Usdc |
+			Asset::Usdt |
+			Asset::ArbUsdc |
+			Asset::SolUsdc |
+			Asset::HubUsdc |
+			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1
+			Asset::Flip => price_from_usd(4, FLIP_DECIMALS) / 10, // ~$0.40
+			Asset::Eth | Asset::ArbEth => price_from_usd(2_800, ETH_DECIMALS), // ~$2,800
+			Asset::Dot | Asset::HubDot => price_from_usd(2, DOT_DECIMALS), // ~$2
+			Asset::Btc => price_from_usd(86_500, BTC_DECIMALS),   // ~$86,500
+			Asset::Sol => price_from_usd(127, SOL_DECIMALS),      // ~$127
 		}
 	}
 

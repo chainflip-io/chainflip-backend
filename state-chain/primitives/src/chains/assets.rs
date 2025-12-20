@@ -47,7 +47,8 @@ macro_rules! assets {
 							string: $asset_string:literal $((aliases: [$($asset_string_aliases:literal),+$(,)?]))?,
 							json: $asset_json:literal,
 							gas: $asset_gas:literal,
-							index: $asset_index:literal
+							index: $asset_index:literal,
+							usd_stablecoin: $asset_usd_stablecoin:literal
 							$(,$asset_legacy_encoding:tt)?$(,)?
 						}
 					),+$(,)?
@@ -130,6 +131,13 @@ macro_rules! assets {
 					match self {
 						$(
 							$(Self::$asset_variant => $asset_gas,)+
+						)+
+					}
+				}
+				pub fn is_usd_stablecoin(&self) -> bool {
+					match self {
+						$(
+							$(Self::$asset_variant => $asset_usd_stablecoin,)+
 						)+
 					}
 				}
@@ -677,6 +685,7 @@ assets!(
 				json: "ETH",
 				gas: true,
 				index: 1,
+				usd_stablecoin: false,
 				legacy_encoding,
 			},
 			Asset {
@@ -686,6 +695,7 @@ assets!(
 				json: "FLIP",
 				gas: false,
 				index: 2,
+				usd_stablecoin: false,
 				legacy_encoding,
 			},
 			Asset {
@@ -695,6 +705,7 @@ assets!(
 				json: "USDC",
 				gas: false,
 				index: 3,
+				usd_stablecoin: true,
 				legacy_encoding,
 			},
 			Asset {
@@ -704,6 +715,7 @@ assets!(
 				json: "USDT",
 				gas: false,
 				index: 8,
+				usd_stablecoin: true,
 			},
 		],
 	},
@@ -720,6 +732,7 @@ assets!(
 				json: "DOT",
 				gas: true,
 				index: 4,
+				usd_stablecoin: false,
 				legacy_encoding,
 			},
 		],
@@ -737,6 +750,7 @@ assets!(
 				json: "BTC",
 				gas: true,
 				index: 5,
+				usd_stablecoin: false,
 				legacy_encoding,
 			},
 		],
@@ -754,6 +768,7 @@ assets!(
 				json: "ETH",
 				gas: true,
 				index: 6,
+				usd_stablecoin: false,
 			},
 			Asset {
 				variant: ArbUsdc,
@@ -762,6 +777,7 @@ assets!(
 				json: "USDC",
 				gas: false,
 				index: 7,
+				usd_stablecoin: true,
 			},
 		],
 	},
@@ -778,6 +794,7 @@ assets!(
 				json: "SOL",
 				gas: true,
 				index: 9,
+				usd_stablecoin: false,
 			},
 			Asset {
 				variant: SolUsdc,
@@ -786,6 +803,7 @@ assets!(
 				json: "USDC",
 				gas: false,
 				index: 10,
+				usd_stablecoin: true,
 			},
 		],
 	},
@@ -802,6 +820,7 @@ assets!(
 				json: "DOT",
 				gas: true,
 				index: 11,
+				usd_stablecoin: false,
 			},
 			Asset {
 				variant: HubUsdt,
@@ -810,6 +829,7 @@ assets!(
 				json: "USDT",
 				gas: false,
 				index: 12,
+				usd_stablecoin: true,
 			},
 			Asset {
 				variant: HubUsdc,
@@ -818,6 +838,7 @@ assets!(
 				json: "USDC",
 				gas: false,
 				index: 13,
+				usd_stablecoin: true,
 			},
 		],
 	},

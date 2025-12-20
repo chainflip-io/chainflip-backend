@@ -27,7 +27,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
-use cf_amm::math::PRICE_FRACTIONAL_BITS;
+use cf_amm::math::{price_from_usd_fine_amount, PRICE_FRACTIONAL_BITS};
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -49,6 +49,7 @@ use cf_traits::{
 		funding_info::MockFundingInfo,
 		ingress_egress_fee_handler::MockIngressEgressFeeHandler,
 		pool_price_api::MockPoolPriceApi,
+		price_feed_api::MockPriceFeedApi,
 	},
 	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
 	INITIAL_FLIP_FUNDING,
@@ -1290,7 +1291,7 @@ fn test_get_scheduled_swap_legs_fallback() {
 		MockPoolPriceApi::set_pool_price(
 			Asset::Flip,
 			STABLE_ASSET,
-			U256::from(PRICE) << PRICE_FRACTIONAL_BITS,
+			price_from_usd_fine_amount(PRICE),
 		);
 
 		assert_eq!(
@@ -1845,6 +1846,8 @@ mod internal_swaps {
 					rate: Permill::from_percent(0),
 					minimum: MIN_NETWORK_FEE,
 				});
+				// Set price for refund fee calculation
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
 
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
@@ -1887,7 +1890,8 @@ mod internal_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
-				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE / NEW_SWAP_RATE as u128;
+				// Small rounding error due to price calculation
+				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE + 1;
 				// Only one chunk is expected to be swapped:
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
 					(CHUNK_AMOUNT * DEFAULT_SWAP_RATE - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE;
@@ -1914,7 +1918,7 @@ mod internal_swaps {
 						account_id: LP_ACCOUNT,
 						asset: INPUT_ASSET,
 						amount: EXPECTED_REFUND_AMOUNT,
-						refund_fee: MIN_NETWORK_FEE,
+						refund_fee: REFUND_FEE,
 					}),
 					RuntimeEvent::Swapping(Event::CreditedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,

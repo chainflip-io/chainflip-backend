@@ -626,14 +626,8 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(INPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
-				);
-				MockPriceFeedApi::set_price(
-					OUTPUT_ASSET,
-					Some(U256::from(OUTPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, INPUT_ASSET_PRICE);
+				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, OUTPUT_ASSET_PRICE);
 
 				// Execution price is exactly the same as the oracle price,
 				// so the first chunk should go through
@@ -681,10 +675,7 @@ mod oracle_swaps {
 
 				// Now drop the oracle price for input asset. It will once again match the swap
 				// rate, so the swap should succeed.
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(OUTPUT_ASSET_PRICE) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, OUTPUT_ASSET_PRICE);
 			})
 			.then_process_blocks_until_block(CHUNK_2_RETRY_BLOCK)
 			.then_execute_with(|_| {
@@ -714,10 +705,7 @@ mod oracle_swaps {
 
 				// Set the price of one of the assets to None to simulate being unsupported
 				MockPriceFeedApi::set_price(INPUT_ASSET, None);
-				MockPriceFeedApi::set_price(
-					OUTPUT_ASSET,
-					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, DEFAULT_SWAP_RATE);
 
 				// Set the swap rate to a small value well below the oracle slippage.
 				// So that if the oracle price was used, the swap would fail.
@@ -752,10 +740,7 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 				MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, DEFAULT_SWAP_RATE);
 
 				// Set the swap rate to a small value well below the oracle slippage
 				SwapRate::set(0.000001);
@@ -794,14 +779,8 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(2) << PRICE_FRACTIONAL_BITS),
-				);
-				MockPriceFeedApi::set_price(
-					OUTPUT_ASSET,
-					Some(U256::from(2) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 2);
+				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 2);
 
 				// Set one of the assets to stale
 				MockPriceFeedApi::set_stale(INPUT_ASSET, true);
@@ -872,14 +851,8 @@ mod oracle_swaps {
 				});
 				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
 				// We use a price of 1 for both assets to make the math easier
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
-				);
-				MockPriceFeedApi::set_price(
-					OUTPUT_ASSET,
-					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 1);
 
 				Swapping::init_swap_request(
 					INPUT_ASSET,
@@ -931,14 +904,8 @@ mod oracle_swaps {
 				// Using a positive swap rate
 				SwapRate::set(1.0 + (SWAP_RATE_BPS as f64 / 10000.0));
 				// We use a price of 1 for both assets to make the math easier
-				MockPriceFeedApi::set_price(
-					INPUT_ASSET,
-					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
-				);
-				MockPriceFeedApi::set_price(
-					OUTPUT_ASSET,
-					Some(U256::from(1) << PRICE_FRACTIONAL_BITS),
-				);
+				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 1);
 
 				Swapping::init_swap_request(
 					INPUT_ASSET,
