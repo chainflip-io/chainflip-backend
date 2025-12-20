@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.4] - 2025-12-20
+
+### Fixes
+
+- Eject unspendable bitcoin utxos.
+
 ## [2.0.3] - 2025-12-15
 
 ### Fixes
