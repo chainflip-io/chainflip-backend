@@ -50,6 +50,7 @@ pub mod key_provider;
 pub mod key_rotator;
 pub mod lending_pools;
 pub mod liability_tracker;
+pub mod minimum_funding;
 pub mod offence_reporting;
 pub mod pool_api;
 pub mod pool_price_api;

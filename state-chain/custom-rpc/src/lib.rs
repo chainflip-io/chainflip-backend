@@ -1604,7 +1604,6 @@ where
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_lending_config() -> RpcLendingConfig,
-		cf_oracle_prices(base_and_quote_asset: Option<(PriceAsset, PriceAsset)>) -> Vec<OraclePrice>,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
@@ -1642,6 +1641,7 @@ where
 						asset: pool.asset,
 						total_amount: pool.total_amount.into(),
 						available_amount: pool.available_amount.into(),
+						owed_to_network: pool.owed_to_network.into(),
 						utilisation_rate: pool.utilisation_rate,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
@@ -1795,11 +1795,16 @@ where
 
 							RpcAccountInfo::broker(info, balance)
 						},
-						AccountRole::LiquidityProvider => {
-							let info = api.cf_liquidity_provider_info(hash, account_id)?;
-
-							RpcAccountInfo::lp(info, api.cf_network_environment(hash)?, balance)
-						},
+						AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+							#[expect(deprecated)]
+							api.cf_liquidity_provider_info_before_version_9(
+								hash,
+								account_id.clone(),
+							)?
+							.into(),
+							api.cf_network_environment(hash)?,
+							balance,
+						),
 						AccountRole::Validator => {
 							#[expect(deprecated)]
 							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
@@ -1858,6 +1863,7 @@ where
 							}
 						},
 						AccountRole::LiquidityProvider => {
+							#[expect(deprecated)]
 							let LiquidityProviderInfo {
 								refund_addresses,
 								earned_fees,
@@ -1865,7 +1871,16 @@ where
 								lending_positions,
 								collateral_balances,
 								..
-							} = api.cf_liquidity_provider_info(hash, account_id.clone())?;
+							} = if api_version < 9 {
+								api.cf_liquidity_provider_info_before_version_9(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else {
+								api.cf_liquidity_provider_info(hash, account_id)?
+							};
+
 							let network = api.cf_network_environment(hash)?;
 							RpcAccountInfo::LiquidityProvider {
 								refund_addresses: refund_addresses
@@ -2828,6 +2843,25 @@ where
 		}
 
 		Ok(result)
+	}
+
+	fn cf_oracle_prices(
+		&self,
+		base_and_quote_asset: Option<(PriceAsset, PriceAsset)>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<OraclePrice>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			Ok::<_, CfApiError>(if version < 11 {
+				#[expect(deprecated)]
+				api.cf_oracle_prices_before_version_11(hash, base_and_quote_asset)
+					.map_err(CfApiError::from)?
+					.into_iter()
+					.map(Into::into)
+					.collect()
+			} else {
+				api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from)?
+			})
+		})
 	}
 }
 

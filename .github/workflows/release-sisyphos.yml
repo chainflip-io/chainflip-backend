@@ -44,6 +44,10 @@ jobs:
     with:
       profile: "production"
       binary-subdir: "production"
+  check-blocktime:
+    needs: [build]
+    uses: ./.github/workflows/_22_check_blocktime.yml
+    secrets: inherit
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     needs: [test]

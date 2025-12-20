@@ -410,7 +410,7 @@ impl<T: Config> LoanAccount<T> {
 					// is added to the account's collateral balance:
 					self.add_new_collateral(
 						BTreeMap::from([(to_asset, excess_amount)]),
-						CollateralAddedActionType::SystemLiquidationExcessAmount,
+						CollateralAddedActionType::SystemLiquidationExcessAmount { loan_id },
 					);
 				}
 
@@ -1590,7 +1590,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 					if excess_amount > 0 {
 						loan_account.add_new_collateral(
 							BTreeMap::from([(liquidation_swap.to_asset, excess_amount)]),
-							CollateralAddedActionType::SystemLiquidationExcessAmount,
+							CollateralAddedActionType::SystemLiquidationExcessAmount { loan_id },
 						);
 					}
 

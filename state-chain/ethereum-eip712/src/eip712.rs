@@ -570,9 +570,19 @@ pub fn encode_field(
 						ParamType::Bytes => encode_eip712_type(Token::Bytes(
 							value.extract_hex_bytes().map_err(|_| err)?,
 						)),
-						ParamType::Int(_) =>
-							return Err(Eip712Error::Message(format!("Unsupported type {s}",))),
-
+						ParamType::Int(_) => match value {
+							MinimizedScaleValue::Primitive(MinimizedPrimitive::I128(n)) => {
+								// According to the EIP-712 spec, integer values are sign-extended
+								// to 256-bit and encoded in big endian order.
+								let mut value = U256::from(n.unsigned_abs());
+								if n.is_negative() {
+									// two's complement for negative numbers
+									value = !value + U256::from(1u8);
+								}
+								Token::Int(value)
+							},
+							_ => return Err(err),
+						},
 						ParamType::Uint(_) => match value {
 							MinimizedScaleValue::Primitive(MinimizedPrimitive::String(n)) =>
 								Token::Uint(U256::from_dec_str(n).map_err(|_| err)?),

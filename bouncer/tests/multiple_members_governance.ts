@@ -9,12 +9,11 @@ import { Codec } from '@polkadot/types/types';
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
 
-  const members = (await chainflip.query.governance.members()) as Codec;
+  const { members } = (await chainflip.query.governance.members()) as unknown as {
+    members: Codec;
+    threshold: number;
+  };
   return members.toPrimitive() as string[];
-}
-
-async function setGovernanceMembers(members: string[]) {
-  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.governance.newMembershipSet(members));
 }
 
 const alice = createStateChainKeypair('//Alice');
@@ -24,7 +23,18 @@ async function addAliceToGovernance(logger: Logger, initMembers: string[] = []) 
 
   const newMembers = [...initMembers, alice.address];
 
-  await setGovernanceMembers(newMembers);
+  assert.strictEqual(
+    newMembers.length,
+    2,
+    `Governance should have 2 members (Snow White and Alice), but found ${newMembers}`,
+  );
+
+  const newThreshold = newMembers.length;
+
+  await submitGovernanceExtrinsic(
+    (chainflip) => chainflip.tx.governance.newMembershipSet(newMembers, newThreshold),
+    logger,
+  );
 
   await observeEvent(logger, 'governance:Executed').event;
 
@@ -52,16 +62,10 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
 
   logger.debug(`Current governance members: ${members}`);
 
-  assert.strictEqual(
-    members.length,
-    2,
-    `Governance should have 2 members (Snow White and Alice), but found ${members}`,
-  );
-
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
   const proposalId = await submitGovernanceExtrinsic(
-    (chainflip) => chainflip.tx.governance.newMembershipSet([snowWhite.address]),
+    (chainflip) => chainflip.tx.governance.newMembershipSet([snowWhite.address], 1),
     logger,
   );
 

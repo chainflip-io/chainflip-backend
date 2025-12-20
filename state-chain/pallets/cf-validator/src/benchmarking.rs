@@ -22,7 +22,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, AssetAmount};
 use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode};
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
@@ -61,18 +61,23 @@ pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>
 		.map(move |i| account::<<T as frame_system::Config>::AccountId>("bidder", i, set_id).into())
 }
 
+fn fund_account<T: RuntimeConfig>(account: &T::AccountId, amount: AssetAmount) {
+	assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
+		T::EnsureWitnessed::try_successful_origin().unwrap(),
+		account.clone(),
+		amount.unique_saturated_into(),
+		Default::default(),
+		Default::default()
+	));
+}
+
 /// Initialises bidders for the auction by funding each one, registering session keys and peer ids
 /// and submitting heartbeats.
 pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
-		assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
-			T::EnsureWitnessed::try_successful_origin().unwrap(),
-			bidder.clone(),
-			(flip_funded * FLIPPERINOS_PER_FLIP).unique_saturated_into(),
-			Default::default(),
-			Default::default()
-		));
+
+		fund_account::<T>(&bidder, flip_funded * FLIPPERINOS_PER_FLIP);
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
 		assert_ok!(Pallet::<T>::start_bidding(bidder_origin.clone(),));
@@ -542,6 +547,8 @@ mod benchmarks {
 		.unwrap();
 		let (operator, delegator) = (accounts[0].clone(), accounts[1].clone());
 
+		fund_account::<T>(&delegator, 1000 * FLIPPERINOS_PER_FLIP);
+
 		assert_ok!(Pallet::<T>::update_operator_settings(
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow }
@@ -565,6 +572,8 @@ mod benchmarks {
 			RawOrigin::Signed(operator.clone()).into(),
 			OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow }
 		));
+
+		fund_account::<T>(&delegator, 1000 * FLIPPERINOS_PER_FLIP);
 
 		assert_ok!(Pallet::<T>::delegate(
 			RawOrigin::Signed(delegator.clone()).into(),
