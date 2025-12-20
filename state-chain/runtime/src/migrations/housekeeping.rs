@@ -19,8 +19,8 @@ use cf_chains::{
 	assets,
 	btc::{
 		api::{batch_transfer::BatchTransfer, BitcoinApi},
-		deposit_address::{DepositAddress, TapscriptPath},
-		BitcoinOutput, BitcoinScript, BitcoinTransaction, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		deposit_address::DepositAddress,
+		BitcoinOutput, BitcoinTransaction, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	instances::BitcoinInstance,
 };
