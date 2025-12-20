@@ -19,8 +19,8 @@ use cf_chains::{
 	assets,
 	btc::{
 		api::{batch_transfer::BatchTransfer, BitcoinApi},
-		deposit_address::DepositAddress,
-		BitcoinOutput, BitcoinTransaction, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		deposit_address::{DepositAddress, TapscriptPath},
+		BitcoinOutput, BitcoinScript, BitcoinTransaction, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	instances::BitcoinInstance,
 };
@@ -50,7 +50,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				if crate::VERSION.spec_version != 2_00_03 {
+				if crate::VERSION.spec_version != 2_00_04 {
 					log::info!("🧹 No housekeeping required for Berghain.");
 					return Weight::zero();
 				}
@@ -71,6 +71,47 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				let mut all_internal_inputs = BTreeSet::new();
 				let mut all_external_inputs = BTreeSet::new();
 				let mut broadcast_ids = Vec::new();
+
+				let spent_utxos = [
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"be88e3bc6683cbefccf2c5eed8e5147e48a9764fd9948336b37f1fa9115b6150"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 139_751,
+						deposit_address: DepositAddress::new(change_key, 95_865),
+					},
+					Utxo {
+						id: UtxoId {
+							tx_id: hex_literal::hex!(
+								"87fec35345d13aa816a7486a3203a575c53e6118bfad8c08e7f6d81661d761c7"
+							)
+							.into(),
+							vout: 0,
+						},
+						amount: 314_446,
+						deposit_address: DepositAddress::new(change_key, 95_865),
+					},
+				];
+				let unspendable_utxo_ids = [
+					UtxoId {
+						tx_id: hex_literal::hex!(
+							"6f0cd5a250b3263385c3b055062e0693a056bc8735a0b910870d4bdc8fea85be"
+						)
+						.into(),
+						vout: 5,
+					},
+					UtxoId {
+						tx_id: hex_literal::hex!(
+							"1e77e8671d5df15bb09cce3402a16367dc798905300579138b705a3565172017"
+						)
+						.into(),
+						vout: 5,
+					},
+				];
 
 				for (broadcast_id, api_call) in
 					pallet_cf_broadcast::PendingApiCalls::<Runtime, BitcoinInstance>::iter()
@@ -233,6 +274,30 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					bitcoin_change_script.to_address(&cf_chains::btc::BitcoinNetwork::Mainnet)
 				);
 
+				for utxo in spent_utxos {
+					if !all_external_inputs.remove(&utxo) {
+						log::warn!(
+							"Expected spent UTXO {}-{} to be in external inputs.",
+							utxo.id.tx_id,
+							utxo.id.vout
+						);
+					} else {
+						log::info!(
+							"Spent UTXO {}-{} found in external inputs and removed.",
+							utxo.id.tx_id,
+							utxo.id.vout
+						);
+					}
+				}
+				for input in &all_external_inputs {
+					log::info!(
+						"External input from tx {} vout {} amount {} sats",
+						input.id.tx_id,
+						input.id.vout,
+						input.amount
+					);
+				}
+
 				// --- Storage writes start here ---
 				// 1. clean up broadcast storage
 				// 2. remove the invalid utxo from the available utxos
@@ -267,7 +332,13 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 						"Total available UTXOs after re-adding external inputs: {} with {} sats",
 						utxos.len(),
 						utxos.iter().map(|utxo| utxo.amount).sum::<u64>(),
-					)
+					);
+					assert!(
+						!unspendable_utxo_ids
+							.iter()
+							.any(|utxo_id| { utxos.iter().any(|utxo| &utxo.id == utxo_id) }),
+						"Unspendable UTXO found in available UTXOs after migration."
+					);
 				});
 
 				let process_txs = |utxos: &[BitcoinOutput]| {
