@@ -538,10 +538,11 @@ pub mod tests {
 					Default::default()
 				)))
 				.prop_map(move |mut progress| {
-					progress.removed = Some(
-						progress.headers.first().block_height..=
-							seen_heights_below.saturating_backward(1),
-					);
+					if let Some(first_header) = progress.headers.first() {
+						progress.removed = Some(
+							first_header.block_height..=seen_heights_below.saturating_backward(1),
+						);
+					}
 
 					Some(progress)
 				})
