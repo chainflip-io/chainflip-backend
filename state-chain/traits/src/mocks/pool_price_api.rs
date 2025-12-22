@@ -1,4 +1,5 @@
-use cf_primitives::{Asset, Price};
+use cf_amm::math::Price;
+use cf_primitives::Asset;
 
 use crate::{PoolPrice, PoolPriceProvider};
 

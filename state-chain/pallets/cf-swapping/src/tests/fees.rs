@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_amm::math::price_from_usd;
-use cf_primitives::FLIP_DECIMALS;
 use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 use super::*;
@@ -506,7 +504,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			500 // 1 leg swap, so 1/2 of input
+			501 // 1 leg swap, so 1/2 of input + rounding error
 		);
 
 		assert_eq!(
@@ -517,7 +515,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				true,
 				false
 			),
-			505 // 1 leg swap + 1% network fee
+			506 // 1 leg swap + 1% network fee
 		);
 
 		assert_eq!(
@@ -528,7 +526,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			250 // 2 leg swap, so 1/4th of input
+			251 // 2 leg swap, so 1/4th of input + rounding error
 		);
 
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
@@ -601,12 +599,11 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
 
 		// Set some arbitrary prices in the oracle
-		MockPriceFeedApi::set_price(Asset::Btc, Some(price_from_usd(30_000, 8)));
-		MockPriceFeedApi::set_price(Asset::Eth, Some(price_from_usd(2_000, 18)));
-		MockPriceFeedApi::set_price(Asset::Usdc, Some(price_from_usd(1, 6)));
-		MockPriceFeedApi::set_price(Asset::ArbUsdc, Some(price_from_usd(1, 6)));
-		MockPriceFeedApi::set_price(Asset::Usdt, Some(price_from_usd(1, 6)));
-
+		MockPriceFeedApi::set_price_usd(Asset::Btc, 30_000);
+		MockPriceFeedApi::set_price_usd(Asset::Eth, 2_000);
+		MockPriceFeedApi::set_price_usd(Asset::Usdc, 1);
+		MockPriceFeedApi::set_price_usd(Asset::ArbUsdc, 1);
+		MockPriceFeedApi::set_price_usd(Asset::Usdt, 1);
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output(
 				Asset::Usdc,
@@ -674,7 +671,8 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				false,
 				false
 			),
-			(15_000 + 60) * 10u128.pow(FLIP_DECIMALS) + 1 // ~=15k + 40bps + rounding error
+			// ~=15k + 40bps + rounding error
+			(15_000 + 60) * 10u128.pow(Asset::Flip.decimals()) + 1
 		);
 
 		// Check that the network fee is still applied when using the same asset as the input and
@@ -1184,10 +1182,10 @@ fn test_refund_fee_calculation() {
 		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
 		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
-		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
+		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE + rounding error = 6
 		// Note: Using Flip here because it uses swap simulation for conversion instead of
 		// oracle price.
-		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
+		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (994, 6));
 		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
 		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));
 
@@ -1197,7 +1195,7 @@ fn test_refund_fee_calculation() {
 			minimum: 30,
 		});
 		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
-		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (985, 15));
+		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (984, 16));
 	});
 }
 

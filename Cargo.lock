@@ -1603,6 +1603,7 @@ name = "cf-rpc-apis"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-rpc-types",
@@ -2037,6 +2038,7 @@ name = "chainflip-lp-api"
 version = "2.1.0"
 dependencies = [
  "anyhow",
+ "cf-amm-math",
  "cf-primitives",
  "cf-rpc-apis",
  "chainflip-api",
@@ -8485,6 +8487,7 @@ dependencies = [
 name = "pallet-cf-ingress-egress"
 version = "0.1.0"
 dependencies = [
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",
@@ -8538,6 +8541,7 @@ dependencies = [
 name = "pallet-cf-lp"
 version = "0.1.0"
 dependencies = [
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",

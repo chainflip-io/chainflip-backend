@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_amm::math::Price;
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	ccm_checker::DecodedCcmAdditionalData,
@@ -21,7 +22,7 @@ use cf_chains::{
 	ChannelRefundParametersCheckedInternal, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{
-	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, Price, PriceLimits,
+	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, PriceLimits,
 	SwapRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -218,7 +219,7 @@ pub trait SwapRequestHandler {
 		input_amount: AssetAmount,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits,
+		price_limits: PriceLimits<Price>,
 		dca_params: Option<DcaParameters>,
 		account_id: Self::AccountId,
 	) -> SwapRequestId {

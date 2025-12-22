@@ -41,6 +41,8 @@ fn new_lp_account<T: Chainflip + Config>() -> T::AccountId {
 
 #[benchmarks]
 mod benchmarks {
+	use cf_amm_math::Price;
+
 	use super::*;
 
 	const ASSET: Asset = Asset::Usdt;
@@ -61,7 +63,12 @@ mod benchmarks {
 
 		assert_eq!(Strategies::<T>::iter().count(), 0);
 
-		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
+		assert_ok!(T::PoolApi::create_pool(
+			ASSET,
+			STABLE_ASSET,
+			0,
+			Price::from_usd(STABLE_ASSET, 12345)
+		));
 
 		#[extrinsic_call]
 		deploy_strategy(
@@ -81,7 +88,12 @@ mod benchmarks {
 		T::BalanceApi::credit_account(&caller, ASSET, 1000);
 		T::BalanceApi::credit_account(&caller, STABLE_ASSET, 1000);
 
-		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
+		assert_ok!(T::PoolApi::create_pool(
+			ASSET,
+			STABLE_ASSET,
+			0,
+			Price::from_usd(STABLE_ASSET, 12345)
+		));
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -108,7 +120,12 @@ mod benchmarks {
 		T::BalanceApi::credit_account(&caller, ASSET, 2000);
 		T::BalanceApi::credit_account(&caller, STABLE_ASSET, 2000);
 
-		assert_ok!(T::PoolApi::create_pool(ASSET, STABLE_ASSET, 0, 12345.into()));
+		assert_ok!(T::PoolApi::create_pool(
+			ASSET,
+			STABLE_ASSET,
+			0,
+			Price::from_usd(STABLE_ASSET, 12345)
+		));
 
 		assert_ok!(Pallet::<T>::deploy_strategy(
 			RawOrigin::Signed(caller.clone()).into(),

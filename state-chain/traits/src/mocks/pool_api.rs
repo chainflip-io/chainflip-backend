@@ -1,3 +1,5 @@
+#[cfg(feature = "runtime-benchmarks")]
+use cf_amm::math::Price;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use cf_amm::{
@@ -234,7 +236,7 @@ impl PoolApi for MockPoolApi {
 		_base_asset: Asset,
 		_quote_asset: Asset,
 		_fee_hundredth_pips: u32,
-		_initial_price: cf_primitives::Price,
+		_initial_price: Price,
 	) -> DispatchResult {
 		unimplemented!()
 	}

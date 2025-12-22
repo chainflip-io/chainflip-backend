@@ -22,7 +22,10 @@ use crate::{
 };
 
 use anyhow::anyhow;
-use cf_amm::{common::Side, math::Tick};
+use cf_amm::{
+	common::Side,
+	math::{Price, Tick},
+};
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
@@ -694,7 +697,7 @@ where
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits,
+		price_limits: PriceLimits<Price>,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {

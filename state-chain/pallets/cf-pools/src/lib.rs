@@ -18,7 +18,7 @@
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
-	math::{bounded_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick, MAX_SQRT_PRICE},
+	math::{Amount, Price, SqrtPriceQ64F96, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
@@ -1101,8 +1101,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		to: any::Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		use cf_amm::math::tick_at_sqrt_price;
-
 		let (asset_pair, order) =
 			AssetPair::from_swap(from, to).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Self::try_mutate_pool(asset_pair, |_asset_pair, pool| {
@@ -1124,12 +1122,12 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					.ok_or(Error::<T>::InsufficientLiquidity)?
 					.2;
 
-				let swap_tick =
-					tick_at_sqrt_price(PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
-						order,
-						input_amount,
-						output_amount,
-					));
+				let swap_tick = PoolState::<(T::AccountId, OrderId)>::swap_sqrt_price(
+					order,
+					input_amount,
+					output_amount,
+				)
+				.to_tick();
 				let bounded_swap_tick = if tick_after < tick_before {
 					core::cmp::min(core::cmp::max(tick_after, swap_tick), tick_before)
 				} else {
@@ -1270,7 +1268,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 		fee_hundredth_pips: u32,
-		initial_price: cf_primitives::Price,
+		initial_price: Price,
 	) -> DispatchResult {
 		Self::create_pool(base_asset, quote_asset, fee_hundredth_pips, initial_price)
 	}
@@ -2068,7 +2066,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: sold_base_amount,
-								sqrt_price: bounded_sqrt_price(
+								sqrt_price: SqrtPriceQ64F96::from_amounts_bounded(
 									bought_quote_amount,
 									sold_base_amount,
 								),
@@ -2094,7 +2092,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: bought_base_amount,
-								sqrt_price: bounded_sqrt_price(
+								sqrt_price: SqrtPriceQ64F96::from_amounts_bounded(
 									sold_quote_amount,
 									bought_base_amount,
 								),
@@ -2413,20 +2411,12 @@ impl<T: Config> cf_traits::PoolPriceProvider for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<cf_traits::PoolPrice, DispatchError> {
-		use cf_amm::math::sqrt_price_to_price;
-
 		// NOTE: we can default to max price because None is only ever returned by
 		// Self::pool_price when the range order is at its maximum tick (irrespective
 		// of whether the pool has liquidity)
 		Self::pool_price(base_asset, quote_asset).map(|price| cf_traits::PoolPrice {
-			sell: price
-				.sell
-				.map(|p| p.price)
-				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
-			buy: price
-				.buy
-				.map(|p| p.price)
-				.unwrap_or_else(|| sqrt_price_to_price(MAX_SQRT_PRICE)),
+			sell: price.sell.map(|p| p.price).unwrap_or(MAX_SQRT_PRICE.into()),
+			buy: price.buy.map(|p| p.price).unwrap_or(MAX_SQRT_PRICE.into()),
 		})
 	}
 }

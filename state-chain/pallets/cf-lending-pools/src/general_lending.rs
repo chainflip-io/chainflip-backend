@@ -1,4 +1,4 @@
-use cf_amm_math::{invert_price, Price};
+use cf_amm_math::Price;
 use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;

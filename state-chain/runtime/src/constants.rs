@@ -16,13 +16,11 @@
 
 pub mod common {
 	use cf_primitives::{
-		AuthorityCount, BlockNumber, FlipBalance, MILLISECONDS_PER_BLOCK, SECONDS_PER_BLOCK,
+		AuthorityCount, BlockNumber, FlipBalance, FLIPPERINOS_PER_FLIP, MILLISECONDS_PER_BLOCK,
+		SECONDS_PER_BLOCK,
 	};
 
 	pub const CHAINFLIP_SS58_PREFIX: u16 = 2112;
-
-	const FLIP_DECIMALS: u32 = 18;
-	pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 
 	pub const TOTAL_ISSUANCE: FlipBalance = {
 		const TOTAL_ISSUANCE_IN_FLIP: FlipBalance = 90_000_000;
