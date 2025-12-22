@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.5] - 2025-12-22
+
+### Fixes
+
+- Fix underflow panic in order fills subscription.
+
 ## [2.0.4] - 2025-12-20
 
 ### Fixes
