@@ -28,23 +28,14 @@ export class ChainflipIO<Requirements> {
   /** This class also exposes logger functionality. */
   readonly logger: Logger;
 
-  /** A long-living chainflip api object. Reused by all functions that interact with the state-chain. */
-  private chainflipApi: DisposableApiPromise;
-
   /**
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
    */
-  constructor(
-    logger: Logger,
-    requirements: Requirements,
-    lastIoBlockHeight: number,
-    chainflipApi: DisposableApiPromise,
-  ) {
+  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number) {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
-    this.chainflipApi = chainflipApi;
   }
 
   /**
@@ -59,11 +50,12 @@ export class ChainflipIO<Requirements> {
     extrinsic: (api: DisposableApiPromise) => any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<Result<any, string>> {
+    await using chainflipApi = await getChainflipApi();
     const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
       this.requirements.account.keypair,
       lpMutex.for(this.requirements.account.uri),
     );
-    const ext = extrinsic(this.chainflipApi);
+    const ext = extrinsic(chainflipApi);
 
     // generate readable description for logging
     const { section, method, args } = ext.toHuman().method;
@@ -73,7 +65,7 @@ export class ChainflipIO<Requirements> {
 
     // submit
     const result = extractExtrinsicResult(
-      this.chainflipApi,
+      chainflipApi,
       await extrinsicSubmitter.submit(ext, false),
     );
     if (result.ok) {
@@ -201,11 +193,11 @@ export class ChainflipIO<Requirements> {
  */
 export async function newChainflipIO<Requirements>(logger: Logger, requirements: Requirements) {
   // find out current block height
-  const chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipApi();
   const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
 
   // initialize with this height, meaning that we'll only search for events from this height on
-  return new ChainflipIO(logger, requirements, currentBlockHeight, chainflipApi);
+  return new ChainflipIO(logger, requirements, currentBlockHeight);
 }
 
 // ------------ Account types  ---------------
