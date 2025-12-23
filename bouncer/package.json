@@ -7,7 +7,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@chainflip/cli": "1.12.1-wbtc-dev.0",
+    "@chainflip/cli": "1.12.1-wbtc-dev.3",
     "@chainflip/utils": "0.11.2-wbtc-dev.0",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
