@@ -27,6 +27,7 @@ export async function execWithLog(
 
     // --- spawn process and register callbacks on events ---
     let running = true;
+    let exitCode: number = 0;
     const ls = spawn(command, args, {
       env: { ...process.env, ...additionalEnv },
     });
@@ -43,12 +44,18 @@ export async function execWithLog(
 
     ls.on('exit', (code) => {
       running = false;
+      exitCode = code ?? 0;
       console.log('child process exited with code ' + (code?.toString() ?? 'null'));
     });
 
     // --- wait for process to exit ---
     while (running) {
       await sleep(1000);
+    }
+
+    if (exitCode !== 0) {
+      console.error(`${commandAlias} failed (exit code: ${exitCode})`);
+      return false;
     }
 
     console.debug(`${commandAlias} succeeded`);
