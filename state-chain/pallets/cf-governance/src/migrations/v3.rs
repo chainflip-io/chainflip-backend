@@ -51,7 +51,9 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for FixThresholdCalculation<T> {
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let old_council = frame_support::storage::unhashed::get::<BTreeSet<T::AccountId>>(
 			&Members::<T>::hashed_key()[..],
-		);
+		)
+		.unwrap_or_default();
+
 		Ok(old_council.encode())
 	}
 
