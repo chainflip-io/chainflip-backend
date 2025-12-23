@@ -14,6 +14,60 @@ use super::{super::state_machine::core::Validate, ChainTypes};
 //------------------------ inputs ---------------------------
 
 defx! {
+	/// Continous chain of block headers.
+	///
+	/// This means that:
+	///  - There's an arbitrary number of headers, possibly 0.
+	///  - The `block_height`s of the headers are consequtive
+	///  - The `parent_hash` of a header matches with the `hash` of the block before it
+	///
+	/// These properties are verified as part of the `Validate` implementation derived by the `defx` macro.
+	#[derive(Ord, PartialOrd)]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(T::NAME)]
+	pub struct ContinuousHeaders[T: ChainTypes] {
+		all_headers: VecDeque<Header<T>>,
+	}
+	validate this (else ContinuousHeadersError) {
+		matching_hashes: pairs.clone().all(|(a, b)| a.hash == b.parent_hash),
+		continuous_heights: pairs.clone().all(|(a, b)| a.block_height.saturating_forward(1) == b.block_height),
+
+		( where pairs = this.all_headers.clone().into_iter().zip(this.all_headers.clone().into_iter().skip(1)) )
+	}
+}
+
+#[cfg(test)]
+impl<T: ChainTypes, X: IntoIterator<Item = Header<T>> + Clone> From<X> for ContinuousHeaders<T> {
+	fn from(value: X) -> Self {
+		ContinuousHeaders { all_headers: value.into_iter().collect() }
+	}
+}
+
+// it is safe to convert from nonempty headers since we know that they are already well-formed
+impl<T: ChainTypes> From<NonemptyContinuousHeaders<T>> for ContinuousHeaders<T> {
+	fn from(value: NonemptyContinuousHeaders<T>) -> Self {
+		Self { all_headers: value.get_headers() }
+	}
+}
+
+impl<T: ChainTypes> ContinuousHeaders<T> {
+	pub fn try_new(headers: VecDeque<Header<T>>) -> Result<Self, ContinuousHeadersError<T>> {
+		let result = Self { all_headers: headers };
+		result.is_valid()?;
+		Ok(result)
+	}
+	pub fn last(&self) -> Option<&Header<T>> {
+		self.all_headers.back()
+	}
+	pub fn first(&self) -> Option<&Header<T>> {
+		self.all_headers.front()
+	}
+	pub fn get_headers(&self) -> &VecDeque<Header<T>> {
+		&self.all_headers
+	}
+}
+
+defx! {
 	/// Non-empty, continous chain of block headers.
 	///
 	/// This means that:

@@ -27,7 +27,8 @@ use sp_std::vec;
 mod benchmarks {
 	use super::*;
 	use crate::general_lending::{GeneralLoan, LiquidationStatus};
-	use cf_chains::{btc::ScriptPubkey, evm::U256, ForeignChainAddress};
+	use cf_amm_math::price_from_usd_fine_amount;
+	use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
 	use frame_support::sp_runtime::FixedU64;
 
 	const TIER_5_BPS: BoostPoolTier = 5;
@@ -35,9 +36,8 @@ mod benchmarks {
 	const LOAN_ASSET: Asset = Asset::Btc;
 	const NUMBER_OF_LENDERS: u32 = 1000;
 
-	fn set_asset_price_in_usd<T: Config>(asset: Asset, price: u128) {
-		const PRICE_FRACTIONAL_BITS: u32 = 128;
-		<T as Config>::PriceApi::set_price(asset, U256::from(price) << PRICE_FRACTIONAL_BITS);
+	fn set_asset_price_in_usd<T: Config>(asset: Asset, price: AssetAmount) {
+		<T as Config>::PriceApi::set_price(asset, price_from_usd_fine_amount(price));
 	}
 
 	fn create_boost_pool<T: Config>() {

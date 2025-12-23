@@ -1,5 +1,4 @@
 use crate::mocks::*;
-use cf_amm_math::PRICE_FRACTIONAL_BITS;
 use cf_chains::{evm::U256, ForeignChain};
 use cf_test_utilities::{
 	assert_event_sequence, assert_has_event, assert_matching_event_count, assert_no_matching_event,
@@ -57,8 +56,8 @@ trait LendingTestRunnerExt {
 impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<Test, Ctx> {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self {
 		self.then_execute_with(|ctx| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
 			setup_pool_with_funds(LOAN_ASSET, init_pool_amount);
 
 			ctx
@@ -174,11 +173,6 @@ fn setup_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 		asset: loan_asset,
 		amount: init_amount,
 	}));
-}
-
-// A helper function to help with updating asset prices (in atomic USD units)
-fn set_asset_price_in_usd(asset: Asset, price: u128) {
-	MockPriceFeedApi::set_price(asset, Some(U256::from(price) << PRICE_FRACTIONAL_BITS));
 }
 
 #[test]
@@ -591,8 +585,8 @@ fn collateral_auto_topup() {
 
 	new_test_ext()
 		.execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1_000_000);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE * 1_000_000);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1_000_000);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			// Enable auto top-up for this test.
@@ -628,7 +622,7 @@ fn collateral_auto_topup() {
 
 			// The price drops 1%, but that shouldn't trigger a top-up
 			// at the next block
-			set_asset_price_in_usd(COLLATERAL_ASSET, 990_000);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 990_000);
 
 			assert_eq!(get_ltv(), FixedU64::from_rational(757_651_515, 1_000_000_000)); // ~76%
 		})
@@ -637,7 +631,7 @@ fn collateral_auto_topup() {
 			assert_eq!(get_collateral(), INIT_COLLATERAL);
 
 			// Drop the price further, this time auto-top up should be triggered
-			set_asset_price_in_usd(COLLATERAL_ASSET, 870_000);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 870_000);
 
 			assert_eq!(get_ltv(), FixedU64::from_rational(862_155_173, 1_000_000_000)); // ~86%
 		})
@@ -692,8 +686,8 @@ fn basic_loan_aggregation() {
 	let (origination_fee_network_3, origination_fee_pool_3) = take_network_fee(ORIGINATION_FEE_3);
 
 	new_test_ext().execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+		MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
 		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
@@ -912,8 +906,8 @@ fn swap_collected_network_fees() {
 			LendingPools::credit_fees_to_network(ASSET_2, AMOUNT_2);
 
 			// Network fee collection requires oracle prices available:
-			set_asset_price_in_usd(ASSET_1, SWAP_RATE);
-			set_asset_price_in_usd(ASSET_2, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(ASSET_1, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(ASSET_2, SWAP_RATE);
 
 			assert_eq!(
 				PendingNetworkFees::<Test>::iter().collect::<BTreeMap<_, _>>(),
@@ -984,9 +978,9 @@ fn adding_and_removing_collateral() {
 	const INIT_COLLATERAL_AMOUNT_2: AssetAmount = 1000;
 
 	new_test_ext().execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
-		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_1, 1);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 		setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 		MockBalance::credit_account(
@@ -1144,7 +1138,7 @@ fn basic_liquidation() {
 		.with_default_loan()
 		.execute_with(|| {
 			// Change oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			// Expecting a liquidation swap here:
@@ -1286,7 +1280,7 @@ fn basic_liquidation() {
 
 
 			// Change oracle price again to trigger liquidation:
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE_2);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE_2);
 		})
 		.then_execute_at_next_block(|_| {
 			// Expecting a liquidation swap here:
@@ -1439,7 +1433,7 @@ fn soft_liquidation_escalates_to_hard() {
 		.with_default_loan()
 		.then_execute_with(|_| {
 			// Change oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_eq!(
@@ -1552,7 +1546,7 @@ fn loans_in_liquidation_pay_interest() {
 				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
 			));
 			// Change oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			// Make sure that the loan is being liquidated
@@ -1614,7 +1608,7 @@ fn liquidation_fully_repays_loan_when_aborted() {
 		.with_default_loan()
 		.then_execute_with(|_| {
 			// Change oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_eq!(
@@ -1690,7 +1684,7 @@ fn liquidation_with_outstanding_principal() {
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).with_default_loan()
 		.execute_with(|| {
 			// Change oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests()
@@ -1803,7 +1797,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 			);
 
 			// Update oracle price to trigger liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert!(MockSwapRequestHandler::<Test>::get_swap_requests()
@@ -1890,7 +1884,7 @@ mod multi_asset_collateral_liquidation {
 	fn add_second_asset_collateral() {
 		// Add collateral in a different asset to trigger multiple liquidation liquidation
 		// swap
-		set_asset_price_in_usd(OTHER_COLLATERAL_ASSET, 1);
+		MockPriceFeedApi::set_price_usd(OTHER_COLLATERAL_ASSET, 1);
 
 		MockBalance::credit_account(&BORROWER, OTHER_COLLATERAL_ASSET, INIT_COLLATERAL);
 
@@ -1944,7 +1938,7 @@ mod multi_asset_collateral_liquidation {
 			.execute_with(|| {
 				add_second_asset_collateral();
 				// Change oracle price to trigger liquidation
-				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 			})
 			.then_execute_at_next_block(|_| {
 				assert_eq!(
@@ -2057,7 +2051,7 @@ mod multi_asset_collateral_liquidation {
 			.execute_with(|| {
 				add_second_asset_collateral();
 				// Change oracle price to trigger liquidation
-				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 			})
 			.then_execute_at_next_block(|_| {
 				// Swap 2 gets executed partially
@@ -2146,14 +2140,14 @@ mod multi_asset_collateral_liquidation {
 			.execute_with(|| {
 				// Setup pools with funds
 
-				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
 				setup_pool_with_funds(LOAN_ASSET, PRINCIPAL * 2);
 
-				set_asset_price_in_usd(LOAN_ASSET_2, SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET_2, SWAP_RATE);
 				setup_pool_with_funds(LOAN_ASSET_2, PRINCIPAL * 2);
 
-				set_asset_price_in_usd(COLLATERAL_ASSET, 1);
-				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+				MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 			})
 			.then_execute_with(|_| {
 				// Fund borrower account
@@ -2190,7 +2184,7 @@ mod multi_asset_collateral_liquidation {
 			})
 			.then_execute_with(|_| {
 				// Change oracle price to trigger liquidation
-				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 			})
 			.then_execute_at_next_block(|_| {
 				// Liquidation swaps are ongoing:
@@ -2393,8 +2387,8 @@ fn small_interest_amounts_accumulate() {
 
 	new_test_ext()
 		.execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
 			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 
 			LendingConfig::<Test>::set(config.clone());
@@ -2700,7 +2694,7 @@ fn borrowing_disallowed_during_liquidation() {
 		.with_default_loan()
 		.execute_with(|| {
 			// Force liquidation
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 2);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE * 2);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
@@ -2946,7 +2940,7 @@ fn removing_collateral_disallowed_during_liquidation() {
 		.with_default_loan()
 		.execute_with(|| {
 			// Force liquidation
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE * 2);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE * 2);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
@@ -3037,7 +3031,7 @@ fn adding_collateral_during_liquidation() {
 			));
 
 			// Force liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 
 			assert_eq!(
 				get_account().derive_ltv(&OraclePriceCache::default()).unwrap(),
@@ -3222,7 +3216,7 @@ fn full_loan_repayment_followed_by_full_liquidation() {
 		.with_default_loan()
 		.execute_with(|| {
 			// Force liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
@@ -3343,7 +3337,7 @@ fn full_loan_repayment_during_partial_liquidation() {
 		.with_default_loan()
 		.execute_with(|| {
 			// Force liquidation
-			set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_matches!(
@@ -3679,7 +3673,7 @@ mod voluntary_liquidation {
 
 				// Oracle price change leads to high LTV triggering escalation to soft
 				// (forced) liquidation:
-				set_asset_price_in_usd(LOAN_ASSET, NEW_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, NEW_SWAP_RATE);
 			})
 			.then_execute_at_next_block(|_| {
 				// Loan has been partially repaid:
@@ -3762,7 +3756,7 @@ mod voluntary_liquidation {
 				);
 
 				// Updating the price again to trigger "recovery" into voluntary liquidation
-				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
 			})
 			.then_execute_at_next_block(|_| {
 				// Loan has been partially repaid again:
@@ -3973,8 +3967,8 @@ mod safe_mode {
 		};
 
 		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(OTHER_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(OTHER_ASSET, SWAP_RATE);
 			// Withdrawing is disabled for all assets:
 			{
 				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
@@ -4111,9 +4105,9 @@ mod safe_mode {
 		};
 
 		new_test_ext().with_funded_pool(10 * PRINCIPAL).execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
-			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_1, 1);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 
@@ -4193,9 +4187,9 @@ mod safe_mode {
 		};
 
 		new_test_ext().with_funded_pool(10 * PRINCIPAL).execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-			set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
-			set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_1, 1);
+			MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_1, 10 * COLLATERAL_AMOUNT);
 			MockBalance::credit_account(&LP, COLLATERAL_ASSET_2, 10 * COLLATERAL_AMOUNT);
@@ -4255,7 +4249,7 @@ mod safe_mode {
 				);
 
 				// Now set the price to trigger normal liquidation
-				set_asset_price_in_usd(LOAN_ASSET, 20 * SWAP_RATE)
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, 20 * SWAP_RATE)
 			})
 			.then_execute_at_next_block(|_| {
 				// Forced liquidation should also be disabled
@@ -4435,10 +4429,10 @@ fn init_liquidation_swaps_test() {
 	};
 
 	new_test_ext().execute_with(|| {
-		set_asset_price_in_usd(Asset::Eth, 4_000);
-		set_asset_price_in_usd(Asset::Btc, 100_000);
-		set_asset_price_in_usd(Asset::Sol, 200);
-		set_asset_price_in_usd(Asset::Usdc, 1);
+		MockPriceFeedApi::set_price_usd(Asset::Eth, 4_000);
+		MockPriceFeedApi::set_price_usd(Asset::Btc, 100_000);
+		MockPriceFeedApi::set_price_usd(Asset::Sol, 200);
+		MockPriceFeedApi::set_price_usd(Asset::Usdc, 1);
 
 		let collateral = loan_account
 			.prepare_collateral_for_liquidation(&OraclePriceCache::default())
@@ -4540,8 +4534,8 @@ fn can_add_but_not_remove_collateral_with_stale_price() {
 	const COLLATERAL_ASSET_2: Asset = Asset::Btc;
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
-		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_1, 1);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 
 		// Set one of the collateral asset prices to be stale
 		MockPriceFeedApi::set_stale(COLLATERAL_ASSET_1, false);
@@ -4580,8 +4574,8 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 	const UNRELATED_COLLATERAL_ASSET: Asset = Asset::SolUsdc;
 
 	new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET_1, 1);
+		MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_1, 1);
 
 		// Start with good non-stale prices
 		MockPriceFeedApi::set_stale(LOAN_ASSET, false);
@@ -4694,11 +4688,11 @@ mod rpcs {
 
 		new_test_ext()
 			.execute_with(|| {
-				set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-				set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
 
-				set_asset_price_in_usd(LOAN_ASSET_2, SWAP_RATE);
-				set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET_2, SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 
 				setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
 				setup_pool_with_funds(LOAN_ASSET_2, INIT_POOL_AMOUNT_2);
@@ -4762,7 +4756,7 @@ mod rpcs {
 				);
 
 				// Trigger liquidation of one of the accounts (BORROWER_2):
-				set_asset_price_in_usd(LOAN_ASSET_2, NEW_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd(LOAN_ASSET_2, NEW_SWAP_RATE);
 			})
 			.then_process_blocks_until_block(
 				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
@@ -4980,7 +4974,7 @@ fn supply_minimum_is_enforced() {
 			..LendingConfigDefault::get()
 		});
 
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
 
 		disable_whitelist();
 
@@ -5136,8 +5130,8 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 	const COLLATERAL_ASSET_2: Asset = Asset::Flip;
 
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(COLLATERAL_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET_2, 1);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET_2, 1);
 		MockBalance::credit_account(
 			&BORROWER,
 			COLLATERAL_ASSET,
@@ -5219,8 +5213,8 @@ fn adding_or_removing_collateral_minimum_is_enforced() {
 #[test]
 fn must_have_refund_address_for_loan_asset() {
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		set_asset_price_in_usd(LOAN_ASSET, SWAP_RATE);
-		set_asset_price_in_usd(COLLATERAL_ASSET, 1);
+		MockPriceFeedApi::set_price_usd(LOAN_ASSET, SWAP_RATE);
+		MockPriceFeedApi::set_price_usd(COLLATERAL_ASSET, 1);
 
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 
@@ -5278,7 +5272,7 @@ fn can_handle_liquidation_with_zero_collateral() {
 
 	new_test_ext()
 		.execute_with(|| {
-			set_asset_price_in_usd(Asset::Btc, 1);
+			MockPriceFeedApi::set_price_usd(Asset::Btc, 1);
 
 			LoanAccounts::<Test>::insert(BORROWER, loan_account.clone());
 		})
@@ -5308,7 +5302,7 @@ fn same_asset_loan() {
 	new_test_ext()
 		.with_funded_pool(INIT_POOL_AMOUNT)
 		.execute_with(|| {
-			set_asset_price_in_usd(LOAN_ASSET, 1);
+			MockPriceFeedApi::set_price_usd(LOAN_ASSET, 1);
 			MockBalance::credit_account(&BORROWER, LOAN_ASSET, INIT_COLLATERAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 

@@ -176,6 +176,7 @@ pub type Ed25519PublicKey = sp_core::ed25519::Public;
 pub type Ipv6Addr = u128;
 pub type Port = u16;
 
+pub const USD_DECIMALS: u32 = 6;
 pub const FLIP_DECIMALS: u32 = 18;
 pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
 
@@ -576,8 +577,8 @@ pub type ShortId = u8;
 pub struct StablecoinDefaults<const N: u128>();
 impl<const N: u128> Get<BTreeMap<Asset, AssetAmount>> for StablecoinDefaults<N> {
 	fn get() -> BTreeMap<Asset, AssetAmount> {
-		[Asset::Usdc, Asset::Usdt, Asset::ArbUsdc, Asset::SolUsdc, Asset::HubUsdc, Asset::HubUsdt]
-			.into_iter()
+		Asset::all()
+			.filter(|asset| asset.is_usd_stablecoin())
 			.map(|asset| (asset, N))
 			.collect()
 	}

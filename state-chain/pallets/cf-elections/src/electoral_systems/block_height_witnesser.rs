@@ -4,11 +4,12 @@ use super::{
 	block_witnesser::state_machine::HookTypeFor,
 	state_machine::core::{defx, Hook, HookType, Validate},
 };
-use crate::generic_tools::*;
+use crate::{
+	electoral_systems::block_height_witnesser::primitives::ContinuousHeaders, generic_tools::*,
+};
 use cf_chains::witness_period::SaturatingStep;
 use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
-use primitives::NonemptyContinuousHeaders;
 #[cfg(test)]
 use proptest::prelude::Arbitrary;
 #[cfg(test)]
@@ -106,7 +107,7 @@ defx! {
 	#[expand_name_with(T::NAME)]
 	#[cfg_attr(test, derive(Arbitrary))]
 	pub struct ChainProgress[T: ChainTypes] {
-		pub headers: NonemptyContinuousHeaders<T>,
+		pub headers: ContinuousHeaders<T>,
 		pub removed: Option<RangeInclusive<<T as ChainTypes>::ChainBlockNumber>>,
 	}
 	validate _this (else ChainProgressError) {}
