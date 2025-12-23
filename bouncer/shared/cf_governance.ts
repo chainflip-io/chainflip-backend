@@ -1,10 +1,11 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import { ApiPromise } from '@polkadot/api';
 import Keyring from 'polkadot/keyring';
-import { snowWhiteMutex, waitForExt } from 'shared/utils';
+import { sleep, snowWhiteMutex, waitForExt } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
+import { ChildProcess } from 'child_process';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
@@ -23,13 +24,23 @@ export async function submitGovernanceExtrinsic(
 ): Promise<number> {
   await using api = await getChainflipApi();
 
-  logger.debug(`Submitting governance extrinsic`);
+  logger.info(`Submitting governance extrinsic`);
 
   const extrinsic = await call(api);
   const release = await snowWhiteMutex.acquire();
   const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
 
-  const nonce = (await api.rpc.system.accountNextIndex(snowWhite.address)) as unknown as number;
+  let nonce;
+  try {
+    nonce = (await api.rpc.system.accountNextIndex(snowWhite.address)) as unknown as number;
+  } catch (err) {
+    logger.warn(`Got error ${err} when trying to get next index`);
+    await sleep(10000);
+    logger.warn(`Trying it again`);
+
+    await using api = await getChainflipApi();
+    nonce = (await api.rpc.system.accountNextIndex(snowWhite.address)) as unknown as number;
+  }
   const unsub = await api.tx.governance
     .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
     .signAndSend(snowWhite, { nonce }, waiter);
