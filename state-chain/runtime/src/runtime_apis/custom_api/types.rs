@@ -365,7 +365,31 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub is_withdrawing: bool,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+pub mod before_version_9 {
+	use super::*;
+
+	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
+	pub struct LiquidityProviderInfo {
+		pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+		pub balances: Vec<(Asset, AssetAmount)>,
+		pub earned_fees: AssetMap<AssetAmount>,
+		pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	}
+
+	impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
+		fn from(old: LiquidityProviderInfo) -> Self {
+			Self {
+				refund_addresses: old.refund_addresses,
+				balances: old.balances,
+				earned_fees: old.earned_fees,
+				boost_balances: old.boost_balances,
+				..Default::default()
+			}
+		}
+	}
+}
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
 pub struct LiquidityProviderInfo {
 	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
 	pub balances: Vec<(Asset, AssetAmount)>,

@@ -36,6 +36,10 @@ jobs:
       profile: "try-runtime"
       upload-name: "chainflip-backend-bin-try-runtime"
       binary-subdir: release
+  check-blocktime:
+    needs: [build]
+    uses: ./.github/workflows/_22_check_blocktime.yml
+    secrets: inherit
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml

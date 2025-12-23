@@ -1374,7 +1374,7 @@ fn basic_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
 					ref collateral,
-					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount {..},
 				}) if collateral == &BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 				// The loan should now be settled:
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
@@ -3289,7 +3289,7 @@ fn full_loan_repayment_followed_by_full_liquidation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
-					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { .. },
 					..
 				})
 			);
@@ -3439,7 +3439,7 @@ fn full_loan_repayment_during_partial_liquidation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
-					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { .. },
 					..
 				})
 			);
@@ -3543,7 +3543,7 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 						borrower_id: BORROWER,
 						ref collateral,
-						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { .. },
 					}) if collateral == &BTreeMap::from([(LOAN_ASSET, EXCESS_PRINCIPAL)]),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
@@ -3866,7 +3866,7 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 						borrower_id: BORROWER,
 						ref collateral,
-						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount,
+						action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { .. },
 					}) if collateral == &BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)]),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
@@ -4889,6 +4889,7 @@ mod rpcs {
 						available_amount: INIT_POOL_AMOUNT -
 							PRINCIPAL - origination_fee_network_1 -
 							network_interest_1,
+						owed_to_network: 0,
 						utilisation_rate: utilisation_after_interest_pool_1,
 						current_interest_rate: Permill::from_parts(53_335), // 5.33%
 						config: CONFIG.get_config_for_asset(LOAN_ASSET).clone(),

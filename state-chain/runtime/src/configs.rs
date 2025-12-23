@@ -122,6 +122,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type Bonder = Bonder<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type ReputationResetter = Reputation;
+	type MinimumFunding = Funding;
 	type CfePeerRegistration = CfeInterface;
 }
 
