@@ -82,7 +82,7 @@ use crate::{
 };
 use cf_primitives::{
 	AccountRole, AuthorityCount, BlockNumber, FlipBalance, DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
-	GENESIS_EPOCH,
+	FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
 };
 
 pub struct ExtBuilder {

@@ -21,10 +21,7 @@ use core::convert::Infallible;
 use sp_core::crypto::AccountId32;
 
 use crate::range_orders::Liquidity;
-use cf_amm_math::{
-	price_at_tick, sqrt_price_to_price, Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-	PRICE_FRACTIONAL_BITS,
-};
+use cf_amm_math::{Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE};
 
 use super::*;
 
@@ -226,15 +223,6 @@ fn test_basic_swaps() {
 	inner(Side::Buy);
 }
 
-#[test]
-fn test_sqrt_price_to_price() {
-	assert_eq!(
-		sqrt_price_to_price(SqrtPriceQ64F96::from(1) << 96),
-		Price::from(1) << PRICE_FRACTIONAL_BITS
-	);
-	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
-}
-
 // Test that we can correctly switch from executing limit orders to range orders
 // and back:
 #[test]
@@ -244,7 +232,7 @@ fn alternating_range_and_limit_orders() {
 	const LP: AccountId32 = AccountId32::new([1; 32]);
 	const TICK_RANGE: core::ops::Range<i32> = -100..100;
 
-	let mut pool = PoolState::new(500, price_at_tick(0).unwrap()).unwrap();
+	let mut pool = PoolState::new(500, Price::at_tick_zero()).unwrap();
 	pool.collect_and_mint_limit_order(&LP, Side::Buy, 0, 1_000_000.into()).unwrap();
 
 	pool.collect_and_mint_range_order(
@@ -271,7 +259,6 @@ fn alternating_range_and_limit_orders() {
 
 #[test]
 fn check_price_adjustment_by_pool_fee() {
-	use cf_amm_math::price_at_tick;
 	use limit_orders::SwapDirection;
 	use sp_core::U256;
 
@@ -279,7 +266,7 @@ fn check_price_adjustment_by_pool_fee() {
 	fn test_case<SD: SwapDirection>(tick: i32, fee_hundredth_pips: u32) {
 		let input = U256::from(100_000_000u32);
 
-		let price = price_at_tick(tick).unwrap();
+		let price = Price::from_tick(tick).unwrap();
 
 		// Output is computed by reducing the input amount:
 		let expected_output = {
@@ -289,10 +276,10 @@ fn check_price_adjustment_by_pool_fee() {
 
 		// Output is computed by adjusting the price instead:
 		let output = {
-			let sqrt_price = price_to_sqrt_price(price);
+			let sqrt_price = SqrtPriceQ64F96::from(price);
 			let adjusted_sqrt_price =
 				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips);
-			let adjusted_price = sqrt_price_to_price(adjusted_sqrt_price);
+			let adjusted_price = Price::from(adjusted_sqrt_price);
 
 			SD::output_amount_floor(input, adjusted_price)
 		};

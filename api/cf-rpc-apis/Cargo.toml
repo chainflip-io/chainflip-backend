@@ -20,3 +20,4 @@ cf-primitives = { workspace = true, default-features = true }
 cf-rpc-types = { workspace = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 pallet-cf-environment = { workspace = true, default-features = true }
+cf-amm-math = { workspace = true}

@@ -16,8 +16,8 @@
 
 use crate::{common::ONE_IN_HUNDREDTH_PIPS, limit_orders, range_orders};
 use cf_amm_math::{
-	mul_div, sqrt_price_at_tick, test_utilities::rng_u256_inclusive_bound, tick_at_sqrt_price,
-	MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE, MIN_TICK,
+	mul_div, mul_div_ceil, mul_div_floor, test_utilities::rng_u256_inclusive_bound, MAX_SQRT_PRICE,
+	MAX_TICK, MIN_SQRT_PRICE, MIN_TICK,
 };
 
 use super::*;
@@ -33,17 +33,15 @@ type PoolState = super::PoolState<LiquidityProvider>;
 /// set low enough that those calculations don't overflow.
 #[test]
 fn max_liquidity() {
-	macro_rules! checks {
-		($t:ty, $price:ident) => {
-			<$t>::input_amount_floor(MAX_FIXED_POOL_LIQUIDITY, $price);
-			<$t>::input_amount_ceil(MAX_FIXED_POOL_LIQUIDITY, $price);
-			<$t>::output_amount_floor(MAX_FIXED_POOL_LIQUIDITY, $price);
-		};
+	fn checks<SD: SwapDirection>(price: Price) {
+		SD::input_amount_floor(MAX_FIXED_POOL_LIQUIDITY, price);
+		SD::input_amount_ceil(MAX_FIXED_POOL_LIQUIDITY, price);
+		SD::output_amount_floor(MAX_FIXED_POOL_LIQUIDITY, price);
 	}
 
-	for price in [MIN_SQRT_PRICE, MAX_SQRT_PRICE].map(sqrt_price_to_price) {
-		checks!(BaseToQuote, price);
-		checks!(QuoteToBase, price);
+	for price in [MIN_SQRT_PRICE, MAX_SQRT_PRICE].map(Price::from) {
+		checks::<BaseToQuote>(price);
+		checks::<QuoteToBase>(price);
 	}
 }
 
@@ -565,7 +563,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+					SqrtPriceQ64F96::from_raw(
+						SqrtPriceQ64F96::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+					)
+					.to_tick(),
 				100000000.into()
 			));
 			let (output, remaining) = pool_state.swap::<BaseToQuote>(75000000.into(), None, 0);
@@ -588,7 +589,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+					SqrtPriceQ64F96::from_raw(
+						SqrtPriceQ64F96::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+					)
+					.to_tick(),
 				100000000.into()
 			));
 			let (output, remaining) = pool_state.swap::<QuoteToBase>(180000000.into(), None, 0);
@@ -608,7 +612,10 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
-			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+			SqrtPriceQ64F96::from_raw(
+				SqrtPriceQ64F96::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<BaseToQuote>(150.into(), None, 0), (200.into(), 24.into()));
@@ -623,7 +630,10 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
-			tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+			SqrtPriceQ64F96::from_raw(
+				SqrtPriceQ64F96::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<QuoteToBase>(550.into(), None, 0), (200.into(), 50.into()));

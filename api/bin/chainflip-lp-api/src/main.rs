@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use cf_amm_math::Price;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
 	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, PriceLimits, WaitFor,
@@ -438,7 +439,7 @@ impl LpRpcApiServer for RpcServerImpl {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits,
+		price_limits: PriceLimits<Price>,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {

@@ -768,7 +768,7 @@ mod test {
 		let refund_parameters = crate::ChannelRefundParametersV0::<<Solana as Chain>::ChainAccount> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
-			min_price: 0.into(),
+			min_price: Default::default(),
 		};
 		let refund_params_v1 = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: refund_parameters.retry_duration,
@@ -844,7 +844,7 @@ mod test {
 		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
-			min_price: 0.into(),
+			min_price: Default::default(),
 			refund_ccm_metadata: None,
 			max_oracle_price_slippage: None,
 		};
@@ -913,7 +913,7 @@ mod test {
 		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
 			retry_duration: 15u32,
 			refund_address: SolAddress([0xF3; 32]),
-			min_price: 0.into(),
+			min_price: Default::default(),
 			refund_ccm_metadata: None,
 			max_oracle_price_slippage: None,
 		};
