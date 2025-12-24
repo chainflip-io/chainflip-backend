@@ -308,11 +308,11 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
       commissionBps: 1,
       fillOrKillParams,
       amount: amount.toString(),
-      network: 'backspin',
     },
     {
       url: brokerApiEndpoint,
     },
+    'backspin',
   );
 
   const txData = cfVaultContract.methods

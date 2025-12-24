@@ -33,6 +33,8 @@ pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xee; 20];
 pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0xcf; 20];
 pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0xba; 20];
+pub const ETHEREUM_WBTC_ADDRESS: [u8; 20] = [0xba; 20];
+
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEvmEnvironment;
 
@@ -45,6 +47,7 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 			assets::eth::Asset::Flip => Some(ETHEREUM_FLIP_ADDRESS.into()),
 			assets::eth::Asset::Usdc => Some(ETHEREUM_USDC_ADDRESS.into()),
 			assets::eth::Asset::Usdt => Some(ETHEREUM_USDT_ADDRESS.into()),
+			assets::eth::Asset::Wbtc => Some(ETHEREUM_WBTC_ADDRESS.into()),
 		}
 	}
 }
