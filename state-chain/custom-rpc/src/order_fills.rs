@@ -150,9 +150,9 @@ fn order_fills_for_pool<'a>(
 						collected
 							.fees
 							.zip(previous_collected.fees)
-							.map(|(fees, previous_fees)| fees - previous_fees)
+							.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
 					} else {
-						collected.fees
+						Default::default()
 					}
 				};
 
