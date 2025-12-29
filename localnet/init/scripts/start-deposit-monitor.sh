@@ -34,12 +34,6 @@ function check_deposit_monitor_health() {
   done
 }
 
-# Set a timeout when running in a CI environment
-if [[ $CI == true ]]; then
-  timeout_duration=60 # 1 minute
-  if ! timeout $timeout_duration check_deposit_monitor_health; then
-    echo "❌ Giving up after 1 minute. The deposit-monitor is not healthy. Continuing with the rest of the CI."
-  fi
-else
-  check_deposit_monitor_health
-fi
+check_deposit_monitor_health
+
+
