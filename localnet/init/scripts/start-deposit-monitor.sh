@@ -35,6 +35,7 @@ function check_deposit_monitor_health() {
 }
 
 export -f check_deposit_monitor_health
+export -f check_endpoint_health
 
 # Set a timeout when running in a CI environment
 if [[ $CI == true ]]; then
