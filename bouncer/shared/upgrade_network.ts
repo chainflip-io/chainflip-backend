@@ -121,7 +121,7 @@ async function compatibleUpgrade(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, false);
 
   killOldNodes();
 
@@ -173,7 +173,7 @@ async function incompatibleUpgradeNoBuild(
   await killEngines();
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
 
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, false);
 
   logger.info(
     'Check that the old engine has now shut down, and that the new engine is now running.',

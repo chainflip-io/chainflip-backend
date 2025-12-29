@@ -185,7 +185,8 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          ./commands/observe_block.ts 5
+          ./setup_for_test.sh
           git reset --hard
 
       - name: Upgrade network 🚀
