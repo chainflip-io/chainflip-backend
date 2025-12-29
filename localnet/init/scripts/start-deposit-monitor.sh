@@ -19,7 +19,7 @@ $DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-lo
   > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1
 
 # Function to check deposit-monitor's health
-check_deposit_monitor_health() {
+function check_deposit_monitor_health() {
   while true; do
     echo "🩺 Checking deposit-monitor's health ..."
     REPLY=$(check_endpoint_health 'http://localhost:6060/health')
