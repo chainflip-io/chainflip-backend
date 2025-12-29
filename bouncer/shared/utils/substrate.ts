@@ -2,7 +2,7 @@ import 'disposablestack/auto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Observable, Subject } from 'rxjs';
 import { runWithTimeout } from 'shared/utils';
-import { Logger } from 'shared/utils/logger';
+import { globalLogger, Logger } from 'shared/utils/logger';
 import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
 import { EventRecord, Header } from '@polkadot/types/interfaces';
@@ -22,43 +22,49 @@ const getCachedDisposable = <T extends AsyncDisposable, F extends (...args: any[
   const cache = new Map<string, Promise<T>>();
   let connections = 0;
 
-  return (async (...args) => {
-    const cacheKey = JSON.stringify(args);
-    let disposablePromise = cache.get(cacheKey);
+  return {
+    cachedDisposableFactory: (async (...args) => {
+      const cacheKey = JSON.stringify(args);
+      let disposablePromise = cache.get(cacheKey);
 
-    if (!disposablePromise) {
-      disposablePromise = factory(...args);
-      cache.set(cacheKey, disposablePromise);
-    }
+      if (!disposablePromise) {
+        disposablePromise = factory(...args);
+        cache.set(cacheKey, disposablePromise);
+      }
 
-    const disposable = await disposablePromise;
+      const disposable = await disposablePromise;
 
-    connections += 1;
+      connections += 1;
 
-    return new Proxy(disposable, {
-      get(target, prop, receiver) {
-        if (prop === Symbol.asyncDispose) {
-          return () => {
-            connections -= 1;
-            setTimeout(() => {
-              if (connections === 0) {
-                const dispose = Reflect.get(
-                  target,
-                  Symbol.asyncDispose,
-                  receiver,
-                ) as unknown as () => Promise<void>;
+      return new Proxy(disposable, {
+        get(target, prop, receiver) {
+          if (prop === Symbol.asyncDispose) {
+            return () => {
+              connections -= 1;
+              setTimeout(() => {
+                if (connections === 0) {
+                  const dispose = Reflect.get(
+                    target,
+                    Symbol.asyncDispose,
+                    receiver,
+                  ) as unknown as () => Promise<void>;
 
-                dispose.call(target).catch(() => null);
-                cache.delete(cacheKey);
-              }
-            }, 5_000).unref();
-          };
-        }
+                  dispose.call(target).catch(() => null);
+                  cache.delete(cacheKey);
+                }
+              }, 5_000).unref();
+            };
+          }
 
-        return Reflect.get(target, prop, receiver);
-      },
-    });
-  }) as F;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    }) as F,
+    clearCache: () => {
+      connections = 0;
+      cache.clear();
+    },
+  };
 };
 
 export type DisposableApiPromise = ApiPromise & { [Symbol.asyncDispose](): Promise<void> };
@@ -116,17 +122,16 @@ const getCachedSubstrateApi = (endpoint: string) =>
     });
   });
 
-export const getChainflipApi = getCachedSubstrateApi(
-  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
-);
+export const { cachedDisposableFactory: getChainflipApi, clearCache: clearChainflipApiCache } =
+  getCachedSubstrateApi(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
 export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
 
-export const getPolkadotApi = getCachedSubstrateApi(
+export const { cachedDisposableFactory: getPolkadotApi } = getCachedSubstrateApi(
   process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9947',
 );
 
-export const getAssethubApi = getCachedSubstrateApi(
+export const { cachedDisposableFactory: getAssethubApi } = getCachedSubstrateApi(
   process.env.ASSETHUB_ENDPOINT ?? 'ws://127.0.0.1:9955',
 );
 
@@ -215,7 +220,8 @@ class EventCache {
 
       this.headers.set(blockHash, blockHeader);
 
-      const api = await (await apiMap[this.chain]()).at(blockHash);
+      await using disposableApi = await apiMap[this.chain]();
+      const api = await disposableApi.at(blockHash);
       const rawEvents = (await api.query.system.events()) as unknown as EventRecord[];
       const events = rawEvents.map(({ event }) => ({
         name: { section: event.section, method: event.method },
@@ -272,7 +278,7 @@ class EventCache {
     }
     const depthLimit = Math.min(historicalCheckBlocks, this.cacheAgeLimit);
 
-    const api = await apiMap[this.chain]();
+    await using api = await apiMap[this.chain]();
     const events: Event[][] = [];
 
     this.logger?.trace(
@@ -446,19 +452,20 @@ async function* observableToIterable<T>(observer: Observable<T>, signal?: AbortS
   }
 }
 
-const subscribeHeads = getCachedDisposable(
-  async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
-    const cache = eventCacheMap[chain];
-    const observable = await cache.getObservable(finalized);
+export const { cachedDisposableFactory: subscribeHeads, clearCache: clearSubscribeHeadsCache } =
+  getCachedDisposable(
+    async ({ chain, finalized = false }: { chain: SubstrateChain; finalized?: boolean }) => {
+      const cache = eventCacheMap[chain];
+      const observable = await cache.getObservable(finalized);
 
-    return {
-      observable,
-      [Symbol.asyncDispose]() {
-        return Promise.resolve();
-      },
-    };
-  },
-);
+      return {
+        observable,
+        [Symbol.asyncDispose]() {
+          return Promise.resolve();
+        },
+      };
+    },
+  );
 
 async function getPastEvents(
   chain: SubstrateChain,
