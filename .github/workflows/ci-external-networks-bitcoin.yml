@@ -22,9 +22,8 @@ jobs:
     strategy:
       matrix:
         localnet-speed-setting:
-          - turbo
           - default
-          - slow
+          - turbo
     uses: ./.github/workflows/_26_docker_external_networks.yml
     with:
       network: bitcoin

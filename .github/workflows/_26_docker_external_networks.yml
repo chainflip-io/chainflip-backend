@@ -6,7 +6,7 @@ on:
         type: string
         required: true
       localnet-speed-setting:
-        description: The speed that the network should run at (possible options are "default", "turbo", "slow")
+        description: The speed that the network should run at (possible options are "default", "turbo")
         type: string
         required: true
 
