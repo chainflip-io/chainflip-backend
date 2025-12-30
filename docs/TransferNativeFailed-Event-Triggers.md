@@ -93,7 +93,7 @@ pub fn vault_transfer_failed(
 This call:
 - Records the failed transfer
 - Initiates a **Transfer Fallback** mechanism
-- Emits a `TransferFallbackRequested` event
+- Emits a `TransferFallbackRequested` event immediately (in the same State Chain block)
 
 ### 3. Transfer Fallback Mechanism
 
@@ -108,7 +108,7 @@ function transferFallback(
 
 This provides a **secondary attempt** to send the failed funds to the recipient. The fallback mechanism:
 - Uses threshold signature from validators
-- Attempts the transfer again with potentially different gas parameters
+- Creates a new transaction to attempt the transfer again
 - Is tracked in `FailedForeignChainCalls` storage for the current epoch
 
 ## Key Characteristics
