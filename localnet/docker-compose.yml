@@ -201,7 +201,7 @@ services:
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-backend/bitcoin-${LOCALNET_SPEED_SETTING}:latest
     platform: linux/amd64
-    pull_policy: always
+    pull_policy: if_not_present
     container_name: bitcoin
     restart: unless-stopped
     ports:
