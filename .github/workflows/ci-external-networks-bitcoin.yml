@@ -19,6 +19,13 @@ on:
 
 jobs:
   build-bitcoin-dev-image:
+    strategy:
+      matrix:
+        localnet-speed-setting:
+          - turbo
+          - default
+          - slow
     uses: ./.github/workflows/_26_docker_external_networks.yml
     with:
       network: bitcoin
+      localnet-speed-setting: ${{ matrix.localnet-speed-setting }}
