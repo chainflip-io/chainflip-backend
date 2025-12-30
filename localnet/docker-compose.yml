@@ -199,7 +199,7 @@ services:
       start_period: 20s
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin:357aa6af70b3d57fe0a9df1fe1815f704e59db07
+    image: ghcr.io/chainflip-io/chainflip-backend/bitcoin-${LOCALNET_SPEED_SETTING}:latest
     platform: linux/amd64
     pull_policy: if_not_present
     container_name: bitcoin

@@ -22,3 +22,4 @@ jobs:
     uses: ./.github/workflows/_26_docker_external_networks.yml
     with:
       network: polkadot
+      localnet-speed-setting: default
