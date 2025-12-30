@@ -43,6 +43,15 @@ get-workflow() {
     echo
     export START_INDEXER=${START_INDEXER:-"NO"}
 
+    echo "🏎️ Do you want to run localnet chains in turbo mode? (Type y or leave empty)"
+    read -p "(default: NO) " TURBO_MODE
+    echo
+    if [[ "$TURBO_MODE" == "y" ]]; then
+      export LOCALNET_SPEED_SETTING="turbo"
+    else
+      export LOCALNET_SPEED_SETTING="default"
+    fi
+
   fi
 }
 
