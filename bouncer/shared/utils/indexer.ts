@@ -113,6 +113,12 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       });
     }
 
+    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock) {
+      throw new Error(
+        `Did not find any of the events in ${JSON.stringify(Object.values(descriptions).map((v) => v.name))} in block range ${timing.startFromBlock}..${timing.endBeforeBlock}`,
+      );
+    }
+
     await sleep(500);
   }
 

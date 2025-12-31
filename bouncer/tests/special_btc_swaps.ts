@@ -1,10 +1,11 @@
 import { requestNewSwap } from 'shared/perform_swap';
 import { sendBtcTransactionWithMultipleUtxosToSameAddress } from 'shared/send_btc';
 import { Asset, newAssetAddress } from 'shared/utils';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 
-async function testBitcoinMultipleUtxos(testContext: TestContext) {
+async function testBitcoinMultipleUtxos<A = []>(cf: ChainflipIO<A>) {
   // Configuration for this test:
   const destAsset: Asset = 'ArbEth';
 
@@ -18,24 +19,24 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
   const destAddress = await newAssetAddress(destAsset);
 
   // request deposit channel
-  const swapParams = await requestNewSwap(testContext.logger, 'Btc', destAsset, destAddress);
+  const swapParams = await requestNewSwap(cf, 'Btc', destAsset, destAddress);
 
   // construct btc tx with multiple outputs to the deposit address
   const txid = await sendBtcTransactionWithMultipleUtxosToSameAddress(
     swapParams.depositAddress,
     fineAmounts,
   );
-  testContext.logger.debug(`Sending bitcoin tx with multiple outputs: ${txid}`);
+  cf.debug(`Sending bitcoin tx with multiple outputs: ${txid}`);
 
   // helper to parse polkadotjs numbers
   const parsePdJsInt = (number: string) => Number(number.replaceAll(',', ''));
 
   // construct a list of promises waiting for confirmation of deposit of each of the amounts
   const events = fineAmounts.map((fineAmount) =>
-    observeEvent(testContext.logger, `bitcoinIngressEgress:DepositFinalised`, {
+    observeEvent(cf.logger, `bitcoinIngressEgress:DepositFinalised`, {
       test: (event) => {
         const amount = parsePdJsInt(event.data.amount);
-        testContext.logger.debug(`event deposit amount is ${amount}`);
+        cf.debug(`event deposit amount is ${amount}`);
         return (
           event.data.channelId === swapParams.channelId.toString() &&
           amount >= fineAmount * 0.95 &&
@@ -44,9 +45,7 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
       },
       historicalCheckBlocks: 10,
     }).event.then((e) => {
-      testContext.logger.debug(
-        `Deposit of ${e.data.amount} finalised for channel ${e.data.channelId}`,
-      );
+      cf.debug(`Deposit of ${e.data.amount} finalised for channel ${e.data.channelId}`);
     }),
   );
 
@@ -55,5 +54,6 @@ async function testBitcoinMultipleUtxos(testContext: TestContext) {
 }
 
 export async function testSpecialBitcoinSwaps(testContext: TestContext) {
-  await testBitcoinMultipleUtxos(testContext);
+  const cf = await newChainflipIO(testContext.logger, []);
+  await testBitcoinMultipleUtxos(cf);
 }

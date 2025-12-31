@@ -2,6 +2,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { performSwap } from 'shared/perform_swap';
 import { observeBalanceIncrease } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 // NOTE: this doesn't work any more because Polkadot chain is deprecated.
 export async function testAssethubXcm(testContext: TestContext, _seed?: string) {
@@ -18,7 +19,7 @@ export async function testAssethubXcm(testContext: TestContext, _seed?: string) 
   const oldDotBalance = await getBalance('Dot', '12QPwzxiXa1UAsgeoeNvvPnJqCFE8SwDb4FVXWauYWCwRiHt');
 
   performSwap(
-    testContext.logger,
+    await newChainflipIO(testContext.logger, [] as []),
     'Eth',
     'HubDot',
     '14iGgWDpriDToidv1GY28a8yGqF4DyR397euELCzQB87qbRM',

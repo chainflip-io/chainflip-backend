@@ -31,17 +31,19 @@ import { Logger, throwError } from 'shared/utils/logger';
 import { newEvmAddress } from 'shared/new_evm_address';
 import { brokerApiEndpoint } from 'shared/json_rpc';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
 
-async function testSuccessiveDepositEvm(
+async function testSuccessiveDepositEvm<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   testContext: TestContext,
 ) {
   const swapParams = await testSwap(
-    testContext.logger,
+    cf,
     sourceAsset,
     destAsset,
     undefined,
@@ -59,13 +61,14 @@ async function testSuccessiveDepositEvm(
   );
 }
 
-async function testNoDuplicateWitnessing(
+async function testNoDuplicateWitnessing<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   testContext: TestContext,
 ) {
   const swapParams = await testSwap(
-    testContext.logger,
+    cf,
     sourceAsset,
     destAsset,
     undefined,
@@ -166,42 +169,46 @@ async function testTxMultipleVaultSwaps(
   await observingEvent.event;
 }
 
-async function testDoubleDeposit(parentLogger: Logger, sourceAsset: Asset, destAsset: Asset) {
+async function testDoubleDeposit<A = []>(
+  parentCf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+) {
   const { destAddress, tag } = await prepareSwap(
-    parentLogger,
+    parentCf.logger,
     sourceAsset,
     destAsset,
     undefined,
     undefined,
     'EvmDoubleDepositTest',
   );
-  const logger = parentLogger.child({ tag });
-  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
+  const cf = parentCf.withChildLogger(tag);
+  const swapParams = await requestNewSwap(cf, sourceAsset, destAsset, destAddress);
 
   {
     const swapRequestedHandle = observeSwapRequested(
-      logger,
+      cf.logger,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
       SwapRequestType.Regular,
     );
 
-    await send(logger, sourceAsset, swapParams.depositAddress);
+    await send(cf.logger, sourceAsset, swapParams.depositAddress);
     await swapRequestedHandle;
   }
 
   // Do another deposit. Regardless of the fetch having been broadcasted or not, another swap
   // should be scheduled when we deposit again.
   const swapRequestedHandle = observeSwapRequested(
-    logger,
+    cf.logger,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
     SwapRequestType.Regular,
   );
 
-  await send(logger, sourceAsset, swapParams.depositAddress);
+  await send(cf.logger, sourceAsset, swapParams.depositAddress);
   await swapRequestedHandle;
 }
 
@@ -342,22 +349,24 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
 }
 
 export async function testEvmDeposits(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
+
   const depositTests = Promise.all([
-    testSuccessiveDepositEvm('Eth', 'Sol', testContext),
-    testSuccessiveDepositEvm('Flip', 'Btc', testContext),
-    testSuccessiveDepositEvm('ArbEth', 'Flip', testContext),
-    testSuccessiveDepositEvm('ArbUsdc', 'Btc', testContext),
+    testSuccessiveDepositEvm(cf, 'Eth', 'Sol', testContext),
+    testSuccessiveDepositEvm(cf, 'Flip', 'Btc', testContext),
+    testSuccessiveDepositEvm(cf, 'ArbEth', 'Flip', testContext),
+    testSuccessiveDepositEvm(cf, 'ArbUsdc', 'Btc', testContext),
   ]);
 
   const noDuplicatedWitnessingTest = Promise.all([
-    testNoDuplicateWitnessing('Eth', 'Sol', testContext),
-    testNoDuplicateWitnessing('Eth', 'Btc', testContext),
-    testNoDuplicateWitnessing('Eth', 'Flip', testContext),
-    testNoDuplicateWitnessing('Eth', 'Usdc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Sol', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Btc', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Flip', testContext),
-    testNoDuplicateWitnessing('ArbEth', 'Usdc', testContext),
+    testNoDuplicateWitnessing(cf, 'Eth', 'Sol', testContext),
+    testNoDuplicateWitnessing(cf, 'Eth', 'Btc', testContext),
+    testNoDuplicateWitnessing(cf, 'Eth', 'Flip', testContext),
+    testNoDuplicateWitnessing(cf, 'Eth', 'Usdc', testContext),
+    testNoDuplicateWitnessing(cf, 'ArbEth', 'Sol', testContext),
+    testNoDuplicateWitnessing(cf, 'ArbEth', 'Btc', testContext),
+    testNoDuplicateWitnessing(cf, 'ArbEth', 'Flip', testContext),
+    testNoDuplicateWitnessing(cf, 'ArbEth', 'Usdc', testContext),
   ]);
 
   const multipleTxSwapsTest = Promise.all([
@@ -366,15 +375,15 @@ export async function testEvmDeposits(testContext: TestContext) {
   ]);
 
   const doubleDepositTests = Promise.all([
-    testDoubleDeposit(testContext.logger, 'Eth', 'Flip'),
-    testDoubleDeposit(testContext.logger, 'Usdc', 'Flip'),
-    testDoubleDeposit(testContext.logger, 'ArbEth', 'Sol'),
-    testDoubleDeposit(testContext.logger, 'ArbUsdc', 'Flip'),
+    testDoubleDeposit(cf, 'Eth', 'Flip'),
+    testDoubleDeposit(cf, 'Usdc', 'Flip'),
+    testDoubleDeposit(cf, 'ArbEth', 'Sol'),
+    testDoubleDeposit(cf, 'ArbUsdc', 'Flip'),
   ]);
 
   const testEncodingCfParameters = Promise.all([
-    testEncodeCfParameters(testContext.logger, 'ArbEth', 'Eth'),
-    testEncodeCfParameters(testContext.logger, 'Eth', 'Flip'),
+    testEncodeCfParameters(cf.logger, 'ArbEth', 'Eth'),
+    testEncodeCfParameters(cf.logger, 'Eth', 'Flip'),
   ]);
 
   await Promise.all([
