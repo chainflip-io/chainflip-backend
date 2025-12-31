@@ -115,20 +115,6 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-// TODO: Consider alternative representation for Price:
-//
-// increasing Price to U512 or switch to a f64 (f64 would only be for the external
-// price representation), as at low ticks the precision in the price is VERY LOW, but this does not
-// cause any problems for the AMM code in terms of correctness
-
-/// This is the ratio of equivalently valued amounts of asset One and asset Zero.
-///
-/// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
-/// zero becomes more valuable relative to asset one the prices literal value goes up, and vice
-/// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
-/// bits.
-pub type Price = U256;
-
 #[derive(
 	Debug,
 	Clone,
@@ -145,7 +131,7 @@ pub type Price = U256;
 	Copy,
 	Default,
 )]
-pub struct PriceLimits {
+pub struct PriceLimits<Price> {
 	pub min_price: Price,
 	pub max_oracle_price_slippage: Option<BasisPoints>,
 }
@@ -153,8 +139,6 @@ pub struct PriceLimits {
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;
-
-pub const PRICE_FRACTIONAL_BITS: u32 = 128;
 
 define_wrapper_type!(SwapId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
@@ -176,9 +160,7 @@ pub type Ed25519PublicKey = sp_core::ed25519::Public;
 pub type Ipv6Addr = u128;
 pub type Port = u16;
 
-pub const USD_DECIMALS: u32 = 6;
-pub const FLIP_DECIMALS: u32 = 18;
-pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(FLIP_DECIMALS);
+pub const FLIPPERINOS_PER_FLIP: FlipBalance = 10u128.pow(Asset::Flip.decimals());
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.

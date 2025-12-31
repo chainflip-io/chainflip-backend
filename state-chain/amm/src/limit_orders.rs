@@ -49,11 +49,7 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE};
-use cf_amm_math::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, output_amount_floor, sqrt_price_at_tick,
-	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
-	PRICE_FRACTIONAL_BITS,
-};
+use cf_amm_math::{is_tick_valid, Amount, Price, SqrtPriceQ64F96, Tick};
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
 // LP attempts to add more liquidity that would increase the total at the tick past this value, the
@@ -226,7 +222,7 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 }
 impl SwapDirection for BaseToQuote {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
-		mul_div_ceil(output, U256::one() << PRICE_FRACTIONAL_BITS, price)
+		price.input_amount_ceil(output)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
@@ -234,7 +230,7 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		output_amount_floor(input, price)
+		price.output_amount_floor(input)
 	}
 
 	fn best_priced_fixed_pool(
@@ -245,7 +241,7 @@ impl SwapDirection for BaseToQuote {
 }
 impl SwapDirection for QuoteToBase {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
-		mul_div_ceil(output, price, U256::one() << PRICE_FRACTIONAL_BITS)
+		price.output_amount_ceil(output)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
@@ -253,7 +249,7 @@ impl SwapDirection for QuoteToBase {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		mul_div_floor(input, U256::one() << PRICE_FRACTIONAL_BITS, price)
+		price.input_amount_floor(input)
 	}
 
 	fn best_priced_fixed_pool(
@@ -451,12 +447,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			let (collected, option_position) = Self::collect_from_position::<SD>(
 				position.clone(),
 				self.fixed_pools[!SD::INPUT_SIDE].get(sqrt_price),
-				sqrt_price_to_price(*sqrt_price),
+				(*sqrt_price).into(),
 			);
 
 			(
 				lp.clone(),
-				tick_at_sqrt_price(*sqrt_price),
+				sqrt_price.to_tick(),
 				collected,
 				option_position
 					.map_or(Default::default(), |position| PositionInfo::from(&position)),
@@ -484,7 +480,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					let (collected, position_info) =
 						self.inner_collect::<QuoteToBase>(&lp, sqrt_price).unwrap();
 
-					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
+					(lp.clone(), sqrt_price.to_tick(), collected, position_info)
 				})
 				.collect(),
 			self.positions[!<BaseToQuote as crate::common::SwapDirection>::INPUT_SIDE]
@@ -496,7 +492,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					let (collected, position_info) =
 						self.inner_collect::<BaseToQuote>(&lp, sqrt_price).unwrap();
 
-					(lp.clone(), tick_at_sqrt_price(sqrt_price), collected, position_info)
+					(lp.clone(), sqrt_price.to_tick(), collected, position_info)
 				})
 				.collect(),
 		])
@@ -560,7 +556,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			}) {
 			let fixed_pool = fixed_pool_entry.get_mut();
 
-			let price = sqrt_price_to_price(sqrt_price);
+			let price = Price::from(sqrt_price);
 			let amount_required_to_consume_pool =
 				SD::input_amount_ceil(fixed_pool.available, price);
 
@@ -687,7 +683,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				.map_err(|err| err.map_other(|e| -> MintError { match e {} }))
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
-			let price = sqrt_price_to_price(sqrt_price);
+			let price = Price::from(sqrt_price);
 
 			let positions = &mut self.positions[!SD::INPUT_SIDE];
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
@@ -758,7 +754,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	fn validate_tick<T>(tick: Tick) -> Result<SqrtPriceQ64F96, PositionError<T>> {
 		is_tick_valid(tick)
-			.then(|| sqrt_price_at_tick(tick))
+			.then(|| SqrtPriceQ64F96::from_tick(tick))
 			.ok_or(PositionError::InvalidTick)
 	}
 
@@ -781,7 +777,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				})
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
-			let price = sqrt_price_to_price(sqrt_price);
+			let price = Price::from(sqrt_price);
 
 			let positions = &mut self.positions[!SD::INPUT_SIDE];
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
@@ -842,7 +838,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
 	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
-		let price = sqrt_price_to_price(sqrt_price);
+		let price = Price::from(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
 		let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
@@ -878,7 +874,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		tick: Tick,
 	) -> Result<(Collected, PositionInfo), PositionError<Infallible>> {
 		let sqrt_price = Self::validate_tick(tick)?;
-		let price = sqrt_price_to_price(sqrt_price);
+		let price = Price::from(sqrt_price);
 
 		let positions = &self.positions[!SD::INPUT_SIDE];
 		let fixed_pools = &self.fixed_pools[!SD::INPUT_SIDE];
@@ -904,7 +900,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn liquidity<SD: SwapDirection>(&self) -> Vec<(Tick, Amount)> {
 		self.fixed_pools[!SD::INPUT_SIDE]
 			.iter()
-			.map(|(sqrt_price, fixed_pool)| (tick_at_sqrt_price(*sqrt_price), fixed_pool.available))
+			.map(|(sqrt_price, fixed_pool)| (sqrt_price.to_tick(), fixed_pool.available))
 			.collect()
 	}
 

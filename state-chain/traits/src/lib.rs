@@ -18,6 +18,7 @@
 
 mod async_result;
 mod liquidity;
+use cf_amm::math::Price;
 use cfe_events::{KeyHandoverRequest, KeygenRequest, TxBroadcastRequest};
 pub use liquidity::*;
 pub mod safe_mode;
@@ -49,8 +50,7 @@ use cf_primitives::{
 	AccountRole, AffiliateShortId, Asset, AssetAmount, AuthorityCount, BasisPoints, Beneficiaries,
 	BlockNumber, BroadcastId, ChainflipNetwork, ChannelId, DcaParameters, Ed25519PublicKey,
 	EgressCounter, EgressId, EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr,
-	NetworkEnvironment, Price, SemVer, SwapRequestId, ThresholdSignatureRequestId,
-	FLIPPERINOS_PER_FLIP,
+	NetworkEnvironment, SemVer, SwapRequestId, ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -1353,7 +1353,7 @@ pub trait PriceFeedApi {
 	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
 		if let (Some(price_1), Some(price_2)) = (Self::get_price(asset1), Self::get_price(asset2)) {
 			Some(OraclePrice {
-				price: cf_amm::math::relative_price(price_1.price, price_2.price),
+				price: price_1.price.relative_to(price_2.price),
 				stale: price_1.stale || price_2.stale,
 			})
 		} else {

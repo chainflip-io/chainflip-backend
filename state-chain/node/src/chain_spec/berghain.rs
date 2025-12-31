@@ -22,6 +22,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, AccountRole, BlockNumber, ChainflipNetwork, FlipBalance, NetworkEnvironment,
+	FLIPPERINOS_PER_FLIP,
 };
 use cf_utilities::bs58_array;
 use pallet_cf_elections::generic_tools::Array;

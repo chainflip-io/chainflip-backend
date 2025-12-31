@@ -19,6 +19,7 @@ use super::{
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
+use cf_amm::math::Price;
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::{Amount, Tick},
@@ -466,7 +467,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits,
+		price_limits: PriceLimits<Price>,
 		dca_params: Option<DcaParameters>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<SwapRequestId>> {

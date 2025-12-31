@@ -29,9 +29,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::Solana, AccountRole, AuthorityCount, ChainflipNetwork, NetworkEnvironment,
-	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION,
+	DEFAULT_MAX_AUTHORITY_SET_CONTRACTION, FLIPPERINOS_PER_FLIP,
 };
-use common::{FLIPPERINOS_PER_FLIP, SHARED_DATA_REFERENCE_LIFETIME};
+use common::SHARED_DATA_REFERENCE_LIFETIME;
 use pallet_cf_elections::generic_tools::{ArrayContainer, ArrayToVector, CommonTraits};
 pub use sc_service::{ChainType, Properties};
 use sc_telemetry::serde_json::json;

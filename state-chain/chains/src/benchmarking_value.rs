@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[cfg(feature = "runtime-benchmarks")]
+use cf_amm_math::Price;
+#[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{any::AssetMap, arb, btc, dot, eth, hub, sol},
 	Asset,
@@ -282,6 +284,13 @@ impl BenchmarkValue for Utxo {
 impl BenchmarkValue for U256 {
 	fn benchmark_value() -> Self {
 		Self([1u64; 4])
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for Price {
+	fn benchmark_value() -> Self {
+		Self::from_raw(U256::benchmark_value())
 	}
 }
 

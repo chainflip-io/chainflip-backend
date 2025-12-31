@@ -17,7 +17,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_amm::math::price_at_tick;
 use cf_chains::ForeignChainAddress;
 use cf_primitives::{AccountRole, Asset};
 use cf_traits::AccountRoleRegistry;
@@ -86,7 +85,7 @@ mod benchmarks {
 			base_asset: Asset::Eth,
 			quote_asset: Asset::Usdc,
 			fee_hundredth_pips: 0u32,
-			initial_price: price_at_tick(0).unwrap(),
+			initial_price: Price::at_tick_zero(),
 		};
 
 		#[block]
@@ -107,7 +106,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
@@ -136,7 +135,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
@@ -165,7 +164,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
@@ -193,7 +192,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
@@ -222,7 +221,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000);
@@ -309,7 +308,7 @@ mod benchmarks {
 			Asset::Eth,
 			Asset::Usdc,
 			0,
-			price_at_tick(0).unwrap()
+			Price::at_tick_zero()
 		));
 		T::LpBalance::credit_account(&caller, Asset::Eth, 1_000_000_000);
 		T::LpBalance::credit_account(&caller, Asset::Usdc, 1_000_000_000);

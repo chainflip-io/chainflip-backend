@@ -22,7 +22,7 @@ impl<T: Config> OraclePriceCache<T> {
 			Entry::Vacant(entry) => {
 				// Price has never been requested this block, so we try to fetch it
 				if let Some(oracle_price) = T::PriceApi::get_price(asset) {
-					if oracle_price.price == Price::zero() {
+					if oracle_price.price == Default::default() {
 						*entry.insert(FetchedPrice::Invalid)
 					} else if oracle_price.stale {
 						*entry.insert(FetchedPrice::Stale(oracle_price.price))
@@ -67,7 +67,7 @@ impl<T: Config> OraclePriceCache<T> {
 		} else {
 			self.get_price(asset)?
 		};
-		Ok(cf_amm_math::output_amount_ceil(amount.into(), price_in_usd).unique_saturated_into())
+		Ok(price_in_usd.output_amount_ceil(amount.into()).unique_saturated_into())
 	}
 
 	/// Uses oracle prices to calculate the USD value of the given asset amount
@@ -128,7 +128,7 @@ impl<T: Config> OraclePriceCache<T> {
 		usd_value: AssetAmount,
 	) -> Result<AssetAmount, Error<T>> {
 		// The "price" of USD in terms of the asset:
-		let price = invert_price(self.get_price(asset)?);
-		Ok(cf_amm_math::output_amount_ceil(usd_value.into(), price).unique_saturated_into())
+		let price = self.get_price(asset)?.invert();
+		Ok(price.output_amount_ceil(usd_value.into()).unique_saturated_into())
 	}
 }

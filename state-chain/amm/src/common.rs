@@ -228,7 +228,7 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
-		sqrt_price_at_tick(tick_at_sqrt_price(sqrt_price).saturating_sub(delta).max(MIN_TICK))
+		SqrtPriceQ64F96::from_tick(sqrt_price.to_tick().saturating_sub(delta).max(MIN_TICK))
 	}
 }
 impl SwapDirection for QuoteToBase {
@@ -246,9 +246,9 @@ impl SwapDirection for QuoteToBase {
 	}
 
 	fn increase_sqrt_price(sqrt_price: SqrtPriceQ64F96, delta: Tick) -> SqrtPriceQ64F96 {
-		let tick = tick_at_sqrt_price(sqrt_price);
-		sqrt_price_at_tick(
-			if sqrt_price == sqrt_price_at_tick(tick) { tick } else { tick + 1 }
+		let tick = sqrt_price.to_tick();
+		SqrtPriceQ64F96::from_tick(
+			if sqrt_price == SqrtPriceQ64F96::from_tick(tick) { tick } else { tick + 1 }
 				.saturating_add(delta)
 				.min(MAX_TICK),
 		)
@@ -404,8 +404,10 @@ mod test {
 			let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
 
 			for _i in 0..10000000 {
-				let sqrt_price =
-					rng_u256_inclusive_bound(&mut rng, (MIN_SQRT_PRICE + 1)..=(MAX_SQRT_PRICE - 1));
+				let sqrt_price = SqrtPriceQ64F96::from_raw(rng_u256_inclusive_bound(
+					&mut rng,
+					(MIN_SQRT_PRICE.as_raw() + 1)..=(MAX_SQRT_PRICE.as_raw() - 1),
+				));
 				assert!(SD::sqrt_price_op_more_than(
 					SD::increase_sqrt_price(sqrt_price, 1),
 					sqrt_price
@@ -417,7 +419,7 @@ mod test {
 			}
 
 			for tick in MIN_TICK..=MAX_TICK {
-				let sqrt_price = sqrt_price_at_tick(tick);
+				let sqrt_price = SqrtPriceQ64F96::from_tick(tick);
 				assert_eq!(sqrt_price, SD::increase_sqrt_price(sqrt_price, 0));
 			}
 		}
