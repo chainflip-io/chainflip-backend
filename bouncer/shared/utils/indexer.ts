@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { sleep } from 'shared/utils';
 import prisma from './prisma_client';
+import { Logger } from './logger';
 
 // ------------ primitives event types ------------
 
@@ -63,6 +64,7 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
 
 // ------------ Querying the indexer database --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
+  logger: Logger,
   descriptions: Descriptions,
   timing: EventTime,
 ): Promise<OneOfEventsResult<Descriptions>> => {
@@ -117,8 +119,8 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   }
 
   if (foundEventsKeyAndData.length > 1) {
-    throw new Error(
-      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(foundEventsKeyAndData)}`,
+    logger.warn(
+      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(foundEventsKeyAndData)}`
     );
   }
 

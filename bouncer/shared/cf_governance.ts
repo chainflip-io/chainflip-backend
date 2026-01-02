@@ -1,8 +1,7 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
-import { ApiPromise } from '@polkadot/api';
 import Keyring from 'polkadot/keyring';
 import { cfMutex, waitForExt } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
 
@@ -16,7 +15,7 @@ export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
 export async function submitGovernanceExtrinsic(
   call: (
-    api: ApiPromise,
+    api: DisposableApiPromise,
   ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
   logger: Logger = globalLogger,
   preAuthorise = 0,

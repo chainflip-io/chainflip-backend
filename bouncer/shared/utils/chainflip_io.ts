@@ -19,6 +19,9 @@ import {
 } from './indexer';
 import { Logger } from './logger';
 import { cfAmmCommonPoolPairsMap } from 'generated/events/common';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { governanceProposed } from 'generated/events/governance/proposed';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -90,6 +93,24 @@ export class ChainflipIO<Requirements> {
     return result;
   }
 
+  // TODO: better return type (no any if event is provided)
+  async submitGovernanceExtrinsic<D extends EventDescription>(
+    extrinsic: (
+      api: DisposableApiPromise,
+    ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
+    event?: D,
+  ): Promise<SingleEventResult<D['name'], D['schema']> | any> {
+    // TODO we might want to move this function here eventually
+    const proposalId = await submitGovernanceExtrinsic(extrinsic);
+    await this.stepUntilEvent(
+      'Governance.Proposed',
+      governanceProposed.refine((id) => id == proposalId),
+    );
+    if (event) {
+      return await this.stepUntilEvent(event.name, event.schema);
+    }
+  }
+
   /**
    * Advance the current chainflip block height by one block.
    */
@@ -110,8 +131,9 @@ export class ChainflipIO<Requirements> {
     name: EventName,
     schema: Z,
   ): Promise<z.infer<Z>> {
-    this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
+    this.logger.info(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
+      this.logger,
       { event: { name, schema } },
       {
         startFromBlock: this.lastIoBlockHeight,
@@ -136,6 +158,7 @@ export class ChainflipIO<Requirements> {
   ): Promise<z.infer<Z>> {
     this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
+      this.logger,
       { event: { name, schema } },
       {
         startFromBlock: this.lastIoBlockHeight,
@@ -159,7 +182,9 @@ export class ChainflipIO<Requirements> {
     this.logger.info(
       `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
-    const event = await findOneEventOfMany(descriptions, {
+    const event = await findOneEventOfMany(
+      this.logger,
+      descriptions, {
       startFromBlock: this.lastIoBlockHeight,
     });
     this.info(`found event ${event}`);
@@ -168,33 +193,47 @@ export class ChainflipIO<Requirements> {
   }
 
   async stepUntilAllEventsOf<Events extends EventDescriptions>(
-    events: Events
+    events: Events,
   ): Promise<AllOfEventsResult<Events>> {
     this.logger.info(
       `waiting for all of the following events: ${JSON.stringify(Object.values(events).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
-    const results = await this.all(Object.entries(events).map(([key, event]) => cf => cf.stepUntilOneEventOf({[key]: event})));
-    const merged: Record<string, SingleEventResult<string, z.ZodTypeAny>> = Object.assign({}, ...results.map((res) => ({[res.key]: res})));
+    const results = await this.all(
+      Object.entries(events).map(
+        ([key, event]) =>
+          (cf) =>
+            cf.stepUntilOneEventOf({ [key]: event }),
+      ),
+    );
+    const merged: Record<string, SingleEventResult<string, z.ZodTypeAny>> = Object.assign(
+      {},
+      ...results.map((res) => ({ [res.key]: res })),
+    );
 
     this.logger.info(`got all the following event data: ${JSON.stringify(merged)}`);
 
     return merged as AllOfEventsResult<Events>;
   }
 
-  async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(values: T): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>; }> {
-
+  async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(
+    values: T,
+  ): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>> }> {
     // run all functions in parallel with clones of this chainflip io instance
-    const results = await Promise.all(values.map(async f => {
-      const cf = this.clone();
-      const result = await f(cf);
-      return { cf, result };
-    }));
+    const results = await Promise.all(
+      values.map(async (f) => {
+        const cf = this.clone();
+        const result = await f(cf);
+        return { cf, result };
+      }),
+    );
 
     // collect all block heights and use the max height for our new block height
-    this.lastIoBlockHeight = Math.max(...results.map(val => val.cf.lastIoBlockHeight));
+    this.lastIoBlockHeight = Math.max(...results.map((val) => val.cf.lastIoBlockHeight));
 
     // we have to typecast to the expected type
-    return results.map(val => val.result) as { -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>; };
+    return results.map((val) => val.result) as {
+      -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>;
+    };
   }
 
   // --------------- logger functionality ------------------
@@ -282,14 +321,11 @@ export const Err = <E>(error: E): Err<E> => ({
   },
 });
 
-function mapRecord<
-  A, B,
-  R extends Record<string, A>
->(
+function mapRecord<A, B, R extends Record<string, A>>(
   input: R,
-  f: (event: A) => B
+  f: (event: A) => B,
 ): { [K in keyof R]: B } {
-  return Object.fromEntries(
-    Object.entries(input).map(([k, v]) => [k, f(v)])
-  ) as { [K in keyof R]: B };
+  return Object.fromEntries(Object.entries(input).map(([k, v]) => [k, f(v)])) as {
+    [K in keyof R]: B;
+  };
 }
