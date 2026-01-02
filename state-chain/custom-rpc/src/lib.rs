@@ -609,16 +609,46 @@ pub enum SwapRateV2AdditionalOrder {
 	LimitOrder { base_asset: Asset, quote_asset: Asset, side: Side, tick: Tick, sell_amount: U256 },
 }
 
+/// This is a copy of PoolInfo exept that we have preserved `limit_order_fee_hundredth_pips` and
+/// `limit_order_total_fees_earned` for RPC compatibility reasons.
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub struct PoolInfoLegacy {
+	/// The fee taken, when limit orders are used, from swap inputs that contributes to liquidity
+	/// provider earnings
+	pub limit_order_fee_hundredth_pips: u32,
+	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
+	/// provider earnings
+	pub range_order_fee_hundredth_pips: u32,
+	/// The total fees earned in this pool by range orders.
+	pub range_order_total_fees_earned: PoolPairsMap<cf_amm::math::Amount>,
+	/// The total fees earned in this pool by limit orders.
+	pub limit_order_total_fees_earned: PoolPairsMap<cf_amm::math::Amount>,
+	/// The total amount of assets that have been bought by range orders in this pool.
+	pub range_total_swap_inputs: PoolPairsMap<cf_amm::math::Amount>,
+	/// The total amount of assets that have been bought by limit orders in this pool.
+	pub limit_total_swap_inputs: PoolPairsMap<cf_amm::math::Amount>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
-	pub pool_info: PoolInfo,
+	pub pool_info: PoolInfoLegacy,
 	pub quote_asset: Asset,
 }
 
 impl From<PoolInfo> for RpcPoolInfo {
 	fn from(pool_info: PoolInfo) -> Self {
-		Self { pool_info, quote_asset: Asset::Usdc }
+		Self {
+			pool_info: PoolInfoLegacy {
+				limit_order_fee_hundredth_pips: 0,
+				range_order_fee_hundredth_pips: pool_info.range_order_fee_hundredth_pips,
+				limit_order_total_fees_earned: Default::default(),
+				range_order_total_fees_earned: pool_info.range_order_total_fees_earned,
+				range_total_swap_inputs: pool_info.range_total_swap_inputs,
+				limit_total_swap_inputs: pool_info.limit_total_swap_inputs,
+			},
+			quote_asset: Asset::Usdc,
+		}
 	}
 }
 

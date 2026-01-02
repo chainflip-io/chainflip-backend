@@ -301,10 +301,8 @@ fn test_environment_serialization() {
 		},
 		pools: {
 			let pool_info: RpcPoolInfo = PoolInfo {
-				limit_order_fee_hundredth_pips: 0,
 				range_order_fee_hundredth_pips: 100,
 				range_order_total_fees_earned: Default::default(),
-				limit_order_total_fees_earned: Default::default(),
 				range_total_swap_inputs: Default::default(),
 				limit_total_swap_inputs: Default::default(),
 			}
@@ -535,13 +533,16 @@ fn pool_order_book_serialization() {
 
 #[test]
 fn pool_info_serialization() {
-	let val = PoolInfo {
-		limit_order_fee_hundredth_pips: 100u32,
-		range_order_fee_hundredth_pips: 200u32,
-		range_order_total_fees_earned: PoolPairsMap { base: 1111.into(), quote: 2222.into() },
-		limit_order_total_fees_earned: PoolPairsMap { base: 3333.into(), quote: 4444.into() },
-		range_total_swap_inputs: PoolPairsMap { base: 5555.into(), quote: 6666.into() },
-		limit_total_swap_inputs: PoolPairsMap { base: 7777.into(), quote: 8888.into() },
+	let val = RpcPoolInfo {
+		pool_info: PoolInfoLegacy {
+			limit_order_fee_hundredth_pips: 100u32,
+			range_order_fee_hundredth_pips: 200u32,
+			range_order_total_fees_earned: PoolPairsMap { base: 1111.into(), quote: 2222.into() },
+			limit_order_total_fees_earned: PoolPairsMap { base: 3333.into(), quote: 4444.into() },
+			range_total_swap_inputs: PoolPairsMap { base: 5555.into(), quote: 6666.into() },
+			limit_total_swap_inputs: PoolPairsMap { base: 7777.into(), quote: 8888.into() },
+		},
+		quote_asset: Asset::Btc,
 	};
 
 	insta::assert_json_snapshot!(val);

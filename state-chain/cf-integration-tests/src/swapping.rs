@@ -420,9 +420,6 @@ fn basic_pool_setup_provision_and_swap() {
 			credit_account(&DORIS, Asset::Eth, 10_000_000 * DECIMALS);
 			credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
 			credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
-			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
-			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
-			assert!(!HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 
 			set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
 			set_limit_order(&DORIS, Asset::Usdc, Asset::Eth, 0, Some(0), 1_000_000 * DECIMALS);
@@ -445,10 +442,6 @@ fn basic_pool_setup_provision_and_swap() {
 					},
 				) if egress_ids.contains(&egress_id) => ()
 			);
-
-			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Eth));
-			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Flip));
-			assert!(HistoricalEarnedFees::<Runtime>::contains_key(&DORIS, Asset::Usdc));
 		});
 }
 
