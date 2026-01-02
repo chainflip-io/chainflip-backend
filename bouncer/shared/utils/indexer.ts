@@ -2,31 +2,70 @@ import { z } from 'zod';
 import { sleep } from 'shared/utils';
 import prisma from './prisma_client';
 
+// ------------ primitives event types ------------
+
 export type EventName = `${string}.${string}` | `.${string}`;
 type EventTime = {
   startFromBlock: number;
   endBeforeBlock?: number;
 };
 
-// ------------ Types for choosing an event of multiple alternatives   ---------------
-
 export type EventDescription = { name: EventName; schema: z.ZodTypeAny };
 
 export type EventDescriptions = Record<string, EventDescription>;
 
-export type ChooseSingleEvent<S extends Record<string, EventDescription>> = {
-  [K in keyof S]: {
-    key: K;
-    data: z.infer<S[K]['schema']>;
-    blockHeight: number;
-  };
-}[keyof S];
+// ------------ Event queries -------------
+
+type OneOfEventsQuery = { oneOf: EventDescriptions };
+type AllOfEventsQuery = { allOf: EventDescriptions };
+
+/** Which events we want to wait for, there are three options:
+ * - waiting for a single event
+ * - waiting for one of multiple events
+ * - waiting for all of multiple events
+ */
+export type EventQuery = EventDescription | OneOfEventsQuery | AllOfEventsQuery;
+
+// ------------ Result types of event queries  ---------------
+
+export type SingleEventResult<Key, Schema extends z.ZodTypeAny> = {
+  key: Key;
+  data: z.infer<Schema>;
+  blockHeight: number;
+};
+
+export type OneOfEventsResult<Descriptions extends Record<string, EventDescription>> = {
+  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]['schema']>;
+}[keyof Descriptions];
+
+export type AllOfEventsResult<Descriptions extends Record<string, EventDescription>> = {
+  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]['schema']>;
+};
+
+export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuery
+  ? OneOfEventsResult<Q['oneOf']>
+  : Q extends AllOfEventsQuery
+    ? AllOfEventsResult<Q['allOf']>
+    : Q extends EventDescription
+      ? SingleEventResult<'event', Q['schema']>
+      : never;
+
+// export const findQuery = async <Query extends EventQuery>(
+//   query: EventQuery,
+//   timing: EventTime,
+// ): Promise<ResultOfEventQuery<Query>> => {
+//   if ("oneOf" in query) {
+//     const bla = query.oneOf;
+//     const res = await findOneEventOfMany<typeof bla>(bla, timing);
+//     return res;
+//   }
+// }
 
 // ------------ Querying the indexer database --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
   descriptions: Descriptions,
   timing: EventTime,
-): Promise<ChooseSingleEvent<Descriptions>> => {
+): Promise<OneOfEventsResult<Descriptions>> => {
   let foundEventsKeyAndData: { key: string; data: unknown; blockHeight: number }[] = [];
   while (foundEventsKeyAndData.length === 0) {
     const matchingEvents = await prisma.event.findMany({

@@ -28,6 +28,11 @@ import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
+import { newChainflipIO, WithAccount } from 'shared/utils/chainflip_io';
+import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
+import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
+import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
 
 export async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -100,6 +105,7 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
 
 async function main(): Promise<void> {
   const logger = loggerChild(globalLogger, 'setup_vaults');
+  const cf = await newChainflipIO(logger, []);
   const btcClient = getBtcClient();
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const solClient = getSolConnection();
@@ -119,32 +125,35 @@ async function main(): Promise<void> {
   ]);
 
   // Step 2
-  const btcActivationRequest = observeEvent(
-    logger,
-    'bitcoinVault:AwaitingGovernanceActivation',
-  ).event;
-  const arbActivationRequest = observeEvent(
-    logger,
-    'arbitrumVault:AwaitingGovernanceActivation',
-  ).event;
-  const solActivationRequest = observeEvent(
-    logger,
-    'solanaVault:AwaitingGovernanceActivation',
-  ).event;
-  const hubActivationRequest = observeEvent(
-    logger,
-    'assethubVault:AwaitingGovernanceActivation',
-  ).event;
   logger.info('Forcing rotation');
+  // NOTE: we should submit this extrinsic via ChainflipIO, but for the moment we use the old way
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
 
   // Step 3
   logger.info('Waiting for new keys');
+  const keyEvents = await cf.stepUntilAllEventsOf({
+    btc: {
+      name: 'BitcoinVault.AwaitingGovernanceActivation',
+      schema: bitcoinVaultAwaitingGovernanceActivation,
+    },
+    arb: {
+      name: 'ArbitrumVault.AwaitingGovernanceActivation',
+      schema: arbitrumVaultAwaitingGovernanceActivation,
+    },
+    sol: {
+      name: 'SolanaVault.AwaitingGovernanceActivation',
+      schema: solanaVaultAwaitingGovernanceActivation,
+    },
+    hub: {
+      name: 'AssethubVault.AwaitingGovernanceActivation',
+      schema: assethubVaultAwaitingGovernanceActivation,
+    },
+  });
 
-  const btcKey = (await btcActivationRequest).data.newPublicKey;
-  const arbKey = (await arbActivationRequest).data.newPublicKey;
-  const solKey = (await solActivationRequest).data.newPublicKey;
-  const hubKey = (await hubActivationRequest).data.newPublicKey;
+  const btcKey = keyEvents.btc.data.newPublicKey;
+  const arbKey = keyEvents.arb.data.newPublicKey;
+  const solKey = keyEvents.sol.data.newPublicKey;
+  const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
   logger.info('Requesting Assethub Vault creation');

@@ -8,8 +8,17 @@ import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
-import { ChooseSingleEvent, EventDescription, EventName, findOneEventOfMany } from './indexer';
+import {
+  OneOfEventsResult,
+  EventDescription,
+  EventName,
+  findOneEventOfMany,
+  EventDescriptions,
+  AllOfEventsResult,
+  SingleEventResult,
+} from './indexer';
 import { Logger } from './logger';
+import { cfAmmCommonPoolPairsMap } from 'generated/events/common';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -36,6 +45,10 @@ export class ChainflipIO<Requirements> {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
+  }
+
+  private clone(): ChainflipIO<Requirements> {
+    return new ChainflipIO(this.logger, this.requirements, this.lastIoBlockHeight);
   }
 
   /**
@@ -140,17 +153,48 @@ export class ChainflipIO<Requirements> {
    * @returns Object containing the key and data of the found event, as well as the block height at which
    * it was found.
    */
-  async stepUntilOneEventOf<S extends Record<string, EventDescription>>(
-    descriptions: S,
-  ): Promise<ChooseSingleEvent<S>> {
-    this.logger.debug(
+  async stepUntilOneEventOf<Events extends EventDescriptions>(
+    descriptions: Events,
+  ): Promise<OneOfEventsResult<Events>> {
+    this.logger.info(
       `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
     const event = await findOneEventOfMany(descriptions, {
       startFromBlock: this.lastIoBlockHeight,
     });
+    this.info(`found event ${event}`);
     this.lastIoBlockHeight = event.blockHeight;
     return event;
+  }
+
+  async stepUntilAllEventsOf<Events extends EventDescriptions>(
+    events: Events
+  ): Promise<AllOfEventsResult<Events>> {
+    this.logger.info(
+      `waiting for all of the following events: ${JSON.stringify(Object.values(events).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
+    );
+    const results = await this.all(Object.entries(events).map(([key, event]) => cf => cf.stepUntilOneEventOf({[key]: event})));
+    const merged: Record<string, SingleEventResult<string, z.ZodTypeAny>> = Object.assign({}, ...results.map((res) => ({[res.key]: res})));
+
+    this.logger.info(`got all the following event data: ${JSON.stringify(merged)}`);
+
+    return merged as AllOfEventsResult<Events>;
+  }
+
+  async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(values: T): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>; }> {
+
+    // run all functions in parallel with clones of this chainflip io instance
+    const results = await Promise.all(values.map(async f => {
+      const cf = this.clone();
+      const result = await f(cf);
+      return { cf, result };
+    }));
+
+    // collect all block heights and use the max height for our new block height
+    this.lastIoBlockHeight = Math.max(...results.map(val => val.cf.lastIoBlockHeight));
+
+    // we have to typecast to the expected type
+    return results.map(val => val.result) as { -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>; };
   }
 
   // --------------- logger functionality ------------------
@@ -237,3 +281,15 @@ export const Err = <E>(error: E): Err<E> => ({
     throw new Error(`${error}`);
   },
 });
+
+function mapRecord<
+  A, B,
+  R extends Record<string, A>
+>(
+  input: R,
+  f: (event: A) => B
+): { [K in keyof R]: B } {
+  return Object.fromEntries(
+    Object.entries(input).map(([k, v]) => [k, f(v)])
+  ) as { [K in keyof R]: B };
+}
