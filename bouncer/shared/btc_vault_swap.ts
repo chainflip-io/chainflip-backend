@@ -4,7 +4,7 @@ import {
   Asset,
   assetDecimals,
   Assets,
-  brokerMutex,
+  cfMutex,
   chainFromAsset,
   Chains,
   createStateChainKeypair,
@@ -30,7 +30,7 @@ interface BtcVaultSwapExtraParameters {
 }
 
 async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
-  const release = await brokerMutex.acquire(brokerUri);
+  const release = await cfMutex.acquire(brokerUri);
   // Check if the channel is already open
   const chainflip = await getChainflipApi();
   const broker = createStateChainKeypair(brokerUri);
@@ -185,7 +185,7 @@ export async function registerAffiliate(
   const broker = createStateChainKeypair(brokerUri);
 
   logger.trace('Registering affiliate');
-  const release = await brokerMutex.acquire(brokerUri);
+  const release = await cfMutex.acquire(brokerUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
   const unsub = await chainflip.tx.swapping

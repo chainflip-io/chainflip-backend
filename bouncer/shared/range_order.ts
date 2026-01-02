@@ -1,7 +1,7 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   amountToFineAmount,
-  lpMutex,
+  cfMutex,
   assetDecimals,
   createStateChainKeypair,
   waitForExt,
@@ -31,7 +31,7 @@ export async function rangeOrder(
   const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   logger.info('Setting up ' + ccy + ' range order');
-  const release = await lpMutex.acquire(lpUri);
+  const release = await cfMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   const unsub = await chainflip.tx.liquidityPools

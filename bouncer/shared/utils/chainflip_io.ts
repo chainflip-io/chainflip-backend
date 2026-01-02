@@ -2,7 +2,7 @@ import {
   ChainflipExtrinsicSubmitter,
   createStateChainKeypair,
   extractExtrinsicResult,
-  lpMutex,
+  cfMutex,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -53,7 +53,7 @@ export class ChainflipIO<Requirements> {
     await using chainflipApi = await getChainflipApi();
     const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
       this.requirements.account.keypair,
-      lpMutex.for(this.requirements.account.uri),
+      cfMutex.for(this.requirements.account.uri),
     );
     const ext = extrinsic(chainflipApi);
 

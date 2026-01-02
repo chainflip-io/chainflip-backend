@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { createStateChainKeypair, lpMutex, waitForExt } from 'shared/utils';
+import { createStateChainKeypair, cfMutex, waitForExt } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { limitOrder } from 'shared/limit_order';
 import { rangeOrder } from 'shared/range_order';
@@ -91,7 +91,7 @@ export async function createAndDeleteMultipleOrders(
 
   logger.debug('Deleting opened orders...');
 
-  const release = await lpMutex.acquire(lpUri);
+  const release = await cfMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   await chainflip.tx.liquidityPools

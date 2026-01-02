@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { lpMutex, handleSubstrateError, createStateChainKeypair } from 'shared/utils';
+import { cfMutex, handleSubstrateError, createStateChainKeypair } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { Logger } from 'shared/utils/logger';
@@ -30,7 +30,7 @@ export async function setupLpAccount(logger: Logger, uri: string) {
     test: (event) => event.data.accountId === lp.address,
   }).event;
 
-  await lpMutex.runExclusive(uri, async () => {
+  await cfMutex.runExclusive(uri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .registerLpAccount()
@@ -61,7 +61,7 @@ export async function setupBrokerAccount(logger: Logger, uri: string) {
       test: (event) => event.data.accountId === broker.address,
     }).event;
 
-    await lpMutex.runExclusive(uri, async () => {
+    await cfMutex.runExclusive(uri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
       await chainflip.tx.swapping
         .registerAsBroker()
@@ -97,7 +97,7 @@ export async function setupOperatorAccount(logger: Logger, uri: string) {
       test: (event) => event.data.accountId === operator.address && event.data.role === 'Operator',
     }).event;
 
-    await lpMutex.runExclusive(uri, async () => {
+    await cfMutex.runExclusive(uri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(operator.address);
       await chainflip.tx.validator
         .registerAsOperator(

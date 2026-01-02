@@ -7,7 +7,7 @@ import {
   assetDecimals,
   Assets,
   createStateChainKeypair,
-  lpMutex,
+  cfMutex,
   newAssetAddress,
   observeBalanceIncrease,
   waitForExt,
@@ -35,7 +35,7 @@ export async function testRotationBarrier(testContext: TestContext) {
 
   logger.info(`Submitting withdrawal request.`);
   const api = await getChainflipApi();
-  const { promise, waiter } = waitForExt(api, logger, 'InBlock', await lpMutex.acquire(lpUri));
+  const { promise, waiter } = waitForExt(api, logger, 'InBlock', await cfMutex.acquire(lpUri));
   const lp = createStateChainKeypair(lpUri);
   const nonce = Number(await api.rpc.system.accountNextIndex(lp.address));
   const unsub = await api.tx.liquidityProvider

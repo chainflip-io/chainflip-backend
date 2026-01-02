@@ -55,12 +55,10 @@ import { Err, Ok, Result } from './utils/chainflip_io';
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
 
-export const lpMutex = new KeyedMutex();
-export const brokerMutex = new KeyedMutex();
+export const cfMutex = new KeyedMutex();
 export const ethNonceMutex = new Mutex();
 export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
-export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
@@ -1503,7 +1501,7 @@ export async function submitExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
   findEvent: string,
   logger: Logger,
-  mutex = lpMutex,
+  mutex = cfMutex,
 ) {
   const account = createStateChainKeypair(uri);
   const [expectedSection, expectedMethod] = findEvent.split(':');
