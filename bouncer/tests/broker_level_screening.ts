@@ -7,7 +7,7 @@ import {
   sleep,
   handleSubstrateError,
   chainGasAsset,
-  lpMutex,
+  cfMutex,
   createStateChainKeypair,
   isWithinOnePercent,
   amountToFineAmountBigInt,
@@ -426,7 +426,7 @@ async function testEvmLiquidityDeposit(
   }).event;
 
   logger.debug('Requesting ' + sourceAsset + ' deposit address');
-  await lpMutex.runExclusive(lpUri, async () => {
+  await cfMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(sourceAsset, null)

@@ -4,7 +4,7 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 
 import Keyring from 'polkadot/keyring';
 import {
-  brokerMutex,
+  cfMutex,
   decodeDotAddressForContract,
   handleSubstrateError,
   observeBalanceIncrease,
@@ -36,7 +36,7 @@ export async function submitBrokerWithdrawal(
 ) {
   await using chainflip = await getChainflipApi();
   // Only allow one withdrawal at a time to stop nonce issues
-  return brokerMutex.runExclusive(brokerUri, async () => {
+  return cfMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     return chainflip.tx.swapping
       .withdraw(asset, addressObject)
@@ -105,7 +105,7 @@ async function testBrokerFees(logger: Logger, inputAsset: Asset, seed?: string):
     retryDuration: 0,
   };
 
-  await brokerMutex.runExclusive(brokerUri, async () => {
+  await cfMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
     await chainflip.tx.swapping
       .requestSwapDepositAddress(

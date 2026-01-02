@@ -2,7 +2,7 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   waitForExt,
   amountToFineAmount,
-  lpMutex,
+  cfMutex,
   assetDecimals,
   createStateChainKeypair,
 } from 'shared/utils';
@@ -24,7 +24,7 @@ export async function limitOrder(
   const lp = createStateChainKeypair(lpUri);
 
   logger.info('Setting up ' + ccy + ' limit order');
-  const release = await lpMutex.acquire(lpUri);
+  const release = await cfMutex.acquire(lpUri);
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   const unsub = await chainflip.tx.liquidityPools
