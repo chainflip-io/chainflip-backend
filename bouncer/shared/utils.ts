@@ -59,7 +59,6 @@ export const cfMutex = new KeyedMutex();
 export const ethNonceMutex = new Mutex();
 export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
-export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];

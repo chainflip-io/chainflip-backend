@@ -1,7 +1,7 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import { ApiPromise } from '@polkadot/api';
 import Keyring from 'polkadot/keyring';
-import { snowWhiteMutex, waitForExt } from 'shared/utils';
+import { cfMutex, waitForExt } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
@@ -26,7 +26,7 @@ export async function submitGovernanceExtrinsic(
   logger.debug(`Submitting governance extrinsic`);
 
   const extrinsic = await call(api);
-  const release = await snowWhiteMutex.acquire();
+  const release = await cfMutex.acquire(snowWhiteUri);
   const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
 
   const nonce = (await api.rpc.system.accountNextIndex(snowWhite.address)) as unknown as number;
