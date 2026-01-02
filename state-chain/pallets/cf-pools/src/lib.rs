@@ -1290,16 +1290,11 @@ impl<T: Config> PoolApi for Pallet<T> {
 	Serialize,
 )]
 pub struct PoolInfo {
-	/// The fee taken, when limit orders are used, from swap inputs that contributes to liquidity
-	/// provider earnings
-	pub limit_order_fee_hundredth_pips: u32,
 	/// The fee taken, when range orders are used, from swap inputs that contributes to liquidity
 	/// provider earnings
 	pub range_order_fee_hundredth_pips: u32,
 	/// The total fees earned in this pool by range orders.
 	pub range_order_total_fees_earned: PoolPairsMap<Amount>,
-	/// The total fees earned in this pool by limit orders.
-	pub limit_order_total_fees_earned: PoolPairsMap<Amount>,
 	/// The total amount of assets that have been bought by range orders in this pool.
 	pub range_total_swap_inputs: PoolPairsMap<Amount>,
 	/// The total amount of assets that have been bought by limit orders in this pool.
@@ -1437,8 +1432,6 @@ impl<T: Config> Pallet<T> {
 				limit_orders_cache: Default::default(),
 				pool_state: PoolState::new(fee_hundredth_pips, initial_price).map_err(
 					|e| match e {
-						NewError::LimitOrders(limit_orders::NewError::InvalidFeeAmount) =>
-							Error::<T>::InvalidFeeAmount,
 						NewError::RangeOrders(range_orders::NewError::InvalidFeeAmount) =>
 							Error::<T>::InvalidFeeAmount,
 						NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice) =>
@@ -2146,10 +2139,8 @@ impl<T: Config> Pallet<T> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolInfo {
-			limit_order_fee_hundredth_pips: pool.pool_state.limit_order_fee(),
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
 			range_order_total_fees_earned: pool.pool_state.range_order_total_fees_earned(),
-			limit_order_total_fees_earned: pool.pool_state.limit_order_total_fees_earned(),
 			range_total_swap_inputs: pool.pool_state.range_order_swap_inputs(),
 			limit_total_swap_inputs: pool.pool_state.limit_order_swap_inputs(),
 		})
@@ -2220,7 +2211,7 @@ impl<T: Config> Pallet<T> {
 								id: id.into(),
 								tick,
 								sell_amount: position_info.amount,
-								fees_earned: collected.accumulative_fees,
+								fees_earned: Default::default(),
 								original_sell_amount: collected.original_amount,
 							})
 						} else {
@@ -2299,13 +2290,6 @@ impl<T: Config> Pallet<T> {
 		position_info: PositionInfo,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
-		let collected_fees: AssetAmount = collected.fees.try_into()?;
-		let asset = asset_pair.assets()[!order.to_sold_pair()];
-		HistoricalEarnedFees::<T>::mutate(lp, asset, |balance| {
-			*balance = balance.saturating_add(collected_fees)
-		});
-		T::LpBalance::try_credit_account(lp, asset, collected_fees)?;
-
 		let bought_amount: AssetAmount = collected.bought_amount.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
@@ -2327,10 +2311,7 @@ impl<T: Config> Pallet<T> {
 
 		let zero_change = *amount_change.abs() == 0;
 
-		if !zero_change ||
-			collected_fees != Default::default() ||
-			bought_amount != Default::default()
-		{
+		if !zero_change || bought_amount != Default::default() {
 			Self::deposit_event(Event::<T>::LimitOrderUpdated {
 				lp: lp.clone(),
 				base_asset: asset_pair.assets().base,
@@ -2346,7 +2327,7 @@ impl<T: Config> Pallet<T> {
 					}
 				},
 				sell_amount_total: position_info.amount.try_into()?,
-				collected_fees,
+				collected_fees: 0,
 				bought_amount,
 			});
 		}
