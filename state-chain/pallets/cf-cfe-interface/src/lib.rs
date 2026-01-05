@@ -73,10 +73,19 @@ pub mod pallet {
 	#[pallet::unbounded]
 	pub type CfeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+
+	pub type RuntimeUpgradeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			CfeEvents::<T>::kill();
+
+			for event in RuntimeUpgradeEvents::<T>::take() {
+				CfeEvents::<T>::append(event);
+			}
 
 			T::WeightInfo::clear_events()
 		}
