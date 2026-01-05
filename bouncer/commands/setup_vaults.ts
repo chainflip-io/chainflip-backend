@@ -33,12 +33,7 @@ import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitco
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
-import { environmentBitcoinBlockNumberSetForVault } from 'generated/events/environment/bitcoinBlockNumberSetForVault';
-import { environmentArbitrumInitialized } from 'generated/events/environment/arbitrumInitialized';
-import { assethubVaultVaultActivationCompleted } from 'generated/events/assethubVault/vaultActivationCompleted';
-import { environmentSolanaInitialized } from 'generated/events/environment/solanaInitialized';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
-import { extrinsics } from '@polkadot/types/interfaces/definitions';
 
 export async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -160,7 +155,7 @@ async function main(): Promise<void> {
   const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (assethub, arbitrum, solana) with new keys')
+  cf.info('Setting up external chains (Arbitrum, Solana, Assethub) with new keys')
 
   const createAssethubVault = async () => {
     // Step a

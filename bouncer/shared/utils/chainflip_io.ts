@@ -18,7 +18,7 @@ import {
   highestBlock,
 } from './indexer';
 import { Logger } from './logger';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { submitExistingGovernanceExtrinsic, submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposed } from 'generated/events/governance/proposed';
 
@@ -106,36 +106,28 @@ export class ChainflipIO<Requirements> {
     };
   }): Promise<SingleEventResult<'event', EventSchema>>;
   async submitGovernance<Schema extends z.ZodTypeAny>(arg: {
-    extrinsic: (
-      api: DisposableApiPromise,
-    ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>;
+    extrinsic: ExtrinsicFromApi;
     expectedEvent?: {
       name: EventName;
       schema?: Schema;
     };
   }) {
     await using chainflipApi = await getChainflipApi();
-    // const ext = await arg.extrinsic(chainflipApi);
-    const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
+    const extrinsic = await arg.extrinsic(chainflipApi);
 
     // generate readable description for logging
-    // const { section, method, args } = ext.toHuman().method;
-    // const readable = `${section}.${method}(${JSON.stringify(args)})`;
-    const readable = '?';
+    const { section, method, args } = (extrinsic.toHuman() as any).method;
+    const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
-    this.logger.info(`At ${currentBlockHeight}: Submitting extrinsic for snowwhite`);
-    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
+    this.logger.info(`Submitting governance extrinsic '${readable}' for snowwhite`);
 
     // TODO we might want to move this function here eventually
-    const proposalId = await submitGovernanceExtrinsic(arg.extrinsic);
-    this.logger.info(`Submitted extrinsic`);
-    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
+    const proposalId = await submitExistingGovernanceExtrinsic(extrinsic);
     await this.stepUntilEvent(
       'Governance.Proposed',
       governanceProposed.refine((id) => id == proposalId),
     );
-    this.logger.info(`Found proposal event in block ${this.lastIoBlockHeight} for ${readable}`);
-    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
+    this.logger.info(`Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`);
 
     // searching for event
     if (arg.expectedEvent) {
@@ -143,7 +135,6 @@ export class ChainflipIO<Requirements> {
         arg.expectedEvent.name,
         arg.expectedEvent.schema ?? z.any(),
       );
-      this.logger.info(`Found result event in block ${this.lastIoBlockHeight} for ${readable}`);
       return result;
     }
   }

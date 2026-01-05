@@ -13,10 +13,8 @@ const keyring = new Keyring({ type: 'sr25519' });
 
 export const snowWhite = keyring.createFromUri(snowWhiteUri);
 
-export async function submitGovernanceExtrinsic(
-  call: (
-    api: DisposableApiPromise,
-  ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
+export async function submitExistingGovernanceExtrinsic(
+  extrinsic: SubmittableExtrinsic<'promise'>,
   logger: Logger = globalLogger,
   preAuthorise = 0,
 ): Promise<number> {
@@ -24,7 +22,6 @@ export async function submitGovernanceExtrinsic(
 
   logger.debug(`Submitting governance extrinsic`);
 
-  const extrinsic = await call(api);
   const release = await cfMutex.acquire(snowWhiteUri);
   const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
 
@@ -47,4 +44,15 @@ export async function submitGovernanceExtrinsic(
 
   logger.debug(`Governance extrinsic proposal ID: ${proposalId}`);
   return proposalId;
+}
+
+export async function submitGovernanceExtrinsic(
+  call: (
+    api: DisposableApiPromise,
+  ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
+  logger: Logger = globalLogger,
+  preAuthorise = 0,
+): Promise<number> {
+  await using api = await getChainflipApi();
+  return submitExistingGovernanceExtrinsic(await call(api), logger, preAuthorise);
 }
