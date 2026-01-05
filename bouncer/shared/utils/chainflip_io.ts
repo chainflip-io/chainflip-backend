@@ -10,15 +10,14 @@ import type { KeyringPair } from '@polkadot/keyring/types';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import {
   OneOfEventsResult,
-  EventDescription,
   EventName,
   findOneEventOfMany,
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
+  highestBlock,
 } from './indexer';
 import { Logger } from './logger';
-import { cfAmmCommonPoolPairsMap } from 'generated/events/common';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposed } from 'generated/events/governance/proposed';
@@ -94,20 +93,58 @@ export class ChainflipIO<Requirements> {
   }
 
   // TODO: better return type (no any if event is provided)
-  async submitGovernanceExtrinsic<D extends EventDescription>(
+  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void>;
+  async submitGovernance(arg: {
+    extrinsic: ExtrinsicFromApi;
+    expectedEvent: { name: EventName };
+  }): Promise<SingleEventResult<'event', any>>;
+  async submitGovernance<EventSchema extends z.ZodTypeAny>(arg: {
+    extrinsic: ExtrinsicFromApi;
+    expectedEvent: {
+      name: EventName;
+      schema: EventSchema;
+    };
+  }): Promise<SingleEventResult<'event', EventSchema>>;
+  async submitGovernance<Schema extends z.ZodTypeAny>(arg: {
     extrinsic: (
       api: DisposableApiPromise,
-    ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
-    event?: D,
-  ): Promise<SingleEventResult<D['name'], D['schema']> | any> {
+    ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>;
+    expectedEvent?: {
+      name: EventName;
+      schema?: Schema;
+    };
+  }) {
+    await using chainflipApi = await getChainflipApi();
+    // const ext = await arg.extrinsic(chainflipApi);
+    const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
+
+    // generate readable description for logging
+    // const { section, method, args } = ext.toHuman().method;
+    // const readable = `${section}.${method}(${JSON.stringify(args)})`;
+    const readable = '?';
+
+    this.logger.info(`At ${currentBlockHeight}: Submitting extrinsic for snowwhite`);
+    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
+
     // TODO we might want to move this function here eventually
-    const proposalId = await submitGovernanceExtrinsic(extrinsic);
+    const proposalId = await submitGovernanceExtrinsic(arg.extrinsic);
+    this.logger.info(`Submitted extrinsic`);
+    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
     await this.stepUntilEvent(
       'Governance.Proposed',
       governanceProposed.refine((id) => id == proposalId),
     );
-    if (event) {
-      return await this.stepUntilEvent(event.name, event.schema);
+    this.logger.info(`Found proposal event in block ${this.lastIoBlockHeight} for ${readable}`);
+    this.logger.info(` => Current indexer height is: ${await highestBlock()}`);
+
+    // searching for event
+    if (arg.expectedEvent) {
+      const result = await this.stepUntilEvent(
+        arg.expectedEvent.name,
+        arg.expectedEvent.schema ?? z.any(),
+      );
+      this.logger.info(`Found result event in block ${this.lastIoBlockHeight} for ${readable}`);
+      return result;
     }
   }
 
@@ -154,12 +191,12 @@ export class ChainflipIO<Requirements> {
    */
   async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
     name: EventName,
-    schema: Z,
+    schema?: Z,
   ): Promise<z.infer<Z>> {
     this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
       this.logger,
-      { event: { name, schema } },
+      { event: { name, schema: schema ?? z.any() } },
       {
         startFromBlock: this.lastIoBlockHeight,
         endBeforeBlock: this.lastIoBlockHeight + 1,
@@ -182,9 +219,7 @@ export class ChainflipIO<Requirements> {
     this.logger.info(
       `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
-    const event = await findOneEventOfMany(
-      this.logger,
-      descriptions, {
+    const event = await findOneEventOfMany(this.logger, descriptions, {
       startFromBlock: this.lastIoBlockHeight,
     });
     this.info(`found event ${event}`);
@@ -283,6 +318,10 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
   return new ChainflipIO(logger, requirements, currentBlockHeight);
 }
 
+// ------------ Extrinsic types  ---------------
+export type ExtrinsicFromApi = (
+  api: DisposableApiPromise,
+) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>;
 // ------------ Account types  ---------------
 
 export type AccountType = 'Broker' | 'LP';
@@ -320,6 +359,40 @@ export const Err = <E>(error: E): Err<E> => ({
     throw new Error(`${error}`);
   },
 });
+
+// ------------ Extrinsic result ---------------
+
+class GovernanceExtrinsicResult {
+  private blockHeight: number;
+  private logger: Logger;
+
+  constructor(logger: Logger, blockHeight: number) {
+    this.blockHeight = blockHeight;
+    this.logger = logger;
+  }
+
+  // async expectEvent<S extends z.ZodTypeAny>(name: EventName): Promise<void>;
+  // async expectEvent<S extends z.ZodTypeAny>(name: EventName, schema: S): Promise<z.infer<S>>;
+
+  async expectEvent<S extends z.ZodTypeAny = z.ZodTypeAny>(name: EventName, schema?: S) {
+    const result = await findOneEventOfMany(
+      this.logger,
+      {
+        event: {
+          name: name,
+          schema: schema ?? z.any(),
+        },
+      },
+      {
+        startFromBlock: this.blockHeight,
+        endBeforeBlock: this.blockHeight + 1,
+      },
+    );
+    return result;
+  }
+}
+
+// ------------ misc ---------------
 
 function mapRecord<A, B, R extends Record<string, A>>(
   input: R,

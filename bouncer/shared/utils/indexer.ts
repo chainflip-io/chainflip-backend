@@ -51,16 +51,14 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
       ? SingleEventResult<'event', Q['schema']>
       : never;
 
-// export const findQuery = async <Query extends EventQuery>(
-//   query: EventQuery,
-//   timing: EventTime,
-// ): Promise<ResultOfEventQuery<Query>> => {
-//   if ("oneOf" in query) {
-//     const bla = query.oneOf;
-//     const res = await findOneEventOfMany<typeof bla>(bla, timing);
-//     return res;
-//   }
-// }
+export const highestBlock = async (): Promise<number> => {
+  const result = await prisma.block.findFirst({
+    orderBy: {
+      height: 'desc',
+    },
+  });
+  return result?.height ?? 0;
+};
 
 // ------------ Querying the indexer database --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
@@ -115,12 +113,12 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       });
     }
 
-    await sleep(2000);
+    await sleep(500);
   }
 
   if (foundEventsKeyAndData.length > 1) {
     logger.warn(
-      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(foundEventsKeyAndData)}`
+      `Found multiple events matching event descriptions, but only one was expected. Found: ${JSON.stringify(foundEventsKeyAndData)}`,
     );
   }
 
