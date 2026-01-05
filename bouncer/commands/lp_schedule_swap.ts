@@ -18,7 +18,7 @@ import {
   Assets,
   createStateChainKeypair,
   handleSubstrateError,
-  lpMutex,
+  cfMutex,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger as logger } from 'shared/utils/logger';
@@ -51,7 +51,7 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 }).event;
 
 logger.info('Submitting on-chain swap extrinsic');
-await lpMutex.runExclusive(lpUri, async () => {
+await cfMutex.runExclusive(lpUri, async () => {
   const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
   await chainflip.tx.liquidityProvider
     .scheduleSwap(

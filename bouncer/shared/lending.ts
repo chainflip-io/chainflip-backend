@@ -6,7 +6,7 @@ import {
   ChainflipExtrinsicSubmitter,
   createStateChainKeypair,
   decodeModuleError,
-  lpMutex,
+  cfMutex,
 } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -76,7 +76,7 @@ export async function addLenderFunds(
 ) {
   await using chainflip = await getChainflipApi();
   const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
   const observeLendingFundsAdded = observeEvent(logger, `lendingPools:LendingFundsAdded`, {
     test: (event) => event.data.lenderId === lp.address && event.data.asset === asset,
