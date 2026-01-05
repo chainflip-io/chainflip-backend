@@ -7,6 +7,9 @@ import {
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
+import { submitExistingGovernanceExtrinsic } from 'shared/cf_governance';
+import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { governanceProposed } from 'generated/events/governance/proposed';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import {
   OneOfEventsResult,
@@ -15,12 +18,8 @@ import {
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
-  highestBlock,
 } from './indexer';
 import { Logger } from './logger';
-import { submitExistingGovernanceExtrinsic, submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { SubmittableExtrinsic } from '@polkadot/api/types';
-import { governanceProposed } from 'generated/events/governance/proposed';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -92,11 +91,16 @@ export class ChainflipIO<Requirements> {
     return result;
   }
 
-  // TODO: better return type (no any if event is provided)
-  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void>;
+  /**
+   * Submits a governance extrinsic and updates `lastIoBlockHeight` to the block were the extrinsic was included.
+   * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
+   * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the extrinsic is included.
+   */
+  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<number>;
   async submitGovernance(arg: {
     extrinsic: ExtrinsicFromApi;
     expectedEvent: { name: EventName };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }): Promise<SingleEventResult<'event', any>>;
   async submitGovernance<EventSchema extends z.ZodTypeAny>(arg: {
     extrinsic: ExtrinsicFromApi;
@@ -116,18 +120,21 @@ export class ChainflipIO<Requirements> {
     const extrinsic = await arg.extrinsic(chainflipApi);
 
     // generate readable description for logging
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { section, method, args } = (extrinsic.toHuman() as any).method;
     const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
     this.logger.info(`Submitting governance extrinsic '${readable}' for snowwhite`);
 
-    // TODO we might want to move this function here eventually
+    // TODO we might want to move this functionality here eventually
     const proposalId = await submitExistingGovernanceExtrinsic(extrinsic);
     await this.stepUntilEvent(
       'Governance.Proposed',
-      governanceProposed.refine((id) => id == proposalId),
+      governanceProposed.refine((id) => id === proposalId),
     );
-    this.logger.info(`Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`);
+    this.logger.info(
+      `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
+    );
 
     // searching for event
     if (arg.expectedEvent) {
@@ -137,6 +144,7 @@ export class ChainflipIO<Requirements> {
       );
       return result;
     }
+    return proposalId;
   }
 
   /**
@@ -350,46 +358,3 @@ export const Err = <E>(error: E): Err<E> => ({
     throw new Error(`${error}`);
   },
 });
-
-// ------------ Extrinsic result ---------------
-
-class GovernanceExtrinsicResult {
-  private blockHeight: number;
-  private logger: Logger;
-
-  constructor(logger: Logger, blockHeight: number) {
-    this.blockHeight = blockHeight;
-    this.logger = logger;
-  }
-
-  // async expectEvent<S extends z.ZodTypeAny>(name: EventName): Promise<void>;
-  // async expectEvent<S extends z.ZodTypeAny>(name: EventName, schema: S): Promise<z.infer<S>>;
-
-  async expectEvent<S extends z.ZodTypeAny = z.ZodTypeAny>(name: EventName, schema?: S) {
-    const result = await findOneEventOfMany(
-      this.logger,
-      {
-        event: {
-          name: name,
-          schema: schema ?? z.any(),
-        },
-      },
-      {
-        startFromBlock: this.blockHeight,
-        endBeforeBlock: this.blockHeight + 1,
-      },
-    );
-    return result;
-  }
-}
-
-// ------------ misc ---------------
-
-function mapRecord<A, B, R extends Record<string, A>>(
-  input: R,
-  f: (event: A) => B,
-): { [K in keyof R]: B } {
-  return Object.fromEntries(Object.entries(input).map(([k, v]) => [k, f(v)])) as {
-    [K in keyof R]: B;
-  };
-}
