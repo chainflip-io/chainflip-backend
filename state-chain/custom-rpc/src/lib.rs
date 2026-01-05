@@ -1633,8 +1633,15 @@ where
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLendingPool<U256>>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_lending_pools(hash, asset).map(|lending_pools| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 12 {
+				#[expect(deprecated)]
+				api.cf_lending_pools_before_version_12(hash, asset)
+					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
+			} else {
+				api.cf_lending_pools(hash, asset)
+			}
+			.map(|lending_pools| {
 				lending_pools
 					.into_iter()
 					.map(|pool| RpcLendingPool::<U256> {
