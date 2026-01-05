@@ -28,7 +28,7 @@ import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
-import { Expect, newChainflipIO, StepUntil, WithAccount } from 'shared/utils/chainflip_io';
+import { newChainflipIO, } from 'shared/utils/chainflip_io';
 import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
@@ -110,32 +110,31 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
 }
 
 async function main(): Promise<void> {
-  const logger = loggerChild(globalLogger, 'setup_vaults');
-  const cf = await newChainflipIO(logger, []);
+  const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const solClient = getSolConnection();
 
   await using assethub = await getAssethubApi();
 
-  logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
-  logger.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
+  cf.info(`LP endpoint set to: ${lpApiEndpoint}`);
+  cf.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
 
-  logger.info('Performing initial Vault setup');
+  cf.info('Performing initial Vault setup');
 
   // Step 1
   await Promise.all([
-    initializeArbitrumChain(logger),
-    initializeSolanaChain(logger),
-    initializeAssethubChain(logger),
+    initializeArbitrumChain(cf.logger),
+    initializeSolanaChain(cf.logger),
+    initializeAssethubChain(cf.logger),
   ]);
 
   // Step 2
-  logger.info('Forcing rotation');
+  cf.info('Forcing rotation');
   await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
 
   // Step 3
-  logger.info('Waiting for new keys');
+  cf.info('Waiting for new keys');
   const keyEvents = await cf.stepUntilAllEventsOf({
     btc: {
       name: 'BitcoinVault.AwaitingGovernanceActivation',
@@ -165,16 +164,16 @@ async function main(): Promise<void> {
 
   const createAssethubVault = async () => {
     // Step a
-    logger.info('Requesting Assethub Vault creation');
+    cf.info('Requesting Assethub Vault creation');
     const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
-    logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+    cf.info(`AssetHub vault created, address: ${hubVaultAddress}`);
 
     // Step b
-    const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
+    const hubProxyAdded = observeEvent(cf.logger, 'proxy:ProxyAdded', {
       chain: 'assethub',
       timeoutSeconds: 120,
     }).event;
-    logger.info('Rotating Proxy and Funding Accounts on Assethub');
+    cf.info('Rotating Proxy and Funding Accounts on Assethub');
     const [, hubVaultEvent] = await Promise.all([
       rotateAndFund(assethub, hubVaultAddress, hubKey),
       hubProxyAdded,
@@ -184,13 +183,13 @@ async function main(): Promise<void> {
   };
 
   const insertArbitrumKey = async () => {
-    logger.info('Inserting Arbitrum key in the contracts');
-    await initializeArbitrumContracts(logger, arbClient, arbKey);
+    cf.info('Inserting Arbitrum key in the contracts');
+    await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
   };
 
   const insertSolanaKey = async () => {
-    logger.info('Inserting Solana key in the programs');
-    await initializeSolanaPrograms(logger, solKey);
+    cf.info('Inserting Solana key in the programs');
+    await initializeSolanaPrograms(cf.logger, solKey);
   };
 
   const [{ hubVaultAddress, hubVaultEvent }, a, b] = await Promise.all([
@@ -200,7 +199,7 @@ async function main(): Promise<void> {
   ]);
 
   // Step 7
-  logger.info('Registering Vaults with state chain');
+  cf.info('Registering Vaults with state chain');
 
   await cf.all([
     (cf) =>
@@ -238,15 +237,15 @@ async function main(): Promise<void> {
   ]);
 
   // Step 8
-  logger.info('Setting up price feeds');
-  await updateDefaultPriceFeeds(logger);
+  cf.info('Setting up price feeds');
+  await updateDefaultPriceFeeds(cf.logger);
 
   // Confirmation
-  logger.info('Waiting for new epoch...');
+  cf.info('Waiting for new epoch...');
   await cf.stepUntilEvent('Validator.NewEpoch', validatorNewEpoch);
 
-  logger.info('New Epoch');
-  logger.info('Vault Setup completed');
+  cf.info('New Epoch');
+  cf.info('Vault Setup completed');
   process.exit(0);
 }
 
