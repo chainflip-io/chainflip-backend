@@ -675,7 +675,7 @@ pub mod pallet {
 		#[pallet::call_index(10)]
 		#[pallet::weight({
 			let di = chainflip_extrinsic.call.get_dispatch_info();
-			let dispatch_weight = di.weight.saturating_add(T::WeightInfo::non_native_signed_call());
+			let dispatch_weight = di.call_weight.saturating_add(T::WeightInfo::non_native_signed_call());
 			(dispatch_weight, di.class)
 		})]
 		pub fn non_native_signed_call(
