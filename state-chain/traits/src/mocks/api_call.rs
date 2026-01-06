@@ -21,7 +21,7 @@ use cf_chains::{
 	ForeignChainAddress, RejectCall, RejectError, TransferAssetParams, TransferFallback,
 	TransferFallbackError, TransferForRejection,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
+use cf_primitives::{chains::assets, AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use frame_support::{
 	parameter_types, sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound,
@@ -161,7 +161,7 @@ pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: GasAmount,
+	gas_budget: AssetAmount,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEvmEnvironment>,
 }
@@ -171,7 +171,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -298,7 +298,7 @@ pub struct MockBtcExecutexSwapAndCall<MockBtcEnvironment> {
 	transfer_param: TransferAssetParams<Bitcoin>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: GasAmount,
+	gas_budget: AssetAmount,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockBtcEnvironment>,
 }
@@ -308,7 +308,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		transfer_param: TransferAssetParams<Bitcoin>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
