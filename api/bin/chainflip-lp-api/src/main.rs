@@ -48,7 +48,7 @@ use custom_rpc::CustomApiClient;
 use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
-use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
+use sc_rpc::utils::{BoundedVecDeque, PendingSubscription};
 use std::{
 	ops::Range,
 	path::PathBuf,
@@ -323,7 +323,9 @@ impl LpRpcApiServer for RpcServerImpl {
 				.boxed();
 
 				tokio::spawn(async move {
-					sc_rpc::utils::pipe_from_stream(pending_sink, stream).await;
+					PendingSubscription::from(pending_sink)
+						.pipe_from_stream(stream, BoundedVecDeque::default())
+						.await;
 				});
 			},
 			Err(e) => {
