@@ -33,7 +33,7 @@ pub use weights::WeightInfo;
 #[cfg(test)]
 mod tests;
 
-use cf_chains::{eth::Address as EthereumAddress, RegisterRedemption};
+use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,

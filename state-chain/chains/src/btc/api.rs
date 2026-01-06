@@ -154,7 +154,7 @@ impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for Bitc
 		_transfer_param: TransferAssetParams<Bitcoin>,
 		_source_chain: ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
-		_gas_budget: GasAmount,
+		_gas_budget: AssetAmount,
 		_message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {

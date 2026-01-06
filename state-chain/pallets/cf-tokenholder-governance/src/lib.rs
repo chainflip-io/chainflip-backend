@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{eth::Address, ForeignChain};
+use cf_chains::{evm::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::*, traits::StorageVersion, RuntimeDebugNoBound};

@@ -17,7 +17,9 @@
 use super::*;
 use crate::eth::deposit_address::get_salt;
 use cf_primitives::{AssetAmount, ChannelId};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{ParamType, Token};
+use sp_core::H160 as Address;
+use sp_std::vec;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableFetchAssetParams {
@@ -27,7 +29,10 @@ pub(crate) struct EncodableFetchAssetParams {
 
 impl Tokenizable for EncodableFetchAssetParams {
 	fn tokenize(self) -> Token {
-		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
+		Token::Tuple(vec![
+			Token::Address(ethabi::ethereum_types::H160(self.contract_address.0)),
+			Token::Address(ethabi::ethereum_types::H160(self.asset.0)),
+		])
 	}
 
 	fn param_type() -> ethabi::ParamType {
@@ -45,7 +50,7 @@ impl Tokenizable for EncodableFetchDeployAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
 			Token::FixedBytes(get_salt(self.channel_id).to_vec()),
-			Token::Address(self.asset),
+			Token::Address(ethabi::ethereum_types::H160(self.asset.0)),
 		])
 	}
 
@@ -65,9 +70,9 @@ pub struct EncodableTransferAssetParams {
 impl Tokenizable for EncodableTransferAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::Address(self.asset),
-			Token::Address(self.to),
-			Token::Uint(Uint::from(self.amount)),
+			Token::Address(ethabi::ethereum_types::H160(self.asset.0)),
+			Token::Address(ethabi::ethereum_types::H160(self.to.0)),
+			Token::Uint(ethabi::Uint::from(self.amount)),
 		])
 	}
 

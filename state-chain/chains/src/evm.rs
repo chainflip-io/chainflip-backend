@@ -20,23 +20,19 @@ pub mod tokenizable;
 
 use crate::*;
 use cf_primitives::ChannelId;
-use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::ParamType;
-pub use ethabi::{
-	encode,
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+use ethabi::{ParamType, Token, Uint};
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
-	traits::{Hash, Keccak256},
+	traits::{Hash as _, Keccak256},
 	AccountId32, RuntimeDebug,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-pub use sp_core::{ecdsa::Signature, ConstBool};
+pub use sp_core::{ecdsa::Signature, ConstBool, H256, U256};
 use sp_std::{convert::TryFrom, str, vec};
+
+pub use sp_core::{H160 as Address, H256 as Hash};
 
 use crate::DepositDetailsToTransactionInId;
 
@@ -418,11 +414,11 @@ pub struct SchnorrVerificationComponents {
 )]
 pub struct Transaction {
 	pub chain_id: u64,
-	pub max_priority_fee_per_gas: Option<Uint>, // EIP-1559
-	pub max_fee_per_gas: Option<Uint>,
-	pub gas_limit: Option<Uint>,
+	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
+	pub max_fee_per_gas: Option<U256>,
+	pub gas_limit: Option<U256>,
 	pub contract: Address,
-	pub value: Uint,
+	pub value: U256,
 	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
 }
@@ -442,10 +438,10 @@ pub struct Transaction {
 	PartialOrd,
 )]
 pub struct EvmTransactionMetadata {
-	pub max_fee_per_gas: Option<Uint>,
-	pub max_priority_fee_per_gas: Option<Uint>,
+	pub max_fee_per_gas: Option<U256>,
+	pub max_priority_fee_per_gas: Option<U256>,
 	pub contract: Address,
-	pub gas_limit: Option<Uint>,
+	pub gas_limit: Option<U256>,
 }
 
 impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMetadata<C>
@@ -719,8 +715,8 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 )]
 pub struct TransactionFee {
 	// priority + base
-	pub effective_gas_price: EthAmount,
-	pub gas_used: u128,
+	pub effective_gas_price: AssetAmount,
+	pub gas_used: AssetAmount,
 }
 
 impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
@@ -1001,9 +997,6 @@ fn metadata_verification() {
 	// Wrong contract address.
 	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
 		&submitted_metadata,
-		&EvmTransactionMetadata {
-			contract: ethereum_types::H160::repeat_byte(1u8),
-			..submitted_metadata
-		}
+		&EvmTransactionMetadata { contract: sp_core::H160::repeat_byte(1u8), ..submitted_metadata }
 	));
 }

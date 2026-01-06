@@ -66,14 +66,13 @@ use cf_chains::{
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
 	},
 	eth::{
-		self,
 		api::{EthereumApi, StateChainGatewayAddressProvider},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
 	evm::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
-		EvmCrypto, Transaction,
+		Address as EvmAddress, EvmCrypto, Transaction,
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{

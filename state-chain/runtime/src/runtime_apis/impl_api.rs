@@ -37,8 +37,7 @@ use cf_chains::{
 	assets::any::AssetMap,
 	btc::{api::BitcoinApi, ScriptPubkey},
 	cf_parameters::build_and_encode_cf_parameters,
-	eth::Address as EthereumAddress,
-	evm::{api::EvmCall, U256},
+	evm::{api::EvmCall, Address as EvmAddress, U256},
 	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
 	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
@@ -663,13 +662,13 @@ impl_runtime_apis! {
 		fn cf_is_auction_phase() -> bool {
 			Validator::is_auction_phase()
 		}
-		fn cf_eth_flip_token_address() -> EthereumAddress {
+		fn cf_eth_flip_token_address() -> EvmAddress {
 			Environment::supported_eth_assets(cf_primitives::chains::assets::eth::Asset::Flip).expect("FLIP token address should exist")
 		}
-		fn cf_eth_state_chain_gateway_address() -> EthereumAddress {
+		fn cf_eth_state_chain_gateway_address() -> EvmAddress {
 			Environment::state_chain_gateway_address()
 		}
-		fn cf_eth_key_manager_address() -> EthereumAddress {
+		fn cf_eth_key_manager_address() -> EvmAddress {
 			Environment::key_manager_address()
 		}
 		fn cf_eth_chain_id() -> u64 {
@@ -1899,7 +1898,7 @@ impl_runtime_apis! {
 		}
 
 		fn cf_evm_calldata(
-			caller: EthereumAddress,
+			caller: EvmAddress,
 			call: EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage> {
 			use cf_chains::evm::api::sc_utils::deposit_flip_to_sc_gateway_and_call::{DepositToSCGatewayAndCall};

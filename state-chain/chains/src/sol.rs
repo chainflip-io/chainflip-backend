@@ -17,7 +17,7 @@
 pub use cf_primitives::chains::Solana;
 
 use cf_primitives::{
-	AffiliateAndFee, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
+	AffiliateAndFee, AssetAmount, BasisPoints, Beneficiary, ChannelId, DcaParameters, ForeignChain,
 	IngressOrEgress,
 };
 use sol_prim::program_instructions::FunctionDiscriminator;
@@ -256,7 +256,7 @@ pub struct SolTrackedData {
 
 impl SolTrackedData {
 	pub fn calculate_ccm_compute_limit(
-		gas_budget: cf_primitives::GasAmount,
+		gas_budget: AssetAmount,
 		asset: SolAsset,
 	) -> SolComputeLimit {
 		use compute_units_costs::*;

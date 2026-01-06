@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ethers::prelude::*;
-use sp_core::H160;
 use std::str::FromStr;
 
 use anyhow::{Ok, Result};

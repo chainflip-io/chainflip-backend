@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cached_rpc;
-pub mod event;
 pub mod retry_rpc;
 pub mod rpc;
 

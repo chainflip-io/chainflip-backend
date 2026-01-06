@@ -29,7 +29,7 @@ use cf_primitives::{
 use core::str::FromStr;
 
 #[cfg(feature = "runtime-benchmarks")]
-use ethereum_types::{H160, U256};
+use sp_core::{H160, U256};
 
 #[cfg(feature = "runtime-benchmarks")]
 use sp_std::vec;

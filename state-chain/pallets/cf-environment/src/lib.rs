@@ -32,8 +32,7 @@ use cf_chains::{
 		AggKey, Bitcoin, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
-	eth::Address as EvmAddress,
-	evm::{verify_evm_signature, Signature as EthereumSignature},
+	evm::{verify_evm_signature, Address as EvmAddress, Signature as EthereumSignature},
 	hub::{Assethub, OutputAccountId},
 	sol::{
 		api::{DurableNonceAndAccount, SolanaApi, SolanaEnvironment, SolanaGovCall},

@@ -85,7 +85,7 @@ where
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -259,7 +259,7 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

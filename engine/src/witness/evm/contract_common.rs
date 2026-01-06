@@ -70,7 +70,7 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 
 pub async fn events_at_block_deprecated<Chain, EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
-	contract_address: H160,
+	contract_address: EvmAddress,
 	eth_rpc: &EvmRpcClient,
 ) -> Result<Vec<Event<EventParameters>>>
 where

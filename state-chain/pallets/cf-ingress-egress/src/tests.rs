@@ -33,8 +33,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::{any::Asset, eth::Asset as EthAsset},
 	btc::{BitcoinNetwork, ScriptPubkey},
-	eth::Address as EthereumAddress,
-	evm::{DepositDetails, EvmFetchId, H256},
+	evm::{Address as EthereumAddress, DepositDetails, EvmFetchId, Hash as EvmHash},
 	mocks::MockEthereum,
 	AccountOrAddress, CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 	CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
@@ -2315,7 +2314,7 @@ fn submit_vault_swap_request(
 	deposit_address: H160,
 	destination_address: EncodedAddress,
 	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
-	tx_id: H256,
+	tx_id: EvmHash,
 	deposit_details: DepositDetails,
 	broker_fee: Beneficiary<u64>,
 	affiliate_fees: Affiliates<AffiliateShortId>,
@@ -2386,7 +2385,7 @@ fn can_request_swap_via_extrinsic() {
 					},
 					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 					origin: SwapOrigin::Vault {
-						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					remaining_input_amount: INPUT_AMOUNT,
@@ -2463,7 +2462,7 @@ fn vault_swaps_support_affiliate_fees() {
 						Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 					],
 					origin: SwapOrigin::Vault {
-						tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: cf_chains::TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					remaining_input_amount: INPUT_AMOUNT,
@@ -2572,7 +2571,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 					},
 					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 					origin: SwapOrigin::Vault {
-						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					accumulated_output_amount: 0,
@@ -2836,7 +2835,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		},
 		boost_fee: 5,
 		channel_id: None,
-		origin: DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
+		origin: DepositOrigin::Vault { tx_id: EvmHash::default(), broker_id: Some(BROKER) },
 	};
 
 	let full_witness = |boost_status| {
@@ -2953,7 +2952,7 @@ mod evm_transaction_rejection {
 		TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
-		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
+		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
 		DepositDetailsToTransactionInId, Ethereum, FetchForRejection,
 	};
 	use cf_traits::{
@@ -2968,11 +2967,11 @@ mod evm_transaction_rejection {
 	fn deposit_with_multiple_txs() {
 		new_test_ext().execute_with(|| {
 			let tx_ids = vec![
-				H256::from_str(
+				EvmHash::from_str(
 					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 				)
 				.unwrap(),
-				H256::from_str(
+				EvmHash::from_str(
 					"0x3214567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 				)
 				.unwrap(),
@@ -3045,7 +3044,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn deposit_with_single_tx() {
 		new_test_ext().execute_with(|| {
-			let tx_id = H256::from_str(
+			let tx_id = EvmHash::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			)
 			.unwrap();
@@ -3137,7 +3136,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
 		new_test_ext().execute_with(|| {
-			let tx_id = H256::from_str(
+			let tx_id = EvmHash::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			)
 			.unwrap();
@@ -3200,10 +3199,10 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn whitelisted_broker_can_reject_two_concurrent_swap_deposits() {
-		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xaa);
-		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xbb);
-		const COMMINGLED_TX_ID: H256 = H256::repeat_byte(0xcc);
-		const CLEAN_TX_ID: H256 = H256::repeat_byte(0xdd);
+		const TAINTED_TX_ID_1: EvmHash = EvmHash::repeat_byte(0xaa);
+		const TAINTED_TX_ID_2: EvmHash = EvmHash::repeat_byte(0xbb);
+		const COMMINGLED_TX_ID: EvmHash = EvmHash::repeat_byte(0xcc);
+		const CLEAN_TX_ID: EvmHash = EvmHash::repeat_byte(0xdd);
 
 		new_test_ext()
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
@@ -3382,7 +3381,7 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn mark_after_prewitness_has_no_effect() {
-		const TAINTED_TX_ID: H256 = H256::repeat_byte(0xab);
+		const TAINTED_TX_ID: EvmHash = EvmHash::repeat_byte(0xab);
 		const DEPOSIT_AMOUNT: AssetAmount = 1_000_000;
 
 		new_test_ext()
@@ -3494,8 +3493,8 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn boosted_transaction_can_be_rejected_by_whitelisted_broker_or_owner() {
-		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xab);
-		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xcd);
+		const TAINTED_TX_ID_1: EvmHash = EvmHash::repeat_byte(0xab);
+		const TAINTED_TX_ID_2: EvmHash = EvmHash::repeat_byte(0xcd);
 
 		new_test_ext()
 			// Add boost liquidity
@@ -3596,7 +3595,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn rejecting_vault_swap() {
 		let tx_id =
-			H256::from_str("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+			EvmHash::from_str("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 				.unwrap();
 
 		new_test_ext()
@@ -3713,7 +3712,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: None,
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
@@ -3740,7 +3739,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
@@ -3767,7 +3766,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {

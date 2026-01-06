@@ -34,7 +34,7 @@ pub struct ExecutexSwapAndCall {
 	/// The source address of the transfer.
 	pub source_address: Vec<u8>,
 	/// Gas units that can be used by this call on the target chain.
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 	/// Message that needs to be passed through.
 	pub message: Vec<u8>,
 }
@@ -44,7 +44,7 @@ impl ExecutexSwapAndCall {
 		transfer_param: EncodableTransferAssetParams,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 	) -> Self {
 		Self {
@@ -78,7 +78,7 @@ impl EvmCall for ExecutexSwapAndCall {
 		]
 	}
 
-	fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		Some((self.gas_budget, self.message.len(), self.transfer_param.asset))
 	}
 }
@@ -91,11 +91,10 @@ mod test_execute_x_swap_and_execute {
 		eth::api::abi::load_abi,
 		evm::{
 			api::{EvmReplayProtection, EvmTransactionBuilder},
-			SchnorrVerificationComponents,
+			Address, SchnorrVerificationComponents,
 		},
 		ForeignChainAddress,
 	};
-	use ethabi::Address;
 
 	#[test]
 	fn test_payload() {
@@ -106,7 +105,7 @@ mod test_execute_x_swap_and_execute {
 		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
-		const GAS_BUDGET: GasAmount = 100_000_u128;
+		const GAS_BUDGET: AssetAmount = 100_000_u128;
 
 		let dummy_transfer_asset_param = EncodableTransferAssetParams {
 			asset: Address::from_slice(&[5; 20]),
@@ -167,7 +166,7 @@ mod test_execute_x_swap_and_execute {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
