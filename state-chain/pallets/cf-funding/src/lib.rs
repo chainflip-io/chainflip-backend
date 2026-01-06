@@ -34,7 +34,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::{evm::Address as EthereumAddress, RegisterRedemption};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthAmount};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, AssetAmount};
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
@@ -1191,9 +1191,9 @@ derive_common_traits! {
 derive_common_traits! {
 	#[derive(PartialOrd, Ord, TypeInfo)]
 	pub enum EthereumDeposit {
-		FlipToSCGateway { amount: EthAmount },
-		Vault { asset: EthAsset, amount: EthAmount },
-		Transfer { asset: EthAsset, amount: EthAmount, destination: EthereumAddress },
+		FlipToSCGateway { amount: AssetAmount },
+		Vault { asset: EthAsset, amount: AssetAmount },
+		Transfer { asset: EthAsset, amount: AssetAmount, destination: EthereumAddress },
 		NoDeposit,
 	}
 }

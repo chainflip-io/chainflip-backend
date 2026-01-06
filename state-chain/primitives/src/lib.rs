@@ -105,11 +105,7 @@ pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
 
-pub type EthAmount = u128;
-
 pub type AssetAmount = u128;
-
-pub type GasAmount = u128;
 
 pub type BasisPoints = u16;
 
@@ -598,5 +594,5 @@ pub enum IngressOrEgress {
 	IngressDepositChannel,
 	IngressVaultSwap,
 	Egress,
-	EgressCcm { gas_budget: GasAmount, message_length: usize },
+	EgressCcm { gas_budget: AssetAmount, message_length: usize },
 }

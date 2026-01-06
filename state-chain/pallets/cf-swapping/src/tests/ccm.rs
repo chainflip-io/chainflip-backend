@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use cf_primitives::GasAmount;
+use cf_primitives::AssetAmount;
 use cf_traits::SwapOutputActionEncoded;
 use sp_core::H256;
 
@@ -67,7 +67,7 @@ fn init_ccm_swap_request(input_asset: Asset, output_asset: Asset, input_amount: 
 }
 
 #[track_caller]
-pub(super) fn assert_ccm_egressed(asset: Asset, swap_amount: AssetAmount, gas_budget: GasAmount) {
+pub(super) fn assert_ccm_egressed(asset: Asset, swap_amount: AssetAmount, gas_budget: AssetAmount) {
 	assert_has_matching_event!(
 		Test,
 		RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {

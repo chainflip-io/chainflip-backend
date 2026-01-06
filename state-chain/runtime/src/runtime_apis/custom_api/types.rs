@@ -21,7 +21,7 @@ use cf_chains::{
 	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain, GasAmount};
+use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -416,7 +416,7 @@ pub struct BrokerInfo<BtcAddress> {
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct CcmData {
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 	pub message_length: u32,
 }
 

@@ -46,9 +46,9 @@ use cf_chains::{
 	TransferAssetParams, TransferFallback, TransferForRejection,
 };
 use cf_primitives::{
-	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
-	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
+	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
+	EpochIndex, ForeignChain, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
 	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -324,7 +324,7 @@ pub struct CrossChainMessage<C: Chain> {
 	pub source_chain: ForeignChain,
 	pub source_address: Option<ForeignChainAddress>,
 	pub ccm_additional_data: DecodedCcmAdditionalData,
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 }
 
 impl<C: Chain> CrossChainMessage<C> {

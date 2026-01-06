@@ -20,7 +20,7 @@ use cf_chains::{
 	ccm_checker::DecodedCcmAdditionalData, CcmDepositMetadataChecked, CcmMessage, Chain,
 	ForeignChainAddress,
 };
-use cf_primitives::{AssetAmount, EgressCounter, GasAmount};
+use cf_primitives::{AssetAmount, EgressCounter};
 use codec::{Decode, Encode};
 use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
@@ -49,7 +49,7 @@ pub enum MockEgressParameter<C: Chain> {
 		destination_address: C::ChainAccount,
 		message: CcmMessage,
 		ccm_additional_data: DecodedCcmAdditionalData,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 	},
 }
 
