@@ -182,7 +182,7 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 		(Weight::zero(), DispatchClass::Operational),
 		|(total_weight, dispatch_class): (Weight, DispatchClass), di| {
 			(
-				total_weight.saturating_add(di.weight),
+				total_weight.saturating_add(di.call_weight),
 				// If not all are `Operational`, we want to use `DispatchClass::Normal`.
 				if di.class == DispatchClass::Normal { di.class } else { dispatch_class },
 			)

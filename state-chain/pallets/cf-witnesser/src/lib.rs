@@ -229,7 +229,7 @@ pub mod pallet {
 					witnessed_calls_storage
 						.extract_if(.., |(_, call, _)| {
 							let next_weight =
-								used_weight.saturating_add(call.get_dispatch_info().weight);
+								used_weight.saturating_add(call.get_dispatch_info().call_weight);
 							if remaining_weight.all_gte(next_weight) &&
 								safe_mode.should_dispatch(call)
 							{
@@ -437,7 +437,7 @@ pub mod pallet {
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::call_index(0)]
 		#[pallet::weight((
-			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
+			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().call_weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
 		, DispatchClass::Operational))]
 		pub fn witness_at_epoch(
@@ -540,7 +540,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(T::WeightInfo::force_witness().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(T::WeightInfo::force_witness().saturating_add(call.get_dispatch_info().call_weight))]
 		pub fn force_witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -573,7 +573,7 @@ pub mod pallet {
 		/// Emits an event to notify that this call has been witnessed. Then, it dispatches the call
 		/// using the prewitness threshold origin.
 		#[pallet::call_index(3)]
-		#[pallet::weight(call.get_dispatch_info().weight)]
+		#[pallet::weight(call.get_dispatch_info().call_weight)]
 		pub fn prewitness_and_execute(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,

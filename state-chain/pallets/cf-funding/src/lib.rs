@@ -894,7 +894,7 @@ pub mod pallet {
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::execute_sc_call().saturating_add(
 			T::EthereumSCApi::decode(&mut &deposit_and_call.call[..])
-			.map( |c| c.get_dispatch_info().weight)
+			.map( |c| c.get_dispatch_info().call_weight)
 			.unwrap_or(Weight::zero())))]
 		pub fn execute_sc_call(
 			origin: OriginFor<T>,
