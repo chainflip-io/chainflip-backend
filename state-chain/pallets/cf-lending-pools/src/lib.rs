@@ -91,7 +91,18 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
@@ -137,7 +148,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum PalletConfigUpdate {
 	SetNetworkFeeDeductionFromBoost {
 		deduction_percent: Percent,
@@ -182,13 +193,15 @@ define_wrapper_type!(CorePoolId, u32);
 const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per extrinsic
 
 // Rename this to LoanPurpose?
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialOrd, Ord,
+)]
 pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
 /// Indicates how the action of adding collateral was triggered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum CollateralAddedActionType {
 	/// Triggered manually by the user. Collateral is taken from the user's free balance.
 	Manual,
@@ -201,7 +214,7 @@ pub enum CollateralAddedActionType {
 }
 
 /// Indicates how the action of repaying a loan was triggered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum LoanRepaidActionType {
 	/// Triggered manually by the user. Loan is repaid from the user's free balance.
 	Manual,

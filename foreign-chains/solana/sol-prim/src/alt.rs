@@ -17,7 +17,7 @@
 pub use crate::{
 	short_vec, Address, CompileError, CompiledInstruction, Digest, Instruction, Pubkey, Signature,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -25,7 +25,17 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 /// Address table lookups describe an on-chain address lookup table to use
 /// for loading more readonly and writable accounts in a single tx.
 #[derive(
-	Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo,
+	Serialize,
+	Deserialize,
+	Default,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct MessageAddressTableLookup {
@@ -52,6 +62,7 @@ pub struct MessageAddressTableLookup {
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Ord,
 	PartialOrd,

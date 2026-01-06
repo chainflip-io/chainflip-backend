@@ -30,7 +30,7 @@ pub use serializable_address::*;
 
 pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::str::FromStr;
 use frame_support::sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
@@ -44,7 +44,18 @@ use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
 
 #[cfg_attr(feature = "std", derive(Hash))]
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Eq,
+	PartialEq,
+	Clone,
+	Serialize,
+	Deserialize,
+)]
 pub struct PolkadotSignature(sr25519::Signature);
 impl PolkadotSignature {
 	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {
@@ -107,6 +118,7 @@ impl PolkadotPair {
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	PartialEq,
 	Eq,
@@ -157,6 +169,7 @@ pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Default,
 	MaxEncodedLen,
@@ -231,7 +244,7 @@ pub const RAW_SEED_3: [u8; 32] =
 pub const NONCE_3: u32 = 0; //correct nonce has to be provided for this account (see/track onchain)
 
 // FROM: https://github.com/paritytech/polkadot/blob/v0.9.33/runtime/polkadot/src/lib.rs
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum PolkadotProxyType {
 	Any = 0,
 	NonTransfer = 1,
@@ -243,11 +256,21 @@ pub enum PolkadotProxyType {
 	Auction = 7,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
 
 #[derive(
-	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
 )]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
@@ -335,7 +358,17 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
 )]
 pub struct PolkadotTransactionId {
 	pub block_number: PolkadotBlockNumber,
@@ -372,7 +405,18 @@ impl Chain for Polkadot {
 
 pub type ResetProxyAccountNonce = bool;
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
+#[derive(
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Default,
+)]
 pub struct PolkadotChannelState;
 
 /// Polkadot channels should always be recycled because we are limited to u16::MAX channels.
@@ -418,7 +462,9 @@ impl ChainCrypto for PolkadotCrypto {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub struct PolkadotTransactionData {
 	pub encoded_extrinsic: Vec<u8>,
 }
@@ -438,7 +484,7 @@ pub struct CurrentVaultAndProxy {
 }
 
 /// The builder for creating and signing polkadot extrinsics, and creating signature payload
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicBuilder {
 	pub extrinsic_call: PolkadotRuntimeCall,
 	pub replay_protection: PolkadotReplayProtection,
@@ -530,7 +576,7 @@ impl PolkadotExtrinsicBuilder {
 }
 
 // The Polkadot Runtime type that is expected by the polkadot runtime
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum PolkadotRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
@@ -540,8 +586,6 @@ pub enum PolkadotRuntimeCall {
 	Utility(UtilityCall),
 	#[codec(index = 29u8)] // INDEX FOR WESTEND: 22, FOR POLKADOT: 29
 	Proxy(ProxyCall),
-	#[codec(index = 99u8)] // INDEX FOR WESTEND: ?, FOR POLKADOT: 99
-	Xcm(Box<XcmCall>),
 }
 
 /// Dummy implementation of the Dispatchable trait for PolkadotRuntimeCall.
@@ -562,13 +606,13 @@ impl Dispatchable for PolkadotRuntimeCall {
 	}
 }
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
 impl DepositDetailsToTransactionInId<PolkadotCrypto> for u32 {}
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
 	///
@@ -611,7 +655,7 @@ pub enum BalancesCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum UtilityCall {
 	/// Send a batch of dispatch calls.
 	///
@@ -698,7 +742,7 @@ pub enum UtilityCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum ProxyCall {
 	/// Dispatch the given `call` from an account that the sender is authorised for through
 	/// `add_proxy`.
@@ -947,13 +991,13 @@ pub enum ProxyCall {
 		call: Box<PolkadotRuntimeCall>,
 	},
 }
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotChargeTransactionPayment(#[codec(compact)] pub PolkadotBalance);
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckNonce(#[codec(compact)] pub PolkadotIndex);
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotCheckMortality(pub Era);
 
 /// Temporarily copied from https://github.com/chainflip-io/polkadot-sdk/blob/8dbe4ee80734bba6644c7e5f879a363ce7c0a19f/substrate/frame/metadata-hash-extension/src/lib.rs
@@ -962,7 +1006,9 @@ pub mod polkadot_sdk_types {
 	use super::*;
 
 	/// The mode of [`CheckMetadataHash`].
-	#[derive(Decode, Encode, PartialEq, Debug, TypeInfo, Clone, Copy, Eq)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo, Clone, Copy, Eq,
+	)]
 	enum Mode {
 		Disabled,
 		Enabled,
@@ -970,7 +1016,9 @@ pub mod polkadot_sdk_types {
 
 	pub type MetadataHash = Option<[u8; 32]>;
 
-	#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo, DebugNoBound)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo, DebugNoBound,
+	)]
 	pub struct CheckMetadataHash {
 		mode: Mode,
 		#[codec(skip)]
@@ -984,7 +1032,7 @@ pub mod polkadot_sdk_types {
 	}
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotSignedExtra(
 	pub  (
 		(),
@@ -1064,7 +1112,7 @@ impl TransactionExtension<PolkadotRuntimeCall> for PolkadotSignedExtra {
 
 pub type PolkadotPublicKey = PolkadotAccountId;
 
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
 	pub signer: PolkadotAccountId,

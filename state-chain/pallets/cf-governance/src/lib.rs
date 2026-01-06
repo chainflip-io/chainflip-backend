@@ -80,21 +80,27 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Default, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub enum ExecutionMode {
 		#[default]
 		Automatic,
 		Manual,
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
 		pub expiry_time: Timestamp,
 	}
 
 	/// Proposal struct
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
@@ -104,7 +110,17 @@ pub mod pallet {
 		pub execution: ExecutionMode,
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, DefaultNoBound)]
+	#[derive(
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Clone,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		DefaultNoBound,
+	)]
 	pub struct GovernanceCouncil<AccountId> {
 		/// Set of accounts which are members of governance.
 		pub members: BTreeSet<AccountId>,
@@ -479,7 +495,17 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	pub enum RawOrigin {
 		GovernanceApproval,
 	}

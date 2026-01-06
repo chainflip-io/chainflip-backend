@@ -19,7 +19,7 @@ use crate::{
 	evm::{api::EvmCall, tokenizable::Tokenizable, Address},
 };
 use cf_primitives::{Asset, AssetAmount};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
@@ -28,7 +28,7 @@ use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'XSwapToken'
 /// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct XSwapToken {
 	/// The destination chain according to Chainflip Protocol's nomenclature.
 	dst_chain: u32,

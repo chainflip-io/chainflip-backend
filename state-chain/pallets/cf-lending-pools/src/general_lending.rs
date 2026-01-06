@@ -25,14 +25,26 @@ pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 pub use general_lending_pool::{LendingPool, WithdrawnAndRemainingAmounts};
 
 /// Helps to link swap id in liquidation status to loan id
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct LiquidationSwap {
 	loan_id: LoanId,
 	from_asset: Asset,
 	to_asset: Asset,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum LiquidationType {
 	SoftVoluntary,
 	Soft,
@@ -41,7 +53,7 @@ pub enum LiquidationType {
 
 /// Whether the account's collateral is being liquidated (and if so, stores ids of liquidation
 /// swaps)
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum LiquidationStatus {
 	NoLiquidation,
 	Liquidating {
@@ -51,7 +63,7 @@ pub enum LiquidationStatus {
 }
 
 /// High precision interest amounts broken down by type
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct InterestBreakdown {
 	network: ScaledAmountHP,
 	pool: ScaledAmountHP,
@@ -59,7 +71,7 @@ pub struct InterestBreakdown {
 	low_ltv_penalty: ScaledAmountHP,
 }
 
-#[derive(Clone, Copy, Debug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 pub enum LiquidationCompletionReason {
 	/// Full liquidation (loans are fully repaid and/or all collateral has been swapped)
 	FullySwapped,
@@ -69,7 +81,7 @@ pub enum LiquidationCompletionReason {
 	ManualAbort,
 }
 
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct LoanAccount<T: Config> {
 	borrower_id: T::AccountId,
@@ -855,7 +867,7 @@ impl<T: Config> LoanAccount<T> {
 	}
 }
 
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct GeneralLoan<T: Config> {
 	pub id: LoanId,

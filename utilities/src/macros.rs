@@ -4,7 +4,7 @@
 macro_rules! derive_common_traits {
 	($($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
+			Debug, Clone, PartialEq, Eq, codec::Encode, codec::Decode, codec::DecodeWithMemTracking,
 		)]
 		#[derive(Deserialize, Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
