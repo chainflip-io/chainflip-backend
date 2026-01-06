@@ -50,7 +50,7 @@ import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logg
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
-import { Err, Ok, Result } from './utils/chainflip_io';
+import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -599,15 +599,15 @@ function checkTransactionInMatches(actual: any, expected: TransactionOriginId): 
   throw new Error(`Unsupported transaction origin type ${actual}`);
 }
 
-export async function observeSwapRequested(
-  logger: Logger,
+export async function observeSwapRequested<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
   // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent(logger, 'swapping:SwapRequested', {
+  return observeEvent(cf.logger, 'swapping:SwapRequested', {
     timeoutSeconds: 150,
     test: (event) => {
       const data = event.data;

@@ -64,7 +64,7 @@ async function testDCASwap<A = []>(
 
     const depositChannelId = swapRequest.channelId;
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: depositChannelId },
@@ -92,7 +92,7 @@ async function testDCASwap<A = []>(
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       inputAsset,
       destAsset,
       transactionId,

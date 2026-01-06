@@ -112,7 +112,7 @@ async function executeAndTrackCcmSwap<A = []>(
     messageMetadata,
   );
   const swapRequestedHandle = observeSwapRequested(
-    cf.logger,
+    cf,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },

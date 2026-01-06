@@ -30,14 +30,7 @@ async function rotatesThroughBtcSwap<A = []>(cf: ChainflipIO<A>, testContext: Te
   await newEpochEvent;
   subCf.info('Vault rotated!');
 
-  await doPerformSwap(
-    subCf.logger,
-    swapParams,
-    undefined,
-    undefined,
-    undefined,
-    testContext.swapContext,
-  );
+  await doPerformSwap(subCf, swapParams, undefined, undefined, undefined, testContext.swapContext);
 }
 
 export async function testRotatesThroughBtcSwap(testContext: TestContext) {

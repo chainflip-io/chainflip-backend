@@ -82,7 +82,7 @@ async function testMinPriceRefund<A = []>(
     );
     const depositAddress = swapRequest.depositAddress;
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
@@ -107,7 +107,7 @@ async function testMinPriceRefund<A = []>(
     );
 
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       sourceAsset,
       destAsset,
       transactionId,
