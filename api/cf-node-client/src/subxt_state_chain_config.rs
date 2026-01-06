@@ -22,7 +22,6 @@ pub enum StateChainConfig {}
 
 impl Config for StateChainConfig {
 	// We cannot use our own Runtime's types for every associated type here, see comments below.
-	type Hash = subxt::utils::H256;
 	type AccountId = subxt::utils::AccountId32; // Requires EncodeAsType trait (which our AccountId doesn't)
 	type Address = subxt::utils::MultiAddress<Self::AccountId, ()>; // Must be convertible from Self::AccountId
 	type Signature = state_chain_runtime::Signature;

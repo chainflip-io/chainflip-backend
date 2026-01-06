@@ -27,10 +27,7 @@ use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use futures_core::Stream;
 use std::pin::Pin;
-use subxt::{
-	backend::legacy::rpc_methods::Bytes, config::Header as SubxtHeader, events::Events,
-	PolkadotConfig,
-};
+use subxt::{backend::legacy::rpc_methods::Bytes, events::Events, PolkadotConfig};
 
 use crate::retrier::{RequestLog, RetrierClient};
 
@@ -213,11 +210,11 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 pub trait DotRetrySubscribeApi {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>>;
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>>;
 }
 
 use crate::dot::rpc::DotSubscribeApi;
@@ -226,7 +223,7 @@ use crate::dot::rpc::DotSubscribeApi;
 impl DotRetrySubscribeApi for DotRetryRpcClient {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>> {
 		self.sub_retry_client
 			.request(
 				RequestLog::new("subscribe_best_heads".to_string(), None),
@@ -239,7 +236,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<(PolkadotHash, PolkadotHeader)>> + Send>> {
 		self.sub_retry_client
 			.request(
 				RequestLog::new("subscribe_finalized_heads".to_string(), None),
@@ -287,7 +284,7 @@ impl ChainClient for DotRetryRpcClient {
 							.ok_or(anyhow!("No events found for block hash {block_hash:?}"))?;
 						Ok(Header {
 							index,
-							hash: header.hash(),
+							hash: block_hash,
 							parent_hash: Some(header.parent_hash),
 							data: events,
 						})
