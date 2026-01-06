@@ -16,7 +16,7 @@
 
 use crate::events_decoder::DynamicEvents;
 use cf_primitives::TxIndex;
-use frame_support::dispatch::DispatchInfo;
+use frame_system::DispatchEventInfo;
 use sp_core::H256;
 use state_chain_runtime::RuntimeEvent;
 
@@ -31,7 +31,7 @@ pub struct ExtrinsicData<Events> {
 	pub tx_hash: H256,
 	pub events: Events,
 	pub header: state_chain_runtime::Header,
-	pub dispatch_info: DispatchInfo,
+	pub dispatch_info: DispatchEventInfo,
 	pub block_hash: state_chain_runtime::Hash,
 	pub tx_index: TxIndex,
 }
