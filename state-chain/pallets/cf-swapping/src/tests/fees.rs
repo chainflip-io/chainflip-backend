@@ -504,7 +504,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			501 // 1 leg swap, so 1/2 of input + rounding error
+			500 // 1 leg swap, so 1/2 of input
 		);
 
 		assert_eq!(
@@ -515,7 +515,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				true,
 				false
 			),
-			506 // 1 leg swap + 1% network fee
+			505 // 1 leg swap + 1% network fee
 		);
 
 		assert_eq!(
@@ -526,7 +526,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				false,
 				false
 			),
-			251 // 2 leg swap, so 1/4th of input + rounding error
+			250 // 2 leg swap, so 1/4th of input
 		);
 
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
@@ -1182,10 +1182,10 @@ fn test_refund_fee_calculation() {
 		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
 		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
-		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE + rounding error = 6
+		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
 		// Note: Using Flip here because it uses swap simulation for conversion instead of
 		// oracle price.
-		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (994, 6));
+		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
 		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
 		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));
 
@@ -1195,7 +1195,7 @@ fn test_refund_fee_calculation() {
 			minimum: 30,
 		});
 		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
-		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (984, 16));
+		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (985, 15));
 	});
 }
 

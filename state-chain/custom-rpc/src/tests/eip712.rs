@@ -46,7 +46,7 @@ fn test_swap_request_call() {
 			dca_params: None,
 		}));
 
-	assert_eq!(hash, "c45381b9dbc522fafb12192d2e18f574c617f02f8ba35578dc387f94c0693b1f");
+	assert_eq!(hash, "2156f7dfb9d55b1b507883d215fe57d41bd18ea083ebc622c9cbcadb5e0e2550");
 }
 
 fn test_build_eip712_typed_data(call: RuntimeCall) -> String {
