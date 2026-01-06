@@ -217,7 +217,7 @@ pub mod pallet {
 		///
 		/// The call is executed with the sub-account's account id as the dispatch origin.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().call_weight))]
 		#[allow(clippy::useless_conversion)]
 		pub fn as_sub_account(
 			origin: OriginFor<T>,

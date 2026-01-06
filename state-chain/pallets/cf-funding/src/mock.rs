@@ -185,7 +185,7 @@ impl UnfilteredDispatchable for EmptyCall {
 
 impl GetDispatchInfo for EmptyCall {
 	fn get_dispatch_info(&self) -> frame_support::dispatch::DispatchInfo {
-		DispatchInfo { weight: Zero::zero(), ..Default::default() }
+		DispatchInfo::default()
 	}
 }
 
