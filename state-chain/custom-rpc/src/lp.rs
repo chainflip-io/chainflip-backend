@@ -61,16 +61,16 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_transaction_pool::FullPool;
-use sc_transaction_pool_api::{TransactionStatus, TxIndex};
+use sc_transaction_pool::TransactionPoolWrapper;
+use sc_transaction_pool_api::{TransactionStatus, TransactionStatusStreamFor, TxIndex};
 use sp_api::CallApiAt;
-use sp_core::{crypto::AccountId32, U256};
+use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
 	chainflip::BlockUpdate, runtime_apis::custom_api::CustomRuntimeApi, AccountId, ConstU32, Hash,
 	Nonce, RuntimeCall,
 };
-use std::{ops::Range, sync::Arc};
+use std::{ops::Range, pin::Pin, sync::Arc};
 
 pub mod lp_crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -131,7 +131,7 @@ where
 		client: Arc<C>,
 		backend: Arc<BE>,
 		executor: Arc<dyn sp_core::traits::SpawnNamed>,
-		pool: Arc<FullPool<B, C>>,
+		pool: Arc<TransactionPoolWrapper<B, C>>,
 		pair: sp_core::sr25519::Pair,
 	) -> Self {
 		Self {
@@ -254,17 +254,17 @@ where
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
-		let mut status_stream = self
-			.signed_pool_client
-			.submit_watch(
-				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
-					asset,
-					boost_fee: boost_fee.unwrap_or_default(),
-				}),
-				false,
-			)
-			.await
-			.map_err(CfApiError::from)?;
+		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
+			self.signed_pool_client
+				.submit_watch(
+					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+						asset,
+						boost_fee: boost_fee.unwrap_or_default(),
+					}),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
 		let pre_allocated_channels = get_preallocated_channels(

@@ -40,14 +40,14 @@ use cf_traits::{
 };
 use frame_support::{
 	derive_impl,
-	pallet_prelude::{InvalidTransaction, TransactionValidityError},
+	pallet_prelude::{InvalidTransaction, TransactionValidityError, ValidTransaction},
 	parameter_types,
 	traits::UnfilteredDispatchable,
 	DebugNoBound, DefaultNoBound,
 };
 use sp_core::{H160, H256};
 use sp_runtime::{
-	traits::{DispatchInfoOf, SignedExtension},
+	traits::{AsSystemOriginSigner, DispatchInfoOf, DispatchOriginOf, TransactionExtension},
 	DispatchError,
 };
 
@@ -254,22 +254,43 @@ pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 #[scale_info(skip_type_params(T))]
 pub struct MockPayment<T>(PhantomData<T>);
 
-impl<T: frame_system::Config + Send + Sync + 'static> SignedExtension for MockPayment<T> {
-	type AccountId = T::AccountId;
-	type AdditionalSigned = ();
-	type Call = T::RuntimeCall;
-	type Pre = ();
+impl<T: frame_system::Config<AccountId = u64> + Send + Sync + 'static>
+	TransactionExtension<T::RuntimeCall> for MockPayment<T>
+where
+	DispatchOriginOf<T::RuntimeCall>: AsSystemOriginSigner<T::AccountId>,
+{
 	const IDENTIFIER: &'static str = "UnitSignedExtension";
-	fn additional_signed(&self) -> Result<(), TransactionValidityError> {
-		Ok(())
+
+	type Implicit = ();
+	type Val = ();
+	type Pre = ();
+
+	fn weight(&self, _call: &T::RuntimeCall) -> sp_runtime::Weight {
+		Default::default()
 	}
-	fn pre_dispatch(
+
+	fn validate(
+		&self,
+		origin: sp_runtime::traits::DispatchOriginOf<T::RuntimeCall>,
+		_call: &T::RuntimeCall,
+		_info: &DispatchInfoOf<T::RuntimeCall>,
+		_len: usize,
+		_self_implicit: Self::Implicit,
+		_inherited_implication: &impl sp_runtime::traits::Implication,
+		_source: frame_support::pallet_prelude::TransactionSource,
+	) -> sp_runtime::traits::ValidateResult<Self::Val, T::RuntimeCall> {
+		Ok((ValidTransaction::default(), (), origin))
+	}
+
+	fn prepare(
 		self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_val: Self::Val,
+		origin: &sp_runtime::traits::DispatchOriginOf<T::RuntimeCall>,
+		_call: &T::RuntimeCall,
+		_info: &DispatchInfoOf<T::RuntimeCall>,
 		_len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
+		let who = origin.as_system_origin_signer().ok_or(InvalidTransaction::BadSigner)?;
 		if frame_system::Account::<T>::contains_key(who) {
 			Ok(())
 		} else {

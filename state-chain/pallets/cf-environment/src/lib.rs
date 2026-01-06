@@ -105,7 +105,7 @@ pub mod pallet {
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
 		dispatch::{DispatchInfo, PostDispatchInfo},
-		sp_runtime::traits::{Dispatchable, SignedExtension},
+		sp_runtime::traits::{Dispatchable, TransactionExtension},
 		traits::OriginTrait,
 		DefaultNoBound,
 	};
@@ -170,13 +170,15 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Handles fee processing.
-		type TransactionPayments: SignedExtension<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Call = <Self as Config>::RuntimeCall,
-		>;
+		type TransactionPayments: TransactionExtension<<Self as Config>::RuntimeCall, Implicit = ()>;
 
 		/// Required as a workaround because TransactionPayments doesn't implement Default.
-		type GetTransactionPayments: Get<Self::TransactionPayments>;
+		type GetTransactionPayments: Get<(
+			Self::TransactionPayments,
+			<<Self as pallet::Config>::TransactionPayments as TransactionExtension<
+				<Self as Config>::RuntimeCall,
+			>>::Val,
+		)>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -683,11 +685,19 @@ pub mod pallet {
 				signature_data.signer_account().map_err(|_| Error::<T>::FailedToDecodeSigner)?;
 
 			// Pre-dispatch fee processing
-			let fee_processor = T::GetTransactionPayments::get();
+			let (fee_processor, val) = T::GetTransactionPayments::get();
 			let dispatch_info = chainflip_extrinsic.call.get_dispatch_info();
 			let len = chainflip_extrinsic.call.encoded_size();
+			// TODO: move this and unsigned validation into transaction extension and/or new
+			// AuthorizeCall extension.
 			let pre_dispatch_info = fee_processor
-				.pre_dispatch(&signer_account, &chainflip_extrinsic.call, &dispatch_info, len)
+				.prepare(
+					val,
+					&OriginTrait::signed(signer_account.clone()),
+					&chainflip_extrinsic.call,
+					&dispatch_info,
+					len,
+				)
 				.map_err(|_e| Error::<T>::FailedToProcessFee)?;
 
 			// Dispatch the inner call
@@ -695,15 +705,15 @@ pub mod pallet {
 				chainflip_extrinsic.call.dispatch(OriginTrait::signed(signer_account));
 
 			// Post dispatch fee processing
-			let post_dispatch_info = match dispatch_result {
+			let mut post_dispatch_info = match dispatch_result {
 				Ok(info) => info,
 				Err(e) => e.post_info,
 			};
 			// Note: the post_dispatch documentation states it should never fail.
 			let _ = T::TransactionPayments::post_dispatch(
-				Some(pre_dispatch_info),
+				pre_dispatch_info,
 				&dispatch_info,
-				&post_dispatch_info,
+				&mut post_dispatch_info,
 				len,
 				&dispatch_result.map(|_| ()).map_err(|e| e.error),
 			);
@@ -748,24 +758,29 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			use frame_support::sp_runtime::traits::TxBaseImplication;
+
 			if let Call::non_native_signed_call {
 				chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
 				signature_data,
 			} = call
 			{
-				let Ok(signer_account) = signature_data.signer_account() else {
+				let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
 					return Err(InvalidTransaction::BadSigner.into());
 				};
 				ensure!(
 					frame_system::Account::<T>::contains_key(&signer_account),
 					InvalidTransaction::BadSigner
 				);
-				T::GetTransactionPayments::get().validate(
-					&signer_account,
+				T::GetTransactionPayments::get().0.validate(
+					OriginTrait::signed(signer_account.clone()),
 					inner_call,
 					&inner_call.get_dispatch_info(),
 					inner_call.encoded_size(),
+					(),
+					&TxBaseImplication(()),
+					source,
 				)?;
 				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
 
