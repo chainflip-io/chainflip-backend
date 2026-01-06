@@ -63,7 +63,8 @@ where
 
 		let lifetime = ..era.death(current_block_number as u64) as state_chain_runtime::BlockNumber;
 
-		let extra: state_chain_runtime::SignedExtra = (
+		let ext: state_chain_runtime::TxExtension = (
+			frame_system::AuthorizeCall::new(),
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
 			frame_system::CheckTxVersion::new(),
@@ -77,8 +78,10 @@ where
 			frame_metadata_hash_extension::CheckMetadataHash::<state_chain_runtime::Runtime>::new(
 				false,
 			),
+			frame_system::WeightReclaim::new(),
 		);
-		let additional_signed = (
+		let implicit = (
+			(),
 			(),
 			runtime_version.spec_version,
 			runtime_version.transaction_version,
@@ -88,13 +91,11 @@ where
 			(),
 			(),
 			None,
+			(),
 		);
 
-		let signed_payload = state_chain_runtime::SignedPayload::from_raw(
-			call.clone(),
-			extra.clone(),
-			additional_signed,
-		);
+		let signed_payload =
+			state_chain_runtime::SignedPayload::from_raw(call.clone(), ext.clone(), implicit);
 		let signature = signed_payload.using_encoded(|bytes| self.signer.sign(bytes).into());
 
 		(
@@ -102,7 +103,7 @@ where
 				call,
 				MultiAddress::Id(self.account_id.clone()),
 				signature,
-				extra,
+				ext,
 			),
 			lifetime,
 		)
