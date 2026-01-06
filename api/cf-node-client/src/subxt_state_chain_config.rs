@@ -215,10 +215,10 @@ impl From<cf_static_runtime::runtime_types::sp_runtime::DispatchError>
 	}
 }
 
-impl From<cf_static_runtime::runtime_types::frame_support::dispatch::DispatchInfo>
-	for frame_support::dispatch::DispatchInfo
+impl From<cf_static_runtime::system::events::extrinsic_success::DispatchInfo>
+	for frame_system::DispatchEventInfo
 {
-	fn from(info: cf_static_runtime::runtime_types::frame_support::dispatch::DispatchInfo) -> Self {
+	fn from(info: cf_static_runtime::system::events::extrinsic_success::DispatchInfo) -> Self {
 		Self {
 			weight: frame_support::weights::Weight::from_parts(info.weight.ref_time, info.weight.proof_size),
 			class: match info.class {
