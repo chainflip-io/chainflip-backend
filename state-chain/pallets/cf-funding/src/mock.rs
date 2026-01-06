@@ -67,7 +67,6 @@ parameter_types! {
 impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
@@ -196,7 +195,6 @@ impl GetDispatchInfo for EmptyCall {
 }
 
 impl pallet_cf_funding::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type Flip = Flip;
 	type WeightInfo = ();

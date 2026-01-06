@@ -74,7 +74,6 @@ parameter_types! {
 impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
@@ -163,7 +162,6 @@ impl RewardsDistribution for FlipDistribution {
 }
 
 impl pallet_cf_emissions::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;

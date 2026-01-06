@@ -310,7 +310,6 @@ where
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
@@ -397,7 +396,6 @@ pub mod benchmarks_mock {
 	impl pallet_cf_environment::Config for BenchmarksTest {
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type RuntimeEvent = RuntimeEvent;
 		type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 		type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 		type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
@@ -425,7 +423,6 @@ pub mod benchmarks_mock {
 	}
 
 	impl pallet_cf_flip::Config for BenchmarksTest {
-		type RuntimeEvent = RuntimeEvent;
 		type Balance = u128;
 		type BlocksPerDay = ConstU64<14400>;
 		type WeightInfo = ();
