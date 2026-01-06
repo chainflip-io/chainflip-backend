@@ -16,13 +16,13 @@
 
 use crate::{
 	address::IntoForeignChainAddress,
-	evm::{api::EvmReplayProtection, TransactionFee},
+	evm::{api::EvmReplayProtection, Address, TransactionFee},
 	IntoTransactionInIdForAnyChain, *,
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode};
 use frame_support::parameter_types;
-use sp_core::{ConstBool, H160};
+use sp_core::ConstBool;
 use sp_std::marker::PhantomData;
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -73,7 +73,7 @@ impl MockEthereumTransactionMetadata {
 
 impl IntoForeignChainAddress<MockEthereum> for u64 {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(H160::repeat_byte(self as u8))
+		ForeignChainAddress::Eth(Address::repeat_byte(self as u8))
 	}
 }
 
@@ -88,7 +88,7 @@ impl Chain for MockEthereum {
 	type ChainCrypto = MockEthereumChainCrypto;
 
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = TransactionFee;
 	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;
@@ -132,7 +132,7 @@ impl TryFrom<ForeignChainAddress> for u64 {
 
 impl From<u64> for ForeignChainAddress {
 	fn from(id: u64) -> Self {
-		ForeignChainAddress::Eth(H160::from_low_u64_be(id))
+		ForeignChainAddress::Eth(Address::from_low_u64_be(id))
 	}
 }
 

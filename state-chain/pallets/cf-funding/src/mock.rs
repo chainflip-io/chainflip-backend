@@ -86,7 +86,7 @@ impl cf_chains::RegisterRedemption for MockRegisterRedemption {
 		amount: u128,
 		_address: &[u8; 20],
 		_expiry: u64,
-		_executor: Option<cf_chains::eth::Address>,
+		_executor: Option<cf_chains::evm::Address>,
 	) -> Self {
 		Self { amount }
 	}

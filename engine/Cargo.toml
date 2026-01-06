@@ -115,7 +115,6 @@ rocksdb = { workspace = true, features = ["lz4"] }
 mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
-ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }
 rlp = { workspace = true, default-features = true }

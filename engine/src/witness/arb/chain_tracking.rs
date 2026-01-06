@@ -24,7 +24,6 @@ use ethers::types::Bloom;
 
 use super::super::common::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
 use ethers::types::{Bytes, H256};
-use sp_core::H160;
 
 #[async_trait::async_trait]
 impl<T: EvmRetryRpcApi + NodeInterfaceRetryRpcApi + Send + Sync + Clone>
@@ -37,7 +36,7 @@ impl<T: EvmRetryRpcApi + NodeInterfaceRetryRpcApi + Send + Sync + Clone>
 		let (_, _, l2_base_fee, l1_base_fee_estimate) = self
 			.gas_estimate_components(
 				// Using zero address as a proxy destination address for the gas estimation.
-				H160::default(),
+				Default::default(),
 				false,
 				// Using empty data for the gas estimation
 				Bytes::default(),
