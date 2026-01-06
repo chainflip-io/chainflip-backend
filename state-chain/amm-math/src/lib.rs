@@ -20,7 +20,7 @@ pub mod test_utilities;
 
 pub use cf_primitives::Tick;
 use cf_primitives::{Asset, BasisPoints, MAX_BASIS_POINTS};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
@@ -40,6 +40,7 @@ pub type Amount = U256;
 	TypeInfo,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
@@ -355,6 +356,7 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	Serialize,
 	Deserialize,
 	TypeInfo,
@@ -523,6 +525,7 @@ pub fn is_tick_valid(tick: Tick) -> bool {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,

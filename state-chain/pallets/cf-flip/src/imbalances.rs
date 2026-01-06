@@ -20,7 +20,7 @@
 // of the inner member.
 
 use crate::{self as Flip, Config, ReserveId};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{
 		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
@@ -32,7 +32,7 @@ use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum InternalSource<AccountId> {
 	/// A user account.
 	Account(AccountId),
@@ -43,7 +43,7 @@ pub enum InternalSource<AccountId> {
 }
 
 /// The origin of an imbalance.
-#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ImbalanceSource<AccountId> {
 	/// External, aka. off-chain.
 	External,

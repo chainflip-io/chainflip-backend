@@ -38,7 +38,7 @@ use crate::{
 	ChannelRefundParametersUncheckedEncoded, DepositChannel, DepositDetailsToTransactionInId,
 	FeeEstimationApi, FeeRefundCalculator, TypeInfo,
 };
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	sp_runtime::{BoundedVec, RuntimeDebug},
 	Parameter,
@@ -100,7 +100,9 @@ pub const MAX_WAIT_BLOCKS_FOR_SWAP_ACCOUNT_CLOSURE_APICALLS: u32 = 14400;
 pub const NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_SWAP_ACCOUNT_CLOSURES: usize = 3;
 
 // Use serialized transaction
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub struct SolanaTransactionData {
 	pub serialized_transaction: Vec<u8>,
 	pub skip_preflight: bool,
@@ -109,7 +111,18 @@ pub struct SolanaTransactionData {
 /// A Solana transaction in id is a tuple of the AccountAddress and the slot number.
 pub type SolanaTransactionInId = (SolAddress, u64);
 #[derive(
-	Ord, PartialOrd, Eq, PartialEq, Encode, Decode, Clone, Debug, TypeInfo, Serialize, Deserialize,
+	Ord,
+	PartialOrd,
+	Eq,
+	PartialEq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Clone,
+	Debug,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub enum VaultSwapOrDepositChannelId {
 	Channel(SolAddress),
@@ -242,6 +255,7 @@ pub mod compute_units_costs {
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Debug,
@@ -391,7 +405,7 @@ impl address::ToHumanreadableAddress for SolAddress {
 
 impl crate::ChannelLifecycleHooks for AccountBump {}
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct SolanaDepositFetchId {
 	pub channel_id: ChannelId,
 	pub address: SolAddress,
@@ -495,7 +509,17 @@ pub mod signing_key {
 
 /// Solana Environment variables used when building the base API call.
 #[derive(
-	Encode, Decode, TypeInfo, Default, Clone, PartialEq, Eq, Debug, Serialize, Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
 )]
 pub struct SolApiEnvironment {
 	// For native Sol API calls.

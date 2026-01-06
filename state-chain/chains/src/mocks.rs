@@ -20,12 +20,23 @@ use crate::{
 	IntoTransactionInIdForAnyChain, *,
 };
 use cf_utilities::SliceToArray;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::parameter_types;
 use sp_core::ConstBool;
 use sp_std::marker::PhantomData;
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
@@ -44,7 +55,17 @@ parameter_types! {
 }
 
 #[derive(
-	Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Debug,
+	Clone,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct MockEthereumTransactionMetadata;
 
@@ -142,7 +163,19 @@ impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockLifecycleHooks;
 
 impl ChannelLifecycleHooks for MockLifecycleHooks {
@@ -165,6 +198,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -198,7 +232,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct MockTransaction;
 
 impl FeeRefundCalculator<MockEthereum> for MockTransaction {
@@ -211,7 +245,18 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 }
 
 #[derive(
-	Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct MockThresholdSignature<K, P> {
 	pub signing_key: K,
@@ -230,6 +275,7 @@ pub struct MockThresholdSignature<K, P> {
 	MaxEncodedLen,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Ord,
 	PartialOrd,
@@ -245,7 +291,18 @@ impl IntoTransactionInIdForAnyChain<MockEthereumChainCrypto> for [u8; 4] {
 /// A key that should be not accepted as handover result
 pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {
 	const NAME: &'static str = "MockEthereum";
@@ -318,7 +375,16 @@ pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetadata =
 	MockEthereumTransactionMetadata;
 
-#[derive(Encode, Decode, TypeInfo, CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+)]
 #[scale_info(skip_type_params(C))]
 pub struct MockApiCall<C: ChainCrypto> {
 	pub payload: <C as ChainCrypto>::Payload,

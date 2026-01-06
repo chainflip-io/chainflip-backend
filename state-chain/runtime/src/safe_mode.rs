@@ -18,7 +18,7 @@
 
 use crate::{Runtime, RuntimeCall};
 use cf_traits::{impl_runtime_safe_mode, CallDispatchFilter};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::instances::*;
 use scale_info::TypeInfo;
 
@@ -65,6 +65,7 @@ impl_runtime_safe_mode! {
 	serde::Deserialize,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Default,

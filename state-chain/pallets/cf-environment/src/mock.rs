@@ -19,7 +19,7 @@
 use core::marker::PhantomData;
 use std::collections::BTreeSet;
 
-use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, DecodeWithMemTracking, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
 	evm,
@@ -132,7 +132,7 @@ parameter_types! {
 	pub static SolanaCallBroadcasted: Option<SolanaApi<MockSolEnvironment>> = None;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockSolEnvironment;
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
 	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
@@ -250,7 +250,17 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 /// A Mock payment extension that simply checks whether the account exists in the system.
-#[derive(Clone, DebugNoBound, DefaultNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone,
+	DebugNoBound,
+	DefaultNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct MockPayment<T>(PhantomData<T>);
 

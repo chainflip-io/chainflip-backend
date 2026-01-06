@@ -111,9 +111,7 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
 	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
-
-use codec::{Decode, Encode};
-use eth::Address as EvmAddress;
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
@@ -498,7 +496,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct DotEnvironment;
 
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
@@ -530,7 +528,7 @@ impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for 
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct HubEnvironment;
 
 impl ReplayProtectionProvider<Assethub> for HubEnvironment {
@@ -568,7 +566,7 @@ impl ChainEnvironment<cf_chains::hub::api::VaultAccount, PolkadotAccountId> for 
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
@@ -588,7 +586,7 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SolEnvironment;
 
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for SolEnvironment {

@@ -24,7 +24,16 @@ use crate::{btc::BitcoinTransaction, *};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum BitcoinApi<Environment: 'static> {
 	BatchTransfer(batch_transfer::BatchTransfer),
@@ -35,7 +44,18 @@ pub enum BitcoinApi<Environment: 'static> {
 }
 pub type SelectedUtxosAndChangeAmount = (Vec<Utxo>, BtcAmount);
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+)]
 pub enum UtxoSelectionType {
 	SelectForConsolidation,
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },

@@ -17416,6 +17416,7 @@ dependencies = [
  "log",
  "mockall",
  "num-traits",
+ "parity-scale-codec",
  "pin-project",
  "predicates",
  "prometheus",

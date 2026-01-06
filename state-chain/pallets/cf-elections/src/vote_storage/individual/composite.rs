@@ -30,10 +30,10 @@ macro_rules! generate_individual_vote_storage_tuple_impls {
 
             use super::super::{private, IndividualVoteStorage};
 
-            use codec::{Encode, Decode};
+            use codec::{Encode, Decode, DecodeWithMemTracking};
             use scale_info::TypeInfo;
 
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum SharedDataEnum<$($t,)*> {
                 $($t($t),)*
             }
