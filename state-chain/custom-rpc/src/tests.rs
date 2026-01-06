@@ -562,21 +562,21 @@ fn ask_bid_map_serialization() {
 	let val = AskBidMap::<UnidirectionalPoolDepth> {
 		asks: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw_into(123456)),
+				price: Some(SqrtPriceQ64F96::from_raw_into(123456)),
 				depth: 654321.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw_into(234567)),
+				price: Some(SqrtPriceQ64F96::from_raw_into(234567)),
 				depth: 765432.into(),
 			},
 		},
 		bids: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw_into(345678)),
+				price: Some(SqrtPriceQ64F96::from_raw_into(345678)),
 				depth: 876543.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw_into(456789)),
+				price: Some(SqrtPriceQ64F96::from_raw_into(456789)),
 				depth: 987654.into(),
 			},
 		},

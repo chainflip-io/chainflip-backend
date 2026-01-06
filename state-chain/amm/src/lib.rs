@@ -486,14 +486,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order_depth(
 		&mut self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, limit_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<SqrtPriceQ64F96>, Amount)>, limit_orders::DepthError> {
 		Ok(PoolPairsMap {
 			base: (
-				self.limit_orders.current_sqrt_price::<QuoteToBase>().map(Price::from),
+				self.limit_orders.current_sqrt_price::<QuoteToBase>(),
 				self.limit_orders.depth::<QuoteToBase>(range.clone())?,
 			),
 			quote: (
-				self.limit_orders.current_sqrt_price::<BaseToQuote>().map(Price::from),
+				self.limit_orders.current_sqrt_price::<BaseToQuote>(),
 				self.limit_orders.depth::<BaseToQuote>(range)?,
 			),
 		})
@@ -502,16 +502,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order_depth(
 		&self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<Price>, Amount)>, range_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<SqrtPriceQ64F96>, Amount)>, range_orders::DepthError> {
 		self.range_orders.depth(range.start, range.end).map(|assets| PoolPairsMap {
-			base: (
-				self.range_orders.current_sqrt_price::<QuoteToBase>().map(Price::from),
-				assets[Pairs::Base],
-			),
-			quote: (
-				self.range_orders.current_sqrt_price::<BaseToQuote>().map(Price::from),
-				assets[Pairs::Quote],
-			),
+			base: (self.range_orders.current_sqrt_price::<QuoteToBase>(), assets[Pairs::Base]),
+			quote: (self.range_orders.current_sqrt_price::<BaseToQuote>(), assets[Pairs::Quote]),
 		})
 	}
 

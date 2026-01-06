@@ -1363,8 +1363,8 @@ pub struct PoolLiquidity {
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UnidirectionalSubPoolDepth {
-	/// The current price in this sub pool, in the given direction of swaps.
-	pub price: Option<Price>,
+	/// The current sqrt price in this sub pool, in the given direction of swaps.
+	pub price: Option<SqrtPriceQ64F96>,
 	/// The approximate amount of assets available to be sold in the specified price range.
 	pub depth: Amount,
 }
