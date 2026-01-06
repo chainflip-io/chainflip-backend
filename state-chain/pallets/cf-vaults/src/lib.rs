@@ -91,10 +91,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The chain that is managed by this vault must implement the api types.
 		type Chain: Chain;
 

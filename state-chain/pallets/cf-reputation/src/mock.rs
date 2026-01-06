@@ -100,7 +100,6 @@ impl From<PalletOffence> for AllOffences {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;

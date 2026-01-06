@@ -115,7 +115,6 @@ impl RetryPolicy for MockRetryPolicy {
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;
