@@ -26,7 +26,7 @@ use frame_support::{
 		traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 		RuntimeDebug,
 	},
-	traits::{Imbalance, SameOrOther, TryDrop},
+	traits::{tokens::imbalance::TryMerge, Imbalance, SameOrOther, TryDrop},
 };
 use scale_info::TypeInfo;
 use sp_std::{cmp, mem, result};
@@ -291,6 +291,18 @@ impl<T: Config> TryDrop for Surplus<T> {
 	}
 }
 
+impl<T: Config> TryMerge for Surplus<T> {
+	fn try_merge(mut self, other: Self) -> Result<Self, (Self, Self)> {
+		if self.source == other.source {
+			self.amount = self.amount.saturating_add(other.amount);
+			mem::forget(other);
+			Ok(self)
+		} else {
+			Err((self, other))
+		}
+	}
+}
+
 impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 	type Opposite = Deficit<T>;
 
@@ -348,6 +360,18 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 impl<T: Config> TryDrop for Deficit<T> {
 	fn try_drop(self) -> result::Result<(), Self> {
 		self.drop_zero()
+	}
+}
+
+impl<T: Config> TryMerge for Deficit<T> {
+	fn try_merge(mut self, other: Self) -> Result<Self, (Self, Self)> {
+		if self.source == other.source {
+			self.amount = self.amount.saturating_add(other.amount);
+			mem::forget(other);
+			Ok(self)
+		} else {
+			Err((self, other))
+		}
 	}
 }
 

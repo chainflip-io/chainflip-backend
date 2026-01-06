@@ -18,7 +18,6 @@
 
 use super::*;
 
-use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::AccountRole;
 use cf_traits::Chainflip;
 use frame_benchmarking::v2::*;
@@ -50,6 +49,8 @@ fn request_max_redemption<T: Config>(account_id: &T::AccountId) {
 
 #[benchmarks]
 mod benchmarks {
+
+	use cf_traits::INITIAL_FLIP_FUNDING;
 
 	use super::*;
 
@@ -225,7 +226,7 @@ mod benchmarks {
 
 		let call = Call::<T>::execute_sc_call {
 			deposit_and_call: EthereumDepositAndSCCall {
-				deposit: EthereumDeposit::FlipToSCGateway { amount: EthAmount::benchmark_value() },
+				deposit: EthereumDeposit::FlipToSCGateway { amount: 10 * INITIAL_FLIP_FUNDING },
 				call: vec![0], //will correctly decode to EmptyCall
 			},
 			caller,
