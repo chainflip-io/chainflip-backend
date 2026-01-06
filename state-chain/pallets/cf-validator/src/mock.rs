@@ -25,7 +25,7 @@ use cf_traits::{
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter,
+		reputation_resetter::MockReputationResetter, waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
@@ -49,6 +49,7 @@ pub type MockFlip = MockFundingInfo<Test>;
 construct_runtime!(
 	pub struct Test {
 		System: frame_system,
+		Flip: pallet_cf_flip,
 		ValidatorPallet: pallet_cf_validator,
 		Session: pallet_session,
 	}
@@ -74,6 +75,17 @@ impl From<UintAuthorityId> for MockSessionKeys {
 	}
 }
 
+impl pallet_cf_flip::Config for Test {
+	type Balance = FlipBalance;
+	type BlocksPerDay = sp_core::ConstU64<14400>;
+	type WeightInfo = ();
+	type WaivedFees = WaivedFeesMock<Self>;
+	// Required to satisfy trait bounds on InspectHold implementation, required by
+	// pallet_session::Config::Currency.
+	type RuntimeHoldReason = pallet_session::HoldReason;
+	type CallIndexer = ();
+}
+
 impl pallet_session::Config for Test {
 	type ShouldEndSession = ValidatorPallet;
 	type SessionManager = ValidatorPallet;
@@ -83,6 +95,9 @@ impl pallet_session::Config for Test {
 	type Keys = MockSessionKeys;
 	type RuntimeEvent = RuntimeEvent;
 	type NextSessionRotation = ();
+	type DisablingStrategy = ();
+	type Currency = pallet_cf_flip::Pallet<Test>;
+	type KeyDeposit = ();
 	type WeightInfo = ();
 }
 pub const WINNING_BIDS: [Bid<ValidatorId, FlipBalance>; 4] = [
@@ -184,9 +199,17 @@ cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
 		system: SystemConfig::default(),
+		flip: Default::default(),
 		session: SessionConfig {
-			keys: all_validators()
-				.into_iter()
+			non_authority_keys: [&WINNING_BIDS[..], &LOSING_BIDS[..]]
+				.concat()
+				.iter()
+				.map(|bid| bid.bidder_id)
+				.map(|i| (i, i, UintAuthorityId(i).into()))
+				.collect(),
+			keys: GENESIS_AUTHORITIES
+				.iter()
+				.copied()
 				.map(|i| (i, i, UintAuthorityId(i).into()))
 				.collect(),
 		},

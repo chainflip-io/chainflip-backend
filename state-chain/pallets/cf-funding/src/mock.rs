@@ -19,9 +19,9 @@ use crate::PalletSafeMode;
 use cf_chains::{evm::EvmCrypto, ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
-	mocks::{broadcaster::MockBroadcaster, time_source},
-	AccountRoleRegistry, RedemptionCheck, WaivedFees,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
+	mocks::{broadcaster::MockBroadcaster, time_source, waived_fees::WaivedFeesMock},
+	AccountRoleRegistry, RedemptionCheck,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
@@ -31,10 +31,7 @@ use frame_support::{
 	traits::UnfilteredDispatchable,
 };
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{IdentityLookup, Zero},
-	AccountId32, DispatchError, DispatchResult, Permill,
-};
+use sp_runtime::{traits::IdentityLookup, AccountId32, DispatchError, DispatchResult, Permill};
 use std::{collections::HashMap, time::Duration};
 
 // Use a realistic account id for compatibility with `RegisterRedemption`.
@@ -63,15 +60,13 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
-// Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, RuntimeCall);
-
 impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
+	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
+	type RuntimeHoldReason = ();
 }
 
 #[derive(

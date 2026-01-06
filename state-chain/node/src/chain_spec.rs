@@ -328,8 +328,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 }
 
 /// Start a single node development chain - using bashful as genesis node
-pub fn cf_development_config() -> Result<ChainSpec, String> {
-	inner_cf_development_config(vec![(
+pub fn cf_development_chain_spec() -> Result<ChainSpec, String> {
+	inner_cf_development_chain_spec(vec![(
 		parse_account(testnet::BASHFUL_ACCOUNT_ID),
 		testnet::BASHFUL_SR25519.unchecked_into(),
 		testnet::BASHFUL_ED25519.unchecked_into(),
@@ -337,8 +337,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 }
 
 /// Start a three node development chain - using bashful, doc and dopey as genesis nodes
-pub fn cf_three_node_development_config() -> Result<ChainSpec, String> {
-	inner_cf_development_config(vec![
+pub fn cf_three_node_development_chain_spec() -> Result<ChainSpec, String> {
+	inner_cf_development_chain_spec(vec![
 		(
 			parse_account(testnet::BASHFUL_ACCOUNT_ID),
 			testnet::BASHFUL_SR25519.unchecked_into(),
@@ -357,7 +357,7 @@ pub fn cf_three_node_development_config() -> Result<ChainSpec, String> {
 	])
 }
 
-pub fn inner_cf_development_config(
+pub fn inner_cf_development_chain_spec(
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>,
 ) -> Result<ChainSpec, String> {
 	let wasm_binary =
@@ -878,6 +878,7 @@ fn testnet_genesis(
 			max_authority_set_contraction_percentage,
 		},
 		session: state_chain_runtime::SessionConfig {
+			non_authority_keys: vec![],
 			keys: initial_authorities
 				.iter()
 				.map(|x| (x.0.clone(), x.0.clone(), session_keys(x.1.clone(), x.2.clone())))

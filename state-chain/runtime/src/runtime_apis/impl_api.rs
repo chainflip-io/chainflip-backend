@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
+extern crate alloc;
 
 use crate::{
 	chainflip::{
@@ -335,7 +336,7 @@ impl_runtime_apis! {
 		) -> (Vec<frame_benchmarking::BenchmarkList>, Vec<frame_support::traits::StorageInfo>) {
 			use baseline::Pallet as BaselineBench;
 			use cf_session_benchmarking::Pallet as SessionBench;
-			use frame_benchmarking::{baseline, BenchmarkList, Benchmarking};
+			use frame_benchmarking::{baseline, BenchmarkList};
 			use frame_support::traits::StorageInfoTrait;
 			use frame_system_benchmarking::Pallet as SystemBench;
 
@@ -352,8 +353,8 @@ impl_runtime_apis! {
 		#[expect(non_local_definitions)]
 		fn dispatch_benchmark(
 			config: frame_benchmarking::BenchmarkConfig,
-		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-			use frame_benchmarking::{baseline, BenchmarkBatch, Benchmarking};
+		) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, alloc::string::String> {
+			use frame_benchmarking::{baseline, BenchmarkBatch};
 			use frame_support::traits::TrackedStorageKey;
 
 			use baseline::Pallet as BaselineBench;
@@ -532,7 +533,7 @@ impl_runtime_apis! {
 			let info = frame_system::LastRuntimeUpgrade::<Runtime>::get().expect("this has to be set");
 			LastRuntimeUpgradeInfo {
 				spec_version: info.spec_version.into(),
-				spec_name: info.spec_name,
+				spec_name: info.spec_name.into(),
 			}
 		}
 		fn cf_rotation_broadcast_ids() -> ActivateKeysBroadcastIds{

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{hub::xcm_types, *};
+use crate::*;
 
 pub mod api;
 
@@ -31,17 +31,21 @@ pub use serializable_address::*;
 pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, DecodeWithMemTracking, Encode};
-use core::str::FromStr;
-use frame_support::sp_runtime::{
-	generic::{Era, SignedPayload, UncheckedExtrinsic},
-	traits::{
-		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
+use frame_support::{
+	pallet_prelude::{TransactionSource, UnknownTransaction},
+	sp_runtime::{
+		generic::{Era, SignedPayload, UncheckedExtrinsic},
+		traits::{AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, StaticLookup, Verify},
+		transaction_validity::TransactionValidityError,
+		MultiAddress, MultiSignature,
 	},
-	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
 };
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstBool, H256};
+use sp_runtime::{
+	generic::Preamble,
+	traits::{DispatchOriginOf, Dispatchable, Implication, TransactionExtension, ValidateResult},
+};
 
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(
@@ -1265,6 +1269,7 @@ mod test_polkadot_extrinsics {
 	#[ignore]
 	#[test]
 	fn with_metadata_hash_extension() {
+		use sp_std::str::FromStr;
 		let mut ext = PolkadotExtrinsicBuilder::new(
 			PolkadotReplayProtection {
 				genesis_hash: H256::from_str(

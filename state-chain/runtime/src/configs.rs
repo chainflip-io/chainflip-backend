@@ -507,6 +507,11 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = ConvertInto;
+	type DisablingStrategy = ();
+	type Currency = pallet_cf_flip::Pallet<Runtime>;
+	// Keys deposit is set to 0: Chainflip does not require a key deposit. Validator constraints are
+	// handled via other mechanisms (see the validator pallet).
+	type KeyDeposit = ConstU128<0>;
 	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
@@ -631,6 +636,9 @@ impl pallet_cf_flip::Config for Runtime {
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 	type CallIndexer = chainflip::LpOrderCallIndexer;
+	// Required to satisfy trait bounds on InspectHold implementation, required by
+	// pallet_session::Config::Currency.
+	type RuntimeHoldReason = pallet_session::HoldReason;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
@@ -706,6 +714,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type WeightToFee = ConstantMultiplier<FlipBalance, ConstU128<{ TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
+	type WeightInfo = pallet_transaction_payment::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

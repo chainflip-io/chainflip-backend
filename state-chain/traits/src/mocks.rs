@@ -66,7 +66,7 @@ pub mod swap_request_api;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod tracked_data_provider;
-pub mod waived_fees_mock;
+pub mod waived_fees;
 
 #[macro_export]
 macro_rules! impl_mock_chainflip {

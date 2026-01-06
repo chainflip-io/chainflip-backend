@@ -18,6 +18,7 @@
 #![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
+
 pub mod chainflip;
 pub mod configs;
 pub mod constants;
@@ -30,11 +31,9 @@ mod weights;
 
 pub use configs::*;
 
-use crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS;
 use codec::{Decode, Encode};
 // use constants::common::*;
 use frame_support::sp_runtime::{
-	create_runtime_str,
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
 };
@@ -95,14 +94,14 @@ pub mod opaque {
 //   https://docs.substrate.io/v3/runtime/upgrades#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("chainflip-node"),
-	impl_name: create_runtime_str!("chainflip-node"),
+	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
+	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
 	spec_version: 2_01_00,
 	impl_version: 1,
-	apis: RUNTIME_API_VERSIONS,
+	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
-	state_version: 1,
+	system_version: 1,
 };
 
 /// The version information used to identify this runtime when compiled natively.
@@ -261,6 +260,8 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// A Block signed with a Justification
 pub type SignedBlock = generic::SignedBlock<Block>;
+/// BlockId type as expected by this runtime.
+pub type BlockId = generic::BlockId<Block>;
 /// The `TransactionExtension` to the basic transaction logic.
 pub type TxExtension = (
 	frame_system::AuthorizeCall<Runtime>,

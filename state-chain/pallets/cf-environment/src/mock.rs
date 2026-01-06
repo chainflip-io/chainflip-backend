@@ -432,6 +432,7 @@ pub mod benchmarks_mock {
 		type BlocksPerDay = ConstU64<14400>;
 		type WeightInfo = ();
 		type WaivedFees = MockWaivedFees;
+		type RuntimeHoldReason = ();
 		type CallIndexer = ();
 	}
 
