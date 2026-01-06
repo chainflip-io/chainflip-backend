@@ -124,7 +124,7 @@ export class ChainflipIO<Requirements> {
     const { section, method, args } = (extrinsic.toHuman() as any).method;
     const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
-    this.logger.info(`Submitting governance extrinsic '${readable}' for snowwhite`);
+    this.logger.debug(`Submitting governance extrinsic '${readable}' for snowwhite`);
 
     // TODO we might want to move this functionality here eventually
     const proposalId = await submitExistingGovernanceExtrinsic(extrinsic);
@@ -132,7 +132,7 @@ export class ChainflipIO<Requirements> {
       'Governance.Proposed',
       governanceProposed.refine((id) => id === proposalId),
     );
-    this.logger.info(
+    this.logger.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
     );
 
@@ -167,7 +167,7 @@ export class ChainflipIO<Requirements> {
     name: EventName,
     schema: Z,
   ): Promise<z.infer<Z>> {
-    this.logger.info(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
+    this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
     const event = await findOneEventOfMany(
       this.logger,
       { event: { name, schema } },
@@ -215,13 +215,13 @@ export class ChainflipIO<Requirements> {
   async stepUntilOneEventOf<Events extends EventDescriptions>(
     descriptions: Events,
   ): Promise<OneOfEventsResult<Events>> {
-    this.logger.info(
+    this.logger.debug(
       `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
     const event = await findOneEventOfMany(this.logger, descriptions, {
       startFromBlock: this.lastIoBlockHeight,
     });
-    this.info(`found event ${event}`);
+    this.debug(`found event ${event}`);
     this.lastIoBlockHeight = event.blockHeight;
     return event;
   }
@@ -229,7 +229,7 @@ export class ChainflipIO<Requirements> {
   async stepUntilAllEventsOf<Events extends EventDescriptions>(
     events: Events,
   ): Promise<AllOfEventsResult<Events>> {
-    this.logger.info(
+    this.logger.debug(
       `waiting for all of the following events: ${JSON.stringify(Object.values(events).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
     const results = await this.all(
@@ -244,7 +244,7 @@ export class ChainflipIO<Requirements> {
       ...results.map((res) => ({ [res.key]: res })),
     );
 
-    this.logger.info(`got all the following event data: ${JSON.stringify(merged)}`);
+    this.logger.debug(`got all the following event data: ${JSON.stringify(merged)}`);
 
     return merged as AllOfEventsResult<Events>;
   }
