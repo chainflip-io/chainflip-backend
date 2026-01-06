@@ -276,7 +276,7 @@ fn check_price_adjustment_by_pool_fee() {
 
 		// Output is computed by adjusting the price instead:
 		let output = {
-			let sqrt_price = SqrtPriceQ64F96::from(price);
+			let sqrt_price = SqrtPrice::from(price);
 			let adjusted_sqrt_price =
 				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips);
 			let adjusted_price = Price::from(adjusted_sqrt_price);

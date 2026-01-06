@@ -4,7 +4,7 @@ pub mod account_info;
 pub mod before_v7;
 pub mod eip712;
 
-use cf_amm::math::{Price, SqrtPriceQ64F96};
+use cf_amm::math::{Price, SqrtPrice};
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -488,7 +488,7 @@ fn auction_state_serialization() {
 fn pool_price_v1_serialization() {
 	let val = PoolPriceV1 {
 		price: Price::from_raw_into(12345678u128),
-		sqrt_price: SqrtPriceQ64F96::from_raw_into(87654321u128),
+		sqrt_price: SqrtPrice::from_raw_into(87654321u128),
 		tick: -100i32,
 	};
 
@@ -501,9 +501,9 @@ fn pool_price_v2_serialization() {
 		base_asset: any::Asset::Eth,
 		quote_asset: any::Asset::Usdc,
 		price: pallet_cf_pools::PoolPriceV2 {
-			sell: Some(SqrtPriceQ64F96::from_raw_into(1234567u128)),
-			buy: Some(SqrtPriceQ64F96::from_raw_into(1234567u128)),
-			range_order: SqrtPriceQ64F96::from_raw_into(1234567u128),
+			sell: Some(SqrtPrice::from_raw_into(1234567u128)),
+			buy: Some(SqrtPrice::from_raw_into(1234567u128)),
+			range_order: SqrtPrice::from_raw_into(1234567u128),
 		},
 	};
 
@@ -532,11 +532,11 @@ fn pool_order_book_serialization() {
 	let val = PoolOrderbook {
 		bids: vec![PoolOrder {
 			amount: 12345678u128.into(),
-			sqrt_price: SqrtPriceQ64F96::from_raw_into(87654321u128),
+			sqrt_price: SqrtPrice::from_raw_into(87654321u128),
 		}],
 		asks: vec![PoolOrder {
 			amount: 23456789u128.into(),
-			sqrt_price: SqrtPriceQ64F96::from_raw_into(98765432u128),
+			sqrt_price: SqrtPrice::from_raw_into(98765432u128),
 		}],
 	};
 
@@ -562,21 +562,21 @@ fn ask_bid_map_serialization() {
 	let val = AskBidMap::<UnidirectionalPoolDepth> {
 		asks: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(SqrtPriceQ64F96::from_raw_into(123456)),
+				price: Some(SqrtPrice::from_raw_into(123456)),
 				depth: 654321.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(SqrtPriceQ64F96::from_raw_into(234567)),
+				price: Some(SqrtPrice::from_raw_into(234567)),
 				depth: 765432.into(),
 			},
 		},
 		bids: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(SqrtPriceQ64F96::from_raw_into(345678)),
+				price: Some(SqrtPrice::from_raw_into(345678)),
 				depth: 876543.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(SqrtPriceQ64F96::from_raw_into(456789)),
+				price: Some(SqrtPrice::from_raw_into(456789)),
 				depth: 987654.into(),
 			},
 		},

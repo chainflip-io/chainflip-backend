@@ -20,7 +20,7 @@ mod tests;
 
 use core::convert::Infallible;
 
-use cf_amm_math::{mul_div_floor, mul_div_floor_checked, Amount, Price, SqrtPriceQ64F96, Tick};
+use cf_amm_math::{mul_div_floor, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 use codec::{Decode, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
@@ -69,20 +69,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Returns the current price for a given direction of swap. The price is measured in units of
 	/// the specified Pairs argument
-	pub fn current_price(&mut self, order: Side) -> Option<(Price, SqrtPriceQ64F96, Tick)> {
+	pub fn current_price(&mut self, order: Side) -> Option<(Price, SqrtPrice, Tick)> {
 		self.current_sqrt_price(order)
 			.map(|sqrt_price| ((Price::from(sqrt_price)), sqrt_price, sqrt_price.to_tick()))
 	}
 
 	/// Returns the Range Order sub-pool's current price.
 	/// SwapDirection is ignored as the price are the same for both directions.
-	pub fn current_range_order_pool_price(&mut self) -> SqrtPriceQ64F96 {
+	pub fn current_range_order_pool_price(&mut self) -> SqrtPrice {
 		self.range_orders.raw_current_sqrt_price()
 	}
 
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
 	/// of the specified Pairs argument
-	pub fn current_sqrt_price(&mut self, order: Side) -> Option<SqrtPriceQ64F96> {
+	pub fn current_sqrt_price(&mut self, order: Side) -> Option<SqrtPrice> {
 		match order.to_sold_pair() {
 			Pairs::Base => self.inner_current_sqrt_price::<BaseToQuote>(),
 			Pairs::Quote => self.inner_current_sqrt_price::<QuoteToBase>(),
@@ -95,14 +95,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		order: Side,
 		input_amount: Amount,
 		output_amount: Amount,
-	) -> SqrtPriceQ64F96 {
+	) -> SqrtPrice {
 		match order.to_sold_pair() {
-			Pairs::Base => SqrtPriceQ64F96::from_amounts_bounded(output_amount, input_amount),
-			Pairs::Quote => SqrtPriceQ64F96::from_amounts_bounded(input_amount, output_amount),
+			Pairs::Base => SqrtPrice::from_amounts_bounded(output_amount, input_amount),
+			Pairs::Quote => SqrtPrice::from_amounts_bounded(input_amount, output_amount),
 		}
 	}
 
-	fn inner_worst_price(order: Side) -> SqrtPriceQ64F96 {
+	fn inner_worst_price(order: Side) -> SqrtPrice {
 		match order.to_sold_pair() {
 			Pairs::Quote => QuoteToBase::WORST_SQRT_PRICE,
 			Pairs::Base => BaseToQuote::WORST_SQRT_PRICE,
@@ -113,7 +113,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		order: Side,
 		count: u32,
-	) -> Vec<SqrtPriceQ64F96> {
+	) -> Vec<SqrtPrice> {
 		let worst_sqrt_price = Self::inner_worst_price(order);
 		if let Some(current_sqrt_price) = self
 			.current_sqrt_price(order)
@@ -130,7 +130,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPriceQ64F96::from_raw(mul_div_floor(
+							*sqrt_price = SqrtPrice::from_raw(mul_div_floor(
 								sqrt_price.as_raw(),
 								U256::one() << 128,
 								root,
@@ -151,7 +151,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPriceQ64F96::from_raw(mul_div_floor(
+							*sqrt_price = SqrtPrice::from_raw(mul_div_floor(
 								sqrt_price.as_raw(),
 								root,
 								U256::one() << 128,
@@ -170,9 +170,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn relative_sqrt_price(
 		&self,
 		order: Side,
-		sqrt_price: SqrtPriceQ64F96,
+		sqrt_price: SqrtPrice,
 		delta: Tick,
-	) -> Option<SqrtPriceQ64F96> {
+	) -> Option<SqrtPrice> {
 		if sqrt_price.is_valid() {
 			Some(match order {
 				Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
@@ -187,7 +187,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
 		&mut self,
-	) -> Option<SqrtPriceQ64F96> {
+	) -> Option<SqrtPrice> {
 		let limit_orders_sqrt_price = self.limit_orders.current_sqrt_price::<SD>();
 		let range_orders_sqrt_price =
 			self.range_orders.current_sqrt_price::<SD>().map(|sqrt_price| {
@@ -217,7 +217,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		&mut self,
 		order: Side,
 		sold_amount: Amount,
-		sqrt_price_limit: Option<SqrtPriceQ64F96>,
+		sqrt_price_limit: Option<SqrtPrice>,
 	) -> (Amount, Amount) {
 		match order.to_sold_pair() {
 			Pairs::Base => self.inner_swap::<BaseToQuote>(sold_amount, sqrt_price_limit),
@@ -230,7 +230,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	>(
 		&mut self,
 		mut amount: Amount,
-		sqrt_price_limit: Option<SqrtPriceQ64F96>,
+		sqrt_price_limit: Option<SqrtPrice>,
 	) -> (Amount, Amount) {
 		let mut total_output_amount = Amount::zero();
 
@@ -486,7 +486,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn limit_order_depth(
 		&mut self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<SqrtPriceQ64F96>, Amount)>, limit_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<SqrtPrice>, Amount)>, limit_orders::DepthError> {
 		Ok(PoolPairsMap {
 			base: (
 				self.limit_orders.current_sqrt_price::<QuoteToBase>(),
@@ -502,7 +502,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn range_order_depth(
 		&self,
 		range: core::ops::Range<Tick>,
-	) -> Result<PoolPairsMap<(Option<SqrtPriceQ64F96>, Amount)>, range_orders::DepthError> {
+	) -> Result<PoolPairsMap<(Option<SqrtPrice>, Amount)>, range_orders::DepthError> {
 		self.range_orders.depth(range.start, range.end).map(|assets| PoolPairsMap {
 			base: (self.range_orders.current_sqrt_price::<QuoteToBase>(), assets[Pairs::Base]),
 			quote: (self.range_orders.current_sqrt_price::<BaseToQuote>(), assets[Pairs::Quote]),
@@ -572,9 +572,9 @@ fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 }
 
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
-	sqrt_price: SqrtPriceQ64F96,
+	sqrt_price: SqrtPrice,
 	fee_hundredth_pips: u32,
-) -> SqrtPriceQ64F96 {
+) -> SqrtPrice {
 	let price = Price::from(sqrt_price);
 
 	let adjusted_price = Price::from_raw(match SD::INPUT_SIDE.sell_order() {

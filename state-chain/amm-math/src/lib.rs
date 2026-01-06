@@ -32,7 +32,7 @@ pub type Amount = U256;
 /// The square root of the price.
 ///
 /// Represented as a fixed point integer with 96 fractional bits and
-/// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPriceQ64F96] is always in sqrt
+/// 64 integer bits (The higher bits past 96+64 th aren't used). [SqrtPrice] is always in sqrt
 /// units of asset one.
 #[derive(
 	Clone,
@@ -50,19 +50,18 @@ pub type Amount = U256;
 	Copy,
 	Default,
 )]
-pub struct SqrtPriceQ64F96(U256);
+pub struct SqrtPrice(U256);
 
-impl From<Price> for SqrtPriceQ64F96 {
+impl From<Price> for SqrtPrice {
 	fn from(price: Price) -> Self {
 		((U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
-			(Price::FRACTIONAL_BITS - SqrtPriceQ64F96::FRACTIONAL_BITS))
+			(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS))
 			.try_into()
-			.unwrap_or(SqrtPriceQ64F96::from_raw(U256::MAX))
+			.unwrap_or(SqrtPrice::from_raw(U256::MAX))
 	}
 }
 
-impl SqrtPriceQ64F96 {
-	/// The number of fractional bits used by `SqrtPriceQ64F96`.
+impl SqrtPrice {
 	pub const FRACTIONAL_BITS: u32 = 96;
 
 	pub fn is_valid(&self) -> bool {
@@ -79,7 +78,7 @@ impl SqrtPriceQ64F96 {
 		if base.is_zero() {
 			MAX_SQRT_PRICE
 		} else {
-			let unbounded_sqrt_price = SqrtPriceQ64F96::try_from(
+			let unbounded_sqrt_price = SqrtPrice::try_from(
 				((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
 					(128 - Self::FRACTIONAL_BITS),
 			)
@@ -96,12 +95,12 @@ impl SqrtPriceQ64F96 {
 	}
 
 	pub fn from_raw(value: U256) -> Self {
-		SqrtPriceQ64F96(value)
+		SqrtPrice(value)
 	}
 
 	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_raw_into<T: Into<U256>>(value: T) -> Self {
-		SqrtPriceQ64F96(value.into())
+		SqrtPrice(value.into())
 	}
 
 	pub fn as_raw(&self) -> U256 {
@@ -120,26 +119,26 @@ impl SqrtPriceQ64F96 {
 		};
 
 		macro_rules! handle_tick_bit {
-		($bit:literal, $constant:literal) => {
-			/* Proof that `checked_mul` does not overflow:
-				Note that the value ratio is initialized with above is such that `ratio <= (U256::one() << 128u128)`, alternatively `ratio <= (u128::MAX + 1)`
-				First consider the case of applying the macro once assuming `ratio <= (U256::one() << 128u128)`:
-					If ∀r ∈ U256, `r <= (U256::one() << 128u128)`, ∀C ∈ "Set of constants the macro is used with (Listed below)"
-					Then `C * r <= U256::MAX` (See `debug_assertions` below)
-					Therefore the `checked_mul` will not overflow
-				Also note that above `(C * r >> 128u128) <= UINT128_MAX`
-				Therefore if the if branch is taken ratio will be assigned a value `<= u128::MAX`
-				else ratio is unchanged and remains `ratio <= u128::MAX + 1`
-				Therefore as the assumption `ratio <= u128::MAX + 1` is always maintained after applying the macro,
-				none of the checked_mul calls in any of the applications of the macro will overflow
-			*/
-			#[cfg(debug_assertions)]
-			U256::checked_mul(U256::one() << 128u128, $constant.into()).unwrap();
-			if abs_tick & (0x1u32 << $bit) != 0 {
-				r = U256::checked_mul(r, U256::from($constant)).unwrap() >> 128u128
+			($bit:literal, $constant:literal) => {
+				/* Proof that `checked_mul` does not overflow:
+					Note that the value ratio is initialized with above is such that `ratio <= (U256::one() << 128u128)`, alternatively `ratio <= (u128::MAX + 1)`
+					First consider the case of applying the macro once assuming `ratio <= (U256::one() << 128u128)`:
+						If ∀r ∈ U256, `r <= (U256::one() << 128u128)`, ∀C ∈ "Set of constants the macro is used with (Listed below)"
+						Then `C * r <= U256::MAX` (See `debug_assertions` below)
+						Therefore the `checked_mul` will not overflow
+					Also note that above `(C * r >> 128u128) <= UINT128_MAX`
+					Therefore if the if branch is taken ratio will be assigned a value `<= u128::MAX`
+					else ratio is unchanged and remains `ratio <= u128::MAX + 1`
+					Therefore as the assumption `ratio <= u128::MAX + 1` is always maintained after applying the macro,
+					none of the checked_mul calls in any of the applications of the macro will overflow
+				*/
+				#[cfg(debug_assertions)]
+				U256::checked_mul(U256::one() << 128u128, $constant.into()).unwrap();
+				if abs_tick & (0x1u32 << $bit) != 0 {
+					r = U256::checked_mul(r, U256::from($constant)).unwrap() >> 128u128
+				}
 			}
 		}
-	}
 
 		handle_tick_bit!(1, 0xfff97272373d413259a46990580e213au128);
 		handle_tick_bit!(2, 0xfff2e50f5f656932ef12357cf3c7fdccu128);
@@ -179,7 +178,7 @@ impl SqrtPriceQ64F96 {
 
 		// we round up in the division so tick_at_sqrt_price of the output price is always
 		// consistent
-		SqrtPriceQ64F96(
+		SqrtPrice(
 			(sqrt_price_q32f128 >> 32u128) +
 				if sqrt_price_q32f128.low_u32() == 0 { U256::zero() } else { U256::one() },
 		)
@@ -310,11 +309,11 @@ impl SqrtPriceQ64F96 {
 	}
 }
 
-impl TryFrom<U512> for SqrtPriceQ64F96 {
+impl TryFrom<U512> for SqrtPrice {
 	type Error = ();
 
 	fn try_from(value: U512) -> Result<Self, Self::Error> {
-		U256::try_from(value).map(SqrtPriceQ64F96).map_err(|_| ())
+		U256::try_from(value).map(SqrtPrice).map_err(|_| ())
 	}
 }
 
@@ -374,8 +373,8 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 /// bits.
 pub struct Price(U256);
 
-impl From<SqrtPriceQ64F96> for Price {
-	fn from(sqrt_price: SqrtPriceQ64F96) -> Self {
+impl From<SqrtPrice> for Price {
+	fn from(sqrt_price: SqrtPrice) -> Self {
 		assert!(sqrt_price.is_valid());
 
 		// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so
@@ -384,7 +383,7 @@ impl From<SqrtPriceQ64F96> for Price {
 		Price(mul_div_floor(
 			sqrt_price.0,
 			sqrt_price.0,
-			U256::one() << (2 * SqrtPriceQ64F96::FRACTIONAL_BITS - Price::FRACTIONAL_BITS),
+			U256::one() << (2 * SqrtPrice::FRACTIONAL_BITS - Price::FRACTIONAL_BITS),
 		))
 	}
 }
@@ -418,14 +417,14 @@ impl Price {
 	/// This function never panics.
 	pub fn from_tick(tick: Tick) -> Option<Self> {
 		if is_tick_valid(tick) {
-			Some(SqrtPriceQ64F96::from_tick(tick).into())
+			Some(SqrtPrice::from_tick(tick).into())
 		} else {
 			None
 		}
 	}
 
 	pub fn from_amounts_bounded(quote: Amount, base: Amount) -> Self {
-		SqrtPriceQ64F96::from_amounts_bounded(quote, base).into()
+		SqrtPrice::from_amounts_bounded(quote, base).into()
 	}
 
 	pub fn from_amounts(quote: Amount, base: Amount) -> Self {
@@ -467,7 +466,7 @@ impl Price {
 	///
 	/// This function never panics.
 	pub fn into_tick(self) -> Option<Tick> {
-		let sqrt_price = SqrtPriceQ64F96::from(self);
+		let sqrt_price = SqrtPrice::from(self);
 		if sqrt_price.is_valid() {
 			Some(sqrt_price.to_tick())
 		} else {
@@ -516,11 +515,11 @@ pub const MIN_TICK: Tick = -887272;
 pub const MAX_TICK: Tick = -MIN_TICK;
 /// The minimum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MIN_TICK)`
-pub const MIN_SQRT_PRICE: SqrtPriceQ64F96 = SqrtPriceQ64F96(U256([0x1000276a3u64, 0x0, 0x0, 0x0]));
+pub const MIN_SQRT_PRICE: SqrtPrice = SqrtPrice(U256([0x1000276a3u64, 0x0, 0x0, 0x0]));
 /// The maximum value that can be returned from `sqrt_price_at_tick`. Equivalent to
 /// `sqrt_price_at_tick(MAX_TICK)`.
-pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
-	SqrtPriceQ64F96(U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]));
+pub const MAX_SQRT_PRICE: SqrtPrice =
+	SqrtPrice(U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]));
 
 pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
@@ -563,7 +562,7 @@ mod test {
 		let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([0; 32]);
 
 		for _i in 0..10000000 {
-			assert!(SqrtPriceQ64F96::from_amounts_bounded(
+			assert!(SqrtPrice::from_amounts_bounded(
 				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
 				rng_u256_inclusive_bound(&mut rng, Amount::one()..=Amount::MAX),
 			)
@@ -621,7 +620,7 @@ mod test {
 	#[test]
 	fn test_conversion_sqrt_price_back_and_forth() {
 		for tick in MIN_TICK..=MAX_TICK {
-			assert_eq!(tick, SqrtPriceQ64F96::from_tick(tick).to_tick());
+			assert_eq!(tick, SqrtPrice::from_tick(tick).to_tick());
 		}
 	}
 
@@ -629,12 +628,12 @@ mod test {
 	fn test_sqrt_price_at_tick() {
 		fn test_tick(tick: Tick, expected_sqrt_price_string: &str) {
 			assert_eq!(
-				SqrtPriceQ64F96::from_tick(tick).0,
+				SqrtPrice::from_tick(tick).0,
 				U256::from_dec_str(expected_sqrt_price_string).unwrap()
 			);
 		}
 
-		assert_eq!(SqrtPriceQ64F96::from_tick(MIN_TICK), MIN_SQRT_PRICE);
+		assert_eq!(SqrtPrice::from_tick(MIN_TICK), MIN_SQRT_PRICE);
 		test_tick(-738203, "7409801140451");
 		test_tick(-500000, "1101692437043807371");
 		test_tick(-250000, "295440463448801648376846");
@@ -663,14 +662,14 @@ mod test {
 		test_tick(250000, "21246587762933397357449903968194344");
 		test_tick(500000, "5697689776495288729098254600827762987878");
 		test_tick(738203, "847134979253254120489401328389043031315994541");
-		assert_eq!(SqrtPriceQ64F96::from_tick(MAX_TICK), MAX_SQRT_PRICE);
+		assert_eq!(SqrtPrice::from_tick(MAX_TICK), MAX_SQRT_PRICE);
 	}
 
 	#[test]
 	fn test_tick_at_sqrt_price() {
 		fn test_sqrt_price(sqrt_price_string: &str, expected_tick: Tick) {
 			assert_eq!(
-				SqrtPriceQ64F96(U256::from_dec_str(sqrt_price_string).unwrap()).to_tick(),
+				SqrtPrice(U256::from_dec_str(sqrt_price_string).unwrap()).to_tick(),
 				expected_tick
 			);
 		}
@@ -687,7 +686,7 @@ mod test {
 		test_sqrt_price("633825300114114700748351602688", 41590);
 		test_sqrt_price("79228162514264337593543950336000", 138162);
 		test_sqrt_price("79228162514264337593543950336000000", 276324);
-		assert_eq!((SqrtPriceQ64F96(MAX_SQRT_PRICE.0 - 1)).to_tick(), MAX_TICK - 1);
+		assert_eq!((SqrtPrice(MAX_SQRT_PRICE.0 - 1)).to_tick(), MAX_TICK - 1);
 		assert_eq!(MAX_SQRT_PRICE.to_tick(), MAX_TICK);
 	}
 
@@ -730,7 +729,7 @@ mod test {
 	#[test]
 	fn test_price_from_sqrt_price() {
 		assert_eq!(
-			Price::from(SqrtPriceQ64F96::from_raw(U256::from(1) << 96)),
+			Price::from(SqrtPrice::from_raw(U256::from(1) << 96)),
 			Price::from_raw(U256::from(1) << Price::FRACTIONAL_BITS)
 		);
 		assert!(Price::from(MIN_SQRT_PRICE) < Price::from(MAX_SQRT_PRICE));

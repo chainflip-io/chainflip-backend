@@ -76,15 +76,15 @@ fn r_non_zero() {
 fn output_amounts_bounded() {
 	// Note these values are significant over-estimates of the maximum output amount
 	QuoteToBase::output_amount_delta_floor(
-		SqrtPriceQ64F96::from_tick(MIN_TICK),
-		SqrtPriceQ64F96::from_tick(MAX_TICK),
+		SqrtPrice::from_tick(MIN_TICK),
+		SqrtPrice::from_tick(MAX_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
 	)
 	.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 	.unwrap();
 	BaseToQuote::output_amount_delta_floor(
-		SqrtPriceQ64F96::from_tick(MAX_TICK),
-		SqrtPriceQ64F96::from_tick(MIN_TICK),
+		SqrtPrice::from_tick(MAX_TICK),
+		SqrtPrice::from_tick(MIN_TICK),
 		MAX_TICK_GROSS_LIQUIDITY,
 	)
 	.checked_mul((1 + MAX_TICK - MIN_TICK).into())
@@ -148,14 +148,14 @@ fn test_amounts_to_liquidity() {
 
 					let pool_state = PoolState::new(
 						0,
-						SqrtPriceQ64F96::from_raw(rng_u256_inclusive_bound(
+						SqrtPrice::from_raw(rng_u256_inclusive_bound(
 							&mut rng,
 							if tick > MIN_TICK {
-								SqrtPriceQ64F96::from_tick(tick - 1).as_raw()..=
-									SqrtPriceQ64F96::from_tick(tick).as_raw()
+								SqrtPrice::from_tick(tick - 1).as_raw()..=
+									SqrtPrice::from_tick(tick).as_raw()
 							} else {
-								SqrtPriceQ64F96::from_tick(tick).as_raw()..=
-									SqrtPriceQ64F96::from_tick(tick + 1).as_raw()
+								SqrtPrice::from_tick(tick).as_raw()..=
+									SqrtPrice::from_tick(tick + 1).as_raw()
 							},
 						)),
 					)
@@ -206,7 +206,7 @@ mod fee_growth {
 	use super::*;
 
 	fn swap_until_tick(pool: &mut PoolState, tick: Tick) {
-		let price = SqrtPriceQ64F96::from_tick(tick);
+		let price = SqrtPrice::from_tick(tick);
 
 		let (output, _) = if pool.current_tick < tick {
 			pool.swap::<QuoteToBase>(U256::MAX, Some(price))
@@ -310,7 +310,7 @@ mod fee_growth {
 		let lp2 = LiquidityProvider::from([2; 32]);
 		let lp3 = LiquidityProvider::from([3; 32]);
 
-		let mut pool = PoolState::new(1000, SqrtPriceQ64F96::from_tick(0)).unwrap();
+		let mut pool = PoolState::new(1000, SqrtPrice::from_tick(0)).unwrap();
 
 		create_new_position(&mut pool, &lp1, 0, 100);
 		create_new_position(&mut pool, &lp2, 0, 200);
@@ -394,7 +394,7 @@ mod fee_growth {
 
 		const NEW_TICK: Tick = 40;
 
-		let mut pool = PoolState::new(1000, SqrtPriceQ64F96::from_tick(0)).unwrap();
+		let mut pool = PoolState::new(1000, SqrtPrice::from_tick(0)).unwrap();
 
 		create_new_position(&mut pool, &lp1, 0, 100);
 		create_new_position(&mut pool, &lp2, 0, 200);

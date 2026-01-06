@@ -49,7 +49,7 @@ use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
 use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE};
-use cf_amm_math::{is_tick_valid, Amount, Price, SqrtPriceQ64F96, Tick};
+use cf_amm_math::{is_tick_valid, Amount, Price, SqrtPrice, Tick};
 
 // This is the maximum liquidity/amount of an asset that can be sold at a single tick/price. If an
 // LP attempts to add more liquidity that would increase the total at the tick past this value, the
@@ -217,8 +217,8 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 
 	/// Gets entry for best prices pool
 	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>>;
+		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>>;
 }
 impl SwapDirection for BaseToQuote {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
@@ -234,8 +234,8 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
+		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>> {
 		pools.last_entry()
 	}
 }
@@ -255,8 +255,8 @@ impl SwapDirection for QuoteToBase {
 	}
 
 	fn best_priced_fixed_pool(
-		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
+		pools: &'_ mut BTreeMap<SqrtPrice, FixedPool>,
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>> {
 		pools.first_entry()
 	}
 }
@@ -403,13 +403,13 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
 	/// selling asset `Base` and all those that are selling asset `Quote` used the PoolPairsMap.
-	fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+	fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
 	/// All the Positions that either are providing liquidity currently, or were providing
 	/// liquidity directly after the last time they where updated. They are grouped into all those
 	/// that are selling asset `Base` and all those that are selling asset `Quote` used the
 	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
 	/// liquidity.
-	positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), Position>>,
 	/// Total fees earned over all time
 	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
@@ -524,7 +524,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the current price of the pool for a given swap direction, if some liquidity exists.
 	///
 	/// This function never panics.
-	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
+	pub(super) fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPrice> {
 		SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]).map(|entry| *entry.key())
 	}
 
@@ -537,7 +537,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub(super) fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
-		sqrt_price_limit: Option<SqrtPriceQ64F96>,
+		sqrt_price_limit: Option<SqrtPrice>,
 		range_orders_pool_fee_hundredth_pips: u32,
 	) -> (Amount, Amount) {
 		let mut total_output_amount = U256::zero();
@@ -754,9 +754,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
-	fn validate_tick<T>(tick: Tick) -> Result<SqrtPriceQ64F96, PositionError<T>> {
+	fn validate_tick<T>(tick: Tick) -> Result<SqrtPrice, PositionError<T>> {
 		is_tick_valid(tick)
-			.then(|| SqrtPriceQ64F96::from_tick(tick))
+			.then(|| SqrtPrice::from_tick(tick))
 			.ok_or(PositionError::InvalidTick)
 	}
 
@@ -838,7 +838,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	fn inner_collect<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
-		sqrt_price: SqrtPriceQ64F96,
+		sqrt_price: SqrtPrice,
 	) -> Result<(Collected, PositionInfo), PositionError<CollectError>> {
 		let price = Price::from(sqrt_price);
 

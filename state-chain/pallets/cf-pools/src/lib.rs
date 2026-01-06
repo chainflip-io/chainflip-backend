@@ -18,7 +18,7 @@
 use cf_amm::{
 	common::{PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
-	math::{Amount, Price, SqrtPriceQ64F96, Tick, MAX_SQRT_PRICE},
+	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
@@ -1364,7 +1364,7 @@ pub struct PoolLiquidity {
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct UnidirectionalSubPoolDepth {
 	/// The current sqrt price in this sub pool, in the given direction of swaps.
-	pub price: Option<SqrtPriceQ64F96>,
+	pub price: Option<SqrtPrice>,
 	/// The approximate amount of assets available to be sold in the specified price range.
 	pub depth: Amount,
 }
@@ -1380,7 +1380,7 @@ pub struct UnidirectionalPoolDepth {
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolOrder {
 	pub amount: Amount,
-	pub sqrt_price: SqrtPriceQ64F96,
+	pub sqrt_price: SqrtPrice,
 }
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
@@ -1392,17 +1392,17 @@ pub struct PoolOrderbook {
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PoolPriceV1 {
 	pub price: Price,
-	pub sqrt_price: SqrtPriceQ64F96,
+	pub sqrt_price: SqrtPrice,
 	pub tick: Tick,
 }
 
-pub type PoolPriceV2 = PoolPrice<SqrtPriceQ64F96>;
+pub type PoolPriceV2 = PoolPrice<SqrtPrice>;
 
 #[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolPrice<P> {
 	pub sell: Option<P>,
 	pub buy: Option<P>,
-	pub range_order: SqrtPriceQ64F96,
+	pub range_order: SqrtPrice,
 }
 
 impl<P> PoolPrice<P> {
@@ -2066,7 +2066,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: sold_base_amount,
-								sqrt_price: SqrtPriceQ64F96::from_amounts_bounded(
+								sqrt_price: SqrtPrice::from_amounts_bounded(
 									bought_quote_amount,
 									sold_base_amount,
 								),
@@ -2092,7 +2092,7 @@ impl<T: Config> Pallet<T> {
 						} else {
 							Some(PoolOrder {
 								amount: bought_base_amount,
-								sqrt_price: SqrtPriceQ64F96::from_amounts_bounded(
+								sqrt_price: SqrtPrice::from_amounts_bounded(
 									sold_quote_amount,
 									bought_base_amount,
 								),
