@@ -44,7 +44,6 @@ impl frame_system::Config for Test {
 impl_mock_runtime_safe_mode!(lending_pools: crate::PalletSafeMode);
 
 impl pallet_cf_lending_pools::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Balance = cf_traits::mocks::balance_api::MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;

@@ -143,7 +143,6 @@ impl RotationBroadcastsPending for MockRotationBroadcastsPending {
 
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type KeyRotator = MockKeyRotatorA;

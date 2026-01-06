@@ -425,9 +425,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// Access to the account balances.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
