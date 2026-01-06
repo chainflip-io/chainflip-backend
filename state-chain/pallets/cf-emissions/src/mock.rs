@@ -24,12 +24,12 @@ use cf_chains::{
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
-		flip_burn_info::MockFlipBurnOrMoveInfo,
+		flip_burn_info::MockFlipBurnOrMoveInfo, waived_fees::WaivedFeesMock,
 	},
-	Issuance, RewardsDistribution, WaivedFees,
+	Issuance, RewardsDistribution,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
@@ -70,15 +70,13 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = 150;
 }
 
-// Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, RuntimeCall);
-
 impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
+	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
+	type RuntimeHoldReason = ();
 }
 
 #[derive(
