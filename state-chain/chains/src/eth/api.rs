@@ -26,7 +26,7 @@ use crate::{
 	},
 	RejectCall, *,
 };
-use ethabi::{Address, Uint};
+use codec::DecodeWithMemTracking;
 use evm::api::common::*;
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
@@ -76,7 +76,16 @@ pub mod register_redemption;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum EthereumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),

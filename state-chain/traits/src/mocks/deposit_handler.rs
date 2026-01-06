@@ -21,7 +21,7 @@ use cf_chains::{
 	ChannelRefundParametersForChain, ForeignChain,
 };
 use cf_primitives::{chains::assets::any, BasisPoints, Beneficiaries, ChannelId, DcaParameters};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, vec, vec::Vec};
@@ -37,7 +37,7 @@ enum SwapOrLp {
 	Lp,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,
@@ -49,7 +49,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub boost_fee: BasisPoints,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct LpChannel<C: Chain, T: Chainflip> {
 	pub deposit_address: ForeignChainAddress,
 	pub source_asset: <C as Chain>::ChainAsset,

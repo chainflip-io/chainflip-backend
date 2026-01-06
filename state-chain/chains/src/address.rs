@@ -27,12 +27,11 @@ use cf_primitives::{
 	chains::{Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use sp_core::H160;
 use sp_std::{fmt::Debug, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +71,7 @@ pub trait AddressDerivationApi<C: Chain> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialOrd,
@@ -116,7 +116,18 @@ impl ForeignChainAddress {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+	Serialize,
+	Deserialize,
 )]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
