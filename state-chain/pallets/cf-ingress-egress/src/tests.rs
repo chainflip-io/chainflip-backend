@@ -77,6 +77,7 @@ use cf_utilities::assert_matches;
 use cf_chains::address::AddressDerivationApi;
 use cf_primitives::chains::assets::btc;
 use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
+use codec::DecodeWithMemTracking;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::{Instance1, Instance2},
@@ -3797,7 +3798,16 @@ fn rollback_storage_if_transactional_call_fails() {
 		use scale_info::TypeInfo;
 		use sp_core::{Decode, Encode};
 
-		#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+		#[derive(
+			CloneNoBound,
+			DebugNoBound,
+			PartialEqNoBound,
+			Eq,
+			Encode,
+			Decode,
+			DecodeWithMemTracking,
+			TypeInfo,
+		)]
 		pub struct RollbackStorageCall;
 
 		impl ApiCall<EvmCrypto> for RollbackStorageCall {

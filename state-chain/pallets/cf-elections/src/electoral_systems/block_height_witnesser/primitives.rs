@@ -1,6 +1,5 @@
 use cf_chains::witness_period::SaturatingStep;
 use cf_utilities::macros::*;
-use codec::{Decode, Encode};
 use core::iter;
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;

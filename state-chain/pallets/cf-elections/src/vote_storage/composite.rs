@@ -29,34 +29,34 @@ macro_rules! generate_vote_storage_tuple_impls {
 
             use super::super::{private, VoteStorage, AuthorityVote, VoteComponents};
 
-            use codec::{Encode, Decode};
+            use codec::{Encode, Decode, DecodeWithMemTracking};
             use scale_info::TypeInfo;
 
             #[cfg(feature = "runtime-benchmarks")]
             use cf_chains::benchmarking_value::BenchmarkValue;
 
 
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeVoteProperties<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeVote<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Ord, PartialOrd)]
             pub enum CompositePartialVote<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeIndividualComponent<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeBitmapComponent<$($t,)*> {
                 $($t($t),)*
             }
-            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeSharedData<$($t,)*> {
                 $($t($t),)*
             }

@@ -35,7 +35,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, ChainflipWithTargetChain, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -71,7 +71,7 @@ thread_local! {
 	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockCallback;
 
 impl MockCallback {

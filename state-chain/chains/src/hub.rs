@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::str::FromStr;
-
 use crate::*;
 
 pub mod api;
@@ -37,7 +35,7 @@ use dot::{
 
 pub use cf_primitives::chains::Assethub;
 use cf_primitives::PolkadotBlockNumber;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	pallet_prelude::{TransactionSource, TransactionValidityError, UnknownTransaction},
 	sp_runtime::generic::Era,
@@ -90,7 +88,7 @@ pub type AssethubUncheckedExtrinsic =
 pub type OutputAccountId = u64;
 
 /// The builder for creating and signing assethub extrinsics, and creating signature payload
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq, Clone)]
 pub struct AssethubExtrinsicBuilder {
 	pub extrinsic_call: AssethubRuntimeCall,
 	pub replay_protection: PolkadotReplayProtection,
@@ -131,14 +129,14 @@ pub fn calculate_derived_address(
 	PolkadotAccountId::from_aliased(payload_hash)
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct AssethubChargeAssetTxPayment {
 	#[codec(compact)]
 	tip: u128,
 	asset_id: Option<u32>,
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct AssethubSignedExtra(
 	pub  (
 		(),
@@ -296,7 +294,17 @@ impl AssethubExtrinsicBuilder {
 }
 
 #[derive(
-	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
 )]
 pub struct AssethubTrackedData {
 	pub median_tip: PolkadotBalance,
@@ -354,7 +362,7 @@ impl FeeRefundCalculator<Assethub> for PolkadotTransactionData {
 
 // The Assethub Runtime type that is expected by the assethub runtime
 #[expect(clippy::large_enum_variant)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssethubRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
@@ -388,11 +396,12 @@ impl Dispatchable for AssethubRuntimeCall {
 	}
 }
 
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
 #[expect(non_camel_case_types)]
 #[expect(clippy::large_enum_variant)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum XcmCall {
 	#[codec(index = 1u8)]
 	teleport_assets {
@@ -475,7 +484,7 @@ pub enum XcmCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
 	///
@@ -518,7 +527,7 @@ pub enum BalancesCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum UtilityCall {
 	/// Send a batch of dispatch calls.
 	///
@@ -605,7 +614,7 @@ pub enum UtilityCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum ProxyCall {
 	/// Dispatch the given `call` from an account that the sender is authorised for through
 	/// `add_proxy`.
@@ -856,7 +865,7 @@ pub enum ProxyCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssetsCall {
 	#[codec(index = 8u8)]
 	transfer {

@@ -23,7 +23,7 @@ use cf_traits::{
 	mocks::{broadcaster::MockBroadcaster, time_source},
 	AccountRoleRegistry, RedemptionCheck, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	derive_impl,
 	dispatch::{DispatchInfo, GetDispatchInfo},
@@ -75,7 +75,19 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockRegisterRedemption {
 	pub amount: <Ethereum as Chain>::ChainAmount,
 }
@@ -161,7 +173,9 @@ impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 pub type MockFundingBroadcaster = MockBroadcaster<(MockRegisterRedemption, RuntimeCall)>;
 
 //we define a variant here so that decoding can also fail. Empty type always successfully decodes.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Debug, Ord, PartialOrd)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug, Ord, PartialOrd,
+)]
 pub enum EmptyCall {
 	Empty,
 }

@@ -21,7 +21,7 @@ use crate::{
 use cf_primitives::{
 	AccountId, AffiliateAndFee, BasisPoints, Beneficiary, DcaParameters, MAX_AFFILIATES,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
@@ -29,13 +29,17 @@ use sp_std::prelude::Vec;
 
 /// The default type for CcmData is `()`, which is used for the (default) non-ccm case (ie. regular
 /// swaps).
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub enum VersionedCfParameters<RefundAddress, CcmData = ()> {
 	V0(CfParametersV0<RefundAddress, CcmData>),
 	V1(CfParametersV1<RefundAddress, CcmData>),
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct CfParameters<VaultSwapParam, CcmData> {
 	/// CCMs may require additional data (e.g. CCMs to Solana requires a list of addresses).
 	pub ccm_additional_data: CcmData,
@@ -47,7 +51,9 @@ pub type CfParametersV0<RefundAddress, CcmData = ()> =
 pub type CfParametersV1<RefundAddress, CcmData = ()> =
 	CfParameters<VaultSwapParametersV1<RefundAddress>, CcmData>;
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct VaultSwapParameters<R> {
 	pub refund_params: R,
 	pub dca_params: Option<DcaParameters>,

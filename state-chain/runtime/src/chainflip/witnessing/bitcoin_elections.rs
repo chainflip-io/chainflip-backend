@@ -19,6 +19,7 @@ use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{Chainflip, Hook};
 use cf_utilities::{cargo_fmt_ignore, derive_common_traits, impls};
+use codec::DecodeWithMemTracking;
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
@@ -83,7 +84,7 @@ impl ChainTypes for BitcoinChain {
 	const NAME: &'static str = "Bitcoin";
 }
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum BitcoinElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<btc::BlockNumber> },
 }
@@ -510,7 +511,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 
 pub struct BitcoinElectoralSystemConfiguration;
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(<GenericBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
 	Vaults(<GenericBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),

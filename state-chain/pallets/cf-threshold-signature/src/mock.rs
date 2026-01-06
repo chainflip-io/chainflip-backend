@@ -35,7 +35,7 @@ use cf_traits::{
 	VaultActivator,
 };
 use cf_utilities::assert_matches;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::dispatch::DispatchResultWithPostInfo;
 pub use frame_support::{
 	derive_impl,
@@ -70,7 +70,7 @@ thread_local! {
 	pub static TIMES_CALLED: std::cell::RefCell<u8> = Default::default();
 	pub static VAULT_ACTIVATION_STATUS: RefCell<AsyncResult<()>> = RefCell::new(AsyncResult::Pending);
 }
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum MockCallback<C: ChainCrypto> {
 	Regular(RequestId, PhantomData<C>),
 	Keygen(Call<Test, Instance1>),

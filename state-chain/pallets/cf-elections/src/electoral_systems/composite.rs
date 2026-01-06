@@ -76,7 +76,7 @@ macro_rules! generate_electoral_system_tuple_impls {
 
             use frame_support::{Parameter, pallet_prelude::{Member, MaybeSerializeDeserialize}};
 
-            use codec::{Encode, Decode};
+            use codec::{Encode, Decode, DecodeWithMemTracking};
             use scale_info::TypeInfo;
             use sp_std::vec::Vec;
 
@@ -87,27 +87,27 @@ macro_rules! generate_electoral_system_tuple_impls {
                 ) -> Result<(), CorruptStorageError>;
             }
 
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeElectoralUnsynchronisedStateMapKey<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeElectoralUnsynchronisedStateMapValue<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeElectionIdentifierExtra<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeElectionProperties<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeElectionState<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
             pub enum CompositeConsensus<$($electoral_system,)*> {
                 $($electoral_system($electoral_system),)*
             }

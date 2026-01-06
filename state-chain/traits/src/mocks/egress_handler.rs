@@ -21,7 +21,7 @@ use cf_chains::{
 	ForeignChainAddress,
 };
 use cf_primitives::{AssetAmount, EgressCounter};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError,
@@ -35,7 +35,7 @@ impl<C> MockPallet for MockEgressHandler<C> {
 	const PREFIX: &'static [u8] = b"MockEgressHandler";
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum MockEgressParameter<C: Chain> {
 	Swap {
 		asset: C::ChainAsset,

@@ -16,6 +16,7 @@
 
 //! Definitions for the "registerRedemption" transaction.
 use super::*;
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::{ParamType, Token};
 use evm::Address;
 use frame_support::sp_runtime::RuntimeDebug;
@@ -25,7 +26,18 @@ use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+)]
 pub struct RegisterRedemption {
 	/// The id (ie. Chainflip account Id) of the redeemer.
 	pub node_id: [u8; 32],
@@ -39,7 +51,19 @@ pub struct RegisterRedemption {
 	pub executor: RedemptionExecutor,
 }
 
-#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Copy,
+	Default,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum RedemptionExecutor {
 	#[default]
 	AnyAddress,

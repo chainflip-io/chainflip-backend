@@ -17,7 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::{address::Address, digest::Digest, signature::Signature};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::str::FromStr;
 use generic_array::{typenum::U64, GenericArray};
 use scale_info::TypeInfo;
@@ -64,7 +64,7 @@ define_binary!(digest, Digest, crate::consts::SOLANA_DIGEST_LEN, "D");
 define_binary!(signature, Signature, crate::consts::SOLANA_SIGNATURE_LEN, "S");
 
 /// Represents a derived Associated Token Account to be used as deposit channels.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct PdaAndBump {
 	pub address: Address,
 	pub bump: AccountBump,
@@ -129,7 +129,18 @@ pub struct PdaAndBump {
 /// Programs may require signatures from some accounts, in which case they
 /// should be specified as signers during `Instruction` construction. The
 /// program must still validate during execution that the account is a signer.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+#[derive(
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct Instruction<Address = Pubkey> {
 	/// Pubkey of the program that executes this instruction.
 	pub program_id: Address,
@@ -215,7 +226,17 @@ impl Instruction {
 /// is not writable.
 #[repr(C)]
 #[derive(
-	Debug, Default, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Clone,
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
 )]
 pub struct AccountMeta<Address = Pubkey> {
 	/// An account's public key.
@@ -299,7 +320,18 @@ impl<P: Into<Pubkey>> From<P> for AccountMeta {
 ///
 /// [PoH]: https://docs.solana.com/cluster/synchronization
 #[derive(
-	Encode, Decode, TypeInfo, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Copy,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	Default,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+	Copy,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct MessageHeader {
@@ -527,7 +559,18 @@ pub fn compile_instructions(ixs: &[Instruction], keys: &[Pubkey]) -> Vec<Compile
 /// construction of `Message`. Most users will not interact with it directly.
 ///
 /// [`Message`]: crate::message::Message
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	Debug,
+	PartialEq,
+	Eq,
+	Clone,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct CompiledInstruction {
 	/// Index into the transaction keys array indicating the program account that executes this
@@ -545,6 +588,7 @@ pub struct CompiledInstruction {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Debug,
 	PartialEq,
@@ -645,6 +689,7 @@ impl From<Signature> for RawSignature {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,

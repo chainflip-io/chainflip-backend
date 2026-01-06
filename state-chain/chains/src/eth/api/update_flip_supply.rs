@@ -15,13 +15,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+)]
 pub struct UpdateFlipSupply {
 	/// The new total supply
 	pub new_total_supply: U256,

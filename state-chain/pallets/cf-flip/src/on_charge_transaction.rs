@@ -22,7 +22,7 @@
 use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, WaivedFees};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	sp_runtime::{
@@ -139,7 +139,17 @@ impl<Call> CallIndexer<Call> for () {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Default,
 )]
 pub enum FeeScalingRateConfig {
 	/// No scaling for the first `threshold` calls, scale by `(call_count - threshold)^exponent`

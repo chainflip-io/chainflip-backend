@@ -14,12 +14,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 
 /// A result type for asynchronous operations.
-#[derive(Clone, Copy, Default, RuntimeDebug, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(
+	Clone,
+	Copy,
+	Default,
+	RuntimeDebug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+)]
 pub enum AsyncResult<R> {
 	/// Result is ready.
 	Ready(R),

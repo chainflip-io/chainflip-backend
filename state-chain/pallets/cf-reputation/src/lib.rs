@@ -70,7 +70,7 @@ type RuntimeReputationTracker<T> = reputation::ReputationTracker<T>;
 
 /// A penalty comprises the reputation that will be deducted and the number of blocks suspension
 /// that are imposed.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound(T: Config))]
 pub struct Penalty<T: Config> {
@@ -93,7 +93,18 @@ impl<T: Config> Default for Penalty<T> {
 	}
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	MissedHeartbeat,
 }

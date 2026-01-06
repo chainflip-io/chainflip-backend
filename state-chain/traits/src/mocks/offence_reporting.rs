@@ -75,11 +75,14 @@ where
 
 #[cfg(test)]
 mod test {
+	use codec::{DecodeWithMemTracking, Encode};
 	use scale_info::TypeInfo;
 
 	use super::*;
 
-	#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(
+		Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+	)]
 	enum MockOffence {
 		BeingNaughty,
 		BeingSuperNaughty,

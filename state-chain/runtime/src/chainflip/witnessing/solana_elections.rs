@@ -43,7 +43,7 @@ use cf_traits::{
 	AdjustedFeeEstimationApi, Broadcaster, Chainflip, DerivedIngressSink, ElectionEgressWitnesser,
 	GetBlockHeight, IngressSource, SolanaNonceWatch,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
@@ -209,6 +209,7 @@ pub type SolanaVaultSwapTracking =
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Ord,
 	PartialOrd,
@@ -262,7 +263,9 @@ impl
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo)]
+#[derive(
+	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo,
+)]
 pub struct TransactionSuccessDetails {
 	pub tx_fee: u64,
 	// It is possible for a contract call to be reverted due to contract's internal error.
@@ -452,7 +455,18 @@ impl
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+)]
 pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
@@ -591,7 +605,18 @@ impl ElectionEgressWitnesser for SolanaEgressWitnessingTrigger {
 }
 
 #[derive(
-	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	PartialOrd,
+	Ord,
 )]
 pub struct SolanaVaultSwapDetails {
 	pub from: SolAsset,
@@ -680,7 +705,18 @@ impl
 }
 
 #[derive(
-	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, PartialOrd, Ord,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	PartialOrd,
+	Ord,
 )]
 pub struct SolanaVaultSwapsSettings {
 	pub swap_endpoint_data_account_address: SolAddress,

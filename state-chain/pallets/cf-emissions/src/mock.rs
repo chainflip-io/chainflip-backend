@@ -31,7 +31,7 @@ use cf_traits::{
 	},
 	Issuance, RewardsDistribution, WaivedFees,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
 use frame_system::{self as system};
 use scale_info::TypeInfo;
@@ -82,7 +82,18 @@ impl pallet_cf_flip::Config for Test {
 	type CallIndexer = ();
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockUpdateFlipSupply {
 	pub new_total_supply: FlipBalance,
 	pub block_number: u64,

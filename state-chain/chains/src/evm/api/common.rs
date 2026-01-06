@@ -21,7 +21,9 @@ use ethabi::{ParamType, Token};
 use sp_core::H160 as Address;
 use sp_std::vec;
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub(crate) struct EncodableFetchAssetParams {
 	pub contract_address: Address,
 	pub asset: Address,
@@ -40,7 +42,9 @@ impl Tokenizable for EncodableFetchAssetParams {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub(crate) struct EncodableFetchDeployAssetParams {
 	pub channel_id: ChannelId,
 	pub asset: Address,
@@ -59,7 +63,9 @@ impl Tokenizable for EncodableFetchDeployAssetParams {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq,
+)]
 pub struct EncodableTransferAssetParams {
 	/// For EVM, the asset is encoded as a contract address.
 	pub asset: Address,

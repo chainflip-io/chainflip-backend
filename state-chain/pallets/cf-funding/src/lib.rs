@@ -40,7 +40,7 @@ use cf_traits::{
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
 use cf_utilities::derive_common_traits;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
@@ -344,8 +344,9 @@ pub mod pallet {
 		Eq,
 		Encode,
 		Decode,
-		TypeInfo,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
+		TypeInfo,
 		Ord,
 		PartialOrd,
 		Serialize,
@@ -1181,7 +1182,7 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 }
 
 derive_common_traits! {
-	#[derive(PartialOrd, Ord, TypeInfo)]
+	#[derive(PartialOrd, Ord, DecodeWithMemTracking, TypeInfo)]
 	pub struct EthereumDepositAndSCCall {
 		pub deposit: EthereumDeposit,
 		pub call: Vec<u8>,

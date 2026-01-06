@@ -60,7 +60,7 @@ use cf_primitives::{
 	EgressCounter, EgressId, EpochIndex, ForeignChain, IngressOrEgress, Ipv6Addr,
 	NetworkEnvironment, SemVer, SwapRequestId, ThresholdSignatureRequestId, FLIPPERINOS_PER_FLIP,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
@@ -190,7 +190,17 @@ impl<T: Chainflip> Get<EpochIndex> for CurrentEpochIndex<T> {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	RuntimeDebug,
+)]
 pub struct Bid<Id, Amount> {
 	pub bidder_id: Id,
 	pub amount: Amount,
@@ -367,7 +377,9 @@ pub trait RewardsDistribution {
 ///
 /// A node is regarded online if we have received a heartbeat during the last heartbeat interval
 /// otherwise they are considered offline.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default,
+)]
 pub struct NetworkState<ValidatorId> {
 	/// Those nodes that are considered offline
 	pub offline: Vec<ValidatorId>,
@@ -748,7 +760,9 @@ pub trait FundingInfo {
 	fn total_onchain_funds() -> Self::Balance;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub enum AdditionalDepositAction {
 	FundFlip { flip_amount_to_credit: cf_primitives::AssetAmount },
 }
@@ -925,7 +939,15 @@ impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> D
 }
 
 #[derive(
-	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug,
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	RuntimeDebug,
 )]
 pub struct ScheduledEgressDetails<C: Chain> {
 	pub egress_id: EgressId,
@@ -1110,7 +1132,7 @@ pub trait FetchesTransfersLimitProvider {
 pub struct NoLimit;
 impl FetchesTransfersLimitProvider for NoLimit {}
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SwapLimits {
 	pub max_swap_retry_duration_blocks: BlockNumber,
 	pub max_swap_request_duration_blocks: BlockNumber,
@@ -1302,7 +1324,16 @@ pub trait LpOrdersWeightsProvider {
 }
 
 #[derive(
-	Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub struct PoolPrice {
 	pub sell: Price,
@@ -1334,7 +1365,7 @@ pub trait SpawnAccount {
 	) -> Result<Self::AccountId, DispatchError>;
 }
 
-#[derive(Encode, Decode, PartialEq, Debug, TypeInfo, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo, Clone)]
 pub enum FundingSource {
 	EthTransaction { tx_hash: [u8; 32], funder: cf_chains::evm::Address },
 	Swap { swap_request_id: SwapRequestId },

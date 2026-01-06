@@ -10,7 +10,6 @@ use crate::electoral_systems::{
 use cf_chains::witness_period::SaturatingStep;
 use cf_traits::{Hook, Validate};
 use cf_utilities::macros::*;
-use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use generic_typeinfo_derive::GenericTypeInfo;
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec::Vec};
@@ -303,6 +302,7 @@ pub(crate) mod tests {
 		Arbitrary,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 	)]
 	pub enum MockBtcEvent<E> {

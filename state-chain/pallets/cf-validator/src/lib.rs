@@ -74,7 +74,9 @@ type Version = SemVer;
 
 type Ed25519Signature = ed25519::Signature;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	/// Note the `min_stake` is in whole FLIP, not flipperinos.
 	MinimumValidatorStake {
@@ -113,7 +115,17 @@ type RuntimeRotationState<T> =
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
-#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	RuntimeDebugNoBound,
+)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
 	#[default]
@@ -139,7 +151,18 @@ impl<T: pallet::Config> RotationPhase<T> {
 }
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
 }

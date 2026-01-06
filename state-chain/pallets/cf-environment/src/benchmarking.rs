@@ -29,13 +29,13 @@ use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 #[allow(dead_code)]
 pub mod benchmark_types {
 	use cf_primitives::{Asset, AssetAmount};
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use scale_info::TypeInfo;
 	use sp_std::collections::btree_map::BTreeMap;
 
 	/// Mimics a realistic pallet call similar to `request_loan`.
 	/// Parameters: asset enum, amount (u128), optional asset, BTreeMap<Asset, Amount>
-	#[derive(TypeInfo, Clone, Encode, Decode, Debug, PartialEq, Eq)]
+	#[derive(TypeInfo, Clone, Encode, Decode, DecodeWithMemTracking, Debug, PartialEq, Eq)]
 	pub struct RealisticCallParams {
 		pub loan_asset: Asset,
 		pub loan_amount: AssetAmount,
