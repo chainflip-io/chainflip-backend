@@ -483,7 +483,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.liquidity()
 	}
 
-	// TODO JAMIE: breaking change here. Need to be noted and update the docs.
 	pub fn limit_order_depth(
 		&mut self,
 		range: core::ops::Range<Tick>,

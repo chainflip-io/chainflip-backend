@@ -134,7 +134,7 @@ pub type ChannelRefundParametersForChain<C> =
 impl<A, D> ChannelRefundParameters<A, D> {
 	pub fn min_output_amount(&self, input_amount: AssetAmount) -> AssetAmount {
 		use sp_runtime::traits::UniqueSaturatedInto;
-		self.min_price.output_amount_ceil(input_amount.into()).unique_saturated_into()
+		self.min_price.output_amount_ceil(input_amount).unique_saturated_into()
 	}
 }
 

@@ -297,7 +297,7 @@ impl SwapDirection for BaseToQuote {
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
 		assert!(0 < liquidity);
-		assert!(U256::zero() < sqrt_price_current.as_raw());
+		assert!(!sqrt_price_current.is_zero());
 
 		let liquidity = U256::from(liquidity) << SqrtPriceQ64F96::FRACTIONAL_BITS;
 

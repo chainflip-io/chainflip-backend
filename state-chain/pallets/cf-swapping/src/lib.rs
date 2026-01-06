@@ -16,7 +16,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use cf_amm::{common::Side, math::Price};
+use cf_amm::{
+	common::Side,
+	math::{Price, PriceLimits},
+};
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
@@ -25,9 +28,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, PriceLimits, SwapId, SwapLeg,
-	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
-	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -115,7 +118,7 @@ pub struct AffiliateDetails {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
-	pub price_limits: PriceLimits<Price>,
+	pub price_limits: PriceLimits,
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
@@ -517,7 +520,7 @@ pub mod pallet {
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		PriceLimits, SwapId, SwapRequestId,
+		SwapId, SwapRequestId,
 	};
 	use cf_traits::{
 		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
@@ -1695,9 +1698,7 @@ pub mod pallet {
 
 							Some(
 								sell_price
-									.output_amount_ceil(cf_amm::math::Amount::from(
-										state.input_amount(),
-									))
+									.output_amount_ceil(state.input_amount())
 									.saturated_into(),
 							)
 						})?;
@@ -1850,8 +1851,7 @@ pub mod pallet {
 			let oracle_delta = if let Some(oracle_price) =
 				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
 			{
-				let oracle_amount =
-					oracle_price.price.output_amount_floor(swap.swap.input_amount.into());
+				let oracle_amount = oracle_price.price.output_amount_floor(swap.swap.input_amount);
 				if oracle_amount.is_zero() {
 					None
 				} else {
@@ -1903,7 +1903,7 @@ pub mod pallet {
 							let min_output_amount = oracle_price
 								.price
 								.adjust_by_bps(slippage_bps, false)
-								.output_amount_floor(swap.swap.input_amount.into())
+								.output_amount_floor(swap.swap.input_amount)
 								.unique_saturated_into();
 							if final_output < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
@@ -1916,7 +1916,7 @@ pub mod pallet {
 				let min_price_output = params
 					.price_limits
 					.min_price
-					.output_amount_floor(swap.swap.input_amount.into())
+					.output_amount_floor(swap.swap.input_amount)
 					.unique_saturated_into();
 				if final_output < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
@@ -2595,7 +2595,7 @@ pub mod pallet {
 			// but small enough to not exhaust the pool liquidity.
 			let estimation_input = utilities::hard_coded_price_for_asset(asset)
 				.invert()
-				.output_amount_floor(20_000_000u128.into())
+				.output_amount_floor(20_000_000u128)
 				.saturated_into();
 
 			let estimation_output = with_transaction_unchecked(|| {
@@ -2614,8 +2614,7 @@ pub mod pallet {
 			}
 			.map(|estimation_output| {
 				// Get price in terms of `output_asset per input_asset`
-				let price =
-					Price::from_amounts_bounded(estimation_output.into(), estimation_input.into());
+				let price = Price::from_amounts(estimation_output.into(), estimation_input.into());
 				// Convert the price to terms of `asset per usdc`
 				if side == Side::Buy {
 					price.invert()
@@ -3071,7 +3070,7 @@ pub mod pallet {
 
 				// Finally calculate the required input amount
 				relative_price
-					.output_amount_ceil(desired_output_amount.into())
+					.output_amount_ceil(desired_output_amount)
 					.saturated_into::<AssetAmount>()
 			};
 

@@ -24,7 +24,7 @@ use crate::{
 use anyhow::anyhow;
 use cf_amm::{
 	common::Side,
-	math::{Price, Tick},
+	math::{PriceLimits, Tick},
 };
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
@@ -41,7 +41,7 @@ use cf_node_client::{
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
 	ApiWaitForResult, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters, EgressId,
-	ForeignChain, PriceLimits, WaitFor,
+	ForeignChain, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{
@@ -697,7 +697,7 @@ where
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits<Price>,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>> {

@@ -1688,6 +1688,7 @@ name = "cf-traits"
 version = "0.1.0"
 dependencies = [
  "cf-amm",
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cfe-events",
@@ -2781,6 +2782,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cf-amm",
+ "cf-amm-math",
  "cf-chains",
  "cf-node-client",
  "cf-primitives",
@@ -8614,6 +8616,7 @@ name = "pallet-cf-swapping"
 version = "0.1.0"
 dependencies = [
  "cf-amm",
+ "cf-amm-math",
  "cf-chains",
  "cf-primitives",
  "cf-runtime-utilities",

@@ -487,8 +487,8 @@ fn auction_state_serialization() {
 #[test]
 fn pool_price_v1_serialization() {
 	let val = PoolPriceV1 {
-		price: Price::from_raw(12345678u128),
-		sqrt_price: SqrtPriceQ64F96::from_raw(87654321u128),
+		price: Price::from_raw_into(12345678u128),
+		sqrt_price: SqrtPriceQ64F96::from_raw_into(87654321u128),
 		tick: -100i32,
 	};
 
@@ -501,9 +501,9 @@ fn pool_price_v2_serialization() {
 		base_asset: any::Asset::Eth,
 		quote_asset: any::Asset::Usdc,
 		price: pallet_cf_pools::PoolPriceV2 {
-			sell: Some(SqrtPriceQ64F96::from_raw(1234567u128)),
-			buy: Some(SqrtPriceQ64F96::from_raw(1234567u128)),
-			range_order: SqrtPriceQ64F96::from_raw(1234567u128),
+			sell: Some(SqrtPriceQ64F96::from_raw_into(1234567u128)),
+			buy: Some(SqrtPriceQ64F96::from_raw_into(1234567u128)),
+			range_order: SqrtPriceQ64F96::from_raw_into(1234567u128),
 		},
 	};
 
@@ -532,11 +532,11 @@ fn pool_order_book_serialization() {
 	let val = PoolOrderbook {
 		bids: vec![PoolOrder {
 			amount: 12345678u128.into(),
-			sqrt_price: SqrtPriceQ64F96::from_raw(87654321u128),
+			sqrt_price: SqrtPriceQ64F96::from_raw_into(87654321u128),
 		}],
 		asks: vec![PoolOrder {
 			amount: 23456789u128.into(),
-			sqrt_price: SqrtPriceQ64F96::from_raw(98765432u128),
+			sqrt_price: SqrtPriceQ64F96::from_raw_into(98765432u128),
 		}],
 	};
 
@@ -562,21 +562,21 @@ fn ask_bid_map_serialization() {
 	let val = AskBidMap::<UnidirectionalPoolDepth> {
 		asks: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw(123456)),
+				price: Some(Price::from_raw_into(123456)),
 				depth: 654321.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw(234567)),
+				price: Some(Price::from_raw_into(234567)),
 				depth: 765432.into(),
 			},
 		},
 		bids: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw(345678)),
+				price: Some(Price::from_raw_into(345678)),
 				depth: 876543.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(Price::from_raw(456789)),
+				price: Some(Price::from_raw_into(456789)),
 				depth: 987654.into(),
 			},
 		},
@@ -806,7 +806,7 @@ fn vault_swap_input_serialization() {
 	let refund_parameter = RefundParametersRpc {
 		retry_duration: 1000u32,
 		refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
-		min_price: Price::from_raw(1234),
+		min_price: Price::from_raw_into(1234),
 		refund_ccm_metadata: Some(ccm_unchecked()),
 		max_oracle_price_slippage: Some(200u16),
 	};
@@ -1047,7 +1047,7 @@ fn swap_deposit_address_serialization() {
 		refund_parameters: RefundParametersRpc {
 			retry_duration: 1000u32,
 			refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
-			min_price: Price::from_raw(1234),
+			min_price: Price::from_raw_into(1234),
 			refund_ccm_metadata: Some(ccm_unchecked()),
 			max_oracle_price_slippage: Some(200u16),
 		},

@@ -19,17 +19,16 @@ use super::{
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_amm::math::Price;
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
-	math::{Amount, Tick},
+	math::{Amount, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
-	EgressId, PriceLimits, SwapRequestId, WaitFor,
+	EgressId, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
@@ -467,7 +466,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits<Price>,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<SwapRequestId>> {

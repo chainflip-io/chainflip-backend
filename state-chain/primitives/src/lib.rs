@@ -115,27 +115,6 @@ pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	Serialize,
-	Deserialize,
-	MaxEncodedLen,
-	PartialOrd,
-	Ord,
-	Copy,
-	Default,
-)]
-pub struct PriceLimits<Price> {
-	pub min_price: Price,
-	pub max_oracle_price_slippage: Option<BasisPoints>,
-}
-
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always
 /// in units of asset One.
 pub type Tick = i32;

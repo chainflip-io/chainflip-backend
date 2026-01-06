@@ -67,7 +67,7 @@ impl<T: Config> OraclePriceCache<T> {
 		} else {
 			self.get_price(asset)?
 		};
-		Ok(price_in_usd.output_amount_ceil(amount.into()).unique_saturated_into())
+		Ok(price_in_usd.output_amount_ceil(amount).unique_saturated_into())
 	}
 
 	/// Uses oracle prices to calculate the USD value of the given asset amount
@@ -129,6 +129,6 @@ impl<T: Config> OraclePriceCache<T> {
 	) -> Result<AssetAmount, Error<T>> {
 		// The "price" of USD in terms of the asset:
 		let price = self.get_price(asset)?.invert();
-		Ok(price.output_amount_ceil(usd_value.into()).unique_saturated_into())
+		Ok(price.output_amount_ceil(usd_value).unique_saturated_into())
 	}
 }

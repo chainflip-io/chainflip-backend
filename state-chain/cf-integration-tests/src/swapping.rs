@@ -28,7 +28,7 @@ use crate::{
 	witness_call, BROKER,
 };
 use cf_amm::{
-	math::{Price, Tick},
+	math::{Price, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -43,8 +43,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{

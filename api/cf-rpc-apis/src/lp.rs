@@ -16,11 +16,11 @@
 
 use crate::{NotificationBehaviour, RpcResult};
 
-use cf_amm_math::Price;
+use cf_amm_math::PriceLimits;
 use cf_chains::{address::AddressString, evm::U256};
 use cf_primitives::{
 	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, BlockNumber,
-	DcaParameters, EgressId, ForeignChain, PriceLimits, WaitFor,
+	DcaParameters, EgressId, ForeignChain, WaitFor,
 };
 pub use cf_rpc_types::lp::*;
 use cf_rpc_types::{
@@ -164,7 +164,7 @@ pub trait LpRpcApi {
 		input_asset: Asset,
 		output_asset: Asset,
 		retry_duration: BlockNumber,
-		price_limits: PriceLimits<Price>,
+		price_limits: PriceLimits,
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;

@@ -249,6 +249,8 @@ impl SwapDirection for QuoteToBase {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
+		// Using input_amount_floor to calculate the output because of the swap direction is
+		// opposite the price.
 		price.input_amount_floor(input)
 	}
 

@@ -27,6 +27,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
+use cf_amm_math::Price;
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -37,7 +38,6 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
-	PriceLimits,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{

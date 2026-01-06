@@ -69,6 +69,10 @@ impl SqrtPriceQ64F96 {
 		(MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(self)
 	}
 
+	pub fn is_zero(&self) -> bool {
+		self.0.is_zero()
+	}
+
 	pub fn from_amounts_bounded(quote: Amount, base: Amount) -> Self {
 		assert!(!quote.is_zero() || !base.is_zero());
 
@@ -91,7 +95,12 @@ impl SqrtPriceQ64F96 {
 		}
 	}
 
-	pub fn from_raw<T: Into<U256>>(value: T) -> Self {
+	pub fn from_raw(value: U256) -> Self {
+		SqrtPriceQ64F96(value)
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
+	pub fn from_raw_into<T: Into<U256>>(value: T) -> Self {
 		SqrtPriceQ64F96(value.into())
 	}
 
@@ -189,14 +198,14 @@ impl SqrtPriceQ64F96 {
 			// rustfmt chokes when formatting this macro.
 			// See: https://github.com/rust-lang/rustfmt/issues/5404
 			#[rustfmt::skip]
-		macro_rules! add_integer_bit {
-			($bit:literal, $lower_bits_mask:literal) => {
-				if _bits_remaining > U256::from($lower_bits_mask) {
-					most_significant_bit |= $bit;
-					_bits_remaining >>= $bit;
-				}
-			};
-		}
+			macro_rules! add_integer_bit {
+				($bit:literal, $lower_bits_mask:literal) => {
+					if _bits_remaining > U256::from($lower_bits_mask) {
+						most_significant_bit |= $bit;
+						_bits_remaining >>= $bit;
+					}
+				};
+			}
 
 			add_integer_bit!(128u8, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFu128);
 			add_integer_bit!(64u8, 0xFFFFFFFFFFFFFFFFu128);
@@ -231,21 +240,21 @@ impl SqrtPriceQ64F96 {
 			// rustfmt chokes when formatting this macro.
 			// See: https://github.com/rust-lang/rustfmt/issues/5404
 			#[rustfmt::skip]
-		macro_rules! add_fractional_bit {
-			($bit:literal) => {
-				// Note squaring a number doubles its log
-				let mantissa_sq =
-					(U256::checked_mul(_mantissa.into(), _mantissa.into()).unwrap() >> 127u8);
-				_mantissa = if mantissa_sq.bit(128) {
-					// is the 129th bit set, all higher bits must be zero due to 127 right bit
-					// shift
-					log_2_q63f64 |= 1i128 << $bit;
-					(mantissa_sq >> 1u8).as_u128()
-				} else {
-					mantissa_sq.as_u128()
-				}
-			};
-		}
+			macro_rules! add_fractional_bit {
+				($bit:literal) => {
+					// Note squaring a number doubles its log
+					let mantissa_sq =
+						(U256::checked_mul(_mantissa.into(), _mantissa.into()).unwrap() >> 127u8);
+					_mantissa = if mantissa_sq.bit(128) {
+						// is the 129th bit set, all higher bits must be zero due to 127 right bit
+						// shift
+						log_2_q63f64 |= 1i128 << $bit;
+						(mantissa_sq >> 1u8).as_u128()
+					} else {
+						mantissa_sq.as_u128()
+					}
+				};
+			}
 
 			add_fractional_bit!(63u8);
 			add_fractional_bit!(62u8);
@@ -357,10 +366,10 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	TypeInfo,
 	MaxEncodedLen,
 )]
-/// This is the ratio of equivalently valued amounts of asset One and asset Zero.
+/// This is the ratio of equivalently valued amounts of base and quote assets.
 ///
-/// The price is always measured in amount of asset One per unit of asset Zero. Therefore as asset
-/// zero becomes more valuable relative to asset one the prices literal value goes up, and vice
+/// The price is always measured in amount of quote asset per unit of base asset. Therefore as base
+/// asset becomes more valuable relative to quote asset the prices literal value goes up, and vice
 /// versa. This ratio is represented as a fixed point number with `PRICE_FRACTIONAL_BITS` fractional
 /// bits.
 pub struct Price(U256);
@@ -383,7 +392,12 @@ impl From<SqrtPriceQ64F96> for Price {
 impl Price {
 	pub const FRACTIONAL_BITS: u32 = 128;
 
-	pub fn from_raw<T: Into<U256>>(value: T) -> Self {
+	pub fn from_raw(value: U256) -> Self {
+		Price(value)
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
+	pub fn from_raw_into<T: Into<U256>>(value: T) -> Self {
 		Price(value.into())
 	}
 
@@ -414,26 +428,29 @@ impl Price {
 		SqrtPriceQ64F96::from_amounts_bounded(quote, base).into()
 	}
 
-	/// Given prices of asset 1 and asset 2 (in terms of the same asset)
-	/// compute the price of asset 1 (self) in terms of asset 2 (given)
+	pub fn from_amounts(quote: Amount, base: Amount) -> Self {
+		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
+	}
+
+	/// Compute the price of asset 1 (self) in terms of asset 2 (given)
 	pub fn relative_to(self, price: Price) -> Self {
 		Price(mul_div_floor(self.0, U256::one() << Self::FRACTIONAL_BITS, price.0))
 	}
 
-	pub fn output_amount_floor(self, input: Amount) -> Amount {
-		mul_div_floor(input, self.0, U256::one() << Self::FRACTIONAL_BITS)
+	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Amount {
+		mul_div_floor(input.into(), self.0, U256::one() << Self::FRACTIONAL_BITS)
 	}
 
-	pub fn output_amount_ceil(self, input: Amount) -> Amount {
-		mul_div_ceil(input, self.0, U256::one() << Self::FRACTIONAL_BITS)
+	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Amount {
+		mul_div_ceil(input.into(), self.0, U256::one() << Self::FRACTIONAL_BITS)
 	}
 
-	pub fn input_amount_floor(self, output: Amount) -> Amount {
-		mul_div_floor(output, U256::one() << Self::FRACTIONAL_BITS, self.0)
+	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Amount {
+		mul_div_floor(output.into(), U256::one() << Self::FRACTIONAL_BITS, self.0)
 	}
 
-	pub fn input_amount_ceil(self, output: Amount) -> Amount {
-		mul_div_ceil(output, U256::one() << Self::FRACTIONAL_BITS, self.0)
+	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Amount {
+		mul_div_ceil(output.into(), U256::one() << Self::FRACTIONAL_BITS, self.0)
 	}
 
 	/// Given price of asset 1 in terms of asset 2, compute the price of asset 2 in terms of asset 1
@@ -462,6 +479,7 @@ impl Price {
 		Self::from_tick(0).unwrap()
 	}
 
+	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd_fine_amount(price_usd: cf_primitives::AssetAmount) -> Self {
 		Self(U256::from(price_usd) << Self::FRACTIONAL_BITS)
 	}
@@ -469,7 +487,7 @@ impl Price {
 	/// Get the price of an asset given its USD cents amount. The price is automatically scaled to
 	/// the asset's decimals.
 	pub fn from_usd_cents(asset: Asset, cents_amount: u32) -> Self {
-		if asset.decimals() == 0 || cents_amount == 0 {
+		if cents_amount == 0 {
 			return Self(U256::zero());
 		}
 		Self(
@@ -506,6 +524,27 @@ pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 
 pub fn is_tick_valid(tick: Tick) -> bool {
 	(MIN_TICK..=MAX_TICK).contains(&tick)
+}
+
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Copy,
+	Default,
+)]
+pub struct PriceLimits {
+	pub min_price: Price,
+	pub max_oracle_price_slippage: Option<BasisPoints>,
 }
 
 #[cfg(test)]
@@ -706,5 +745,16 @@ mod test {
 				asset
 			);
 		}
+	}
+
+	#[test]
+	fn test_price_invert() {
+		let price = Price::from_usd_cents(Asset::Eth, 12345);
+
+		assert_eq!(price.invert().invert(), price);
+		assert_eq!(
+			price.output_amount_floor(U256::from(123 * 10u128.pow(18))),
+			price.invert().input_amount_floor(U256::from(123 * 10u128.pow(18)))
+		);
 	}
 }
