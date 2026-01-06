@@ -125,9 +125,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The runtime offence type must be compatible with this pallet's offence type.
 		type Offence: From<PalletOffence>
 			+ Member

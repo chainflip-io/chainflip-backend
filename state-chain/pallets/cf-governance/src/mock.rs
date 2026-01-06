@@ -124,7 +124,6 @@ impl CompatibleCfeVersions for MockCompatibleCfeVersions {
 impl pallet_cf_governance::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type WeightInfo = ();
 	type UpgradeCondition = UpgradeConditionMock;

@@ -160,7 +160,6 @@ pub type MockOffenceReporter =
 impl_mock_runtime_safe_mode! { threshold_signature: pallet_cf_threshold_signature::PalletSafeMode<Instance1> }
 
 impl pallet_cf_threshold_signature::Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = MockCallback<MockEthereumChainCrypto>;

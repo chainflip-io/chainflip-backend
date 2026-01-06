@@ -75,7 +75,6 @@ impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 pub type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
 
 impl pallet_cf_witness::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
@@ -89,7 +88,6 @@ impl pallet_cf_witness::Config for Test {
 impl_mock_chainflip!(Test);
 
 impl dummy::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 }
 

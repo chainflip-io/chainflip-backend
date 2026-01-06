@@ -123,7 +123,6 @@ impl CommKeyBroadcaster for MockBroadcaster {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = MockFeePayment<Self>;
 	type CommKeyBroadcaster = MockBroadcaster;
 	type AnyChainGovKeyBroadcaster = MockBroadcaster;

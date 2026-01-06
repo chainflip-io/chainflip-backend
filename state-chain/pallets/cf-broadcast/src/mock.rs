@@ -119,7 +119,6 @@ impl ChainflipWithTargetChain<Instance1> for Test {
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
