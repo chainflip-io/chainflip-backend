@@ -19,7 +19,7 @@ extern crate alloc;
 use crate::{
 	btc::ScriptPubkey,
 	dot::PolkadotAccountId,
-	eth::Address as EvmAddress,
+	evm::Address as EvmAddress,
 	sol::{self, SolAddress, SolPubkey},
 	Chain,
 };
@@ -181,7 +181,7 @@ pub enum AddressError {
 	InvalidAddressForChain,
 }
 
-impl TryFrom<ForeignChainAddress> for H160 {
+impl TryFrom<ForeignChainAddress> for EvmAddress {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {

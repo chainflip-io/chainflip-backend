@@ -14,12 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::prelude::*;
-
 use crate::evm::rpc::{
 	address_checker::{AddressCheckerRpcApi, *},
 	EvmRpcApi,
 };
+use cf_chains::evm::{Address as EvmAddress, H256, U256};
 
 use super::EvmRetryRpcClient;
 
@@ -32,21 +31,21 @@ pub trait AddressCheckerRetryRpcApi {
 	async fn address_states(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> Vec<AddressState>;
 
 	async fn balances(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> Vec<U256>;
 
 	async fn query_price_feeds(
 		&self,
-		contract_address: H160,
-		aggregator_addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		aggregator_addresses: Vec<EvmAddress>,
 	) -> Result<(U256, U256, Vec<PriceFeedData>), anyhow::Error>;
 }
 
@@ -55,8 +54,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 	async fn address_states(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> Vec<AddressState> {
 		self.rpc_retry_client
 			.request(
@@ -77,8 +76,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 	async fn balances(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> Vec<U256> {
 		self.rpc_retry_client
 			.request(
@@ -98,8 +97,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 
 	async fn query_price_feeds(
 		&self,
-		contract_address: H160,
-		aggregator_addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		aggregator_addresses: Vec<EvmAddress>,
 	) -> Result<(U256, U256, Vec<PriceFeedData>), anyhow::Error> {
 		self.rpc_retry_client
 			.request_with_limit(

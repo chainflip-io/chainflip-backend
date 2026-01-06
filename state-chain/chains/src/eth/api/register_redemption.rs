@@ -16,10 +16,11 @@
 
 //! Definitions for the "registerRedemption" transaction.
 use super::*;
-use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{ParamType, Token};
+use evm::Address;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
+use sp_core::U256;
 use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
@@ -29,11 +30,11 @@ pub struct RegisterRedemption {
 	/// The id (ie. Chainflip account Id) of the redeemer.
 	pub node_id: [u8; 32],
 	/// The amount being redeemed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
-	pub amount: Uint,
+	pub amount: U256,
 	/// The Ethereum address to which the redemption with will be withdrawn.
 	pub address: Address,
 	/// The expiry duration in seconds.
-	pub expiry: Uint,
+	pub expiry: U256,
 	/// The authorised executor of the redemption.
 	pub executor: RedemptionExecutor,
 }
@@ -68,7 +69,7 @@ impl Tokenizable for RedemptionExecutor {
 }
 
 impl RegisterRedemption {
-	pub fn new<Amount: Into<Uint> + Clone>(
+	pub fn new<Amount: Into<U256> + Clone>(
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
@@ -91,7 +92,7 @@ impl EvmCall for RegisterRedemption {
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
 		vec![
 			("nodeID", <[u8; 32]>::param_type()),
-			("amount", Uint::param_type()),
+			("amount", U256::param_type()),
 			("funder", Address::param_type()),
 			("expiryTime", ParamType::Uint(48)),
 			("executor", RedemptionExecutor::param_type()),
@@ -176,7 +177,7 @@ mod test_register_redemption {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
