@@ -19,6 +19,7 @@ use crate::{
 	AllBatchError, Chain, ChainCrypto, FetchAssetParams, TransferAssetParams,
 };
 use cf_primitives::AssetAmount;
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use common::*;
 use ethabi::{ParamType, Token, Uint};
 use frame_support::{
@@ -44,7 +45,19 @@ pub mod vault_swaps;
 
 pub use vault_swaps::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Default,
+)]
 pub struct EvmReplayProtection {
 	pub nonce: u64,
 	pub chain_id: EvmChainId,
@@ -77,6 +90,7 @@ impl Tokenizable for EvmReplayProtection {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Copy,
 	Clone,
@@ -194,7 +208,17 @@ pub trait EvmCall {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct EvmTransactionBuilder<C> {
 	pub signer_and_sig_data: Option<(AggKey, SigData)>,
 	pub replay_protection: EvmReplayProtection,

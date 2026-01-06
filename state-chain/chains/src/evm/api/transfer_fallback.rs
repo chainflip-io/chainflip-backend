@@ -15,14 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Struct containing info for the TransferFallback call in the Vault contract.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct TransferFallback {
 	/// The failed transfer that needs to be addressed.
 	transfer_param: EncodableTransferAssetParams,

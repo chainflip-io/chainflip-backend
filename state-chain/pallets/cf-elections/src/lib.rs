@@ -197,7 +197,7 @@ pub mod pallet {
 	pub const MAXIMUM_VOTES_PER_EXTRINSIC: u32 = 16;
 	const BLOCKS_BETWEEN_CLEANUP: u64 = 128;
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 	pub struct AuthorityElectionData<Settings, Properties, AuthorityVote> {
 		pub settings: Settings,
 		pub properties: Properties,
@@ -208,7 +208,7 @@ pub mod pallet {
 		pub option_existing_vote: Option<AuthorityVote>,
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
+	#[derive(Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 	pub struct ElectoralData<ElectionIdentifier, Settings, Properties, AuthorityVote, BlockNumber> {
 		pub current_elections: BTreeMap<
 			ElectionIdentifier,
@@ -238,7 +238,18 @@ pub mod pallet {
 
 	/// A unique identifier for an election.
 	#[derive(
-		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Clone,
+		Copy,
+		Debug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Default,
 	)]
 	pub struct UniqueMonotonicIdentifier(u64);
 
@@ -260,7 +271,18 @@ pub mod pallet {
 	/// identify which type of election an identifier refers to, without having to read additional
 	/// storage.
 	#[derive(
-		PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode, TypeInfo, Default,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Clone,
+		Copy,
+		Debug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Default,
 	)]
 	pub struct ElectionIdentifier<Extra>(UniqueMonotonicIdentifier, Extra);
 	impl<Extra> ElectionIdentifier<Extra> {
@@ -286,7 +308,18 @@ pub mod pallet {
 
 	/// The hash of the original `SharedData` information, used retrieve the original information.
 	#[derive(
-		Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode, TypeInfo,
+		Clone,
+		Copy,
+		Debug,
+		PartialEq,
+		Eq,
+		PartialOrd,
+		Ord,
+		Hash,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
 	)]
 	pub struct SharedDataHash(sp_core::H256);
 	impl SharedDataHash {
@@ -332,13 +365,24 @@ pub mod pallet {
 	}
 	pub use corrupt_storage_error::CorruptStorageError;
 
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 	pub enum ElectionPalletStatus {
 		Paused { detected_corrupt_storage: bool },
 		Running,
 	}
 
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+	#[derive(
+		Debug,
+		PartialEq,
+		Eq,
+		Clone,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Serialize,
+		Deserialize,
+	)]
 	pub struct InitialState<
 		ElectoralUnsynchronisedState,
 		ElectoralUnsynchronisedSettings,
@@ -420,10 +464,6 @@ pub mod pallet {
 		/// Suffix that will be added to [GenericTypeInfo] derivations for this pallet.
 		const TYPE_INFO_SUFFIX: &'static str;
 
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		type ElectoralSystemRunner: ElectoralSystemRunner<
 			ValidatorId = <Self as Chainflip>::ValidatorId,
 			StateChainBlockNumber = BlockNumberFor<Self>,
@@ -502,7 +542,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
+	#[derive(
+		PartialEq, Eq, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default,
+	)]
 	pub struct ReferenceDetails<BlockNumber> {
 		pub count: u32,
 		/// The block at which the first reference was introduced.
@@ -630,7 +672,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo, Default)]
+	#[derive(
+		PartialEq, Eq, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default,
+	)]
 	pub struct ConsensusHistory<T> {
 		/// The most recent consensus the election had.
 		pub most_recent: T,
@@ -1742,7 +1786,7 @@ pub mod pallet {
 
 	// ---------------------------------------------------------------------------------------- //
 
-	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 	pub enum CorruptStorageAdherance {
 		Ignore,
 		Heed,

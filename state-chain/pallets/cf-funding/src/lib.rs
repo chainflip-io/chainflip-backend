@@ -39,7 +39,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Broadcaster, Chainflip, FeePayment,
 	FundAccount, Funding, FundingSource, GetMinimumFunding, RedemptionCheck, SpawnAccount,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::{DispatchResult, GetDispatchInfo},
 	ensure,
@@ -344,8 +344,9 @@ pub mod pallet {
 		Eq,
 		Encode,
 		Decode,
-		TypeInfo,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
+		TypeInfo,
 		Ord,
 		PartialOrd,
 		Serialize,
@@ -1234,13 +1235,24 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 		MinimumFunding::<T>::get().into()
 	}
 }
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, DebugNoBound)]
 pub struct EthereumDepositAndSCCall {
 	pub deposit: EthereumDeposit,
 	pub call: Vec<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, DebugNoBound, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	DebugNoBound,
+	Serialize,
+	Deserialize,
+)]
 pub enum EthereumDeposit {
 	FlipToSCGateway { amount: AssetAmount },
 	Vault { asset: EthAsset, amount: AssetAmount },

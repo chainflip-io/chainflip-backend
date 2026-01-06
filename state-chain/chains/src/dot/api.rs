@@ -15,7 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod batch_fetch_and_transfer;
-pub mod migrate_polkadot;
 pub mod rotate_vault_proxy;
 
 use super::{
@@ -29,7 +28,16 @@ use frame_support::{
 use sp_std::marker::PhantomData;
 
 /// Chainflip api calls available on Polkadot.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum PolkadotApi<Environment: 'static> {
 	BatchFetchAndTransfer(PolkadotExtrinsicBuilder),
@@ -63,7 +71,7 @@ impl<T: ChainEnvironment<VaultAccount, PolkadotAccountId> + Get<RuntimeVersion>>
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct VaultAccount;
 
 impl<E> ConsolidateCall<Polkadot> for PolkadotApi<E>

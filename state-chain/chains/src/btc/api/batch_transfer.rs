@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
@@ -26,7 +26,7 @@ use frame_support::sp_runtime::RuntimeDebug;
 
 /// Represents all the arguments required to build the call to fetch assets for all given channel
 /// ids.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchTransfer {
 	pub bitcoin_transaction: BitcoinTransaction,
 	pub change_utxo_key: [u8; 32],

@@ -23,6 +23,7 @@ use crate::{
 	hub::Assethub,
 	*,
 };
+use codec::DecodeWithMemTracking;
 use frame_support::{
 	traits::{Defensive, Get},
 	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
@@ -32,7 +33,16 @@ use hub::{AssethubExtrinsicBuilder, AssethubRuntimeCall, OutputAccountId};
 use sp_std::marker::PhantomData;
 
 /// Chainflip api calls available on Assethub.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum AssethubApi<Environment: 'static> {
 	BatchFetchAndTransfer(AssethubExtrinsicBuilder),
@@ -73,7 +83,7 @@ impl<
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct VaultAccount;
 
 impl<E> ConsolidateCall<Assethub> for AssethubApi<E>
@@ -262,7 +272,7 @@ impl<E: AssethubEnvironment + ReplayProtectionProvider<Assethub>> ApiCall<Polkad
 }
 
 #[expect(clippy::large_enum_variant)]
-#[derive(Clone, Encode, Decode, PartialEq, Debug, TypeInfo, Eq)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, Debug, TypeInfo, Eq)]
 pub enum TransferType {
 	/// should teleport `asset` to `dest`
 	Teleport,

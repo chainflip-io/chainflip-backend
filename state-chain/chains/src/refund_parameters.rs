@@ -24,7 +24,7 @@ use crate::{
 };
 use cf_amm_math::Price;
 use cf_primitives::{Asset, AssetAmount, BasisPoints};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::sp_runtime::DispatchError;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,9 @@ use sp_std::{cmp::Ord, convert::Into, fmt::Debug, prelude::*};
 /// AccountOrAddress is a enum that can represent an internal account or an external address.
 /// This is used to represent the destination address for an egress or an internal account
 /// to move funds internally.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialOrd, Ord,
+)]
 #[n_functor::derive_n_functor]
 pub enum AccountOrAddress<AccountId, Address> {
 	InternalAccount(AccountId),
@@ -66,6 +68,7 @@ pub enum AccountOrAddress<AccountId, Address> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Serialize,
@@ -89,6 +92,7 @@ pub struct ChannelRefundParameters<A, CcmRefundDetails> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Serialize,
