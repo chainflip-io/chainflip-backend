@@ -17,7 +17,7 @@
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, evm::Address as EvmAddress,
 	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
@@ -160,9 +160,9 @@ pub mod validator_info_before_v7 {
 		pub is_qualified: bool,
 		pub is_online: bool,
 		pub is_bidding: bool,
-		pub bound_redeem_address: Option<EthereumAddress>,
+		pub bound_redeem_address: Option<EvmAddress>,
 		pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-		pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+		pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 		pub estimated_redeemable_balance: AssetAmount,
 	}
 }
@@ -202,9 +202,9 @@ pub struct ValidatorInfo {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
 	pub operator: Option<AccountId32>,
 }
@@ -665,9 +665,9 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub bond: Balance,
 	pub estimated_redeemable_balance: Balance,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
-	pub restricted_balances: BTreeMap<EthereumAddress, Balance>,
+	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
 	#[serde(skip_serializing_if = "Option::is_none")]

@@ -61,7 +61,6 @@ pub mod benchmark_types {
 	}
 }
 
-#[expect(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where
 	T: pallet_cf_flip::Config,
@@ -570,9 +569,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_verify_signature() {
-		use cf_chains::{
-			eth::Address as EvmAddress,
-			evm::{verify_evm_signature, Signature as EthereumSignature},
+		use cf_chains::evm::{
+			verify_evm_signature, Address as EvmAddress, Signature as EthereumSignature,
 		};
 
 		// Pre-computed test data: a valid EIP-712 payload and matching signature.

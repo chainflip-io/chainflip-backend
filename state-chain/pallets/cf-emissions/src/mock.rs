@@ -131,7 +131,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 pub struct MockStateChainGatewayProvider;
 
 impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
-	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+	fn state_chain_gateway_address() -> cf_chains::evm::Address {
 		[0xcc; 20].into()
 	}
 }

@@ -16,12 +16,15 @@
 
 use std::collections::HashSet;
 
-use cf_chains::{evm::DepositDetails, instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	evm::{Address as EvmAddress, DepositDetails, H256, U256},
+	instances::ChainInstanceFor,
+	Chain,
+};
 use cf_primitives::EpochIndex;
-use ethers::types::{Bloom, H160};
+use ethers::types::{Address as EthersEvmAddress, Bloom};
 use futures_core::Future;
 use pallet_cf_ingress_egress::DepositWitness;
-use sp_core::{H256, U256};
 
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
@@ -41,7 +44,7 @@ use super::{
 
 #[derive(Debug)]
 pub enum Erc20Events {
-	TransferFilter { to: H160, from: H160, value: U256 },
+	TransferFilter { to: EvmAddress, from: EvmAddress, value: U256 },
 	Other,
 }
 
@@ -85,13 +88,13 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		eth_rpc: EvmRetryRpcClient,
 		asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
-		asset_contract_address: H160,
+		asset_contract_address: EvmAddress,
 	) -> Result<ChunkedByVaultBuilder<impl ChunkedByVault>, anyhow::Error>
 	where
 		Inner::Chain: cf_chains::Chain<
 			ChainAmount = u128,
 			DepositDetails = DepositDetails,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -122,7 +125,9 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.1
 					.into_iter()
 					.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
-					.map(|deposit_channel| deposit_channel.deposit_channel.address)
+					.map(|deposit_channel| {
+						EthersEvmAddress::from(deposit_channel.deposit_channel.address.0)
+					})
 					.collect::<HashSet<_>>();
 
 				let deposit_witnesses = events_at_block_deprecated::<Inner::Chain, Events, _>(

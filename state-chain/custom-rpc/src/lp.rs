@@ -28,7 +28,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -377,7 +377,7 @@ where
 
 	async fn transfer_asset(
 		&self,
-		amount: U256,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<Hash> {
@@ -529,7 +529,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
+	async fn free_balances(&self) -> RpcResult<AssetMap<NumberOrHex>> {
 		Ok(self
 			.rpc_backend
 			.client
@@ -555,9 +555,9 @@ where
 
 	async fn request_redemption(
 		&self,
-		redeem_address: EthereumAddress,
+		redeem_address: EvmAddress,
 		exact_amount: Option<NumberOrHex>,
-		executor_address: Option<EthereumAddress>,
+		executor_address: Option<EvmAddress>,
 	) -> RpcResult<Hash> {
 		let redeem_amount = if let Some(number_or_hex) = exact_amount {
 			RedemptionAmount::Exact(try_parse_number_or_hex(number_or_hex)?)

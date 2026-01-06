@@ -525,12 +525,14 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 					let s = s.clone();
 					Box::pin(async move {
 						let mut transaction_request = Eip1559TransactionRequest {
-							to: Some(NameOrAddress::Address(tx.contract)),
+							to: Some(NameOrAddress::Address(tx.contract.0.into())),
 							data: Some(tx.data.into()),
 							chain_id: Some(tx.chain_id.into()),
-							value: Some(tx.value),
-							max_fee_per_gas: tx.max_fee_per_gas,
-							max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+							value: Some(U256(tx.value.0)),
+							max_fee_per_gas: tx.max_fee_per_gas.map(|uint| U256(uint.0)),
+							max_priority_fee_per_gas: tx
+								.max_priority_fee_per_gas
+								.map(|uint| U256(uint.0)),
 							// geth uses the latest block gas limit as an upper bound
 							gas: None,
 							access_list: AccessList::default(),
@@ -543,22 +545,23 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 							.await
 							.context("Failed to estimate gas")?;
 
-						transaction_request.gas = Some(match tx.gas_limit {
-							Some(gas_limit) =>
-								if estimated_gas > gas_limit {
-									return Err(anyhow::anyhow!(
-										"Estimated gas ({}) is greater than the gas limit ({})",
-										estimated_gas,
+						transaction_request.gas =
+							Some(match tx.gas_limit.map(|uint| U256(uint.0)) {
+								Some(gas_limit) =>
+									if estimated_gas > gas_limit {
+										return Err(anyhow::anyhow!(
+											"Estimated gas ({}) is greater than the gas limit ({})",
+											estimated_gas,
+											gas_limit
+										))
+									} else {
 										gas_limit
-									))
-								} else {
-									gas_limit
+									},
+								None => {
+									// increase the estimate by 33% for normal transactions
+									estimated_gas.saturating_mul(U256::from(4u64)) / 3u64
 								},
-							None => {
-								// increase the estimate by 33% for normal transactions
-								estimated_gas.saturating_mul(U256::from(4u64)) / 3u64
-							},
-						});
+							});
 
 						client
 							.send_transaction(transaction_request)

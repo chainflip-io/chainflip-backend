@@ -331,16 +331,12 @@ impl EvmSigningRpcApi for EvmRpcSigningClient {
 pub struct ReconnectSubscriptionClient {
 	ws_endpoint: SecretUrl,
 	// This value comes from the SC.
-	chain_id: web3::types::U256,
+	chain_id: U256,
 	chain_name: &'static str,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(
-		ws_endpoint: SecretUrl,
-		chain_id: web3::types::U256,
-		chain_name: &'static str,
-	) -> Self {
+	pub fn new(ws_endpoint: SecretUrl, chain_id: U256, chain_name: &'static str) -> Self {
 		Self { ws_endpoint, chain_id, chain_name }
 	}
 }
@@ -375,7 +371,7 @@ impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 		}
 
 		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
-		if self.chain_id != client_chain_id {
+		if self.chain_id.0 != client_chain_id.0 {
 			bail!(
 				"Expected chain id {}, {} ws client returned {client_chain_id}.",
 				self.chain_id,

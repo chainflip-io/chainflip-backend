@@ -25,7 +25,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
@@ -420,9 +420,9 @@ pub mod account_info_before_api_v7 {
 			is_qualified: bool,
 			is_online: bool,
 			is_bidding: bool,
-			bound_redeem_address: Option<EthereumAddress>,
+			bound_redeem_address: Option<EvmAddress>,
 			apy_bp: Option<u32>,
-			restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+			restricted_balances: BTreeMap<EvmAddress, NumberOrHex>,
 			estimated_redeemable_balance: NumberOrHex,
 		},
 	}
@@ -511,9 +511,9 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>,
-	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
 
@@ -1342,7 +1342,7 @@ pub trait CustomApi {
 	#[method(name = "evm_calldata")]
 	fn cf_evm_calldata(
 		&self,
-		caller: EthereumAddress,
+		caller: EvmAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails>;
@@ -2712,7 +2712,7 @@ where
 
 	fn cf_evm_calldata(
 		&self,
-		caller: EthereumAddress,
+		caller: EvmAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails> {
