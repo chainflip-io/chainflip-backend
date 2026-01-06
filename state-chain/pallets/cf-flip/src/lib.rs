@@ -26,6 +26,8 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
+pub mod substrate_impls;
+
 pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
@@ -100,16 +102,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip<Amount = Self::Balance> {
 		/// The balance of an account.
-		type Balance: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ From<u128>
-			+ From<u64>;
+		type Balance: frame_support::traits::tokens::Balance + From<u128> + From<u64>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -125,6 +118,9 @@ pub mod pallet {
 		>;
 
 		type CallIndexer: CallIndexer<<Self as frame_system::Config>::RuntimeCall>;
+
+		/// Required in order to inject a HoldReason for impls in [substrate_impls]
+		type RuntimeHoldReason: Encode + TypeInfo + 'static;
 	}
 
 	#[pallet::pallet]
