@@ -39,13 +39,16 @@ pub use cf_primitives::chains::Assethub;
 use cf_primitives::PolkadotBlockNumber;
 use codec::{Decode, Encode};
 use frame_support::{
-	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
+	pallet_prelude::{TransactionSource, TransactionValidityError, UnknownTransaction},
 	sp_runtime::generic::Era,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::SignedPayload,
-	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
+	traits::{
+		BlakeTwo256, DispatchInfoOf, DispatchOriginOf, Dispatchable, Hash, Implication,
+		TransactionExtension, ValidateResult,
+	},
 };
 
 pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
@@ -150,10 +153,15 @@ pub struct AssethubSignedExtra(
 	),
 );
 
-impl SignedExtension for AssethubSignedExtra {
-	type AccountId = PolkadotAccountId;
-	type Call = ();
-	type AdditionalSigned = (
+/// Dummy implementation of TransactionExtension for PolkadotSignedExtra.
+///
+/// The dummy implementation is required to satisfy trait bounds on [SignedPayload].
+impl TransactionExtension<AssethubRuntimeCall> for AssethubSignedExtra {
+	const IDENTIFIER: &'static str = "AssethubSignedExtra";
+
+	type Pre = ();
+	type Val = ();
+	type Implicit = (
 		(),
 		PolkadotSpecVersion,
 		PolkadotTransactionVersion,
@@ -164,48 +172,44 @@ impl SignedExtension for AssethubSignedExtra {
 		(),
 		polkadot_sdk_types::MetadataHash,
 	);
-	type Pre = ();
-	const IDENTIFIER: &'static str = "AssethubSignedExtra";
 
-	// This is a dummy implementation of additional_signed required by SignedPayload. This is never
-	// actually used since the extrinsic builder that constructs the payload uses its own
-	// additional_signed and constructs payload from raw.
-	fn additional_signed(
-		&self,
-	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+	fn implicit(&self) -> Result<Self::Implicit, TransactionValidityError> {
 		Ok((
 			(),
-			9300,
-			15,
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
+			0,
+			0,
+			H256([0; 32]),
+			H256([0; 32]),
 			(),
 			(),
 			(),
 			polkadot_sdk_types::MetadataHash::None,
 		))
 	}
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<(), TransactionValidityError> {
-		Ok(())
-	}
-
 	fn validate(
 		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_origin: DispatchOriginOf<AssethubRuntimeCall>,
+		_call: &AssethubRuntimeCall,
+		_info: &DispatchInfoOf<AssethubRuntimeCall>,
 		_len: usize,
-	) -> TransactionValidity {
-		Ok(<ValidTransaction as Default>::default())
+		_self_implicit: Self::Implicit,
+		_inherited_implication: &impl Implication,
+		_source: TransactionSource,
+	) -> ValidateResult<Self::Val, AssethubRuntimeCall> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
+	}
+	fn weight(&self, _call: &AssethubRuntimeCall) -> sp_runtime::Weight {
+		Default::default()
+	}
+	fn prepare(
+		self,
+		_val: Self::Val,
+		_origin: &sp_runtime::traits::DispatchOriginOf<AssethubRuntimeCall>,
+		_call: &AssethubRuntimeCall,
+		_info: &DispatchInfoOf<AssethubRuntimeCall>,
+		_len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
 	}
 }
 
@@ -366,7 +370,24 @@ pub enum AssethubRuntimeCall {
 	Assets(AssetsCall),
 }
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+/// Dummy implementation of the Dispatchable trait for AssethubRuntimeCall.
+///
+/// We never actually dispatch these calls, but we need to implement the trait
+/// to satify trait requirements on TransactionExtension and SignedPayload.
+impl Dispatchable for AssethubRuntimeCall {
+	type RuntimeOrigin = ();
+	type Config = ();
+	type Info = ();
+	type PostInfo = ();
+
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		Ok(())
+	}
+}
+
 pub enum SystemCall {}
 
 #[expect(non_camel_case_types)]

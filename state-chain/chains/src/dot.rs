@@ -172,11 +172,13 @@ pub type PolkadotSpecVersion = u32;
 pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
-#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
-pub struct GenericUncheckedExtrinsic<Call, Extra: SignedExtension>(
+#[derive(Debug, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub struct GenericUncheckedExtrinsic<Call: Dispatchable, Extra: TransactionExtension<Call>>(
 	UncheckedExtrinsic<MultiAddress<PolkadotAccountId, ()>, Call, MultiSignature, Extra>,
 );
-impl<Call: Decode, Extra: SignedExtension> GenericUncheckedExtrinsic<Call, Extra> {
+impl<Call: Dispatchable + Decode + DecodeWithMemTracking, Extra: TransactionExtension<Call>>
+	GenericUncheckedExtrinsic<Call, Extra>
+{
 	pub fn new_signed(
 		function: Call,
 		signed: PolkadotAccountId,
@@ -196,13 +198,11 @@ impl<Call: Decode, Extra: SignedExtension> GenericUncheckedExtrinsic<Call, Extra
 	}
 
 	pub fn signature(&self) -> Option<PolkadotSignature> {
-		self.0.signature.as_ref().and_then(|signature| {
-			if let MultiSignature::Sr25519(signature) = &signature.1 {
-				Some(PolkadotSignature(*signature))
-			} else {
-				None
-			}
-		})
+		match self.0.preamble {
+			Preamble::Signed(_, MultiSignature::Sr25519(signature), _) =>
+				Some(PolkadotSignature(signature)),
+			_ => None,
+		}
 	}
 }
 
@@ -544,23 +544,22 @@ pub enum PolkadotRuntimeCall {
 	Xcm(Box<XcmCall>),
 }
 
-/// Only used for the migration to Assethub
-#[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-pub enum XcmCall {
-	#[codec(index = 9u8)]
-	limited_teleport_assets {
-		#[expect(missing_docs)]
-		dest: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[expect(missing_docs)]
-		beneficiary: xcm_types::hub_runtime_types::xcm::VersionedLocation,
-		#[expect(missing_docs)]
-		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
-		#[expect(missing_docs)]
-		fee_asset_itme: u32,
-		#[expect(missing_docs)]
-		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
-	},
+/// Dummy implementation of the Dispatchable trait for PolkadotRuntimeCall.
+///
+/// We never actually dispatch these calls, but we need to implement the trait
+/// to satify trait requirements on TransactionExtension and SignedPayload.
+impl Dispatchable for PolkadotRuntimeCall {
+	type RuntimeOrigin = ();
+	type Config = ();
+	type Info = ();
+	type PostInfo = ();
+
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		Ok(())
+	}
 }
 
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
@@ -1001,10 +1000,15 @@ pub struct PolkadotSignedExtra(
 	),
 );
 
-impl SignedExtension for PolkadotSignedExtra {
-	type AccountId = PolkadotAccountId;
-	type Call = ();
-	type AdditionalSigned = (
+/// Dummy implementation of TransactionExtension for PolkadotSignedExtra.
+///
+/// The dummy implementation is required to satisfy trait bounds on [SignedPayload].
+impl TransactionExtension<PolkadotRuntimeCall> for PolkadotSignedExtra {
+	const IDENTIFIER: &'static str = "PolkadotSignedExtra";
+
+	type Pre = ();
+	type Val = ();
+	type Implicit = (
 		(),
 		PolkadotSpecVersion,
 		PolkadotTransactionVersion,
@@ -1016,23 +1020,14 @@ impl SignedExtension for PolkadotSignedExtra {
 		(),
 		polkadot_sdk_types::MetadataHash,
 	);
-	type Pre = ();
-	const IDENTIFIER: &'static str = "PolkadotSignedExtra";
 
-	// This is a dummy implementation of additional_signed required by SignedPayload. This is never
-	// actually used since the extrinsic builder that constructs the payload uses its own
-	// additional_signed and constructs payload from raw.
-	fn additional_signed(
-		&self,
-	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+	fn implicit(&self) -> Result<Self::Implicit, TransactionValidityError> {
 		Ok((
 			(),
-			9300,
-			15,
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
+			0,
+			0,
+			H256([0; 32]),
+			H256([0; 32]),
 			(),
 			(),
 			(),
@@ -1040,25 +1035,30 @@ impl SignedExtension for PolkadotSignedExtra {
 			polkadot_sdk_types::MetadataHash::None,
 		))
 	}
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<(), TransactionValidityError> {
-		Ok(())
-	}
-
 	fn validate(
 		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_origin: DispatchOriginOf<PolkadotRuntimeCall>,
+		_call: &PolkadotRuntimeCall,
+		_info: &DispatchInfoOf<PolkadotRuntimeCall>,
 		_len: usize,
-	) -> TransactionValidity {
-		Ok(<ValidTransaction as Default>::default())
+		_self_implicit: Self::Implicit,
+		_inherited_implication: &impl Implication,
+		_source: TransactionSource,
+	) -> ValidateResult<Self::Val, PolkadotRuntimeCall> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
+	}
+	fn weight(&self, _call: &PolkadotRuntimeCall) -> sp_runtime::Weight {
+		Default::default()
+	}
+	fn prepare(
+		self,
+		_val: Self::Val,
+		_origin: &sp_runtime::traits::DispatchOriginOf<PolkadotRuntimeCall>,
+		_call: &PolkadotRuntimeCall,
+		_info: &DispatchInfoOf<PolkadotRuntimeCall>,
+		_len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
 	}
 }
 
