@@ -91,11 +91,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	/// Returns the current sqrt price for a given direction of swap. The price is measured in units
 	/// of the specified Pairs argument
-	pub fn swap_sqrt_price(
-		order: Side,
-		input_amount: Amount,
-		output_amount: Amount,
-	) -> SqrtPrice {
+	pub fn swap_sqrt_price(order: Side, input_amount: Amount, output_amount: Amount) -> SqrtPrice {
 		match order.to_sold_pair() {
 			Pairs::Base => SqrtPrice::from_amounts_bounded(output_amount, input_amount),
 			Pairs::Quote => SqrtPrice::from_amounts_bounded(input_amount, output_amount),
@@ -109,11 +105,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
-	pub fn logarithm_sqrt_price_sequence(
-		&mut self,
-		order: Side,
-		count: u32,
-	) -> Vec<SqrtPrice> {
+	pub fn logarithm_sqrt_price_sequence(&mut self, order: Side, count: u32) -> Vec<SqrtPrice> {
 		let worst_sqrt_price = Self::inner_worst_price(order);
 		if let Some(current_sqrt_price) = self
 			.current_sqrt_price(order)

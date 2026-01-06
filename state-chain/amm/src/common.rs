@@ -205,10 +205,7 @@ pub(super) trait SwapDirection {
 	const WORST_SQRT_PRICE: SqrtPrice;
 
 	/// Determines if a given sqrt_price is more than another for this direction of swap.
-	fn sqrt_price_op_more_than(
-		sqrt_price: SqrtPrice,
-		sqrt_price_other: SqrtPrice,
-	) -> bool;
+	fn sqrt_price_op_more_than(sqrt_price: SqrtPrice, sqrt_price_other: SqrtPrice) -> bool;
 
 	/// Increases a valid sqrt_price by a specified number of ticks
 	fn increase_sqrt_price(sqrt_price: SqrtPrice, delta: Tick) -> SqrtPrice;
@@ -220,10 +217,7 @@ impl SwapDirection for BaseToQuote {
 
 	const WORST_SQRT_PRICE: SqrtPrice = MIN_SQRT_PRICE;
 
-	fn sqrt_price_op_more_than(
-		sqrt_price: SqrtPrice,
-		sqrt_price_other: SqrtPrice,
-	) -> bool {
+	fn sqrt_price_op_more_than(sqrt_price: SqrtPrice, sqrt_price_other: SqrtPrice) -> bool {
 		sqrt_price < sqrt_price_other
 	}
 
@@ -238,10 +232,7 @@ impl SwapDirection for QuoteToBase {
 
 	const WORST_SQRT_PRICE: SqrtPrice = MAX_SQRT_PRICE;
 
-	fn sqrt_price_op_more_than(
-		sqrt_price: SqrtPrice,
-		sqrt_price_other: SqrtPrice,
-	) -> bool {
+	fn sqrt_price_op_more_than(sqrt_price: SqrtPrice, sqrt_price_other: SqrtPrice) -> bool {
 		sqrt_price > sqrt_price_other
 	}
 
