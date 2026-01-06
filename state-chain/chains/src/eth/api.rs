@@ -31,6 +31,7 @@ use evm::api::common::*;
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
+use sp_core::H160 as Address;
 use sp_std::marker::PhantomData;
 
 use evm::tokenizable::Tokenizable;
@@ -209,7 +210,7 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -406,7 +407,7 @@ impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> A
 }
 
 impl<E> EthereumApi<E> {
-	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

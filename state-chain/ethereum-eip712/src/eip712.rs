@@ -171,7 +171,7 @@ impl EIP712Domain {
 		let mut needs_comma = false;
 		if let Some(ref name) = self.name {
 			ty += "string name";
-			tokens.push(Token::Uint(U256::from(keccak256(name))));
+			tokens.push(Token::Uint(U256::from_big_endian(&keccak256(name))));
 			needs_comma = true;
 		}
 
@@ -180,7 +180,7 @@ impl EIP712Domain {
 				ty.push(',');
 			}
 			ty += "string version";
-			tokens.push(Token::Uint(U256::from(keccak256(version))));
+			tokens.push(Token::Uint(U256::from_big_endian(&keccak256(version))));
 			needs_comma = true;
 		}
 
@@ -207,12 +207,12 @@ impl EIP712Domain {
 				ty.push(',');
 			}
 			ty += "bytes32 salt";
-			tokens.push(Token::Uint(U256::from(salt)));
+			tokens.push(Token::Uint(U256::from_big_endian(&salt)));
 		}
 
 		ty.push(')');
 
-		tokens.insert(0, Token::Uint(U256::from(keccak256(ty))));
+		tokens.insert(0, Token::Uint(U256::from_big_endian(&keccak256(ty))));
 
 		keccak256(encode(&tokens))
 	}
@@ -412,7 +412,7 @@ pub fn encode_data(
 	types: &Types,
 ) -> Result<Vec<Token>, Eip712Error> {
 	let hash = hash_type(primary_type, types)?;
-	let mut tokens = vec![Token::Uint(U256::from(hash))];
+	let mut tokens = vec![Token::Uint(U256::from_big_endian(&hash))];
 
 	if let Some(fields) = types.get(primary_type) {
 		for field in fields.iter() {
@@ -642,27 +642,27 @@ pub fn make_type_hash(primary_type: String, fields: &[(String, ParamType)]) -> [
 /// Parse token into Eip712 compliant ABI encoding
 pub fn encode_eip712_type(token: Token) -> Token {
 	match token {
-		Token::Bytes(t) => Token::Uint(U256::from(keccak256(t))),
-		Token::FixedBytes(t) => Token::Uint(U256::from(&t[..])),
-		Token::String(t) => Token::Uint(U256::from(keccak256(t))),
+		Token::Bytes(t) => Token::Uint(U256::from_big_endian(&keccak256(t))),
+		Token::FixedBytes(t) => Token::Uint(U256::from_big_endian(&t[..])),
+		Token::String(t) => Token::Uint(U256::from_big_endian(&keccak256(t))),
 		Token::Bool(t) => {
 			// Boolean false and true are encoded as uint256 values 0 and 1 respectively
-			Token::Uint(U256::from(t as i32))
+			Token::Uint(U256::from_big_endian(&(t as i32).to_be_bytes()))
 		},
 		Token::Int(t) => {
 			// Integer values are sign-extended to 256-bit and encoded in big endian order.
 			Token::Uint(t)
 		},
-		Token::Array(tokens) => Token::Uint(U256::from(keccak256(encode(
+		Token::Array(tokens) => Token::Uint(U256::from_big_endian(&keccak256(encode(
 			&tokens.into_iter().map(encode_eip712_type).collect::<Vec<Token>>(),
 		)))),
-		Token::FixedArray(tokens) => Token::Uint(U256::from(keccak256(encode(
+		Token::FixedArray(tokens) => Token::Uint(U256::from_big_endian(&keccak256(encode(
 			&tokens.into_iter().map(encode_eip712_type).collect::<Vec<Token>>(),
 		)))),
 		Token::Tuple(tuple) => {
 			let tokens = tuple.into_iter().map(encode_eip712_type).collect::<Vec<Token>>();
 			let encoded = encode(&tokens);
-			Token::Uint(U256::from(keccak256(encoded)))
+			Token::Uint(U256::from_big_endian(&keccak256(encoded)))
 		},
 		_ => {
 			// Return the ABI encoded token;

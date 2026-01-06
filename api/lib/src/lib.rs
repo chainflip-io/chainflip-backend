@@ -45,7 +45,7 @@ pub mod primitives {
 	pub use pallet_cf_swapping::AffiliateDetails;
 	pub use state_chain_runtime::{self, BlockNumber, Hash};
 }
-pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_chains::evm::Address as EthereumAddress;
 use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
 	SolanaInstance,

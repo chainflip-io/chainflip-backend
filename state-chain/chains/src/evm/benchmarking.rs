@@ -28,10 +28,10 @@ use crate::{
 };
 use cf_primitives::{
 	chains::{assets, Ethereum},
-	EthAmount,
+	AssetAmount,
 };
-use ethabi::Uint;
 use libsecp256k1::{PublicKey, SecretKey};
+use sp_core::U256;
 
 const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
@@ -128,8 +128,8 @@ impl BenchmarkValue for Transaction {
 	fn benchmark_value() -> Self {
 		Transaction {
 			chain_id: 31337,
-			max_fee_per_gas: Uint::from(1_000_000_000u32).into(),
-			gas_limit: Uint::from(21_000u32).into(),
+			max_fee_per_gas: Some(U256::from(1_000_000_000u32)),
+			gas_limit: Some(U256::from(21_000u32)),
 			contract: [0xcf; 20].into(),
 			value: 0.into(),
 			data: b"do_something()".to_vec(),
@@ -144,7 +144,7 @@ impl BenchmarkValue for TransactionFee {
 	}
 }
 
-impl BenchmarkValue for EthAmount {
+impl BenchmarkValue for AssetAmount {
 	fn benchmark_value() -> Self {
 		2000
 	}

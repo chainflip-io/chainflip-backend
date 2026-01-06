@@ -16,7 +16,7 @@
 
 use crate::RpcResult;
 
-use cf_chains::{eth::Address as EthereumAddress, CcmChannelMetadataUnchecked};
+use cf_chains::{evm::Address as EthereumAddress, CcmChannelMetadataUnchecked};
 use cf_rpc_types::{AccountId32, BlockUpdate, OpenedDepositChannels, RefundParametersRpc, H256};
 use jsonrpsee::proc_macros::rpc;
 
