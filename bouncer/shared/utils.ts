@@ -50,7 +50,10 @@ import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logg
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
-import { cfChainsSwapOrigin } from 'generated/events/common';
+import {
+  cfChainsSwapOrigin,
+  cfTraitsSwappingSwapRequestTypeGeneric,
+} from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
@@ -558,11 +561,11 @@ export type TransactionOriginId =
   | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
   | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
-function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
-  if (typeof actual === 'object') {
-    return expected in actual;
-  }
-  return expected === actual;
+function checkRequestTypeMatches(
+  actual: z.infer<typeof cfTraitsSwappingSwapRequestTypeGeneric>,
+  expected: SwapRequestType,
+) {
+  return actual.__kind === expected;
 }
 
 function checkTransactionInMatches(
