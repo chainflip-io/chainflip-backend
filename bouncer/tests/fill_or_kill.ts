@@ -82,7 +82,7 @@ async function testMinPriceRefund<A = []>(
     );
     const depositAddress = swapRequest.depositAddress;
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
@@ -107,7 +107,7 @@ async function testMinPriceRefund<A = []>(
     );
 
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       sourceAsset,
       destAsset,
       transactionId,
@@ -116,7 +116,7 @@ async function testMinPriceRefund<A = []>(
   }
 
   const swapRequestedEvent = await swapRequestedHandle;
-  const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
+  const swapRequestId = Number(swapRequestedEvent.swapRequestId);
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
   const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {

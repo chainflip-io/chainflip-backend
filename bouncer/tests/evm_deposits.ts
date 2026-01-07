@@ -56,7 +56,7 @@ async function testSuccessiveDepositEvm<A = []>(
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
   await doPerformSwap(
-    testContext.logger.child({ tag: `[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]` }),
+    cf.withChildLogger(`[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`),
     swapParams,
   );
 }
@@ -187,7 +187,7 @@ async function testDoubleDeposit<A = []>(
 
   {
     const swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       sourceAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
@@ -201,7 +201,7 @@ async function testDoubleDeposit<A = []>(
   // Do another deposit. Regardless of the fetch having been broadcasted or not, another swap
   // should be scheduled when we deposit again.
   const swapRequestedHandle = observeSwapRequested(
-    cf.logger,
+    cf,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
@@ -290,12 +290,16 @@ async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
   }
 }
 
-async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, destAsset: Asset) {
+async function testEncodeCfParameters<A = []>(
+  parentcf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+) {
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
   const cfVaultAddress = getContractAddress(chainFromAsset(sourceAsset), 'VAULT');
   const cfVaultContract = new web3.eth.Contract(cfEvmVaultAbi, cfVaultAddress);
-  const { destAddress, tag } = await prepareSwap(parentLogger, sourceAsset, destAsset);
-  const logger = parentLogger.child({ tag });
+  const { destAddress, tag } = await prepareSwap(parentcf.logger, sourceAsset, destAsset);
+  const cf = parentcf.withChildLogger(tag);
 
   const fillOrKillParams: FillOrKillParamsX128 = {
     retryDurationBlocks: 10,
@@ -332,7 +336,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
     .encodeABI();
 
   const receipt = await signAndSendTxEvm(
-    logger,
+    cf.logger,
     chainFromAsset(sourceAsset),
     cfVaultAddress,
     amount.toString(),
@@ -340,7 +344,7 @@ async function testEncodeCfParameters(parentLogger: Logger, sourceAsset: Asset, 
   );
 
   await observeSwapRequested(
-    logger,
+    cf,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.VaultSwapEvm, txHash: receipt.transactionHash },
@@ -382,8 +386,8 @@ export async function testEvmDeposits(testContext: TestContext) {
   ]);
 
   const testEncodingCfParameters = Promise.all([
-    testEncodeCfParameters(cf.logger, 'ArbEth', 'Eth'),
-    testEncodeCfParameters(cf.logger, 'Eth', 'Flip'),
+    testEncodeCfParameters(cf, 'ArbEth', 'Eth'),
+    testEncodeCfParameters(cf, 'Eth', 'Flip'),
   ]);
 
   await Promise.all([

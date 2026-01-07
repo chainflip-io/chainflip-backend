@@ -24,12 +24,14 @@ import {
   createStateChainKeypair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { Logger, throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
+import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
 import { ChainflipIO } from './utils/chainflip_io';
 
 export type SwapParams = {
@@ -107,8 +109,8 @@ export enum SenderType {
 }
 
 // Note: if using the swap context, the logger must contain the tag
-export async function doPerformSwap(
-  logger: Logger,
+export async function doPerformSwap<A = []>(
+  cf: ChainflipIO<A>,
   { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
   messageMetadata?: CcmDepositMetadata,
   senderType = SenderType.Address,
@@ -117,10 +119,10 @@ export async function doPerformSwap(
 ) {
   const oldBalance = await getBalance(destAsset, destAddress);
 
-  logger.trace(`Old balance: ${oldBalance}`);
+  cf.trace(`Old balance: ${oldBalance}`);
 
   const swapRequestedHandle = observeSwapRequested(
-    logger,
+    cf,
     sourceAsset,
     destAsset,
     { type: TransactionOrigin.DepositChannel, channelId },
@@ -132,58 +134,56 @@ export async function doPerformSwap(
     : Promise.resolve();
 
   const txId = await (senderType === SenderType.Address
-    ? send(logger, sourceAsset, depositAddress, amount)
-    : sendViaCfTester(logger, sourceAsset, depositAddress));
+    ? send(cf.logger, sourceAsset, depositAddress, amount)
+    : sendViaCfTester(cf.logger, sourceAsset, depositAddress));
 
-  logger.debug(`Funded the address with tx ${txId}`);
+  cf.debug(`Funded the address with tx ${txId}`);
 
-  swapContext?.updateStatus(logger, SwapStatus.Funded);
+  swapContext?.updateStatus(cf.logger, SwapStatus.Funded);
 
-  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
+  const swapRequestId = (await swapRequestedHandle).swapRequestId;
 
-  swapContext?.updateStatus(logger, SwapStatus.SwapScheduled);
+  swapContext?.updateStatus(cf.logger, SwapStatus.SwapScheduled);
 
-  logger.debug(`Swap requested with ID: ${swapRequestId}`);
+  cf.debug(`Swap requested with ID: ${swapRequestId}`);
 
-  await observeEvent(logger, 'swapping:SwapRequestCompleted', {
-    test: (event) => event.data.swapRequestId === swapRequestId,
-    historicalCheckBlocks: 4,
-  }).event;
+  await cf.stepUntilEvent(
+    'Swapping.SwapRequestCompleted',
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+  );
 
-  swapContext?.updateStatus(logger, SwapStatus.SwapCompleted);
+  swapContext?.updateStatus(cf.logger, SwapStatus.SwapCompleted);
 
-  logger.debug(`Swap Request Completed. Waiting for egress.`);
+  cf.debug(`Swap Request Completed. Waiting for egress.`);
 
-  const { egressId, amount: egressAmount } = (
-    await observeEvent(logger, 'swapping:SwapEgressScheduled', {
-      test: (event) => event.data.swapRequestId === swapRequestId,
-      historicalCheckBlocks: 4,
-    }).event
-  ).data;
+  const { egressId, amount: egressAmount } = await cf.stepUntilEvent(
+    'Swapping.SwapEgressScheduled',
+    swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
+  );
 
-  swapContext?.updateStatus(logger, SwapStatus.EgressScheduled);
+  swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
 
-  logger.debug(
+  cf.debug(
     `Egress ID: ${egressId}, Egress amount: ${egressAmount}. Waiting for balance to increase.`,
   );
 
   try {
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(logger, destAsset, destAddress, oldBalance),
+      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
 
     const chain = chainFromAsset(sourceAsset);
     if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
-      logger.debug(`Waiting deposit fetch ${depositAddress}`);
+      cf.debug(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }
 
-    logger.debug(`Swap success! New balance: ${newBalance}!`);
-    swapContext?.updateStatus(logger, SwapStatus.Success);
+    cf.debug(`Swap success! New balance: ${newBalance}!`);
+    swapContext?.updateStatus(cf.logger, SwapStatus.Success);
   } catch (err) {
-    swapContext?.updateStatus(logger, SwapStatus.Failure);
-    throwError(logger, new Error(`$${err}`));
+    swapContext?.updateStatus(cf.logger, SwapStatus.Failure);
+    throwError(cf.logger, new Error(`$${err}`));
   }
 }
 
@@ -218,7 +218,7 @@ export async function performSwap<A = []>(
     brokerCommissionBps,
   );
 
-  await doPerformSwap(cf.logger, swapParams, messageMetadata, senderType, amount, swapContext);
+  await doPerformSwap(cf, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
 }
@@ -343,8 +343,8 @@ export async function executeVaultSwap(
   return { transactionId, sourceAddress };
 }
 
-export async function performVaultSwap(
-  logger: Logger,
+export async function performVaultSwap<A = []>(
+  cf: ChainflipIO<A>,
   brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
@@ -363,14 +363,14 @@ export async function performVaultSwap(
 ): Promise<VaultSwapParams> {
   const oldBalance = await getBalance(destAsset, destAddress);
 
-  logger.trace(`Old balance: ${oldBalance}`);
-  logger.trace(
+  cf.trace(`Old balance: ${oldBalance}`);
+  cf.trace(
     `Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
   );
 
   try {
     const { transactionId, sourceAddress } = await executeVaultSwap(
-      logger,
+      cf.logger,
       brokerUri,
       sourceAsset,
       destAsset,
@@ -383,27 +383,21 @@ export async function performVaultSwap(
       brokerFee,
       affiliateFees,
     );
-    swapContext?.updateStatus(logger, SwapStatus.VaultSwapInitiated);
+    swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(
-      logger,
-      sourceAsset,
-      destAsset,
-      transactionId,
-      SwapRequestType.Regular,
-    );
+    await observeSwapRequested(cf, sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
 
-    swapContext?.updateStatus(logger, SwapStatus.VaultSwapScheduled);
+    swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(logger, destAsset, destAddress, oldBalance),
+      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
-    logger.trace(`Swap success! New balance: ${newBalance}!`);
+    cf.trace(`Swap success! New balance: ${newBalance}!`);
 
     if (sourceAsset === 'Sol') {
       // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
@@ -411,12 +405,12 @@ export async function performVaultSwap(
         'Solana',
         'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
       );
-      logger.trace(
+      cf.trace(
         `$Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
       );
       await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
-    swapContext?.updateStatus(logger, SwapStatus.Success);
+    swapContext?.updateStatus(cf.logger, SwapStatus.Success);
     return {
       sourceAsset,
       destAsset,
@@ -424,10 +418,10 @@ export async function performVaultSwap(
       transactionId,
     };
   } catch (err) {
-    swapContext?.updateStatus(logger, SwapStatus.Failure);
+    swapContext?.updateStatus(cf.logger, SwapStatus.Failure);
     if (err instanceof Error) {
-      logger.trace(err.stack);
+      cf.trace(err.stack ?? '');
     }
-    return throwError(logger, new Error(`${err}`));
+    return throwError(cf.logger, new Error(`${err}`));
   }
 }

@@ -10,12 +10,13 @@ import {
   TransactionOrigin,
 } from 'shared/utils';
 import { send } from 'shared/send';
-import { observeEvent, observeEvents } from 'shared/utils/substrate';
+import { observeEvents } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 
 async function testDCASwap<A = []>(
   parentCf: ChainflipIO<A>,
@@ -64,7 +65,7 @@ async function testDCASwap<A = []>(
 
     const depositChannelId = swapRequest.channelId;
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: depositChannelId },
@@ -92,7 +93,7 @@ async function testDCASwap<A = []>(
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
     swapRequestedHandle = observeSwapRequested(
-      cf.logger,
+      cf,
       inputAsset,
       destAsset,
       transactionId,
@@ -100,20 +101,21 @@ async function testDCASwap<A = []>(
     );
   }
 
-  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
+  const swapRequestId = (await swapRequestedHandle).swapRequestId;
   cf.debug(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
   // Wait for the swap to complete
-  await observeEvent(cf.logger, `swapping:SwapRequestCompleted`, {
-    test: (event) => event.data.swapRequestId === swapRequestId,
-  }).event;
+  await cf.stepUntilEvent(
+    `Swapping.SwapRequestCompleted`,
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+  );
 
   // Find the `SwapExecuted` events for this swap.
   const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
   const observeSwapExecutedEvents = await observeEvents(cf.logger, `swapping:SwapExecuted`, {
-    test: (event) => event.data.swapRequestId === swapRequestId,
+    test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks,
     stopAfter: { blocks: historicalCheckBlocks },
   }).events;

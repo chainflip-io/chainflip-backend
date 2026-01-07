@@ -314,7 +314,7 @@ export async function testVaultSwap(
   );
 
   return performVaultSwap(
-    cf.logger.child({ tag }),
+    cf.withChildLogger(tag),
     '//BROKER_1',
     sourceAsset,
     destAsset,
