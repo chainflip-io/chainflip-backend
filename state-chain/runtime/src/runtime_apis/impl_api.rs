@@ -385,7 +385,9 @@ impl_runtime_apis! {
 			let mut result = AuthoritiesInfo {
 				authorities: authorities.len() as u32,
 				online_authorities: 0,
+				#[expect(deprecated)]
 				backups: 0,
+				#[expect(deprecated)]
 				online_backups: 0,
 			};
 			authorities.retain(HeartbeatQualification::<Runtime>::is_qualified);
@@ -807,6 +809,7 @@ impl_runtime_apis! {
 				reputation_points: reputation_info.reputation_points,
 				keyholder_epochs,
 				is_current_authority,
+				#[expect(deprecated)]
 				is_current_backup: false,
 				is_qualified: is_bidding && is_qualified,
 				is_online: HeartbeatQualification::<Runtime>::is_qualified(account_id),
