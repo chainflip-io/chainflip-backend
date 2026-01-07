@@ -1,4 +1,3 @@
-import z from 'zod';
 import { getInternalAsset } from '@chainflip/cli';
 import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -6,7 +5,6 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 import {
   ChainflipIO,
   fullAccountFromUri,
@@ -101,11 +99,11 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
     false,
     '//LP_BOOST',
   );
-  const fundBoostPoolsPromises: Promise<z.infer<typeof lendingPoolsBoostFundsAdded>>[] = [];
-  for (const tier of boostPoolTiers) {
-    fundBoostPoolsPromises.push(addBoostFunds(cf, Assets.Btc, tier, fundBtcBoostPoolsAmount));
-  }
-  await Promise.all(fundBoostPoolsPromises);
+  await cf.all(
+    boostPoolTiers.map(
+      (tier) => (subcf) => addBoostFunds(subcf, Assets.Btc, tier, fundBtcBoostPoolsAmount),
+    ),
+  );
 
   logger.info('Boost Pools Setup completed');
 }
