@@ -18,11 +18,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount};
+use cf_primitives::{AccountId, Asset, AssetAmount, AccountRole};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
-	LiabilityTracker, ScheduledEgressDetails,
+	LiabilityTracker, PoolApi, ScheduledEgressDetails, AccountRoleRegistry
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -100,6 +100,8 @@ pub mod pallet {
 
 		/// Polkadot environment.
 		type PolkadotKeyProvider: KeyProvider<PolkadotCrypto>;
+
+		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
@@ -437,6 +439,11 @@ where
 	) -> DispatchResult {
 		if amount == 0 {
 			return Ok(())
+		}
+
+		// Sweep LP earnings before debiting to ensure all available funds are accounted for
+		if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider) {
+			T::PoolApi::sweep(account_id)?;
 		}
 
 		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
