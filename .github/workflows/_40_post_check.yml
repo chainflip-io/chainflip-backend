@@ -30,6 +30,9 @@ on:
       chainflip-backend-bin-suffix:
         type: string
         default: ""
+      continue-on-bouncer-error:
+        type: boolean
+        default: false
 
 env:
   FORCE_COLOR: 1
@@ -139,12 +142,14 @@ jobs:
       - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
         if: inputs.full-bouncer
         working-directory: bouncer
+        continue-on-error: ${{ inputs.continue-on-bouncer-error }}
         run: |
           ./full_bouncer.sh
 
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
+        continue-on-error: ${{ inputs.continue-on-bouncer-error }}
         run: |
           ./fast_bouncer.sh
 
