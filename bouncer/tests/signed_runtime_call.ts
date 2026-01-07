@@ -64,7 +64,7 @@ const encodeNonNativeCallResponseSchema = z.tuple([
 ]);
 
 // Default value for number of blocks after which the signed call will expire
-const blocksToExpiry = 20;
+const blocksToExpiry = 120;
 
 async function observeNonNativeSignedCallAndRole(logger: Logger, scAccount: string) {
   const nonNativeSignedCallEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
