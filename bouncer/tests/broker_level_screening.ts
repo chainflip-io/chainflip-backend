@@ -27,7 +27,7 @@ import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBtcBalance } from 'shared/get_btc_balance';
 import { TestContext } from 'shared/utils/test_context';
-import { getIsoTime } from 'shared/utils/logger';
+import { getIsoTime, globalLogger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -126,6 +126,7 @@ async function setTxRiskScore(txid: string, score: number) {
  */
 async function ensureHealth() {
   const response = await postToDepositMonitor(':6060/health', {});
+  globalLogger.info(`DM health response is: ${response}`);
   if (response.starting === true || response.all_processors === false) {
     throw new Error(
       `Deposit monitor is running, but not healthy. It's response was: ${JSON.stringify(response)}`,

@@ -119,12 +119,12 @@ async function executeAndTrackCcmSwap<A = []>(
     SwapRequestType.Regular,
   );
   await send(cf.logger, sourceAsset, depositAddress);
-  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
+  const swapRequestId = (await swapRequestedHandle).swapRequestId;
 
   // Find all of the swap events
   const egressId = (
     await observeEvent(cf.logger, 'swapping:SwapEgressScheduled', {
-      test: (event) => event.data.swapRequestId === swapRequestId,
+      test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
       historicalCheckBlocks: CHECK_PAST_BLOCKS_FOR_EVENTS,
     }).event
   ).data.egressId as EgressId;

@@ -116,7 +116,7 @@ async function testMinPriceRefund<A = []>(
   }
 
   const swapRequestedEvent = await swapRequestedHandle;
-  const swapRequestId = Number(swapRequestedEvent.data.swapRequestId.replaceAll(',', ''));
+  const swapRequestId = Number(swapRequestedEvent.swapRequestId);
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
   const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {

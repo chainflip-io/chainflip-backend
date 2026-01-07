@@ -23,7 +23,7 @@ import {
 } from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
+import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
@@ -50,6 +50,9 @@ import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logg
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
+import { cfChainsSwapOrigin } from 'generated/events/common';
+import z from 'zod';
+import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
 
 const cfTesterAbi = await getCFTesterAbi();
@@ -562,41 +565,53 @@ function checkRequestTypeMatches(actual: object | string, expected: SwapRequestT
   return expected === actual;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
-  if ('DepositChannel' in actual) {
-    return (
-      expected.type === TransactionOrigin.DepositChannel &&
-      Number(actual.DepositChannel.channelId.replaceAll(',', '')) === expected.channelId
-    );
+function checkTransactionInMatches(
+  actual: z.infer<typeof cfChainsSwapOrigin>,
+  expected: TransactionOriginId,
+): boolean {
+  switch (actual.__kind) {
+    case 'DepositChannel':
+      return (
+        expected.type === TransactionOrigin.DepositChannel &&
+        actual.channelId === BigInt(expected.channelId)
+      );
+    case 'Vault':
+      switch (actual.txId.__kind) {
+        case 'Evm':
+          return (
+            expected.type === TransactionOrigin.VaultSwapEvm &&
+            actual.txId.value === expected.txHash
+          );
+        case 'Solana':
+          return (
+            expected.type === TransactionOrigin.VaultSwapSolana &&
+            actual.txId.value[1] === BigInt(expected.addressAndSlot[1]) &&
+            actual.txId.value[0] === expected.addressAndSlot[0]
+          );
+        case 'Bitcoin':
+          return (
+            expected.type === TransactionOrigin.VaultSwapBitcoin &&
+            actual.txId.value ===
+              // Reverse byte order of BTC transactions
+              '0x' +
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+                  .map((x) => x.toString(16).padStart(2, '0'))
+                  .join('')
+          );
+        default:
+          return false;
+      }
+    case 'OnChainAccount':
+      return (
+        expected.type === TransactionOrigin.OnChainAccount && actual.value === expected.accountId
+      );
+    case 'Internal':
+      return false;
+    default:
+      break;
   }
-  if ('Vault' in actual) {
-    return (
-      ('Evm' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapEvm &&
-        actual.Vault.txId.Evm === expected.txHash) ||
-      ('Solana' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapSolana &&
-        actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString()) ||
-      ('Bitcoin' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapBitcoin &&
-        actual.Vault.txId.Bitcoin ===
-          // Reverse byte order of BTC transactions
-          '0x' +
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
-              .map((x) => x.toString(16).padStart(2, '0'))
-              .join(''))
-    );
-  }
-  if ('OnChainAccount' in actual) {
-    return (
-      expected.type === TransactionOrigin.OnChainAccount &&
-      actual.OnChainAccount.accountId === expected.accountId
-    );
-  }
-  throw new Error(`Unsupported transaction origin type ${actual}`);
+  return assertUnreachable(actual);
 }
 
 export async function observeSwapRequested<A = []>(
@@ -606,27 +621,17 @@ export async function observeSwapRequested<A = []>(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
-  // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent(cf.logger, 'swapping:SwapRequested', {
-    timeoutSeconds: 150,
-    test: (event) => {
-      const data = event.data;
+  return cf.stepUntilEvent(
+    'Swapping.SwapRequested',
+    swappingSwapRequested.refine((event) => {
+      const channelMatches = checkTransactionInMatches(event.origin, id);
+      const sourceAssetMatches = sourceAsset === event.inputAsset;
+      const destAssetMatches = destAsset === event.outputAsset;
+      const requestTypeMatches = checkRequestTypeMatches(event.requestType, swapRequestType);
 
-      if (typeof data.origin === 'object') {
-        const channelMatches = checkTransactionInMatches(data.origin, id);
-        const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
-        const destAssetMatches = destAsset === (data.outputAsset as Asset);
-        const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
-
-        return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
-      }
-      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-      return false;
-    },
-    // We assume that a swaprequest is uniquely identifiable by the `id: TransactionOriginId`.
-    // To reduce potential race conditions we always check the last 5 blocks.
-    historicalCheckBlocks: 5,
-  }).event;
+      return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
+    }),
+  );
 }
 
 export async function observeBroadcastSuccess(logger: Logger, broadcastId: BroadcastChainAndId) {

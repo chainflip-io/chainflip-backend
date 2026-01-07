@@ -24,12 +24,14 @@ import {
   createStateChainKeypair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { Logger, throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
+import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
 import { ChainflipIO } from './utils/chainflip_io';
 
 export type SwapParams = {
@@ -139,27 +141,25 @@ export async function doPerformSwap<A = []>(
 
   swapContext?.updateStatus(cf.logger, SwapStatus.Funded);
 
-  const swapRequestId = (await swapRequestedHandle).data.swapRequestId;
+  const swapRequestId = (await swapRequestedHandle).swapRequestId;
 
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapScheduled);
 
   cf.debug(`Swap requested with ID: ${swapRequestId}`);
 
-  await observeEvent(cf.logger, 'swapping:SwapRequestCompleted', {
-    test: (event) => event.data.swapRequestId === swapRequestId,
-    historicalCheckBlocks: 4,
-  }).event;
+  await cf.stepUntilEvent(
+    'Swapping.SwapRequestCompleted',
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+  );
 
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapCompleted);
 
   cf.debug(`Swap Request Completed. Waiting for egress.`);
 
-  const { egressId, amount: egressAmount } = (
-    await observeEvent(cf.logger, 'swapping:SwapEgressScheduled', {
-      test: (event) => event.data.swapRequestId === swapRequestId,
-      historicalCheckBlocks: 4,
-    }).event
-  ).data;
+  const { egressId, amount: egressAmount } = await cf.stepUntilEvent(
+    'Swapping.SwapEgressScheduled',
+    swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
+  );
 
   swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
 

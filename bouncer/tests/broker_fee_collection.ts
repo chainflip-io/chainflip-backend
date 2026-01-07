@@ -25,6 +25,7 @@ import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
 
 const commissionBps = 1000; // 10%
 
@@ -130,7 +131,8 @@ async function testBrokerFees<A = []>(
   const depositAddress = res.depositAddress[shortChainFromAsset(inputAsset)];
   const channelId = Number(res.channelId);
 
-  const swapRequestedHandle = observeSwapRequested(
+  await send(cf.logger, inputAsset, depositAddress, rawDepositForSwapAmount);
+  const swapRequestedEvent = await observeSwapRequested(
     cf,
     inputAsset,
     destAsset,
@@ -138,22 +140,18 @@ async function testBrokerFees<A = []>(
     SwapRequestType.Regular,
   );
 
-  await send(cf.logger, inputAsset, depositAddress, rawDepositForSwapAmount);
-
-  const swapRequestedEvent = (await swapRequestedHandle).data;
-
   // Get values from the swap event
   const requestId = swapRequestedEvent.swapRequestId;
 
-  const swapExecutedEvent = await observeEvent(cf.logger, 'swapping:SwapExecuted', {
-    test: (event) => event.data.swapRequestId === requestId,
-  }).event;
+  const swapExecutedEvent = await cf.stepUntilEvent(
+    'Swapping.SwapExecuted',
+    swappingSwapExecuted.refine((event) => event.swapRequestId === requestId),
+  );
 
-  const brokerFee = BigInt(swapExecutedEvent.data.brokerFee.replace(/,/g, ''));
-  cf.debug('brokerFee:', brokerFee);
+  cf.debug('brokerFee:', swapExecutedEvent.brokerFee);
 
   // Check that the deposit amount is correct after deducting the deposit fee
-  const depositAmountAfterIngressFee = BigInt(swapRequestedEvent.inputAmount.replaceAll(',', ''));
+  const depositAmountAfterIngressFee = swapRequestedEvent.inputAmount;
   const rawDepositForSwapAmountBigInt = amountToFineAmountBigInt(
     rawDepositForSwapAmount,
     inputAsset,
