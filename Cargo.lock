@@ -2301,6 +2301,7 @@ dependencies = [
  "jsonrpsee",
  "log",
  "pallet-cf-elections",
+ "pallet-staking",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
@@ -9405,6 +9406,7 @@ name = "pallet-cf-flip"
 version = "0.1.0"
 dependencies = [
  "cf-primitives",
+ "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
@@ -9703,6 +9705,7 @@ dependencies = [
  "lazy_static",
  "log",
  "nanorand",
+ "pallet-cf-flip",
  "pallet-cf-funding",
  "pallet-cf-reputation",
  "pallet-session",
