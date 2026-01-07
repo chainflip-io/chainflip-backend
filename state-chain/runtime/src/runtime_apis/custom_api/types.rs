@@ -176,6 +176,7 @@ impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
 			reputation_points: old.reputation_points,
 			keyholder_epochs: old.keyholder_epochs,
 			is_current_authority: old.is_current_authority,
+			#[expect(deprecated)]
 			is_current_backup: old.is_current_backup,
 			is_qualified: old.is_qualified,
 			is_online: old.is_online,
