@@ -133,7 +133,7 @@ async function testBoostingForAsset(
   const destAddress = await newAssetAddress(swapAsset, 'LP_BOOST');
   cf.debug(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
-    cf.logger,
+    cf,
     asset,
     swapAsset,
     destAddress,

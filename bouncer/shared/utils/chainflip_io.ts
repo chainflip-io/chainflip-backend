@@ -52,6 +52,19 @@ export class ChainflipIO<Requirements> {
     return new ChainflipIO(this.logger, this.requirements, this.lastIoBlockHeight);
   }
 
+  withChildLogger(tag: string): ChainflipIO<Requirements> {
+    return new ChainflipIO(this.logger.child({ tag }), this.requirements, this.lastIoBlockHeight);
+  }
+
+  ifYouCallThisYouHaveToRefactor_stepToBlockHeight(newIoBlockHeight: number) {
+    if (this.lastIoBlockHeight > newIoBlockHeight) {
+      throw new Error(
+        'Error in ChainflipIO: `stepToBlockHeight` called with lower block height than current',
+      );
+    }
+    this.lastIoBlockHeight = newIoBlockHeight;
+  }
+
   /**
    * Submits an extrinsic and updates the `lastIoBlockHeight` to the block height were the extrinsic was included.
    * @param this Automatically provided by typescript when called as a method on a ChainflipIO object.

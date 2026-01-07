@@ -1,15 +1,12 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
-import { encodeAddress } from 'polkadot/util-crypto';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
 import {
   observeBalanceIncrease,
   observeCcmReceived,
-  shortChainFromAsset,
   observeSwapEvents,
   observeBroadcastSuccess,
-  getEncodedSolAddress,
   observeFetch,
   chainFromAsset,
   observeSwapRequested,
@@ -24,7 +21,6 @@ import {
   defaultAssetAmounts,
   newAssetAddress,
   getContractAddress,
-  isPolkadotAsset,
   createStateChainKeypair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
@@ -33,18 +29,8 @@ import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { Logger, throwError } from 'shared/utils/logger';
-
-function encodeDestinationAddress(address: string, destAsset: Asset): string {
-  let destAddress = address;
-
-  if (destAddress && isPolkadotAsset(destAsset)) {
-    destAddress = encodeAddress(destAddress);
-  } else if (shortChainFromAsset(destAsset) === 'Sol') {
-    destAddress = getEncodedSolAddress(destAddress);
-  }
-
-  return destAddress;
-}
+import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
+import { ChainflipIO } from './utils/chainflip_io';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -54,8 +40,8 @@ export type SwapParams = {
   channelId: number;
 };
 
-export async function requestNewSwap(
-  logger: Logger,
+export async function requestNewSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -65,34 +51,11 @@ export async function requestNewSwap(
   fillOrKillParams?: FillOrKillParamsX128,
   dcaParams?: DcaParams,
 ): Promise<SwapParams> {
-  const addressPromise = observeEvent(logger, 'swapping:SwapDepositAddressReady', {
-    test: (event) => {
-      // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = encodeDestinationAddress(
-        event.data.destinationAddress[shortChainFromAsset(destAsset)],
-        destAsset,
-      );
-      if (!destAddressEvent) return false;
-
-      const destAssetMatches = event.data.destinationAsset === destAsset;
-      const sourceAssetMatches = event.data.sourceAsset === sourceAsset;
-      const destAddressMatches =
-        destAddressEvent.toLowerCase() ===
-        encodeDestinationAddress(destAddress, destAsset).toLowerCase();
-
-      const ccmMetadataMatches = messageMetadata
-        ? event.data.channelMetadata !== null &&
-          event.data.channelMetadata.message ===
-            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
-          event.data.channelMetadata.gasBudget.replace(/,/g, '') === messageMetadata.gasBudget
-        : event.data.channelMetadata === null;
-
-      return destAddressMatches && destAssetMatches && sourceAssetMatches && ccmMetadataMatches;
-    },
-  }).event;
-
+  cf.debug(
+    `Requesting swap with sourceAsset ${sourceAsset}, destinationAsset ${destAsset}, destinationAddress ${destAddress} and metadata ${JSON.stringify(messageMetadata)}`,
+  );
   await newSwap(
-    logger,
+    cf,
     sourceAsset,
     destAsset,
     destAddress,
@@ -102,34 +65,30 @@ export async function requestNewSwap(
     fillOrKillParams,
     dcaParams,
   );
+  const addressReady = await cf.expectEvent(
+    'Swapping.SwapDepositAddressReady',
+    swappingSwapDepositAddressReady.refine((event) => {
+      const eventMatches =
+        event.destinationAddress.address.toLowerCase() === destAddress.toLowerCase() &&
+        event.destinationAsset === destAsset &&
+        event.sourceAsset === sourceAsset;
 
-  let timeout: number;
-  if (chainFromAsset(destAsset) === 'Assethub') {
-    // The blocktime on assethub is 12 seconds, so if the broadcast fails due to a reorg, we
-    // need some more time to retry.
-    timeout = 36000;
-  } else {
-    // Set an aggressive timeout for the addressPromise. We expect an event within 3 blocks at most.
-    timeout = 18000;
-  }
+      const ccmMetadataMatches = messageMetadata
+        ? event.channelMetadata !== undefined &&
+          event.channelMetadata?.message ===
+            (messageMetadata.message === '0x' ? '' : messageMetadata.message) &&
+          event.channelMetadata.gasBudget === BigInt(messageMetadata.gasBudget)
+        : event.channelMetadata === undefined;
 
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(
-        new Error(`Timeout waiting for deposit address for ${sourceAsset} -> ${destAsset} swap.`),
-      );
-    }, timeout);
-  });
+      return eventMatches && ccmMetadataMatches;
+    }),
+  );
 
-  // Wait for the addressPromise or the timeoutPromise to resolve (race)
-  const eventOrTimeout = await Promise.race([addressPromise, timeoutPromise]);
+  const depositAddress = addressReady.depositAddress.address;
+  const channelDestAddress = addressReady.destinationAddress.address;
+  const channelId = Number(addressReady.channelId);
 
-  const res = eventOrTimeout.data;
-  const depositAddress = res.depositAddress[shortChainFromAsset(sourceAsset)];
-  const channelDestAddress = res.destinationAddress[shortChainFromAsset(destAsset)];
-  const channelId = Number(res.channelId.replaceAll(',', ''));
-
-  logger.debug(
+  cf.debug(
     `Deposit address: ${depositAddress}, Destination address: ${channelDestAddress}, Channel ID: ${channelId}`,
   );
 
@@ -229,8 +188,8 @@ export async function doPerformSwap(
 }
 
 // Note: if using the swap context, the logger must contain the tag
-export async function performSwap(
-  logger: Logger,
+export async function performSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -240,7 +199,7 @@ export async function performSwap(
   brokerCommissionBps?: number,
   swapContext?: SwapContext,
 ) {
-  logger.trace(
+  cf.trace(
     `The args are: ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata
         ? messageMetadata.message.substring(0, 6) +
@@ -251,7 +210,7 @@ export async function performSwap(
   );
 
   const swapParams = await requestNewSwap(
-    logger,
+    cf,
     sourceAsset,
     destAsset,
     destAddress,
@@ -259,14 +218,14 @@ export async function performSwap(
     brokerCommissionBps,
   );
 
-  await doPerformSwap(logger, swapParams, messageMetadata, senderType, amount, swapContext);
+  await doPerformSwap(cf.logger, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
 }
 
 // function to create a swap and track it until we detect the corresponding broadcast success
-export async function performAndTrackSwap(
-  logger: Logger,
+export async function performAndTrackSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -274,20 +233,20 @@ export async function performAndTrackSwap(
 ) {
   await using chainflipApi = await getChainflipApi();
 
-  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
+  const swapParams = await requestNewSwap(cf, sourceAsset, destAsset, destAddress);
 
-  await send(logger, sourceAsset, swapParams.depositAddress, amount);
-  logger.debug(`Funds sent, waiting for the deposit to be witnessed..`);
+  await send(cf.logger, sourceAsset, swapParams.depositAddress, amount);
+  cf.debug(`Funds sent, waiting for the deposit to be witnessed..`);
 
   // SwapScheduled, SwapExecuted, SwapEgressScheduled, BatchBroadcastRequested
-  const broadcastId = await observeSwapEvents(logger, swapParams, chainflipApi);
+  const broadcastId = await observeSwapEvents(cf.logger, swapParams, chainflipApi);
 
   if (broadcastId) {
-    await observeBroadcastSuccess(logger, broadcastId);
+    await observeBroadcastSuccess(cf.logger, broadcastId);
   } else {
-    throwError(logger, new Error(`Failed to retrieve broadcastId!`));
+    throwError(cf.logger, new Error(`Failed to retrieve broadcastId!`));
   }
-  logger.debug(`Broadcast executed successfully, swap is complete!`);
+  cf.debug(`Broadcast executed successfully, swap is complete!`);
 }
 
 export async function executeVaultSwap(
