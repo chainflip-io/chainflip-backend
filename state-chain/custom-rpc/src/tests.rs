@@ -300,11 +300,13 @@ fn test_environment_serialization() {
 			minimum_funding_amount: 0u32.into(),
 		},
 		pools: {
-			let pool_info: RpcPoolInfo = PoolInfo {
+			let pool_info: RpcPoolInfo = pallet_cf_pools::before_v13::PoolInfo {
 				range_order_fee_hundredth_pips: 100,
 				range_order_total_fees_earned: Default::default(),
 				range_total_swap_inputs: Default::default(),
 				limit_total_swap_inputs: Default::default(),
+				limit_order_fee_hundredth_pips: Default::default(),
+				limit_order_total_fees_earned: Default::default(),
 			}
 			.into();
 			PoolsEnvironment { fees: asset_map(Some(pool_info)) }
@@ -534,7 +536,7 @@ fn pool_order_book_serialization() {
 #[test]
 fn pool_info_serialization() {
 	let val = RpcPoolInfo {
-		pool_info: PoolInfoLegacy {
+		pool_info: pallet_cf_pools::before_v13::PoolInfo {
 			limit_order_fee_hundredth_pips: 100u32,
 			range_order_fee_hundredth_pips: 200u32,
 			range_order_total_fees_earned: PoolPairsMap { base: 1111.into(), quote: 2222.into() },

@@ -52,6 +52,7 @@ mod benchmarking;
 pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
+pub mod before_v13;
 
 #[cfg(test)]
 mod mock;
@@ -327,7 +328,7 @@ pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
 
 #[frame_support::pallet]
 pub mod pallet {
