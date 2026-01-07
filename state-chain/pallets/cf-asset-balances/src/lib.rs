@@ -18,11 +18,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount, AccountRole};
+use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
-	LiabilityTracker, PoolApi, ScheduledEgressDetails, AccountRoleRegistry
+	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip, EgressApi,
+	KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
 };
 use frame_support::{
 	pallet_prelude::*,
