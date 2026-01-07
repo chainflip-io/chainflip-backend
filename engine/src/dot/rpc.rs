@@ -79,6 +79,7 @@ impl DotSubClient {
 
 #[async_trait]
 impl DotSubscribeApi for DotSubClient {
+	#[expect(clippy::result_large_err)]
 	async fn subscribe_best_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
@@ -94,6 +95,7 @@ impl DotSubscribeApi for DotSubClient {
 		))
 	}
 
+	#[expect(clippy::result_large_err)]
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
