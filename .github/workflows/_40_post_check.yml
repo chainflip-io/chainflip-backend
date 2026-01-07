@@ -49,6 +49,7 @@ jobs:
   bouncer:
     runs-on: hetzner
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    continue-on-error: ${{ inputs.continue-on-bouncer-error }}
     steps:
       - name: Setup ngrok ✨
         if: inputs.ngrok
@@ -149,7 +150,6 @@ jobs:
       - name: Run HeuteLeiderNicht.einfach.exe 🦺
         if: ${{ ! inputs.full-bouncer }}
         working-directory: bouncer
-        continue-on-error: ${{ inputs.continue-on-bouncer-error }}
         run: |
           ./fast_bouncer.sh
 
