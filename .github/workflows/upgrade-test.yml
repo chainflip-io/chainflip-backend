@@ -269,6 +269,13 @@ jobs:
         run: |
           cat /tmp/chainflip/debug.log
 
+      - name: Show logs from docker containers 🐳🕵️‍♂️
+        if: always()
+        continue-on-error: true
+        run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs > /tmp/chainflip/chainflip-docker-logs.log 
+          cat /tmp/chainflip/chainflip-docker-logs.log
+
       - name: Upload Localnet Logs 💾
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
@@ -277,6 +284,9 @@ jobs:
           name: localnet-logs-upgrade-test
           path: |
             /tmp/chainflip/*/chainflip-*.*log
+            /tmp/chainflip/chainflip-*.*log
+            /tmp/chainflip/debug.*log
+            /tmp/solana/*.*log
 
       - name: Upload Chainflip Logs 💾
         if: inputs.run-job || failure() || cancelled()
