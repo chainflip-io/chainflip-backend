@@ -27,6 +27,9 @@ on:
       chain:
         type: string
         default: "dev"
+      chainflip-backend-bin-suffix:
+        type: string
+        default: ""
 
 env:
   FORCE_COLOR: 1
@@ -87,7 +90,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
 
       - name: Install node dependencies 📦
         working-directory: bouncer
