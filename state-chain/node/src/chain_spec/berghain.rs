@@ -61,6 +61,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_key_manager_address: hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"),
 	arb_vault_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
+	arb_usdt_token_address: hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 	arb_address_checker_address: hex_literal::hex!("69C700A0DEBAb9e349dd1f52ED62eb253a3c9892"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,

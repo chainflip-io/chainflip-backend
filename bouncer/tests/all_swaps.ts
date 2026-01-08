@@ -78,8 +78,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
 
+  // TODO Add SolUsdt once deployed
   const AssetsWithoutAssethubAndDot = Object.values(Assets).filter(
-    (id) => !id.startsWith('Hub') && id !== 'Dot',
+    (id) => !id.startsWith('Hub') && id !== 'Dot' && id !== 'SolUsdt',
   );
 
   AssetsWithoutAssethubAndDot.forEach((sourceAsset) => {

@@ -199,7 +199,7 @@ pub fn evm_vault_swap<A>(
 				)
 				.abi_encoded_payload())
 			},
-		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc => {
+		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc | Asset::ArbUsdt => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
@@ -207,9 +207,9 @@ pub fn evm_vault_swap<A>(
 						<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
 							source_asset.try_into().expect("Only Ethereum asset is processed here"),
 						),
-					Asset::ArbUsdc =>
+					Asset::ArbUsdc | Asset::ArbUsdt =>
 						<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
-							cf_chains::assets::arb::Asset::ArbUsdc,
+							source_asset.try_into().expect("Only Arbitrum asset is processed here"),
 						),
 					_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
 				}

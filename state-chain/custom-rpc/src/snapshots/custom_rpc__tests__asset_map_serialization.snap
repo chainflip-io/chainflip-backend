@@ -18,7 +18,8 @@ expression: val
   },
   "Arbitrum": {
     "ETH": "0x1f4",
-    "USDC": "0x1f4"
+    "USDC": "0x1f4",
+    "USDT": "0x1f4"
   },
   "Solana": {
     "SOL": "0x1f4",

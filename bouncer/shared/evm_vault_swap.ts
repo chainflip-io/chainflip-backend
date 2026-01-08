@@ -23,7 +23,7 @@ import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { Logger } from 'shared/utils/logger';
 import { getErc20abi } from 'shared/contract_interfaces';
 
-const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc'];
+const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
 interface EvmVaultSwapDetails {
   chain: 'Ethereum' | 'Arbitrum';

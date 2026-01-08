@@ -61,6 +61,7 @@ pub(super) struct EnvironmentParameters {
 	arb_address_checker_address: H160,
 	arb_key_manager_address: H160,
 	arb_usdc_contract_address: H160,
+	arb_usdt_contract_address: H160,
 	arb_supported_erc20_tokens: HashMap<H160, Asset>,
 
 	dot_genesis_hash: PolkadotHash,
@@ -164,6 +165,9 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	let arb_usdc_contract_address =
 		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdc).expect("USDC not supported");
 
+	let arb_usdt_contract_address =
+		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdt).expect("USDT not supported");
+
 	let arb_supported_erc20_tokens: HashMap<H160, Asset> = arb_supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -204,6 +208,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		arb_key_manager_address,
 		arb_address_checker_address,
 		arb_usdc_contract_address,
+		arb_usdt_contract_address,
 		arb_supported_erc20_tokens,
 
 		dot_genesis_hash,

@@ -824,6 +824,7 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub arb_usdc_address: EvmAddress,
+		pub arb_usdt_address: EvmAddress,
 		pub arb_key_manager_address: EvmAddress,
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
@@ -865,6 +866,7 @@ pub mod pallet {
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);

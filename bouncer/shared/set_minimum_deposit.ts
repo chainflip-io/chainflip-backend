@@ -25,6 +25,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
       );
       break;
     case 'ArbUsdc':
+    case 'ArbUsdt':
     case 'ArbEth':
       await submitGovernanceExtrinsic((api) =>
         api.tx.arbitrumIngressEgress.updatePalletConfig([

@@ -213,7 +213,7 @@ async function launchTornado() {
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
-  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc', 'ArbUsdt'];
   for (let i = 0; i < 10; i++) {
     const index1 = Math.floor(Math.random() * assets.length);
     const index2 = Math.floor(Math.random() * assets.length);
@@ -239,10 +239,21 @@ const swapAmount = new Map<Asset, string>([
   ['Flip', '3'],
   ['ArbEth', '0.03'],
   ['ArbUsdc', '30'],
+  ['ArbUsdt', '40'],
 ]);
 
 async function playSwapper() {
-  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = [
+    'Eth',
+    'Btc',
+    'Usdc',
+    'Flip',
+    'Usdt',
+    'Wbtc',
+    'ArbEth',
+    'ArbUsdc',
+    'ArbUsdt',
+  ];
   for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
@@ -263,6 +274,7 @@ const price = new Map<Asset, number>([
   ['Flip', 10],
   ['ArbEth', 1000],
   ['ArbUsdc', 1],
+  ['ArbUsdt', 1],
 ]);
 
 async function bananas() {
@@ -276,6 +288,7 @@ async function bananas() {
     createLpPool(logger, 'Wbtc', price.get('Wbtc')!),
     createLpPool(logger, 'ArbEth', price.get('ArbEth')!),
     createLpPool(logger, 'ArbUsdc', price.get('ArbUsdc')!),
+    createLpPool(logger, 'ArbUsdt', price.get('ArbUsdt')!),
   ]);
 
   await Promise.all([
@@ -287,6 +300,7 @@ async function bananas() {
     depositLiquidity(logger, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
     depositLiquidity(logger, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
     depositLiquidity(logger, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
+    depositLiquidity(logger, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
   ]);
 
   await Promise.all([
@@ -323,6 +337,11 @@ async function bananas() {
     playLp(
       'ArbUsdc',
       price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
+      liquidityUsdc,
+    ),
+    playLp(
+      'ArbUsdt',
+      price.get('ArbUsdt')! * 10 ** (assetDecimals('Usdt') - assetDecimals('ArbUsdt')),
       liquidityUsdc,
     ),
     playSwapper(),

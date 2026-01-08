@@ -41,7 +41,7 @@ use crate::{
 		stream_api::{StreamApi, FINALIZED},
 		STATE_CHAIN_CONNECTION,
 	},
-	witness::evm::erc20_deposits::usdc::UsdcEvents,
+	witness::evm::erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents},
 };
 
 use super::{
@@ -104,6 +104,10 @@ where
 		.get(&ArbAsset::ArbUsdc)
 		.context("ArbitrumSupportedAssets does not include USDC")?;
 
+	let usdt_contract_address = *supported_arb_erc20_assets
+		.get(&ArbAsset::ArbUsdt)
+		.context("ArbitrumSupportedAssets does not include USDT")?;
+
 	let supported_arb_erc20_assets: HashMap<H160, Asset> = supported_arb_erc20_assets
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -163,6 +167,19 @@ where
 		.await?
 		.continuous("ArbitrumUSDCDeposits".to_string(), db.clone())
 		.logging("USDCDeposits")
+		.spawn(scope);
+
+	arb_safe_vault_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdtEvents>(
+			process_call.clone(),
+			arb_client.clone(),
+			ArbAsset::ArbUsdt,
+			usdt_contract_address,
+		)
+		.await?
+		.continuous("ArbitrumUSDTDeposits".to_string(), db.clone())
+		.logging("USDTDeposits")
 		.spawn(scope);
 
 	arb_safe_vault_source_deposit_addresses

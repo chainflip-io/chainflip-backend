@@ -20,7 +20,8 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
       result = await getErc20Balance('Ethereum', address, contractAddress);
       break;
     }
-    case 'ArbUsdc': {
+    case 'ArbUsdc':
+    case 'ArbUsdt': {
       const contractAddress = getContractAddress('Arbitrum', asset);
       result = await getErc20Balance('Arbitrum', address, contractAddress);
       break;

@@ -31,7 +31,10 @@ use chainflip_engine::{
 	witness::{
 		arb::ArbCallBuilder,
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
-		evm::{erc20_deposits::usdc::UsdcEvents, source::EvmSource},
+		evm::{
+			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents},
+			source::EvmSource,
+		},
 	},
 };
 
@@ -90,6 +93,18 @@ where
 		)
 		.await?
 		.logging("witnessing USDCDeposits")
+		.spawn(scope);
+
+	arb_source_deposit_addresses
+		.clone()
+		.erc20_deposits::<_, _, _, UsdtEvents>(
+			witness_call.clone(),
+			arb_client.clone(),
+			ArbAsset::ArbUsdt,
+			env_params.arb_usdt_contract_address,
+		)
+		.await?
+		.logging("witnessing USDTDeposits")
 		.spawn(scope);
 
 	arb_source_deposit_addresses

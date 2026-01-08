@@ -21,7 +21,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x6f05b59d3b20000",
-      "USDC": "0xf4240"
+      "USDC": "0xf4240",
+      "USDT": "0x16e360"
     },
     "Solana": {
       "SOL": "0x12a05f200",

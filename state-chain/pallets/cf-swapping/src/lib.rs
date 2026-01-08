@@ -3229,6 +3229,7 @@ pub mod utilities {
 			Asset::Usdc |
 			Asset::Usdt |
 			Asset::ArbUsdc |
+			Asset::ArbUsdt |
 			Asset::SolUsdc |
 			Asset::HubUsdc |
 			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1

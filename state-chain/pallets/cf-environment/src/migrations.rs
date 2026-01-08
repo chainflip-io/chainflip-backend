@@ -24,7 +24,7 @@ use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-mod wbtc;
+mod wbtc_arbusdt;
 // NOTE: Do not remove this. This is used to update the on-chain version for CFE compatibility
 // checks.
 pub struct VersionUpdate<T: Config>(sp_std::marker::PhantomData<T>);
@@ -55,7 +55,7 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		20,
 		21,
-		wbtc::WbtcMigration<T>,
+		wbtc_arbusdt::NewAssetsMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,

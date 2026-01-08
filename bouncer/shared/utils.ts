@@ -175,18 +175,20 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ArbUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+        case 'ArbUsdt':
+          return process.env.ARB_USDT_ADDRESS ?? '0x5FC8d32690cc91D4c39d9d3abcBD16989F875707';
         case 'CFTESTER':
-          return '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9'; // 0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
+          return '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
         case 'PRICE_FEED_BTC':
-          return '0x0165878A594ca255338adfa4d48449f69242Eb8F'; // 0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f
+          return '0x0165878A594ca255338adfa4d48449f69242Eb8F';
         case 'PRICE_FEED_ETH':
-          return '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853'; // 0x4A679253410272dd5232B3Ff7cF5dbB88f295319
+          return '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853';
         case 'PRICE_FEED_SOL':
-          return '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6'; // 0x7a2088a1bFc9d81c55368AE168C2C02570cB814F
+          return '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
         case 'PRICE_FEED_USDC':
-          return '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318'; // 0x09635F643e140090A9A8Dcd712eD6285858ceBef
+          return '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318';
         case 'PRICE_FEED_USDT':
-          return '0x610178dA211FEF7D417bC0e6FeD39F05609AD788'; // 0xc5a5C42992dECbae36851359345FE25997F5C42d
+          return '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -241,6 +243,7 @@ export function shortChainFromAsset(asset: Asset) {
     case 'Btc':
       return 'Btc';
     case 'ArbUsdc':
+    case 'ArbUsdt':
     case 'ArbEth':
       return 'Arb';
     case 'Sol':
@@ -277,6 +280,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'Usdc':
     case 'Usdt':
     case 'ArbUsdc':
+    case 'ArbUsdt':
     case 'Flip':
     case 'SolUsdc':
     case 'HubUsdc':
@@ -659,6 +663,7 @@ export async function newAddress(
     case Assets.Wbtc:
     case Assets.ArbEth:
     case Assets.ArbUsdc:
+    case Assets.ArbUsdt:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:

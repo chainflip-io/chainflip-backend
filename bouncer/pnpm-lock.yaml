@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.12.1-wbtc-dev.3
-        version: 1.12.1-wbtc-dev.3(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
+        specifier: 1.12.1-wbtc-dev.4
+        version: 1.12.1-wbtc-dev.4(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@chainflip/utils':
-        specifier: 0.11.2-wbtc-dev.0
-        version: 0.11.2-wbtc-dev.0
+        specifier: 0.11.2-wbtc-dev.1
+        version: 0.11.2-wbtc-dev.1
       '@coral-xyz/anchor':
         specifier: ^0.30.1
         version: 0.30.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
@@ -157,15 +157,15 @@ packages:
   '@chainflip/bitcoin@1.2.7':
     resolution: {integrity: sha512-De/3Oe53xCvolYsYydK+/wQ1qorPsvbsRX7idA4m86sHQTxlZ4hP5LU7lb3xhOyqrl94LMd56iCRLgoFlzmsCA==}
 
-  '@chainflip/cli@1.12.1-wbtc-dev.3':
-    resolution: {integrity: sha512-5y0+YeoLpY0gAGq9JaYVxybYdifqsfL9DlBoRVPZt5pnDOfyWu3fBfGoYAdSHj4DzvhdV/14cUksQTI2Mxzwig==}
+  '@chainflip/cli@1.12.1-wbtc-dev.4':
+    resolution: {integrity: sha512-RSoBYR40OEUm7VOgvSE6QhbJKcZHcyjoHda3Bskh5QdkYk6F8emiAZEzzUeCAkLcDnGCjWtTkaWOSu7W1LcsHA==}
     hasBin: true
     peerDependencies:
       axios: ^1.10.0
       ethers: ^6.14.4
 
-  '@chainflip/rpc@2.0.6-wbtc-dev.2':
-    resolution: {integrity: sha512-FAgJ0XHi5GUq5lpALTUvnJ3rpA3FPC1CsYaQFpqZH440bpCXg5VVeQ+rM0Y1GTo17EsNYaXYq5FS+2ICUc/R7Q==}
+  '@chainflip/rpc@2.0.6-wbtc-dev.3':
+    resolution: {integrity: sha512-sZrgvl7dI6g/YiicLw/PcR59Z/lfc/bCXpNn2t3WWeKnA65nOf2WD+WiTSi4Rjvy+k/wBB7hHFxVpqD4J0LFtQ==}
 
   '@chainflip/scale@1.11.0':
     resolution: {integrity: sha512-gLs2pARutz6JJSKth92TYQEHVWvwpavWNUARB9626t+QxlparHyL10t9XibD2X1sr+GLXWKj2q5qXOSGU8CICA==}
@@ -173,8 +173,8 @@ packages:
   '@chainflip/solana@2.2.0':
     resolution: {integrity: sha512-MQhH0b9hwO6miw2pAatDUzJJdaOhLMSiZSzbmUHJWqwvazg2X2YUUK3e4+RGKSBL8bBCFiC+FyXBSAvYztd1YQ==}
 
-  '@chainflip/utils@0.11.2-wbtc-dev.0':
-    resolution: {integrity: sha512-SmNJqNhwnz5BVE3nAdCCMdKBywdx2H+MOgeCIS/VrBUoaCHLaYPQ15IA6HJDYncEcQiuww876FncFpcczBg1+A==}
+  '@chainflip/utils@0.11.2-wbtc-dev.1':
+    resolution: {integrity: sha512-rolASf1zsyopj3t1oPUQvRKGUz2NLceExVFHAcSsd/k5E0sGlrbGZ0SYp0WUhUm9AYOm9NdPqLzRPyDn6GsHGA==}
 
   '@chainflip/utils@0.8.18':
     resolution: {integrity: sha512-qaKtasZSfCcEICR3Bo6IUabOkBsmldsKmDbGTRr0WBQlUyOA2SNwZRN9EP73ZQofWyI3luRN2tFGS54O3bYazQ==}
@@ -4172,12 +4172,12 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.12.1-wbtc-dev.3(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.12.1-wbtc-dev.4(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.2.7(typescript@5.9.3)
-      '@chainflip/rpc': 2.0.6-wbtc-dev.2
+      '@chainflip/rpc': 2.0.6-wbtc-dev.3
       '@chainflip/solana': 2.2.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
-      '@chainflip/utils': 0.11.2-wbtc-dev.0
+      '@chainflip/utils': 0.11.2-wbtc-dev.1
       axios: 1.13.2
       ethers: 6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       ioredis: 5.8.2
@@ -4190,9 +4190,9 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@chainflip/rpc@2.0.6-wbtc-dev.2':
+  '@chainflip/rpc@2.0.6-wbtc-dev.3':
     dependencies:
-      '@chainflip/utils': 0.11.2-wbtc-dev.0
+      '@chainflip/utils': 0.11.2-wbtc-dev.1
       zod: 3.25.76
 
   '@chainflip/scale@1.11.0':
@@ -4215,7 +4215,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@chainflip/utils@0.11.2-wbtc-dev.0':
+  '@chainflip/utils@0.11.2-wbtc-dev.1':
     dependencies:
       '@date-fns/utc': 2.1.1
       bignumber.js: 9.3.1

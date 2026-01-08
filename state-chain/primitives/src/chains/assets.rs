@@ -788,6 +788,15 @@ assets!(
 				index: 7,
 				usd_stablecoin: true,
 			},
+			Asset {
+				variant: ArbUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 15,
+				usd_stablecoin: true,
+			},
 		],
 	},
 	Chain {
@@ -901,6 +910,7 @@ mod test_assets {
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
 		assert_conversion!(arb, ArbUsdc);
+		assert_conversion!(arb, ArbUsdt);
 		assert_conversion!(sol, Sol);
 		assert_conversion!(sol, SolUsdc);
 		assert_conversion!(hub, HubDot);
@@ -1123,7 +1133,7 @@ mod test_assets {
 			eth(Eth, Usdc),
 			btc(Btc),
 			dot(Dot),
-			arb(ArbEth, ArbUsdc),
+			arb(ArbEth, ArbUsdc, ArbUsdt),
 			sol(Sol, SolUsdc),
 			hub(HubDot)
 		);

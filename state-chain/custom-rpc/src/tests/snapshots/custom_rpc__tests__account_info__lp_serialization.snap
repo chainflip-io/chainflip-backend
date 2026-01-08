@@ -21,7 +21,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x1",
-      "USDC": "0x2"
+      "USDC": "0x2",
+      "USDT": "0x3"
     },
     "Solana": {
       "SOL": "0x3",
@@ -59,7 +60,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x1",
-      "USDC": "0x2"
+      "USDC": "0x2",
+      "USDT": "0x3"
     },
     "Solana": {
       "SOL": "0x2",
@@ -102,7 +104,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": [],
-      "USDC": []
+      "USDC": [],
+      "USDT": []
     },
     "Solana": {
       "SOL": [],
