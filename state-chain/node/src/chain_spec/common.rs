@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, FLIPPERINOS_PER_FLIP};
 use sp_runtime::Permill;
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance, SetSizeParameters};

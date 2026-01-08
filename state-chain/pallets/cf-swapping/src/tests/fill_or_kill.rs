@@ -524,18 +524,18 @@ fn test_refund_parameter_validation() {
 		);
 
 		MockPriceFeedApi::set_price(INPUT_ASSET, None);
-		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(Price::from_raw(U256::one())));
 		assert_err!(
 			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
 			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
 		);
-		MockPriceFeedApi::set_price(INPUT_ASSET, Some(U256::from(1)));
+		MockPriceFeedApi::set_price(INPUT_ASSET, Some(Price::from_raw(U256::one())));
 		MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
 		assert_err!(
 			Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)),
 			DispatchError::from(crate::Error::<Test>::OraclePriceNotAvailable)
 		);
-		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(U256::from(1)));
+		MockPriceFeedApi::set_price(OUTPUT_ASSET, Some(Price::from_raw(U256::one())));
 		assert_ok!(Swapping::validate_refund_params(INPUT_ASSET, OUTPUT_ASSET, 0, Some(100)));
 	});
 }
@@ -626,8 +626,8 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, INPUT_ASSET_PRICE);
-				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, OUTPUT_ASSET_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, INPUT_ASSET_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, OUTPUT_ASSET_PRICE);
 
 				// Execution price is exactly the same as the oracle price,
 				// so the first chunk should go through
@@ -640,7 +640,7 @@ mod oracle_swaps {
 					RETRY_DURATION,
 					PriceLimits {
 						// Make sure we turn of the old min price check
-						min_price: 0.into(),
+						min_price: Price::zero(),
 						// Set the maximum oracle price slippage to any value
 						max_oracle_price_slippage: Some(ORACLE_PRICE_SLIPPAGE),
 					},
@@ -675,7 +675,7 @@ mod oracle_swaps {
 
 				// Now drop the oracle price for input asset. It will once again match the swap
 				// rate, so the swap should succeed.
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, OUTPUT_ASSET_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, OUTPUT_ASSET_PRICE);
 			})
 			.then_process_blocks_until_block(CHUNK_2_RETRY_BLOCK)
 			.then_execute_with(|_| {
@@ -705,7 +705,7 @@ mod oracle_swaps {
 
 				// Set the price of one of the assets to None to simulate being unsupported
 				MockPriceFeedApi::set_price(INPUT_ASSET, None);
-				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, DEFAULT_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, DEFAULT_SWAP_RATE);
 
 				// Set the swap rate to a small value well below the oracle slippage.
 				// So that if the oracle price was used, the swap would fail.
@@ -717,7 +717,7 @@ mod oracle_swaps {
 					OUTPUT_ASSET,
 					0, // retry duration
 					// Set the oracle price slippage to a non-zero value
-					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(10) },
+					PriceLimits { min_price: Price::zero(), max_oracle_price_slippage: Some(10) },
 					None,
 					LP_ACCOUNT,
 				);
@@ -740,7 +740,7 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 				MockPriceFeedApi::set_price(OUTPUT_ASSET, None);
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, DEFAULT_SWAP_RATE);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, DEFAULT_SWAP_RATE);
 
 				// Set the swap rate to a small value well below the oracle slippage
 				SwapRate::set(0.000001);
@@ -751,7 +751,7 @@ mod oracle_swaps {
 					OUTPUT_ASSET,
 					0, // retry duration
 					// Set the oracle price slippage to a non-zero value
-					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(10) },
+					PriceLimits { min_price: Price::zero(), max_oracle_price_slippage: Some(10) },
 					None,
 					LP_ACCOUNT,
 				);
@@ -779,8 +779,8 @@ mod oracle_swaps {
 			.execute_with(|| {
 				assert_eq!(System::block_number(), INIT_BLOCK);
 
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 2);
-				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 2);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 2);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, 2);
 
 				// Set one of the assets to stale
 				MockPriceFeedApi::set_stale(INPUT_ASSET, true);
@@ -792,7 +792,7 @@ mod oracle_swaps {
 					OUTPUT_ASSET,
 					DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					// Set the oracle price slippage to a non-zero value
-					PriceLimits { min_price: 0.into(), max_oracle_price_slippage: Some(10) },
+					PriceLimits { min_price: Price::zero(), max_oracle_price_slippage: Some(10) },
 					None,
 					LP_ACCOUNT,
 				);
@@ -851,8 +851,8 @@ mod oracle_swaps {
 				});
 				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
 				// We use a price of 1 for both assets to make the math easier
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
-				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, 1);
 
 				Swapping::init_swap_request(
 					INPUT_ASSET,
@@ -904,8 +904,8 @@ mod oracle_swaps {
 				// Using a positive swap rate
 				SwapRate::set(1.0 + (SWAP_RATE_BPS as f64 / 10000.0));
 				// We use a price of 1 for both assets to make the math easier
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
-				MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, 1);
 
 				Swapping::init_swap_request(
 					INPUT_ASSET,
@@ -954,8 +954,8 @@ mod oracle_swaps {
 			let eth_price = U256::from_dec_str(ETH_PRICE).unwrap();
 			let btc_price = U256::from_dec_str(BTC_PRICE).unwrap();
 
-			MockPriceFeedApi::set_price(Asset::Eth, Some(eth_price));
-			MockPriceFeedApi::set_price(Asset::Btc, Some(btc_price));
+			MockPriceFeedApi::set_price(Asset::Eth, Some(Price::from_raw(eth_price)));
+			MockPriceFeedApi::set_price(Asset::Btc, Some(Price::from_raw(btc_price)));
 		}
 
 		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test> {
@@ -969,7 +969,7 @@ mod oracle_swaps {
 					Some(SwapRefundParameters {
 						refund_block: 10,
 						price_limits: PriceLimits {
-							min_price: 0.into(),
+							min_price: Price::zero(),
 							max_oracle_price_slippage,
 						},
 					}),

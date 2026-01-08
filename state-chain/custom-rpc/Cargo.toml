@@ -72,3 +72,4 @@ substrate-frame-rpc-system = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 serde_json = { workspace = true, default-features = true }
 pallet-cf-trading-strategy = { workspace = true, default-features = true }
+cf-amm-math = { workspace = true, features = ["test"] }

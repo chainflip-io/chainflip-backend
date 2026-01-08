@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_amm::math::price_from_usd;
-use cf_primitives::FLIP_DECIMALS;
 use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 use super::*;
@@ -601,12 +599,11 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
 
 		// Set some arbitrary prices in the oracle
-		MockPriceFeedApi::set_price(Asset::Btc, Some(price_from_usd(30_000, 8)));
-		MockPriceFeedApi::set_price(Asset::Eth, Some(price_from_usd(2_000, 18)));
-		MockPriceFeedApi::set_price(Asset::Usdc, Some(price_from_usd(1, 6)));
-		MockPriceFeedApi::set_price(Asset::ArbUsdc, Some(price_from_usd(1, 6)));
-		MockPriceFeedApi::set_price(Asset::Usdt, Some(price_from_usd(1, 6)));
-
+		MockPriceFeedApi::set_price_usd(Asset::Btc, 30_000);
+		MockPriceFeedApi::set_price_usd(Asset::Eth, 2_000);
+		MockPriceFeedApi::set_price_usd(Asset::Usdc, 1);
+		MockPriceFeedApi::set_price_usd(Asset::ArbUsdc, 1);
+		MockPriceFeedApi::set_price_usd(Asset::Usdt, 1);
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output(
 				Asset::Usdc,
@@ -674,7 +671,8 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				false,
 				false
 			),
-			(15_000 + 60) * 10u128.pow(FLIP_DECIMALS) + 1 // ~=15k + 40bps + rounding error
+			// ~=15k + 40bps + rounding error
+			(15_000 + 60) * 10u128.pow(Asset::Flip.decimals()) + 1
 		);
 
 		// Check that the network fee is still applied when using the same asset as the input and

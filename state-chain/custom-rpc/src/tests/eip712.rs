@@ -1,4 +1,5 @@
 use super::*;
+use cf_amm::math::{Price, PriceLimits};
 use ethereum_eip712::{build_eip712_data::build_eip712_typed_data, eip712::Eip712};
 use serde_json;
 use sp_core::U256;
@@ -38,14 +39,14 @@ fn test_swap_request_call() {
 			input_asset: cf_primitives::Asset::Sol,
 			output_asset: cf_primitives::Asset::Btc,
 			retry_duration: 543u32,
-			price_limits: cf_primitives::PriceLimits {
-				min_price: U256::from_dec_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap(),
+			price_limits: PriceLimits {
+				min_price: Price::from_raw(U256::from_dec_str("115792089237316195423570985008687907853269984665640564039457584007913129639935").unwrap()),
 				max_oracle_price_slippage: Some(98u16),
 			},
 			dca_params: None,
 		}));
 
-	assert_eq!(hash, "43ad4628e1b07ca4887cb8cad3995898a744e68f4ee5d3f6488d3596e6186c3b");
+	assert_eq!(hash, "2156f7dfb9d55b1b507883d215fe57d41bd18ea083ebc622c9cbcadb5e0e2550");
 }
 
 fn test_build_eip712_typed_data(call: RuntimeCall) -> String {

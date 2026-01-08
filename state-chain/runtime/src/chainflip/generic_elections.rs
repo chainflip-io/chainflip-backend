@@ -14,7 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{chains::assets::any, Price};
+use cf_amm::math::Price;
+use cf_primitives::chains::assets::any;
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::macros::*;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -318,9 +319,7 @@ pub fn initial_state(
 
 #[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 pub fn set_price(asset: any::Asset, price: Price) {
-	use pallet_cf_elections::electoral_systems::oracle_price::{
-		chainlink::statechain_price_to_chainlink_price, price::StatechainPrice,
-	};
+	use pallet_cf_elections::electoral_systems::oracle_price::chainlink::statechain_price_to_chainlink_price;
 
 	let asset_pair = match asset {
 		any::Asset::Eth => ChainlinkAssetpair::EthUsd,
@@ -331,8 +330,7 @@ pub fn set_price(asset: any::Asset, price: Price) {
 		_ => panic!("Asset not supported for price oracle"),
 	};
 
-	let price =
-		statechain_price_to_chainlink_price(&StatechainPrice::from_raw(price), asset_pair).unwrap();
+	let price = statechain_price_to_chainlink_price(&price.into(), asset_pair).unwrap();
 
 	let mut state: OraclePriceTracker<TypesFor<Chainlink>> =
 		pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime>::get().unwrap().0;

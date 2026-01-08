@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_amm::math::Price;
 use subxt::{config::transaction_extensions, Config};
 
 #[derive(Debug, Clone)]
@@ -91,7 +92,7 @@ impl<T>
 		Self {
 			retry_duration: value.retry_duration,
 			refund_address: value.refund_address,
-			min_price: value.min_price.0,
+			min_price: Price::from_raw(*value.min_price.0),
 			refund_ccm_metadata: value.refund_ccm_metadata.map(|metadata| {
 				cf_chains::CcmChannelMetadata {
 					message: cf_chains::CcmMessage::try_from(metadata.message.0)

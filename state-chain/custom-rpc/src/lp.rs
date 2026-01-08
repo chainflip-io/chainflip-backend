@@ -22,7 +22,10 @@ use crate::{
 };
 
 use anyhow::anyhow;
-use cf_amm::{common::Side, math::Tick};
+use cf_amm::{
+	common::Side,
+	math::{PriceLimits, Tick},
+};
 use cf_chains::{
 	address::{AddressString, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
@@ -38,7 +41,7 @@ use cf_node_client::{
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
 	ApiWaitForResult, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters, EgressId,
-	ForeignChain, PriceLimits, WaitFor,
+	ForeignChain, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{

@@ -27,7 +27,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
-use cf_amm::math::{price_from_usd_fine_amount, PRICE_FRACTIONAL_BITS};
+use cf_amm_math::Price;
 use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -38,7 +38,6 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
-	PriceLimits,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -131,8 +130,6 @@ impl TestRefundParams {
 	/// Due to rounding errors, you may have to set the `min_output` to a value one unit higher than
 	/// expected.
 	fn into_extended_params(self, input_amount: AssetAmount) -> PriceLimitsAndExpiry<u64> {
-		use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
-
 		PriceLimitsAndExpiry {
 			expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
 				retry_duration: self.retry_duration,
@@ -141,10 +138,7 @@ impl TestRefundParams {
 				)),
 				refund_ccm_metadata: None,
 			},
-			min_price: sqrt_price_to_price(bounded_sqrt_price(
-				self.min_output.into(),
-				input_amount.into(),
-			)),
+			min_price: Price::from_amounts_bounded(self.min_output.into(), input_amount.into()),
 			max_oracle_price_slippage: None,
 		}
 	}
@@ -282,7 +276,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 	ChannelRefundParametersUncheckedEncoded {
 		retry_duration: 100,
 		refund_address: EncodedAddress::Eth([1; 20]),
-		min_price: U256::zero(),
+		min_price: Price::zero(),
 		max_oracle_price_slippage: None,
 		refund_ccm_metadata: None,
 	};
@@ -1291,7 +1285,7 @@ fn test_get_scheduled_swap_legs_fallback() {
 		MockPoolPriceApi::set_pool_price(
 			Asset::Flip,
 			STABLE_ASSET,
-			price_from_usd_fine_amount(PRICE),
+			Price::from_usd_fine_amount(PRICE),
 		);
 
 		assert_eq!(
@@ -1759,7 +1753,7 @@ mod internal_swaps {
 		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
 			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
 
-		let min_price = U256::from(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE) << PRICE_FRACTIONAL_BITS;
+		let min_price = Price::from_usd_fine_amount(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE);
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1832,11 +1826,11 @@ mod internal_swaps {
 		// work, so this must be taken into account in the min_price calculation.
 		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
 		// charged instead.
-		let min_price = U256::from(
+		let min_price = Price::from_usd_fine_amount(
 			(DEFAULT_SWAP_RATE as f64 *
 				DEFAULT_SWAP_RATE as f64 *
 				(((CHUNK_AMOUNT - MIN_NETWORK_FEE) as f64) / CHUNK_AMOUNT as f64)) as u128,
-		) << PRICE_FRACTIONAL_BITS;
+		);
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1847,7 +1841,7 @@ mod internal_swaps {
 					minimum: MIN_NETWORK_FEE,
 				});
 				// Set price for refund fee calculation
-				MockPriceFeedApi::set_price_usd(INPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
 
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,

@@ -64,6 +64,7 @@ runtime-benchmarks = [
 	"cf-traits/runtime-benchmarks",
 	"cf-runtime-utilities/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
+	"cf-amm-math/runtime-benchmarks",
 ]
 try-runtime = [
 	"cf-runtime-utilities/try-runtime",

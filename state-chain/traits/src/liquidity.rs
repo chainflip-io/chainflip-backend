@@ -15,6 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use cf_amm::common::{PoolPairsMap, Side};
+#[cfg(feature = "runtime-benchmarks")]
+use cf_amm::math::Price;
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount, Tick};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -138,7 +140,7 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		fee_hundredth_pips: u32,
-		initial_price: cf_primitives::Price,
+		initial_price: Price,
 	) -> DispatchResult;
 }
 

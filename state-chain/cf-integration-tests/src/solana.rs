@@ -19,6 +19,7 @@
 use std::{collections::BTreeMap, marker::PhantomData};
 
 use super::*;
+use cf_amm::math::Price;
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	assets::{any::Asset, sol::Asset as SolAsset},
@@ -39,7 +40,9 @@ use cf_chains::{
 	RequiresSignatureRefresh, SetAggKeyWithAggKey, SetAggKeyWithAggKeyError, Solana, SwapOrigin,
 	TransactionBuilder,
 };
-use cf_primitives::{AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId};
+use cf_primitives::{
+	AccountRole, AuthorityCount, Beneficiary, ForeignChain, SwapRequestId, FLIPPERINOS_PER_FLIP,
+};
 use cf_test_utilities::{assert_events_match, assert_has_matching_event};
 use cf_traits::EgressApi;
 use cf_utilities::{assert_matches, bs58_array};
@@ -93,7 +96,7 @@ const REFUND_PARAMS: ChannelRefundParametersUncheckedEncoded =
 	ChannelRefundParametersUncheckedEncoded {
 		retry_duration: 0,
 		refund_address: EncodedAddress::Sol(FALLBACK_ADDRESS.0),
-		min_price: sp_core::U256::zero(),
+		min_price: Price::zero(),
 		refund_ccm_metadata: None,
 		max_oracle_price_slippage: None,
 	};

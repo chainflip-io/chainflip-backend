@@ -30,3 +30,5 @@ std = [
 	"sp-std/std",
 	"serde/std",
 ]
+runtime-benchmarks = []
+test = []

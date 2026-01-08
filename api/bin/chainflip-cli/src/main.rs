@@ -20,10 +20,8 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi,
-	primitives::{EpochIndex, FLIP_DECIMALS},
-	queries::QueryApi,
-	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
+	OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
@@ -33,7 +31,7 @@ use chainflip_api::{
 	lp::LiquidityDepositChannelDetails,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
-	BrokerApi,
+	Asset, BrokerApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -217,7 +215,7 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 		Some(amount_float) => {
 			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
 				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
+				10_u128.pow(Asset::Flip.decimals() - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => RedemptionAmount::Max,

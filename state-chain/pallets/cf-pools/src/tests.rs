@@ -15,10 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{self as pallet_cf_pools, mock::*, *};
-use cf_amm::{
-	common::Side,
-	math::{price_at_tick, Tick},
-};
+use cf_amm::{common::Side, math::Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
@@ -34,7 +31,7 @@ use sp_runtime::BoundedVec;
 fn can_create_new_trading_pool() {
 	new_test_ext().execute_with(|| {
 		let unstable_asset = Asset::Eth;
-		let default_price = price_at_tick(0).unwrap();
+		let default_price = Price::at_tick_zero();
 
 		// While the pool does not exist, no info can be obtained.
 		assert!(Pools::<Test>::get(AssetPair::new(unstable_asset, STABLE_ASSET).unwrap()).is_none());
@@ -104,7 +101,7 @@ fn test_mint_range_order_with_asset_amounts() {
 			FLIP,
 			STABLE_ASSET,
 			Default::default(),
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		MockBalance::credit_account(&ALICE, FLIP, 1_000_000);
@@ -152,7 +149,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			Asset::Eth,
 			STABLE_ASSET,
 			0,
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		MockBalance::credit_account(&ALICE, Asset::Eth, 100);
@@ -269,7 +266,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			Asset::Eth,
 			STABLE_ASSET,
 			old_fee,
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 		assert_eq!(
 			LiquidityPools::pool_info(Asset::Eth, STABLE_ASSET),
@@ -394,7 +391,7 @@ fn can_execute_scheduled_limit_order_updates() {
 					Asset::Flip,
 					STABLE_ASSET,
 					400_000u32,
-					price_at_tick(0).unwrap(),
+					Price::at_tick_zero(),
 				));
 
 				MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT);
@@ -514,7 +511,7 @@ fn can_get_all_pool_orders() {
 			Asset::Eth,
 			STABLE_ASSET,
 			Default::default(),
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000_000);
@@ -683,7 +680,7 @@ fn range_order_fees_are_recorded() {
 			Asset::Eth,
 			STABLE_ASSET,
 			100,
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000_000_000_000_000);
@@ -766,7 +763,7 @@ fn test_maximum_slippage_limits() {
 					BASE_ASSET,
 					STABLE_ASSET,
 					Default::default(),
-					price_at_tick(0).unwrap(),
+					Price::at_tick_zero(),
 				));
 				assert_ok!(LiquidityPools::set_range_order(
 					RuntimeOrigin::signed(ALICE),
@@ -822,7 +819,7 @@ fn can_accept_additional_limit_orders() {
 	new_test_ext().execute_with(|| {
 		let from = Asset::Flip;
 		let to = Asset::Usdt;
-		let default_price = price_at_tick(0).unwrap();
+		let default_price = Price::at_tick_zero();
 
 		for asset in [from, to] {
 			// While the pool does not exist, no info can be obtained.
@@ -911,7 +908,7 @@ fn test_cancel_orders_batch() {
 			FLIP,
 			STABLE_ASSET,
 			POOL_FEE_BPS * 100,
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		MockBalance::credit_account(&ALICE, STABLE_ASSET, 1_000_000);
@@ -1039,7 +1036,7 @@ fn handle_zero_liquidity_changes_set_range_order() {
 			FLIP,
 			STABLE_ASSET,
 			Default::default(),
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		assert_noop!(
@@ -1073,7 +1070,7 @@ fn auto_sweeping() {
 				ASSET,
 				STABLE_ASSET,
 				0,
-				price_at_tick(0).unwrap(),
+				Price::at_tick_zero(),
 			));
 
 			for (lp, amount) in [(ALICE, 20_000), (BOB, 10_000)] {
@@ -1157,7 +1154,7 @@ fn cancel_all_limit_orders_for_account() {
 				asset,
 				STABLE_ASSET,
 				0,
-				price_at_tick(0).unwrap(),
+				Price::at_tick_zero(),
 			));
 		}
 
@@ -1308,7 +1305,7 @@ fn test_sweeping_when_updating_limit_order() {
 			ASSET,
 			STABLE_ASSET,
 			0, // no fee
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		// Setup limit orders
@@ -1405,7 +1402,7 @@ fn test_sweeping_when_updating_range_order() {
 			ASSET,
 			STABLE_ASSET,
 			10_000, // 100bps fee
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		// Setup range orders
@@ -1485,7 +1482,7 @@ fn test_limit_order_auto_close() {
 				ASSET,
 				STABLE_ASSET,
 				0,
-				price_at_tick(0).unwrap(),
+				Price::at_tick_zero(),
 			));
 
 			MockBalance::credit_account(&ALICE, ASSET, AMOUNT);
@@ -1631,7 +1628,7 @@ fn cancel_all_pool_positions() {
 			BASE_ASSET,
 			STABLE_ASSET,
 			0,
-			price_at_tick(0).unwrap(),
+			Price::at_tick_zero(),
 		));
 
 		for (lp, side, n) in [(ALICE, Side::Sell, 2), (ALICE, Side::Buy, 2), (BOB, Side::Sell, 8)] {
