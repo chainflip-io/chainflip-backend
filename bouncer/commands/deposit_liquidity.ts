@@ -15,8 +15,8 @@ import { globalLogger } from 'shared/utils/logger';
 
 const asset = parseAssetString(process.argv[2]);
 const amount = parseFloat(process.argv[3]);
-const lpKey = process.argv[4];
+const lpUri = process.argv[4];
 await runWithTimeoutAndExit(
-  depositLiquidity(globalLogger, asset as InternalAsset, amount, false, lpKey),
+  depositLiquidity(globalLogger, asset as InternalAsset, amount, false, lpUri),
   120,
 );

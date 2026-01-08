@@ -31,11 +31,10 @@ async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string
 export async function createAndDeleteMultipleOrders(
   logger: Logger,
   numberOfLimitOrders = 30,
-  lpKey?: string,
+  lpUri = DEFAULT_LP,
 ) {
   await using chainflip = await getChainflipApi();
 
-  const lpUri = lpKey || DEFAULT_LP;
   const lp = createStateChainKeypair(lpUri);
 
   logger.debug(`Depositing liquidity to ${lpUri}`);

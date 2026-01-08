@@ -2,7 +2,6 @@ import assert from 'assert';
 import { randomBytes } from 'crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
 
-import Keyring from 'polkadot/keyring';
 import {
   cfMutex,
   decodeDotAddressForContract,
@@ -18,6 +17,7 @@ import {
   newAssetAddress,
   getFreeBalance,
   Assets,
+  createStateChainKeypair,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -26,17 +26,18 @@ import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 
 const commissionBps = 1000; // 10%
 
-const brokerUri = '//BROKER_FEE_TEST';
-const broker = new Keyring({ type: 'sr25519' }).createFromUri(brokerUri);
-
 export async function submitBrokerWithdrawal(
+  brokerUri: string,
   asset: Asset,
   addressObject: { [chain: string]: string },
 ) {
+  const broker = createStateChainKeypair(brokerUri);
   await using chainflip = await getChainflipApi();
+
   // Only allow one withdrawal at a time to stop nonce issues
   return cfMutex.runExclusive(brokerUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
@@ -58,10 +59,13 @@ export async function getEarnedBrokerFees(logger: Logger, address: string): Prom
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
 async function testBrokerFees<A = []>(
   cf: ChainflipIO<A>,
+  brokerUri: string,
   inputAsset: Asset,
   seed?: string,
 ): Promise<void> {
+  const broker = createStateChainKeypair(brokerUri);
   await using chainflip = await getChainflipApi();
+
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
   cf.debug(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
@@ -186,7 +190,7 @@ async function testBrokerFees<A = []>(
       event.data.destinationAddress[chain]?.toLowerCase() === withdrawalAddress.toLowerCase(),
   });
 
-  await submitBrokerWithdrawal(feeAsset, {
+  await submitBrokerWithdrawal(brokerUri, feeAsset, {
     [chain]: withdrawalAddress,
   });
   cf.debug(`Submitted withdrawal for ${feeAsset}`);
@@ -210,14 +214,8 @@ async function testBrokerFees<A = []>(
 
 export async function testBrokerFeeCollection(testContext: TestContext): Promise<void> {
   const cf = await newChainflipIO(testContext.logger, []);
-  await using chainflip = await getChainflipApi();
+  const brokerUri = '//BROKER_FEE_TEST';
+  await setupAccount(cf.logger, brokerUri, AccountRole.Broker);
 
-  // Check account role
-  const role = JSON.stringify(
-    await chainflip.query.accountRoles.accountRoles(broker.address),
-  ).replace(/"/g, '');
-  cf.debug('Broker address:', broker.address);
-  assert.strictEqual(role, 'Broker', `Broker has unexpected role: ${role}`);
-
-  await testBrokerFees(cf, Assets.Flip, randomBytes(32).toString('hex'));
+  await testBrokerFees(cf, brokerUri, Assets.Flip, randomBytes(32).toString('hex'));
 }
