@@ -57,6 +57,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2025-0118: Unsound API access to a WebAssembly shared linear memory.
 # - RUSTSEC-2025-0120: Unmaintained JSON crate. Only used for config.
 # - RUSTSEC-2025-0134: Unmaintained rustls-pemfile crate (version 1.0.4 and 2.2.0). Substrate dependency.
+# - RUSTSEC-2025-0141: Unmaintained bincode crate. Wasmtime dependency.
 cf-audit = '''
 audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2021-0139
@@ -82,6 +83,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2025-0118
 	--ignore RUSTSEC-2025-0120
 	--ignore RUSTSEC-2025-0134
+	--ignore RUSTSEC-2025-0141
 '''
 
 [build]
