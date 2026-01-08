@@ -51,6 +51,8 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
       ? SingleEventResult<'event', Q['schema']>
       : never;
 
+// ------------ Querying for block height --------------
+
 export const highestBlock = async (): Promise<number> => {
   const result = await prisma.block.findFirst({
     orderBy: {
@@ -60,7 +62,28 @@ export const highestBlock = async (): Promise<number> => {
   return result?.height ?? 0;
 };
 
-// ------------ Querying the indexer database --------------
+// ------------ Querying for transaction hashes --------------
+
+export async function blockWithTransactionHash(txhash: string): Promise<number> {
+  while (true) {
+    const result = await prisma.extrinsic.findFirst({
+      where: {
+        hash: txhash,
+      },
+      include: {
+        block: true,
+      },
+    });
+
+    if (result) {
+      return result.block.height;
+    }
+
+    await sleep(500);
+  }
+};
+
+// ------------ Querying for events --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
   logger: Logger,
   descriptions: Descriptions,

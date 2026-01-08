@@ -3,6 +3,7 @@ import {
   createStateChainKeypair,
   extractExtrinsicResult,
   cfMutex,
+  isValidHexHash,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -18,6 +19,7 @@ import {
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
+  blockWithTransactionHash,
 } from './indexer';
 import { Logger } from './logger';
 
@@ -43,6 +45,8 @@ export class ChainflipIO<Requirements> {
    */
   private currentlyInUseBy: string | undefined;
 
+  private currentStackTrace: string | undefined;
+
   /**
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
@@ -52,6 +56,7 @@ export class ChainflipIO<Requirements> {
     this.requirements = requirements;
     this.logger = logger;
     this.currentlyInUseBy = undefined;
+    this.currentStackTrace = undefined;
   }
 
   private clone(): ChainflipIO<Requirements> {
@@ -173,6 +178,28 @@ export class ChainflipIO<Requirements> {
     return proposalId;
   }
 
+  async stepToTransactionIncluded(hash: string): Promise<void> {
+    await this.runExclusively('stepToTransactionIncluded', async () => {
+      if (!isValidHexHash(hash)) {
+        throw new Error(
+          `Expected transaction hash but got ${hash} when trying to step to tx included`,
+        );
+      }
+
+      this.debug(`Waiting for block with transaction hash ${hash}`);
+      const height = await blockWithTransactionHash(hash);
+
+      if (height >= this.lastIoBlockHeight) {
+        this.debug(`Found transaction hash ${hash} in block ${height}`);
+        this.lastIoBlockHeight = height;
+      } else {
+        throw new Error(`When stepping to block with transaction with hash ${hash}, found it in a block that's lower than the current IO height:
+        - current lastIoBlockHeight: ${this.lastIoBlockHeight}
+        - found tx in ${height}`);
+      }
+    });
+  }
+
   /**
    * Advance the current chainflip block height by one block.
    */
@@ -285,7 +312,7 @@ export class ChainflipIO<Requirements> {
   async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(
     values: T,
   ): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>> }> {
-    return this.runExclusively('stepUntilAllEventsOf', async () => {
+    return this.runExclusively('all', async () => {
       // run all functions in parallel with clones of this chainflip io instance
       const results = await Promise.all(
         values.map(async (f) => {
@@ -314,6 +341,7 @@ export class ChainflipIO<Requirements> {
    * @returns result of `f` is forwarded
    */
   private async runExclusively<A>(method: string, f: () => Promise<A>): Promise<A> {
+    const stack = new Error().stack;
     if (this.currentlyInUseBy) {
       throw new Error(`Attempted to call a method on a cf object while it was already in use!
 
@@ -325,11 +353,29 @@ export class ChainflipIO<Requirements> {
         If you want to run code in parallel, you should use the 'cf.all()' method to run "subtasks",
         e.g.: 'cf.all([cf => cf.method1(), cf => cf.method2()])'.
 
-        The current lastIoBlockHeight is ${this.lastIoBlockHeight}.`);
+        The current lastIoBlockHeight is ${this.lastIoBlockHeight}.
+
+        Current stack trace:
+        ${stack}
+
+        In use by stack trace:
+        ${this.currentStackTrace}
+        `);
     }
     this.currentlyInUseBy = method;
-    const result = await f();
-    this.currentlyInUseBy = undefined;
+    this.currentStackTrace = stack;
+    let result = undefined;
+
+    try {
+      result = await f();
+    } catch (e) {
+      throw e;
+    } finally {
+      // always clean up even if we got an error
+      this.currentlyInUseBy = undefined;
+      this.currentStackTrace = undefined;
+    }
+
     return result;
   }
 

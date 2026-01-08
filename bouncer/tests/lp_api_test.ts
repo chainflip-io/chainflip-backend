@@ -23,6 +23,7 @@ import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
 
 const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
 const testRpcAsset = stateChainAssetFromAsset(testAsset);
@@ -59,22 +60,14 @@ async function provideLiquidityAndTestAssetBalances<A = []>(cf: ChainflipIO<A>) 
 }
 
 async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
-  const observeRefundAddressRegisteredEvent = observeEvent(
-    cf.logger,
-    'liquidityProvider:LiquidityRefundAddressRegistered',
-    {
-      test: (event) => event.data.address.Eth === testAddress,
-    },
-  );
-
-  const registerRefundAddress = await lpApiRpc(cf.logger, `lp_register_liquidity_refund_address`, [
+  const txhash = await lpApiRpc(cf.logger, `lp_register_liquidity_refund_address`, [
     'Ethereum',
     testAddress,
   ]);
-  if (!isValidHexHash(await registerRefundAddress)) {
-    throw new Error(`Unexpected lp_register_liquidity_refund_address result`);
-  }
-  await observeRefundAddressRegisteredEvent.event;
+  await cf.stepToTransactionIncluded(txhash);
+  await cf.expectEvent('LiquidityProvider.LiquidityRefundAddressRegistered', liquidityProviderLiquidityRefundAddressRegistered.refine(
+    event => event.address.__kind === 'Eth' && event.address.value === testAddress
+  ));
 
   // TODO: Check that the correct address is now set on the SC
 }
