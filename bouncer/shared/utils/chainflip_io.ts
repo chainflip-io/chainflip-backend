@@ -178,26 +178,44 @@ export class ChainflipIO<Requirements> {
     return proposalId;
   }
 
-  async stepToTransactionIncluded(hash: string): Promise<void> {
+  stepToTransactionIncluded = this.doAndExpectEvent((arg: { hash: string }) =>
+    this.impl_stepToTransactionIncluded(arg),
+  );
+
+  private async impl_stepToTransactionIncluded(arg: { hash: string }): Promise<void> {
     await this.runExclusively('stepToTransactionIncluded', async () => {
-      if (!isValidHexHash(hash)) {
+      if (!isValidHexHash(arg.hash)) {
         throw new Error(
-          `Expected transaction hash but got ${hash} when trying to step to tx included`,
+          `Expected transaction hash but got ${arg.hash} when trying to step to tx included`,
         );
       }
 
-      this.debug(`Waiting for block with transaction hash ${hash}`);
-      const height = await blockWithTransactionHash(hash);
+      this.debug(`Waiting for block with transaction hash ${arg.hash}`);
+      const height = await blockWithTransactionHash(arg.hash);
 
       if (height >= this.lastIoBlockHeight) {
-        this.debug(`Found transaction hash ${hash} in block ${height}`);
+        this.debug(`Found transaction hash ${arg.hash} in block ${height}`);
         this.lastIoBlockHeight = height;
       } else {
-        throw new Error(`When stepping to block with transaction with hash ${hash}, found it in a block that's lower than the current IO height:
+        throw new Error(`When stepping to block with transaction with hash ${arg.hash}, found it in a block that's lower than the current IO height:
         - current lastIoBlockHeight: ${this.lastIoBlockHeight}
         - found tx in ${height}`);
       }
     });
+  }
+
+  private doAndExpectEvent<A extends object>(
+    f: (a: A) => Promise<void>,
+  ): <Schema extends z.ZodTypeAny>(
+    a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
+  ) => Promise<z.infer<Schema>> {
+    return async (arg) => {
+      await f(arg);
+      if (arg.expectedEvent) {
+        return this.expectEvent(arg.expectedEvent.name, arg.expectedEvent.schema ?? z.any());
+      }
+      return Promise.resolve();
+    };
   }
 
   /**
@@ -364,12 +382,9 @@ export class ChainflipIO<Requirements> {
     }
     this.currentlyInUseBy = method;
     this.currentStackTrace = stack;
-    let result = undefined;
-
+    let result;
     try {
       result = await f();
-    } catch (e) {
-      throw e;
     } finally {
       // always clean up even if we got an error
       this.currentlyInUseBy = undefined;

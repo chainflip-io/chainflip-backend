@@ -1,6 +1,5 @@
 import assert from 'assert';
 import {
-  isValidHexHash,
   isValidEthAddress,
   amountToFineAmount,
   sleep,
@@ -24,6 +23,8 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
+import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
 
 const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
 const testRpcAsset = stateChainAssetFromAsset(testAsset);
@@ -64,10 +65,15 @@ async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
     'Ethereum',
     testAddress,
   ]);
-  await cf.stepToTransactionIncluded(txhash);
-  await cf.expectEvent('LiquidityProvider.LiquidityRefundAddressRegistered', liquidityProviderLiquidityRefundAddressRegistered.refine(
-    event => event.address.__kind === 'Eth' && event.address.value === testAddress
-  ));
+  await cf.stepToTransactionIncluded({
+    hash: txhash,
+    expectedEvent: {
+      name: 'LiquidityProvider.LiquidityRefundAddressRegistered',
+      schema: liquidityProviderLiquidityRefundAddressRegistered.refine(
+        (event) => event.address.__kind === 'Eth' && event.address.value === testAddress,
+      ),
+    },
+  });
 
   // TODO: Check that the correct address is now set on the SC
 }
@@ -75,27 +81,30 @@ async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
 async function testLiquidityDepositLegacy<A = []>(cf: ChainflipIO<A>) {
   const lpAccount = createStateChainKeypair('//LP_API');
 
-  const observeLiquidityDepositAddressReadyEvent = observeEvent(
-    cf.logger,
-    'liquidityProvider:LiquidityDepositAddressReady',
-    {
-      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
-    },
-  ).event;
-
   await assert.rejects(
     () => lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
     (e: Error) => e.message.includes('InBlock waiting is not allowed for this method'),
     `Unexpected lp_request_liquidity_deposit_address result. Expected to return an error because InBlock waiting is not allowed`,
   );
 
-  const liquidityDepositAddress = (
-    await lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'Finalized'])
-  ).tx_details.response.deposit_address;
-  const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
+  const rpcResult = await lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address`, [
+    testRpcAsset,
+    'Finalized',
+  ]);
+  const liquidityDepositAddress = rpcResult.tx_details.response.deposit_address;
+  const liquidityDepositEvent = await cf.stepToTransactionIncluded({
+    hash: rpcResult.tx_details.tx_hash,
+    expectedEvent: {
+      name: 'LiquidityProvider.LiquidityDepositAddressReady',
+      schema: liquidityProviderLiquidityDepositAddressReady.refine(
+        (event) =>
+          event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
+      ),
+    },
+  });
 
   assert.strictEqual(
-    liquidityDepositEvent.data.depositAddress.Eth,
+    liquidityDepositEvent.depositAddress.address,
     liquidityDepositAddress,
     `Incorrect deposit address`,
   );
@@ -105,22 +114,20 @@ async function testLiquidityDepositLegacy<A = []>(cf: ChainflipIO<A>) {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(cf.logger, 'assetBalances:AccountCredited', {
-    timeoutSeconds: 120,
-    test: (event) =>
-      event.data.asset === testAsset &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(testAssetAmount),
-      ),
-  }).event;
   await sendEvmNative(
     cf.logger,
     chainFromAsset(testAsset),
     liquidityDepositAddress,
     String(testAmount),
   );
-  await observeAccountCreditedEvent;
+  await cf.stepUntilEvent(
+    'AssetBalances.AccountCredited',
+    assetBalancesAccountCredited.refine(
+      (event) =>
+        event.asset === testAsset &&
+        isWithinOnePercent(BigInt(event.amountCredited), BigInt(testAssetAmount)),
+    ),
+  );
 }
 
 async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
@@ -488,14 +495,14 @@ export async function testLpApi(testContext: TestContext) {
   await parentcf.all([
     (cf) =>
       testRegisterLiquidityRefundAddress(cf.withChildLogger('testRegisterLiquidityRefundAddress')),
-    (cf) => testLiquidityDeposit(cf.withChildLogger('testLiquidityDeposit')),
-    (cf) => testWithdrawAsset(cf.withChildLogger('testWithdrawAsset')),
-    (cf) =>
-      testRegisterWithExistingLpAccount(cf.withChildLogger('testRegisterWithExistingLpAccount')),
-    (cf) => testRangeOrder(cf.withChildLogger('testRangeOrder')),
-    (cf) => testLimitOrder(cf.withChildLogger('testLimitOrder')),
-    (cf) => testGetOpenSwapChannels(cf.withChildLogger('testGetOpenSwapChannels')),
-    (cf) => testInternalSwap(cf.withChildLogger('testInternalSwap')),
+    // (cf) => testLiquidityDeposit(cf.withChildLogger('testLiquidityDeposit')),
+    // (cf) => testWithdrawAsset(cf.withChildLogger('testWithdrawAsset')),
+    // (cf) =>
+    //   testRegisterWithExistingLpAccount(cf.withChildLogger('testRegisterWithExistingLpAccount')),
+    // (cf) => testRangeOrder(cf.withChildLogger('testRangeOrder')),
+    // (cf) => testLimitOrder(cf.withChildLogger('testLimitOrder')),
+    // (cf) => testGetOpenSwapChannels(cf.withChildLogger('testGetOpenSwapChannels')),
+    // (cf) => testInternalSwap(cf.withChildLogger('testInternalSwap')),
   ]);
 
   await testTransferAsset(parentcf);

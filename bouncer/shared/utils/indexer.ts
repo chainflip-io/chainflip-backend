@@ -65,6 +65,7 @@ export const highestBlock = async (): Promise<number> => {
 // ------------ Querying for transaction hashes --------------
 
 export async function blockWithTransactionHash(txhash: string): Promise<number> {
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const result = await prisma.extrinsic.findFirst({
       where: {
@@ -81,7 +82,7 @@ export async function blockWithTransactionHash(txhash: string): Promise<number> 
 
     await sleep(500);
   }
-};
+}
 
 // ------------ Querying for events --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
