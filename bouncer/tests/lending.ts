@@ -1,7 +1,7 @@
 import { Logger } from 'pino';
 import assert from 'assert';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { setupLpAccount } from 'shared/setup_account';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 import {
   amountToFineAmount,
   amountToFineAmountBigInt,
@@ -57,7 +57,7 @@ async function lendingTestForAsset(
   // Create a new random LP account
   const seed = randomBytes(4).toString('hex');
   const lpUri = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
-  const lp = await setupLpAccount(logger, lpUri);
+  const lp = await setupAccount(logger, lpUri, AccountRole.LiquidityProvider);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
   // Credit the account with the collateral and a little of the loan asset to be able to settle the loan.

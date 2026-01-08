@@ -18,7 +18,7 @@ import z from 'zod';
 import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
-import { setupBrokerAccount } from 'shared/setup_account';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 import { Enum, Bytes as TsBytes } from 'scale-ts';
 
 /// Codecs for the special LP deposit channel opening
@@ -376,8 +376,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 
   logger.info('Setting up a broker account');
   const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
-  const broker = createStateChainKeypair(brokerUri);
-  await setupBrokerAccount(logger, brokerUri);
+  const broker = await setupAccount(logger, brokerUri, AccountRole.Broker);
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);

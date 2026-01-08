@@ -15,12 +15,11 @@ export async function limitOrder(
   amount: number,
   orderId: number,
   tick: number,
-  lpKey?: string,
+  lpUri = process.env.LP_URI || '//LP_1',
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = createStateChainKeypair(lpUri);
 
   logger.info('Setting up ' + ccy + ' limit order');
