@@ -291,7 +291,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
-			T::PoolApi::sweep(&account_id)?;
 
 			ensure!(
 				T::PoolApi::pools().iter().all(|asset_pair| {
