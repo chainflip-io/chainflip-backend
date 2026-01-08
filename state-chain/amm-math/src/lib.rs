@@ -431,7 +431,8 @@ impl Price {
 		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
 	}
 
-	/// Compute the price of asset 1 (self) in terms of asset 2 (given)
+	/// Compute the price of asset 1 (self) in terms of asset 2 (given).
+	/// Both prices must have the same quote asset (eg. USD).
 	pub fn relative_to(self, price: Price) -> Self {
 		Price(mul_div_floor(self.0, U256::one() << Self::FRACTIONAL_BITS, price.0))
 	}
@@ -497,6 +498,7 @@ impl Price {
 
 	/// Get the price of an asset given its dollar amount. The price is automatically scaled to the
 	/// asset's decimals.
+	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd(asset: Asset, dollar_amount: u32) -> Self {
 		Self::from_usd_cents(asset, dollar_amount * 100)
 	}
