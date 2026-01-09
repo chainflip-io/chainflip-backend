@@ -163,6 +163,9 @@ export class ChainflipIO<Requirements> {
 
   /**
    * Steps until it finds a block where the tx with the given hash was included.
+   *
+   * WARNING: this will loop indefinitely if the provided tx hash is never included.
+   *
    * @param arg Object containing `hash: string` that references an on-chain transaction
    * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the transaction is included.
    */

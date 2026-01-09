@@ -64,6 +64,14 @@ export const highestBlock = async (): Promise<number> => {
 
 // ------------ Querying for transaction hashes --------------
 
+/**
+ * Searches for a block that contains the given txhash in the indexer database.
+ *
+ * WARNING: This expects the txhash to be eventually available, and will loop indefinitely if it isn't found.
+ *
+ * @param txhash transaction hash to look for
+ * @returns block height of the block where the transaction was found
+ */
 export async function blockWithTransactionHash(txhash: string): Promise<number> {
   // eslint-disable-next-line no-constant-condition
   while (true) {
