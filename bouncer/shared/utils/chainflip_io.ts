@@ -122,26 +122,11 @@ export class ChainflipIO<Requirements> {
    * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
    * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the extrinsic is included.
    */
-  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<number>;
-  async submitGovernance(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: { name: EventName };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<SingleEventResult<'event', any>>;
-  async submitGovernance<EventSchema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: {
-      name: EventName;
-      schema: EventSchema;
-    };
-  }): Promise<SingleEventResult<'event', EventSchema>>;
-  async submitGovernance<Schema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent?: {
-      name: EventName;
-      schema?: Schema;
-    };
-  }) {
+  submitGovernance = this.wrapWithExpectEvent((arg: { extrinsic: ExtrinsicFromApi }) =>
+    this.impl_submitGovernance(arg),
+  );
+
+  private async impl_submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void> {
     // we only wrap the governance submission by `runExclusively`
     // because the second half invokes `stepUntilEvent` which has its own `runExclusively` wrapper.
     const proposalId = await this.runExclusively('submitGovernance', async () => {
@@ -166,19 +151,14 @@ export class ChainflipIO<Requirements> {
     this.logger.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
     );
-
-    // searching for event
-    if (arg.expectedEvent) {
-      const result = await this.stepUntilEvent(
-        arg.expectedEvent.name,
-        arg.expectedEvent.schema ?? z.any(),
-      );
-      return result;
-    }
-    return proposalId;
   }
 
-  stepToTransactionIncluded = this.doAndExpectEvent((arg: { hash: string }) =>
+  /**
+   * Steps until it finds a block where the tx with the given hash was included.
+   * @param arg Object containing `hash: string` that references an on-chain transaction
+   * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the transaction is included.
+   */
+  stepToTransactionIncluded = this.wrapWithExpectEvent((arg: { hash: string }) =>
     this.impl_stepToTransactionIncluded(arg),
   );
 
@@ -204,7 +184,15 @@ export class ChainflipIO<Requirements> {
     });
   }
 
-  private doAndExpectEvent<A extends object>(
+  /**
+   * Runs `f` and afterwards tries to `expectEvent` if an event was provided.
+   *
+   * This function handles the common pattern of expecting a certain event after stepping to a block. So implementations
+   * can be written without taking the expected event into account, then just have to wrapped with `wrapWithExpectEvent`.
+   * @param f Method to be executed
+   * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
+   */
+  private wrapWithExpectEvent<A extends object>(
     f: (a: A) => Promise<void>,
   ): <Schema extends z.ZodTypeAny>(
     a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
