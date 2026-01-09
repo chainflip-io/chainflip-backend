@@ -38,10 +38,14 @@ get-workflow() {
     echo
     export START_TRACKER=${START_TRACKER:-"NO"}
 
-    echo "❓ Do you want to start the indexer? (Type y or leave empty)"
-    read -p "(default: NO) " START_INDEXER
+    echo "🏎️ Do you want to run localnet chains in turbo mode? (Type y or leave empty)"
+    read -p "(default: NO) " TURBO_MODE
     echo
-    export START_INDEXER=${START_INDEXER:-"NO"}
+    if [[ "$TURBO_MODE" == "y" ]]; then
+      export LOCALNET_SPEED_SETTING="turbo"
+    else
+      export LOCALNET_SPEED_SETTING="default"
+    fi
 
   fi
 }

@@ -3,13 +3,14 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { observeEvent } from 'shared/utils/substrate';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import { TestContext } from 'shared/utils/test_context';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
-async function rotatesThroughBtcSwap(testContext: TestContext) {
+async function rotatesThroughBtcSwap<A = []>(cf: ChainflipIO<A>, testContext: TestContext) {
   const sourceAsset = 'Btc';
   const destAsset = 'ArbEth';
 
   const { destAddress, tag } = await prepareSwap(
-    testContext.logger,
+    cf.logger,
     sourceAsset,
     destAsset,
     undefined,
@@ -17,25 +18,26 @@ async function rotatesThroughBtcSwap(testContext: TestContext) {
     'through rotation',
     testContext.swapContext,
   );
-  const logger = testContext.logger.child({ tag });
+  const subCf = cf.withChildLogger(tag);
 
-  logger.debug('Generated ArbEth address: ' + destAddress);
+  subCf.debug('Generated ArbEth address: ' + destAddress);
 
-  const swapParams = await requestNewSwap(logger, sourceAsset, destAsset, destAddress);
+  const swapParams = await requestNewSwap(subCf, sourceAsset, destAsset, destAddress);
 
-  const newEpochEvent = observeEvent(logger, 'validator:NewEpoch').event;
+  const newEpochEvent = observeEvent(subCf.logger, 'validator:NewEpoch').event;
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
-  logger.info(`Vault rotation initiated. Awaiting new epoch.`);
+  subCf.info(`Vault rotation initiated. Awaiting new epoch.`);
   await newEpochEvent;
-  logger.info('Vault rotated!');
+  subCf.info('Vault rotated!');
 
-  await doPerformSwap(logger, swapParams, undefined, undefined, undefined, testContext.swapContext);
+  await doPerformSwap(subCf, swapParams, undefined, undefined, undefined, testContext.swapContext);
 }
 
 export async function testRotatesThroughBtcSwap(testContext: TestContext) {
-  await rotatesThroughBtcSwap(testContext);
+  const cf = await newChainflipIO(testContext.logger, []);
+  await rotatesThroughBtcSwap(cf, testContext);
   await testSwap(
-    testContext.logger,
+    cf,
     'ArbEth',
     'Btc',
     undefined,

@@ -10,6 +10,7 @@ export SOLANA_BASE_PATH="/tmp/solana"
 export CHAINFLIP_BASE_PATH="/tmp/chainflip"
 export DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 export BACKSPIN=${BACKSPIN:-"false"}
+export LOCALNET_SPEED_SETTING=${LOCALNET_SPEED_SETTING:-"default"}
 
 source ./localnet/helper.sh
 
@@ -88,6 +89,12 @@ build-localnet() {
   mkdir -p $CHAINFLIP_BASE_PATH
   save_settings
   touch $DEBUG_OUTPUT_DESTINATION
+
+  if [[ "$LOCALNET_SPEED_SETTING" == "turbo" ]]; then
+    echo "🏎️ Turbo mode enabled. If available, turbo docker images will be used for external chains."
+  else
+    echo "🚶 Default speed. Default docker images will be used for external chains."
+  fi
 
   echo "🪢 Pulling Docker Images"
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
@@ -217,14 +224,12 @@ build-localnet() {
   additional_docker_compose_up_args=$additional_docker_compose_up_args \
   ./$LOCALNET_INIT_DIR/scripts/start-deposit-monitor.sh
 
+  echo "🗂️ Starting Indexer ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
-  if [[ $START_INDEXER == "y" ]]; then
-    echo "🗂️ Starting Indexer ..."
-    $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   fi
 
   print_success

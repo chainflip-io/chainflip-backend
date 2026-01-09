@@ -5,6 +5,10 @@ on:
         description: The network image to build
         type: string
         required: true
+      localnet-speed-setting:
+        description: The speed that the network should run at (possible options are "default", "turbo")
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -43,7 +47,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@31cebacef4805868f9ce9a0cb03ee36c32df2ac4
         with:
-          images: ghcr.io/${{ github.repository }}/${{ inputs.network }}
+          images: ghcr.io/${{ github.repository }}/${{ inputs.network }}-${{ inputs.localnet-speed-setting }}
           flavor: |
             latest=true
           tags: |
@@ -69,3 +73,4 @@ jobs:
           build-args: |
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
+            LOCALNET_SPEED_SETTING=${{ inputs.localnet-speed-setting }}

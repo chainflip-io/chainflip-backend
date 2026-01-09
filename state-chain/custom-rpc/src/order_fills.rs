@@ -80,7 +80,7 @@ fn order_fills_for_pool<'a>(
 		.flat_map(move |side| {
 			pool.pool_state.limit_orders(side).filter_map(
 				move |((lp, id), tick, collected, position_info)| {
-					let (fees, sold, bought) = {
+					let (sold, bought) = {
 						let option_previous_order_state = if updated_limit_orders.contains(&(
 							lp.clone(),
 							*asset_pair,
@@ -96,7 +96,6 @@ fn order_fills_for_pool<'a>(
 
 						if let Some((previous_collected, _)) = option_previous_order_state {
 							(
-								collected.fees - previous_collected.fees,
 								collected
 									.sold_amount
 									.checked_sub(previous_collected.sold_amount)
@@ -111,11 +110,11 @@ fn order_fills_for_pool<'a>(
 								collected.bought_amount - previous_collected.bought_amount,
 							)
 						} else {
-							(collected.fees, collected.sold_amount, collected.bought_amount)
+							(collected.sold_amount, collected.bought_amount)
 						}
 					};
 
-					if fees.is_zero() && sold.is_zero() && bought.is_zero() {
+					if sold.is_zero() && bought.is_zero() {
 						None
 					} else {
 						Some(OrderFilled::LimitOrder {
@@ -127,7 +126,7 @@ fn order_fills_for_pool<'a>(
 							tick,
 							sold,
 							bought,
-							fees,
+							fees: Default::default(),
 							remaining: position_info.amount,
 						})
 					}
@@ -150,9 +149,9 @@ fn order_fills_for_pool<'a>(
 						collected
 							.fees
 							.zip(previous_collected.fees)
-							.map(|(fees, previous_fees)| fees - previous_fees)
+							.map(|(fees, previous_fees)| fees.overflowing_sub(previous_fees).0)
 					} else {
-						collected.fees
+						Default::default()
 					}
 				};
 

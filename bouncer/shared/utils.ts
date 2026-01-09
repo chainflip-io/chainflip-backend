@@ -23,7 +23,7 @@ import {
 } from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { hexToU8a, u8aToHex, BN } from '@polkadot/util';
+import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
@@ -37,7 +37,12 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import {
+  DisposableApiPromise,
+  getChainflipApi,
+  observeBadEvent,
+  observeEvent,
+} from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -45,16 +50,21 @@ import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logg
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
+import {
+  cfChainsSwapOrigin,
+  cfTraitsSwappingSwapRequestTypeGeneric,
+} from 'generated/events/common';
+import z from 'zod';
+import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
+import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
 
-export const lpMutex = new KeyedMutex();
-export const brokerMutex = new KeyedMutex();
+export const cfMutex = new KeyedMutex();
 export const ethNonceMutex = new Mutex();
 export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
-export const snowWhiteMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
@@ -551,78 +561,80 @@ export type TransactionOriginId =
   | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
   | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
-function checkRequestTypeMatches(actual: object | string, expected: SwapRequestType) {
-  if (typeof actual === 'object') {
-    return expected in actual;
-  }
-  return expected === actual;
+function checkRequestTypeMatches(
+  actual: z.infer<typeof cfTraitsSwappingSwapRequestTypeGeneric>,
+  expected: SwapRequestType,
+) {
+  return actual.__kind === expected;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function checkTransactionInMatches(actual: any, expected: TransactionOriginId): boolean {
-  if ('DepositChannel' in actual) {
-    return (
-      expected.type === TransactionOrigin.DepositChannel &&
-      Number(actual.DepositChannel.channelId.replaceAll(',', '')) === expected.channelId
-    );
+function checkTransactionInMatches(
+  actual: z.infer<typeof cfChainsSwapOrigin>,
+  expected: TransactionOriginId,
+): boolean {
+  switch (actual.__kind) {
+    case 'DepositChannel':
+      return (
+        expected.type === TransactionOrigin.DepositChannel &&
+        actual.channelId === BigInt(expected.channelId)
+      );
+    case 'Vault':
+      switch (actual.txId.__kind) {
+        case 'Evm':
+          return (
+            expected.type === TransactionOrigin.VaultSwapEvm &&
+            actual.txId.value === expected.txHash
+          );
+        case 'Solana':
+          return (
+            expected.type === TransactionOrigin.VaultSwapSolana &&
+            actual.txId.value[1] === BigInt(expected.addressAndSlot[1]) &&
+            actual.txId.value[0] === expected.addressAndSlot[0]
+          );
+        case 'Bitcoin':
+          return (
+            expected.type === TransactionOrigin.VaultSwapBitcoin &&
+            actual.txId.value ===
+              // Reverse byte order of BTC transactions
+              '0x' +
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+                  .map((x) => x.toString(16).padStart(2, '0'))
+                  .join('')
+          );
+        default:
+          return false;
+      }
+    case 'OnChainAccount':
+      return (
+        expected.type === TransactionOrigin.OnChainAccount && actual.value === expected.accountId
+      );
+    case 'Internal':
+      return false;
+    default:
+      break;
   }
-  if ('Vault' in actual) {
-    return (
-      ('Evm' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapEvm &&
-        actual.Vault.txId.Evm === expected.txHash) ||
-      ('Solana' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapSolana &&
-        actual.Vault.txId.Solana[1].replaceAll(',', '') === expected.addressAndSlot[1].toString() &&
-        actual.Vault.txId.Solana[0].toString() === expected.addressAndSlot[0].toString()) ||
-      ('Bitcoin' in actual.Vault.txId &&
-        expected.type === TransactionOrigin.VaultSwapBitcoin &&
-        actual.Vault.txId.Bitcoin ===
-          // Reverse byte order of BTC transactions
-          '0x' +
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
-              .map((x) => x.toString(16).padStart(2, '0'))
-              .join(''))
-    );
-  }
-  if ('OnChainAccount' in actual) {
-    return (
-      expected.type === TransactionOrigin.OnChainAccount &&
-      actual.OnChainAccount.accountId === expected.accountId
-    );
-  }
-  throw new Error(`Unsupported transaction origin type ${actual}`);
+  return assertUnreachable(actual);
 }
 
-export async function observeSwapRequested(
-  logger: Logger,
+export async function observeSwapRequested<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
-  // need to await this to prevent the chainflip api from being disposed prematurely
-  return observeEvent(logger, 'swapping:SwapRequested', {
-    timeoutSeconds: 150,
-    test: (event) => {
-      const data = event.data;
+  return cf.stepUntilEvent(
+    'Swapping.SwapRequested',
+    swappingSwapRequested.refine((event) => {
+      const channelMatches = checkTransactionInMatches(event.origin, id);
+      const sourceAssetMatches = sourceAsset === event.inputAsset;
+      const destAssetMatches = destAsset === event.outputAsset;
+      const requestTypeMatches = checkRequestTypeMatches(event.requestType, swapRequestType);
 
-      if (typeof data.origin === 'object') {
-        const channelMatches = checkTransactionInMatches(data.origin, id);
-        const sourceAssetMatches = sourceAsset === (data.inputAsset as Asset);
-        const destAssetMatches = destAsset === (data.outputAsset as Asset);
-        const requestTypeMatches = checkRequestTypeMatches(data.requestType, swapRequestType);
-
-        return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
-      }
-      // Otherwise it was a swap scheduled by interacting with the Eth smart contract
-      return false;
-    },
-    // We assume that a swaprequest is uniquely identifiable by the `id: TransactionOriginId`.
-    // To reduce potential race conditions we always check the last 5 blocks.
-    historicalCheckBlocks: 5,
-  }).event;
+      return channelMatches && sourceAssetMatches && destAssetMatches && requestTypeMatches;
+    }),
+  );
 }
 
 export async function observeBroadcastSuccess(logger: Logger, broadcastId: BroadcastChainAndId) {
@@ -1233,6 +1245,27 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   return outputPrice;
 }
 
+export function extractExtrinsicResult(
+  chainflipApi: DisposableApiPromise,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extrinsicResult: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Result<any, string> {
+  if (extrinsicResult.dispatchError) {
+    let error;
+    if (extrinsicResult.dispatchError.isModule) {
+      const { docs, name, section } = chainflipApi.registry.findMetaError(
+        extrinsicResult.dispatchError.asModule,
+      );
+      error = section + '.' + name + ': ' + docs;
+    } else {
+      error = extrinsicResult.dispatchError.toString();
+    }
+    return Err(`Extrinsic failed: ${error}`);
+  }
+  return Ok(extrinsicResult);
+}
+
 /// Submits an extrinsic and waits for it to be included in a block.
 /// Returning the extrinsic result or throwing the dispatchError.
 export async function submitChainflipExtrinsic(
@@ -1256,17 +1289,11 @@ export async function submitChainflipExtrinsic(
   while (!extrinsicResult) {
     await sleep(100);
   }
-  if (extrinsicResult.dispatchError && errorOnFail) {
-    let error;
-    if (extrinsicResult.dispatchError.isModule) {
-      const { docs, name, section } = chainflipApi.registry.findMetaError(
-        extrinsicResult.dispatchError.asModule,
-      );
-      error = section + '.' + name + ': ' + docs;
-    } else {
-      error = extrinsicResult.dispatchError.toString();
+  if (errorOnFail) {
+    const extracted = extractExtrinsicResult(chainflipApi, extrinsicResult);
+    if (!extracted.ok) {
+      throw new Error(extracted.error);
     }
-    throw new Error(`Extrinsic failed: ${error}`);
   }
   return extrinsicResult;
 }
@@ -1482,7 +1509,7 @@ export async function submitExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
   findEvent: string,
   logger: Logger,
-  mutex = lpMutex,
+  mutex = cfMutex,
 ) {
   const account = createStateChainKeypair(uri);
   const [expectedSection, expectedMethod] = findEvent.split(':');

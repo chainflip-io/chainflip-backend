@@ -374,7 +374,12 @@ impl<T: BWTypes> ElectionTracker<T> {
 			self.ongoing.retain(|height, _| !removed.contains(height));
 		}
 
-		let last_seen_height = progress.headers.last().block_height;
+		// We exit early if `progress.headers` is empty. All the following code
+		// is only required if we got new headers.
+		let Some(last_header) = progress.headers.last() else {
+			return Vec::new();
+		};
+		let last_seen_height = last_header.block_height;
 
 		// We definitely want to ensure that `self.seen_heights_below` is monotonically
 		// increasing in order to have saner invariants hold for the other components
@@ -383,7 +388,7 @@ impl<T: BWTypes> ElectionTracker<T> {
 			max(self.seen_heights_below, last_seen_height.saturating_forward(1));
 
 		let (accepted_optimistic_blocks, mut remaining): (BTreeMap<_, _>, BTreeMap<_, _>) =
-			progress.headers.get_headers().into_iter().fold(
+			progress.headers.get_headers().iter().fold(
 				(BTreeMap::new(), BTreeMap::new()),
 				|(mut optimistic_blocks, mut remaining), header| {
 					match self.optimistic_block_cache.remove(&header.block_height) {

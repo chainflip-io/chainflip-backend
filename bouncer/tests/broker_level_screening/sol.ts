@@ -13,22 +13,21 @@ import {
 import { observeEvent } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
-import { TestContext } from 'shared/utils/test_context';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 const brokerUri = '//BROKER_1';
 
-export async function testSol(
-  testContext: TestContext,
+export async function testSol<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
   ccmRefund = false,
 ) {
-  const logger = testContext.logger;
-  logger.info(`Testing broker level screening for Sol ${sourceAsset}...`);
+  cf.info(`Testing broker level screening for Sol ${sourceAsset}...`);
 
   const chain = chainFromAsset(sourceAsset);
   if (chain !== Chains.Solana) {
@@ -39,7 +38,7 @@ export async function testSol(
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
-  logger.debug(`BTC destination address: ${destinationAddressForBtc}`);
+  cf.debug(`BTC destination address: ${destinationAddressForBtc}`);
 
   const solRefundAddress = await newAssetAddress('Sol', undefined, undefined, ccmRefund);
   const initialRefundAddressBalance = await getBalance(sourceAsset, solRefundAddress);
@@ -54,7 +53,7 @@ export async function testSol(
   };
 
   const swapParams = await requestNewSwap(
-    logger,
+    cf,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
@@ -64,15 +63,15 @@ export async function testSol(
     refundParameters,
   );
 
-  logger.debug(`Sending ${sourceAsset} tx to reject...`);
-  const result = await send(logger, sourceAsset, swapParams.depositAddress);
+  cf.debug(`Sending ${sourceAsset} tx to reject...`);
+  const result = await send(cf.logger, sourceAsset, swapParams.depositAddress);
   const txHash = result.transaction.signatures[0] as string;
-  logger.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
+  cf.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
 
   await reportFunction(txHash);
-  logger.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
+  cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
-  await observeEvent(logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  await observeEvent(cf.logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
@@ -84,39 +83,43 @@ export async function testSol(
     : Promise.resolve();
 
   await Promise.all([
-    observeBalanceIncrease(logger, sourceAsset, solRefundAddress, initialRefundAddressBalance, 360),
+    observeBalanceIncrease(
+      cf.logger,
+      sourceAsset,
+      solRefundAddress,
+      initialRefundAddressBalance,
+      360,
+    ),
     ccmEventEmitted,
     observeFetch(sourceAsset, swapParams.depositAddress),
   ]);
 
-  logger.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
+  cf.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
-export async function testSolVaultSwap(
-  testContext: TestContext,
+export async function testSolVaultSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
-  const logger = testContext.logger;
-
   const chain = chainFromAsset(sourceAsset);
   if (chain !== Chains.Solana) {
     // This should always be Sol
     throw new Error('Expected chain to be Solana');
   }
 
-  logger.info(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
+  cf.info(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
   const MAX_RETRIES = 120;
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
   const solanaRefundAddress = await newAssetAddress('Sol');
 
-  logger.debug(`Refund address for ${sourceAsset} is ${solanaRefundAddress}...`);
+  cf.debug(`Refund address for ${sourceAsset} is ${solanaRefundAddress}...`);
 
-  logger.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
+  cf.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
 
   const receipt = await executeSolVaultSwap(
-    logger,
+    cf.logger,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
@@ -136,10 +139,10 @@ export async function testSolVaultSwap(
     [],
   );
   const txHash = receipt.txHash;
-  logger.debug(`Sent ${sourceAsset} (vault swap) tx...`);
+  cf.debug(`Sent ${sourceAsset} (vault swap) tx...`);
 
   await reportFunction(txHash);
-  logger.debug(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
+  cf.debug(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
   // just wait for the funds to arrive at the refund address
@@ -160,5 +163,5 @@ export async function testSolVaultSwap(
       `Didn't receive funds refund to address ${solanaRefundAddress} within timeout!`,
     );
   }
-  logger.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
+  cf.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }

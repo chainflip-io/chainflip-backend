@@ -42,6 +42,15 @@ COPY start.sh .
 
 EXPOSE 50001/tcp
 
-ARG PRUNE="true"
+# Used to select block time of bitcoin node
+# Available options are "default", "turbo", "slow"
+ARG LOCALNET_SPEED_SETTING="default"
+ENV ENV_LOCALNET_SPEED_SETTING=$LOCALNET_SPEED_SETTING
+
+ARG PRUNE="false"
+ENV ENV_PRUNE=$PRUNE
+
 # Start the Bitcoin Core daemon in regtest mode
-CMD ["bash", "start.sh", "$PRUNE"]
+# The environment variables $ENV_PRUNE and $ENV_LOCALNET_SPEED_SETTING are automatically
+# available in the script
+CMD ["bash", "start.sh"]

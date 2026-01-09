@@ -2,6 +2,118 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.5] - 2025-12-22
+
+### Fixes
+
+- Fix underflow panic in order fills subscription.
+
+## [2.0.4] - 2025-12-20
+
+### Fixes
+
+- Eject unspendable bitcoin utxos.
+
+## [2.0.3] - 2025-12-15
+
+### Fixes
+
+- Delete old stale solana elections on sisyphos/perseverance (Egress witnessing and Nonce witnessing)
+- Correct handling of bitcoin reorg into empty headers.
+
+## [2.0.2] - 2025-12-09
+
+### Fixes
+
+- Revert Polkadot-SDK blocks pruning.
+
+## [2.0.1] - 2025-12-07
+
+### Fixes
+
+- Make cf_liquidity_provider_info RPC backwards-compatible.
+
+## [2.0.0] - 2025-12-01
+
+### Features
+
+- Solana nonces only in static accounts simd-0242 (#6291)
+- Historical signing ([#6276](https://github.com/chainflip-io/chainflip-backend/issues/6276))
+- Faster EIP encoding implementation ([#6277](https://github.com/chainflip-io/chainflip-backend/issues/6277))
+- Oracle prices not required for interest payments ([#6280](https://github.com/chainflip-io/chainflip-backend/issues/6280))
+- Increase max length for operational extrinsics. ([#6274](https://github.com/chainflip-io/chainflip-backend/issues/6274))
+- Add statechain indexer as optional feature to bouncer. ([#6270](https://github.com/chainflip-io/chainflip-backend/issues/6270))
+- Eip encoding matches test ([#6218](https://github.com/chainflip-io/chainflip-backend/issues/6218))
+- Liquidations safe mode ([#6269](https://github.com/chainflip-io/chainflip-backend/issues/6269))
+- Allow stale price for some low risk lending actions ([#6263](https://github.com/chainflip-io/chainflip-backend/issues/6263))
+- Eip712-stringify-numbers-json ([#6233](https://github.com/chainflip-io/chainflip-backend/issues/6233))
+- Optional collateral topup asset ([#6261](https://github.com/chainflip-io/chainflip-backend/issues/6261))
+- Always ingress wrongly encoded BTC vault deposits ([#6248](https://github.com/chainflip-io/chainflip-backend/issues/6248))
+- Add `request_account_creation_deposit_address` to broker API ([#6254](https://github.com/chainflip-io/chainflip-backend/issues/6254))
+- Oracle price cache ([#6243](https://github.com/chainflip-io/chainflip-backend/issues/6243))
+- Deposit channel based account creation ([#6170](https://github.com/chainflip-io/chainflip-backend/issues/6170))
+- Whitelist for lending ([#6239](https://github.com/chainflip-io/chainflip-backend/issues/6239))
+- Hard liquidation swaps use different chunk size ([#6236](https://github.com/chainflip-io/chainflip-backend/issues/6236))
+- Interest interval tied to loan creation ([#6237](https://github.com/chainflip-io/chainflip-backend/issues/6237))
+- Encode data in the runtime and unify build functions ([#6227](https://github.com/chainflip-io/chainflip-backend/issues/6227))
+- Lending benchmarks for upkeep and new extrinsics ([#6229](https://github.com/chainflip-io/chainflip-backend/issues/6229))
+- Cf_lending_pool_supply_balances ([#6234](https://github.com/chainflip-io/chainflip-backend/issues/6234))
+- Make dot witnessing no-op ([#6232](https://github.com/chainflip-io/chainflip-backend/issues/6232))
+- Remove polkadot witnessing ([#6225](https://github.com/chainflip-io/chainflip-backend/issues/6225))
+- Voluntary liquidation ([#6221](https://github.com/chainflip-io/chainflip-backend/issues/6221))
+- Cherry picks from 1.12.2 release  ([#6223](https://github.com/chainflip-io/chainflip-backend/issues/6223))
+- Upgrade chainflip polkadot-sdk to pull in light-rpc mode improvements ([#6178](https://github.com/chainflip-io/chainflip-backend/issues/6178))
+- Charge fees for non-native calls ([#6200](https://github.com/chainflip-io/chainflip-backend/issues/6200))
+- Ensure loan asset has refund address ([#6185](https://github.com/chainflip-io/chainflip-backend/issues/6185))
+- Explicit option to repay loan in full ([#6202](https://github.com/chainflip-io/chainflip-backend/issues/6202))
+- Benchmarks for lending ([#6177](https://github.com/chainflip-io/chainflip-backend/issues/6177))
+- Ensure last interest charge never fails ([#6201](https://github.com/chainflip-io/chainflip-backend/issues/6201))
+- [cherry-pick] BLS for Solana ([#6162](https://github.com/chainflip-io/chainflip-backend/issues/6162)) ([#6203](https://github.com/chainflip-io/chainflip-backend/issues/6203))
+- Take all lending fees in loan asset ([#6186](https://github.com/chainflip-io/chainflip-backend/issues/6186))
+- Ethereum EIP712 Encoding ([#6146](https://github.com/chainflip-io/chainflip-backend/issues/6146))
+- Charge any pending interest before settling a loan ([#6171](https://github.com/chainflip-io/chainflip-backend/issues/6171))
+- Lending minimum loan ([#6155](https://github.com/chainflip-io/chainflip-backend/issues/6155))
+- Improve rpc encoding non native calls ([#6172](https://github.com/chainflip-io/chainflip-backend/issues/6172))
+- Update primary collateral extrinsic ([#6169](https://github.com/chainflip-io/chainflip-backend/issues/6169))
+- Core Lending ([#6061](https://github.com/chainflip-io/chainflip-backend/issues/6061))
+- Support for signed runtime calls and batching ([#6141](https://github.com/chainflip-io/chainflip-backend/issues/6141))
+
+### Fixes
+
+- Asset converter 2 leg swap for flip funding ([#6281](https://github.com/chainflip-io/chainflip-backend/issues/6281))
+- More accurate error variant ([#6271](https://github.com/chainflip-io/chainflip-backend/issues/6271))
+- Ensure different broker URI to avoid race conditions ([#6266](https://github.com/chainflip-io/chainflip-backend/issues/6266))
+- Optional auto-topup ([#6258](https://github.com/chainflip-io/chainflip-backend/issues/6258))
+- Throw an error if rpc response not json ([#6249](https://github.com/chainflip-io/chainflip-backend/issues/6249))
+- Correctly handle a rare edge case with multiple liquidation swaps ([#6256](https://github.com/chainflip-io/chainflip-backend/issues/6256))
+- Do check price staleness ([#6242](https://github.com/chainflip-io/chainflip-backend/issues/6242))
+- Return error for non native calls ([#6235](https://github.com/chainflip-io/chainflip-backend/issues/6235))
+- Lp_total_balances includes ass and lending ([#6230](https://github.com/chainflip-io/chainflip-backend/issues/6230))
+- Allow balance to drop below escrow amount ([#6226](https://github.com/chainflip-io/chainflip-backend/issues/6226))
+- Solana ingress egress fee rpc ([#6228](https://github.com/chainflip-io/chainflip-backend/issues/6228))
+- Use string to represent unsigned ints ([#6214](https://github.com/chainflip-io/chainflip-backend/issues/6214))
+- Color escape codes ([#6210](https://github.com/chainflip-io/chainflip-backend/issues/6210))
+- Updates reviewer for cherry-pick 🍒 ([#6208](https://github.com/chainflip-io/chainflip-backend/issues/6208))
+- Correctly write off unrecoverable debt ([#6198](https://github.com/chainflip-io/chainflip-backend/issues/6198))
+- Do emit SwapRequestCompleted when swap request is aborted ([#6195](https://github.com/chainflip-io/chainflip-backend/issues/6195))
+- Pass chainspec name when restarting nodes in `upgrade-network.ts` ([#6182](https://github.com/chainflip-io/chainflip-backend/issues/6182))
+
+### Refactor
+
+- Simpler rejection refund flow ([#6204](https://github.com/chainflip-io/chainflip-backend/issues/6204))
+- Lending misc improvements ([#6197](https://github.com/chainflip-io/chainflip-backend/issues/6197))
+
+### Testing
+
+- More lending unit tests ([#6279](https://github.com/chainflip-io/chainflip-backend/issues/6279))
+- Lending bouncer test ([#6164](https://github.com/chainflip-io/chainflip-backend/issues/6164))
+- Repayment during liquidation ([#6275](https://github.com/chainflip-io/chainflip-backend/issues/6275))
+- Soft to hard liquidation escalation ([#6267](https://github.com/chainflip-io/chainflip-backend/issues/6267))
+- Muli-loan multi-collateral liquidation ([#6264](https://github.com/chainflip-io/chainflip-backend/issues/6264))
+- Liquidation with multiple collateral assets ([#6259](https://github.com/chainflip-io/chainflip-backend/issues/6259))
+- Lending integration test ([#6250](https://github.com/chainflip-io/chainflip-backend/issues/6250))
+- Extra tests for lending ([#6196](https://github.com/chainflip-io/chainflip-backend/issues/6196))
+
 ## [1.12.1] - 2025-10-30
 
 ### Features

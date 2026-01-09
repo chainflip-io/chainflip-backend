@@ -1,11 +1,19 @@
 #!/bin/bash
 set -x
 btc_version=$(bitcoind --version)
-btc_block_time=5
 
-PRUNE=$1
+echo "Speed setting is: $ENV_LOCALNET_SPEED_SETTING"
+if [ "$ENV_LOCALNET_SPEED_SETTING" == "turbo" ]; then
+  btc_block_time=1
+elif [ "$ENV_LOCALNET_SPEED_SETTING" == "slow" ]; then
+  btc_block_time=15
+else
+  # default block time
+  btc_block_time=5
+fi
 
-if [ "$PRUNE" == "true" ]; then
+echo "Prune setting is: $ENV_PRUNE"
+if [ "$ENV_PRUNE" == "true" ]; then
   bitcoind -debug=http -debug=rpc &
 else
   bitcoind -debug=http -debug=rpc -prune=0 &
@@ -16,8 +24,6 @@ else
   done
 
   electrs --conf electrs.conf &
-
-  btc_block_time=15
 fi
 
 echo "Bitcoin version: $btc_version"

@@ -33,7 +33,7 @@ fn test_basic_swaps() {
 	fn inner(order: Side) {
 		{
 			let mut pool_state = PoolState {
-				limit_orders: limit_orders::PoolState::new(0).unwrap(),
+				limit_orders: limit_orders::PoolState::new(),
 				range_orders: range_orders::PoolState::new(0, MIN_SQRT_PRICE).unwrap(),
 			};
 
@@ -44,7 +44,7 @@ fn test_basic_swaps() {
 
 		{
 			let mut pool_state = PoolState {
-				limit_orders: limit_orders::PoolState::new(0).unwrap(),
+				limit_orders: limit_orders::PoolState::new(),
 				range_orders: range_orders::PoolState::new(0, MIN_SQRT_PRICE).unwrap(),
 			};
 
@@ -70,7 +70,7 @@ fn test_basic_swaps() {
 				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
-				limit_orders: limit_orders::PoolState::new(0).unwrap(),
+				limit_orders: limit_orders::PoolState::new(),
 				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 
@@ -109,7 +109,7 @@ fn test_basic_swaps() {
 				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
-				limit_orders: limit_orders::PoolState::new(0).unwrap(),
+				limit_orders: limit_orders::PoolState::new(),
 				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 
@@ -165,7 +165,7 @@ fn test_basic_swaps() {
 				Pairs::Quote => MIN_SQRT_PRICE,
 			};
 			let mut pool_state = PoolState {
-				limit_orders: limit_orders::PoolState::new(0).unwrap(),
+				limit_orders: limit_orders::PoolState::new(),
 				range_orders: range_orders::PoolState::new(0, initial_sqrt_price).unwrap(),
 			};
 

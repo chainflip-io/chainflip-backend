@@ -14,6 +14,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { estimateCcmCfTesterGas } from 'shared/send_evm';
 import { Logger } from 'shared/utils/logger';
+import { ChainflipIO } from './utils/chainflip_io';
 
 let swapCount = 1;
 
@@ -261,8 +262,8 @@ export async function prepareSwap(
   return { destAddress, tag };
 }
 
-export async function testSwap(
-  logger: Logger,
+export async function testSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -272,7 +273,7 @@ export async function testSwap(
   amount?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
-    logger,
+    cf.logger,
     sourceAsset,
     destAsset,
     addressType,
@@ -282,7 +283,7 @@ export async function testSwap(
   );
 
   return performSwap(
-    logger.child({ tag }),
+    cf.withChildLogger(tag),
     sourceAsset,
     destAsset,
     destAddress,
@@ -294,7 +295,7 @@ export async function testSwap(
   );
 }
 export async function testVaultSwap(
-  logger: Logger,
+  cf: ChainflipIO<[]>,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -303,7 +304,7 @@ export async function testVaultSwap(
   tagSuffix?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
-    logger,
+    cf.logger,
     sourceAsset,
     destAsset,
     addressType,
@@ -313,7 +314,7 @@ export async function testVaultSwap(
   );
 
   return performVaultSwap(
-    logger.child({ tag }),
+    cf.withChildLogger(tag),
     '//BROKER_1',
     sourceAsset,
     destAsset,

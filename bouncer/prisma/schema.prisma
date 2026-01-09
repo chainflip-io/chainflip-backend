@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Block {
+  id             String      @id @db.Char(16)
+  height         Int
+  hash           String      @db.Char(66)
+  parentHash     String      @map("parent_hash") @db.Char(66)
+  stateRoot      String      @map("state_root") @db.Char(66)
+  extrinsicsRoot String      @map("extrinsics_root") @db.Char(66)
+  timestamp      DateTime    @db.Timestamptz(6)
+  validator      String?     @db.VarChar
+  specId         String      @map("spec_id")
+  call           Call[]
+  event          Event[]
+  extrinsic      Extrinsic[]
+
+  @@index([hash], map: "idx_block__hash")
+  @@index([height], map: "idx_block__height")
+  @@index([timestamp], map: "idx_block__timestamp")
+  @@index([validator], map: "idx_block__validator")
+  @@map("block")
+}
+
+model Call {
+  id          String    @id @db.VarChar(30)
+  parentId    String?   @map("parent_id") @db.VarChar(30)
+  blockId     String    @map("block_id") @db.Char(16)
+  extrinsicId String    @map("extrinsic_id") @db.Char(23)
+  name        String    @db.VarChar
+  args        Json?
+  success     Boolean
+  error       Json?
+  origin      Json?
+  pos         Int
+  block       Block     @relation(fields: [blockId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  extrinsic   Extrinsic @relation(fields: [extrinsicId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  call        Call?     @relation("callTocall", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  otherCall   Call[]    @relation("callTocall")
+  event       Event[]
+
+  @@index([blockId], map: "idx_call__block")
+  @@index([extrinsicId], map: "idx_call__extrinsic__index")
+  @@index([name, blockId], map: "idx_call__name__block")
+  @@index([parentId], map: "idx_call__parent")
+  @@map("call")
+}
+
+model Event {
+  id           String     @id @db.Char(23)
+  blockId      String     @map("block_id") @db.Char(16)
+  indexInBlock Int        @map("index_in_block")
+  phase        String     @db.VarChar
+  extrinsicId  String?    @map("extrinsic_id") @db.Char(23)
+  callId       String?    @map("call_id") @db.VarChar(30)
+  name         String     @db.VarChar
+  args         Json?
+  pos          Int
+  block        Block      @relation(fields: [blockId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  call         Call?      @relation(fields: [callId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  extrinsic    Extrinsic? @relation(fields: [extrinsicId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([args], map: "idx_event__args", type: Gin)
+  @@index([blockId, indexInBlock], map: "idx_event__block__index")
+  @@index([callId], map: "idx_event__call")
+  @@index([extrinsicId], map: "idx_event__extrinsic")
+  @@index([name, blockId], map: "idx_event__name__block")
+  @@map("event")
+}
+
+model Extrinsic {
+  id           String   @id @db.Char(23)
+  blockId      String   @map("block_id") @db.Char(16)
+  indexInBlock Int      @map("index_in_block")
+  version      Int
+  signature    Json?
+  callId       String   @map("call_id") @db.VarChar(30)
+  fee          Decimal? @db.Decimal
+  tip          Decimal? @db.Decimal
+  success      Boolean
+  error        Json?
+  pos          Int
+  hash         String   @db.Char(66)
+  call         Call[]
+  event        Event[]
+  block        Block    @relation(fields: [blockId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([blockId, indexInBlock], map: "idx_extrinsic__block__index")
+  @@index([callId], map: "idx_extrinsic__call")
+  @@index([hash], map: "idx_extrinsic__hash")
+  @@index([signature], map: "idx_extrinsic__signature", type: Gin)
+  @@map("extrinsic")
+}
+
+model Metadata {
+  id          String @id @db.VarChar
+  specname    String @map("spec_name") @db.VarChar
+  specVersion Int?   @map("spec_version")
+  blockHeight Int    @map("block_height")
+  blockHash   String @map("block_hash") @db.Char(66)
+  hex         String @db.VarChar
+
+  @@map("metadata")
+}

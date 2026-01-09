@@ -65,8 +65,7 @@ use pallet_cf_lending_pools::{
 	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
 };
 use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
-	UnidirectionalPoolDepth,
+	AskBidMap, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
 use sc_client_api::{
@@ -612,12 +611,12 @@ pub enum SwapRateV2AdditionalOrder {
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct RpcPoolInfo {
 	#[serde(flatten)]
-	pub pool_info: PoolInfo,
+	pub pool_info: pallet_cf_pools::before_v13::PoolInfo,
 	pub quote_asset: Asset,
 }
 
-impl From<PoolInfo> for RpcPoolInfo {
-	fn from(pool_info: PoolInfo) -> Self {
+impl From<pallet_cf_pools::before_v13::PoolInfo> for RpcPoolInfo {
+	fn from(pool_info: pallet_cf_pools::before_v13::PoolInfo) -> Self {
 		Self { pool_info, quote_asset: Asset::Usdc }
 	}
 }
@@ -974,7 +973,7 @@ pub trait CustomApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<PoolInfo>;
+	) -> RpcResult<pallet_cf_pools::before_v13::PoolInfo>;
 	#[method(name = "pool_depth")]
 	fn cf_pool_depth(
 		&self,
@@ -1610,7 +1609,6 @@ where
 	pass_through_and_flatten! {
 		cf_required_asset_ratio_for_range_order(base_asset: Asset, quote_asset: Asset, tick_range: Range<Tick>) -> PoolPairsMap<AmmAmount>,
 		cf_pool_orderbook(base_asset: Asset, quote_asset: Asset, orders: u32) -> PoolOrderbook,
-		cf_pool_info(base_asset: Asset, quote_asset: Asset) -> PoolInfo,
 		cf_pool_depth(base_asset: Asset, quote_asset: Asset, tick_range: Range<Tick>) -> AskBidMap<UnidirectionalPoolDepth>,
 		cf_pool_liquidity(base_asset: Asset, quote_asset: Asset) -> PoolLiquidity,
 		cf_pool_range_order_liquidity_value(
@@ -1626,6 +1624,21 @@ where
 			retry_duration: BlockNumber,
 			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> (),
+	}
+
+	fn cf_pool_info(
+		&self,
+		base_asset: Asset,
+		quote_asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<pallet_cf_pools::before_v13::PoolInfo> {
+		flatten_into_error(self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 13 {
+				api.cf_pool_info_before_version_13(hash, base_asset, quote_asset)
+			} else {
+				api.cf_pool_info(hash, base_asset, quote_asset).map(|info| info.map(Into::into))
+			}
+		}))
 	}
 
 	fn cf_lending_pools(
