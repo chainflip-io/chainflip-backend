@@ -32,7 +32,7 @@ jobs:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
     timeout-minutes: 80
     container:
-      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2025-11-10"
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
       volumes:
         - /cache:/cache
       options: --cap-add=SYS_ADMIN
