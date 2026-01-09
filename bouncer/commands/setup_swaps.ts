@@ -7,6 +7,8 @@
 
 import { setupSwaps } from 'shared/setup_swaps';
 import { runWithTimeoutAndExit } from 'shared/utils';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 
-await runWithTimeoutAndExit(setupSwaps(globalLogger), 240);
+const cf = await newChainflipIO(globalLogger, []);
+await runWithTimeoutAndExit(setupSwaps(cf), 240);

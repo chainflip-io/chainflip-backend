@@ -6,6 +6,8 @@
 
 import { setupLendingPools } from 'shared/lending';
 import { runWithTimeoutAndExit } from 'shared/utils';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 
-await runWithTimeoutAndExit(setupLendingPools(globalLogger), 120);
+const cf = await newChainflipIO(globalLogger, []);
+await runWithTimeoutAndExit(setupLendingPools(cf), 120);

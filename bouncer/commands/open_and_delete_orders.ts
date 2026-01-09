@@ -8,6 +8,7 @@
 // will create 5 limit_order and then delete them all with a single extrinsic
 
 import { runWithTimeoutAndExit } from 'shared/utils';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 import { createAndDeleteMultipleOrders } from 'tests/create_and_delete_multiple_orders';
 
@@ -18,7 +19,10 @@ async function main(): Promise<void> {
   }
   const numberOfOrders = process.argv[2];
 
-  await createAndDeleteMultipleOrders(globalLogger, Number(numberOfOrders));
+  const cf = await newChainflipIO(globalLogger, {
+    account: fullAccountFromUri('//LP_1', 'LP'),
+  });
+  await createAndDeleteMultipleOrders(cf, Number(numberOfOrders));
 }
 
 await runWithTimeoutAndExit(main(), 240);
