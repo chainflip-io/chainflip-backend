@@ -1,4 +1,3 @@
-import { Logger } from 'pino';
 import assert from 'assert';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { AccountRole, setupAccount } from 'shared/setup_account';
@@ -19,6 +18,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { randomBytes } from 'crypto';
 import { TestContext } from 'shared/utils/test_context';
 import { setupLendingPools } from 'shared/lending';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export interface Loan {
   loan_id: number;
@@ -44,20 +44,20 @@ async function getLoan(address: string): Promise<Loan> {
   return loanAccount.loans[0];
 }
 
-async function lendingTestForAsset(
-  parentLogger: Logger,
+async function lendingTestForAsset<A = []>(
+  parentcf: ChainflipIO<A>,
   collateralAsset: Asset,
   collateralAmount: number,
   loanAsset: Asset,
   loanAmount: number,
 ) {
-  const logger = parentLogger.child({ collateralAsset, loanAsset });
+  const cf = parentcf.withChildLogger(`${JSON.stringify({ collateralAsset, loanAsset })}`);
   await using chainflip = await getChainflipApi();
 
   // Create a new random LP account
   const seed = randomBytes(4).toString('hex');
   const lpUri = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
-  const lp = await setupAccount(logger, lpUri, AccountRole.LiquidityProvider);
+  const lp = await setupAccount(cf.logger, lpUri, AccountRole.LiquidityProvider);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
   // Credit the account with the collateral and a little of the loan asset to be able to settle the loan.
@@ -66,14 +66,14 @@ async function lendingTestForAsset(
   const factor = 10 ** loanAssetDecimals;
   const extraLoanAssetAmount = Math.round(0.01 * loanAmount * factor) / factor;
   await Promise.all([
-    depositLiquidity(logger, loanAsset, extraLoanAssetAmount * 1.01, true, lpUri),
-    depositLiquidity(logger, collateralAsset, collateralAmount * 1.05, true, lpUri),
+    depositLiquidity(cf, loanAsset, extraLoanAssetAmount * 1.01, true, lpUri),
+    depositLiquidity(cf, collateralAsset, collateralAmount * 1.05, true, lpUri),
   ]);
 
   // Add collateral to the account
   const collateralAssetFreeBalance1 = await getFreeBalance(lp.address, collateralAsset);
-  logger.debug(`Current free balance of collateral asset: ${collateralAssetFreeBalance1}`);
-  logger.debug(`Adding collateral`);
+  cf.debug(`Current free balance of collateral asset: ${collateralAssetFreeBalance1}`);
+  cf.debug(`Adding collateral`);
   const collateral: [Asset, string][] = [
     [
       collateralAsset,
@@ -99,7 +99,7 @@ async function lendingTestForAsset(
   );
 
   // Create a loan
-  logger.debug(`Requesting loan of ${loanAmount} ${loanAsset}`);
+  cf.debug(`Requesting loan of ${loanAmount} ${loanAsset}`);
   const loanAssetFreeBalance1 = await getFreeBalance(lp.address, loanAsset);
 
   const loanId = Number(
@@ -114,12 +114,12 @@ async function lendingTestForAsset(
           [], // No extra collateral needed
         ),
         'lendingPools:LoanCreated',
-        logger,
+        cf.logger,
       )
     ).data.loanId,
   );
 
-  logger.debug(`Created loan id: ${loanId}`);
+  cf.debug(`Created loan id: ${loanId}`);
 
   // Check that we got the loan amount
   const loanAssetFreeBalance2 = await getFreeBalance(lp.address, loanAsset);
@@ -140,7 +140,7 @@ async function lendingTestForAsset(
 
   // Wait for some interest
   await sleep(6000);
-  await observeEvent(logger, 'lendingPools:InterestTaken', {
+  await observeEvent(cf.logger, 'lendingPools:InterestTaken', {
     test: (event) => Number(event.data.loanId) === loanId,
     timeoutSeconds: 15,
   }).event;
@@ -150,7 +150,7 @@ async function lendingTestForAsset(
   );
 
   // Repay part of the loan
-  logger.debug(`Repaying half the loan`);
+  cf.debug(`Repaying half the loan`);
   const partialRepaymentAmount = loanAmount / 2;
   await extrinsicSubmitter.submit(
     chainflip.tx.lendingPools.makeRepayment(loanId, {
@@ -176,13 +176,13 @@ async function lendingTestForAsset(
     BigInt((await getLoan(lp.address)).principal_amount) <= loanAssetFreeBalance3,
     'Not enough free balance to fully repay the loan',
   );
-  logger.debug(`Repaying the rest of the loan`);
+  cf.debug(`Repaying the rest of the loan`);
   await submitExtrinsic(
     lpUri,
     chainflip,
     chainflip.tx.lendingPools.makeRepayment(loanId, 'Full'),
     'lendingPools:LoanSettled',
-    logger,
+    cf.logger,
   );
 
   // Recover the collateral
@@ -209,7 +209,7 @@ async function lendingTestForAsset(
 }
 
 export async function lendingTest(testContext: TestContext): Promise<void> {
-  const logger = testContext.logger;
+  const cf = await newChainflipIO(testContext.logger, []);
 
   // Check if the lending pool exists. This can be removed after the `upgrade_test` uses the new lending pool setup.
   await using chainflip = await getChainflipApi();
@@ -218,21 +218,21 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
     await chainflip.query.lendingPools.generalLendingPools(Assets.Btc)
   ).toJSON();
   if (!btcPool) {
-    logger.info('Btc lending pool not found, running setupLendingPools');
-    await setupLendingPools(logger);
+    cf.info('Btc lending pool not found, running setupLendingPools');
+    await setupLendingPools(cf);
   }
 
   // Set lending config and whitelist
-  logger.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
+  cf.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
       { SetInterestPaymentIntervalBlocks: 1 },
       { SetInterestCollectionThresholdUsd: 1 },
     ]),
   );
-  logger.debug(`Disabling lending pool whitelist`);
+  cf.debug(`Disabling lending pool whitelist`);
   await submitGovernanceExtrinsic((api) => api.tx.lendingPools.updateWhitelist('SetAllowAll'));
 
   // Run test
-  await lendingTestForAsset(logger, Assets.Eth, 35, Assets.Btc, 1.8);
+  await lendingTestForAsset(cf, Assets.Eth, 35, Assets.Btc, 1.8);
 }

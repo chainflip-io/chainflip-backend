@@ -125,7 +125,7 @@ async function testBoostingForAsset(
   );
 
   // Add boost funds
-  await depositLiquidity(cf.logger, asset, amount * 1.01, false, lpUri);
+  await depositLiquidity(cf, asset, amount * 1.01, false, lpUri);
   await addBoostFunds(cf, asset, boostFee, amount);
 
   // Do a swap
@@ -208,6 +208,7 @@ async function testBoostingForAsset(
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
   await using chainflip = await getChainflipApi();
 
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
@@ -220,9 +221,9 @@ export async function testBoostingSwap(testContext: TestContext) {
 
   // Create the boost pool if it doesn't exist
   if (!boostPool?.feeBps) {
-    await createBoostPools(testContext.logger, [{ asset: Assets.Btc, tier: boostPoolTier }]);
+    await createBoostPools(cf, [{ asset: Assets.Btc, tier: boostPoolTier }]);
   } else {
-    testContext.trace(`Boost pool already exists for tier ${boostPoolTier}`);
+    cf.trace(`Boost pool already exists for tier ${boostPoolTier}`);
   }
 
   // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.

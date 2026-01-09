@@ -15,10 +15,10 @@ import {
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { Logger } from 'shared/utils/logger';
+import { ChainflipIO } from './utils/chainflip_io';
 
-export async function depositLiquidity(
-  parentLogger: Logger,
+export async function depositLiquidity<A = []>(
+  parentcf: ChainflipIO<A>,
   ccy: Asset,
   givenAmount: number,
   waitForFinalization = false,
@@ -27,7 +27,7 @@ export async function depositLiquidity(
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
   const lpUri = optionLpUri ?? (process.env.LP_URI || '//LP_1');
-  const logger = parentLogger.child({ ccy, amount, lpUri });
+  const cf = parentcf.withChildLogger(`${JSON.stringify({ ccy, amount, lpUri })}`);
 
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
@@ -47,7 +47,7 @@ export async function depositLiquidity(
     refundAddress = chain === 'Hub' ? decodeDotAddressForContract(refundAddress) : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
-    logger.debug(`Registering Liquidity Refund Address for ${refundAddress}`);
+    cf.debug(`Registering Liquidity Refund Address for ${refundAddress}`);
     await cfMutex.runExclusive(lpUri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
       await chainflip.tx.liquidityProvider
@@ -56,11 +56,11 @@ export async function depositLiquidity(
     });
   }
 
-  let eventHandle = observeEvent(logger, 'liquidityProvider:LiquidityDepositAddressReady', {
+  let eventHandle = observeEvent(cf.logger, 'liquidityProvider:LiquidityDepositAddressReady', {
     test: (event) => event.data.asset === ccy && event.data.accountId === lp.address,
   }).event;
 
-  logger.debug(`Requesting ${ccy} deposit address`);
+  cf.debug(`Requesting ${ccy} deposit address`);
   await cfMutex.runExclusive(lpUri, async () => {
     const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
     await chainflip.tx.liquidityProvider
@@ -70,8 +70,8 @@ export async function depositLiquidity(
 
   const ingressAddress = (await eventHandle).data.depositAddress[chain];
 
-  logger.trace(`Initiating transfer to ${ingressAddress}`);
-  eventHandle = observeEvent(logger, 'assetBalances:AccountCredited', {
+  cf.trace(`Initiating transfer to ${ingressAddress}`);
+  eventHandle = observeEvent(cf.logger, 'assetBalances:AccountCredited', {
     test: (event) =>
       event.data.asset === ccy &&
       event.data.accountId === lp.address &&
@@ -84,14 +84,14 @@ export async function depositLiquidity(
   }).event;
 
   const txHash = await runWithTimeout(
-    send(logger, ccy, ingressAddress, String(amount)),
+    send(cf.logger, ccy, ingressAddress, String(amount)),
     130,
-    logger,
+    cf.logger,
     `sending liquidity ${amount} ${ccy}.`,
   );
 
   await eventHandle;
 
-  logger.debug(`Liquidity deposited to ${ingressAddress}`);
+  cf.debug(`Liquidity deposited to ${ingressAddress}`);
   return txHash;
 }
