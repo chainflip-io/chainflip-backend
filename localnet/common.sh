@@ -183,8 +183,18 @@ build-localnet() {
       echo "💚 $NODE's chainflip-node is running!"
       ((RPC_PORT++))
   done
-  SLOT_DURATION="$(curl --silent -H "Content-Type: application/json" -d '{ "jsonrpc":"2.0", "id":"1", "method":"cf_slot_duration", "params":{} }' http://localhost:9944 | jq '.result')"
-  echo "🕐 Block time is ${SLOT_DURATION}ms."
+
+  # Get and print CF block time (the rpc returns a scale encoded value)
+  SLOT_DURATION="$(curl --silent --location 'http://localhost:9944' \
+    --header 'Content-Type: application/json' \
+    --data '{"id":9,"jsonrpc":"2.0","method":"state_call","params":["AuraApi_slot_duration",""]}' | jq -r '.result')"
+  if [[ $SLOT_DURATION == 0x7017000000000000 ]]; then
+    echo "🕐 Block time is 6000ms."
+  elif [[ $SLOT_DURATION == 0xe803000000000000 ]]; then
+    echo "🕐 Block time is 1000ms."
+  else
+    echo "🕐 Warning: unrecognized block time: ${SLOT_DURATION} ⚠️"
+  fi
 
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
