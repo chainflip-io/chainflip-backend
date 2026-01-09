@@ -11,6 +11,7 @@ import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitExistingGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposed } from 'generated/events/governance/proposed';
+import { governanceExecuted } from 'generated/events/governance/executed';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import {
   OneOfEventsResult,
@@ -150,6 +151,13 @@ export class ChainflipIO<Requirements> {
     );
     this.logger.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
+    );
+    await this.stepUntilEvent(
+      'Governance.Executed',
+      governanceExecuted.refine((id) => id === proposalId),
+    );
+    this.logger.debug(
+      `Governance proposal with id ${proposalId} executed in block ${this.lastIoBlockHeight}`,
     );
   }
 
