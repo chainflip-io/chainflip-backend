@@ -73,7 +73,7 @@ jobs:
           node-version-file: ./bouncer/.nvmrc
           cache: "pnpm"
           registry-url: "https://npm.pkg.github.com"
-          cache-dependency-path: "./bouncer/pnpm-lock.yaml"
+          cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
       - name: Install node dependencies 📦
         working-directory: bouncer
