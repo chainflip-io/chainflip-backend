@@ -12,6 +12,7 @@ import { testSwap } from 'shared/swapping';
 import { observeEvent, observeBadEvent, getPolkadotApi } from 'shared/utils/substrate';
 import { Logger, loggerChild } from 'shared/utils/logger';
 import { TestContext } from 'shared/utils/test_context';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Note: This test only passes if there is more than one node in the network due to the polkadot runtime upgrade causing broadcast failures due to bad signatures.
 
@@ -196,6 +197,7 @@ export async function bumpAndBuildPolkadotRuntime(logger: Logger): Promise<[stri
 }
 
 async function randomPolkadotSwap(testContext: TestContext): Promise<void> {
+  const cf = await newChainflipIO(testContext.logger, []);
   const assets: Asset[] = [Assets.Btc, Assets.Eth, Assets.Usdc, Assets.Flip];
   const randomAsset = assets[Math.floor(Math.random() * assets.length)];
 
@@ -211,7 +213,7 @@ async function randomPolkadotSwap(testContext: TestContext): Promise<void> {
   }
 
   await testSwap(
-    testContext.logger,
+    cf,
     sourceAsset,
     destAsset,
     undefined,
@@ -221,7 +223,7 @@ async function randomPolkadotSwap(testContext: TestContext): Promise<void> {
     undefined,
   );
   swapsComplete++;
-  testContext.debug(`Swap complete: (${swapsComplete}/${swapsStarted})`);
+  cf.debug(`Swap complete: (${swapsComplete}/${swapsStarted})`);
 }
 
 async function doPolkadotSwaps(testContext: TestContext): Promise<void> {

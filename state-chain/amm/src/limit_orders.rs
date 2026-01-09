@@ -48,7 +48,7 @@ use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 use sp_std::vec::Vec;
 
-use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE};
+use crate::common::{BaseToQuote, PoolPairsMap, QuoteToBase};
 use cf_amm_math::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, output_amount_floor, sqrt_price_at_tick,
 	sqrt_price_to_price, tick_at_sqrt_price, Amount, Price, SqrtPriceQ64F96, Tick,
@@ -264,12 +264,6 @@ impl SwapDirection for QuoteToBase {
 }
 
 #[derive(Debug)]
-pub enum NewError {
-	/// Fee must be between 0 - 50%
-	InvalidFeeAmount,
-}
-
-#[derive(Debug)]
 pub enum DepthError {
 	/// Invalid Price
 	InvalidTick,
@@ -311,17 +305,12 @@ pub enum CollectError {}
 
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct Collected {
-	/// The amount of fees earned by this position since the last collect.
-	pub fees: Amount,
 	/// The amount of assets purchased by the LP using the liquidity in this position since the
 	/// last collect.
 	pub bought_amount: Amount,
 	/// The amount of assets sold by the LP using the liquidity in this position since the
 	/// last collect.
 	pub sold_amount: Amount,
-	/// The accumulative fees earned by this position since the last modification of the position
-	/// i.e. non-zero mint or burn.
-	pub accumulative_fees: Amount,
 	/// The amount of liquidity in the position when it was created/last updated (a non-zero mint
 	/// or burn) prior to the operation that which returned this value.
 	pub original_amount: Amount,
@@ -364,10 +353,6 @@ struct Position {
 	/// position. It is the percent_remaining of the FixedPool when the position was last
 	/// updated/collected from.
 	last_percent_remaining: FloatBetweenZeroAndOne,
-	/// This is the total fees earned by this position since the last non-zero mint or burn on the
-	/// position, as of the last operation on the position. I.e. this value is not updated when
-	/// swaps occur, only when the LP updates their position in some way.
-	accumulative_fees: Amount,
 	/// This is the original amount of liquidity provider by this position as of its creation. This
 	/// value is updated if a non-zero mint or burn is performed on the position.
 	original_amount: Amount,
@@ -378,7 +363,7 @@ struct Position {
 #[derive(
 	Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen, Serialize, Deserialize, PartialEq,
 )]
-pub(super) struct FixedPool {
+pub struct FixedPool {
 	/// Whenever a FixedPool is destroyed and recreated i.e. all the liquidity in the FixedPool is
 	/// used, a new value for pool_instance is used, and the previously used value will never be
 	/// used again. This is used to determine whether a position was created during the current
@@ -397,10 +382,7 @@ pub(super) struct FixedPool {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, Serialize, Deserialize, PartialEq)]
-pub(super) struct PoolState<LiquidityProvider: Ord> {
-	/// The percentage fee taken from swap inputs and earned by LPs. It is in units of 0.0001%.
-	/// I.e. 5000 means 0.5%.
-	pub(super) fee_hundredth_pips: u32,
+pub struct PoolState<LiquidityProvider: Ord> {
 	/// The ID the next FixedPool that is created will use.
 	next_pool_instance: u128,
 	/// All the FixedPools that have some liquidity. They are grouped into all those that are
@@ -412,8 +394,6 @@ pub(super) struct PoolState<LiquidityProvider: Ord> {
 	/// PoolPairsMap. Therefore there can be positions stored here that don't provide any
 	/// liquidity.
 	positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
-	/// Total fees earned over all time
-	pub(super) total_fees_earned: PoolPairsMap<Amount>,
 	/// Total of all swap inputs over all time (not including fees)
 	pub(super) total_swap_inputs: PoolPairsMap<Amount>,
 	/// Total of all swap outputs over all time
@@ -425,20 +405,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// may not be created with a fee higher than 50%.
 	///
 	/// This function never panics.
-	pub(super) fn new(fee_hundredth_pips: u32) -> Result<Self, NewError> {
-		Self::validate_fees(fee_hundredth_pips)
-			.then_some(())
-			.ok_or(NewError::InvalidFeeAmount)?;
-
-		Ok(Self {
-			fee_hundredth_pips,
+	pub(super) fn new() -> Self {
+		Self {
 			next_pool_instance: 0,
 			fixed_pools: Default::default(),
 			positions: Default::default(),
-			total_fees_earned: Default::default(),
 			total_swap_inputs: Default::default(),
 			total_swap_outputs: Default::default(),
-		})
+		}
 	}
 
 	/// Creates an iterator over all positions
@@ -500,27 +474,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				})
 				.collect(),
 		])
-	}
-
-	/// Sets the fee for the pool. This will apply to future swaps. The fee may not be set
-	/// higher than 50%. Also runs collect for all positions in the pool. Returns a PoolPairsMap
-	/// containing the state and fees collected from every position as part of the set_fees
-	/// operation. The positions are grouped into a PoolPairsMap by the asset they sell.
-	///
-	/// This function never panics.
-	#[expect(clippy::type_complexity)]
-	pub(super) fn set_fees(
-		&mut self,
-		fee_hundredth_pips: u32,
-	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
-	{
-		Self::validate_fees(fee_hundredth_pips)
-			.then_some(())
-			.ok_or(SetFeesError::InvalidFeeAmount)?;
-
-		let collect_all = self.collect_all();
-		self.fee_hundredth_pips = fee_hundredth_pips;
-		Ok(collect_all)
 	}
 
 	/// Returns the current price of the pool for a given swap direction, if some liquidity exists.
@@ -661,10 +614,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		(
 			Collected {
-				fees: 0.into(),
 				bought_amount,
 				sold_amount: used_liquidity,
-				accumulative_fees: 0.into(),
 				original_amount: previous_position.original_amount,
 			},
 			option_position,
@@ -730,7 +681,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						pool_instance: fixed_pool.pool_instance,
 						amount: Amount::zero(),
 						last_percent_remaining: fixed_pool.percent_remaining.clone(),
-						accumulative_fees: Amount::zero(),
 						original_amount: Amount::zero(),
 					},
 					fixed_pool,
@@ -928,8 +878,60 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			Err(DepthError::InvalidTickRange)
 		}
 	}
+}
 
-	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		fee_hundredth_pips <= MAX_LP_FEE
+/// Putting some supporting code of migrating from v7 to v8 here to preserve existing visibility of
+/// structs involved in the migration.
+pub mod migration_support {
+	use super::*;
+
+	#[derive(Decode)]
+	pub struct PositionV7 {
+		pool_instance: u128,
+		amount: Amount,
+		last_percent_remaining: FloatBetweenZeroAndOne,
+		_accumulative_fees: Amount, // this field is being removed
+		original_amount: Amount,
+	}
+
+	#[derive(Decode)]
+	pub struct PoolStateV7<LiquidityProvider: Ord> {
+		_fee_hundredth_pips: u32, // this field is being removed
+		next_pool_instance: u128,
+		fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+		positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), PositionV7>>,
+		_total_fees_earned: PoolPairsMap<Amount>, // this field is being removed
+		total_swap_inputs: PoolPairsMap<Amount>,
+		total_swap_outputs: PoolPairsMap<Amount>,
+	}
+
+	impl<LP: Ord> PoolStateV7<LP> {
+		pub fn migrate_to_v8(self) -> PoolState<LP> {
+			PoolState {
+				next_pool_instance: self.next_pool_instance,
+				fixed_pools: self.fixed_pools,
+				positions: self.positions.map(|positions_map| {
+					positions_map
+						.into_iter()
+						.map(|(key, position_v7)| {
+							(
+								key,
+								Position {
+									pool_instance: position_v7.pool_instance,
+									amount: position_v7.amount,
+									last_percent_remaining: position_v7.last_percent_remaining,
+									original_amount: position_v7.original_amount,
+									// accumulative_fees is dropped
+								},
+							)
+						})
+						.collect()
+				}),
+				total_swap_inputs: self.total_swap_inputs,
+				total_swap_outputs: self.total_swap_outputs,
+				// fee_hundredth_pips is dropped
+				// total_fees_earned is dropped
+			}
+		}
 	}
 }

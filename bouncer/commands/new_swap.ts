@@ -21,6 +21,7 @@ import {
 import { requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 interface Args {
   sourceAsset: string;
@@ -122,7 +123,7 @@ async function newSwapCommand() {
       : undefined;
 
   await requestNewSwap(
-    globalLogger,
+    await newChainflipIO(globalLogger, [] as []),
     parseAssetString(args.sourceAsset) as InternalAsset,
     parseAssetString(args.destAsset) as InternalAsset,
     args.destAddress,

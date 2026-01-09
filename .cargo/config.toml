@@ -21,6 +21,7 @@ cf-clippy-ci = "clippy --all-targets --features runtime-benchmarks,try-runtime,r
 cf-build-benchmarks = "build --release --features=runtime-benchmarks"
 cf-build-try-runtime = "build --release --features try-runtime"
 cf-build-release = "build --release"
+cf-build-release-turbo = "build --release --features turbo"
 cf-build-production = "build --profile=production"
 # Check for feature inconsistencies.
 check-sc-features = '''
@@ -57,6 +58,8 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2025-0118: Unsound API access to a WebAssembly shared linear memory.
 # - RUSTSEC-2025-0120: Unmaintained JSON crate. Only used for config.
 # - RUSTSEC-2025-0134: Unmaintained rustls-pemfile crate (version 1.0.4 and 2.2.0). Substrate dependency.
+# - RUSTSEC-2025-0141: Unmaintained bincode crate. Wasmtime dependency.
+# - RUSTSEC-2026-0002: Unsoundness in the lru crate. Our immediate dependency is patched, but not the transitive dependency, which is limited to libp2p-identify and smoldot crates.
 cf-audit = '''
 audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2021-0139
@@ -82,6 +85,8 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2025-0118
 	--ignore RUSTSEC-2025-0120
 	--ignore RUSTSEC-2025-0134
+	--ignore RUSTSEC-2025-0141
+	--ignore RUSTSEC-2026-0002
 '''
 
 [build]

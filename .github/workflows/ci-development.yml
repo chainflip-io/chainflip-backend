@@ -27,6 +27,12 @@ jobs:
     secrets: inherit
     with:
       profile: "release"
+  build-turbo:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      profile: "release-turbo"
+      upload-name: "chainflip-backend-bin-turbo"
   # Used to test upgrades to this version from the latest release
   build-try-runtime:
     uses: ./.github/workflows/_20_build.yml
@@ -62,6 +68,16 @@ jobs:
     with:
       full-bouncer: false
       ngrok: true
+  post-check-turbo:
+    needs: [build-turbo]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+    with:
+      full-bouncer: false
+      ngrok: true
+      chainflip-backend-bin-suffix: -turbo
+      log-postfix: "-turbo"
+      continue-on-bouncer-error: true
   post-check-old-rpcs:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml

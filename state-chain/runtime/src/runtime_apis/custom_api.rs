@@ -77,7 +77,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(12)]
+	#[api_version(13)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -139,6 +139,11 @@ decl_runtime_apis!(
 			additional_limit_orders: Option<Vec<SimulateSwapAdditionalOrder>>,
 			is_internal: Option<bool>,
 		) -> Result<SimulatedSwapInformation, DispatchErrorWithMessage>;
+		#[changed_in(13)]
+		fn cf_pool_info(
+			base_asset: Asset,
+			quote_asset: Asset,
+		) -> Result<pallet_cf_pools::before_v13::PoolInfo, DispatchErrorWithMessage>;
 		fn cf_pool_info(
 			base_asset: Asset,
 			quote_asset: Asset,

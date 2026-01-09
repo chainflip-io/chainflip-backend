@@ -10,6 +10,7 @@ import {
   sleep,
   startEngines,
 } from 'shared/utils';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { observeEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 
@@ -28,7 +29,7 @@ async function deltaBasedIngressTest(
   localnetInitPath: string,
   numberOfNodes: 1 | 3,
 ): Promise<void> {
-  const logger = testContext.logger;
+  const cf = await newChainflipIO(testContext.logger, [] as []);
   let swapsWitnessed: number = 0;
   const amountFirstDeposit = '5';
   const amountSecondDeposit = '1';
@@ -51,7 +52,7 @@ async function deltaBasedIngressTest(
     }
 
     swapsWitnessed++;
-    logger.debug('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
+    cf.debug('Swap Scheduled found, swaps witnessed: ', swapsWitnessed);
 
     if (swapsWitnessed > maxTotalSwapsExpected) {
       throw new Error('More than one swaps were initiated');
@@ -64,14 +65,14 @@ async function deltaBasedIngressTest(
   };
 
   // Monitor swap events to make sure there is only one
-  let swapScheduledHandle = observeEvent(logger, 'swapping:SwapScheduled', {
+  let swapScheduledHandle = observeEvent(cf.logger, 'swapping:SwapScheduled', {
     test: (event) => handleSwapScheduled(event, amountFirstDeposit, 1),
     abortable: true,
   });
 
   // Initiate swap from Solana
   const swapParams = await testSwap(
-    logger,
+    cf,
     sourceAsset,
     destAsset,
     undefined,
@@ -83,12 +84,12 @@ async function deltaBasedIngressTest(
 
   await observeFetch(sourceAsset, swapParams.depositAddress);
 
-  logger.info('Killing the engines');
+  cf.info('Killing the engines');
   await killEngines();
   await startEngines(localnetInitPath, binariesPath, numberOfNodes);
 
   // Wait to ensure no new swap is being triggered after restart.
-  logger.info('Waiting for 40 seconds to ensure no swap is being triggered after restart');
+  cf.info('Waiting for 40 seconds to ensure no swap is being triggered after restart');
   await sleep(40000);
   swapScheduledHandle.stop();
 
@@ -96,19 +97,19 @@ async function deltaBasedIngressTest(
     throw new Error('No swap was initiated. Swaps witnessed: ' + swapsWitnessed);
   }
 
-  logger.info('Killing the engines');
+  cf.info('Killing the engines');
   await killEngines();
 
   // Start another swap doing another deposit to the same address
   const swapHandle = doPerformSwap(
-    logger.child({ tag: `[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]` }),
+    cf.withChildLogger(`[${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit]`),
     swapParams,
     undefined,
     undefined,
     amountSecondDeposit,
   );
 
-  swapScheduledHandle = observeEvent(logger, 'swapping:SwapScheduled', {
+  swapScheduledHandle = observeEvent(cf.logger, 'swapping:SwapScheduled', {
     test: (event) => handleSwapScheduled(event, amountSecondDeposit, 2),
     abortable: true,
   });
@@ -116,11 +117,9 @@ async function deltaBasedIngressTest(
 
   // Wait to ensure no additional new swap is being triggered after restart
   // and check that swap completes.
-  logger.info('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
+  cf.info('Waiting for 40 seconds to ensure no extra swap is being triggered after restart');
   await sleep(40000);
-  logger.info(
-    `Waiting for ${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit to complete`,
-  );
+  cf.info(`Waiting for ${sourceAsset}->${destAsset} DeltaBasedIngressSecondDeposit to complete`);
   await swapHandle;
   swapScheduledHandle.stop();
 
