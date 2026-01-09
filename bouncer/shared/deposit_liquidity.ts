@@ -23,14 +23,10 @@ export async function depositLiquidity<A extends WithLpAccount>(
   parentcf: ChainflipIO<A>,
   ccy: Asset,
   givenAmount: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  waitForFinalization = false,
-  // optionLpUri?: string,
 ) {
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
   const lpUri = parentcf.requirements.account.uri;
-  // const lpUri = optionLpUri ?? (process.env.LP_URI || '//LP_1');
   const cf = parentcf.withChildLogger(`${JSON.stringify({ ccy, amount, lpUri })}`);
 
   await using chainflip = await getChainflipApi();

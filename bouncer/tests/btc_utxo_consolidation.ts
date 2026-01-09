@@ -2,7 +2,7 @@ import assert from 'assert';
 
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { observeEvent, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 
@@ -25,7 +25,9 @@ async function queryUtxos(): Promise<{ amount: number; count: number }> {
 }
 
 export async function testBtcUtxoConsolidation(testContext: TestContext) {
-  const cf = await newChainflipIO(testContext.logger, []);
+  const cf = await newChainflipIO(testContext.logger, {
+    account: fullAccountFromUri('//LP_1', 'LP'),
+  });
   const initialUtxos = await queryUtxos();
 
   cf.debug(`Initial utxo count: ${initialUtxos.count}`);

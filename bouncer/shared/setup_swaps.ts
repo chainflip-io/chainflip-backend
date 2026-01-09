@@ -2,7 +2,7 @@ import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { Asset } from 'shared/utils';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri } from './utils/chainflip_io';
 
 export const deposits = new Map<Asset, number>([
   ['Eth', 1000],
@@ -51,37 +51,43 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     createLpPool(cf.logger, 'HubUsdt', price.get('HubUsdt')!),
   ]);
 
-  const lp1Deposits = cf.all([
-    (subcf) => depositLiquidity(subcf, 'Usdc', deposits.get('Usdc')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'Eth', deposits.get('Eth')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'Btc', deposits.get('Btc')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'Flip', deposits.get('Flip')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'Usdt', deposits.get('Usdt')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'ArbEth', deposits.get('ArbEth')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'ArbUsdc', deposits.get('ArbUsdc')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'Sol', deposits.get('Sol')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdc', deposits.get('HubUsdc')!, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdt', deposits.get('HubUsdt')!, false, '//LP_1'),
-  ]);
+  const lp1Deposits = (lpcf: ChainflipIO<A>) =>
+    lpcf
+      .with({ account: fullAccountFromUri('//LP_1', 'LP') })
+      .all([
+        (subcf) => depositLiquidity(subcf, 'Usdc', deposits.get('Usdc')!),
+        (subcf) => depositLiquidity(subcf, 'Eth', deposits.get('Eth')!),
+        (subcf) => depositLiquidity(subcf, 'Btc', deposits.get('Btc')!),
+        (subcf) => depositLiquidity(subcf, 'Flip', deposits.get('Flip')!),
+        (subcf) => depositLiquidity(subcf, 'Usdt', deposits.get('Usdt')!),
+        (subcf) => depositLiquidity(subcf, 'ArbEth', deposits.get('ArbEth')!),
+        (subcf) => depositLiquidity(subcf, 'ArbUsdc', deposits.get('ArbUsdc')!),
+        (subcf) => depositLiquidity(subcf, 'Sol', deposits.get('Sol')!),
+        (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!),
+        (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!),
+        (subcf) => depositLiquidity(subcf, 'HubUsdc', deposits.get('HubUsdc')!),
+        (subcf) => depositLiquidity(subcf, 'HubUsdt', deposits.get('HubUsdt')!),
+      ]);
 
-  const lpApiDeposits = cf.all([
-    (subcf) => depositLiquidity(subcf, 'Usdc', 1000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'Eth', 100, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'Btc', 10, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'Flip', 10000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'Usdt', 1000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'ArbEth', 10, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'ArbUsdc', 1000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'Sol', 500, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'SolUsdc', 1000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'HubDot', 2000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdc', 1000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdt', 1000, false, '//LP_API'),
-  ]);
+  const lpApiDeposits = (lpcf: ChainflipIO<A>) =>
+    lpcf
+      .with({ account: fullAccountFromUri('//LP_API', 'LP') })
+      .all([
+        (subcf) => depositLiquidity(subcf, 'Usdc', 1000),
+        (subcf) => depositLiquidity(subcf, 'Eth', 100),
+        (subcf) => depositLiquidity(subcf, 'Btc', 10),
+        (subcf) => depositLiquidity(subcf, 'Flip', 10000),
+        (subcf) => depositLiquidity(subcf, 'Usdt', 1000),
+        (subcf) => depositLiquidity(subcf, 'ArbEth', 10),
+        (subcf) => depositLiquidity(subcf, 'ArbUsdc', 1000),
+        (subcf) => depositLiquidity(subcf, 'Sol', 500),
+        (subcf) => depositLiquidity(subcf, 'SolUsdc', 1000),
+        (subcf) => depositLiquidity(subcf, 'HubDot', 2000),
+        (subcf) => depositLiquidity(subcf, 'HubUsdc', 1000),
+        (subcf) => depositLiquidity(subcf, 'HubUsdt', 1000),
+      ]);
 
-  await Promise.all([lpApiDeposits, lp1Deposits]);
+  await cf.all([lpApiDeposits, lp1Deposits]);
 
   await Promise.all([
     rangeOrder(cf.logger, 'Eth', deposits.get('Eth')! * 0.9999),

@@ -12,7 +12,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri } from './utils/chainflip_io';
 
 export type LendingPoolId = {
   asset: Asset;
@@ -96,7 +96,9 @@ export async function addLenderFunds(
 }
 
 /// Creates lending pools for multiple assets and funds the BTC one.
-export async function setupLendingPools<A = []>(cf: ChainflipIO<A>): Promise<void> {
+export async function setupLendingPools<A = []>(parentcf: ChainflipIO<A>): Promise<void> {
+  const cf = parentcf.with({ account: fullAccountFromUri('//LP_BOOST', 'LP') });
+
   cf.info('Creating Lending Pools');
   const newPools: LendingPoolId[] = assets.map((asset) => ({ asset }));
   await createLendingPools(cf.logger, newPools);
@@ -107,7 +109,7 @@ export async function setupLendingPools<A = []>(cf: ChainflipIO<A>): Promise<voi
 
   const btcFundingAmount = 50;
 
-  await depositLiquidity(cf, Assets.Btc, btcFundingAmount + btcIngressFee, false, '//LP_BOOST');
+  await depositLiquidity(cf, Assets.Btc, btcFundingAmount + btcIngressFee);
   await addLenderFunds(cf.logger, Assets.Btc, btcFundingAmount, '//LP_BOOST');
 
   cf.info('Lending Pools Setup completed');
