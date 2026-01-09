@@ -23,9 +23,12 @@ const fundBtcBoostPoolsAmount = 2; // Put 2 BTC in each Btc boost pool after cre
 
 /// Submits a single governance extrinsic that creates the boost pools for the given assets and tiers.
 /// All assets must be be from the same chain.
-export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]): Promise<void> {
+export async function createBoostPools<A = []>(
+  cf: ChainflipIO<A>,
+  newPools: BoostPoolId[],
+): Promise<void> {
   if (newPools.length === 0) {
-    throwError(logger, new Error('No boost pools to create'));
+    throwError(cf.logger, new Error('No boost pools to create'));
   }
   const chain = chainFromAsset(newPools[0].asset);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,20 +36,20 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
 
   for (const pool of newPools) {
     if (chainFromAsset(pool.asset) !== chain) {
-      throwError(logger, new Error(`All assets must be from the same chain`));
+      throwError(cf.logger, new Error(`All assets must be from the same chain`));
     }
 
     if (pool.tier <= 0) {
-      throwError(logger, new Error(`Tier value: ${pool.tier} must be larger than 0`));
+      throwError(cf.logger, new Error(`Tier value: ${pool.tier} must be larger than 0`));
     }
 
-    const observeBoostPoolCreated = observeEvent(logger, `lendingPools:BoostPoolCreated`, {
+    const observeBoostPoolCreated = observeEvent(cf.logger, `lendingPools:BoostPoolCreated`, {
       test: (event) =>
         event.data.boostPool.asset === pool.asset &&
         Number(event.data.boostPool.tier) === pool.tier,
     }).event;
     const observeGovernanceFailedExecution = observeEvent(
-      logger,
+      cf.logger,
       `governance:FailedExecution`,
     ).event;
 
@@ -54,18 +57,16 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
       Promise.race([observeBoostPoolCreated, observeGovernanceFailedExecution]),
     );
   }
-  logger.debug(
-    `Creating boost pools for chain ${chain} via governance: ${JSON.stringify(newPools)}`,
-  );
+  cf.debug(`Creating boost pools for chain ${chain} via governance: ${JSON.stringify(newPools)}`);
   await submitGovernanceExtrinsic((api) => api.tx.lendingPools.createBoostPools(newPools));
 
   const boostPoolEvents = await Promise.all(observeBoostPoolEvents);
   for (const event of boostPoolEvents) {
     if (event.name.method !== 'BoostPoolCreated') {
       const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
-      throwError(logger, new Error(`Failed to create boost pool: ${error}`));
+      throwError(cf.logger, new Error(`Failed to create boost pool: ${error}`));
     }
-    logger.debug(
+    cf.debug(
       `Boost pools created for ${event.data.boostPool.asset} at ${event.data.boostPool.tier} bps`,
     );
   }
@@ -73,6 +74,12 @@ export async function createBoostPools(logger: Logger, newPools: BoostPoolId[]):
 
 /// Creates 5, 10 and 30 bps tier boost pools for Btc and then funds them.
 export async function setupBoostPools(logger: Logger): Promise<void> {
+  // create CFIO instance, this could be done further outside,
+  // but temporarily it's here
+  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(logger, {
+    account: fullAccountFromUri('//LP_BOOST', 'LP'),
+  });
+
   logger.info('Creating BTC Boost Pools');
   const newPools: BoostPoolId[] = [];
   for (const tier of boostPoolTiers) {
@@ -81,19 +88,13 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
       tier,
     });
   }
-  await createBoostPools(logger, newPools);
-
-  // create CFIO instance, this could be done further outside,
-  // but temporarily it's here
-  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(logger, {
-    account: fullAccountFromUri('//LP_BOOST', 'LP'),
-  });
+  await createBoostPools(cf, newPools);
 
   // Add some boost funds to each Btc boost tier
   logger.info('Funding BTC Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
   await depositLiquidity(
-    logger,
+    cf,
     Assets.Btc,
     fundBtcBoostPoolsAmount * boostPoolTiers.length + btcIngressFee,
     false,

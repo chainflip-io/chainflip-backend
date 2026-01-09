@@ -12,11 +12,13 @@ import { InternalAsset } from '@chainflip/cli';
 import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 const asset = parseAssetString(process.argv[2]);
 const amount = parseFloat(process.argv[3]);
 const lpKey = process.argv[4];
+const cf = await newChainflipIO(globalLogger, []);
 await runWithTimeoutAndExit(
-  depositLiquidity(globalLogger, asset as InternalAsset, amount, false, lpKey),
+  depositLiquidity(cf, asset as InternalAsset, amount, false, lpKey),
   120,
 );

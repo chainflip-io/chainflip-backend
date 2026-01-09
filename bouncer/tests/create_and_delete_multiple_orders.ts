@@ -6,7 +6,7 @@ import { rangeOrder } from 'shared/range_order';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { deposits } from 'shared/setup_swaps';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger } from 'shared/utils/logger';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 const DEFAULT_LP: string = '//LP_3';
 
@@ -28,8 +28,8 @@ async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string
   return openOrders;
 }
 
-export async function createAndDeleteMultipleOrders(
-  logger: Logger,
+export async function createAndDeleteMultipleOrders<A = []>(
+  cf: ChainflipIO<A>,
   numberOfLimitOrders = 30,
   lpKey?: string,
 ) {
@@ -38,23 +38,23 @@ export async function createAndDeleteMultipleOrders(
   const lpUri = lpKey || DEFAULT_LP;
   const lp = createStateChainKeypair(lpUri);
 
-  logger.debug(`Depositing liquidity to ${lpUri}`);
+  cf.debug(`Depositing liquidity to ${lpUri}`);
 
   await Promise.all([
     // provide liquidity to LP_3
-    depositLiquidity(logger, 'Usdc', 10000, false, lpUri),
-    depositLiquidity(logger, 'Eth', deposits.get('Eth')!, false, lpUri),
-    depositLiquidity(logger, 'HubDot', deposits.get('HubDot')!, false, lpUri),
-    depositLiquidity(logger, 'Btc', deposits.get('Btc')!, false, lpUri),
-    depositLiquidity(logger, 'Flip', deposits.get('Flip')!, false, lpUri),
-    depositLiquidity(logger, 'Usdt', deposits.get('Usdt')!, false, lpUri),
-    depositLiquidity(logger, 'ArbEth', deposits.get('ArbEth')!, false, lpUri),
-    depositLiquidity(logger, 'ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
-    depositLiquidity(logger, 'Sol', deposits.get('Sol')!, false, lpUri),
-    depositLiquidity(logger, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
+    depositLiquidity(cf, 'Usdc', 10000, false, lpUri),
+    depositLiquidity(cf, 'Eth', deposits.get('Eth')!, false, lpUri),
+    depositLiquidity(cf, 'HubDot', deposits.get('HubDot')!, false, lpUri),
+    depositLiquidity(cf, 'Btc', deposits.get('Btc')!, false, lpUri),
+    depositLiquidity(cf, 'Flip', deposits.get('Flip')!, false, lpUri),
+    depositLiquidity(cf, 'Usdt', deposits.get('Usdt')!, false, lpUri),
+    depositLiquidity(cf, 'ArbEth', deposits.get('ArbEth')!, false, lpUri),
+    depositLiquidity(cf, 'ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
+    depositLiquidity(cf, 'Sol', deposits.get('Sol')!, false, lpUri),
+    depositLiquidity(cf, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
 
-  logger.debug(`Liquidity successfully deposited to ${lpUri}`);
+  cf.debug(`Liquidity successfully deposited to ${lpUri}`);
 
   // create a series of limit_order and save their info to delete them later on
   const promises = [];
@@ -64,35 +64,35 @@ export async function createAndDeleteMultipleOrders(
   }[] = [];
 
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push(limitOrder(logger, 'Btc', 0.00000001, i, i, lpUri));
+    promises.push(limitOrder(cf.logger, 'Btc', 0.00000001, i, i, lpUri));
     ordersToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
   }
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push(limitOrder(logger, 'Eth', 0.000000000000000001, i, i, lpUri));
+    promises.push(limitOrder(cf.logger, 'Eth', 0.000000000000000001, i, i, lpUri));
     ordersToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
   }
 
-  promises.push(rangeOrder(logger, 'Btc', 0.1, lpUri, 0));
+  promises.push(rangeOrder(cf.logger, 'Btc', 0.1, lpUri, 0));
   ordersToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
-  promises.push(rangeOrder(logger, 'Eth', 0.01, lpUri, 0));
+  promises.push(rangeOrder(cf.logger, 'Eth', 0.01, lpUri, 0));
   ordersToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
-  logger.debug('Submitting orders');
+  cf.debug('Submitting orders');
   await Promise.all(promises);
-  logger.debug('Orders successfully submitted');
+  cf.debug('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.debug(`Number of open orders: ${openOrders}`);
+  cf.debug(`Number of open orders: ${openOrders}`);
 
-  logger.debug('Deleting opened orders...');
+  cf.debug('Deleting opened orders...');
 
   const release = await cfMutex.acquire(lpUri);
-  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
+  const { promise, waiter } = waitForExt(chainflip, cf.logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   await chainflip.tx.liquidityPools
     .cancelOrdersBatch(ordersToDelete)
@@ -100,17 +100,18 @@ export async function createAndDeleteMultipleOrders(
 
   await promise;
 
-  logger.debug('All orders successfully deleted');
+  cf.debug('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lp.address);
   openOrders += await countOpenOrders('ETH', 'USDC', lp.address);
-  logger.debug(`Number of open orders: ${openOrders}`);
+  cf.debug(`Number of open orders: ${openOrders}`);
 
   assert.strictEqual(openOrders, 0, `Number of open orders should be 0 but is ${openOrders}`);
 
-  logger.debug('All orders successfully deleted');
+  cf.debug('All orders successfully deleted');
 }
 
 export async function testCancelOrdersBatch(testContext: TestContext) {
-  await createAndDeleteMultipleOrders(testContext.logger);
+  const cf = await newChainflipIO(testContext.logger, []);
+  await createAndDeleteMultipleOrders(cf);
 }

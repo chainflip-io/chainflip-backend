@@ -41,7 +41,7 @@ async function provideLiquidityAndTestAssetBalances<A = []>(cf: ChainflipIO<A>) 
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(cf.logger, testAsset, amountToProvide, true, '//LP_API');
+  await depositLiquidity(cf, testAsset, amountToProvide, true, '//LP_API');
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
