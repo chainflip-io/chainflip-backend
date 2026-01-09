@@ -35,7 +35,7 @@ use cf_traits::{
 	},
 	AccountRoleRegistry, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
@@ -71,7 +71,7 @@ thread_local! {
 	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockCallback;
 
 impl MockCallback {
@@ -115,7 +115,6 @@ impl RetryPolicy for MockRetryPolicy {
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
 	type TargetChain = MockEthereum;

@@ -80,21 +80,27 @@ pub mod pallet {
 
 	use super::{GovCallHash, WeightInfo};
 
-	#[derive(Default, Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Default, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub enum ExecutionMode {
 		#[default]
 		Automatic,
 		Manual,
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, Copy, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub struct ActiveProposal {
 		pub proposal_id: ProposalId,
 		pub expiry_time: Timestamp,
 	}
 
 	/// Proposal struct
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+	#[derive(
+		Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq,
+	)]
 	pub struct Proposal<AccountId> {
 		/// Encoded representation of a extrinsic.
 		pub call: OpaqueCall,
@@ -104,7 +110,17 @@ pub mod pallet {
 		pub execution: ExecutionMode,
 	}
 
-	#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, DefaultNoBound)]
+	#[derive(
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Clone,
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		DefaultNoBound,
+	)]
 	pub struct GovernanceCouncil<AccountId> {
 		/// Set of accounts which are members of governance.
 		pub members: BTreeSet<AccountId>,
@@ -130,8 +146,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// Standard Event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type RuntimeOrigin: From<RawOrigin>
 			+ From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
@@ -365,7 +379,7 @@ pub mod pallet {
 		#[allow(clippy::useless_conversion)]
 		#[allow(clippy::boxed_local)]
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(T::WeightInfo::call_as_sudo().saturating_add(call.get_dispatch_info().total_weight()))]
 		pub fn call_as_sudo(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -396,7 +410,7 @@ pub mod pallet {
 		/// Submit a call to be executed if the gov key has already committed to it.
 		#[allow(clippy::useless_conversion)]
 		#[pallet::call_index(6)]
-		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().weight), DispatchClass::Operational))]
+		#[pallet::weight((T::WeightInfo::submit_govkey_call().saturating_add(call.get_dispatch_info().total_weight()), DispatchClass::Operational))]
 		pub fn submit_govkey_call(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -479,7 +493,17 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	pub enum RawOrigin {
 		GovernanceApproval,
 	}
@@ -572,7 +596,7 @@ impl<T: Config> Pallet<T> {
 		for (call, id) in ExecutionPipeline::<T>::take() {
 			Self::deposit_event(
 				if let Ok(call) = <T as Config>::RuntimeCall::decode(&mut &(*call)) {
-					execution_weight.saturating_accrue(call.get_dispatch_info().weight);
+					execution_weight.saturating_accrue(call.get_dispatch_info().call_weight);
 					match Self::dispatch_governance_call(call) {
 						Ok(_) => Event::Executed(id),
 						Err(err) => Event::FailedExecution(err.error),

@@ -71,8 +71,8 @@ where
 			event.metadata().level().as_str(),
 			visitor.message,
 			// Only show the tag if its not empty
-			if visitor.tag.is_some() {
-				format!("([{}], {})", visitor.tag.unwrap(), event.metadata().target())
+			if let Some(tag) = &visitor.tag {
+				format!("([{}], {})", tag, event.metadata().target())
 			} else {
 				format!("({})", event.metadata().target())
 			}

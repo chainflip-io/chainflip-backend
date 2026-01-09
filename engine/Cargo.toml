@@ -34,7 +34,6 @@ http = { workspace = true }
 itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
 dyn-clone = { workspace = true }
-ethbloom = { workspace = true }
 ethers = { workspace = true, features = ["rustls"] }
 lazy_static = { workspace = true }
 num-bigint = { workspace = true }
@@ -127,7 +126,6 @@ rocksdb = { workspace = true, features = ["lz4"] }
 mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
-ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }
 rlp = { workspace = true, default-features = true }

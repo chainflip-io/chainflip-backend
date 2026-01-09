@@ -19,7 +19,7 @@ extern crate alloc;
 use crate::{
 	btc::ScriptPubkey,
 	dot::PolkadotAccountId,
-	eth::Address as EvmAddress,
+	evm::Address as EvmAddress,
 	sol::{self, SolAddress, SolPubkey},
 	Chain,
 };
@@ -27,12 +27,11 @@ use cf_primitives::{
 	chains::{Arbitrum, Assethub, Bitcoin, Ethereum, Polkadot, Solana},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use sp_core::H160;
 use sp_std::{fmt::Debug, vec::Vec};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +71,7 @@ pub trait AddressDerivationApi<C: Chain> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialOrd,
@@ -116,7 +116,18 @@ impl ForeignChainAddress {
 }
 
 #[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord, Serialize, Deserialize,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+	Serialize,
+	Deserialize,
 )]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
@@ -181,7 +192,7 @@ pub enum AddressError {
 	InvalidAddressForChain,
 }
 
-impl TryFrom<ForeignChainAddress> for H160 {
+impl TryFrom<ForeignChainAddress> for EvmAddress {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {

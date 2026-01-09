@@ -16,13 +16,10 @@
 
 use crate::{
 	address::EncodedAddress,
-	evm::{
-		api::{EvmAddress, EvmCall},
-		tokenizable::Tokenizable,
-	},
+	evm::{api::EvmCall, tokenizable::Tokenizable, Address},
 };
 use cf_primitives::{Asset, AssetAmount};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
@@ -31,7 +28,7 @@ use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'XCallToken'
 /// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct XCallToken {
 	/// The destination chain according to Chainflip Protocol's nomenclature.
 	dst_chain: u32,
@@ -44,7 +41,7 @@ pub struct XCallToken {
 	/// Amount gas the user allows to execute the CCM on the target chain.
 	gas_budget: U256,
 	/// Address of the source token to swap.
-	src_token: EvmAddress,
+	src_token: Address,
 	/// Amount of source tokens to swap.
 	amount: U256,
 	/// Additional parameters to be passed to the Chainflip Protocol.
@@ -57,7 +54,7 @@ impl XCallToken {
 		destination_asset: Asset,
 		message: Vec<u8>,
 		gas_budget: AssetAmount,
-		source_token: EvmAddress,
+		source_token: Address,
 		source_amount: AssetAmount,
 		cf_parameters: Vec<u8>,
 	) -> Self {
@@ -84,7 +81,7 @@ impl EvmCall for XCallToken {
 			("dstToken", u32::param_type()),
 			("message", <Vec<u8>>::param_type()),
 			("gasAmount", U256::param_type()),
-			("srcToken", ethabi::Address::param_type()),
+			("srcToken", Address::param_type()),
 			("amount", U256::param_type()),
 			("cfParameters", <Vec<u8>>::param_type()),
 		]
@@ -122,7 +119,7 @@ mod test {
 		let dest_asset = Asset::Dot;
 		let ccm = channel_metadata();
 
-		let eth_token: EvmAddress = [0xEE; 20].into();
+		let eth_token: Address = [0xEE; 20].into();
 		let amount = 1_234_567_890u128;
 
 		let eth_vault = load_abi("IVault");

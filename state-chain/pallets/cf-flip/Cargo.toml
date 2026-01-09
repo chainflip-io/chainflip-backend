@@ -20,6 +20,7 @@ workspace = true
 # Internal dependencies
 cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
+cf-runtime-utilities = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
@@ -59,6 +60,7 @@ runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"cf-traits/runtime-benchmarks",
+	"pallet-transaction-payment/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [

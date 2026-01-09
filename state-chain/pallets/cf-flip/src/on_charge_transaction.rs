@@ -22,7 +22,7 @@
 use crate::{imbalances::Surplus, Config as FlipConfig, OpaqueCallIndex, Pallet as Flip};
 use cf_primitives::{FlipBalance, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountInfo, WaivedFees};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	sp_runtime::{
@@ -53,6 +53,31 @@ pub type CallIndexFor<T> = <<T as crate::Config>::CallIndexer as CallIndexer<
 impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransactionPayment<T> {
 	type Balance = <T as FlipConfig>::Balance;
 	type LiquidityInfo = Option<(Surplus<T>, Option<CallIndexFor<T>>)>;
+
+	fn can_withdraw_fee(
+		who: &T::AccountId,
+		call: &<T as frame_system::Config>::RuntimeCall,
+		_dispatch_info: &DispatchInfoOf<<T as frame_system::Config>::RuntimeCall>,
+		fee: Self::Balance,
+		_tip: Self::Balance,
+	) -> Result<(), frame_support::pallet_prelude::TransactionValidityError> {
+		if T::WaivedFees::should_waive_fees(call, who) {
+			return Ok(())
+		}
+
+		// Check if there's an upfront fee for spam prevention
+		let fee = if T::CallIndexer::call_index(call).is_some() {
+			sp_std::cmp::max(fee, UP_FRONT_ESCROW_FEE.into())
+		} else {
+			fee
+		};
+
+		if Flip::<T>::balance(who) >= fee {
+			Ok(())
+		} else {
+			Err(InvalidTransaction::Payment.into())
+		}
+	}
 
 	fn withdraw_fee(
 		who: &T::AccountId,
@@ -121,6 +146,17 @@ impl<T: TxConfig + FlipConfig + Config> OnChargeTransaction<T> for FlipTransacti
 		}
 		Ok(())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn endow_account(who: &<T>::AccountId, amount: Self::Balance) {
+		let _ = Flip::<T>::credit(who, amount);
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn minimum_balance() -> Self::Balance {
+		use frame_support::traits::tokens::fungible::Inspect;
+		Flip::<T>::minimum_balance()
+	}
 }
 
 /// Converts a call into a call index to allow it to be categorised for fee scaling.
@@ -139,7 +175,17 @@ impl<Call> CallIndexer<Call> for () {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy, PartialEq, Eq, RuntimeDebug, Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Default,
 )]
 pub enum FeeScalingRateConfig {
 	/// No scaling for the first `threshold` calls, scale by `(call_count - threshold)^exponent`

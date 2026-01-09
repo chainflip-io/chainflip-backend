@@ -69,7 +69,7 @@ impl UnsignedExtrinsicClient {
 				while let Some((call, result_sender)) = request_receiver.recv().await {
 					let _result = result_sender.send({
 						let extrinsic =
-							state_chain_runtime::UncheckedExtrinsic::new_unsigned(call.clone());
+							state_chain_runtime::UncheckedExtrinsic::new_bare(call.clone());
 						let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(&extrinsic);
 						match base_rpc_client.submit_extrinsic(extrinsic.clone()).await {
 							Ok(tx_hash) => {
