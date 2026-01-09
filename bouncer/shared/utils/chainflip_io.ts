@@ -3,6 +3,7 @@ import {
   createStateChainKeypair,
   extractExtrinsicResult,
   cfMutex,
+  isValidHexHash,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -10,6 +11,7 @@ import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitExistingGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposed } from 'generated/events/governance/proposed';
+import { governanceExecuted } from 'generated/events/governance/executed';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import {
   OneOfEventsResult,
@@ -18,6 +20,7 @@ import {
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
+  blockWithTransactionHash,
 } from './indexer';
 import { Logger } from './logger';
 
@@ -43,6 +46,8 @@ export class ChainflipIO<Requirements> {
    */
   private currentlyInUseBy: string | undefined;
 
+  private currentStackTrace: string | undefined;
+
   /**
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
@@ -52,6 +57,7 @@ export class ChainflipIO<Requirements> {
     this.requirements = requirements;
     this.logger = logger;
     this.currentlyInUseBy = undefined;
+    this.currentStackTrace = undefined;
   }
 
   private clone(): ChainflipIO<Requirements> {
@@ -117,26 +123,11 @@ export class ChainflipIO<Requirements> {
    * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
    * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the extrinsic is included.
    */
-  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<number>;
-  async submitGovernance(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: { name: EventName };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<SingleEventResult<'event', any>>;
-  async submitGovernance<EventSchema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: {
-      name: EventName;
-      schema: EventSchema;
-    };
-  }): Promise<SingleEventResult<'event', EventSchema>>;
-  async submitGovernance<Schema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent?: {
-      name: EventName;
-      schema?: Schema;
-    };
-  }) {
+  submitGovernance = this.wrapWithExpectEvent((arg: { extrinsic: ExtrinsicFromApi }) =>
+    this.impl_submitGovernance(arg),
+  );
+
+  private async impl_submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void> {
     // we only wrap the governance submission by `runExclusively`
     // because the second half invokes `stepUntilEvent` which has its own `runExclusively` wrapper.
     const proposalId = await this.runExclusively('submitGovernance', async () => {
@@ -161,16 +152,69 @@ export class ChainflipIO<Requirements> {
     this.logger.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
     );
+    await this.stepUntilEvent(
+      'Governance.Executed',
+      governanceExecuted.refine((id) => id === proposalId),
+    );
+    this.logger.debug(
+      `Governance proposal with id ${proposalId} executed in block ${this.lastIoBlockHeight}`,
+    );
+  }
 
-    // searching for event
-    if (arg.expectedEvent) {
-      const result = await this.stepUntilEvent(
-        arg.expectedEvent.name,
-        arg.expectedEvent.schema ?? z.any(),
-      );
-      return result;
-    }
-    return proposalId;
+  /**
+   * Steps until it finds a block where the tx with the given hash was included.
+   *
+   * WARNING: this will loop indefinitely if the provided tx hash is never included.
+   *
+   * @param arg Object containing `hash: string` that references an on-chain transaction
+   * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the transaction is included.
+   */
+  stepToTransactionIncluded = this.wrapWithExpectEvent((arg: { hash: string }) =>
+    this.impl_stepToTransactionIncluded(arg),
+  );
+
+  private async impl_stepToTransactionIncluded(arg: { hash: string }): Promise<void> {
+    await this.runExclusively('stepToTransactionIncluded', async () => {
+      if (!isValidHexHash(arg.hash)) {
+        throw new Error(
+          `Expected transaction hash but got ${arg.hash} when trying to step to tx included`,
+        );
+      }
+
+      this.debug(`Waiting for block with transaction hash ${arg.hash}`);
+      const height = await blockWithTransactionHash(arg.hash);
+
+      if (height >= this.lastIoBlockHeight) {
+        this.debug(`Found transaction hash ${arg.hash} in block ${height}`);
+        this.lastIoBlockHeight = height;
+      } else {
+        throw new Error(`When stepping to block with transaction with hash ${arg.hash}, found it in a block that's lower than the current IO height:
+        - current lastIoBlockHeight: ${this.lastIoBlockHeight}
+        - found tx in ${height}`);
+      }
+    });
+  }
+
+  /**
+   * Runs `f` and afterwards tries to `expectEvent` if an event was provided.
+   *
+   * This function handles the common pattern of expecting a certain event after stepping to a block. So implementations
+   * can be written without taking the expected event into account, then just have to wrapped with `wrapWithExpectEvent`.
+   * @param f Method to be executed
+   * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
+   */
+  private wrapWithExpectEvent<A extends object>(
+    f: (a: A) => Promise<void>,
+  ): <Schema extends z.ZodTypeAny>(
+    a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
+  ) => Promise<z.infer<Schema>> {
+    return async (arg) => {
+      await f(arg);
+      if (arg.expectedEvent) {
+        return this.expectEvent(arg.expectedEvent.name, arg.expectedEvent.schema ?? z.any());
+      }
+      return Promise.resolve();
+    };
   }
 
   /**
@@ -285,7 +329,7 @@ export class ChainflipIO<Requirements> {
   async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(
     values: T,
   ): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>> }> {
-    return this.runExclusively('stepUntilAllEventsOf', async () => {
+    return this.runExclusively('all', async () => {
       // run all functions in parallel with clones of this chainflip io instance
       const results = await Promise.all(
         values.map(async (f) => {
@@ -314,6 +358,7 @@ export class ChainflipIO<Requirements> {
    * @returns result of `f` is forwarded
    */
   private async runExclusively<A>(method: string, f: () => Promise<A>): Promise<A> {
+    const stack = new Error().stack;
     if (this.currentlyInUseBy) {
       throw new Error(`Attempted to call a method on a cf object while it was already in use!
 
@@ -325,11 +370,26 @@ export class ChainflipIO<Requirements> {
         If you want to run code in parallel, you should use the 'cf.all()' method to run "subtasks",
         e.g.: 'cf.all([cf => cf.method1(), cf => cf.method2()])'.
 
-        The current lastIoBlockHeight is ${this.lastIoBlockHeight}.`);
+        The current lastIoBlockHeight is ${this.lastIoBlockHeight}.
+
+        Current stack trace:
+        ${stack}
+
+        In use by stack trace:
+        ${this.currentStackTrace}
+        `);
     }
     this.currentlyInUseBy = method;
-    const result = await f();
-    this.currentlyInUseBy = undefined;
+    this.currentStackTrace = stack;
+    let result;
+    try {
+      result = await f();
+    } finally {
+      // always clean up even if we got an error
+      this.currentlyInUseBy = undefined;
+      this.currentStackTrace = undefined;
+    }
+
     return result;
   }
 
