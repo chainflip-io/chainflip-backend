@@ -84,32 +84,32 @@ async function main(): Promise<void> {
   );
 
   cf.info('creating pools for assethub assets');
-  await Promise.all([
-    createLpPool(cf.logger, 'HubDot', 10),
-    createLpPool(cf.logger, 'HubUsdc', 1),
-    createLpPool(cf.logger, 'HubUsdt', 1),
+  await cf.all([
+    (subcf) => createLpPool(subcf.logger, 'HubDot', 10),
+    (subcf) => createLpPool(subcf.logger, 'HubUsdc', 1),
+    (subcf) => createLpPool(subcf.logger, 'HubUsdt', 1),
   ]);
 
   cf.info('funding pools with assethub assets');
-  const lp1Deposits = Promise.all([
-    depositLiquidity(cf, 'HubDot', 20000, false, '//LP_1'),
-    depositLiquidity(cf, 'HubUsdc', 250000, false, '//LP_1'),
-    depositLiquidity(cf, 'HubUsdt', 250000, false, '//LP_1'),
+  const lp1Deposits = cf.all([
+    (subcf) => depositLiquidity(subcf, 'HubDot', 20000, false, '//LP_1'),
+    (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000, false, '//LP_1'),
+    (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000, false, '//LP_1'),
   ]);
 
-  const lpApiDeposits = Promise.all([
-    depositLiquidity(cf, 'HubDot', 20000, false, '//LP_API'),
-    depositLiquidity(cf, 'HubUsdc', 250000, false, '//LP_API'),
-    depositLiquidity(cf, 'HubUsdt', 250000, false, '//LP_API'),
+  const lpApiDeposits = cf.all([
+    (subcf) => depositLiquidity(subcf, 'HubDot', 20000, false, '//LP_API'),
+    (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000, false, '//LP_API'),
+    (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000, false, '//LP_API'),
   ]);
 
   await Promise.all([lpApiDeposits, lp1Deposits]);
 
   cf.info('creating orders for assethub assets');
-  await Promise.all([
-    rangeOrder(cf.logger, 'HubDot', 20000 * 0.9999),
-    rangeOrder(cf.logger, 'HubUsdc', 250000 * 0.9999),
-    rangeOrder(cf.logger, 'HubUsdt', 250000 * 0.9999),
+  await cf.all([
+    (subcf) => rangeOrder(subcf.logger, 'HubDot', 20000 * 0.9999),
+    (subcf) => rangeOrder(subcf.logger, 'HubUsdc', 250000 * 0.9999),
+    (subcf) => rangeOrder(subcf.logger, 'HubUsdt', 250000 * 0.9999),
   ]);
 }
 

@@ -18,7 +18,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { randomBytes } from 'crypto';
 import { TestContext } from 'shared/utils/test_context';
 import { setupLendingPools } from 'shared/lending';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export interface Loan {
   loan_id: number;
@@ -51,12 +51,17 @@ async function lendingTestForAsset<A = []>(
   loanAsset: Asset,
   loanAmount: number,
 ) {
-  const cf = parentcf.withChildLogger(`${JSON.stringify({ collateralAsset, loanAsset })}`);
-  await using chainflip = await getChainflipApi();
-
   // Create a new random LP account
   const seed = randomBytes(4).toString('hex');
-  const lpUri = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
+  const lpUri: `//${string}` = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
+
+  // setup cf with account and logger
+  const cf = parentcf
+    .with({ account: fullAccountFromUri(lpUri, 'LP') })
+    .withChildLogger(`${JSON.stringify({ collateralAsset, loanAsset })}`);
+  await using chainflip = await getChainflipApi();
+
+  // setup LP account
   const lp = await setupLpAccount(cf.logger, lpUri);
   const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
@@ -65,9 +70,9 @@ async function lendingTestForAsset<A = []>(
   const loanAssetDecimals = assetDecimals(loanAsset);
   const factor = 10 ** loanAssetDecimals;
   const extraLoanAssetAmount = Math.round(0.01 * loanAmount * factor) / factor;
-  await Promise.all([
-    depositLiquidity(cf, loanAsset, extraLoanAssetAmount * 1.01, true, lpUri),
-    depositLiquidity(cf, collateralAsset, collateralAmount * 1.05, true, lpUri),
+  await cf.all([
+    (subcf) => depositLiquidity(subcf, loanAsset, extraLoanAssetAmount * 1.01, true),
+    (subcf) => depositLiquidity(subcf, collateralAsset, collateralAmount * 1.05, true),
   ]);
 
   // Add collateral to the account
