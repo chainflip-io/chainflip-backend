@@ -40,8 +40,6 @@ export class ChainflipIO<Requirements> {
 
   /**
    * Used by `this.runExclusively()` to ensure that this objects' async methods are always called sequentially.
-   * Whenever an async method is called, we make sure that this variable is false
-   * and set it ourselves to true. When the method is exited, we reset to false.
    */
   private currentlyInUseBy: string | undefined;
 
