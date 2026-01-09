@@ -168,7 +168,7 @@ async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
     'AssetBalances.AccountCredited',
     assetBalancesAccountCredited.refine(
       (event) =>
-        // TODO: are we missing to check for the correct deposit address?
+        event.accountId === lpAccount.address &&
         event.asset === testAsset &&
         isWithinOnePercent(BigInt(event.amountCredited), BigInt(testAssetAmount)),
     ),
