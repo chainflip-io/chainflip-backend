@@ -26,8 +26,9 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{
-		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
-		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+		before_v12, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
+		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+		RpcLoanAccount,
 	},
 	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
 	WhitelistUpdate, WithdrawnAndRemainingAmounts,

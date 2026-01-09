@@ -31,8 +31,8 @@ use n_functor::derive_n_functor;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{
-	BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool,
-	RpcLoanAccount,
+	before_v12, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+	RpcLendingPool, RpcLoanAccount,
 };
 pub use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
