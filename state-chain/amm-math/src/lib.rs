@@ -395,11 +395,6 @@ impl Price {
 		Price(value)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
-	pub fn from_raw_into<T: Into<U256>>(value: T) -> Self {
-		Price(value.into())
-	}
-
 	pub fn as_raw(self) -> U256 {
 		self.0
 	}
@@ -479,13 +474,14 @@ impl Price {
 		Self::from_tick(0).unwrap()
 	}
 
+	/// Get a price from a USD fine amount. The quote asset will be USD.
 	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd_fine_amount(price_usd: cf_primitives::AssetAmount) -> Self {
 		Self(U256::from(price_usd) << Self::FRACTIONAL_BITS)
 	}
 
 	/// Get the price of an asset given its USD cents amount. The price is automatically scaled to
-	/// the asset's decimals.
+	/// the asset's decimals. The quote asset will be USD.
 	pub fn from_usd_cents(asset: Asset, cents_amount: u32) -> Self {
 		if cents_amount == 0 {
 			return Self(U256::zero());
@@ -497,7 +493,7 @@ impl Price {
 	}
 
 	/// Get the price of an asset given its dollar amount. The price is automatically scaled to the
-	/// asset's decimals.
+	/// asset's decimals. The quote asset will be USD.
 	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd(asset: Asset, dollar_amount: u32) -> Self {
 		Self::from_usd_cents(asset, dollar_amount * 100)
