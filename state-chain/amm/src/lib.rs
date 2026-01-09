@@ -30,7 +30,6 @@ use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
 	SetFeesError, Side, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
 };
-use limit_orders::{Collected, PositionInfo};
 use range_orders::Liquidity;
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -45,13 +44,12 @@ pub use cf_amm_math as math;
 	Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize, PartialEq,
 )]
 pub struct PoolState<LiquidityProvider: Ord> {
-	limit_orders: limit_orders::PoolState<LiquidityProvider>,
-	range_orders: range_orders::PoolState<LiquidityProvider>,
+	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
+	pub range_orders: range_orders::PoolState<LiquidityProvider>,
 }
 
 #[derive(Debug)]
 pub enum NewError {
-	LimitOrders(limit_orders::NewError),
 	RangeOrders(range_orders::NewError),
 }
 
@@ -61,8 +59,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		initial_range_order_price: Price,
 	) -> Result<Self, NewError> {
 		Ok(Self {
-			limit_orders: limit_orders::PoolState::new(fee_hundredth_pips)
-				.map_err(NewError::LimitOrders)?,
+			limit_orders: limit_orders::PoolState::new(),
 			range_orders: range_orders::PoolState::new(
 				fee_hundredth_pips,
 				price_to_sqrt_price(initial_range_order_price),
@@ -447,20 +444,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
-	pub fn limit_order_fee(&self) -> u32 {
-		self.limit_orders.fee_hundredth_pips
-	}
-
 	pub fn range_order_fee(&self) -> u32 {
 		self.range_orders.fee_hundredth_pips
 	}
 
 	pub fn range_order_total_fees_earned(&self) -> PoolPairsMap<Amount> {
 		self.range_orders.total_fees_earned
-	}
-
-	pub fn limit_order_total_fees_earned(&self) -> PoolPairsMap<Amount> {
-		self.limit_orders.total_fees_earned
 	}
 
 	pub fn range_order_swap_inputs(&self) -> PoolPairsMap<Amount> {
@@ -518,16 +507,6 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		self.range_orders.set_fees(fee_hundredth_pips)
 	}
 
-	/// This function exists to help with migration, and will likely be removed in the future.
-	#[expect(clippy::type_complexity)]
-	pub fn set_limit_order_fees(
-		&mut self,
-		fee_hundredth_pips: u32,
-	) -> Result<PoolPairsMap<Vec<(LiquidityProvider, Tick, Collected, PositionInfo)>>, SetFeesError>
-	{
-		self.limit_orders.set_fees(fee_hundredth_pips)
-	}
-
 	pub fn collect_all_range_orders(
 		&mut self,
 	) -> Vec<(
@@ -554,8 +533,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 	// Returns if the pool fee is valid.
 	pub fn validate_fees(fee_hundredth_pips: u32) -> bool {
-		limit_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips) &&
-			range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
+		range_orders::PoolState::<LiquidityProvider>::validate_fees(fee_hundredth_pips)
 	}
 }
 fn reduce_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {

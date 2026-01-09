@@ -27,6 +27,12 @@ on:
       chain:
         type: string
         default: "dev"
+      chainflip-backend-bin-suffix:
+        type: string
+        default: ""
+      continue-on-bouncer-error:
+        type: boolean
+        default: false
 
 env:
   FORCE_COLOR: 1
@@ -43,6 +49,7 @@ jobs:
   bouncer:
     runs-on: hetzner
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    continue-on-error: ${{ inputs.continue-on-bouncer-error }}
     steps:
       - name: Setup ngrok ✨
         if: inputs.ngrok
@@ -87,7 +94,7 @@ jobs:
       - name: Download binaries 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
 
       - name: Install node dependencies 📦
         working-directory: bouncer
@@ -136,6 +143,7 @@ jobs:
       - name: Run HeuteLeiderNicht.voll.exe 🙅‍♂️
         if: inputs.full-bouncer
         working-directory: bouncer
+        continue-on-error: ${{ inputs.continue-on-bouncer-error }}
         run: |
           ./full_bouncer.sh
 
@@ -299,7 +307,7 @@ jobs:
       - name: Download Binaries 📥
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin${{ inputs.chainflip-backend-bin-suffix }}
 
       - name: Make Binaries Executable 🛠️
         run: |

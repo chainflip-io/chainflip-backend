@@ -5,8 +5,8 @@ import {
   isPolkadotAsset,
   newAssetAddress,
 } from 'shared/utils';
-import { Logger } from 'shared/utils/logger';
 import { brokerApiEndpoint } from 'shared/json_rpc';
+import { ChainflipIO } from './utils/chainflip_io';
 
 const defaultCommissionBps = 100; // 1%
 
@@ -17,8 +17,8 @@ export type CcmDepositMetadata = NonNullable<RequestDepositChannelParams['ccmPar
 export type FillOrKillParamsX128 = NonNullable<RequestDepositChannelParams['fillOrKillParams']>;
 export type DcaParams = NonNullable<RequestDepositChannelParams['dcaParams']>;
 
-export async function newSwap(
-  logger: Logger,
+export async function newSwap<A = []>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -46,7 +46,7 @@ export async function newSwap(
   let retryCount = 0;
   while (retryCount < 20) {
     try {
-      await broker.requestSwapDepositAddress(
+      const result = await broker.requestSwapDepositAddress(
         {
           srcAsset: stateChainAssetFromAsset(sourceAsset),
           destAsset: stateChainAssetFromAsset(destAsset),
@@ -66,10 +66,16 @@ export async function newSwap(
         },
         'backspin',
       );
+
+      // set current block height to the block where the deposit channel request was accepted,
+      // since calls via the broker API are currently not handled by ChainflipIO, we have to
+      // manually update the current block height
+      cf.ifYouCallThisYouHaveToRefactor_stepToBlockHeight(result.issuedBlock);
+
       break; // Exit the loop on success
     } catch (error) {
       retryCount++;
-      logger.error(
+      cf.error(
         `Request swap deposit address for ${sourceAsset} attempt: ${retryCount} failed: ${error}`,
       );
     }

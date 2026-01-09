@@ -19,8 +19,9 @@ import { sendBtc } from 'shared/send_btc';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { globalLogger as logger } from 'shared/utils/logger';
+import { globalLogger } from 'shared/utils/logger';
 import { lpApiEndpoint } from 'shared/json_rpc';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
@@ -121,7 +122,7 @@ export function assetFromStateChainAsset(
   });
 }
 
-async function playLp(asset: Asset, price: number, liquidity: number) {
+async function playLp<A = []>(cf: ChainflipIO<A>, asset: Asset, price: number, liquidity: number) {
   const spread = 0.01 * price;
   const liquidityFine = liquidity * 1e6;
   for (;;) {
@@ -162,7 +163,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
     ]);
     result.forEach((r) => {
       if (r.data.error) {
-        logger.error(`[${r.data.id}]: ${JSON.stringify(r.data.error)}`);
+        cf.error(`[${r.data.id}]: ${JSON.stringify(r.data.error)}`);
       } else {
         r.data.result.tx_details.response.forEach((update: LimitOrderResponse) => {
           if (BigInt(update.collected_fees) > BigInt(0)) {
@@ -176,7 +177,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
               BigInt(update.collected_fees.toString()).toString(10),
               assetDecimals(ccy),
             );
-            logger.info(`Collected ${fees} ${ccy} in fees`);
+            cf.info(`Collected ${fees} ${ccy} in fees`);
           }
           if (BigInt(update.bought_amount) > BigInt(0)) {
             let buyCcy;
@@ -192,7 +193,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
               BigInt(update.bought_amount.toString()).toString(10),
               assetDecimals(buyCcy),
             );
-            logger.info(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
+            cf.info(`Bought ${amount} ${buyCcy} for ${sellCcy}`);
           }
         });
       }
@@ -201,7 +202,7 @@ async function playLp(asset: Asset, price: number, liquidity: number) {
   }
 }
 
-async function launchTornado() {
+async function launchTornado<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
   const epoch = (
     await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
@@ -221,13 +222,13 @@ async function launchTornado() {
     assets[index1] = assets[index2];
     assets[index2] = temp;
   }
-  let swap = await requestNewSwap(logger, assets[0], 'Btc', btcAddress);
+  let swap = await requestNewSwap(cf, assets[0], 'Btc', btcAddress);
   for (let i = 0; i < assets.length - 1; i++) {
-    swap = await requestNewSwap(logger, assets[i + 1], assets[i], swap.depositAddress);
+    swap = await requestNewSwap(cf, assets[i + 1], assets[i], swap.depositAddress);
   }
-  await requestNewSwap(logger, 'Btc', assets[assets.length - 1], swap.depositAddress);
-  await sendBtc(logger, btcAddress, 0.01);
-  logger.info(btcAddress);
+  await requestNewSwap(cf, 'Btc', assets[assets.length - 1], swap.depositAddress);
+  await sendBtc(cf.logger, btcAddress, 0.01);
+  cf.info(btcAddress);
 }
 
 const swapAmount = new Map<Asset, string>([
@@ -242,7 +243,7 @@ const swapAmount = new Map<Asset, string>([
   ['ArbUsdt', '40'],
 ]);
 
-async function playSwapper() {
+async function playSwapper<A = []>(cf: ChainflipIO<A>) {
   const assets: Asset[] = [
     'Eth',
     'Btc',
@@ -260,7 +261,7 @@ async function playSwapper() {
       .filter((x) => x !== src)
       .at(Math.floor(Math.random() * (assets.length - 1)))!;
     /* eslint-disable @typescript-eslint/no-floating-promises */
-    testSwap(logger, src, dest, undefined, undefined, undefined, undefined, swapAmount.get(src));
+    testSwap(cf, src, dest, undefined, undefined, undefined, undefined, swapAmount.get(src));
     await sleep(5000);
   }
 }
@@ -278,74 +279,91 @@ const price = new Map<Asset, number>([
 ]);
 
 async function bananas() {
+  const cf = await newChainflipIO(globalLogger, []);
   const liquidityUsdc = 10000;
 
   await Promise.all([
-    createLpPool(logger, 'Eth', price.get('Eth')!),
-    createLpPool(logger, 'Btc', price.get('Btc')!),
-    createLpPool(logger, 'Flip', price.get('Flip')!),
-    createLpPool(logger, 'Usdt', price.get('Usdt')!),
-    createLpPool(logger, 'Wbtc', price.get('Wbtc')!),
-    createLpPool(logger, 'ArbEth', price.get('ArbEth')!),
-    createLpPool(logger, 'ArbUsdc', price.get('ArbUsdc')!),
-    createLpPool(logger, 'ArbUsdt', price.get('ArbUsdt')!),
+    createLpPool(cf.logger, 'Eth', price.get('Eth')!),
+    createLpPool(cf.logger, 'Btc', price.get('Btc')!),
+    createLpPool(cf.logger, 'Flip', price.get('Flip')!),
+    createLpPool(cf.logger, 'Usdt', price.get('Usdt')!),
+    createLpPool(cf.logger, 'Wbtc', price.get('Wbtc')!),
+    createLpPool(cf.logger, 'ArbEth', price.get('ArbEth')!),
+    createLpPool(cf.logger, 'ArbUsdc', price.get('ArbUsdc')!),
+    createLpPool(cf.logger, 'ArbUsdt', price.get('ArbUsdc')!),
   ]);
 
   await Promise.all([
-    depositLiquidity(logger, 'Usdc', 8 * liquidityUsdc),
-    depositLiquidity(logger, 'Eth', (2 * liquidityUsdc) / price.get('Eth')!),
-    depositLiquidity(logger, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
-    depositLiquidity(logger, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
-    depositLiquidity(logger, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
-    depositLiquidity(logger, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
-    depositLiquidity(logger, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
-    depositLiquidity(logger, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
-    depositLiquidity(logger, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
+    depositLiquidity(cf.logger, 'Usdc', 8 * liquidityUsdc),
+    depositLiquidity(cf.logger, 'Eth', (2 * liquidityUsdc) / price.get('Eth')!),
+    depositLiquidity(cf.logger, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
+    depositLiquidity(cf.logger, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
+    depositLiquidity(cf.logger, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    depositLiquidity(cf.logger, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
+    depositLiquidity(cf.logger, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
+    depositLiquidity(cf.logger, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
+    depositLiquidity(cf.logger, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
   ]);
 
-  await Promise.all([
-    playLp(
-      'Eth',
-      price.get('Eth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Eth')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'Btc',
-      price.get('Btc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Btc')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'Flip',
-      price.get('Flip')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Flip')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'Usdt',
-      price.get('Usdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Usdt')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'Wbtc',
-      price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'ArbEth',
-      price.get('ArbEth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbEth')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'ArbUsdc',
-      price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
-      liquidityUsdc,
-    ),
-    playLp(
-      'ArbUsdt',
-      price.get('ArbUsdt')! * 10 ** (assetDecimals('Usdt') - assetDecimals('ArbUsdt')),
-      liquidityUsdc,
-    ),
-    playSwapper(),
-    launchTornado(),
+  await cf.all([
+    (subCf) =>
+      playLp(
+        subCf,
+        'Eth',
+        price.get('Eth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Eth')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'Btc',
+        price.get('Btc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Btc')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'Flip',
+        price.get('Flip')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Flip')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'Usdt',
+        price.get('Usdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Usdt')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'Wbtc',
+        price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'ArbEth',
+        price.get('ArbEth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbEth')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'ArbUsdc',
+        price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
+        liquidityUsdc,
+      ),
+    (subCf) =>
+      playLp(
+        subCf,
+        'ArbUsdt',
+        price.get('ArbUsdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdt')),
+        liquidityUsdc,
+      ),
+    (subCf) => playSwapper(subCf),
+    (subCf) => launchTornado(subCf),
   ]);
 }
 

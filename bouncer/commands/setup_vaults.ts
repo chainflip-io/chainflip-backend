@@ -8,7 +8,6 @@
 
 import { AddressOrPair } from '@polkadot/api/types';
 import Web3 from 'web3';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import {
   getBtcClient,
   handleSubstrateError,
@@ -28,6 +27,12 @@ import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
+import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
+import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
+import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
 
 export async function createPolkadotVault(api: DisposableApiPromise) {
   const { promise, resolve } = deferredPromise<{
@@ -99,128 +104,140 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
 }
 
 async function main(): Promise<void> {
-  const logger = loggerChild(globalLogger, 'setup_vaults');
+  const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
   const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
   const solClient = getSolConnection();
 
   await using assethub = await getAssethubApi();
 
-  logger.info(`LP endpoint set to: ${lpApiEndpoint}`);
-  logger.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
+  cf.info(`LP endpoint set to: ${lpApiEndpoint}`);
+  cf.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
 
-  logger.info('Performing initial Vault setup');
+  cf.info('Performing initial Vault setup');
 
   // Step 1
   await Promise.all([
-    initializeArbitrumChain(logger),
-    initializeSolanaChain(logger),
-    initializeAssethubChain(logger),
+    initializeArbitrumChain(cf.logger),
+    initializeSolanaChain(cf.logger),
+    initializeAssethubChain(cf.logger),
   ]);
 
   // Step 2
-  const btcActivationRequest = observeEvent(
-    logger,
-    'bitcoinVault:AwaitingGovernanceActivation',
-  ).event;
-  const arbActivationRequest = observeEvent(
-    logger,
-    'arbitrumVault:AwaitingGovernanceActivation',
-  ).event;
-  const solActivationRequest = observeEvent(
-    logger,
-    'solanaVault:AwaitingGovernanceActivation',
-  ).event;
-  const hubActivationRequest = observeEvent(
-    logger,
-    'assethubVault:AwaitingGovernanceActivation',
-  ).event;
-  logger.info('Forcing rotation');
-  await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
+  cf.info('Forcing rotation');
+  await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
 
   // Step 3
-  logger.info('Waiting for new keys');
+  cf.info('Waiting for new keys');
+  const keyEvents = await cf.stepUntilAllEventsOf({
+    btc: {
+      name: 'BitcoinVault.AwaitingGovernanceActivation',
+      schema: bitcoinVaultAwaitingGovernanceActivation,
+    },
+    arb: {
+      name: 'ArbitrumVault.AwaitingGovernanceActivation',
+      schema: arbitrumVaultAwaitingGovernanceActivation,
+    },
+    sol: {
+      name: 'SolanaVault.AwaitingGovernanceActivation',
+      schema: solanaVaultAwaitingGovernanceActivation,
+    },
+    hub: {
+      name: 'AssethubVault.AwaitingGovernanceActivation',
+      schema: assethubVaultAwaitingGovernanceActivation,
+    },
+  });
 
-  const btcKey = (await btcActivationRequest).data.newPublicKey;
-  const arbKey = (await arbActivationRequest).data.newPublicKey;
-  const solKey = (await solActivationRequest).data.newPublicKey;
-  const hubKey = (await hubActivationRequest).data.newPublicKey;
+  const btcKey = keyEvents.btc.data.newPublicKey;
+  const arbKey = keyEvents.arb.data.newPublicKey;
+  const solKey = keyEvents.sol.data.newPublicKey;
+  const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
-  logger.info('Requesting Assethub Vault creation');
-  const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
-  logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+  cf.info('Setting up external chains (Arbitrum, Solana, Assethub) with new keys');
 
-  // Step 5
-  const hubProxyAdded = observeEvent(logger, 'proxy:ProxyAdded', {
-    chain: 'assethub',
-    timeoutSeconds: 120,
-  }).event;
-  logger.info('Rotating Proxy and Funding Accounts on Assethub');
-  const [, hubVaultEvent] = await Promise.all([
-    rotateAndFund(assethub, hubVaultAddress, hubKey),
-    hubProxyAdded,
+  const createAssethubVault = async () => {
+    // Step a
+    cf.info('Requesting Assethub Vault creation');
+    const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
+    cf.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+
+    // Step b
+    const hubProxyAdded = observeEvent(cf.logger, 'proxy:ProxyAdded', {
+      chain: 'assethub',
+      timeoutSeconds: 120,
+    }).event;
+    cf.info('Rotating Proxy and Funding Accounts on Assethub');
+    const [, hubVaultEvent] = await Promise.all([
+      rotateAndFund(assethub, hubVaultAddress, hubKey),
+      hubProxyAdded,
+    ]);
+
+    return { hubVaultAddress, hubVaultEvent };
+  };
+
+  const insertArbitrumKey = async () => {
+    cf.info('Inserting Arbitrum key in the contracts');
+    await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
+  };
+
+  const insertSolanaKey = async () => {
+    cf.info('Inserting Solana key in the programs');
+    await initializeSolanaPrograms(cf.logger, solKey);
+  };
+
+  const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([
+    createAssethubVault(),
+    insertArbitrumKey(),
+    insertSolanaKey(),
   ]);
 
-  // Step 6
-  logger.info('Inserting Arbitrum key in the contracts');
-  await initializeArbitrumContracts(logger, arbClient, arbKey);
-
-  // Using arbitrary key for now, we will use solKey generated by SC
-  logger.info('Inserting Solana key in the programs');
-  await initializeSolanaPrograms(logger, solKey);
-
   // Step 7
-  logger.info('Registering Vaults with state chain');
+  cf.info('Registering Vaults with state chain');
 
-  const assethubVaultCreatedEvent = observeEvent(
-    logger,
-    'assethubVault:VaultActivationCompleted',
-  ).event;
-  await submitGovernanceExtrinsic((chainflip) =>
-    chainflip.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
-      blockNumber: hubVaultEvent.block,
-      extrinsicIndex: hubVaultEvent.eventIndex,
-    }),
-  );
-  await assethubVaultCreatedEvent;
-
-  const bitcoinBlocknumberSetEvent = observeEvent(
-    logger,
-    'environment:BitcoinBlockNumberSetForVault',
-  ).event;
-  await submitGovernanceExtrinsic(async (chainflip) =>
-    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
-      await btcClient.getBlockCount(),
-      btcKey,
-    ),
-  );
-  await bitcoinBlocknumberSetEvent;
-
-  const arbitrumInitializedEvent = observeEvent(logger, 'environment:ArbitrumInitialized').event;
-  await submitGovernanceExtrinsic(async (chainflip) =>
-    chainflip.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
-  );
-  await arbitrumInitializedEvent;
-
-  const solanaInitializedEvent = observeEvent(logger, 'environment:SolanaInitialized').event;
-  await submitGovernanceExtrinsic(async (chainflip) =>
-    chainflip.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
-  );
-  await solanaInitializedEvent;
+  await cf.all([
+    (subcf) =>
+      subcf.submitGovernance({
+        extrinsic: (api) =>
+          api.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
+            blockNumber: hubVaultEvent.block,
+            extrinsicIndex: hubVaultEvent.eventIndex,
+          }),
+        expectedEvent: { name: 'AssethubVault.VaultActivationCompleted' },
+      }),
+    (subcf) =>
+      subcf.submitGovernance({
+        extrinsic: async (api) =>
+          api.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
+            await btcClient.getBlockCount(),
+            btcKey,
+          ),
+        expectedEvent: { name: 'Environment.BitcoinBlockNumberSetForVault' },
+      }),
+    (subcf) =>
+      subcf.submitGovernance({
+        extrinsic: async (api) =>
+          api.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
+        expectedEvent: { name: 'Environment.ArbitrumInitialized' },
+      }),
+    (subcf) =>
+      subcf.submitGovernance({
+        extrinsic: async (api) =>
+          api.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
+        expectedEvent: { name: 'Environment.SolanaInitialized' },
+      }),
+  ]);
 
   // Step 8
-  logger.info('Setting up price feeds');
-  await updateDefaultPriceFeeds(logger);
+  cf.info('Setting up price feeds');
+  await updateDefaultPriceFeeds(cf.logger);
 
   // Confirmation
-  logger.info('Waiting for new epoch...');
-  await observeEvent(logger, 'validator:NewEpoch', {
-    historicalCheckBlocks: 10,
-  }).event;
+  cf.info('Waiting for new epoch...');
+  await cf.stepUntilEvent('Validator.NewEpoch', validatorNewEpoch);
 
-  logger.info('New Epoch');
-  logger.info('Vault Setup completed');
+  cf.info('New Epoch');
+  cf.info('Vault Setup completed');
   process.exit(0);
 }
 

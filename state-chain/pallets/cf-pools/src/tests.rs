@@ -274,10 +274,8 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(
 			LiquidityPools::pool_info(Asset::Eth, STABLE_ASSET),
 			Ok(PoolInfo {
-				limit_order_fee_hundredth_pips: old_fee,
 				range_order_fee_hundredth_pips: old_fee,
 				range_order_total_fees_earned: Default::default(),
-				limit_order_total_fees_earned: Default::default(),
 				range_total_swap_inputs: Default::default(),
 				limit_total_swap_inputs: Default::default(),
 			})

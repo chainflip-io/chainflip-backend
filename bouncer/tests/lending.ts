@@ -7,7 +7,7 @@ import {
   amountToFineAmountBigInt,
   assetDecimals,
   ChainflipExtrinsicSubmitter,
-  lpMutex,
+  cfMutex,
   getFreeBalance,
   sleep,
   submitExtrinsic,
@@ -58,7 +58,7 @@ async function lendingTestForAsset(
   const seed = randomBytes(4).toString('hex');
   const lpUri = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
   const lp = await setupLpAccount(logger, lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, lpMutex.for(lpUri));
+  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
   // Credit the account with the collateral and a little of the loan asset to be able to settle the loan.
   // We also need a little extra of both assets to cover the ingress fee.

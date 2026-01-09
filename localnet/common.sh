@@ -10,6 +10,7 @@ export SOLANA_BASE_PATH="/tmp/solana"
 export CHAINFLIP_BASE_PATH="/tmp/chainflip"
 export DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 export BACKSPIN=${BACKSPIN:-"false"}
+export LOCALNET_SPEED_SETTING=${LOCALNET_SPEED_SETTING:-"default"}
 
 source ./localnet/helper.sh
 
@@ -88,6 +89,12 @@ build-localnet() {
   mkdir -p $CHAINFLIP_BASE_PATH
   save_settings
   touch $DEBUG_OUTPUT_DESTINATION
+
+  if [[ "$LOCALNET_SPEED_SETTING" == "turbo" ]]; then
+    echo "🏎️ Turbo mode enabled. If available, turbo docker images will be used for external chains."
+  else
+    echo "🚶 Default speed. Default docker images will be used for external chains."
+  fi
 
   echo "🪢 Pulling Docker Images"
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" pull --quiet >>$DEBUG_OUTPUT_DESTINATION 2>&1
@@ -176,8 +183,18 @@ build-localnet() {
       echo "💚 $NODE's chainflip-node is running!"
       ((RPC_PORT++))
   done
-  SLOT_DURATION="$(curl --silent -H "Content-Type: application/json" -d '{ "jsonrpc":"2.0", "id":"1", "method":"cf_slot_duration", "params":{} }' http://localhost:9944 | jq '.result')"
-  echo "🕐 Block time is ${SLOT_DURATION}ms."
+
+  # Get and print CF block time (the rpc returns a scale encoded value)
+  SLOT_DURATION="$(curl --silent --location 'http://localhost:9944' \
+    --header 'Content-Type: application/json' \
+    --data '{"id":9,"jsonrpc":"2.0","method":"state_call","params":["AuraApi_slot_duration",""]}' | jq -r '.result')"
+  if [[ $SLOT_DURATION == 0x7017000000000000 ]]; then
+    echo "🕐 Block time is 6000ms."
+  elif [[ $SLOT_DURATION == 0xe803000000000000 ]]; then
+    echo "🕐 Block time is 1000ms."
+  else
+    echo "🕐 Warning: unrecognized block time: ${SLOT_DURATION} ⚠️"
+  fi
 
   NODE_COUNT=$NODE_COUNT \
   BINARY_ROOT_PATH=$BINARY_ROOT_PATH \
@@ -217,14 +234,12 @@ build-localnet() {
   additional_docker_compose_up_args=$additional_docker_compose_up_args \
   ./$LOCALNET_INIT_DIR/scripts/start-deposit-monitor.sh
 
+  echo "🗂️ Starting Indexer ..."
+  $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
+
   if [[ $START_TRACKER == "y" ]]; then
     echo "👁 Starting Ingress-Egress-tracker ..."
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
-  if [[ $START_INDEXER == "y" ]]; then
-    echo "🗂️ Starting Indexer ..."
-    $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
   fi
 
   print_success

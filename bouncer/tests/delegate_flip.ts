@@ -22,6 +22,7 @@ import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { setupOperatorAccount } from 'shared/setup_account';
 import z from 'zod';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 const evmCallDetails = z.object({
   calldata: z.string(),
@@ -188,6 +189,7 @@ export async function testDelegate(logger: Logger) {
 }
 
 export async function testCcmSwapFundAccount(logger: Logger) {
+  const cf = await newChainflipIO(logger, []);
   const web3 = new Web3(getEvmEndpoint('Ethereum'));
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const scAddress = await newStatechainAddress(randomBytes(32).toString('hex'));
@@ -205,7 +207,7 @@ export async function testCcmSwapFundAccount(logger: Logger) {
   // Override gas budget for this particular use case
   ccmMetadata.gasBudget = '1000000';
 
-  const swapParams = await requestNewSwap(logger, 'Btc', 'Flip', scUtilsAddress, ccmMetadata);
+  const swapParams = await requestNewSwap(cf, 'Btc', 'Flip', scUtilsAddress, ccmMetadata);
 
   await send(logger, 'Btc', swapParams.depositAddress);
   await fundEvent;

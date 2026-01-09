@@ -12,8 +12,10 @@ import {
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
 import { SwapContext } from 'shared/utils/swap_context';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function initiateSwap(
+  cf: ChainflipIO<[]>,
   testContext: TestContext,
   sourceAsset: Asset,
   destAsset: Asset,
@@ -31,7 +33,7 @@ export async function initiateSwap(
   if (destAsset === 'Btc') {
     const btcAddressTypesArray = Object.values(btcAddressTypes);
     return functionCall(
-      testContext.logger,
+      cf,
       sourceAsset,
       destAsset,
       btcAddressTypesArray[Math.floor(Math.random() * btcAddressTypesArray.length)],
@@ -40,7 +42,7 @@ export async function initiateSwap(
     );
   }
   return functionCall(
-    testContext.logger,
+    cf,
     sourceAsset,
     destAsset,
     undefined,
@@ -66,7 +68,8 @@ export function testAllSwaps(timeoutPerSwap: number) {
     allSwaps.push({
       name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
       test: async (context) => {
-        await initiateSwap(context, sourceAsset, destAsset, functionCall, ccmSwap);
+        const cf = await newChainflipIO(context.logger, [] as []);
+        await initiateSwap(cf, context, sourceAsset, destAsset, functionCall, ccmSwap);
       },
     });
   }
@@ -128,6 +131,7 @@ export async function testSwapsToAssethub(testContext: TestContext) {
   // which caused bouncer flakiness in the past.
   for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
     const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });
-    await testSwap(logger, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
+    const cf = await newChainflipIO(logger, [] as []);
+    await testSwap(cf, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
   }
 }
