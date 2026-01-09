@@ -71,8 +71,8 @@ async function lendingTestForAsset<A = []>(
   const factor = 10 ** loanAssetDecimals;
   const extraLoanAssetAmount = Math.round(0.01 * loanAmount * factor) / factor;
   await cf.all([
-    (subcf) => depositLiquidity(subcf, loanAsset, extraLoanAssetAmount * 1.01, true),
-    (subcf) => depositLiquidity(subcf, collateralAsset, collateralAmount * 1.05, true),
+    (subcf) => depositLiquidity(subcf, loanAsset, extraLoanAssetAmount * 1.01),
+    (subcf) => depositLiquidity(subcf, collateralAsset, collateralAmount * 1.05),
   ]);
 
   // Add collateral to the account

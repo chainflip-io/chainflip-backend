@@ -12,16 +12,18 @@ import {
   observeBalanceIncrease,
   waitForExt,
 } from 'shared/utils';
-import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Testing broadcast through vault rotations
 export async function testRotationBarrier(testContext: TestContext) {
-  const cf = await newChainflipIO(testContext.logger, []);
-
-  const lpUri = process.env.LP_URI || '//LP_1';
+  const lpUri = (process.env.LP_URI || '//LP_1') as `//${string}`;
   const withdrawalAddress = await newAssetAddress(Assets.ArbEth);
 
-  await depositLiquidity(cf, Assets.ArbEth, 5, false, lpUri);
+  const cf = await newChainflipIO(testContext.logger, {
+    account: fullAccountFromUri(lpUri, 'LP'),
+  });
+
+  await depositLiquidity(cf, Assets.ArbEth, 5);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   // Wait for the activation key to be created and the activation key to be sent for signing

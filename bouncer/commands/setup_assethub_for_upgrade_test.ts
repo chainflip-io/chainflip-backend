@@ -11,7 +11,7 @@ import { rangeOrder } from 'shared/range_order';
 import { deferredPromise, handleSubstrateError, runWithTimeoutAndExit } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import { createPolkadotVault } from 'commands/setup_vaults';
-import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function rotateAndFund(
   api: DisposableApiPromise,
@@ -59,7 +59,7 @@ export async function rotateAndFund(
 }
 
 async function main(): Promise<void> {
-  const cf = (await newChainflipIO(globalLogger, [])).withChildLogger('setup_vaults');
+  const cf = (await newChainflipIO(globalLogger, {})).withChildLogger('setup_vaults');
   await using assethub = await getAssethubApi();
 
   await initializeAssethubChain(cf.logger);
@@ -91,19 +91,21 @@ async function main(): Promise<void> {
   ]);
 
   cf.info('funding pools with assethub assets');
-  const lp1Deposits = cf.all([
-    (subcf) => depositLiquidity(subcf, 'HubDot', 20000, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000, false, '//LP_1'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000, false, '//LP_1'),
-  ]);
+  await cf
+    .with({ account: fullAccountFromUri('//LP_1', 'LP') })
+    .all([
+      (subcf) => depositLiquidity(subcf, 'HubDot', 20000),
+      (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000),
+      (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000),
+    ]);
 
-  const lpApiDeposits = cf.all([
-    (subcf) => depositLiquidity(subcf, 'HubDot', 20000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000, false, '//LP_API'),
-    (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000, false, '//LP_API'),
-  ]);
-
-  await Promise.all([lpApiDeposits, lp1Deposits]);
+  await cf
+    .with({ account: fullAccountFromUri('//LP_API', 'LP') })
+    .all([
+      (subcf) => depositLiquidity(subcf, 'HubDot', 20000),
+      (subcf) => depositLiquidity(subcf, 'HubUsdc', 250000),
+      (subcf) => depositLiquidity(subcf, 'HubUsdt', 250000),
+    ]);
 
   cf.info('creating orders for assethub assets');
   await cf.all([

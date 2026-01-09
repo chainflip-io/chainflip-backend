@@ -21,7 +21,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { globalLogger } from 'shared/utils/logger';
 import { lpApiEndpoint } from 'shared/json_rpc';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
@@ -265,7 +265,9 @@ const price = new Map<Asset, number>([
 ]);
 
 async function bananas() {
-  const cf = await newChainflipIO(globalLogger, []);
+  const cf = await newChainflipIO(globalLogger, {
+    account: fullAccountFromUri('//LP_1', 'LP'),
+  });
   const liquidityUsdc = 10000;
 
   await Promise.all([

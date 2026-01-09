@@ -23,7 +23,7 @@ import {
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 const args = process.argv.slice(2);
 if (args.length < 3) {
@@ -40,14 +40,16 @@ if (!inputAsset || !outputAsset) {
   process.exit(1);
 }
 
-const cf = await newChainflipIO(logger, []);
-
 await using chainflip = await getChainflipApi();
-const lpUri = process.env.LP_URI || '//LP_1';
+const lpUri = (process.env.LP_URI || '//LP_1') as `//${string}`;
 const lp = createStateChainKeypair(lpUri);
 
+const cf = await newChainflipIO(logger, {
+  account: fullAccountFromUri(lpUri, 'LP'),
+});
+
 logger.info('Depositing liquidity on account');
-await depositLiquidity(cf, inputAsset, amount, false, lpUri);
+await depositLiquidity(cf, inputAsset, amount);
 
 const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
   test: (event) => event.data.accountId === lp.address,

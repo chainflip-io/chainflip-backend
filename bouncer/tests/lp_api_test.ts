@@ -21,7 +21,7 @@ import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
@@ -36,12 +36,16 @@ const testAssetAmount = parseInt(
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
-async function provideLiquidityAndTestAssetBalances<A = []>(cf: ChainflipIO<A>) {
+async function provideLiquidityAndTestAssetBalances<A = []>(parentcf: ChainflipIO<A>) {
+  const cf = parentcf.with({
+    account: fullAccountFromUri('//LP_API', 'LP'),
+  });
+
   const fineAmountToProvide = parseInt(
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(cf, testAsset, amountToProvide, true, '//LP_API');
+  await depositLiquidity(cf, testAsset, amountToProvide);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;

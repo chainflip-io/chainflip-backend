@@ -122,7 +122,7 @@ async function testBoostingForAsset(
   );
 
   // Add boost funds
-  await depositLiquidity(cf, asset, amount * 1.01, false, lpUri);
+  await depositLiquidity(cf, asset, amount * 1.01);
   await addBoostFunds(cf, asset, boostFee, amount);
 
   // Do a swap

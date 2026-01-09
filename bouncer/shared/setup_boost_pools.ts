@@ -97,8 +97,6 @@ export async function setupBoostPools(logger: Logger): Promise<void> {
     cf,
     Assets.Btc,
     fundBtcBoostPoolsAmount * boostPoolTiers.length + btcIngressFee,
-    false,
-    '//LP_BOOST',
   );
   await cf.all(
     boostPoolTiers.map(
