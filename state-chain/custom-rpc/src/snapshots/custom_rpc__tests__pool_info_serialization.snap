@@ -20,5 +20,9 @@ expression: val
   "limit_total_swap_inputs": {
     "base": "0x1e61",
     "quote": "0x22b8"
+  },
+  "quote_asset": {
+    "chain": "Bitcoin",
+    "asset": "BTC"
   }
 }
