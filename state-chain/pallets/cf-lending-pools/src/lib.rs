@@ -53,6 +53,7 @@ mod benchmarking;
 
 use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	SwapRequestId,
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
@@ -195,7 +196,17 @@ pub enum CollateralAddedActionType {
 	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
-	SystemLiquidationExcessAmount { loan_id: LoanId },
+	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
+}
+
+/// Indicates how the action of repaying a loan was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum LoanRepaidActionType {
+	/// Triggered manually by the user. Loan is repaid from the user's free balance.
+	Manual,
+	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
+	/// swap's output.
+	Liquidation { swap_request_id: SwapRequestId },
 }
 
 pub struct LendingConfigDefault {}
@@ -451,6 +462,7 @@ pub mod pallet {
 		LoanRepaid {
 			loan_id: LoanId,
 			amount: AssetAmount,
+			action_type: LoanRepaidActionType,
 		},
 		LoanSettled {
 			loan_id: LoanId,
