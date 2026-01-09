@@ -68,6 +68,14 @@ export class ChainflipIO<Requirements> {
     return new ChainflipIO(this.logger.child({ tag }), this.requirements, this.lastIoBlockHeight);
   }
 
+  with<Extension>(extension: Extension): ChainflipIO<Requirements & Extension> {
+    return new ChainflipIO(
+      this.logger,
+      { ...this.requirements, ...extension },
+      this.lastIoBlockHeight,
+    );
+  }
+
   ifYouCallThisYouHaveToRefactor_stepToBlockHeight(newIoBlockHeight: number) {
     if (this.lastIoBlockHeight > newIoBlockHeight) {
       throw new Error(

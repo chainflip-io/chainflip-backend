@@ -24,11 +24,11 @@ async function main(): Promise<void> {
     unlinkSync(stateChainEventLogFile);
   }
 
-  await Promise.all([
-    setupSwaps(cf),
-    setupBoostPools(cf.logger),
-    setupLendingPools(cf),
-    setupElections(cf.logger),
+  await cf.all([
+    (subcf) => setupSwaps(subcf),
+    (subcf) => setupBoostPools(subcf.logger),
+    (subcf) => setupLendingPools(subcf),
+    (subcf) => setupElections(subcf.logger),
   ]);
   cf.info('Setup concurrent complete');
 }

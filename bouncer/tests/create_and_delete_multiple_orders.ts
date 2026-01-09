@@ -39,18 +39,18 @@ export async function createAndDeleteMultipleOrders<A = []>(
 
   cf.debug(`Depositing liquidity to ${lpUri}`);
 
-  await Promise.all([
+  await cf.all([
     // provide liquidity to LP_3
-    depositLiquidity(cf, 'Usdc', 10000, false, lpUri),
-    depositLiquidity(cf, 'Eth', deposits.get('Eth')!, false, lpUri),
-    depositLiquidity(cf, 'HubDot', deposits.get('HubDot')!, false, lpUri),
-    depositLiquidity(cf, 'Btc', deposits.get('Btc')!, false, lpUri),
-    depositLiquidity(cf, 'Flip', deposits.get('Flip')!, false, lpUri),
-    depositLiquidity(cf, 'Usdt', deposits.get('Usdt')!, false, lpUri),
-    depositLiquidity(cf, 'ArbEth', deposits.get('ArbEth')!, false, lpUri),
-    depositLiquidity(cf, 'ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
-    depositLiquidity(cf, 'Sol', deposits.get('Sol')!, false, lpUri),
-    depositLiquidity(cf, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Usdc', 10000, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Eth', deposits.get('Eth')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Btc', deposits.get('Btc')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Flip', deposits.get('Flip')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Usdt', deposits.get('Usdt')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'ArbEth', deposits.get('ArbEth')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'ArbUsdc', deposits.get('ArbUsdc')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'Sol', deposits.get('Sol')!, false, lpUri),
+    (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!, false, lpUri),
   ]);
 
   cf.debug(`Liquidity successfully deposited to ${lpUri}`);
