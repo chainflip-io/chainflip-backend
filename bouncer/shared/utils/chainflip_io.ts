@@ -20,9 +20,10 @@ import {
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
-  blockWithTransactionHash,
+  blockHeightOfTransactionHash,
 } from './indexer';
 import { Logger } from './logger';
+import { Ok, Result } from './result';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -83,22 +84,27 @@ export class ChainflipIO<Requirements> {
    * @param extrinsic Function that takes a `DisposableApiPromise` and builds the extrinsic that should be submitted.
    * @returns The result of submitting the extrinsic if successful, or a string containing the failure reason.
    */
-  async stepToExtrinsicIncluded<Data extends Requirements & { account: FullAccount<AccountType> }>(
+  async submitExtrinsic<
+    Data extends Requirements & { account: FullAccount<AccountType> },
+    Schema extends z.ZodTypeAny,
+  >(
     this: ChainflipIO<Data>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    extrinsic: (api: DisposableApiPromise) => any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<Result<any, string>> {
-    return this.runExclusively('stepToExtrinsicIncluded', async () => {
+    arg: {
+      extrinsic: ExtrinsicFromApi;
+      expectedEvent?: { name: EventName; schema?: Schema };
+    },
+  ): Promise<Result<z.infer<Schema>, string>> {
+    return this.runExclusively('submitExtrinsic', async () => {
       await using chainflipApi = await getChainflipApi();
       const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
         this.requirements.account.keypair,
         cfMutex.for(this.requirements.account.uri),
       );
-      const ext = extrinsic(chainflipApi);
+      const ext = arg.extrinsic(chainflipApi);
 
       // generate readable description for logging
-      const { section, method, args } = ext.toHuman().method;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { section, method, args } = (ext as any).toHuman().method;
       const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
       this.logger.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
@@ -109,8 +115,36 @@ export class ChainflipIO<Requirements> {
         await extrinsicSubmitter.submit(ext, false),
       );
       if (result.ok) {
-        this.logger.debug(`Successfully submitted`);
+        this.logger.debug(
+          `Successfully submitted extrinsic with result ${JSON.stringify(result.value)}`,
+        );
         this.lastIoBlockHeight = result.value.blockNumber.toNumber();
+
+        // extract event data if expected
+        if (arg.expectedEvent) {
+          const txHash = `${result.value.txHash}`;
+          this.logger.debug(
+            `Searching for event ${arg.expectedEvent.name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
+          );
+          const event = await findOneEventOfMany(
+            this.logger,
+            {
+              event: {
+                name: arg.expectedEvent.name,
+                schema: arg.expectedEvent.schema ?? z.any(),
+                txHash,
+              },
+            },
+            {
+              startFromBlock: this.lastIoBlockHeight,
+              endBeforeBlock: this.lastIoBlockHeight + 1,
+            },
+          );
+          this.logger.debug(
+            `Found event ${arg.expectedEvent.name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
+          );
+          return Ok(event.data);
+        }
       } else {
         this.logger.debug(`Encountered error when submitting extrinsic: ${result.error}`);
       }
@@ -182,7 +216,7 @@ export class ChainflipIO<Requirements> {
       }
 
       this.debug(`Waiting for block with transaction hash ${arg.hash}`);
-      const height = await blockWithTransactionHash(arg.hash);
+      const height = await blockHeightOfTransactionHash(arg.hash);
 
       if (height >= this.lastIoBlockHeight) {
         this.debug(`Found transaction hash ${arg.hash} in block ${height}`);
@@ -467,17 +501,3 @@ export function fullAccountFromUri<A extends AccountType>(
     type,
   };
 }
-
-// ------------ Result type ---------------
-
-export type Ok<T> = { ok: true; value: T; unwrap: () => T };
-export type Err<E> = { ok: false; error: E; unwrap: () => never };
-export type Result<T, E> = Ok<T> | Err<E>;
-export const Ok = <T>(value: T): Ok<T> => ({ ok: true, value, unwrap: () => value });
-export const Err = <E>(error: E): Err<E> => ({
-  ok: false,
-  error,
-  unwrap: () => {
-    throw new Error(`${error}`);
-  },
-});

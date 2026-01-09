@@ -34,21 +34,23 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const extrinsicResult = await cf.stepToExtrinsicIncluded((api) =>
-    api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-  );
-
-  if (extrinsicResult.ok) {
-    cf.info('waiting for stop boosting event');
-    return cf.expectEvent(
-      'LendingPools.StoppedBoosting',
-      lendingPoolsStoppedBoosting.refine(
+  const extrinsicResult = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
+    expectedEvent: {
+      name: 'LendingPools.StoppedBoosting',
+      schema: lendingPoolsStoppedBoosting.refine(
         (event) =>
           event.boosterId === cf.requirements.account.keypair.address &&
           event.boostPool.asset === asset &&
           event.boostPool.tier === boostTier,
       ),
-    );
+    },
+  });
+
+  if (extrinsicResult.ok) {
+    cf.info('waiting for stop boosting event');
+    return extrinsicResult.value;
   }
 
   cf.info(`Already stopped boosting (${extrinsicResult.error})`);
@@ -66,25 +68,25 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   cf.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await cf.stepToExtrinsicIncluded((api) =>
-    api.tx.lendingPools.addBoostFunds(
-      shortChainFromAsset(asset).toUpperCase(),
-      amountToFineAmount(amount.toString(), assetDecimals(asset)),
-      boostTier,
-    ),
-  );
+  const result = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.addBoostFunds(
+        shortChainFromAsset(asset).toUpperCase(),
+        amountToFineAmount(amount.toString(), assetDecimals(asset)),
+        boostTier,
+      ),
+    expectedEvent: {
+      name: 'LendingPools.BoostFundsAdded',
+      schema: lendingPoolsBoostFundsAdded.refine(
+        (event) =>
+          event.boosterId === cf.requirements.account.keypair.address &&
+          event.boostPool.asset === asset &&
+          event.boostPool.tier === boostTier,
+      ),
+    },
+  });
 
-  const result = await cf.expectEvent(
-    'LendingPools.BoostFundsAdded',
-    lendingPoolsBoostFundsAdded.refine(
-      (event) =>
-        event.boosterId === cf.requirements.account.keypair.address &&
-        event.boostPool.asset === asset &&
-        event.boostPool.tier === boostTier,
-    ),
-  );
-
-  return result;
+  return result.unwrap();
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
