@@ -10,7 +10,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "ETH": "0xffffffffffffffffffffffffffffffff",
       "FLIP": "0x7fffffffffffffffffffffffffffffff",
       "USDC": "0x989680",
-      "USDT": "0x4c4b40"
+      "USDT": "0x4c4b40",
+      "WBTC": "0x1dcd6500"
     },
     "Polkadot": {
       "DOT": "0x174876e800"
@@ -20,7 +21,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x1",
-      "USDC": "0x2"
+      "USDC": "0x2",
+      "USDT": "0x3"
     },
     "Solana": {
       "SOL": "0x3",
@@ -47,7 +49,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "ETH": "0xde0b6b3a7640000",
       "FLIP": "0xffffffffffffffff",
       "USDC": "0x7ffffffffffffffe",
-      "USDT": "0x3d090"
+      "USDT": "0x3d090",
+      "WBTC": "0x17d7840"
     },
     "Polkadot": {
       "DOT": "0x37e11d600"
@@ -57,7 +60,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x1",
-      "USDC": "0x2"
+      "USDC": "0x2",
+      "USDT": "0x3"
     },
     "Solana": {
       "SOL": "0x2",
@@ -74,7 +78,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "ETH": [],
       "FLIP": [],
       "USDC": [],
-      "USDT": []
+      "USDT": [],
+      "WBTC": []
     },
     "Polkadot": {
       "DOT": []
@@ -99,7 +104,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": [],
-      "USDC": []
+      "USDC": [],
+      "USDT": []
     },
     "Solana": {
       "SOL": [],

@@ -13,17 +13,15 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
   let result: string;
   switch (asset) {
     case 'Flip':
-    case 'Usdc': {
+    case 'Usdc':
+    case 'Usdt':
+    case 'Wbtc': {
       const contractAddress = getContractAddress('Ethereum', asset);
       result = await getErc20Balance('Ethereum', address, contractAddress);
       break;
     }
-    case 'Usdt': {
-      const contractAddress = getContractAddress('Ethereum', asset);
-      result = await getErc20Balance('Ethereum', address, contractAddress);
-      break;
-    }
-    case 'ArbUsdc': {
+    case 'ArbUsdc':
+    case 'ArbUsdt': {
       const contractAddress = getContractAddress('Arbitrum', asset);
       result = await getErc20Balance('Arbitrum', address, contractAddress);
       break;
