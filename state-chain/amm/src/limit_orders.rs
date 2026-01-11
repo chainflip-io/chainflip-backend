@@ -896,8 +896,8 @@ pub mod migration_support {
 	pub struct PoolStateV7<LiquidityProvider: Ord> {
 		_fee_hundredth_pips: u32, // this field is being removed
 		next_pool_instance: u128,
-		fixed_pools: PoolPairsMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
-		positions: PoolPairsMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), PositionV7>>,
+		fixed_pools: PoolPairsMap<BTreeMap<SqrtPrice, FixedPool>>,
+		positions: PoolPairsMap<BTreeMap<(SqrtPrice, LiquidityProvider), PositionV7>>,
 		_total_fees_earned: PoolPairsMap<Amount>, // this field is being removed
 		total_swap_inputs: PoolPairsMap<Amount>,
 		total_swap_outputs: PoolPairsMap<Amount>,
