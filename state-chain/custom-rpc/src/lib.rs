@@ -295,6 +295,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				},
 				role_specific: RpcAccountInfo::Unregistered {},
 			},
+			#[expect(deprecated)]
 			OldRpcAccountInfo::Broker {
 				flip_balance,
 				bond,
@@ -1667,6 +1668,7 @@ where
 	) -> RpcResult<pallet_cf_pools::before_v13::PoolInfo> {
 		flatten_into_error(self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 13 {
+				#[expect(deprecated)]
 				api.cf_pool_info_before_version_13(hash, base_asset, quote_asset)
 			} else {
 				api.cf_pool_info(hash, base_asset, quote_asset).map(|info| info.map(Into::into))
@@ -1982,6 +1984,7 @@ where
 								reputation_points,
 								keyholder_epochs,
 								is_current_authority,
+								#[expect(deprecated)]
 								is_current_backup,
 								is_qualified,
 								is_online,
@@ -2030,6 +2033,7 @@ where
 			reputation_points: account_info.reputation_points,
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
+			#[expect(deprecated)]
 			is_current_backup: account_info.is_current_backup,
 			is_qualified: account_info.is_qualified,
 			is_online: account_info.is_online,
@@ -2215,6 +2219,7 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
+				#[expect(deprecated)]
 				network_fee_hundredth_pips: api
 					.cf_network_fees(hash)?
 					.regular_network_fee
