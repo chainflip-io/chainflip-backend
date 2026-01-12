@@ -25,7 +25,7 @@ import { lendingTest } from 'tests/lending';
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
   // Specify the number of nodes via setting the env var.
-  // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+  // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=1000 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
