@@ -150,9 +150,7 @@ export class ChainflipIO<Requirements> {
         throw new Error(`'${readable}' failed (${result.error})`);
       }
 
-      this.debug(
-        `Successfully submitted extrinsic with hash ${result.value.txHash}`,
-      );
+      this.debug(`Successfully submitted extrinsic with hash ${result.value.txHash}`);
       this.lastIoBlockHeight = result.value.blockNumber.toNumber();
 
       // extract event data if expected
@@ -357,13 +355,19 @@ export class ChainflipIO<Requirements> {
     descriptions: Events,
   ): Promise<OneOfEventsResult<Events>> {
     return this.runExclusively('stepUntilOneEventOf', async () => {
-      this.debug(
-        `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
-      );
+      if (Object.values(descriptions).length > 1) {
+        this.debug(
+          `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
+        );
+      } else {
+        this.debug(
+          `waiting for event ${JSON.stringify(Object.values(descriptions)[0].name)} from block ${this.lastIoBlockHeight}`,
+        );
+      }
       const event = await findOneEventOfMany(this.logger, descriptions, {
         startFromBlock: this.lastIoBlockHeight,
       });
-      this.debug(`found event ${event}`);
+      this.debug(`found event ${JSON.stringify(event)}`);
       this.lastIoBlockHeight = event.blockHeight;
       return event;
     });
@@ -407,9 +411,12 @@ export class ChainflipIO<Requirements> {
       let getSymbol = (index: number, indexOfTalker: number) => {
         if (indexOfTalker === index) {
           switch (running[index]) {
-            case 'starting': return '*';
-            case 'success': return 'v';
-            default: return '+';
+            case 'starting':
+              return '*';
+            case 'success':
+              return 'v';
+            default:
+              return '+';
           }
         }
         switch (running[index]) {
@@ -546,11 +553,16 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
   return new ChainflipIO(logger, requirements, currentBlockHeight, (level: Severity) => {
     // make sure that the rest of the log is aligned by emiting whitespace for warn and info
     switch (level) {
-      case 'Warn': return " ";
-      case 'Info': return " ";
-      case 'Error': return "";
-      case 'Debug': return "";
-      case 'Trace': return "";
+      case 'Warn':
+        return ' ';
+      case 'Info':
+        return ' ';
+      case 'Error':
+        return '';
+      case 'Debug':
+        return '';
+      case 'Trace':
+        return '';
     }
   });
 }
