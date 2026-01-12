@@ -17,8 +17,13 @@
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
+	self,
+	address::EncodedAddress,
+	assets::any::AssetMap,
+	eth::Address as EthereumAddress,
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	sol::SolInstructionRpc,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, DcaParameters, EpochIndex, ForeignChain, GasAmount};
@@ -30,6 +35,7 @@ use frame_support::{sp_runtime::AccountId32, DefaultNoBound};
 use n_functor::derive_n_functor;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
 	BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool,
 	RpcLoanAccount,
@@ -621,91 +627,34 @@ mod serialize_vanity_name {
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
 
-// ============ Witnessed Events Types ============
-// These types match the format used by the ingress-egress-tracker for Redis storage
+// ============ Witnessed Events Raw Types ============
+// Raw event data returned by the runtime API; conversion happens in the RPC layer.
 
-/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
-#[derive(Debug, Clone, Deserialize, TypeInfo, Encode, Decode)]
-pub struct BitcoinHash(pub sp_core::H256);
-
-impl Serialize for BitcoinHash {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		use cf_utilities::ArrayCollect;
-		sp_core::H256(self.0.to_fixed_bytes().into_iter().rev().collect_array())
-			.serialize(serializer)
-	}
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-#[serde(untagged)]
-pub enum RpcTransactionRef {
-	Bitcoin { hash: BitcoinHash },
-	Ethereum { hash: cf_chains::evm::H256 },
-	Arbitrum { hash: cf_chains::evm::H256 },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-#[serde(untagged)]
-pub enum RpcTransactionId {
-	Bitcoin { hash: BitcoinHash },
-	Ethereum { signature: cf_chains::evm::SchnorrVerificationComponents },
-	Arbitrum { signature: cf_chains::evm::SchnorrVerificationComponents },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-#[serde(untagged)]
-pub enum DepositDetails {
-	Bitcoin { tx_id: BitcoinHash, vout: u32 },
-	Ethereum { tx_hashes: Vec<cf_chains::evm::H256> },
-	Arbitrum { tx_hashes: Vec<cf_chains::evm::H256> },
-}
+use crate::chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
+use pallet_cf_broadcast::TransactionConfirmation;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct DepositWitnessInfo {
-	pub deposit_chain_block_height: u64,
-	pub deposit_address: EncodedAddress,
-	pub amount: u128,
-	pub asset: cf_chains::assets::any::Asset,
-	pub deposit_details: Option<DepositDetails>,
+pub enum RawWitnessedEvents {
+	Bitcoin {
+		deposits: Vec<(u64, DepositWitness<Bitcoin>)>,
+		vault_deposits: Vec<(u64, VaultDepositWitness<Runtime, BitcoinInstance>)>,
+		broadcasts: Vec<(u64, TransactionConfirmation<Runtime, BitcoinInstance>)>,
+	},
+	Ethereum {
+		deposits: Vec<(u64, DepositWitness<Ethereum>)>,
+		vault_deposits:
+			Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>)>,
+		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+	},
+	Arbitrum {
+		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
+		vault_deposits:
+			Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, ArbitrumInstance>, Arbitrum>)>,
+		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+	},
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
-pub struct BroadcastWitnessInfo {
-	pub broadcast_chain_block_height: u64,
-	pub broadcast_id: cf_primitives::BroadcastId,
-	pub tx_out_id: RpcTransactionId,
-	pub tx_ref: RpcTransactionRef,
-}
-
-#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct VaultDepositWitnessInfo {
-	pub tx_id: cf_chains::TransactionInIdForAnyChain,
-	pub deposit_chain_block_height: u64,
-	pub input_asset: cf_chains::assets::any::Asset,
-	pub output_asset: cf_chains::assets::any::Asset,
-	pub amount: u128,
-	pub destination_address: EncodedAddress,
-	pub ccm_deposit_metadata:
-		Option<cf_chains::CcmDepositMetadataUnchecked<cf_chains::ForeignChainAddress>>,
-	pub deposit_details: Option<DepositDetails>,
-	pub broker_fee: Option<cf_primitives::Beneficiary<AccountId32>>,
-	pub affiliate_fees: sp_std::vec::Vec<cf_primitives::Beneficiary<AccountId32>>,
-	pub refund_params: Option<cf_chains::ChannelRefundParametersUncheckedEncoded>,
-	pub dca_params: Option<DcaParameters>,
-	pub max_boost_fee: BasisPoints,
-}
-
-#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct WitnessedEventsResponse {
-	pub deposits: sp_std::vec::Vec<DepositWitnessInfo>,
-	pub broadcasts: sp_std::vec::Vec<BroadcastWitnessInfo>,
-	pub vault_deposits: sp_std::vec::Vec<VaultDepositWitnessInfo>,
-}
-
-// ============ End Witnessed Events Types ============
+// ============ End Witnessed Events Raw Types ============
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct RpcLendingConfig {

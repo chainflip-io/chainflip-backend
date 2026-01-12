@@ -16,9 +16,7 @@
 
 pub mod types;
 
-pub use types::{
-	BroadcastWitnessInfo, DepositWitnessInfo, VaultDepositWitnessInfo, WitnessedEventsResponse,
-};
+pub use types::RawWitnessedEvents;
 
 use crate::runtime_apis::types::*;
 
@@ -337,6 +335,6 @@ decl_runtime_apis!(
 		fn cf_witnessed_events();
 		fn cf_witnessed_events(
 			chain: ForeignChain,
-		) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage>;
+		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
 	}
 );

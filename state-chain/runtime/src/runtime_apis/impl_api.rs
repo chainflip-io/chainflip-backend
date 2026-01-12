@@ -2018,7 +2018,7 @@ impl_runtime_apis! {
 			Ok((encoded_data, transaction_metadata))
 		}
 
-		fn cf_witnessed_events(chain: ForeignChain) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage> {
+		fn cf_witnessed_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}
 	}
@@ -2026,37 +2026,23 @@ impl_runtime_apis! {
 
 mod witnessed_events {
 	use super::*;
-	use crate::chainflip::ethereum_elections::VaultEvents;
-	use cf_chains::{
-		address::EncodedAddress,
-		evm::H256,
-		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
-		Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, IntoTransactionInIdForAnyChain,
-		TransactionInIdForAnyChain,
-	};
-	use cf_primitives::{AffiliateShortId, NetworkEnvironment};
-	use pallet_cf_broadcast::TransactionOutIdToBroadcastId;
+	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
-	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 
 	pub fn extract_witnessed_events(
 		chain: ForeignChain,
-	) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage> {
-		let network = Environment::network_environment();
-
+	) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 		match chain {
-			ForeignChain::Bitcoin => extract_bitcoin_witnessed_events(network),
-			ForeignChain::Ethereum => extract_ethereum_witnessed_events(network),
-			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(network),
+			ForeignChain::Bitcoin => extract_bitcoin_witnessed_events(),
+			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
+			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
 		}
 	}
 
-	fn extract_bitcoin_witnessed_events(
-		network: NetworkEnvironment,
-	) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage> {
+	fn extract_bitcoin_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 		// Bitcoin composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2), Egress(3),
 		// FeeTracking(4), Liveness(5))
 		let state =
@@ -2076,35 +2062,24 @@ mod witnessed_events {
 
 		// Extract deposits from deposit channel witnessing
 		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
-			for witness in info.block_data.iter() {
-				deposits.push(convert_deposit_witness::<Bitcoin>(witness, *height, network));
-			}
+			deposits.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
 		}
 
 		// Extract vault deposits
 		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
-			for witness in info.block_data.iter() {
-				vault_deposits.push(convert_vault_deposit_witness::<Runtime, BitcoinInstance>(
-					witness, *height, network,
-				));
-			}
+			vault_deposits
+				.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
 		}
 
 		// Extract broadcasts (egress witnessing)
 		for (height, info) in egress_state.block_processor.blocks_data.iter() {
-			for tx_confirmation in info.block_data.iter() {
-				if let Some(broadcast) = convert_bitcoin_broadcast(tx_confirmation, *height) {
-					broadcasts.push(broadcast);
-				}
-			}
+			broadcasts.extend(info.block_data.iter().cloned().map(|tx| (*height, tx)));
 		}
 
-		Ok(WitnessedEventsResponse { deposits, broadcasts, vault_deposits })
+		Ok(RawWitnessedEvents::Bitcoin { deposits, broadcasts, vault_deposits })
 	}
 
-	fn extract_ethereum_witnessed_events(
-		network: NetworkEnvironment,
-	) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage> {
+	fn extract_ethereum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 		// Ethereum composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2),
 		// StateChainGateway(3), KeyManager(4), ScUtils(5), FeeTracking(6), Liveness(7))
 		let state =
@@ -2124,61 +2099,22 @@ mod witnessed_events {
 
 		// Extract deposits from deposit channel witnessing
 		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
-			for witness in info.block_data.iter() {
-				deposits.push(convert_deposit_witness::<Ethereum>(witness, *height, network));
-			}
+			deposits.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
 		}
 
-		// Extract vault deposits from VaultEvents
+		// Extract raw vault events
 		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
-			for vault_event in info.block_data.iter() {
-				if let Some(witness) =
-					extract_vault_deposit_from_event::<Runtime, EthereumInstance, Ethereum>(
-						vault_event,
-					) {
-					vault_deposits.push(
-						convert_vault_deposit_witness::<Runtime, EthereumInstance>(
-							&witness, *height, network,
-						),
-					);
-				}
-			}
+			vault_deposits.extend(info.block_data.iter().cloned().map(|event| (*height, event)));
 		}
 
 		for (height, info) in key_manager_state.block_processor.blocks_data.iter() {
-			for key_manager_event in info.block_data.iter() {
-				match key_manager_event {
-					EthereumKeyManagerEvent::SignatureAccepted {
-						tx_out_id,
-						signer_id,
-						tx_fee,
-						tx_metadata,
-						transaction_ref,
-					} => {
-						if let Some((broadcast_id, _)) = TransactionOutIdToBroadcastId::<
-							Runtime,
-							EthereumInstance,
-						>::get(tx_out_id)
-						{
-							broadcasts.push(BroadcastWitnessInfo {
-								broadcast_chain_block_height: *height,
-								broadcast_id,
-								tx_out_id: RpcTransactionId::Ethereum { signature: *tx_out_id },
-								tx_ref: RpcTransactionRef::Ethereum { hash: *transaction_ref },
-							});
-						}
-					},
-					_ => {},
-				}
-			}
+			broadcasts.extend(info.block_data.iter().cloned().map(|event| (*height, event)));
 		}
 		// Ethereum doesn't have separate egress witnessing in the block processor
-		Ok(WitnessedEventsResponse { deposits, broadcasts, vault_deposits })
+		Ok(RawWitnessedEvents::Ethereum { deposits, broadcasts, vault_deposits })
 	}
 
-	fn extract_arbitrum_witnessed_events(
-		network: NetworkEnvironment,
-	) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage> {
+	fn extract_arbitrum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 		// Arbitrum composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2), KeyManager(3),
 		// FeeTracking(4), Liveness(5))
 		let state =
@@ -2200,208 +2136,22 @@ mod witnessed_events {
 		// Arbitrum uses BlockWitnessRange, so we need to get the root block number
 		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
 			let block_height: u64 = *height.root();
-			for witness in info.block_data.iter() {
-				deposits.push(convert_deposit_witness::<Arbitrum>(witness, block_height, network));
-			}
+			deposits.extend(info.block_data.iter().cloned().map(|witness| (block_height, witness)));
 		}
 
-		// Extract vault deposits from VaultEvents
+		// Extract raw vault events
 		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
 			let block_height: u64 = *height.root();
-			for vault_event in info.block_data.iter() {
-				if let Some(witness) =
-					extract_vault_deposit_from_event::<Runtime, ArbitrumInstance, Arbitrum>(
-						vault_event,
-					) {
-					vault_deposits.push(
-						convert_vault_deposit_witness::<Runtime, ArbitrumInstance>(
-							&witness,
-							block_height,
-							network,
-						),
-					);
-				}
-			}
+			vault_deposits
+				.extend(info.block_data.iter().cloned().map(|event| (block_height, event)));
 		}
 
 		for (height, info) in key_manager_state.block_processor.blocks_data.iter() {
-			for key_manager_event in info.block_data.iter() {
-				match key_manager_event {
-					EthereumKeyManagerEvent::SignatureAccepted {
-						tx_out_id,
-						signer_id,
-						tx_fee,
-						tx_metadata,
-						transaction_ref,
-					} => {
-						if let Some((broadcast_id, _)) = TransactionOutIdToBroadcastId::<
-							Runtime,
-							ArbitrumInstance,
-						>::get(tx_out_id)
-						{
-							broadcasts.push(BroadcastWitnessInfo {
-								broadcast_chain_block_height: *height.root(),
-								broadcast_id,
-								tx_out_id: RpcTransactionId::Arbitrum { signature: *tx_out_id },
-								tx_ref: RpcTransactionRef::Arbitrum { hash: *transaction_ref },
-							});
-						}
-					},
-					_ => {},
-				}
-			}
+			let block_height: u64 = *height.root();
+			broadcasts.extend(info.block_data.iter().cloned().map(|event| (block_height, event)));
 		}
 
 		// Arbitrum doesn't have separate egress witnessing in the block processor
-		Ok(WitnessedEventsResponse { deposits, broadcasts, vault_deposits })
-	}
-
-	/// Extract VaultDepositWitness from VaultEvents enum
-	fn extract_vault_deposit_from_event<T, I, C>(
-		event: &VaultEvents<VaultDepositWitness<T, I>, C>,
-	) -> Option<VaultDepositWitness<T, I>>
-	where
-		T: pallet_cf_ingress_egress::Config<I>,
-		I: 'static,
-		C: Chain,
-		VaultDepositWitness<T, I>: Clone,
-	{
-		match event {
-			VaultEvents::SwapNativeFilter(w) |
-			VaultEvents::SwapTokenFilter(w) |
-			VaultEvents::XcallNativeFilter(w) |
-			VaultEvents::XcallTokenFilter(w) => Some(w.clone()),
-			// TransferNativeFailedFilter and TransferTokenFailedFilter don't contain vault deposits
-			_ => None,
-		}
-	}
-
-	fn convert_deposit_witness<C: Chain + sp_core::Get<ForeignChain>>(
-		witness: &DepositWitness<C>,
-		height: u64,
-		network: NetworkEnvironment,
-	) -> DepositWitnessInfo
-	where
-		C::DepositDetails: IntoRpcDepositDetails,
-	{
-		DepositWitnessInfo {
-			deposit_chain_block_height: height,
-			deposit_address: EncodedAddress::from_chain_account::<C>(
-				witness.deposit_address.clone(),
-				network,
-			),
-			amount: witness.amount.into(),
-			asset: witness.asset.into(),
-			deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
-		}
-	}
-
-	fn convert_vault_deposit_witness<T, I>(
-		witness: &VaultDepositWitness<T, I>,
-		height: u64,
-		network: NetworkEnvironment,
-	) -> VaultDepositWitnessInfo
-	where
-		T: pallet_cf_ingress_egress::Config<I, AccountId = AccountId>,
-		I: 'static,
-		<T::TargetChain as Chain>::DepositDetails: IntoRpcDepositDetails,
-		<T::TargetChain as Chain>::ChainAccount: Clone,
-		<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId:
-			IntoTransactionInIdForAnyChain<<T::TargetChain as Chain>::ChainCrypto>,
-	{
-		use cf_chains::ChannelRefundParameters;
-
-		let tx_id: TransactionInIdForAnyChain = <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id.clone());
-
-		// Resolve affiliate short IDs to account IDs
-		let affiliate_fees: Vec<cf_primitives::Beneficiary<AccountId>> = witness
-			.affiliate_fees
-			.iter()
-			.filter_map(|affiliate| {
-				let broker_id = witness.broker_fee.as_ref().map(|b| &b.account);
-				resolve_affiliate_to_account(broker_id, affiliate.account)
-					.map(|account| cf_primitives::Beneficiary { account, bps: affiliate.bps })
-			})
-			.collect();
-
-		// Convert refund_params to use EncodedAddress
-		let refund_params = Some(ChannelRefundParameters {
-			retry_duration: witness.refund_params.retry_duration,
-			refund_address: EncodedAddress::from_chain_account::<T::TargetChain>(
-				witness.refund_params.refund_address.clone(),
-				network,
-			),
-			min_price: witness.refund_params.min_price,
-			refund_ccm_metadata: witness.refund_params.refund_ccm_metadata.clone(),
-			max_oracle_price_slippage: witness.refund_params.max_oracle_price_slippage,
-		});
-
-		VaultDepositWitnessInfo {
-			tx_id,
-			deposit_chain_block_height: height,
-			input_asset: witness.input_asset.into(),
-			output_asset: witness.output_asset,
-			amount: witness.deposit_amount.into(),
-			destination_address: witness.destination_address.clone(),
-			ccm_deposit_metadata: witness.deposit_metadata.clone(),
-			deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
-			broker_fee: witness.broker_fee.clone(),
-			affiliate_fees,
-			refund_params,
-			dca_params: witness.dca_params.clone(),
-			max_boost_fee: witness.boost_fee,
-		}
-	}
-
-	fn resolve_affiliate_to_account(
-		broker_id: Option<&AccountId>,
-		short_id: AffiliateShortId,
-	) -> Option<AccountId> {
-		broker_id.and_then(|broker| {
-			pallet_cf_swapping::AffiliateIdMapping::<Runtime>::get(broker, short_id)
-		})
-	}
-
-	fn convert_bitcoin_broadcast(
-		tx_confirmation: &pallet_cf_broadcast::TransactionConfirmation<Runtime, BitcoinInstance>,
-		height: u64,
-	) -> Option<BroadcastWitnessInfo> {
-		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<
-			Runtime,
-			BitcoinInstance,
-		>::get(tx_confirmation.tx_out_id)?;
-
-		Some(BroadcastWitnessInfo {
-			broadcast_chain_block_height: height,
-			broadcast_id,
-			tx_out_id: RpcTransactionId::Bitcoin { hash: BitcoinHash(tx_confirmation.tx_out_id) },
-			tx_ref: RpcTransactionRef::Bitcoin {
-				hash: BitcoinHash(tx_confirmation.transaction_ref),
-			},
-		})
-	}
-
-	/// Trait to convert chain-specific deposit details to RPC format
-	trait IntoRpcDepositDetails {
-		fn into_rpc_deposit_details(self) -> Option<DepositDetails>;
-	}
-
-	impl IntoRpcDepositDetails for cf_chains::btc::Utxo {
-		fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
-			Some(DepositDetails::Bitcoin { tx_id: BitcoinHash(self.id.tx_id), vout: self.id.vout })
-		}
-	}
-
-	impl IntoRpcDepositDetails for cf_chains::evm::DepositDetails {
-		fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
-			self.tx_hashes.map(|tx_hashes| DepositDetails::Ethereum { tx_hashes })
-		}
-	}
-
-	// For Arbitrum which also uses EVM deposit details but we want to use the Arbitrum variant
-	impl IntoRpcDepositDetails for Vec<H256> {
-		fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
-			Some(DepositDetails::Arbitrum { tx_hashes: self })
-		}
+		Ok(RawWitnessedEvents::Arbitrum { deposits, broadcasts, vault_deposits })
 	}
 }

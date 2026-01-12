@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 793
+assertion_line: 788
 expression: response
 ---
 {

@@ -24,9 +24,13 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
+	address::{
+		AddressString, EncodedAddress, ForeignChainAddressHumanreadable, ToHumanreadableAddress,
+	},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUnchecked, MAX_CCM_MSG_LENGTH,
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	CcmChannelMetadataUnchecked, Chain, ChainCrypto, ChannelRefundParametersUnchecked,
+	IntoTransactionInIdForAnyChain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
 use cf_primitives::{
@@ -43,7 +47,7 @@ use cf_rpc_apis::{
 	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
-use cf_utilities::rpc::NumberOrHex;
+use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
 use core::ops::Range;
 use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
@@ -56,11 +60,13 @@ use jsonrpsee::{
 	},
 	PendingSubscriptionSink,
 };
+use pallet_cf_broadcast::TransactionOutIdToBroadcastId;
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::OraclePrice, price::PriceAsset,
 };
 use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use pallet_cf_lending_pools::{
 	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
 };
@@ -82,26 +88,28 @@ use sp_runtime::{
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
-	chainflip::{BlockUpdate, Offence},
+	chainflip::{
+		ethereum_elections::{EthereumKeyManagerEvent, VaultEvents},
+		BlockUpdate, Offence,
+	},
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{
-		custom_api::CustomRuntimeApi,
+		custom_api::{CustomRuntimeApi, RawWitnessedEvents},
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BoostPoolDetails, BroadcastWitnessInfo, BrokerInfo,
-			CcmData, ChainAccounts, DelegationSnapshot, DepositDetails, DepositWitnessInfo,
-			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
-			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
-			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
-			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RpcTransactionId, RpcTransactionRef, RuntimeApiPenalty,
+			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
+			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
+			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
+			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
+			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
+			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
 			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
 			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultDepositWitnessInfo, VaultSwapDetails, WitnessedEventsResponse,
+			VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
-	Hash,
+	Hash, Runtime,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -809,16 +817,39 @@ type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
-impl From<DepositWitnessInfo> for RpcDepositWitnessInfo {
-	fn from(deposit_witness: DepositWitnessInfo) -> Self {
-		RpcDepositWitnessInfo {
-			deposit_chain_block_height: deposit_witness.deposit_chain_block_height,
-			amount: deposit_witness.amount.into(),
-			asset: deposit_witness.asset,
-			deposit_details: deposit_witness.deposit_details,
-			deposit_address: AddressString::from_encoded_address(deposit_witness.deposit_address),
-		}
+/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BitcoinHash(pub sp_core::H256);
+
+impl Serialize for BitcoinHash {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		sp_core::H256(self.0.to_fixed_bytes().into_iter().rev().collect_array())
+			.serialize(serializer)
 	}
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcTransactionRef {
+	Bitcoin { hash: BitcoinHash },
+	Evm { hash: cf_chains::evm::H256 },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RpcTransactionId {
+	Bitcoin { hash: BitcoinHash },
+	Evm { signature: cf_chains::evm::SchnorrVerificationComponents },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DepositDetails {
+	Bitcoin { tx_id: BitcoinHash, vout: u32 },
+	Evm { tx_hashes: Vec<cf_chains::evm::H256> },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -830,29 +861,14 @@ pub struct RpcDepositWitnessInfo {
 	pub deposit_details: Option<DepositDetails>,
 }
 
-impl From<VaultDepositWitnessInfo> for RpcVaultDepositWitnessInfo {
-	fn from(vault_deposits: VaultDepositWitnessInfo) -> Self {
-		RpcVaultDepositWitnessInfo {
-			tx_id: vault_deposits.tx_id.to_string(),
-			deposit_chain_block_height: vault_deposits.deposit_chain_block_height,
-			input_asset: vault_deposits.input_asset,
-			output_asset: vault_deposits.output_asset,
-			amount: vault_deposits.amount.into(),
-			destination_address: AddressString::from_encoded_address(
-				vault_deposits.destination_address,
-			),
-			ccm_deposit_metadata: vault_deposits.ccm_deposit_metadata,
-			deposit_details: vault_deposits.deposit_details,
-			broker_fee: vault_deposits.broker_fee,
-			affiliate_fees: vault_deposits.affiliate_fees,
-			refund_params: vault_deposits.refund_params.map(|refund_params| {
-				refund_params.map_address(|a| AddressString::from_encoded_address(a))
-			}),
-			dca_params: vault_deposits.dca_params,
-			max_boost_fee: vault_deposits.max_boost_fee,
-		}
-	}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BroadcastWitnessInfo {
+	pub broadcast_chain_block_height: u64,
+	pub broadcast_id: cf_primitives::BroadcastId,
+	pub tx_out_id: RpcTransactionId,
+	pub tx_ref: RpcTransactionRef,
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RpcVaultDepositWitnessInfo {
 	pub tx_id: String,
@@ -876,6 +892,241 @@ pub struct RpcWitnessedEventsResponse {
 	pub deposits: Vec<RpcDepositWitnessInfo>,
 	pub broadcasts: Vec<BroadcastWitnessInfo>,
 	pub vault_deposits: Vec<RpcVaultDepositWitnessInfo>,
+}
+
+fn convert_deposit_witness<C: Chain>(
+	witness: &DepositWitness<C>,
+	height: u64,
+	network: NetworkEnvironment,
+) -> RpcDepositWitnessInfo
+where
+	C::DepositDetails: IntoRpcDepositDetails,
+{
+	RpcDepositWitnessInfo {
+		deposit_chain_block_height: height,
+		deposit_address: AddressString::from_encoded_address(
+			EncodedAddress::from_chain_account::<C>(witness.deposit_address.clone(), network),
+		),
+		amount: <<C as cf_chains::Chain>::ChainAmount as Into<u128>>::into(witness.amount).into(),
+		asset: witness.asset.into(),
+		deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
+	}
+}
+
+fn convert_vault_deposit_witness<T, I>(
+	witness: &VaultDepositWitness<T, I>,
+	height: u64,
+	network: NetworkEnvironment,
+) -> RpcVaultDepositWitnessInfo
+where
+	T: pallet_cf_ingress_egress::Config<I, AccountId = state_chain_runtime::AccountId>,
+	I: 'static,
+	<T::TargetChain as Chain>::DepositDetails: IntoRpcDepositDetails,
+	<T::TargetChain as Chain>::ChainAccount: Clone,
+	<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId:
+		IntoTransactionInIdForAnyChain<<T::TargetChain as Chain>::ChainCrypto>,
+{
+	let tx_id = <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id.clone())
+		.to_string();
+
+	let affiliate_fees: Vec<cf_primitives::Beneficiary<AccountId32>> = witness
+		.affiliate_fees
+		.iter()
+		.filter_map(|affiliate| {
+			let broker_id = witness.broker_fee.as_ref().map(|b| &b.account);
+			resolve_affiliate_to_account(broker_id, affiliate.account)
+				.map(|account| cf_primitives::Beneficiary { account, bps: affiliate.bps })
+		})
+		.collect();
+
+	let refund_params = Some(witness.refund_params.clone().map_address(|address| {
+		AddressString::from_encoded_address(EncodedAddress::from_chain_account::<T::TargetChain>(
+			address, network,
+		))
+	}));
+
+	RpcVaultDepositWitnessInfo {
+		tx_id,
+		deposit_chain_block_height: height,
+		input_asset: witness.input_asset.into(),
+		output_asset: witness.output_asset,
+		amount: <<<T as pallet_cf_ingress_egress::Config<I>>::TargetChain as Chain>::ChainAmount as Into<u128>>::into(witness.deposit_amount).into(),
+		destination_address: AddressString::from_encoded_address(witness.destination_address.clone()),
+		ccm_deposit_metadata: witness.deposit_metadata.clone(),
+		deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
+		broker_fee: witness.broker_fee.clone(),
+		affiliate_fees,
+		refund_params,
+		dca_params: witness.dca_params.clone(),
+		max_boost_fee: witness.boost_fee,
+	}
+}
+
+fn resolve_affiliate_to_account(
+	broker_id: Option<&state_chain_runtime::AccountId>,
+	short_id: cf_primitives::AffiliateShortId,
+) -> Option<state_chain_runtime::AccountId> {
+	broker_id
+		.and_then(|broker| pallet_cf_swapping::AffiliateIdMapping::<Runtime>::get(broker, short_id))
+}
+
+fn convert_bitcoin_broadcast(
+	tx_confirmation: pallet_cf_broadcast::TransactionConfirmation<Runtime, BitcoinInstance>,
+	height: u64,
+) -> Option<BroadcastWitnessInfo> {
+	let (broadcast_id, _) =
+		TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::get(tx_confirmation.tx_out_id)?;
+
+	Some(BroadcastWitnessInfo {
+		broadcast_chain_block_height: height,
+		broadcast_id,
+		tx_out_id: RpcTransactionId::Bitcoin { hash: BitcoinHash(tx_confirmation.tx_out_id) },
+		tx_ref: RpcTransactionRef::Bitcoin { hash: BitcoinHash(tx_confirmation.transaction_ref) },
+	})
+}
+
+fn convert_evm_broadcast(
+	key_manager_event: &EthereumKeyManagerEvent,
+	height: u64,
+) -> Option<BroadcastWitnessInfo> {
+	match key_manager_event {
+		EthereumKeyManagerEvent::SignatureAccepted { tx_out_id, transaction_ref, .. } => {
+			let (broadcast_id, _) =
+				TransactionOutIdToBroadcastId::<Runtime, EthereumInstance>::get(tx_out_id)?;
+			Some(BroadcastWitnessInfo {
+				broadcast_chain_block_height: height,
+				broadcast_id,
+				tx_out_id: RpcTransactionId::Evm { signature: *tx_out_id },
+				tx_ref: RpcTransactionRef::Evm { hash: *transaction_ref },
+			})
+		},
+		_ => None,
+	}
+}
+
+fn extract_vault_deposit_from_event<T, I, C>(
+	event: &VaultEvents<VaultDepositWitness<T, I>, C>,
+) -> Option<VaultDepositWitness<T, I>>
+where
+	T: pallet_cf_ingress_egress::Config<I>,
+	I: 'static,
+	C: Chain,
+	VaultDepositWitness<T, I>: Clone,
+{
+	match event {
+		VaultEvents::SwapNativeFilter(w) |
+		VaultEvents::SwapTokenFilter(w) |
+		VaultEvents::XcallNativeFilter(w) |
+		VaultEvents::XcallTokenFilter(w) => Some(w.clone()),
+		// TransferNativeFailedFilter and TransferTokenFailedFilter don't contain vault deposits
+		_ => None,
+	}
+}
+
+trait IntoRpcDepositDetails {
+	fn into_rpc_deposit_details(self) -> Option<DepositDetails>;
+}
+
+impl IntoRpcDepositDetails for cf_chains::btc::Utxo {
+	fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
+		Some(DepositDetails::Bitcoin { tx_id: BitcoinHash(self.id.tx_id), vout: self.id.vout })
+	}
+}
+
+impl IntoRpcDepositDetails for cf_chains::evm::DepositDetails {
+	fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
+		self.tx_hashes.map(|tx_hashes| DepositDetails::Evm { tx_hashes })
+	}
+}
+
+fn convert_raw_witnessed_events(
+	raw: RawWitnessedEvents,
+	network: NetworkEnvironment,
+) -> RpcWitnessedEventsResponse {
+	match raw {
+		RawWitnessedEvents::Bitcoin { deposits, broadcasts, vault_deposits } => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_deposit_witness::<cf_chains::Bitcoin>(&witness, height, network)
+				})
+				.collect();
+
+			let vault_deposits = vault_deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_vault_deposit_witness::<Runtime, BitcoinInstance>(
+						&witness, height, network,
+					)
+				})
+				.collect();
+
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, tx)| convert_bitcoin_broadcast(tx, height))
+				.collect();
+
+			RpcWitnessedEventsResponse { deposits, broadcasts, vault_deposits }
+		},
+		RawWitnessedEvents::Ethereum { deposits, broadcasts, vault_deposits } => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_deposit_witness::<cf_chains::Ethereum>(&witness, height, network)
+				})
+				.collect();
+
+			let vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event::<Runtime, EthereumInstance, cf_chains::Ethereum>(
+						&event,
+					)
+					.map(|witness| {
+						convert_vault_deposit_witness::<Runtime, EthereumInstance>(
+							&witness, height, network,
+						)
+					})
+				})
+				.collect();
+
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
+
+			RpcWitnessedEventsResponse { deposits, broadcasts, vault_deposits }
+		},
+		RawWitnessedEvents::Arbitrum { deposits, broadcasts, vault_deposits } => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_deposit_witness::<cf_chains::Arbitrum>(&witness, height, network)
+				})
+				.collect();
+
+			let vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event::<Runtime, ArbitrumInstance, cf_chains::Arbitrum>(
+						&event,
+					)
+					.map(|witness| {
+						convert_vault_deposit_witness::<Runtime, ArbitrumInstance>(
+							&witness, height, network,
+						)
+					})
+				})
+				.collect();
+
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
+
+			RpcWitnessedEventsResponse { deposits, broadcasts, vault_deposits }
+		},
+	}
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -2998,17 +3249,19 @@ where
 		chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcWitnessedEventsResponse> {
-		let WitnessedEventsResponse { deposits, broadcasts, vault_deposits } = self
+		let hash = self.rpc_backend.unwrap_or_best(at);
+		let raw = self
 			.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_witnessed_events(hash, chain))
-			.unwrap()
-			.unwrap();
+			.with_runtime_api(Some(hash), |api, hash| api.cf_witnessed_events(hash, chain))?
+			.map_err(CfApiError::from)?;
+		let network = self
+			.rpc_backend
+			.with_runtime_api(Some(hash), |api, hash| api.cf_network_environment(hash))?;
 
-		Ok(RpcWitnessedEventsResponse {
-			deposits: deposits.into_iter().map(|deposit| deposit.into()).collect(),
-			broadcasts,
-			vault_deposits: vault_deposits.into_iter().map(|vault| vault.into()).collect(),
-		})
+		let network = network.into();
+
+		StorageQueryApi::new(&self.rpc_backend.client)
+			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
 	}
 }
 

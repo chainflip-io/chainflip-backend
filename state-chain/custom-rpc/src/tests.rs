@@ -736,11 +736,6 @@ fn runtime_safe_mode_serialization() {
 
 #[test]
 fn witnessed_events_serialization() {
-	use state_chain_runtime::runtime_apis::types::{
-		BitcoinHash, BroadcastWitnessInfo, DepositDetails as RpcDepositDetails, RpcTransactionId,
-		RpcTransactionRef,
-	};
-
 	let response = RpcWitnessedEventsResponse {
 		deposits: vec![RpcDepositWitnessInfo {
 			deposit_chain_block_height: 1,
@@ -749,9 +744,7 @@ fn witnessed_events_serialization() {
 			),
 			amount: 100u128.into(),
 			asset: any::Asset::Eth,
-			deposit_details: Some(RpcDepositDetails::Ethereum {
-				tx_hashes: vec![H256([0x22; 32])],
-			}),
+			deposit_details: Some(DepositDetails::Evm { tx_hashes: vec![H256([0x22; 32])] }),
 		}],
 		broadcasts: vec![BroadcastWitnessInfo {
 			broadcast_chain_block_height: 2,
