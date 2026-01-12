@@ -17,7 +17,7 @@ import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
-import { ChainflipIO, WithLpAccount } from './utils/chainflip_io';
+import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
 export async function depositLiquidity<A extends WithLpAccount>(
   parentcf: ChainflipIO<A>,

@@ -12,7 +12,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { ChainflipIO, fullAccountFromUri } from './utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export type LendingPoolId = {
   asset: Asset;

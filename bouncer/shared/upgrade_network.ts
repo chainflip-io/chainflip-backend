@@ -11,7 +11,7 @@ import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgr
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger as logger } from 'shared/utils/logger';
-import { clearChainflipApiCache, clearSubscribeHeadsCache } from './utils/substrate';
+import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');

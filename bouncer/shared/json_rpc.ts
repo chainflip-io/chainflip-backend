@@ -1,5 +1,5 @@
 import { Logger, throwError } from 'shared/utils/logger';
-import { runWithTimeout } from './utils';
+import { runWithTimeout } from 'shared/utils';
 
 // export const brokerEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
