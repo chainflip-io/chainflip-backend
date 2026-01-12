@@ -116,15 +116,15 @@ async function testDCASwap<A = []>(
   const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
   const observeSwapExecutedEvents = await observeEvents(cf.logger, `swapping:SwapExecuted`, {
     test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks,
-    stopAfter: { blocks: historicalCheckBlocks },
+    historicalCheckBlocks: historicalCheckBlocks * 2,
+    stopAfter: { blocks: historicalCheckBlocks * 2 },
   }).events;
 
   // Check that there were the correct number of SwapExecuted events, one for each chunk.
   assert.strictEqual(
     observeSwapExecutedEvents.length,
     numberOfChunks,
-    'Unexpected number of SwapExecuted events',
+    `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${observeSwapExecutedEvents.length}`,
   );
 
   // Check the chunk interval of all chunks

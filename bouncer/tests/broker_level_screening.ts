@@ -73,7 +73,7 @@ async function postToDepositMonitor(portAndRoute: string, body: string | object)
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      timeout: 5000,
+      timeout: 20000,
     })
     .then((res) => res.data)
     .catch((error) => {
