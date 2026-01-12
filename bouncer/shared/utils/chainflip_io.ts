@@ -49,23 +49,29 @@ export class ChainflipIO<Requirements> {
   private currentStackTrace: string | undefined;
 
   /**
+   * Used to print logs with parallelism aware prefix
+   */
+  private getLoggingPrefix: () => string;
+
+  /**
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
    */
-  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number) {
+  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number, getLoggingPrefix: () => string) {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
     this.currentlyInUseBy = undefined;
     this.currentStackTrace = undefined;
+    this.getLoggingPrefix = getLoggingPrefix;
   }
 
   private clone(): ChainflipIO<Requirements> {
-    return new ChainflipIO(this.logger, this.requirements, this.lastIoBlockHeight);
+    return new ChainflipIO(this.logger, this.requirements, this.lastIoBlockHeight, this.getLoggingPrefix);
   }
 
   withChildLogger(tag: string): ChainflipIO<Requirements> {
-    return new ChainflipIO(this.logger.child({ tag }), this.requirements, this.lastIoBlockHeight);
+    return new ChainflipIO(this.logger.child({ tag }), this.requirements, this.lastIoBlockHeight, this.getLoggingPrefix);
   }
 
   with<Extension>(extension: Extension): ChainflipIO<Requirements & Extension> {
@@ -73,6 +79,7 @@ export class ChainflipIO<Requirements> {
       this.logger,
       { ...this.requirements, ...extension },
       this.lastIoBlockHeight,
+      this.getLoggingPrefix,
     );
   }
 
@@ -375,14 +382,48 @@ export class ChainflipIO<Requirements> {
     values: T,
   ): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>> }> {
     return this.runExclusively('all', async () => {
+      this.info(`Starting tasks ${values.map((_, index) => index)}`);
+
+      const n = values.length;
+
+      // markers whether subtasks are still running
+      let running: ('running' | 'success' | 'done')[] = Array(n).fill('running');
+
+      let getSymbol = (index: number, indexOfTalker: number) => {
+        if (indexOfTalker === index) {
+          if (running[index] === 'success') {
+            return 'v';
+          } else {
+            return '+';
+          }
+        }
+        switch (running[index]) {
+          case 'running': return '|';
+          case 'done': return ' ';
+        }
+      };
+
       // run all functions in parallel with clones of this chainflip io instance
       const results = await Promise.all(
-        values.map(async (f) => {
-          const cf = this.clone();
-          const result = await f(cf);
-          return { cf, result };
+        values.map(async (f, index) => {
+          let cf = this.clone();
+          const oldLoggingPrefix = cf.getLoggingPrefix;
+          cf.getLoggingPrefix = () => {
+            const taskState = Array.from({length: n}, (_, i) => getSymbol(i, index)).join(" ");
+            return `${oldLoggingPrefix()} ${taskState} [${index}] `;
+          };
+          try {
+            const result = await f(cf);
+            running[index] = 'success';
+            cf.debug(`Task ${index} finished successfully`);
+            return { cf, result }
+          } finally {
+            running[index] = 'done';
+          }
         }),
       );
+
+      this.info(`All tasks ${values.map((_, index) => index)} finished successfully`);
 
       // collect all block heights and use the max height for our new block height
       this.lastIoBlockHeight = Math.max(...results.map((val) => val.cf.lastIoBlockHeight));
@@ -442,27 +483,27 @@ export class ChainflipIO<Requirements> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   trace(msg: string, ...args: any[]) {
-    this.logger.trace(msg, ...args);
+    this.logger.trace(`${this.getLoggingPrefix()}${msg}`, ...args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   debug(msg: string, ...args: any[]) {
-    this.logger.debug(msg, ...args);
+    this.logger.debug(`${this.getLoggingPrefix()}${msg}`, ...args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   info(msg: string, ...args: any[]) {
-    this.logger.info(msg, ...args);
+    this.logger.info(`${this.getLoggingPrefix()}${msg}`, ...args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   warn(msg: string, ...args: any[]) {
-    this.logger.warn(msg, ...args);
+    this.logger.warn(`${this.getLoggingPrefix()}${msg}`, ...args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error(msg: string, ...args: any[]) {
-    this.logger.error(msg, ...args);
+    this.logger.error(`${this.getLoggingPrefix()}${msg}`, ...args);
   }
 }
 
@@ -482,7 +523,7 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
   const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
 
   // initialize with this height, meaning that we'll only search for events from this height on
-  return new ChainflipIO(logger, requirements, currentBlockHeight);
+  return new ChainflipIO(logger, requirements, currentBlockHeight, () => "");
 }
 
 // ------------ Extrinsic types  ---------------
