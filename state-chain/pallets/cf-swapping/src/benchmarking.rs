@@ -128,7 +128,7 @@ mod benchmarks {
 		T::BalanceApi::credit_account(&caller, Asset::Eth, 200);
 
 		#[extrinsic_call]
-		withdraw(RawOrigin::Signed(caller.clone()), BenchmarkValue::benchmark_value());
+		withdraw(RawOrigin::Signed(caller.clone()), Asset::Eth, EncodedAddress::benchmark_value());
 	}
 
 	#[benchmark]

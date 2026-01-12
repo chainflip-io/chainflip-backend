@@ -1134,24 +1134,30 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::withdraw())]
 		pub fn withdraw(
 			origin: OriginFor<T>,
-			destination_address: EthereumAddress,
+			asset: Asset,
+			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
-				ensure!(
-					bound_address == destination_address,
-					Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
-				);
+			let destination_address_internal =
+				T::AddressConverter::decode_and_validate_address_for_asset(
+					destination_address.clone(),
+					asset,
+				)
+				.map_err(address_error_to_pallet_error::<T>)?;
+
+			if asset == Asset::Usdc {
+				if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
+					ensure!(
+						matches!(destination_address_internal, ForeignChainAddress::Eth(add) if add == bound_address),
+						Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
+					);
+				}
 			}
 
-			Self::trigger_withdrawal(
-				&account_id,
-				Asset::Usdc,
-				ForeignChainAddress::Eth(destination_address),
-			)?;
+			Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
 			Ok(())
 		}
