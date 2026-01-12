@@ -32,7 +32,7 @@ export async function initiateSwap(
   }
 
   if (sourceAsset === 'Btc') {
-    await sleep(Math.random() * 40000);
+    await sleep(Math.random() * 100000);
   }
 
   if (destAsset === 'Btc') {
