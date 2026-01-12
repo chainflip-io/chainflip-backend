@@ -56,6 +56,8 @@ export async function depositLiquidity<A extends WithLpAccount>(
     });
   }
 
+  cf.debug(`Opening new liquidity deposit channel for ${lpUri}`);
+
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
     expectedEvent: {
@@ -67,7 +69,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
 
-  cf.trace(`Initiating transfer to ${ingressAddress}`);
+  cf.debug(`Initiating transfer to ${ingressAddress}`);
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),

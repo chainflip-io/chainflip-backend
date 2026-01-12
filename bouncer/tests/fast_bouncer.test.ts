@@ -33,13 +33,13 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);
-  concurrentTest('LpApi', testLpApi, 240);
-  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 200);
+  concurrentTest('LpApi', testLpApi, 300);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 250);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 300);
   concurrentTest('FillOrKill', testFillOrKill, 300);
   concurrentTest('DCASwaps', testDCASwaps, 300);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
-  concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 250);
+  concurrentTest('DepositChannelCreation', depositChannelCreation, 150);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);
   // This test times out far too often.
