@@ -6,6 +6,7 @@ import {
   Assets,
   ccmSupportedChains,
   chainFromAsset,
+  sleep,
   VaultSwapParams,
   vaultSwapSupportedChains,
 } from 'shared/utils';
@@ -28,6 +29,10 @@ export async function initiateSwap(
       functionCall === testSwap
         ? await newCcmMetadata(destAsset)
         : await newVaultSwapCcmMetadata(sourceAsset, destAsset);
+  }
+
+  if (sourceAsset === 'Btc') {
+    await sleep(Math.random() * 40000);
   }
 
   if (destAsset === 'Btc') {
