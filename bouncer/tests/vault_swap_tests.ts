@@ -4,7 +4,6 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import {
   Assets,
-  createStateChainKeypair,
   defaultAssetAmounts,
   handleSubstrateError,
   newAssetAddress,
@@ -12,7 +11,7 @@ import {
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
 import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
-import { setupBrokerAccount } from 'shared/setup_account';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -114,9 +113,8 @@ async function testFeeCollection<A = []>(
   let cf = parentcf;
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
-  const broker = createStateChainKeypair(brokerUri);
   const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
-  await setupBrokerAccount(cf.logger, brokerUri);
+  const broker = await setupAccount(cf.logger, brokerUri, AccountRole.Broker);
   cf.debug('Registering affiliate');
   const { affiliateId, shortId } = await registerAffiliate(cf.logger, brokerUri, refundAddress);
 
