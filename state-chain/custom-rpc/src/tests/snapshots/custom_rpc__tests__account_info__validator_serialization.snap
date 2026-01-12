@@ -26,7 +26,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Solana": {
       "SOL": "0x12a05f200",
-      "USDC": "0xb71b0"
+      "USDC": "0xb71b0",
+      "USDT": "0x16e360"
     },
     "Assethub": {
       "DOT": "0x2540be400",

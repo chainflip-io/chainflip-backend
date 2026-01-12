@@ -246,7 +246,7 @@ impl CcmValidityChecker {
 					ccm_accounts.cf_receiver.pubkey.into(),
 				]);
 
-				if asset == SolAsset::SolUsdc {
+				if asset == SolAsset::SolUsdc || asset == SolAsset::SolUsdt  {
 					seen_addresses.insert(TOKEN_PROGRAM_ID);
 				}
 				let mut accounts_length = ccm_accounts.additional_accounts.len() *
@@ -265,6 +265,7 @@ impl CcmValidityChecker {
 					match asset {
 						SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
 						SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
+						SolAsset::SolUsdt => MAX_USER_CCM_BYTES_USDC,
 					} {
 					return Err(CcmValidityError::CcmIsTooLong)
 				}
