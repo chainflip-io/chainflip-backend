@@ -570,3 +570,6 @@ export function fullAccountFromUri<A extends AccountType>(
     type,
   };
 }
+
+// ------------ Other ---------------
+export type Severity = 'Error' | 'Warn' | 'Info' | 'Debug' | 'Trace';

@@ -1,9 +1,10 @@
 import { Logger } from 'shared/utils/logger';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi } from 'shared/utils/substrate';
+import { ChainflipIO } from './utils/chainflip_io';
 
-export async function setupElections(logger: Logger): Promise<void> {
-  logger.info('Setting up elections');
+export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
+  cf.info('Setting up elections');
 
   const chainflip = await getChainflipApi();
 
@@ -30,9 +31,9 @@ export async function setupElections(logger: Logger): Promise<void> {
       api.tx.bitcoinElections.updateSettings(response, null, 'Heed'),
     );
 
-    logger.info(`Ingress safety margin for bitcoin elections set to ${ingressSafetyMargin}.`);
+    cf.info(`Ingress safety margin for bitcoin elections set to ${ingressSafetyMargin}.`);
   } else {
-    logger.info('Ignoring bitcoin elections setup as bitcoinElections pallet is not available.');
+    cf.info('Ignoring bitcoin elections setup as bitcoinElections pallet is not available.');
   }
 
   if (chainflip.query.genericElections) {
@@ -59,8 +60,8 @@ export async function setupElections(logger: Logger): Promise<void> {
       api.tx.genericElections.updateSettings(response, null, 'Heed'),
     );
 
-    logger.info(`Oracle elections timeout set to ${upToDateTimeout}.`);
+    cf.info(`Oracle elections timeout set to ${upToDateTimeout}.`);
   } else {
-    logger.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
+    cf.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
   }
 }
