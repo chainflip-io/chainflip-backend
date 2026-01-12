@@ -1,4 +1,5 @@
 import { Logger, throwError } from 'shared/utils/logger';
+import { runWithTimeout } from './utils';
 
 // export const brokerEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
@@ -25,14 +26,17 @@ export async function jsonRpc(
   });
 
   const fetchEndpoint = endpoint ?? 'http://127.0.0.1:9944';
-  const response = await fetch(`${fetchEndpoint}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: request,
-  });
+  const response = await runWithTimeout(
+    fetch(`${fetchEndpoint}`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: request,
+    }),
+    5000,
+  );
 
   const data = await response.json();
   if (data.error) {

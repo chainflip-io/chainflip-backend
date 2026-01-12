@@ -57,7 +57,12 @@ export class ChainflipIO<Requirements> {
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
    */
-  constructor(logger: Logger, requirements: Requirements, lastIoBlockHeight: number, getLoggingPrefix: () => string) {
+  constructor(
+    logger: Logger,
+    requirements: Requirements,
+    lastIoBlockHeight: number,
+    getLoggingPrefix: () => string,
+  ) {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
@@ -67,11 +72,21 @@ export class ChainflipIO<Requirements> {
   }
 
   private clone(): ChainflipIO<Requirements> {
-    return new ChainflipIO(this.logger, this.requirements, this.lastIoBlockHeight, this.getLoggingPrefix);
+    return new ChainflipIO(
+      this.logger,
+      this.requirements,
+      this.lastIoBlockHeight,
+      this.getLoggingPrefix,
+    );
   }
 
   withChildLogger(tag: string): ChainflipIO<Requirements> {
-    return new ChainflipIO(this.logger.child({ tag }), this.requirements, this.lastIoBlockHeight, this.getLoggingPrefix);
+    return new ChainflipIO(
+      this.logger.child({ tag }),
+      this.requirements,
+      this.lastIoBlockHeight,
+      this.getLoggingPrefix,
+    );
   }
 
   with<Extension>(extension: Extension): ChainflipIO<Requirements & Extension> {
@@ -398,8 +413,10 @@ export class ChainflipIO<Requirements> {
           }
         }
         switch (running[index]) {
-          case 'running': return '|';
-          case 'done': return ' ';
+          case 'running':
+            return '|';
+          case 'done':
+            return ' ';
         }
       };
 
@@ -409,14 +426,14 @@ export class ChainflipIO<Requirements> {
           let cf = this.clone();
           const oldLoggingPrefix = cf.getLoggingPrefix;
           cf.getLoggingPrefix = () => {
-            const taskState = Array.from({length: n}, (_, i) => getSymbol(i, index)).join(" ");
+            const taskState = Array.from({ length: n }, (_, i) => getSymbol(i, index)).join(' ');
             return `${oldLoggingPrefix()} ${taskState} [${index}] `;
           };
           try {
             const result = await f(cf);
             running[index] = 'success';
             cf.debug(`Task ${index} finished successfully`);
-            return { cf, result }
+            return { cf, result };
           } finally {
             running[index] = 'done';
           }
@@ -523,7 +540,7 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
   const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
 
   // initialize with this height, meaning that we'll only search for events from this height on
-  return new ChainflipIO(logger, requirements, currentBlockHeight, () => "");
+  return new ChainflipIO(logger, requirements, currentBlockHeight, () => '');
 }
 
 // ------------ Extrinsic types  ---------------
