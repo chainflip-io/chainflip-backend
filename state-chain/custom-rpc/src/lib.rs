@@ -26,7 +26,7 @@ use cf_amm::{
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
 	eth::Address as EthereumAddress,
-	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
+	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUnchecked, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
 use cf_primitives::{
@@ -88,15 +88,16 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
-			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
+			AuctionState, BoostPoolDepth, BoostPoolDetails, BroadcastWitnessInfo, BrokerInfo,
+			CcmData, ChainAccounts, DelegationSnapshot, DepositDetails, DepositWitnessInfo,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
+			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
+			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
+			RpcLendingPool, RpcTransactionId, RpcTransactionRef, RuntimeApiPenalty,
 			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
 			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			VaultDepositWitnessInfo, VaultSwapDetails, WitnessedEventsResponse,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -808,6 +809,75 @@ type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
+impl From<DepositWitnessInfo> for RpcDepositWitnessInfo {
+	fn from(deposit_witness: DepositWitnessInfo) -> Self {
+		RpcDepositWitnessInfo {
+			deposit_chain_block_height: deposit_witness.deposit_chain_block_height,
+			amount: deposit_witness.amount.into(),
+			asset: deposit_witness.asset,
+			deposit_details: deposit_witness.deposit_details,
+			deposit_address: AddressString::from_encoded_address(deposit_witness.deposit_address),
+		}
+	}
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RpcDepositWitnessInfo {
+	pub deposit_chain_block_height: u64,
+	pub deposit_address: AddressString,
+	pub amount: NumberOrHex,
+	pub asset: cf_chains::assets::any::Asset,
+	pub deposit_details: Option<DepositDetails>,
+}
+
+impl From<VaultDepositWitnessInfo> for RpcVaultDepositWitnessInfo {
+	fn from(vault_deposits: VaultDepositWitnessInfo) -> Self {
+		RpcVaultDepositWitnessInfo {
+			tx_id: vault_deposits.tx_id.to_string(),
+			deposit_chain_block_height: vault_deposits.deposit_chain_block_height,
+			input_asset: vault_deposits.input_asset,
+			output_asset: vault_deposits.output_asset,
+			amount: vault_deposits.amount.into(),
+			destination_address: AddressString::from_encoded_address(
+				vault_deposits.destination_address,
+			),
+			ccm_deposit_metadata: vault_deposits.ccm_deposit_metadata,
+			deposit_details: vault_deposits.deposit_details,
+			broker_fee: vault_deposits.broker_fee,
+			affiliate_fees: vault_deposits.affiliate_fees,
+			refund_params: vault_deposits.refund_params.map(|refund_params| {
+				refund_params.map_address(|a| AddressString::from_encoded_address(a))
+			}),
+			dca_params: vault_deposits.dca_params,
+			max_boost_fee: vault_deposits.max_boost_fee,
+		}
+	}
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RpcVaultDepositWitnessInfo {
+	pub tx_id: String,
+	pub deposit_chain_block_height: u64,
+	pub input_asset: cf_chains::assets::any::Asset,
+	pub output_asset: cf_chains::assets::any::Asset,
+	pub amount: NumberOrHex,
+	pub destination_address: AddressString,
+	pub ccm_deposit_metadata:
+		Option<cf_chains::CcmDepositMetadataUnchecked<cf_chains::ForeignChainAddress>>,
+	pub deposit_details: Option<DepositDetails>,
+	pub broker_fee: Option<cf_primitives::Beneficiary<AccountId32>>,
+	pub affiliate_fees: Vec<cf_primitives::Beneficiary<AccountId32>>,
+	pub refund_params: Option<ChannelRefundParametersUnchecked<AddressString>>,
+	pub dca_params: Option<DcaParameters>,
+	pub max_boost_fee: BasisPoints,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RpcWitnessedEventsResponse {
+	pub deposits: Vec<RpcDepositWitnessInfo>,
+	pub broadcasts: Vec<BroadcastWitnessInfo>,
+	pub vault_deposits: Vec<RpcVaultDepositWitnessInfo>,
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -1371,6 +1441,14 @@ pub trait CustomApi {
 		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
+	/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+	/// from the block witnesser election's unsynchronized state.
+	#[method(name = "witnessed_events")]
+	fn cf_witnessed_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -2913,6 +2991,24 @@ where
 		}
 
 		Ok(result)
+	}
+
+	fn cf_witnessed_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse> {
+		let WitnessedEventsResponse { deposits, broadcasts, vault_deposits } = self
+			.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_witnessed_events(hash, chain))
+			.unwrap()
+			.unwrap();
+
+		Ok(RpcWitnessedEventsResponse {
+			deposits: deposits.into_iter().map(|deposit| deposit.into()).collect(),
+			broadcasts,
+			vault_deposits: vault_deposits.into_iter().map(|vault| vault.into()).collect(),
+		})
 	}
 }
 

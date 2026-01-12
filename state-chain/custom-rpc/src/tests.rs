@@ -735,6 +735,65 @@ fn runtime_safe_mode_serialization() {
 }
 
 #[test]
+fn witnessed_events_serialization() {
+	use state_chain_runtime::runtime_apis::types::{
+		BitcoinHash, BroadcastWitnessInfo, DepositDetails as RpcDepositDetails, RpcTransactionId,
+		RpcTransactionRef,
+	};
+
+	let response = RpcWitnessedEventsResponse {
+		deposits: vec![RpcDepositWitnessInfo {
+			deposit_chain_block_height: 1,
+			deposit_address: cf_chains::address::AddressString::from_encoded_address(
+				EncodedAddress::Eth([0x11; 20]),
+			),
+			amount: 100u128.into(),
+			asset: any::Asset::Eth,
+			deposit_details: Some(RpcDepositDetails::Ethereum {
+				tx_hashes: vec![H256([0x22; 32])],
+			}),
+		}],
+		broadcasts: vec![BroadcastWitnessInfo {
+			broadcast_chain_block_height: 2,
+			broadcast_id: 7,
+			tx_out_id: RpcTransactionId::Bitcoin {
+				hash: BitcoinHash(H256([
+					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+					0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+					0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+				])),
+			},
+			tx_ref: RpcTransactionRef::Bitcoin {
+				hash: BitcoinHash(H256([
+					0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c,
+					0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+					0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+				])),
+			},
+		}],
+		vault_deposits: vec![RpcVaultDepositWitnessInfo {
+			tx_id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+			deposit_chain_block_height: 3,
+			input_asset: any::Asset::Eth,
+			output_asset: any::Asset::Flip,
+			amount: 500u128.into(),
+			destination_address: cf_chains::address::AddressString::from_encoded_address(
+				EncodedAddress::Eth([0x44; 20]),
+			),
+			ccm_deposit_metadata: None,
+			deposit_details: None,
+			broker_fee: None,
+			affiliate_fees: vec![],
+			refund_params: None,
+			dca_params: None,
+			max_boost_fee: 5,
+		}],
+	};
+
+	insta::assert_json_snapshot!(response);
+}
+
+#[test]
 fn vault_swap_details_serialization() {
 	let btc = VaultSwapDetails::<AddressString>::Bitcoin {
 		nulldata_payload: vec![0x00, 0x01, 0x02, 0x03],

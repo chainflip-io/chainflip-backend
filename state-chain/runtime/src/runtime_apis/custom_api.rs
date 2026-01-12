@@ -16,6 +16,10 @@
 
 pub mod types;
 
+pub use types::{
+	BroadcastWitnessInfo, DepositWitnessInfo, VaultDepositWitnessInfo, WitnessedEventsResponse,
+};
+
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -76,7 +80,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(10)]
+	#[api_version(11)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -327,5 +331,12 @@ decl_runtime_apis!(
 			nonce_or_account: NonceOrAccount,
 			encoding: EncodingType,
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
+		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(11)]
+		fn cf_witnessed_events();
+		fn cf_witnessed_events(
+			chain: ForeignChain,
+		) -> Result<WitnessedEventsResponse, DispatchErrorWithMessage>;
 	}
 );

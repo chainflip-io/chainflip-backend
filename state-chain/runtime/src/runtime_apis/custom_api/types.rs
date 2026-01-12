@@ -21,7 +21,7 @@ use cf_chains::{
 	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain, GasAmount};
+use cf_primitives::{Asset, BroadcastId, DcaParameters, EpochIndex, ForeignChain, GasAmount};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -43,7 +43,7 @@ use pallet_cf_trading_strategy::TradingStrategy;
 pub use pallet_cf_validator::DelegationSnapshot;
 use pallet_cf_validator::OperatorSettings;
 use scale_info::{prelude::string::String, TypeInfo};
-pub use serde::{Deserialize, Serialize};
+pub use serde::{Deserialize, Serialize, Serializer};
 use sp_core::U256;
 use sp_runtime::{DispatchError, Permill};
 pub use sp_std::{
@@ -620,6 +620,92 @@ mod serialize_vanity_name {
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
+
+// ============ Witnessed Events Types ============
+// These types match the format used by the ingress-egress-tracker for Redis storage
+
+/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
+#[derive(Debug, Clone, Deserialize, TypeInfo, Encode, Decode)]
+pub struct BitcoinHash(pub sp_core::H256);
+
+impl Serialize for BitcoinHash {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		use cf_utilities::ArrayCollect;
+		sp_core::H256(self.0.to_fixed_bytes().into_iter().rev().collect_array())
+			.serialize(serializer)
+	}
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
+#[serde(untagged)]
+pub enum RpcTransactionRef {
+	Bitcoin { hash: BitcoinHash },
+	Ethereum { hash: cf_chains::evm::H256 },
+	Arbitrum { hash: cf_chains::evm::H256 },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
+#[serde(untagged)]
+pub enum RpcTransactionId {
+	Bitcoin { hash: BitcoinHash },
+	Ethereum { signature: cf_chains::evm::SchnorrVerificationComponents },
+	Arbitrum { signature: cf_chains::evm::SchnorrVerificationComponents },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
+#[serde(untagged)]
+pub enum DepositDetails {
+	Bitcoin { tx_id: BitcoinHash, vout: u32 },
+	Ethereum { tx_hashes: Vec<cf_chains::evm::H256> },
+	Arbitrum { tx_hashes: Vec<cf_chains::evm::H256> },
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub struct DepositWitnessInfo {
+	pub deposit_chain_block_height: u64,
+	pub deposit_address: EncodedAddress,
+	pub amount: u128,
+	pub asset: cf_chains::assets::any::Asset,
+	pub deposit_details: Option<DepositDetails>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode)]
+pub struct BroadcastWitnessInfo {
+	pub broadcast_chain_block_height: u64,
+	pub broadcast_id: cf_primitives::BroadcastId,
+	pub tx_out_id: RpcTransactionId,
+	pub tx_ref: RpcTransactionRef,
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub struct VaultDepositWitnessInfo {
+	pub tx_id: cf_chains::TransactionInIdForAnyChain,
+	pub deposit_chain_block_height: u64,
+	pub input_asset: cf_chains::assets::any::Asset,
+	pub output_asset: cf_chains::assets::any::Asset,
+	pub amount: u128,
+	pub destination_address: EncodedAddress,
+	pub ccm_deposit_metadata:
+		Option<cf_chains::CcmDepositMetadataUnchecked<cf_chains::ForeignChainAddress>>,
+	pub deposit_details: Option<DepositDetails>,
+	pub broker_fee: Option<cf_primitives::Beneficiary<AccountId32>>,
+	pub affiliate_fees: sp_std::vec::Vec<cf_primitives::Beneficiary<AccountId32>>,
+	pub refund_params: Option<cf_chains::ChannelRefundParametersUncheckedEncoded>,
+	pub dca_params: Option<DcaParameters>,
+	pub max_boost_fee: BasisPoints,
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub struct WitnessedEventsResponse {
+	pub deposits: sp_std::vec::Vec<DepositWitnessInfo>,
+	pub broadcasts: sp_std::vec::Vec<BroadcastWitnessInfo>,
+	pub vault_deposits: sp_std::vec::Vec<VaultDepositWitnessInfo>,
+}
+
+// ============ End Witnessed Events Types ============
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct RpcLendingConfig {
