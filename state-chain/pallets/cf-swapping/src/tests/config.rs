@@ -377,11 +377,7 @@ fn cannot_withdraw_in_safe_mode() {
 
 		// Cannot withdraw
 		assert_noop!(
-			Swapping::withdraw(
-				RuntimeOrigin::signed(BROKER),
-				Asset::Eth,
-				EncodedAddress::Eth(Default::default()),
-			),
+			Swapping::withdraw(RuntimeOrigin::signed(BROKER), Default::default()),
 			Error::<Test>::WithdrawalsDisabled
 		);
 
@@ -391,11 +387,7 @@ fn cannot_withdraw_in_safe_mode() {
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// withdraws are now allowed
-		assert_ok!(Swapping::withdraw(
-			RuntimeOrigin::signed(BROKER),
-			Asset::Eth,
-			EncodedAddress::Eth(Default::default()),
-		));
+		assert_ok!(Swapping::withdraw(RuntimeOrigin::signed(BROKER), Default::default()));
 		assert_eq!(get_broker_balance::<Test>(&BROKER, Asset::Eth), 0);
 	});
 }

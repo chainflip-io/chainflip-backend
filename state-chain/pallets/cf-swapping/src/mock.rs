@@ -182,6 +182,10 @@ impl WeightInfo for MockWeightInfo {
 	fn request_account_creation_deposit_address() -> Weight {
 		Weight::from_parts(100, 0)
 	}
+
+	fn bind_broker_withdrawal_address() -> Weight {
+		Weight::from_parts(100, 0)
+	}
 }
 
 pub struct MockChannelIdAllocator {}

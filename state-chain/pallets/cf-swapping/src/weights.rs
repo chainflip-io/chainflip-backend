@@ -59,6 +59,7 @@ pub trait WeightInfo {
 	fn affiliate_withdrawal_request() -> Weight;
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
 	fn request_account_creation_deposit_address() -> Weight;
+	fn bind_broker_withdrawal_address() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -339,6 +340,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(14_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
+
+
+	fn bind_broker_withdrawal_address() -> Weight {
+		Weight::zero()
+	}
 }
 
 // For backwards compatibility and tests
@@ -617,5 +623,9 @@ impl WeightInfo for () {
 		Weight::from_parts(201_750_000, 5026)
 			.saturating_add(ParityDbWeight::get().reads(14_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
+	}
+
+	fn bind_broker_withdrawal_address() -> Weight {
+		Weight::zero()
 	}
 }

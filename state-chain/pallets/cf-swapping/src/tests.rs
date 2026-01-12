@@ -1389,11 +1389,7 @@ fn broker_deregistration_checks_earned_fees() {
 			Error::<Test>::EarnedFeesNotWithdrawn,
 		);
 
-		assert_ok!(Swapping::withdraw(
-			OriginTrait::signed(BROKER),
-			Asset::Eth,
-			EncodedAddress::Eth(Default::default()),
-		));
+		assert_ok!(Swapping::withdraw(OriginTrait::signed(BROKER), Default::default(),));
 
 		assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),);
 

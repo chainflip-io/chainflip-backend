@@ -899,20 +899,12 @@ fn input_amount_excludes_network_fee() {
 fn withdraw_broker_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Swapping::withdraw(
-				RuntimeOrigin::signed(BROKER),
-				Asset::Eth,
-				EncodedAddress::Eth(Default::default()),
-			),
+			Swapping::withdraw(RuntimeOrigin::signed(BROKER), Default::default(),),
 			<Error<Test>>::NoFundsAvailable
 		);
 
 		<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 200);
-		assert_ok!(Swapping::withdraw(
-			RuntimeOrigin::signed(BROKER),
-			Asset::Eth,
-			EncodedAddress::Eth(Default::default()),
-		));
+		assert_ok!(Swapping::withdraw(RuntimeOrigin::signed(BROKER), Default::default(),));
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
