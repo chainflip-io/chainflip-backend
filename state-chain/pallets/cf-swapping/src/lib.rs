@@ -741,8 +741,9 @@ pub mod pallet {
 
 	/// Map of bound addresses for accounts.
 	#[pallet::storage]
-	pub type BoundRedeemAddress<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress>;
+	#[pallet::getter(fn bound_broker_withdrawal_address)]
+	pub type BoundBrokerWithdrawalAddress<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1149,7 +1150,7 @@ pub mod pallet {
 				.map_err(address_error_to_pallet_error::<T>)?;
 
 			if asset == Asset::Usdc {
-				if let Some(bound_address) = BoundRedeemAddress::<T>::get(&account_id) {
+				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
 					ensure!(
 						matches!(destination_address_internal, ForeignChainAddress::Eth(add) if add == bound_address),
 						Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
@@ -1667,10 +1668,10 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 			ensure!(
-				!BoundRedeemAddress::<T>::contains_key(&broker),
+				!BoundBrokerWithdrawalAddress::<T>::contains_key(&broker),
 				Error::<T>::BrokerAlreadyBound
 			);
-			BoundRedeemAddress::<T>::insert(&broker, address);
+			BoundBrokerWithdrawalAddress::<T>::insert(&broker, address);
 			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
 			Ok(())
 		}

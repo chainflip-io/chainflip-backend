@@ -253,6 +253,8 @@ pub enum RpcAccountInfo {
 		affiliates: Vec<RpcAffiliate>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		bound_fee_withdrawal_address: Option<EthereumAddress>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
@@ -310,6 +312,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					earned_fees,
 					affiliates,
 					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
+					bound_fee_withdrawal_address: None,
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -1864,11 +1867,18 @@ where
 								earned_fees,
 								btc_vault_deposit_address,
 								affiliates,
+								bound_fee_withdrawal_address,
 								..
 							} = if api_version < 10 {
 								#[expect(deprecated)]
 								api.cf_broker_info_before_version_10(hash, account_id.clone())?
 									.map(Into::into)
+							} else if api_version < 12 {
+								let network = api.cf_network_environment(hash)?.into();
+								#[expect(deprecated)]
+								api.cf_broker_info_before_version_12(hash, account_id.clone())?
+									.map(|pubkey| pubkey.to_address(&network))
+									.into()
 							} else {
 								let network = api.cf_network_environment(hash)?.into();
 								api.cf_broker_info(hash, account_id.clone())?
@@ -1880,6 +1890,7 @@ where
 								),
 								affiliates: affiliates.into_iter().map(Into::into).collect(),
 								btc_vault_deposit_address,
+								bound_fee_withdrawal_address,
 							}
 						},
 						AccountRole::LiquidityProvider => {

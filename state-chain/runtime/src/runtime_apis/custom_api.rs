@@ -193,9 +193,13 @@ decl_runtime_apis!(
 		) -> before_version_9::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
-		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
+		fn cf_broker_info(account_id: AccountId32) -> old::BrokerInfoLegacy;
 		#[changed_in(10)]
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<String>;
+		#[changed_in(13)]
+		fn cf_broker_info(
+			account_id: AccountId32,
+		) -> old::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;

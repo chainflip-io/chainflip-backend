@@ -328,6 +328,20 @@ pub mod old {
 		pub auction_size_range: (u32, u32),
 		pub min_active_bid: Option<u128>,
 	}
+
+	#[derive(Encode, Decode, TypeInfo, DefaultNoBound)]
+	#[derive_n_functor]
+	pub struct BrokerInfo<BtcAddress> {
+		pub earned_fees: Vec<(Asset, AssetAmount)>,
+		pub btc_vault_deposit_address: Option<BtcAddress>,
+		pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
+		pub bond: AssetAmount,
+	}
+
+	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
+	pub struct BrokerInfoLegacy {
+		pub earned_fees: Vec<(Asset, AssetAmount)>,
+	}
 }
 
 #[expect(deprecated)]
@@ -406,16 +420,24 @@ pub struct BrokerInfo<BtcAddress> {
 	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
+	pub bound_fee_withdrawal_address: Option<EthereumAddress>,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct BrokerInfoLegacy {
-	pub earned_fees: Vec<(Asset, AssetAmount)>,
-}
-
-impl<A> From<BrokerInfoLegacy> for BrokerInfo<A> {
-	fn from(legacy: BrokerInfoLegacy) -> Self {
+impl<A> From<old::BrokerInfoLegacy> for BrokerInfo<A> {
+	fn from(legacy: old::BrokerInfoLegacy) -> Self {
 		BrokerInfo { earned_fees: legacy.earned_fees, ..Default::default() }
+	}
+}
+
+impl<A> From<old::BrokerInfo<A>> for BrokerInfo<A> {
+	fn from(old: old::BrokerInfo<A>) -> Self {
+		BrokerInfo {
+			earned_fees: old.earned_fees,
+			btc_vault_deposit_address: old.btc_vault_deposit_address,
+			affiliates: old.affiliates,
+			bond: old.bond,
+			bound_fee_withdrawal_address: None,
+		}
 	}
 }
 

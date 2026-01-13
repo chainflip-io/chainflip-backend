@@ -35,6 +35,7 @@ fn test_broker_serialization() {
 				AccountId32::new([1; 32]),
 				AffiliateDetails { short_id: 1.into(), withdrawal_address: H160::from([0xcf; 20]) },
 			)],
+			bound_fee_withdrawal_address: Some(H160::from([0xdf; 20])),
 		},
 		0,
 	);
