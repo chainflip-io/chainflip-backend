@@ -187,7 +187,7 @@ async function brokerLevelScreeningTestBtc<A = []>(
   };
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const swapParams = await requestNewSwap(
-    cf.withChildLogger('brokerLevelScreeningTest'),
+    cf,
     'Btc',
     'Usdc',
     destinationAddressForUsdc,
