@@ -111,6 +111,7 @@ export async function sendBtc(
 
   while (attempts < maxAttempts) {
     try {
+      logger.debug(`Sending ${roundedAmount}btc to ${address}.`);
       txid = await fundAndSendTransaction(
         [
           {
@@ -119,9 +120,13 @@ export async function sendBtc(
         ],
         await client.getNewAddress(),
       );
+      logger.debug(`Transaction has txhash ${txid}.`);
 
       if (confirmations > 0) {
         await waitForBtcTransaction(logger, txid, confirmations, client);
+        logger.debug(`Transaction confirmed with ${confirmations} confirmations`);
+      } else {
+        logger.debug(`Not waiting for confirmation`);
       }
       return txid;
     } catch (error) {
