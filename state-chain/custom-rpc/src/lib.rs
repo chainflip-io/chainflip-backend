@@ -636,6 +636,7 @@ pub struct IngressEgressEnvironment {
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub ingress_delays: HashMap<ForeignChain, u32>,
 	pub boost_delays: HashMap<ForeignChain, u32>,
+	pub boost_minimum_add_funds_amounts: any::AssetMap<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2147,6 +2148,13 @@ where
 				channel_opening_fees,
 				ingress_delays,
 				boost_delays,
+				boost_minimum_add_funds_amounts: if version >= 14 {
+					any::AssetMap::try_from_fn(|asset| {
+						api.cf_boost_minimum_add_funds_amount(hash, asset).map(Into::into)
+					})?
+				} else {
+					any::AssetMap::default()
+				},
 			})
 		})
 	}

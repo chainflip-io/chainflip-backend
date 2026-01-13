@@ -1277,6 +1277,10 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_boost_minimum_add_funds_amount(asset: Asset) -> AssetAmount {
+			pallet_cf_lending_pools::BoostConfig::<Runtime>::get().minimum_add_funds_amount.get(&asset).cloned().unwrap_or_default()
+		}
+
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
 
 			pallet_cf_lending_pools::boost_pools_iter::<Runtime>().map(|(asset, tier, core_pool)| {

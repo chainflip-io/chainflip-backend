@@ -199,7 +199,9 @@ async function testBoostingForAsset(
   const boostFeesCollected =
     stoppedBoostingEvent.unlockedAmount - amountToFineAmountBigInt(amount, asset);
   cf.debug('Boost fees collected:', boostFeesCollected);
-  const expectedIncrease = calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee);
+  // By default 50% of the boost fee is taken as network fee.
+  const expectedIncrease =
+    calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee) / BigInt(2);
   assert.strictEqual(
     boostFeesCollected,
     expectedIncrease,
