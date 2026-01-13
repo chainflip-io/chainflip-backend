@@ -1128,16 +1128,19 @@ export function waitForExt(
   waitForStatus: 'InBlock' | 'Finalized',
   mutexRelease?: () => void,
 ): {
-  promise: Promise<ISubmittableResult>;
+  promise: Promise<EventRecord[]>;
+  fullResult: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
 } {
-  const { promise, resolve, reject } = deferredPromise<ISubmittableResult>();
+  const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
+  const fullResult = deferredPromise<ISubmittableResult>();
   let release = !!mutexRelease;
   const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
+    fullResult: fullResult.promise,
     waiter: (all) => {
-      const { status, dispatchError } = all;
+      const { events, status, dispatchError } = all;
       if (release) {
         mutexRelease!();
         release = false;
@@ -1150,12 +1153,14 @@ export function waitForExt(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
+          fullResult.reject(err);
           throwError(logger, err);
         }
         return;
       }
       if (waitForStatus === 'InBlock' && status.isInBlock === true) {
-        resolve(all);
+        resolve(events);
+        fullResult.resolve(all);
         return;
       }
       if (waitForStatus === 'Finalized' && status.isFinalized === true) {
