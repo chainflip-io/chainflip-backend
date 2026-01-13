@@ -1,6 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
-assertion_line: 788
+assertion_line: 782
 expression: response
 ---
 {
@@ -34,7 +34,7 @@ expression: response
   ],
   "vault_deposits": [
     {
-      "tx_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tx_id": "0x1010101010101010101010101010101010101010101010101010101010101010",
       "deposit_chain_block_height": 3,
       "input_asset": {
         "chain": "Ethereum",
@@ -47,8 +47,15 @@ expression: response
       "amount": "0x1f4",
       "destination_address": "0x4444444444444444444444444444444444444444",
       "ccm_deposit_metadata": null,
-      "deposit_details": null,
-      "broker_fee": null,
+      "deposit_details": {
+        "tx_hashes": [
+          "0x2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "broker_fee": {
+        "account": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd",
+        "bps": 2
+      },
       "affiliate_fees": [],
       "refund_params": null,
       "dca_params": null,

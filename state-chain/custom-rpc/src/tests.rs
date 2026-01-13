@@ -32,7 +32,7 @@ use cf_chains::{
 		SolPubkey, VaultSwapOrDepositChannelId,
 	},
 	Arbitrum, Bitcoin, CcmAdditionalData, CcmChannelMetadataChecked, Ethereum,
-	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana,
+	EvmVaultSwapExtraParameters, ForeignChainAddress, Solana, TransactionInIdForAnyChain,
 };
 
 use cf_primitives::{
@@ -765,7 +765,7 @@ fn witnessed_events_serialization() {
 			},
 		}],
 		vault_deposits: vec![RpcVaultDepositWitnessInfo {
-			tx_id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+			tx_id: format!("{}", TransactionInIdForAnyChain::Evm(H256([0x10; 32]))),
 			deposit_chain_block_height: 3,
 			input_asset: any::Asset::Eth,
 			output_asset: any::Asset::Flip,
@@ -774,8 +774,8 @@ fn witnessed_events_serialization() {
 				EncodedAddress::Eth([0x44; 20]),
 			),
 			ccm_deposit_metadata: None,
-			deposit_details: None,
-			broker_fee: None,
+			deposit_details: Some(DepositDetails::Evm { tx_hashes: vec![H256([0x22; 32])] }),
+			broker_fee: Some(Beneficiary { account: AccountId32::new([0x11; 32]), bps: 2 }),
 			affiliate_fees: vec![],
 			refund_params: None,
 			dca_params: None,

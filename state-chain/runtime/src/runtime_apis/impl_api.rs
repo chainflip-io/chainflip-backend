@@ -18,10 +18,7 @@ use crate::{
 	chainflip::{ethereum_sc_calls::*, *},
 	runtime_apis::{
 		custom_api::{runtime_decl_for_custom_runtime_api::CustomRuntimeApi as _, *},
-		impl_api::{
-			ethereum_elections::EthereumKeyManagerEvent,
-			solana_elections::SolanaChainTrackingProvider,
-		},
+		impl_api::solana_elections::SolanaChainTrackingProvider,
 		monitoring_api::*,
 		types::*,
 	},
