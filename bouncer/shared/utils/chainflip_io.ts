@@ -5,6 +5,7 @@ import {
   cfMutex,
   isValidHexHash,
   waitForExt,
+  sleep,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -22,6 +23,7 @@ import {
   AllOfEventsResult,
   SingleEventResult,
   blockHeightOfTransactionHash,
+  highestBlock,
 } from './indexer';
 import { Logger } from './logger';
 
@@ -310,13 +312,15 @@ export class ChainflipIO<Requirements> {
     schema: Z,
   ): Promise<z.infer<Z>> {
     return this.runExclusively('stepUntilEvent', async () => {
-      this.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
-      const event = await findOneEventOfMany(
-        this.logger,
-        { event: { name, schema } },
-        {
-          startFromBlock: this.lastIoBlockHeight,
-        },
+      const event = await this.waitFor(
+        `event ${name} from block ${this.lastIoBlockHeight}`,
+        findOneEventOfMany(
+          this.logger,
+          { event: { name, schema } },
+          {
+            startFromBlock: this.lastIoBlockHeight,
+          },
+        ),
       );
       this.lastIoBlockHeight = event.blockHeight;
       return event.data;
@@ -362,18 +366,18 @@ export class ChainflipIO<Requirements> {
     descriptions: Events,
   ): Promise<OneOfEventsResult<Events>> {
     return this.runExclusively('stepUntilOneEventOf', async () => {
+      let target;
       if (Object.values(descriptions).length > 1) {
-        this.debug(
-          `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
-        );
+        target = `either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`;
       } else {
-        this.debug(
-          `waiting for event ${JSON.stringify(Object.values(descriptions)[0].name)} from block ${this.lastIoBlockHeight}`,
-        );
+        target = `event ${JSON.stringify(Object.values(descriptions)[0].name)} from block ${this.lastIoBlockHeight}`;
       }
-      const event = await findOneEventOfMany(this.logger, descriptions, {
-        startFromBlock: this.lastIoBlockHeight,
-      });
+      const event = await this.waitFor(
+        target,
+        findOneEventOfMany(this.logger, descriptions, {
+          startFromBlock: this.lastIoBlockHeight,
+        }),
+      );
       this.debug(`found event ${JSON.stringify(event)}`);
       this.lastIoBlockHeight = event.blockHeight;
       return event;
@@ -403,6 +407,8 @@ export class ChainflipIO<Requirements> {
 
     return merged as AllOfEventsResult<Events>;
   }
+
+  // --------------- multi tasking support ------------------
 
   async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(
     values: T,
@@ -467,6 +473,33 @@ export class ChainflipIO<Requirements> {
         -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>;
       };
     });
+  }
+
+  // --------------- internal helpers ------------------
+  private async waitFor<A>(target: string, promise: Promise<A>): Promise<A> {
+    this.debug(`Waiting for ${target}`);
+
+    let waiting = true;
+    const messagePrinter = async () => {
+      await sleep(30000);
+      // eslint-disable-next-line no-constant-condition
+      while (waiting) {
+        this.debug(
+          `Still waiting for ${target}. Current highest block height is ${await highestBlock()}.`,
+        );
+        await sleep(30000);
+      }
+    };
+
+    // start printing messages, but don't await this promise
+    messagePrinter();
+
+    const result = await promise;
+
+    // stop printing messages
+    waiting = false;
+
+    return result;
   }
 
   // --------------- api invariants ------------------
