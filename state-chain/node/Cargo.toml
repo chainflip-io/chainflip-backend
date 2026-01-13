@@ -8,7 +8,7 @@ license = "Apache-2.0"
 name = "chainflip-node"
 publish = false
 repository = "https://github.com/chainflip-io/chainflip-backend"
-version = "2.0.6"
+version = "2.0.7"
 
 [[bin]]
 name = "chainflip-node"
