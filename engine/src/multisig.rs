@@ -20,10 +20,10 @@ use cf_primitives::CeremonyId;
 use multisig::{ChainSigning, MultisigClient};
 use tracing::{info, info_span, Instrument};
 
-use crate::{
-	db::KeyStore,
-	p2p::{MultisigMessageReceiver, MultisigMessageSender},
-};
+use crate::db::KeyStore;
+
+use engine_p2p::{MultisigMessageReceiver, MultisigMessageSender};
+
 use state_chain_runtime::AccountId;
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC

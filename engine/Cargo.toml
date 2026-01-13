@@ -29,16 +29,12 @@ futures = { workspace = true }
 futures-core = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true, default-features = true }
-httparse = { workspace = true }
 http = { workspace = true }
 itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-dyn-clone = { workspace = true }
 ethbloom = { workspace = true }
 ethers = { workspace = true, features = ["rustls"] }
 lazy_static = { workspace = true }
-num-bigint = { workspace = true }
-num-derive = { workspace = true }
 num-traits = { workspace = true }
 secp256k1 = { workspace = true, features = ["hashes"] }
 serde = { workspace = true, default-features = true, features = [
@@ -54,18 +50,11 @@ tokio-stream = { workspace = true, features = ["sync"] }
 url = { workspace = true }
 web3 = { workspace = true, features = ["ws-tls-tokio"] }
 zeroize = { workspace = true }
-curve25519-dalek = { workspace = true, default-features = true, features = [
-	"serde",
-] }
 ed25519-dalek = { workspace = true }
 pin-project = { workspace = true }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
-x25519-dalek = { workspace = true, features = ["serde"] }
-warp = { workspace = true }
-regex = { workspace = true }
-zmq = { workspace = true, features = ["vendored"] }
 
 # Local deps
 cf-chains = { workspace = true, default-features = true }
@@ -75,6 +64,7 @@ chainflip-node = { workspace = true }
 custom-rpc = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 multisig = { workspace = true }
+engine-p2p = { workspace = true }
 pallet-cf-account-roles = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
 pallet-cf-chain-tracking = { workspace = true, default-features = true }

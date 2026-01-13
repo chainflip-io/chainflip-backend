@@ -16,12 +16,12 @@
 
 use anyhow::{anyhow, Result};
 use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
+use cf_primitives::AccountId;
 use futures::Future;
-use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, Instrument};
 
-use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
+use crate::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
 use cf_utilities::metrics::P2P_BAD_MSG;
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 use multisig::ChainTag;
@@ -249,7 +249,7 @@ mod tests {
 
 	use super::*;
 
-	use crate::p2p::OutgoingMultisigStageMessages;
+	use crate::OutgoingMultisigStageMessages;
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);
