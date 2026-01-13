@@ -25,8 +25,9 @@ use cf_primitives::AccountId;
 
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{egress_handler::MockEgressHandler, key_provider::MockKeyProvider},
-	IncreaseOrDecrease, OrderId, PoolApi, PoolPairsMap, Side,
+	mocks::{
+		egress_handler::MockEgressHandler, key_provider::MockKeyProvider, pool_api::MockPoolApi,
+	},
 };
 use frame_support::{derive_impl, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
@@ -68,66 +69,11 @@ pub const SOL_ADDR: ForeignChainAddress =
 
 impl_mock_runtime_safe_mode!(refunding: PalletSafeMode);
 
-// Simple no-op PoolApi implementation for AssetBalances tests
-pub struct TestMockPoolApi;
-
-impl PoolApi for TestMockPoolApi {
-	type AccountId = AccountId;
-
-	fn sweep(_who: &Self::AccountId) -> sp_runtime::DispatchResult {
-		// No-op implementation for testing
-		Ok(())
-	}
-
-	fn open_order_count(
-		_who: &Self::AccountId,
-		_asset_pair: &PoolPairsMap<cf_primitives::Asset>,
-	) -> Result<u32, sp_runtime::DispatchError> {
-		Ok(0)
-	}
-
-	fn open_order_balances(
-		_who: &Self::AccountId,
-	) -> cf_chains::assets::any::AssetMap<cf_primitives::AssetAmount> {
-		Default::default()
-	}
-
-	fn pools() -> std::vec::Vec<PoolPairsMap<cf_primitives::Asset>> {
-		std::vec![]
-	}
-
-	fn update_limit_order(
-		_account: &Self::AccountId,
-		_base_asset: cf_primitives::Asset,
-		_quote_asset: cf_primitives::Asset,
-		_side: Side,
-		_id: OrderId,
-		_option_tick: Option<cf_primitives::Tick>,
-		_amount_change: IncreaseOrDecrease<cf_primitives::AssetAmount>,
-	) -> sp_runtime::DispatchResult {
-		Ok(())
-	}
-
-	fn cancel_all_limit_orders(_account: &Self::AccountId) -> sp_runtime::DispatchResult {
-		Ok(())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn create_pool(
-		_base_asset: cf_primitives::Asset,
-		_quote_asset: cf_primitives::Asset,
-		_fee_hundredth_pips: u32,
-		_initial_price: cf_primitives::Price,
-	) -> sp_runtime::DispatchResult {
-		Ok(())
-	}
-}
-
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type PolkadotKeyProvider = MockKeyProvider<PolkadotCrypto>;
-	type PoolApi = TestMockPoolApi;
+	type PoolApi = MockPoolApi<AccountId>;
 	type SafeMode = MockRuntimeSafeMode;
 }
 
