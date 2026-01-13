@@ -513,7 +513,7 @@ export async function testSignedRuntimeCall(testContext: TestContext) {
     (subcf) => testSvmDomain(subcf.withChildLogger(`SvmDomain`)),
     (subcf) => testEvmPersonalSign(subcf.withChildLogger(`EvmPersonalSign`)),
     (subcf) => testEvmEip712Encoding(subcf.withChildLogger(`EvmEip712Encoding`)),
-    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDeposit`), 'Btc'),
-    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDeposit`), 'Eth'),
+    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDepositBtc`), 'Btc'),
+    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDepositEth`), 'Eth'),
   ]);
 }

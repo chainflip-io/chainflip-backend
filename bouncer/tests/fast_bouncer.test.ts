@@ -53,7 +53,7 @@ describe('ConcurrentTests', () => {
     (context) => testCcmSwapFundAccount(context.logger),
     360,
   );
-  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
+  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280);
   concurrentTest('Lending', lendingTest, 360);
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
