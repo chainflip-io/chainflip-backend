@@ -20,6 +20,7 @@ import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { setupBrokerAccount } from 'shared/setup_account';
 import { Enum, Bytes as TsBytes } from 'scale-ts';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 /// Codecs for the special LP deposit channel opening
 const encodedAddressCodec = Enum({
@@ -66,12 +67,12 @@ const encodeNonNativeCallResponseSchema = z.tuple([
 // Default value for number of blocks after which the signed call will expire
 const blocksToExpiry = 120;
 
-async function observeNonNativeSignedCallAndRole(logger: Logger, scAccount: string) {
-  const nonNativeSignedCallEvent = observeEvent(globalLogger, `environment:NonNativeSignedCall`, {
+async function observeNonNativeSignedCallAndRole<A = []>(cf: ChainflipIO<A>, scAccount: string) {
+  const nonNativeSignedCallEvent = observeEvent(cf.logger, `environment:NonNativeSignedCall`, {
     historicalCheckBlocks: 1,
   }).event;
 
-  const accountRoleRegisteredEvent = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
+  const accountRoleRegisteredEvent = observeEvent(cf.logger, 'accountRoles:AccountRoleRegistered', {
     test: (event) => event.data.accountId === scAccount && event.data.role === 'Operator',
   }).event;
 
@@ -93,19 +94,19 @@ function getRegisterOperatorCall(chainflip: ApiPromise) {
   );
 }
 
-async function testEvmEip712(logger: Logger) {
+async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
-  logger.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
+  cf.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
   // EVM to ScAccount e.g. whale wallet -> `cFHsUq1uK5opJudRDd1qkV354mUi9T7FB9SBFv17pVVm2LsU7`
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
 
-  logger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
-  await fundFlip(logger, evmScAccount, '1000');
+  cf.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
+  await fundFlip(cf.logger, evmScAccount, '1000');
 
-  logger.info(`Registering EVM account as operator: ${evmScAccount}`);
+  cf.info(`Registering EVM account as operator: ${evmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
 
@@ -118,12 +119,12 @@ async function testEvmEip712(logger: Logger) {
   );
 
   const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
-  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
-  logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
+  cf.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+  cf.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
 
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message, primaryType } = parsedPayload.Eip712;
-  logger.debug('primaryType:', primaryType);
+  cf.debug('primaryType:', primaryType);
 
   // Remove the EIP712Domain from the message to smoothen out differences between Rust and
   // TS's ethers signTypedData. With Wagmi we don't need to remove this. There might be other
@@ -131,7 +132,7 @@ async function testEvmEip712(logger: Logger) {
   delete types.EIP712Domain;
 
   const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
-  logger.debug('EIP712 Signature:', evmSignatureEip712);
+  cf.debug('EIP712 Signature:', evmSignatureEip712);
 
   // Submit to the SC
   await chainflip.tx.environment
@@ -153,15 +154,15 @@ async function testEvmEip712(logger: Logger) {
     )
     .send();
 
-  logger.info('EVM EIP-712 signed call submitted, waiting for events...');
-  await observeNonNativeSignedCallAndRole(logger, evmScAccount);
+  cf.info('EVM EIP-712 signed call submitted, waiting for events...');
+  await observeNonNativeSignedCallAndRole(cf, evmScAccount);
 }
 
 // Submit the same call as EVM but using batch to test it out.
-async function testSvmDomain(logger: Logger) {
+async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
-  logger.info('Signing and submitting user-signed payload with Solana wallet');
+  cf.info('Signing and submitting user-signed payload with Solana wallet');
 
   // Create a new Solana keypair for each test run to ensure a unique account
   // const svmKeypair = await generateKeyPair();
@@ -170,10 +171,10 @@ async function testSvmDomain(logger: Logger) {
   // SVM to ScAccount e.g. whale wallet -> `cFPU9QPPTQBxi12e7Vb63misSkQXG9CnTCAZSgBwqdW4up8W1`
   const svmScAccount = externalChainToScAccount(decodeSolAddress(svmKeypair.address.toString()));
 
-  logger.info(`Funding with FLIP to register the SVM account: ${svmScAccount}`);
-  await fundFlip(logger, svmScAccount, '1000');
+  cf.info(`Funding with FLIP to register the SVM account: ${svmScAccount}`);
+  await fundFlip(cf.logger, svmScAccount, '1000');
 
-  logger.info(`Registering SVM account as operator: ${svmScAccount}`);
+  cf.info(`Registering SVM account as operator: ${svmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
   const calls = [call];
 
@@ -191,8 +192,8 @@ async function testSvmDomain(logger: Logger) {
 
   const [svmBytesPayload, svmTransactionMetadata] =
     encodeNonNativeCallResponseSchema.parse(svmResponse);
-  logger.debug('SvmBytesPayload', JSON.stringify(svmBytesPayload, null, 2));
-  logger.debug('svmTransactionMetadata', JSON.stringify(svmTransactionMetadata, null, 2));
+  cf.debug('SvmBytesPayload', JSON.stringify(svmBytesPayload, null, 2));
+  cf.debug('svmTransactionMetadata', JSON.stringify(svmTransactionMetadata, null, 2));
 
   const svmPayload = encodedBytesSchema.parse(svmBytesPayload);
 
@@ -222,26 +223,26 @@ async function testSvmDomain(logger: Logger) {
     )
     .send();
 
-  const events = observeNonNativeSignedCallAndRole(logger, svmScAccount);
+  const events = observeNonNativeSignedCallAndRole(cf, svmScAccount);
 
   const batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
     historicalCheckBlocks: 1,
   }).event;
 
-  logger.info('SVM Domain signed call batch submitted, waiting for events...');
+  cf.info('SVM Domain signed call batch submitted, waiting for events...');
   await Promise.all([events, batchCompletedEvent]);
 }
 
-async function testEvmPersonalSign(logger: Logger) {
+async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
-  logger.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
+  cf.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
 
-  logger.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
-  await fundFlip(logger, evmScAccount, '1000');
+  cf.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
+  await fundFlip(cf.logger, evmScAccount, '1000');
 
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
 
@@ -258,8 +259,8 @@ async function testEvmPersonalSign(logger: Logger) {
 
   const [evmPayload, personalSignMetadata] =
     encodeNonNativeCallResponseSchema.parse(personalSignResponse);
-  logger.debug('evmPayload', JSON.stringify(evmPayload, null, 2));
-  logger.debug('personalSignMetadata', JSON.stringify(personalSignMetadata, null, 2));
+  cf.debug('evmPayload', JSON.stringify(evmPayload, null, 2));
+  cf.debug('personalSignMetadata', JSON.stringify(personalSignMetadata, null, 2));
 
   const parsedEvmPayload = encodedBytesSchema.parse(evmPayload);
   const evmString = parsedEvmPayload.String;
@@ -291,14 +292,14 @@ async function testEvmPersonalSign(logger: Logger) {
     )
     .send();
 
-  logger.info('EVM PersonalSign signed call submitted, waiting for events...');
-  await observeNonNativeSignedCallAndRole(logger, evmScAccount);
+  cf.info('EVM PersonalSign signed call submitted, waiting for events...');
+  await observeNonNativeSignedCallAndRole(cf, evmScAccount);
 }
 
 // Testing encoding of a few values in the EIP-712 payload, mainly for u128 and U256
 // that can be problematic between Rust and JS big ints. This can be removed once we
 // have more extensive tests in PRO-2584.
-async function testEvmEip712Encoding(logger: Logger) {
+async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
   const evmWallet = await createEvmWallet();
@@ -327,8 +328,8 @@ async function testEvmEip712Encoding(logger: Logger) {
   );
 
   const [eipPayload, transactionMetadata] = encodeNonNativeCallResponseSchema.parse(response);
-  logger.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
-  logger.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
+  cf.debug('eipPayload', JSON.stringify(eipPayload, null, 2));
+  cf.debug('transactionMetadata', JSON.stringify(transactionMetadata, null, 2));
 
   const parsedPayload = encodedNonNativeCallSchema.parse(eipPayload);
   const { domain, types, message } = parsedPayload.Eip712;
@@ -345,7 +346,7 @@ async function testEvmEip712Encoding(logger: Logger) {
 
   // If the signing works proceed to fund the account and submit the call to ensure it works.
   // Doing it afterwards to make debugging of the signing faster (not waiting for the funding).
-  await fundFlip(logger, evmScAccount, '1000');
+  await fundFlip(cf.logger, evmScAccount, '1000');
 
   await chainflip.tx.environment
     .nonNativeSignedCall(
@@ -367,21 +368,21 @@ async function testEvmEip712Encoding(logger: Logger) {
     .send();
 }
 
-async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
+async function testSpecialLpDeposit<A = []>(cf: ChainflipIO<A>, asset: Asset) {
   await using chainflip = await getChainflipApi();
 
   const initialFlipToBeSentToGateway = (
     await chainflip.query.swapping.flipToBeSentToGateway()
   ).toJSON() as number;
 
-  logger.info('Setting up a broker account');
+  cf.info('Setting up a broker account');
   const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
   const broker = createStateChainKeypair(brokerUri);
-  await setupBrokerAccount(logger, brokerUri);
+  await setupBrokerAccount(cf.logger, brokerUri);
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
-  logger.info('evmScAccount for special LP deposit channel:', evmScAccount);
+  cf.info('evmScAccount for special LP deposit channel:', evmScAccount);
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
   const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
 
@@ -434,18 +435,18 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
     )
     .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
 
-  logger.info('Opening special deposit channel and depositing..');
+  cf.info('Opening special deposit channel and depositing..');
 
-  const eventResult = await observeEvent(logger, 'swapping:AccountCreationDepositAddressReady', {
+  const eventResult = await observeEvent(cf.logger, 'swapping:AccountCreationDepositAddressReady', {
     test: (event) =>
       event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
     historicalCheckBlocks: 10,
   }).event;
   const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
 
-  await send(logger, asset, depositAddress);
+  await send(cf.logger, asset, depositAddress);
 
-  logger.info('Waiting for FLIP balance to be credited...');
+  cf.info('Waiting for FLIP balance to be credited...');
 
   let attempt = 0;
   let flipBalanceCredited = false;
@@ -461,7 +462,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
       const balance = BigInt(account.balance);
 
       if (balance > 0) {
-        logger.info('FLIP balance credited successfully');
+        cf.info('FLIP balance credited successfully');
         flipBalanceCredited = true;
       }
     }
@@ -473,7 +474,7 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
       ).toJSON() as number;
 
       if (flipToBeSentToGateway > initialFlipToBeSentToGateway) {
-        logger.info('FLIP to be sent to Gateway increased successfully');
+        cf.info('FLIP to be sent to Gateway increased successfully');
         flipToGatewayIncreased = true;
       }
     }
@@ -497,12 +498,13 @@ async function testSpecialLpDeposit(logger: Logger, asset: Asset) {
 }
 
 export async function testSignedRuntimeCall(testContext: TestContext) {
-  await Promise.all([
-    testEvmEip712(testContext.logger.child({ tag: `EvmSignedCall` })),
-    testSvmDomain(testContext.logger.child({ tag: `SvmDomain` })),
-    testEvmPersonalSign(testContext.logger.child({ tag: `EvmPersonalSign` })),
-    testEvmEip712Encoding(testContext.logger.child({ tag: `EvmEip712Encoding` })),
-    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Btc'),
-    testSpecialLpDeposit(testContext.logger.child({ tag: `SpecialLpDeposit` }), 'Eth'),
+  const cf = await newChainflipIO(testContext.logger, []);
+  await cf.all([
+    (subcf) => testEvmEip712(subcf.withChildLogger(`EvmSignedCall`)),
+    (subcf) => testSvmDomain(subcf.withChildLogger(`SvmDomain`)),
+    (subcf) => testEvmPersonalSign(subcf.withChildLogger(`EvmPersonalSign`)),
+    (subcf) => testEvmEip712Encoding(subcf.withChildLogger(`EvmEip712Encoding`)),
+    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDeposit`), 'Btc'),
+    (subcf) => testSpecialLpDeposit(subcf.withChildLogger(`SpecialLpDeposit`), 'Eth'),
   ]);
 }
