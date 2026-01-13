@@ -39,7 +39,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				if crate::VERSION.spec_version != 2_00_06 {
+				if crate::VERSION.spec_version != 2_00_07 {
 					log::info!("🧹 No housekeeping required for Berghain.");
 					return Weight::zero();
 				}
@@ -51,32 +51,11 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					Default::default(),
 					(0..) // Dummy egress_ids: these aren't used.
 						.zip([
-							// https://etherscan.io/tx/0xa701b0c4b0b275ab2540dae384031ddb0aaa2b13c0b571da31b920b927b1d1b4
+							// https://etherscan.io/tx/0x35c71da922b12f0f9b15b279be46ee307a82748262116a3053fd7dd87dfacb9e
 							TransferAssetParams {
 								asset: assets::eth::Asset::Eth,
-								amount: 91_500_000_000_000_000_000,
-								to: hex_literal::hex!("C26b5977C42C4fa2DD41750F8658f6Bd2B67869C")
-									.into(),
-							},
-							// https://etherscan.io/tx/0x883888a29b56ef8ad37f74dec7acdbe8962d670dc48ad5d86de499b446847a56
-							TransferAssetParams {
-								asset: assets::eth::Asset::Eth,
-								amount: 34_000_000_000_000_000_000,
-								to: hex_literal::hex!("2D4f72825c5908b6fcA5a624F1B412b6E1D79bb4")
-									.into(),
-							},
-							// https://etherscan.io/tx/0x99313cf3457b663a5077534b5fbee46c1effad136dcfb51019550acc200a0184
-							TransferAssetParams {
-								asset: assets::eth::Asset::Flip,
-								amount: 1_927_000_000_000_000_000_000,
-								to: hex_literal::hex!("734Ec340250d3268E7D7104aEdaa426686345504")
-									.into(),
-							},
-							// https://etherscan.io/tx/0x4fea3b54d41a6721928ad63421742da2201be084ca9c5e35ac1bb9b9d414897c#internal
-							TransferAssetParams {
-								asset: assets::eth::Asset::Eth,
-								amount: 1_343_638_500_000_000_000,
-								to: hex_literal::hex!("2c02eea3ad478320f6629f1b01352c690a48588a")
+								amount: 1_000_000_000_000_000_000,
+								to: hex_literal::hex!("e9b5Cf76dFCca58aFDf04Ac8b76633B4BCeADa38")
 									.into(),
 							},
 						])
