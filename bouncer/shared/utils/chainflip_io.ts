@@ -4,6 +4,7 @@ import {
   extractExtrinsicResult,
   cfMutex,
   isValidHexHash,
+  waitForExt,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -128,11 +129,7 @@ export class ChainflipIO<Requirements> {
   ): Promise<z.infer<Schema>> {
     return this.runExclusively('submitExtrinsic', async () => {
       await using chainflipApi = await getChainflipApi();
-      const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
-        this.requirements.account.keypair,
-        cfMutex.for(this.requirements.account.uri),
-      );
-      const ext = arg.extrinsic(chainflipApi);
+      const ext = await arg.extrinsic(chainflipApi);
 
       // generate readable description for logging
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,16 +139,26 @@ export class ChainflipIO<Requirements> {
       this.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
 
       // submit
-      const result = extractExtrinsicResult(
+      const release = await cfMutex.acquire(this.requirements.account.uri);
+      const { promise, fullResult, waiter } = waitForExt(
         chainflipApi,
-        await extrinsicSubmitter.submit(ext, false),
+        this.logger,
+        'InBlock',
+        release,
       );
+      const nonce = (await chainflipApi.rpc.system.accountNextIndex(
+        this.requirements.account.keypair.address,
+      )) as unknown as number;
+      const unsub = await ext.signAndSend(this.requirements.account.keypair, { nonce }, waiter);
+      const result = extractExtrinsicResult(chainflipApi, await fullResult);
+      unsub();
+
       if (!result.ok) {
         throw new Error(`'${readable}' failed (${result.error})`);
       }
 
       this.debug(`Successfully submitted extrinsic with hash ${result.value.txHash}`);
-      this.lastIoBlockHeight = result.value.blockNumber.toNumber();
+      this.lastIoBlockHeight = (result.value as any).blockNumber.toNumber();
 
       // extract event data if expected
       if (arg.expectedEvent) {

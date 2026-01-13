@@ -1129,14 +1129,18 @@ export function waitForExt(
   mutexRelease?: () => void,
 ): {
   promise: Promise<EventRecord[]>;
+  fullResult: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
 } {
   const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
+  const fullResult = deferredPromise<ISubmittableResult>();
   let release = !!mutexRelease;
   const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
-    waiter: ({ events, status, dispatchError }) => {
+    fullResult: fullResult.promise,
+    waiter: (all) => {
+      const { events, status, dispatchError } = all;
       if (release) {
         mutexRelease!();
         release = false;
@@ -1149,12 +1153,14 @@ export function waitForExt(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
+          fullResult.reject(err);
           throwError(logger, err);
         }
         return;
       }
       if (waitForStatus === 'InBlock' && status.isInBlock === true) {
         resolve(events);
+        fullResult.resolve(all);
         return;
       }
       if (waitForStatus === 'Finalized' && status.isFinalized === true) {
@@ -1249,9 +1255,9 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
 export function extractExtrinsicResult(
   chainflipApi: DisposableApiPromise,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsicResult: any,
+  extrinsicResult: ISubmittableResult,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Result<any, string> {
+): Result<ISubmittableResult, string> {
   if (extrinsicResult.dispatchError) {
     let error;
     if (extrinsicResult.dispatchError.isModule) {
