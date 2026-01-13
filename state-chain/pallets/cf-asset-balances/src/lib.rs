@@ -469,6 +469,9 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		if T::AccountRoleRegistry::has_account_role(who, AccountRole::LiquidityProvider) {
+			let _ = T::PoolApi::sweep(who);
+		}
 		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 
