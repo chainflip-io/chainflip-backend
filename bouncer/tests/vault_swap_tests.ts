@@ -208,20 +208,6 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
 }
 
 export async function testVaultSwap(testContext: TestContext) {
-  // const n = 5;
-  // let running: ('running' | 'done')[] = Array(n).fill('running');
-  // let getSymbol = (index: number, indexOfTalker: number) => {
-  //   if (indexOfTalker === index) {
-  //     return '+';
-  //   }
-  //   switch (running[index]) {
-  //     case 'running': return '|';
-  //     case 'done': return ' ';
-  //   }
-  // };
-
-  // testContext.logger.info(`${getSymbol(0,0)}`);
-
   const cf = await newChainflipIO(testContext.logger, []);
   await cf.all([
     (subcf) => testFeeCollection(subcf, Assets.Eth, testContext),
@@ -230,8 +216,8 @@ export async function testVaultSwap(testContext: TestContext) {
   ]);
 
   // Test the affiliate withdrawal functionality
-  // const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
-  // await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
-  // await testRefundVaultSwap(testContext.logger);
-  // await testInvalidBtcVaultSwap(testContext.logger);
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
+  await testWithdrawCollectedAffiliateFees(testContext.logger, broker, affiliateId, refundAddress);
+  await testRefundVaultSwap(testContext.logger);
+  await testInvalidBtcVaultSwap(testContext.logger);
 }
