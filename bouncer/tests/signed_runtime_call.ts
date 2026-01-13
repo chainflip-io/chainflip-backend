@@ -1,6 +1,7 @@
 import { TestContext } from 'shared/utils/test_context';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
+  chainFromAsset,
   createEvmWallet,
   createStateChainKeypair,
   decodeSolAddress,
@@ -11,8 +12,7 @@ import {
   sleep,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { globalLogger, Logger } from 'shared/utils/logger';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
 import { ApiPromise } from '@polkadot/api';
@@ -21,6 +21,10 @@ import { send } from 'shared/send';
 import { setupBrokerAccount } from 'shared/setup_account';
 import { Enum, Bytes as TsBytes } from 'scale-ts';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { environmentNonNativeSignedCall } from 'generated/events/environment/nonNativeSignedCall';
+import { accountRolesAccountRoleRegistered } from 'generated/events/accountRoles/accountRoleRegistered';
+import { environmentBatchCompleted } from 'generated/events/environment/batchCompleted';
+import { swappingAccountCreationDepositAddressReady } from 'generated/events/swapping/accountCreationDepositAddressReady';
 
 /// Codecs for the special LP deposit channel opening
 const encodedAddressCodec = Enum({
@@ -68,15 +72,18 @@ const encodeNonNativeCallResponseSchema = z.tuple([
 const blocksToExpiry = 120;
 
 async function observeNonNativeSignedCallAndRole<A = []>(cf: ChainflipIO<A>, scAccount: string) {
-  const nonNativeSignedCallEvent = observeEvent(cf.logger, `environment:NonNativeSignedCall`, {
-    historicalCheckBlocks: 1,
-  }).event;
-
-  const accountRoleRegisteredEvent = observeEvent(cf.logger, 'accountRoles:AccountRoleRegistered', {
-    test: (event) => event.data.accountId === scAccount && event.data.role === 'Operator',
-  }).event;
-
-  await Promise.all([nonNativeSignedCallEvent, accountRoleRegisteredEvent]);
+  await cf.stepUntilAllEventsOf({
+    nonNativeSignedCallEvent: {
+      name: 'Environment.NonNativeSignedCall',
+      schema: environmentNonNativeSignedCall,
+    },
+    accountRoleRegistered: {
+      name: 'AccountRoles.AccountRoleRegistered',
+      schema: accountRolesAccountRoleRegistered.refine(
+        (event) => event.accountId === scAccount && event.role === 'Operator',
+      ),
+    },
+  });
 }
 
 // Using the register operator call as an example of a runtime call to submit.
@@ -223,14 +230,12 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
     )
     .send();
 
-  const events = observeNonNativeSignedCallAndRole(cf, svmScAccount);
-
-  const batchCompletedEvent = observeEvent(globalLogger, `environment:BatchCompleted`, {
-    historicalCheckBlocks: 1,
-  }).event;
-
   cf.info('SVM Domain signed call batch submitted, waiting for events...');
-  await Promise.all([events, batchCompletedEvent]);
+
+  await cf.all([
+    (subcf) => observeNonNativeSignedCallAndRole(subcf, svmScAccount),
+    (subcf) => subcf.stepUntilEvent('Environment.BatchCompleted', environmentBatchCompleted),
+  ]);
 }
 
 async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
@@ -437,12 +442,16 @@ async function testSpecialLpDeposit<A = []>(cf: ChainflipIO<A>, asset: Asset) {
 
   cf.info('Opening special deposit channel and depositing..');
 
-  const eventResult = await observeEvent(cf.logger, 'swapping:AccountCreationDepositAddressReady', {
-    test: (event) =>
-      event.data.requestedBy === broker.address && event.data.requestedFor === evmScAccount,
-    historicalCheckBlocks: 10,
-  }).event;
-  const depositAddress = eventResult.data.depositAddress[shortChainFromAsset(asset)];
+  const eventResult = await cf.stepUntilEvent(
+    'Swapping.AccountCreationDepositAddressReady',
+    swappingAccountCreationDepositAddressReady.refine(
+      (event) =>
+        event.requestedBy === broker.address &&
+        event.requestedFor === evmScAccount &&
+        event.depositAddress.chain === chainFromAsset(asset),
+    ),
+  );
+  const depositAddress = eventResult.depositAddress.address;
 
   await send(cf.logger, asset, depositAddress);
 
