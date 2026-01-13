@@ -36,6 +36,9 @@ import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { testSol, testSolVaultSwap } from './broker_level_screening/sol';
+import { bitcoinIngressEgressTransactionRejectedByBroker } from 'generated/events/bitcoinIngressEgress/transactionRejectedByBroker';
+import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
+import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
 
 const keyring = new Keyring({ type: 'sr25519' });
 const brokerUri = '//BROKER_1';
@@ -204,7 +207,10 @@ async function brokerLevelScreeningTestBtc<A = []>(
   await reportFunction(txId);
 
   // wait for rejection
-  await observeEvent(cf.logger, 'bitcoinIngressEgress:TransactionRejectedByBroker').event;
+  await cf.stepUntilEvent(
+    'BitcoinIngressEgress.TransactionRejectedByBroker',
+    bitcoinIngressEgressTransactionRejectedByBroker,
+  );
   if (!(await observeBtcAddressBalanceChange(refundAddress))) {
     throw new Error(`Didn't receive funds refund to address ${refundAddress} within timeout!`);
   }
@@ -284,7 +290,12 @@ async function testEvm<A = []>(
   if (sourceAsset === chainGasAsset('Ethereum')) {
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
-    await observeEvent(cf.logger, 'ethereumIngressEgress:DepositFinalised').event;
+    await cf.stepUntilEvent(
+      'EthereumIngressEgress.DepositFinalised',
+      ethereumIngressEgressDepositFinalised.refine(
+        (event) => event.channelId === BigInt(swapParams.channelId),
+      ),
+    );
     cf.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
@@ -300,7 +311,12 @@ async function testEvm<A = []>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
-  await observeEvent(cf.logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  await cf.stepUntilEvent(
+    `EthereumIngressEgress.TransactionRejectedByBroker`,
+    ethereumIngressEgressTransactionRejectedByBroker.refine((event) =>
+      event.txId.txHashes?.includes(txHash as `0x${string}`),
+    ),
+  );
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
