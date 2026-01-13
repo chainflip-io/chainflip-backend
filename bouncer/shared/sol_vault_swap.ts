@@ -32,7 +32,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger, throwError } from 'shared/utils/logger';
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.2.3/swap_endpoint';
+import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
