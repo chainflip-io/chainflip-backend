@@ -77,7 +77,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(13)]
+	#[api_version(14)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -196,7 +196,7 @@ decl_runtime_apis!(
 		fn cf_broker_info(account_id: AccountId32) -> old::BrokerInfoLegacy;
 		#[changed_in(10)]
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<String>;
-		#[changed_in(13)]
+		#[changed_in(14)]
 		fn cf_broker_info(
 			account_id: AccountId32,
 		) -> old::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
