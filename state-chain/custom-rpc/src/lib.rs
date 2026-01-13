@@ -1873,10 +1873,10 @@ where
 								#[expect(deprecated)]
 								api.cf_broker_info_before_version_10(hash, account_id.clone())?
 									.map(Into::into)
-							} else if api_version < 12 {
+							} else if api_version < 13 {
 								let network = api.cf_network_environment(hash)?.into();
 								#[expect(deprecated)]
-								api.cf_broker_info_before_version_12(hash, account_id.clone())?
+								api.cf_broker_info_before_version_13(hash, account_id.clone())?
 									.map(|pubkey| pubkey.to_address(&network))
 									.into()
 							} else {
