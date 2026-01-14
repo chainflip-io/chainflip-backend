@@ -58,7 +58,6 @@ import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Err, Ok, Result } from 'shared/utils/result';
-import { ILogger } from './utils/logger_interface';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();

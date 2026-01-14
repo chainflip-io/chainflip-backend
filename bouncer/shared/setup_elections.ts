@@ -1,7 +1,7 @@
 import { Logger } from 'shared/utils/logger';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up elections');

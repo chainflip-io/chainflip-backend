@@ -52,7 +52,7 @@ async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise
   await fundFlip(logger, broker.address, fundAmount);
 
   // Open the private channel
-  logger.trace('Opening private BTC channel');
+  logger.debug('Opening private BTC channel');
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock');
   const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
   const unsub = await chainflip.tx.swapping
