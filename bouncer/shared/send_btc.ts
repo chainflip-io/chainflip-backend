@@ -20,8 +20,26 @@ class BtcClient {
     this.mutex = new Mutex();
   }
 
+  async ensureFunded(logger: Logger) {
+    const balance = (await this.client.getBalance()) as any as number;
+    if (balance <= 100.0) {
+      if (this.name === 'whale') {
+        throw new Error(`The whale wallet is underfunded, current balance ${balance}`);
+      }
+
+      logger.debug(
+        `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up.`,
+      );
+
+      const fundingAddress = await this.client.getNewAddress();
+      const hash = await sendBtc(logger, fundingAddress, 200, 1, btcClient);
+
+      logger.debug(`Funded with 200 btc in tx ${hash}`);
+    }
+  }
+
   runExclusive<A>(f: (client: Client) => Promise<A>): Promise<A> {
-    return this.mutex.runExclusive(() => f(this.client))
+    return this.mutex.runExclusive(() => f(this.client));
   }
 
   getTransaction(id: string) {
@@ -38,15 +56,15 @@ class BtcClient {
 }
 
 export const btcClient = new BtcClient(
-  "whale",
-new Client({
-  host: BTC_ENDPOINT.split(':')[1].slice(2),
-  port: Number(BTC_ENDPOINT.split(':')[2]),
-  username: 'flip',
-  password: 'flip',
-  wallet: 'whale',
-}));
-
+  'whale',
+  new Client({
+    host: BTC_ENDPOINT.split(':')[1].slice(2),
+    port: Number(BTC_ENDPOINT.split(':')[2]),
+    username: 'flip',
+    password: 'flip',
+    wallet: 'whale',
+  }),
+);
 
 function getBtcClient2(wallet: string = 'watch'): Client {
   const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
@@ -69,35 +87,36 @@ const btcClients: Record<string, BtcClient> = {
 };
 
 export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
-  await cf.all(
-    [
-      subcf => setupWallet(subcf, "wallet1"),
-      subcf => setupWallet(subcf, "wallet2"),
-      subcf => setupWallet(subcf, "wallet3"),
-      subcf => setupWallet(subcf, "wallet4"),
-      subcf => setupWallet(subcf, "wallet5"),
-    ]
-  );
+  await cf.all([
+    (subcf) => setupWallet(subcf, 'wallet1'),
+    (subcf) => setupWallet(subcf, 'wallet2'),
+    (subcf) => setupWallet(subcf, 'wallet3'),
+    (subcf) => setupWallet(subcf, 'wallet4'),
+    (subcf) => setupWallet(subcf, 'wallet5'),
+  ]);
 }
 
-export function getRandomBtcClient(): BtcClient {
+export async function getRandomBtcClient(logger: Logger): Promise<BtcClient> {
   const keys = Object.keys(btcClients);
   if (keys.length === 0) {
     throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
   }
   const chosen = keys[Math.floor(Math.random() * keys.length)];
-  return btcClients[chosen];
+  const client = btcClients[chosen];
+  await client.ensureFunded(logger);
+  return client;
 }
 
 export async function setupWallet(logger: ILogger, name: string) {
-
   const newClient = await btcClient.runExclusive(async (client) => {
     const reply: any = await client.createWallet(name, false, false, '');
     if (!reply.name) {
       throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
     }
     if (reply.name !== name) {
-      throw new Error(`Expected btc wallet to be created with name ${name}, but got name ${reply.name}`);
+      throw new Error(
+        `Expected btc wallet to be created with name ${name}, but got name ${reply.name}`,
+      );
     }
     logger.info(`Created new wallet: ${reply.name}`);
     return getBtcClient(reply.name);
@@ -163,7 +182,7 @@ export async function sendVaultTransaction(
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
-  client = btcClient
+  client = btcClient,
 ): Promise<string> {
   return fundAndSendTransaction(
     logger,
@@ -177,7 +196,7 @@ export async function sendVaultTransaction(
     ],
     refundAddress,
     undefined,
-    client
+    client,
   );
 }
 
@@ -237,7 +256,7 @@ export async function sendBtc(
         ],
         await client.getNewAddress(),
         undefined,
-        client
+        client,
       );
       logger.debug(`Transaction has txhash ${txid}.`);
 
@@ -340,7 +359,12 @@ export async function sendBtcTransactionWithParent(
   });
 
   if (childConfirmations > 0) {
-    await waitForBtcTransaction(logger, txids.childTxid, childConfirmations, client.unsafe_getClient());
+    await waitForBtcTransaction(
+      logger,
+      txids.childTxid,
+      childConfirmations,
+      client.unsafe_getClient(),
+    );
   }
 
   return txids;
@@ -371,7 +395,6 @@ export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
     }
 
     return btcClient.runExclusive(async (client) => {
-
       // Once we have added the outputs, all other steps (funding, signing, sending) can be done as usual with bitcoin-cli.
       const fundedTx = (await client.fundRawTransaction(tx.toHex(), {
         changeAddress: await client.getNewAddress(),
@@ -389,8 +412,6 @@ export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
       const txid = (await client.sendRawTransaction(signedTx.hex)) as string;
 
       return { txid };
-
-    })
-
+    });
   });
 }

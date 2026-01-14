@@ -120,7 +120,7 @@ export async function buildAndSendBtcVaultSwap(
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
-    getRandomBtcClient()
+    await getRandomBtcClient(logger),
   );
 
   return txid;
@@ -174,7 +174,7 @@ export async function buildAndSendInvalidBtcVaultSwap(
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
-    getRandomBtcClient()
+    await getRandomBtcClient(logger),
   );
 
   return txid;

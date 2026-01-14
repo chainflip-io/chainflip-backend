@@ -36,7 +36,7 @@ export const price = new Map<Asset, number>([
 ]);
 
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
-  cf.info('Setting up bitcoin wallets')
+  cf.info('Setting up bitcoin wallets');
   await setupAllBtcWallets(cf);
 
   cf.info('Setting up for swaps');
