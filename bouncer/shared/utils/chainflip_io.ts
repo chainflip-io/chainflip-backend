@@ -500,7 +500,7 @@ export class ChainflipIO<Requirements> implements ILogger {
   }
 
   // --------------- internal helpers ------------------
-  private async waitFor<A>(target: string, promise: Promise<A>): Promise<A> {
+  async waitFor<A>(target: string, promise: Promise<A>): Promise<A> {
     this.debug(`Waiting for ${target}`);
 
     let waiting = true;
