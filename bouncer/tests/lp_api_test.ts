@@ -196,7 +196,7 @@ async function testWithdrawAsset<A = []>(cf: ChainflipIO<A>) {
   assert.strictEqual(chain, testRpcAsset.chain, `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
-  await observeBalanceIncrease(cf.logger, testAsset, testAddress, oldBalance);
+  await observeBalanceIncrease(cf, testAsset, testAddress, oldBalance);
 }
 
 async function testTransferAsset<A = []>(cf: ChainflipIO<A>) {

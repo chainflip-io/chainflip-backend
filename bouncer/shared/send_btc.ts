@@ -48,12 +48,24 @@ new Client({
 }));
 
 
+function getBtcClient2(wallet: string = 'watch'): Client {
+  const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
+
+  return new Client({
+    host: endpoint.split(':')[1].slice(2),
+    port: Number(endpoint.split(':')[2]),
+    username: 'flip',
+    password: 'flip',
+    wallet,
+  });
+}
+
 const btcClients: Record<string, BtcClient> = {
-  wallet1: new BtcClient('wallet1', getBtcClient('wallet1')),
-  wallet2: new BtcClient('wallet2', getBtcClient('wallet2')),
-  wallet3: new BtcClient('wallet3', getBtcClient('wallet3')),
-  wallet4: new BtcClient('wallet4', getBtcClient('wallet4')),
-  wallet5: new BtcClient('wallet5', getBtcClient('wallet5')),
+  wallet1: new BtcClient('wallet1', getBtcClient2('wallet1')),
+  wallet2: new BtcClient('wallet2', getBtcClient2('wallet2')),
+  wallet3: new BtcClient('wallet3', getBtcClient2('wallet3')),
+  wallet4: new BtcClient('wallet4', getBtcClient2('wallet4')),
+  wallet5: new BtcClient('wallet5', getBtcClient2('wallet5')),
 };
 
 export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
