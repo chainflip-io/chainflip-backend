@@ -448,6 +448,12 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 			Some(b"Chainflip Testnet LP BOOST".to_vec()),
 		),
 		(
+			get_account_id_from_seed::<sr25519::Public>("BROKER_API"),
+			AccountRole::Broker,
+			200 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet Broker Api".to_vec()),
+		),
+		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
 			AccountRole::Broker,
 			200 * FLIPPERINOS_PER_FLIP,

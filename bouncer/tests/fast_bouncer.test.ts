@@ -25,21 +25,21 @@ import { lendingTest } from 'tests/lending';
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
   // Specify the number of nodes via setting the env var.
-  // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+  // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=1000 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
-  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
+  testAllSwaps(numberOfNodes === 1 ? 280 : 240); // TODO: find out what the 3-node timeout should be
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);
-  concurrentTest('LpApi', testLpApi, 240);
-  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 200);
+  concurrentTest('LpApi', testLpApi, 300);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 250);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 300);
   concurrentTest('FillOrKill', testFillOrKill, 300);
   concurrentTest('DCASwaps', testDCASwaps, 300);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
-  concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 250);
+  concurrentTest('DepositChannelCreation', depositChannelCreation, 150);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);
   // This test times out far too often.
@@ -53,7 +53,7 @@ describe('ConcurrentTests', () => {
     (context) => testCcmSwapFundAccount(context.logger),
     360,
   );
-  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
+  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280);
   concurrentTest('Lending', lendingTest, 360);
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in

@@ -14,37 +14,61 @@ export const btcClient = new Client({
   wallet: 'whale',
 });
 
+async function assertCanSubmitRawTx(rawTx: string) {
+  const check: any = await btcClient.testMempoolAccept([rawTx]);
+  if (!check[0].allowed) {
+    throw new Error(`Bitcoin tx failed mempool accept check with '${check[0]['reject-reason']}'`);
+  }
+}
+
 export async function fundAndSendTransaction(
+  logger: Logger,
   outputs: object[],
   changeAddress: string,
   feeRate?: number,
 ): Promise<string> {
-  return btcClientMutex.runExclusive(async () => {
-    const rawTx = await btcClient.createRawTransaction([], outputs);
-    const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
-      changeAddress,
-      feeRate: feeRate ?? 0.00001,
-      lockUnspents: true,
-      changePosition: 2,
-    })) as { hex: string };
-    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
-    const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
+  logger.debug(`Waiting for bitcoin mutex`);
+  return btcClientMutex
+    .runExclusive(async () => {
+      logger.debug(`Acquired mutex, creating raw tx`);
+      const rawTx = await btcClient.createRawTransaction([], outputs);
+      logger.debug(`funding raw tx`);
+      const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+        changeAddress,
+        feeRate: feeRate ?? 0.00001,
+        lockUnspents: true,
+        changePosition: outputs.length,
+      })) as { hex: string };
+      logger.debug(`signing raw tx`);
+      const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+      logger.debug(`checking in mempool`);
+      await assertCanSubmitRawTx(signedTx.hex);
+      logger.debug(`sending`);
+      const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
 
-    if (!txId) {
-      throw new Error('Broadcast failed');
-    }
+      if (!txId) {
+        throw new Error('Broadcast failed');
+      }
 
-    return txId;
-  });
+      logger.debug(`sending done (txid: ${txId}), dropping mutex`);
+
+      return txId;
+    })
+    .then((val) => {
+      logger.debug(`bitcoin mutex dropped`);
+      return val;
+    });
 }
 
 export async function sendVaultTransaction(
+  logger: Logger,
   nulldataPayload: string,
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
 ): Promise<string> {
   return fundAndSendTransaction(
+    logger,
     [
       {
         [depositAddress]: amountBtc,
@@ -103,12 +127,23 @@ export async function sendBtc(
 
   while (attempts < maxAttempts) {
     try {
-      txid = (await btcClientMutex.runExclusive(async () =>
-        client.sendToAddress(address, roundedAmount, '', '', false, true, null, 'unset', null, 1),
-      )) as string;
+      logger.debug(`Sending ${roundedAmount}btc to ${address}.`);
+      txid = await fundAndSendTransaction(
+        logger,
+        [
+          {
+            [address]: roundedAmount,
+          },
+        ],
+        await client.getNewAddress(),
+      );
+      logger.debug(`Transaction has txhash ${txid}.`);
 
       if (confirmations > 0) {
         await waitForBtcTransaction(logger, txid, confirmations, client);
+        logger.debug(`Transaction confirmed with ${confirmations} confirmations`);
+      } else {
+        logger.debug(`Not waiting for confirmation`);
       }
       return txid;
     } catch (error) {
@@ -193,6 +228,9 @@ export async function sendBtcTransactionWithParent(
     // Sign the child tx
     const childSignedTx = await client.signRawTransactionWithWallet(childFundedTx.hex);
 
+    // verify
+    await assertCanSubmitRawTx(childSignedTx.hex);
+
     // Send the signed tx
     const childTxid = (await client.sendRawTransaction(childSignedTx.hex)) as string;
 
@@ -239,6 +277,9 @@ export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
 
     // Sign the tx
     const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+
+    // verify
+    await assertCanSubmitRawTx(signedTx.hex);
 
     // Send the tx
     const txid = (await btcClient.sendRawTransaction(signedTx.hex)) as string;

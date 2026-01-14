@@ -17,17 +17,17 @@ import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
-import { ChainflipIO, WithLpAccount } from './utils/chainflip_io';
+import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
 export async function depositLiquidity<A extends WithLpAccount>(
-  parentcf: ChainflipIO<A>,
+  cf: ChainflipIO<A>,
   ccy: Asset,
   givenAmount: number,
 ) {
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
-  const lpUri = parentcf.requirements.account.uri;
-  const cf = parentcf.withChildLogger(`${JSON.stringify({ ccy, amount, lpUri })}`);
+  const lpUri = cf.requirements.account.uri;
+  cf.debug(`Depositing ${amount}${ccy} of liquidity for ${lpUri}`);
 
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
@@ -56,6 +56,8 @@ export async function depositLiquidity<A extends WithLpAccount>(
     });
   }
 
+  cf.debug(`Opening new liquidity deposit channel for ${lpUri}`);
+
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
     expectedEvent: {
@@ -67,7 +69,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
 
-  cf.trace(`Initiating transfer to ${ingressAddress}`);
+  cf.debug(`Initiating transfer to ${ingressAddress}`);
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),

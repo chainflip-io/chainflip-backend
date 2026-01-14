@@ -21,6 +21,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingRefundEgressScheduled } from 'generated/events/swapping/refundEgressScheduled';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund<A = []>(
@@ -31,7 +32,12 @@ async function testMinPriceRefund<A = []>(
   ccmRefund = false,
   oracleSwap = false,
 ) {
-  const cf = parentCf.withChildLogger(`FoK_${sourceAsset}_${amount}`);
+  const vaultText = swapViaVault ? 'vault' : '';
+  const ccmRefundText = ccmRefund ? 'ccmRefund' : '';
+  const oracleSwapText = oracleSwap ? 'oracleSwap' : '';
+  const cf = parentCf.withChildLogger(
+    `FoK_${sourceAsset}_${amount}_${vaultText}_${ccmRefundText}_${oracleSwapText}`,
+  );
   const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
   const refundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
@@ -119,10 +125,13 @@ async function testMinPriceRefund<A = []>(
   const swapRequestId = Number(swapRequestedEvent.swapRequestId);
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+  const observeRefundEgress = <A>(subcf: ChainflipIO<A>) =>
+    subcf.stepUntilEvent(
+      `Swapping.RefundEgressScheduled`,
+      swappingRefundEgressScheduled.refine(
+        (event) => Number(event.swapRequestId) === swapRequestId,
+      ),
+    );
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
@@ -134,10 +143,10 @@ async function testMinPriceRefund<A = []>(
     : Promise.resolve();
 
   // Wait for the refund to be scheduled and executed
-  await Promise.all([
-    observeRefundEgress,
-    observeBalanceIncrease(cf.logger, sourceAsset, refundAddress, refundBalanceBefore),
-    ccmEventEmitted,
+  await cf.all([
+    (subcf) => observeRefundEgress(subcf),
+    (subcf) => observeBalanceIncrease(subcf, sourceAsset, refundAddress, refundBalanceBefore),
+    (subcf) => ccmEventEmitted,
   ]);
 
   cf.info(
@@ -180,25 +189,25 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
 export async function testFillOrKill(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
-  await Promise.all([
-    testMinPriceRefund(cf, Assets.Flip, 500),
-    testMinPriceRefund(cf, Assets.Eth, 1),
-    // testMinPriceRefund(testContext.logger, Assets.HubDot, 100), // flaky, so we don't test HubDot
-    testMinPriceRefund(cf, Assets.Btc, 0.1),
-    testMinPriceRefund(cf, Assets.Usdc, 1000),
-    testMinPriceRefund(cf, Assets.Sol, 10),
-    testMinPriceRefund(cf, Assets.SolUsdc, 1000),
-    testMinPriceRefund(cf, Assets.Flip, 500, true),
-    testMinPriceRefund(cf, Assets.Eth, 1, true),
-    testMinPriceRefund(cf, Assets.ArbEth, 5, true),
-    testMinPriceRefund(cf, Assets.Sol, 10, true),
-    testMinPriceRefund(cf, Assets.Sol, 1000, true),
-    testMinPriceRefund(cf, Assets.ArbUsdc, 5, false, true),
-    testMinPriceRefund(cf, Assets.Usdc, 1, false, true),
-    testMinPriceRefund(cf, Assets.SolUsdc, 1, false, true),
-    testMinPriceRefund(cf, Assets.ArbEth, 5, true, true),
-    testMinPriceRefund(cf, Assets.Sol, 10, true, true),
-    testMinPriceRefund(cf, Assets.Usdc, 10, true, true),
-    testOracleSwapsFoK(cf),
+  await cf.all([
+    (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500),
+    (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1),
+    // subcf => testMinPriceRefund(subcf, Assets.HubDot, 100), // flaky, so we don't test HubDot
+    (subcf) => testMinPriceRefund(subcf, Assets.Btc, 0.1),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1000),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10),
+    (subcf) => testMinPriceRefund(subcf, Assets.SolUsdc, 1000),
+    (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbEth, 5, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 1000, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbUsdc, 5, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.SolUsdc, 1, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbEth, 5, true, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 10, true, true),
+    (subcf) => testOracleSwapsFoK(subcf),
   ]);
 }

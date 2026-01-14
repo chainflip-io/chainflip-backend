@@ -32,7 +32,7 @@ import { Logger, throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -168,9 +168,9 @@ export async function doPerformSwap<A = []>(
   );
 
   try {
-    const [newBalance] = await Promise.all([
-      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
-      ccmEventEmitted,
+    const [newBalance] = await cf.all([
+      (subcf) => observeBalanceIncrease(subcf, destAsset, destAddress, oldBalance),
+      (subcf) => ccmEventEmitted,
     ]);
 
     const chain = chainFromAsset(sourceAsset);
@@ -272,7 +272,7 @@ export async function executeVaultSwap(
   const srcChain = chainFromAsset(sourceAsset);
 
   if (evmChains.includes(srcChain)) {
-    logger.trace('Executing EVM vault swap');
+    logger.debug('Executing EVM vault swap');
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
     const wallet = await createEvmWalletAndFund(logger, sourceAsset);
@@ -299,7 +299,7 @@ export async function executeVaultSwap(
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else if (srcChain === 'Bitcoin') {
-    logger.trace('Executing BTC vault swap');
+    logger.debug('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
       logger,
       brokerUri,
@@ -316,7 +316,7 @@ export async function executeVaultSwap(
     // Unused for now
     sourceAddress = '';
   } else {
-    logger.trace('Executing Solana vault swap');
+    logger.debug('Executing Solana vault swap');
     const { slot, accountAddress } = await executeSolVaultSwap(
       logger,
       sourceAsset,
@@ -367,8 +367,8 @@ export async function performVaultSwap<A = []>(
 ): Promise<VaultSwapParams> {
   const oldBalance = await getBalance(destAsset, destAddress);
 
-  cf.trace(`Old balance: ${oldBalance}`);
-  cf.trace(
+  cf.debug(`Old balance: ${oldBalance}`);
+  cf.debug(
     `Executing (${sourceAsset}) vault swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
   );
 
@@ -389,19 +389,19 @@ export async function performVaultSwap<A = []>(
     );
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapInitiated);
 
+    const observeCcmEvent = messageMetadata
+      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
+      : Promise.resolve();
+
     await observeSwapRequested(cf, sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
 
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
-    const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
-      : Promise.resolve();
-
-    const [newBalance] = await Promise.all([
-      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
-      ccmEventEmitted,
+    const [newBalance] = await cf.all([
+      (subcf) => observeBalanceIncrease(subcf, destAsset, destAddress, oldBalance),
+      (subcf) => observeCcmEvent,
     ]);
-    cf.trace(`Swap success! New balance: ${newBalance}!`);
+    cf.debug(`Swap success! New balance: ${newBalance}!`);
 
     if (sourceAsset === 'Sol') {
       // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.
@@ -409,8 +409,8 @@ export async function performVaultSwap<A = []>(
         'Solana',
         'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT',
       );
-      cf.trace(
-        `$Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
+      cf.debug(
+        `Waiting for Swap Endpoint Native Vault Swap Fetch ${swapEndpointNativeVaultAddress}`,
       );
       await observeFetch(sourceAsset, swapEndpointNativeVaultAddress);
     }
@@ -424,7 +424,7 @@ export async function performVaultSwap<A = []>(
   } catch (err) {
     swapContext?.updateStatus(cf.logger, SwapStatus.Failure);
     if (err instanceof Error) {
-      cf.trace(err.stack ?? '');
+      cf.debug(err.stack ?? '');
     }
     return throwError(cf.logger, new Error(`${err}`));
   }

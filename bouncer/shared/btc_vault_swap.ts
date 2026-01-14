@@ -52,7 +52,7 @@ async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise
   await fundFlip(logger, broker.address, fundAmount);
 
   // Open the private channel
-  logger.trace('Opening private BTC channel');
+  logger.debug('Opening private BTC channel');
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock');
   const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
   const unsub = await chainflip.tx.swapping
@@ -115,6 +115,7 @@ export async function buildAndSendBtcVaultSwap(
 
   logger.trace('Sending BTC vault swap transaction');
   const txid = await sendVaultTransaction(
+    logger,
     BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
@@ -166,6 +167,7 @@ export async function buildAndSendInvalidBtcVaultSwap(
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
   const txid = await sendVaultTransaction(
+    logger,
     // wrong encoded payload
     '0x6a3a0101701b90c687681727ada344f4e440f1a82ae548f66400602b04924ddf21970000000000000000ff010002001e02003d7c6c69666949c04689',
     depositAmountBtc,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { sleep } from 'shared/utils';
 import prisma from './prisma_client';
 import { Logger } from './logger';
+import { ILogger } from './logger_interface';
 
 // ------------ primitives event types ------------
 
@@ -98,7 +99,7 @@ export async function blockHeightOfTransactionHash(txhash: string): Promise<numb
 
 // ------------ Querying for events --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
-  logger: Logger,
+  logger: ILogger,
   descriptions: Descriptions,
   timing: EventTime,
 ): Promise<OneOfEventsResult<Descriptions>> => {
@@ -180,6 +181,58 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   }
 
   return foundEventsKeyAndData[0];
+};
+
+export const collectAllEvents = async <Schema extends z.ZodTypeAny>(
+  logger: ILogger,
+  description: {
+    name: EventName;
+    schema: Schema;
+  },
+  startFromBlock: number,
+  endBeforeBlock: number,
+): Promise<SingleEventResult<'collect', Schema>[]> => {
+  // we wait until the last block has been reached
+  logger.debug(
+    `Collecting events with name ${description.name} in range ${startFromBlock}..${endBeforeBlock}. Waiting for highest block to pass the end of the range.`,
+  );
+  while ((await highestBlock()) < endBeforeBlock + 2) {
+    await sleep(2000);
+  }
+  logger.debug(
+    `Highest block is beyond ${endBeforeBlock}, searching for events in provided range.`,
+  );
+  const events = await prisma.event.findMany({
+    where: {
+      name: description.name.startsWith('.')
+        ? { endsWith: description.name }
+        : { equals: description.name },
+      block: {
+        height: {
+          gte: startFromBlock,
+          lt: endBeforeBlock,
+        },
+      },
+    },
+    include: {
+      block: true,
+    },
+  });
+  const parsedData = events.flatMap((event) => {
+    const r = description.schema.safeParse(event.args);
+    return r.success
+      ? [
+          {
+            key: 'collect' as 'collect',
+            data: r.data as z.infer<Schema>,
+            blockHeight: event.block.height,
+          },
+        ]
+      : [];
+  });
+  logger.debug(`Found ${parsedData.length} events that match name and schema.`);
+
+  return parsedData;
 };
 
 // ------------ General fix  ---------------

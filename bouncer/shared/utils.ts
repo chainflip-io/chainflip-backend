@@ -56,8 +56,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
-import { ChainflipIO } from './utils/chainflip_io';
-import { Err, Ok, Result } from './utils/result';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { Err, Ok, Result } from 'shared/utils/result';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -781,21 +781,21 @@ export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: str
   }
 }
 
-export async function observeBalanceIncrease(
-  logger: Logger,
+export async function observeBalanceIncrease<A = []>(
+  cf: ChainflipIO<A>,
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
   timeoutSeconds = 120,
 ): Promise<number> {
-  logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
+  cf.debug(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
-      logger.trace(
+      cf.debug(
         `Observed balance increase of ${newBalance - initialBalance}${dstCcy} in ${i * 3} seconds`,
       );
       return newBalance;
@@ -804,7 +804,7 @@ export async function observeBalanceIncrease(
   }
 
   return throwError(
-    logger,
+    cf.logger,
     new Error(
       `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
     ),
@@ -1129,14 +1129,18 @@ export function waitForExt(
   mutexRelease?: () => void,
 ): {
   promise: Promise<EventRecord[]>;
+  fullResult: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
 } {
   const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
+  const fullResult = deferredPromise<ISubmittableResult>();
   let release = !!mutexRelease;
   const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
-    waiter: ({ events, status, dispatchError }) => {
+    fullResult: fullResult.promise,
+    waiter: (all) => {
+      const { events, status, dispatchError } = all;
       if (release) {
         mutexRelease!();
         release = false;
@@ -1149,12 +1153,14 @@ export function waitForExt(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
+          fullResult.reject(err);
           throwError(logger, err);
         }
         return;
       }
       if (waitForStatus === 'InBlock' && status.isInBlock === true) {
         resolve(events);
+        fullResult.resolve(all);
         return;
       }
       if (waitForStatus === 'Finalized' && status.isFinalized === true) {
@@ -1249,9 +1255,9 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
 export function extractExtrinsicResult(
   chainflipApi: DisposableApiPromise,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsicResult: any,
+  extrinsicResult: ISubmittableResult,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Result<any, string> {
+): Result<ISubmittableResult, string> {
   if (extrinsicResult.dispatchError) {
     let error;
     if (extrinsicResult.dispatchError.isModule) {
