@@ -43,9 +43,9 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
-	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
-	NetworkEnvironment, SemVer, STABLE_ASSET,
+	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
+	BoostConfiguration, BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance,
+	ForeignChain, IngressOrEgress, NetworkEnvironment, SemVer, STABLE_ASSET,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochKey, GetBlockHeight, KeyProvider,
@@ -1277,8 +1277,8 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_boost_minimum_add_funds_amount(asset: Asset) -> AssetAmount {
-			pallet_cf_lending_pools::BoostConfig::<Runtime>::get().minimum_add_funds_amount.get(&asset).cloned().unwrap_or_default()
+		fn cf_boost_config() -> BoostConfiguration {
+			pallet_cf_lending_pools::BoostConfig::<Runtime>::get()
 		}
 
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {

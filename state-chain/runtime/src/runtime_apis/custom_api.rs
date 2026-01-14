@@ -31,8 +31,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::Bitcoin, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain,
-	NetworkEnvironment, SemVer,
+	BoostConfiguration, BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance,
+	ForeignChain, NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use core::{ops::Range, str};
@@ -332,8 +332,8 @@ decl_runtime_apis!(
 		fn cf_boost_delay();
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
-		fn cf_boost_minimum_add_funds_amount();
-		fn cf_boost_minimum_add_funds_amount(asset: Asset) -> AssetAmount;
+		fn cf_boost_config();
+		fn cf_boost_config() -> BoostConfiguration;
 		#[changed_in(9)]
 		fn cf_encode_non_native_call();
 		fn cf_encode_non_native_call(

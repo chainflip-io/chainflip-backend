@@ -53,8 +53,8 @@ mod tests;
 mod benchmarking;
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
-	SwapRequestId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostConfiguration, BoostPoolTier,
+	PrewitnessedDepositId, SwapRequestId,
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
@@ -208,14 +208,6 @@ pub enum LoanRepaidActionType {
 	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
 	/// swap's output.
 	Liquidation { swap_request_id: SwapRequestId },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct BoostConfiguration {
-	/// The fraction of the network fee that is deducted from the boost fee.
-	pub network_fee_deduction_from_boost_percent: Percent,
-	/// The minimum amount that can be added to the boost pool.
-	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
 }
 
 pub struct BoostConfigDefault {}

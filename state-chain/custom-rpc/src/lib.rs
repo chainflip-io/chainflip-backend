@@ -2150,7 +2150,14 @@ where
 				boost_delays,
 				boost_minimum_add_funds_amounts: if version >= 14 {
 					any::AssetMap::try_from_fn(|asset| {
-						api.cf_boost_minimum_add_funds_amount(hash, asset).map(Into::into)
+						api.cf_boost_config(hash).map(|config| {
+							config
+								.minimum_add_funds_amount
+								.get(&asset)
+								.cloned()
+								.unwrap_or_default()
+								.into()
+						})
 					})?
 				} else {
 					any::AssetMap::default()
