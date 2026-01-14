@@ -328,12 +328,7 @@ async function testEvm<A = []>(
     : Promise.resolve();
 
   await Promise.all([
-    observeBalanceIncrease(
-      cf.logger,
-      sourceAsset,
-      ethereumRefundAddress,
-      initialRefundAddressBalance,
-    ),
+    observeBalanceIncrease(cf, sourceAsset, ethereumRefundAddress, initialRefundAddressBalance),
     ccmEventEmitted,
     observeFetch(sourceAsset, swapParams.depositAddress),
   ]);

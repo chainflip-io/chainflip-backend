@@ -21,6 +21,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingRefundEgressScheduled } from 'generated/events/swapping/refundEgressScheduled';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund<A = []>(
@@ -124,10 +125,13 @@ async function testMinPriceRefund<A = []>(
   const swapRequestId = Number(swapRequestedEvent.swapRequestId);
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+  const observeRefundEgress = <A>(subcf: ChainflipIO<A>) =>
+    subcf.stepUntilEvent(
+      `Swapping.RefundEgressScheduled`,
+      swappingRefundEgressScheduled.refine(
+        (event) => Number(event.swapRequestId) === swapRequestId,
+      ),
+    );
 
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
@@ -139,10 +143,10 @@ async function testMinPriceRefund<A = []>(
     : Promise.resolve();
 
   // Wait for the refund to be scheduled and executed
-  await Promise.all([
-    observeRefundEgress,
-    observeBalanceIncrease(cf.logger, sourceAsset, refundAddress, refundBalanceBefore),
-    ccmEventEmitted,
+  await cf.all([
+    (subcf) => observeRefundEgress(subcf),
+    (subcf) => observeBalanceIncrease(subcf, sourceAsset, refundAddress, refundBalanceBefore),
+    (subcf) => ccmEventEmitted,
   ]);
 
   cf.info(

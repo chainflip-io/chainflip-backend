@@ -17,6 +17,7 @@ import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
+import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
 
 async function testDCASwap<A = []>(
   parentCf: ChainflipIO<A>,
@@ -106,30 +107,28 @@ async function testDCASwap<A = []>(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
-  // Wait for the swap to complete
-  await cf.stepUntilEvent(
-    `Swapping.SwapRequestCompleted`,
-    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
-  );
-
-  // Find the `SwapExecuted` events for this swap.
-  const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
-  const observeSwapExecutedEvents = await observeEvents(cf.logger, `swapping:SwapExecuted`, {
-    test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: historicalCheckBlocks * 2,
-    stopAfter: { blocks: historicalCheckBlocks * 2 },
-  }).events;
+  // Wait for the swap to complete and find all the `SwapExecuted` events for this swap that occur.
+  const { collected } = await cf.stepUntilAndCollect({
+    until: {
+      name: `Swapping.SwapRequestCompleted`,
+      schema: swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+    },
+    collect: {
+      name: `Swapping.SwapExecuted`,
+      schema: swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
+    },
+  });
 
   // Check that there were the correct number of SwapExecuted events, one for each chunk.
   assert.strictEqual(
-    observeSwapExecutedEvents.length,
+    collected.length,
     numberOfChunks,
-    `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${observeSwapExecutedEvents.length}`,
+    `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${collected.length}`,
   );
 
   // Check the chunk interval of all chunks
   for (let i = 1; i < numberOfChunks; i++) {
-    const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
+    const interval = collected[i].blockHeight - collected[i - 1].blockHeight;
     assert.strictEqual(
       interval,
       chunkIntervalBlocks,
@@ -139,7 +138,7 @@ async function testDCASwap<A = []>(
 
   cf.debug(`Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`);
 
-  await observeBalanceIncrease(cf.logger, destAsset, destAddress, destBalanceBefore);
+  await observeBalanceIncrease(cf, destAsset, destAddress, destBalanceBefore);
 }
 
 export async function testDCASwaps(testContext: TestContext) {

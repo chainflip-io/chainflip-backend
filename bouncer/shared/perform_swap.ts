@@ -168,9 +168,9 @@ export async function doPerformSwap<A = []>(
   );
 
   try {
-    const [newBalance] = await Promise.all([
-      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
-      ccmEventEmitted,
+    const [newBalance] = await cf.all([
+      (subcf) => observeBalanceIncrease(subcf, destAsset, destAddress, oldBalance),
+      (subcf) => ccmEventEmitted,
     ]);
 
     const chain = chainFromAsset(sourceAsset);
@@ -389,29 +389,17 @@ export async function performVaultSwap<A = []>(
     );
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapInitiated);
 
+    const observeCcmEvent = messageMetadata
+      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
+      : Promise.resolve();
+
     await observeSwapRequested(cf, sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
 
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
     const [newBalance] = await cf.all([
       (subcf) => observeBalanceIncrease(subcf, destAsset, destAddress, oldBalance),
-      async (subcf) => {
-        if (messageMetadata) {
-          subcf.debug(`Waiting for ccmEvent`);
-          const result = await observeCcmReceived(
-            sourceAsset,
-            destAsset,
-            destAddress,
-            messageMetadata,
-            sourceAddress,
-          );
-          subcf.debug(`Found ccmEvent!`);
-          return result;
-        } else {
-          subcf.debug(`No message metadata, so not waiting for a ccm event.`);
-          return;
-        }
-      },
+      (subcf) => observeCcmEvent,
     ]);
     cf.debug(`Swap success! New balance: ${newBalance}!`);
 

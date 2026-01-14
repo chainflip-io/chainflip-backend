@@ -24,10 +24,12 @@ import {
   SingleEventResult,
   blockHeightOfTransactionHash,
   highestBlock,
+  collectAllEvents,
 } from './indexer';
 import { Logger } from './logger';
+import { ILogger } from './logger_interface';
 
-export class ChainflipIO<Requirements> {
+export class ChainflipIO<Requirements> implements ILogger {
   /**
    * The last block height at which either an input or an output operation happened,
    * (that is either an extrinsic was submitted or an event was found)
@@ -325,6 +327,28 @@ export class ChainflipIO<Requirements> {
       this.lastIoBlockHeight = event.blockHeight;
       return event.data;
     });
+  }
+
+  async stepUntilAndCollect<Until extends z.ZodTypeAny, Collect extends z.ZodTypeAny>(args: {
+    until: {
+      name: EventName;
+      schema: Until;
+    };
+    collect: {
+      name: EventName;
+      schema: Collect;
+    };
+  }): Promise<{ result: z.infer<Until>; collected: SingleEventResult<'collect', Collect>[] }> {
+    const startFrom = this.lastIoBlockHeight;
+    const result = await this.stepUntilEvent(args.until.name, args.until.schema);
+    const endBefore = this.lastIoBlockHeight + 1;
+    const collected = await this.runExclusively('stepUntilAndCollect', () =>
+      this.waitFor(
+        `collecting events ${args.collect.name}`,
+        collectAllEvents(this, args.collect, startFrom, endBefore),
+      ),
+    );
+    return { result, collected };
   }
 
   /**
