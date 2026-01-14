@@ -23,6 +23,7 @@ async function testBitcoinMultipleUtxos<A = []>(cf: ChainflipIO<A>) {
 
   // construct btc tx with multiple outputs to the deposit address
   const txid = await sendBtcTransactionWithMultipleUtxosToSameAddress(
+    cf.logger,
     swapParams.depositAddress,
     fineAmounts,
   );
