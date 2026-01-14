@@ -19,20 +19,18 @@ use std::{
 	sync::Arc,
 };
 
-use crate::{
-	common::Signal,
-	state_chain_observer::client::{
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-		STATE_CHAIN_CONNECTION,
-	},
-};
+use crate::common::Signal;
 use cf_chains::{
 	instances::{ChainInstanceFor, CryptoInstanceFor},
 	Chain, ChainCrypto,
 };
 use cf_primitives::{AccountId, EpochIndex};
 use cf_utilities::{spmc, task_scope::Scope};
+use engine_sc_client::{
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
+	STATE_CHAIN_CONNECTION,
+};
 use futures::StreamExt;
 use futures_core::{Future, Stream};
 use futures_util::stream;

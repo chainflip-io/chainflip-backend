@@ -19,6 +19,7 @@ members = [
 	"engine-upgrade-utils",
 	"engine/generate-genesis-keys",
 	"engine/multisig",
+	"engine/sc-client",
 	"engine/p2p",
 	"foreign-chains/solana/sol-prim",
 	"state-chain/amm",
@@ -296,6 +297,7 @@ cf-engine-dylib = { path = "engine-dylib" }
 chainflip-api = { path = "api/lib" }
 chainflip-engine = { path = "engine" }
 engine-p2p = { path = "engine/p2p" }
+engine-sc-client = { path = "engine/sc-client" }
 engine-proc-macros = { path = "engine-proc-macros" }
 cf-node-client = { path = "api/cf-node-client" }
 cf-rpc-types = { path = "api/cf-rpc-types" }

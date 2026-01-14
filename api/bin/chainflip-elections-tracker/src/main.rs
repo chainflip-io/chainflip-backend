@@ -22,8 +22,8 @@ pub mod trace;
 use std::collections::BTreeMap;
 
 use cf_utilities::task_scope::{self};
-use chainflip_engine::state_chain_observer::client::{StateChainClient, storage_api::StorageApi};
 use elections::{ElectionData, Key, TraceInit, make_traces};
+use engine_sc_client::{StateChainClient, storage_api::StorageApi};
 use futures::StreamExt;
 use futures_util::FutureExt;
 use opentelemetry::{

@@ -23,16 +23,17 @@ use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
 	dot::retry_rpc::DotRetryRpcClient,
 	settings::NodeContainer,
-	state_chain_observer::client::{
-		storage_api::StorageApi,
-		stream_api::{StreamApi, UNFINALIZED},
-		StateChainClient, STATE_CHAIN_CONNECTION,
-	},
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		dot::{filter_map_events, process_egress, proxy_added_witnessing, DotUnfinalisedSource},
 	},
 };
+use engine_sc_client::{
+	storage_api::StorageApi,
+	stream_api::{StreamApi, UNFINALIZED},
+	StateChainClient, STATE_CHAIN_CONNECTION,
+};
+
 use futures::Future;
 
 pub(super) async fn start<ProcessCall, ProcessingFut>(

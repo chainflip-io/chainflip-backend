@@ -17,7 +17,6 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-broadcast = { workspace = true }
-async-channel = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true, features = ["serde"] }
@@ -61,10 +60,10 @@ cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-node-client = { workspace = true }
 chainflip-node = { workspace = true }
-custom-rpc = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 multisig = { workspace = true }
 engine-p2p = { workspace = true }
+engine-sc-client = { workspace = true }
 pallet-cf-account-roles = { workspace = true, default-features = true }
 pallet-cf-broadcast = { workspace = true, default-features = true }
 pallet-cf-chain-tracking = { workspace = true, default-features = true }
@@ -132,6 +131,6 @@ substrate-build-script-utils = { workspace = true }
 engine-upgrade-utils = { workspace = true }
 
 [features]
-client-mocks = ["mockall"]
+client-mocks = ["mockall", "engine-sc-client/client-mocks"]
 integration-test = []
 std = []

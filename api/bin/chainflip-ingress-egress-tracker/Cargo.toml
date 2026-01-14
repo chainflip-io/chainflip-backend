@@ -33,6 +33,7 @@ codec = { workspace = true, default-features = true, features = [
 
 # Local dependencies
 chainflip-engine = { workspace = true }
+engine-sc-client = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
 pallet-cf-environment = { workspace = true, default-features = true }
 pallet-cf-ingress-egress = { workspace = true, default-features = true }

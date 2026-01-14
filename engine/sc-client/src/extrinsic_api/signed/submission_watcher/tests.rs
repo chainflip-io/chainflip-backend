@@ -21,10 +21,7 @@ use futures::stream;
 use futures_util::FutureExt;
 use jsonrpsee::types::ErrorObject;
 
-use crate::{
-	constants::SIGNED_EXTRINSIC_LIFETIME,
-	state_chain_observer::client::base_rpc_api::MockBaseRpcApi,
-};
+use crate::{base_rpc_api::MockBaseRpcApi, SIGNED_EXTRINSIC_LIFETIME};
 
 use super::*;
 

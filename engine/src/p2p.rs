@@ -21,14 +21,13 @@ use std::{
 	sync::Arc,
 };
 
-use crate::{
-	settings::P2P as P2PSettings,
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-	},
+use crate::settings::P2P as P2PSettings;
+
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
 };
 
 use engine_p2p::{

@@ -28,14 +28,9 @@ use chainflip_api::primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
 	Asset, NetworkEnvironment,
 };
-use chainflip_engine::{
-	state_chain_observer::{
-		self,
-		client::{
-			chain_api::ChainApi, storage_api::StorageApi, StateChainClient, STATE_CHAIN_CONNECTION,
-		},
-	},
-	witness::common::epoch_source::EpochSource,
+use chainflip_engine::witness::common::epoch_source::EpochSource;
+use engine_sc_client::{
+	chain_api::ChainApi, storage_api::StorageApi, StateChainClient, STATE_CHAIN_CONNECTION,
 };
 
 use anyhow::anyhow;
@@ -212,7 +207,7 @@ pub(super) async fn start(
 	store: RedisStore,
 ) -> anyhow::Result<()> {
 	let (state_chain_stream, unfinalized_chain_stream, state_chain_client) = {
-		state_chain_observer::client::StateChainClient::<(), _>::connect_without_account(
+		engine_sc_client::StateChainClient::<(), _>::connect_without_account(
 			scope,
 			&settings.state_chain_ws_endpoint,
 		)

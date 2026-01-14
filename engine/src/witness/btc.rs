@@ -56,13 +56,13 @@ use state_chain_runtime::{
 use crate::{
 	btc::rpc::BlockHeader,
 	elections::voter_api::{CompositeVoter, VoterApi},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
 use anyhow::{bail, Result};
+use engine_sc_client::{
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+};
 
 use state_chain_runtime::chainflip::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,

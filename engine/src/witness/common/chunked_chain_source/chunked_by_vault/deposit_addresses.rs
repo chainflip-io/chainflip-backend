@@ -19,12 +19,8 @@ use cf_utilities::task_scope::Scope;
 use pallet_cf_ingress_egress::DepositChannelDetails;
 use std::sync::Arc;
 
-use crate::{
-	state_chain_observer::client::{
-		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION,
-	},
-	witness::common::RuntimeHasChain,
-};
+use crate::witness::common::RuntimeHasChain;
+use engine_sc_client::{storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION};
 
 use super::{builder::ChunkedByVaultBuilder, monitored_items::MonitoredSCItems, ChunkedByVault};
 

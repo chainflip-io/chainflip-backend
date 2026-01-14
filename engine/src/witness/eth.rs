@@ -36,13 +36,13 @@ use sp_core::H160;
 use crate::{
 	db::PersistentKeyDB,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-	},
 	witness::evm::erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+};
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
 };
 
 use super::{

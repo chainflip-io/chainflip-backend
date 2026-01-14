@@ -36,14 +36,13 @@ pub mod dot;
 pub mod evm;
 pub mod sol;
 
-use crate::state_chain_observer::client::CreateStateChainClientError;
 use ::multisig::{
 	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };
 use cf_primitives::CfeCompatibility;
-use state_chain_observer::client::{
+use engine_sc_client::{
 	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	STATE_CHAIN_CONNECTION,
+	CreateStateChainClientError, STATE_CHAIN_CONNECTION,
 };
 
 use self::{
@@ -138,7 +137,7 @@ async fn run_main(
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
 			let (state_chain_stream, unfinalised_state_chain_stream, state_chain_client) =
-				state_chain_observer::client::StateChainClient::connect_with_account(
+				engine_sc_client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
 					&settings.state_chain.signing_key_file,
