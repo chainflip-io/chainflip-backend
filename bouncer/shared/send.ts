@@ -31,7 +31,7 @@ export async function send(
   logger.debug(`Sending ${amount} ${asset} to ${address}`);
   switch (asset) {
     case 'Btc':
-      return sendBtc(logger, address, amount, 1, getRandomBtcClient());
+      return sendBtc(logger, address, amount, 1, await getRandomBtcClient(logger));
     case 'Eth':
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':

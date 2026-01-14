@@ -21,6 +21,24 @@ class BtcClient {
     this.mutex = new Mutex();
   }
 
+  async ensureFunded(logger: ILogger) {
+    const balance = (await this.client.getBalance()) as any as number;
+    if (balance <= 100.0) {
+      if (this.name === 'whale') {
+        throw new Error(`The whale wallet is underfunded, current balance ${balance}`);
+      }
+
+      logger.debug(
+        `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up.`,
+      );
+
+      const fundingAddress = await this.client.getNewAddress();
+      const hash = await sendBtc(logger, fundingAddress, 200, 1, btcClient);
+
+      logger.debug(`Funded with 200 btc in tx ${hash}`);
+    }
+  }
+
   runExclusive<A>(f: (client: Client) => Promise<A>): Promise<A> {
     return this.mutex.runExclusive(() => f(this.client));
   }
@@ -79,13 +97,15 @@ export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
   ]);
 }
 
-export function getRandomBtcClient(): BtcClient {
+export async function getRandomBtcClient(logger: ILogger): Promise<BtcClient> {
   const keys = Object.keys(btcClients);
   if (keys.length === 0) {
     throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
   }
   const chosen = keys[Math.floor(Math.random() * keys.length)];
-  return btcClients[chosen];
+  const client = btcClients[chosen];
+  await client.ensureFunded(logger);
+  return client;
 }
 
 export async function setupWallet(logger: ILogger, name: string) {
