@@ -93,6 +93,9 @@ async fn run_cli() -> Result<()> {
 					BrokerSubcommands::DeregisterAccount => {
 						api.broker_api().deregister_account().await?;
 					},
+					BrokerSubcommands::BindWithdrawalAddress(eth_address) => {
+						api.broker_api().bind_fee_withdrawal_address(cf_chains::eth::H160::from_str(&eth_address.address)?).await?;
+					},
 				},
 				LiquidityProvider(subcommand) => match subcommand {
 					LiquidityProviderSubcommands::RequestLiquidityDepositAddress {

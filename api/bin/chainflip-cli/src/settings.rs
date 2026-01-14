@@ -97,6 +97,12 @@ pub struct WithdrawFeesParams {
 	/// Egress asset address to receive withdrawn funds
 	pub destination_address: AddressString,
 }
+
+#[derive(Parser, Clone, Debug)]
+pub struct EthereumAddressString {
+	pub address: String,
+}
+
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum BrokerSubcommands {
 	WithdrawFees(WithdrawFeesParams),
@@ -104,6 +110,8 @@ pub enum BrokerSubcommands {
 	RegisterAccount,
 	/// De-register this broker account.
 	DeregisterAccount,
+	/// Set bound fee withdrawal address
+	BindWithdrawalAddress(EthereumAddressString),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
