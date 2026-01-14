@@ -28,6 +28,7 @@ import {
 } from './indexer';
 import { Logger } from './logger';
 import { ILogger } from './logger_interface';
+import pino from 'pino';
 
 export class ChainflipIO<Requirements> implements ILogger {
   /**
@@ -171,7 +172,7 @@ export class ChainflipIO<Requirements> implements ILogger {
           `Searching for event ${arg.expectedEvent.name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
         );
         const event = await findOneEventOfMany(
-          this.logger,
+          this,
           {
             event: {
               name: arg.expectedEvent.name,
@@ -317,7 +318,7 @@ export class ChainflipIO<Requirements> implements ILogger {
       const event = await this.waitFor(
         `event ${name} from block ${this.lastIoBlockHeight}`,
         findOneEventOfMany(
-          this.logger,
+          this,
           { event: { name, schema } },
           {
             startFromBlock: this.lastIoBlockHeight,
@@ -367,7 +368,7 @@ export class ChainflipIO<Requirements> implements ILogger {
     return this.runExclusively('expectEvent', async () => {
       this.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
       const event = await findOneEventOfMany(
-        this.logger,
+        this,
         { event: { name, schema: schema ?? z.any() } },
         {
           startFromBlock: this.lastIoBlockHeight,
@@ -398,7 +399,7 @@ export class ChainflipIO<Requirements> implements ILogger {
       }
       const event = await this.waitFor(
         target,
-        findOneEventOfMany(this.logger, descriptions, {
+        findOneEventOfMany(this, descriptions, {
           startFromBlock: this.lastIoBlockHeight,
         }),
       );
@@ -595,6 +596,10 @@ export class ChainflipIO<Requirements> implements ILogger {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error(msg: string, ...args: any[]) {
     this.logger.error(`${this.getLoggingPrefix('Error')}${msg}`, ...args);
+  }
+
+  as_pino(): pino.Logger {
+    return this.logger;
   }
 }
 

@@ -3,6 +3,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+import { setupAllBtcWallets } from './send_btc';
 
 export const deposits = new Map<Asset, number>([
   ['Eth', 1000],
@@ -35,6 +36,9 @@ export const price = new Map<Asset, number>([
 ]);
 
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
+  cf.info('Setting up bitcoin wallets');
+  await setupAllBtcWallets(cf);
+
   cf.info('Setting up for swaps');
 
   await Promise.all([

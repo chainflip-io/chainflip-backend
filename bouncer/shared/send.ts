@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { sendDot } from 'shared/send_dot';
-import { sendBtc } from 'shared/send_btc';
+import { getRandomBtcClient, sendBtc } from 'shared/send_btc';
 import { sendErc20 } from 'shared/send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from 'shared/send_evm';
 import {
@@ -30,7 +30,7 @@ export async function send(
 ): Promise<any> {
   switch (asset) {
     case 'Btc':
-      return sendBtc(logger, address, amount);
+      return sendBtc(logger, address, amount, 1, await getRandomBtcClient(logger));
     case 'Eth':
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
