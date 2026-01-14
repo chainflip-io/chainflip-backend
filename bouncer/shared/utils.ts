@@ -781,21 +781,21 @@ export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: str
   }
 }
 
-export async function observeBalanceIncrease(
-  logger: Logger,
+export async function observeBalanceIncrease<A = []>(
+  cf: ChainflipIO<A>,
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
   timeoutSeconds = 120,
 ): Promise<number> {
-  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
+  cf.debug(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
-      logger.debug(
+      cf.debug(
         `Observed balance increase of ${newBalance - initialBalance}${dstCcy} in ${i * 3} seconds`,
       );
       return newBalance;
@@ -804,7 +804,7 @@ export async function observeBalanceIncrease(
   }
 
   return throwError(
-    logger,
+    cf.logger,
     new Error(
       `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
     ),
