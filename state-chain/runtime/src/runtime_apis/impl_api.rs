@@ -702,11 +702,9 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
-			LiquidityPools::sweep(&account_id).unwrap();
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
-			LiquidityPools::sweep(&account_id).unwrap();
 			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 
@@ -761,7 +759,6 @@ impl_runtime_apis! {
 		fn cf_common_account_info(
 			account_id: &AccountId,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
-			LiquidityPools::sweep(account_id).unwrap();
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
 				.map(|(operator, max_bid)| DelegationInfo { operator, bid: core::cmp::min(flip_account.total(), max_bid) });
@@ -1769,8 +1766,6 @@ impl_runtime_apis! {
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
 
 			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
-
-				LiquidityPools::sweep(&strategy_id).unwrap();
 
 				let free_balances = AssetBalances::free_balances(&strategy_id);
 				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);
