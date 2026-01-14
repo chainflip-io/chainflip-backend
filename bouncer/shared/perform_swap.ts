@@ -340,6 +340,10 @@ export async function executeVaultSwap(
     sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
   }
 
+  logger.debug(
+    `vault swap sent on ${srcChain} with transactionId ${JSON.stringify(transactionId)} and source address ${sourceAddress}`,
+  );
+
   return { transactionId, sourceAddress };
 }
 

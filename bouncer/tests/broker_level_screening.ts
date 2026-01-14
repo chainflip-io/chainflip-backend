@@ -541,7 +541,8 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
 export async function testBitcoin<A = []>(
   cf: ChainflipIO<A>,
   doBoost: boolean,
-): Promise<Promise<void>[]> {
+  // ): Promise<((cf: ChainflipIO<A>) => Promise<void>)[]> {
+) {
   // we have to setup a separate wallet in order to not taint our main wallet, otherwise
   // the deposit monitor will possibly reject transactions created by other tests, due
   // to ancestor screening. This has been a source of bouncer flakiness in the past.
@@ -562,49 +563,52 @@ export async function testBitcoin<A = []>(
   const confirmationsBeforeReport = doBoost ? 0 : 1;
 
   // send a single tx
-  const simple = brokerLevelScreeningTestBtc(
-    cf,
-    doBoost,
-    async (amount, address) =>
-      sendBtc(cf.logger, address, amount, confirmationsBeforeReport, taintedClient),
-    async (txId) => setTxRiskScore(txId, 9.0),
-  );
+  const simple = (subcf: ChainflipIO<A>) =>
+    brokerLevelScreeningTestBtc(
+      subcf,
+      doBoost,
+      async (amount, address) =>
+        sendBtc(subcf.logger, address, amount, confirmationsBeforeReport, taintedClient),
+      async (txId) => setTxRiskScore(txId, 9.0),
+    );
 
   // send a parent->child chain in the same block and mark the parent
-  const sameBlockParentMarked = brokerLevelScreeningTestBtc(
-    cf,
-    doBoost,
-    async (amount, address) =>
-      (
-        await sendBtcTransactionWithParent(
-          cf.logger,
-          address,
-          amount,
-          0,
-          confirmationsBeforeReport,
-          taintedClient,
-        )
-      ).childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
-  );
+  const sameBlockParentMarked = (subcf: ChainflipIO<A>) =>
+    brokerLevelScreeningTestBtc(
+      subcf,
+      doBoost,
+      async (amount, address) =>
+        (
+          await sendBtcTransactionWithParent(
+            subcf.logger,
+            address,
+            amount,
+            0,
+            confirmationsBeforeReport,
+            taintedClient,
+          )
+        ).childTxid,
+      async (txId) => setTxRiskScore(txId, 9.0),
+    );
 
   // send a parent->child chain where parent is 2 blocks older and mark the parent
-  const oldParentMarked = brokerLevelScreeningTestBtc(
-    cf,
-    doBoost,
-    async (amount, address) =>
-      (
-        await sendBtcTransactionWithParent(
-          cf.logger,
-          address,
-          amount,
-          2,
-          confirmationsBeforeReport,
-          taintedClient,
-        )
-      ).childTxid,
-    async (txId) => setTxRiskScore(txId, 9.0),
-  );
+  const oldParentMarked = (subcf: ChainflipIO<A>) =>
+    brokerLevelScreeningTestBtc(
+      subcf,
+      doBoost,
+      async (amount, address) =>
+        (
+          await sendBtcTransactionWithParent(
+            subcf.logger,
+            address,
+            amount,
+            2,
+            confirmationsBeforeReport,
+            taintedClient,
+          )
+        ).childTxid,
+      async (txId) => setTxRiskScore(txId, 9.0),
+    );
 
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
@@ -639,7 +643,7 @@ export async function testBrokerLevelScreening(
   testContext: TestContext,
   testBoostedDeposits: boolean = false,
 ) {
-  const cf = await newChainflipIO(testContext.logger, []);
+  const parentcf = await newChainflipIO(testContext.logger, []);
 
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
@@ -659,34 +663,32 @@ export async function testBrokerLevelScreening(
   //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.
 
   // test rejection of swaps by the responsible broker
-  await Promise.all(
-    [
-      testSol(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-      testSol(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      testEvm(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    ]
-      .concat(await testBitcoin(cf, false))
-      .concat(testBoostedDeposits ? await testBitcoin(cf, true) : []),
-  );
+  await parentcf.all([
+    (cf) => testSol(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testSol(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvm(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvm(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvm(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    ...(await testBitcoin(parentcf, false)),
+    ...(testBoostedDeposits ? await testBitcoin(parentcf, true) : []),
+  ]);
 
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   await setWhitelistedBroker(broker.addressRaw);
-  await Promise.all([
+  await parentcf.all([
     // --- LP deposits ---
-    testEvmLiquidityDeposit(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmLiquidityDeposit(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmLiquidityDeposit(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvmLiquidityDeposit(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvmLiquidityDeposit(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvmLiquidityDeposit(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
 
     // --- vault swaps ---
     // testBitcoinVaultSwap(testContext),
-    testEvmVaultSwap(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    testEvmVaultSwap(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    testSolVaultSwap(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-    testSolVaultSwap(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvmVaultSwap(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testEvmVaultSwap(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testSolVaultSwap(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testSolVaultSwap(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);

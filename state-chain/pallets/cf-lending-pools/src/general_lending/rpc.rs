@@ -3,6 +3,8 @@ use cf_primitives::{AssetAndAmount, SwapRequestId};
 use cf_traits::lending::LoanId;
 use serde::{Deserialize, Serialize};
 
+pub mod before_v12;
+
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcLoan<Amount> {
 	pub loan_id: LoanId,

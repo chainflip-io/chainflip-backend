@@ -3,6 +3,7 @@ import {
   createStateChainKeypair,
   extractExtrinsicResult,
   cfMutex,
+  isValidHexHash,
 } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
@@ -10,6 +11,7 @@ import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitExistingGovernanceExtrinsic } from 'shared/cf_governance';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposed } from 'generated/events/governance/proposed';
+import { governanceExecuted } from 'generated/events/governance/executed';
 import { DisposableApiPromise, getChainflipApi } from './substrate';
 import {
   OneOfEventsResult,
@@ -18,6 +20,7 @@ import {
   EventDescriptions,
   AllOfEventsResult,
   SingleEventResult,
+  blockWithTransactionHash,
 } from './indexer';
 import { Logger } from './logger';
 
@@ -39,6 +42,13 @@ export class ChainflipIO<Requirements> {
   readonly logger: Logger;
 
   /**
+   * Used by `this.runExclusively()` to ensure that this objects' async methods are always called sequentially.
+   */
+  private currentlyInUseBy: string | undefined;
+
+  private currentStackTrace: string | undefined;
+
+  /**
    * Creates a new instance, the `lastIoBlockHeight` has to be specified. If you want
    * to automatically initialize to the current block height, use `newChainflipIO` instead.
    */
@@ -46,6 +56,8 @@ export class ChainflipIO<Requirements> {
     this.lastIoBlockHeight = lastIoBlockHeight;
     this.requirements = requirements;
     this.logger = logger;
+    this.currentlyInUseBy = undefined;
+    this.currentStackTrace = undefined;
   }
 
   private clone(): ChainflipIO<Requirements> {
@@ -77,31 +89,33 @@ export class ChainflipIO<Requirements> {
     extrinsic: (api: DisposableApiPromise) => any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<Result<any, string>> {
-    await using chainflipApi = await getChainflipApi();
-    const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
-      this.requirements.account.keypair,
-      cfMutex.for(this.requirements.account.uri),
-    );
-    const ext = extrinsic(chainflipApi);
+    return this.runExclusively('stepToExtrinsicIncluded', async () => {
+      await using chainflipApi = await getChainflipApi();
+      const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(
+        this.requirements.account.keypair,
+        cfMutex.for(this.requirements.account.uri),
+      );
+      const ext = extrinsic(chainflipApi);
 
-    // generate readable description for logging
-    const { section, method, args } = ext.toHuman().method;
-    const readable = `${section}.${method}(${JSON.stringify(args)})`;
+      // generate readable description for logging
+      const { section, method, args } = ext.toHuman().method;
+      const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
-    this.logger.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
+      this.logger.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
 
-    // submit
-    const result = extractExtrinsicResult(
-      chainflipApi,
-      await extrinsicSubmitter.submit(ext, false),
-    );
-    if (result.ok) {
-      this.logger.debug(`Successfully submitted`);
-      this.lastIoBlockHeight = result.value.blockNumber.toNumber();
-    } else {
-      this.logger.debug(`Encountered error when submitting extrinsic: ${result.error}`);
-    }
-    return result;
+      // submit
+      const result = extractExtrinsicResult(
+        chainflipApi,
+        await extrinsicSubmitter.submit(ext, false),
+      );
+      if (result.ok) {
+        this.logger.debug(`Successfully submitted`);
+        this.lastIoBlockHeight = result.value.blockNumber.toNumber();
+      } else {
+        this.logger.debug(`Encountered error when submitting extrinsic: ${result.error}`);
+      }
+      return result;
+    });
   }
 
   /**
@@ -109,38 +123,28 @@ export class ChainflipIO<Requirements> {
    * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
    * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the extrinsic is included.
    */
-  async submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<number>;
-  async submitGovernance(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: { name: EventName };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<SingleEventResult<'event', any>>;
-  async submitGovernance<EventSchema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent: {
-      name: EventName;
-      schema: EventSchema;
-    };
-  }): Promise<SingleEventResult<'event', EventSchema>>;
-  async submitGovernance<Schema extends z.ZodTypeAny>(arg: {
-    extrinsic: ExtrinsicFromApi;
-    expectedEvent?: {
-      name: EventName;
-      schema?: Schema;
-    };
-  }) {
-    await using chainflipApi = await getChainflipApi();
-    const extrinsic = await arg.extrinsic(chainflipApi);
+  submitGovernance = this.wrapWithExpectEvent((arg: { extrinsic: ExtrinsicFromApi }) =>
+    this.impl_submitGovernance(arg),
+  );
 
-    // generate readable description for logging
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { section, method, args } = (extrinsic.toHuman() as any).method;
-    const readable = `${section}.${method}(${JSON.stringify(args)})`;
+  private async impl_submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void> {
+    // we only wrap the governance submission by `runExclusively`
+    // because the second half invokes `stepUntilEvent` which has its own `runExclusively` wrapper.
+    const proposalId = await this.runExclusively('submitGovernance', async () => {
+      await using chainflipApi = await getChainflipApi();
+      const extrinsic = await arg.extrinsic(chainflipApi);
 
-    this.logger.debug(`Submitting governance extrinsic '${readable}' for snowwhite`);
+      // generate readable description for logging
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { section, method, args } = (extrinsic.toHuman() as any).method;
+      const readable = `${section}.${method}(${JSON.stringify(args)})`;
 
-    // TODO we might want to move this functionality here eventually
-    const proposalId = await submitExistingGovernanceExtrinsic(extrinsic);
+      this.logger.debug(`Submitting governance extrinsic '${readable}' for snowwhite`);
+
+      // TODO we might want to move this functionality here eventually
+      return submitExistingGovernanceExtrinsic(extrinsic);
+    });
+
     await this.stepUntilEvent(
       'Governance.Proposed',
       governanceProposed.refine((id) => id === proposalId),
@@ -148,16 +152,69 @@ export class ChainflipIO<Requirements> {
     this.logger.debug(
       `Governance proposal has id ${proposalId} and was found in block ${this.lastIoBlockHeight}`,
     );
+    await this.stepUntilEvent(
+      'Governance.Executed',
+      governanceExecuted.refine((id) => id === proposalId),
+    );
+    this.logger.debug(
+      `Governance proposal with id ${proposalId} executed in block ${this.lastIoBlockHeight}`,
+    );
+  }
 
-    // searching for event
-    if (arg.expectedEvent) {
-      const result = await this.stepUntilEvent(
-        arg.expectedEvent.name,
-        arg.expectedEvent.schema ?? z.any(),
-      );
-      return result;
-    }
-    return proposalId;
+  /**
+   * Steps until it finds a block where the tx with the given hash was included.
+   *
+   * WARNING: this will loop indefinitely if the provided tx hash is never included.
+   *
+   * @param arg Object containing `hash: string` that references an on-chain transaction
+   * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the transaction is included.
+   */
+  stepToTransactionIncluded = this.wrapWithExpectEvent((arg: { hash: string }) =>
+    this.impl_stepToTransactionIncluded(arg),
+  );
+
+  private async impl_stepToTransactionIncluded(arg: { hash: string }): Promise<void> {
+    await this.runExclusively('stepToTransactionIncluded', async () => {
+      if (!isValidHexHash(arg.hash)) {
+        throw new Error(
+          `Expected transaction hash but got ${arg.hash} when trying to step to tx included`,
+        );
+      }
+
+      this.debug(`Waiting for block with transaction hash ${arg.hash}`);
+      const height = await blockWithTransactionHash(arg.hash);
+
+      if (height >= this.lastIoBlockHeight) {
+        this.debug(`Found transaction hash ${arg.hash} in block ${height}`);
+        this.lastIoBlockHeight = height;
+      } else {
+        throw new Error(`When stepping to block with transaction with hash ${arg.hash}, found it in a block that's lower than the current IO height:
+        - current lastIoBlockHeight: ${this.lastIoBlockHeight}
+        - found tx in ${height}`);
+      }
+    });
+  }
+
+  /**
+   * Runs `f` and afterwards tries to `expectEvent` if an event was provided.
+   *
+   * This function handles the common pattern of expecting a certain event after stepping to a block. So implementations
+   * can be written without taking the expected event into account, then just have to wrapped with `wrapWithExpectEvent`.
+   * @param f Method to be executed
+   * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
+   */
+  private wrapWithExpectEvent<A extends object>(
+    f: (a: A) => Promise<void>,
+  ): <Schema extends z.ZodTypeAny>(
+    a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
+  ) => Promise<z.infer<Schema>> {
+    return async (arg) => {
+      await f(arg);
+      if (arg.expectedEvent) {
+        return this.expectEvent(arg.expectedEvent.name, arg.expectedEvent.schema ?? z.any());
+      }
+      return Promise.resolve();
+    };
   }
 
   /**
@@ -180,16 +237,18 @@ export class ChainflipIO<Requirements> {
     name: EventName,
     schema: Z,
   ): Promise<z.infer<Z>> {
-    this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
-    const event = await findOneEventOfMany(
-      this.logger,
-      { event: { name, schema } },
-      {
-        startFromBlock: this.lastIoBlockHeight,
-      },
-    );
-    this.lastIoBlockHeight = event.blockHeight;
-    return event.data;
+    return this.runExclusively('stepUntilEvent', async () => {
+      this.logger.debug(`waiting for event ${name} from block ${this.lastIoBlockHeight}`);
+      const event = await findOneEventOfMany(
+        this.logger,
+        { event: { name, schema } },
+        {
+          startFromBlock: this.lastIoBlockHeight,
+        },
+      );
+      this.lastIoBlockHeight = event.blockHeight;
+      return event.data;
+    });
   }
 
   /**
@@ -205,17 +264,19 @@ export class ChainflipIO<Requirements> {
     name: EventName,
     schema?: Z,
   ): Promise<z.infer<Z>> {
-    this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
-    const event = await findOneEventOfMany(
-      this.logger,
-      { event: { name, schema: schema ?? z.any() } },
-      {
-        startFromBlock: this.lastIoBlockHeight,
-        endBeforeBlock: this.lastIoBlockHeight + 1,
-      },
-    );
+    return this.runExclusively('expectEvent', async () => {
+      this.logger.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
+      const event = await findOneEventOfMany(
+        this.logger,
+        { event: { name, schema: schema ?? z.any() } },
+        {
+          startFromBlock: this.lastIoBlockHeight,
+          endBeforeBlock: this.lastIoBlockHeight + 1,
+        },
+      );
 
-    return event.data;
+      return event.data;
+    });
   }
 
   /**
@@ -228,20 +289,23 @@ export class ChainflipIO<Requirements> {
   async stepUntilOneEventOf<Events extends EventDescriptions>(
     descriptions: Events,
   ): Promise<OneOfEventsResult<Events>> {
-    this.logger.debug(
-      `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
-    );
-    const event = await findOneEventOfMany(this.logger, descriptions, {
-      startFromBlock: this.lastIoBlockHeight,
+    return this.runExclusively('stepUntilOneEventOf', async () => {
+      this.logger.debug(
+        `waiting for either of the following events: ${JSON.stringify(Object.values(descriptions).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
+      );
+      const event = await findOneEventOfMany(this.logger, descriptions, {
+        startFromBlock: this.lastIoBlockHeight,
+      });
+      this.debug(`found event ${event}`);
+      this.lastIoBlockHeight = event.blockHeight;
+      return event;
     });
-    this.debug(`found event ${event}`);
-    this.lastIoBlockHeight = event.blockHeight;
-    return event;
   }
 
   async stepUntilAllEventsOf<Events extends EventDescriptions>(
     events: Events,
   ): Promise<AllOfEventsResult<Events>> {
+    // Note, this function is not wrapped in `runExclusively` because `this.all()` already is.
     this.logger.debug(
       `waiting for all of the following events: ${JSON.stringify(Object.values(events).map((d) => d.name))} from block ${this.lastIoBlockHeight}`,
     );
@@ -265,22 +329,68 @@ export class ChainflipIO<Requirements> {
   async all<T extends readonly ((cf: ChainflipIO<Requirements>) => unknown)[] | []>(
     values: T,
   ): Promise<{ -readonly [P in keyof T]: Awaited<ReturnType<T[P]>> }> {
-    // run all functions in parallel with clones of this chainflip io instance
-    const results = await Promise.all(
-      values.map(async (f) => {
-        const cf = this.clone();
-        const result = await f(cf);
-        return { cf, result };
-      }),
-    );
+    return this.runExclusively('all', async () => {
+      // run all functions in parallel with clones of this chainflip io instance
+      const results = await Promise.all(
+        values.map(async (f) => {
+          const cf = this.clone();
+          const result = await f(cf);
+          return { cf, result };
+        }),
+      );
 
-    // collect all block heights and use the max height for our new block height
-    this.lastIoBlockHeight = Math.max(...results.map((val) => val.cf.lastIoBlockHeight));
+      // collect all block heights and use the max height for our new block height
+      this.lastIoBlockHeight = Math.max(...results.map((val) => val.cf.lastIoBlockHeight));
 
-    // we have to typecast to the expected type
-    return results.map((val) => val.result) as {
-      -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>;
-    };
+      // we have to typecast to the expected type
+      return results.map((val) => val.result) as {
+        -readonly [P in keyof T]: Awaited<ReturnType<T[P]>>;
+      };
+    });
+  }
+
+  // --------------- api invariants ------------------
+
+  /**
+   * Makes sure that the function body `f` has exclusive access to this object while running.
+   * @param method current method name (for better errors)
+   * @param f the actual function body to run
+   * @returns result of `f` is forwarded
+   */
+  private async runExclusively<A>(method: string, f: () => Promise<A>): Promise<A> {
+    const stack = new Error().stack;
+    if (this.currentlyInUseBy) {
+      throw new Error(`Attempted to call a method on a cf object while it was already in use!
+
+         - in use by '${this.currentlyInUseBy}'
+         - tried to call on '${method}'
+
+        This is not allowed, calls to the same cf object should be done strictly sequentially.
+
+        If you want to run code in parallel, you should use the 'cf.all()' method to run "subtasks",
+        e.g.: 'cf.all([cf => cf.method1(), cf => cf.method2()])'.
+
+        The current lastIoBlockHeight is ${this.lastIoBlockHeight}.
+
+        Current stack trace:
+        ${stack}
+
+        In use by stack trace:
+        ${this.currentStackTrace}
+        `);
+    }
+    this.currentlyInUseBy = method;
+    this.currentStackTrace = stack;
+    let result;
+    try {
+      result = await f();
+    } finally {
+      // always clean up even if we got an error
+      this.currentlyInUseBy = undefined;
+      this.currentStackTrace = undefined;
+    }
+
+    return result;
   }
 
   // --------------- logger functionality ------------------

@@ -958,6 +958,7 @@ impl pallet_cf_asset_balances::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
+	type PoolApi = LiquidityPools;
 	type SafeMode = RuntimeSafeMode;
 }
 

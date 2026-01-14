@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.6] - 2025-12-22
+
+### Fixes
+
+- Make lending-pools rpc backwards compatible.
+
 ## [2.0.5] - 2025-12-22
 
 ### Fixes

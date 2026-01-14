@@ -26,8 +26,9 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{
-		get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions, LendingSupplyPosition,
-		RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+		before_v12, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
+		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+		RpcLoanAccount,
 	},
 	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
 	WhitelistUpdate, WithdrawnAndRemainingAmounts,
@@ -53,6 +54,7 @@ mod benchmarking;
 
 use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	SwapRequestId,
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
@@ -195,7 +197,17 @@ pub enum CollateralAddedActionType {
 	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
-	SystemLiquidationExcessAmount { loan_id: LoanId },
+	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
+}
+
+/// Indicates how the action of repaying a loan was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum LoanRepaidActionType {
+	/// Triggered manually by the user. Loan is repaid from the user's free balance.
+	Manual,
+	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
+	/// swap's output.
+	Liquidation { swap_request_id: SwapRequestId },
 }
 
 pub struct LendingConfigDefault {}
@@ -451,6 +463,7 @@ pub mod pallet {
 		LoanRepaid {
 			loan_id: LoanId,
 			amount: AssetAmount,
+			action_type: LoanRepaidActionType,
 		},
 		LoanSettled {
 			loan_id: LoanId,
@@ -668,10 +681,6 @@ pub mod pallet {
 
 			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 
-			// `try_debit_account` does not account for any unswept open positions, so we sweep to
-			// ensure we have the funds in our free balance before attempting to debit the account.
-			T::PoolApi::sweep(&booster_id)?;
-
 			T::Balance::try_debit_account(&booster_id, asset, amount)?;
 
 			let boost_pool: BoostPool =
@@ -785,10 +794,6 @@ pub mod pallet {
 					config.minimum_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
-
-			// `try_debit_account` does not account for any unswept open positions, so we sweep to
-			// ensure we have the funds in our free balance before attempting to debit the account.
-			T::PoolApi::sweep(&lender_id)?;
 
 			T::Balance::try_debit_account(&lender_id, asset, amount)?;
 

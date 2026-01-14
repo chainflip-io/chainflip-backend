@@ -7,15 +7,15 @@
 // For example: ./commands/setup_lp_account.ts //LP_3
 
 import { runWithTimeoutAndExit } from 'shared/utils';
-import { setupLpAccount } from 'shared/setup_account';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 import { globalLogger } from 'shared/utils/logger';
 
 async function main() {
-  const lpKey = process.argv[2];
-  if (!lpKey) {
-    throw new Error('No LP key provided');
+  const lpUri = process.argv[2];
+  if (!lpUri) {
+    throw new Error('No LP URI provided');
   }
-  await setupLpAccount(globalLogger, lpKey);
+  await setupAccount(globalLogger, lpUri, AccountRole.LiquidityProvider);
 }
 
 await runWithTimeoutAndExit(main(), 120);

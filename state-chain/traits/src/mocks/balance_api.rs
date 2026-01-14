@@ -20,20 +20,25 @@ use cf_chains::{
 	ForeignChain,
 };
 use cf_primitives::AssetAmount;
+use codec::Encode;
 use frame_support::sp_runtime::{
 	traits::{CheckedSub, Saturating},
 	DispatchError, DispatchResult,
 };
+use sp_std::marker::PhantomData;
 
 use super::{MockPallet, MockPalletStorage};
 
 use crate::LpRegistration;
 
-pub struct MockBalance;
+type DefaultAccountId = u64;
 
-type AccountId = u64;
+pub struct MockBalance<AccountId = DefaultAccountId>(PhantomData<AccountId>);
 
-impl LpDepositHandler for MockBalance {
+impl<AccountId> LpDepositHandler for MockBalance<AccountId>
+where
+	AccountId: Encode,
+{
 	type AccountId = AccountId;
 
 	fn add_deposit(
@@ -45,19 +50,22 @@ impl LpDepositHandler for MockBalance {
 	}
 }
 
-impl MockPallet for MockBalance {
+impl<AccountId> MockPallet for MockBalance<AccountId> {
 	const PREFIX: &'static [u8] = b"LP_BALANCE";
 }
 
 const FREE_BALANCES: &[u8] = b"FREE_BALANCES";
 
-impl BalanceApi for MockBalance {
+impl<AccountId> BalanceApi for MockBalance<AccountId>
+where
+	AccountId: Encode,
+{
 	type AccountId = AccountId;
 
 	fn credit_account(who: &Self::AccountId, asset: Asset, amount_to_credit: AssetAmount) {
-		Self::mutate_storage::<(AccountId, cf_primitives::Asset), _, _, _, _>(
+		Self::mutate_storage::<(&AccountId, cf_primitives::Asset), _, _, _, _>(
 			FREE_BALANCES,
-			&(*who, asset),
+			&(who, asset),
 			|amount| {
 				let amount = amount.get_or_insert_with(|| 0);
 				*amount = amount.saturating_add(amount_to_credit);
@@ -79,9 +87,9 @@ impl BalanceApi for MockBalance {
 		asset: Asset,
 		amount_to_debit: AssetAmount,
 	) -> DispatchResult {
-		Self::mutate_storage::<(AccountId, cf_primitives::Asset), _, _, _, _>(
+		Self::mutate_storage::<(&AccountId, cf_primitives::Asset), _, _, _, _>(
 			FREE_BALANCES,
-			&(*who, asset),
+			&(who, asset),
 			|amount| {
 				let amount = amount.get_or_insert_with(|| 0);
 
@@ -113,8 +121,8 @@ impl MockPallet for MockLpRegistration {
 const REFUND_ADDRESS_REGISTRATION: &[u8] = b"IS_REGISTERED_FOR_ASSET";
 
 impl MockLpRegistration {
-	pub fn register_refund_address(account_id: AccountId, chain: ForeignChain) {
-		Self::mutate_storage::<(AccountId, ForeignChain), _, _, (), _>(
+	pub fn register_refund_address(account_id: DefaultAccountId, chain: ForeignChain) {
+		Self::mutate_storage::<(DefaultAccountId, ForeignChain), _, _, (), _>(
 			REFUND_ADDRESS_REGISTRATION,
 			&(account_id, chain),
 			|is_registered: &mut Option<()>| {
@@ -135,7 +143,7 @@ impl LpRegistration for MockLpRegistration {
 	}
 
 	fn ensure_has_refund_address_for_asset(who: &Self::AccountId, asset: Asset) -> DispatchResult {
-		if Self::get_storage::<(AccountId, ForeignChain), ()>(
+		if Self::get_storage::<(Self::AccountId, ForeignChain), ()>(
 			REFUND_ADDRESS_REGISTRATION,
 			(*who, asset.into()),
 		)

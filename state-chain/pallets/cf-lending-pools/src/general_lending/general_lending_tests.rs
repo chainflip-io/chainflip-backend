@@ -1272,6 +1272,7 @@ fn basic_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
+					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 }
 				}) if amount == repaid_amount_1,
 			);
 
@@ -1363,12 +1364,13 @@ fn basic_liquidation() {
 				}) if pool_fee == liquidation_fee_pool_2 && network_fee == liquidation_fee_network_2 && broker_fee == 0,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
+					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_2 },
 					amount,
 				}) if amount == repaid_amount_2,
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
 					ref collateral,
-					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount {..},
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { loan_id: LOAN_ID, swap_request_id: LIQUIDATION_SWAP_2 },
 				}) if collateral == &BTreeMap::from([(LOAN_ASSET, excess_principal)]),
 				// The loan should now be settled:
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
@@ -1730,7 +1732,8 @@ fn liquidation_with_outstanding_principal() {
 				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
-					amount
+					amount,
+					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 }
 				}) if amount == RECOVERED_PRINCIPAL - liquidation_fee,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 					loan_id: LOAN_ID,
@@ -1842,6 +1845,7 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
+					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 },
 					amount
 				}) if amount == RECOVERED_PRINCIPAL - liquidation_fee,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
@@ -2541,6 +2545,7 @@ fn reconciling_interest_before_settling_loan() {
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
+					action_type: LoanRepaidActionType::Manual
 				}) if amount == total_amount_to_repay,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled { .. })
 			);
@@ -2582,6 +2587,7 @@ fn making_loan_repayment() {
 
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 				loan_id: LOAN_ID,
+				action_type: LoanRepaidActionType::Manual,
 				amount: FIRST_REPAYMENT,
 			}));
 
@@ -2614,6 +2620,7 @@ fn making_loan_repayment() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
+					action_type: LoanRepaidActionType::Manual,
 					amount,
 				}) if amount == PRINCIPAL - FIRST_REPAYMENT + ORIGINATION_FEE,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
@@ -2651,6 +2658,7 @@ fn repaying_more_than_necessary() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
+					action_type: LoanRepaidActionType::Manual,
 					amount,
 				}) if amount == PRINCIPAL + ORIGINATION_FEE,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
@@ -3113,7 +3121,8 @@ fn adding_collateral_during_liquidation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
-					amount: RECOVERED_PRINCIPAL_1
+					amount: RECOVERED_PRINCIPAL_1,
+					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 }
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
@@ -3194,7 +3203,10 @@ fn adding_collateral_during_liquidation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
-					amount: RECOVERED_PRINCIPAL_2
+					amount: RECOVERED_PRINCIPAL_2,
+					action_type: LoanRepaidActionType::Liquidation {
+						swap_request_id: LIQUIDATION_SWAP_2
+					}
 				}),
 			);
 		});
@@ -3433,7 +3445,10 @@ fn full_loan_repayment_during_partial_liquidation() {
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 					borrower_id: BORROWER,
-					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount { .. },
+					action_type: CollateralAddedActionType::SystemLiquidationExcessAmount {
+						loan_id: LOAN_ID,
+						swap_request_id: LIQUIDATION_SWAP_1
+					},
 					..
 				})
 			);
@@ -3533,6 +3548,7 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: TOTAL_TO_REPAY,
+						action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP }
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {
 						borrower_id: BORROWER,
@@ -3619,6 +3635,9 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: SWAPPED_PRINCIPAL,
+						action_type: LoanRepaidActionType::Liquidation {
+							swap_request_id: LIQUIDATION_SWAP
+						}
 					}),
 				);
 
@@ -3730,6 +3749,9 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
 						amount: SWAPPED_PRINCIPAL_1,
+						action_type: LoanRepaidActionType::Liquidation {
+							swap_request_id: LIQUIDATION_SWAP_1
+						}
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
@@ -3816,6 +3838,9 @@ mod voluntary_liquidation {
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. }),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
+						action_type: LoanRepaidActionType::Liquidation {
+							swap_request_id: LIQUIDATION_SWAP_2
+						},
 						amount,
 					}) if amount == SWAPPED_PRINCIPAL_2 - liquidation_fee,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
@@ -3855,6 +3880,7 @@ mod voluntary_liquidation {
 					}),
 					RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 						loan_id: LOAN_ID,
+						action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_3 },
 						amount,
 					}) if amount == owed_after_liquidation_2,
 					RuntimeEvent::LendingPools(Event::<Test>::CollateralAdded {

@@ -484,7 +484,7 @@ fn closing_strategy() {
 		.then_execute_at_next_block(|_| deploy_strategy())
 		.then_execute_at_next_block(|strategy_id| {
 			// Two orders must have been created:
-			assert_eq!(MockPoolApi::get_limit_orders().len(), 2);
+			assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
 
 			// Credit the strategy account so has a non-zero free balance:
 			MockBalance::credit_account(&LP, BASE_ASSET, ADDITIONAL_BASE_AMOUNT);
@@ -510,7 +510,7 @@ fn closing_strategy() {
 			);
 
 			// Limit orders should be closed:
-			assert!(MockPoolApi::get_limit_orders().is_empty());
+			assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
 			assert_eq!(Strategies::<Test>::iter().count(), 0);
 			assert_balances!(strategy_id, 0, 0);
 		});
@@ -1033,12 +1033,12 @@ mod safe_mode {
 				);
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(MockPoolApi::get_limit_orders().len(), 0);
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 0);
 				// Resetting to code green should allow limit order creation:
 				<MockRuntimeSafeMode as SetSafeMode<PalletSafeMode>>::set_code_green();
 			})
 			.then_execute_at_next_block(|_| {
-				assert_eq!(MockPoolApi::get_limit_orders().len(), 2);
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
 			});
 	}
 }
