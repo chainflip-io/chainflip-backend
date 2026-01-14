@@ -213,6 +213,9 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	fn input_amount_floor(output: Amount, price: Price) -> Amount;
 
 	/// Calculates the swap output amount produced for an input amount at a price
+	fn output_amount_ceil(input: Amount, price: Price) -> Amount;
+
+	/// Calculates the swap output amount produced for an input amount at a price
 	fn output_amount_floor(input: Amount, price: Price) -> Amount;
 
 	/// Gets entry for best prices pool
@@ -226,7 +229,11 @@ impl SwapDirection for BaseToQuote {
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
-		QuoteToBase::output_amount_floor(output, price)
+		price.input_amount_floor(output)
+	}
+
+	fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+		price.output_amount_ceil(input)
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
@@ -241,17 +248,19 @@ impl SwapDirection for BaseToQuote {
 }
 impl SwapDirection for QuoteToBase {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
-		price.output_amount_ceil(output)
+		BaseToQuote::output_amount_ceil(output, price)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
 		BaseToQuote::output_amount_floor(output, price)
 	}
 
+	fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+		BaseToQuote::input_amount_ceil(input, price)
+	}
+
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		// Using input_amount_floor to calculate the output because of the swap direction is
-		// opposite the price.
-		price.input_amount_floor(input)
+		BaseToQuote::input_amount_floor(input, price)
 	}
 
 	fn best_priced_fixed_pool(

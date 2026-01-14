@@ -98,11 +98,6 @@ impl SqrtPrice {
 		SqrtPrice(value)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
-	pub fn from_raw_into<T: Into<U256>>(value: T) -> Self {
-		SqrtPrice(value.into())
-	}
-
 	pub fn as_raw(&self) -> U256 {
 		self.0
 	}
