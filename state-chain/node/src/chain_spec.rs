@@ -108,6 +108,7 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
 	eth_usdt_address: [u8; 20],
+	eth_wbtc_address: [u8; 20],
 	state_chain_gateway_address: [u8; 20],
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
@@ -119,6 +120,7 @@ pub struct StateChainEnvironment {
 	arb_key_manager_address: [u8; 20],
 	arb_vault_address: [u8; 20],
 	arb_usdc_token_address: [u8; 20],
+	arb_usdt_token_address: [u8; 20],
 	arb_address_checker_address: [u8; 20],
 	arbitrum_chain_id: u64,
 	ethereum_deployment_block: u64,
@@ -168,12 +170,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, ETH_USDT_ADDRESS, eth_usdt_address);
+	from_env_var!(clean_hex_address, ETH_WBTC_ADDRESS, eth_wbtc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, eth_key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_hex_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARB_USDC_TOKEN_ADDRESS, arb_usdc_token_address);
+	from_env_var!(clean_hex_address, ARB_USDT_TOKEN_ADDRESS, arb_usdt_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
@@ -268,12 +272,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
 		arb_usdc_token_address,
+		arb_usdt_token_address,
 		eth_address_checker_address,
 		eth_sc_utils_address,
 		arb_address_checker_address,
@@ -351,12 +357,14 @@ pub fn inner_cf_development_config(
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
 		arb_usdc_token_address,
+		arb_usdt_token_address,
 		eth_address_checker_address,
 		eth_sc_utils_address,
 		arb_address_checker_address,
@@ -403,6 +411,7 @@ pub fn inner_cf_development_config(
 				flip_token_address: flip_token_address.into(),
 				eth_usdc_address: eth_usdc_address.into(),
 				eth_usdt_address: eth_usdt_address.into(),
+				eth_wbtc_address: eth_wbtc_address.into(),
 				state_chain_gateway_address: state_chain_gateway_address.into(),
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
@@ -412,6 +421,7 @@ pub fn inner_cf_development_config(
 				arb_vault_address: arb_vault_address.into(),
 				arb_address_checker_address: arb_address_checker_address.into(),
 				arb_usdc_address: arb_usdc_token_address.into(),
+				arb_usdt_address: arb_usdt_token_address.into(),
 				ethereum_chain_id,
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
@@ -512,12 +522,14 @@ macro_rules! network_spec {
 					flip_token_address,
 					eth_usdc_address,
 					eth_usdt_address,
+					eth_wbtc_address,
 					state_chain_gateway_address,
 					eth_key_manager_address,
 					eth_vault_address,
 					arb_key_manager_address,
 					arb_vault_address,
 					arb_usdc_token_address,
+					arb_usdt_token_address,
 					eth_address_checker_address,
 					eth_sc_utils_address,
 					arb_address_checker_address,
@@ -594,6 +606,7 @@ macro_rules! network_spec {
 							flip_token_address: flip_token_address.into(),
 							eth_usdc_address: eth_usdc_address.into(),
 							eth_usdt_address: eth_usdt_address.into(),
+							eth_wbtc_address: eth_wbtc_address.into(),
 							state_chain_gateway_address: state_chain_gateway_address.into(),
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
@@ -603,6 +616,7 @@ macro_rules! network_spec {
 							arb_vault_address: arb_vault_address.into(),
 							arb_address_checker_address: arb_address_checker_address.into(),
 							arb_usdc_address: arb_usdc_token_address.into(),
+							arb_usdt_address: arb_usdt_token_address.into(),
 							ethereum_chain_id,
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,

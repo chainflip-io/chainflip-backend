@@ -3229,13 +3229,14 @@ pub mod utilities {
 			Asset::Usdc |
 			Asset::Usdt |
 			Asset::ArbUsdc |
+			Asset::ArbUsdt |
 			Asset::SolUsdc |
 			Asset::HubUsdc |
 			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1
 			Asset::Flip => price_from_usd(4, FLIP_DECIMALS) / 10, // ~$0.40
 			Asset::Eth | Asset::ArbEth => price_from_usd(2_800, ETH_DECIMALS), // ~$2,800
 			Asset::Dot | Asset::HubDot => price_from_usd(2, DOT_DECIMALS), // ~$2
-			Asset::Btc => price_from_usd(86_500, BTC_DECIMALS),   // ~$86,500
+			Asset::Btc | Asset::Wbtc => price_from_usd(86_500, BTC_DECIMALS), // ~$86,500
 			Asset::Sol => price_from_usd(127, SOL_DECIMALS),      // ~$127
 		}
 	}

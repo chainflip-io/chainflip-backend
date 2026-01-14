@@ -717,6 +717,15 @@ assets!(
 				index: 8,
 				usd_stablecoin: true,
 			},
+			Asset {
+				variant: Wbtc,
+				member: wbtc,
+				string: "WBTC" (aliases: ["Wbtc", "wbtc"]),
+				json: "WBTC",
+				gas: false,
+				index: 14,
+				usd_stablecoin: false,
+			}
 		],
 	},
 	Chain {
@@ -777,6 +786,15 @@ assets!(
 				json: "USDC",
 				gas: false,
 				index: 7,
+				usd_stablecoin: true,
+			},
+			Asset {
+				variant: ArbUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 15,
 				usd_stablecoin: true,
 			},
 		],
@@ -878,6 +896,7 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(11).unwrap(), any::Asset::HubDot);
 		assert_eq!(any::Asset::try_from(12).unwrap(), any::Asset::HubUsdt);
 		assert_eq!(any::Asset::try_from(13).unwrap(), any::Asset::HubUsdc);
+		assert_eq!(any::Asset::try_from(14).unwrap(), any::Asset::Wbtc);
 	}
 
 	#[test]
@@ -886,10 +905,12 @@ mod test_assets {
 		assert_conversion!(eth, Flip);
 		assert_conversion!(eth, Usdc);
 		assert_conversion!(eth, Usdt);
+		assert_conversion!(eth, Wbtc);
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
 		assert_conversion!(arb, ArbUsdc);
+		assert_conversion!(arb, ArbUsdt);
 		assert_conversion!(sol, Sol);
 		assert_conversion!(sol, SolUsdc);
 		assert_conversion!(hub, HubDot);
@@ -908,6 +929,8 @@ mod test_assets {
 		assert_incompatible!(arb, SolUsdc);
 		assert_incompatible!(dot, SolUsdc);
 		assert_incompatible!(btc, SolUsdc);
+		assert_incompatible!(btc, Wbtc);
+		assert_incompatible!(arb, Wbtc);
 	}
 
 	#[test]
@@ -1048,13 +1071,13 @@ mod test_assets {
 	fn asset_map_from_iterator() {
 		assert_eq!(
 			eth::AssetMap::from_iter(vec![(eth::Asset::Eth, 1), (eth::Asset::Flip, 2),]),
-			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0 }
+			eth::AssetMap { eth: 1, flip: 2, usdc: 0, usdt: 0, wbtc: 0 }
 		);
 		assert_eq!(any::AssetMap::<u128>::from_iter(vec![]), Default::default());
 		assert_eq!(
 			any::AssetMap::from_iter(vec![(any::Asset::Eth, 1), (any::Asset::Dot, 2),]),
 			any::AssetMap {
-				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0 },
+				eth: eth::AssetMap { eth: 1, flip: 0, usdc: 0, usdt: 0, wbtc: 0 },
 				dot: dot::AssetMap { dot: 2 },
 				..Default::default()
 			}
@@ -1110,7 +1133,7 @@ mod test_assets {
 			eth(Eth, Usdc),
 			btc(Btc),
 			dot(Dot),
-			arb(ArbEth, ArbUsdc),
+			arb(ArbEth, ArbUsdc, ArbUsdt),
 			sol(Sol, SolUsdc),
 			hub(HubDot)
 		);
