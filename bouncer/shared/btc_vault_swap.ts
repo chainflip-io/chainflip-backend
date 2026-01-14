@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { sendVaultTransaction } from 'shared/send_btc';
+import { getRandomBtcClient, sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
@@ -149,6 +149,7 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
+    getRandomBtcClient(),
   );
 
   return txid;
@@ -200,6 +201,7 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
+    getRandomBtcClient(),
   );
 
   return txid;
