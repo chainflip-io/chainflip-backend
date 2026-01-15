@@ -11,6 +11,8 @@
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { BoostPoolId, createBoostPools } from 'shared/setup_boost_pools';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
+const cf = await newChainflipIO(globalLogger, []);
 const newPools: BoostPoolId[] = JSON.parse(process.argv[2]);
-await runWithTimeoutAndExit(createBoostPools(globalLogger, newPools), 30);
+await runWithTimeoutAndExit(createBoostPools(cf, newPools), 30);
