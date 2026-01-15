@@ -59,7 +59,7 @@ pub trait WeightInfo {
 	fn affiliate_withdrawal_request() -> Weight;
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
 	fn request_account_creation_deposit_address() -> Weight;
-	fn bind_broker_withdrawal_address() -> Weight;
+	fn bind_broker_fee_withdrawal_address() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -340,10 +340,18 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(14_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
-
-
-	fn bind_broker_withdrawal_address() -> Weight {
-		Weight::zero()
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::BoundBrokerWithdrawalAddress` (r:1 w:1)
+	/// Proof: `Swapping::BoundBrokerWithdrawalAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn bind_broker_fee_withdrawal_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `640`
+		//  Estimated: `4105`
+		// Minimum execution time: 106_000_000 picoseconds.
+		Weight::from_parts(116_000_000, 4105)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 }
 
@@ -624,8 +632,17 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(14_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
 	}
-
-	fn bind_broker_withdrawal_address() -> Weight {
-		Weight::zero()
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::BoundBrokerWithdrawalAddress` (r:1 w:1)
+	/// Proof: `Swapping::BoundBrokerWithdrawalAddress` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn bind_broker_fee_withdrawal_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `640`
+		//  Estimated: `4105`
+		// Minimum execution time: 106_000_000 picoseconds.
+		Weight::from_parts(116_000_000, 4105)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 }
