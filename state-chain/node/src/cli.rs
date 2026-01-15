@@ -31,8 +31,7 @@ pub enum Subcommand {
 	Key(sc_cli::KeySubcommand),
 
 	/// Build a chain specification.
-	/// DEPRECATED: `build-spec` command will be removed after 1/04/2026. Use `export-chain-spec`
-	/// command instead.
+	/// DEPRECATED: Use `export-chain-spec` command instead.
 	#[deprecated(
 		note = "build-spec command will be removed after 1/04/2026. Use export-chain-spec command instead"
 	)]
