@@ -17,7 +17,7 @@ import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 const asset = parseAssetString(process.argv[2]);
 const amount = parseFloat(process.argv[3]);
 const lpKey = process.argv[4] as `//${string}`;
-const cf = (await newChainflipIO(globalLogger, [])).with({
+const cf = await newChainflipIO(globalLogger, {
   account: fullAccountFromUri(lpKey, 'LP'),
 });
 await runWithTimeoutAndExit(depositLiquidity(cf, asset as InternalAsset, amount), 120);
