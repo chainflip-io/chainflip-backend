@@ -1152,7 +1152,7 @@ pub mod pallet {
 			if asset == Asset::Usdc {
 				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
 					ensure!(
-						matches!(destination_address_internal, ForeignChainAddress::Eth(add) if add == bound_address),
+						destination_address_internal == ForeignChainAddress::Eth(bound_address),
 						Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
 					);
 				}
