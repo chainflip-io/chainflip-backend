@@ -95,8 +95,7 @@ async fn run_cli() -> Result<()> {
 						api.broker_api().deregister_account().await?;
 						println!("Broker account successfully deregistered.");
 					},
-					BrokerSubcommands::BindWithdrawalAddress(eth_address) => {
-						api.broker_api().bind_fee_withdrawal_address(cf_chains::eth::H160::from_str(&eth_address.address)?).await?;
+					BrokerSubcommands::BindFeeWithdrawalAddress(eth_address) => {
 						let _ = api.broker_api().bind_fee_withdrawal_address(<str>::parse(&eth_address.address)?).await?;
 						println!("Broker account bound to fee withdrawal address: {}", eth_address.address);
 					},

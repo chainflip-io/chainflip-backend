@@ -687,7 +687,7 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> Result<H256> {
 		let extrinsic_data = self
 			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::bind_broker_withdrawal_address { address },
+				pallet_cf_swapping::Call::bind_broker_fee_withdrawal_address { address },
 			)
 			.await?
 			.until_in_block()

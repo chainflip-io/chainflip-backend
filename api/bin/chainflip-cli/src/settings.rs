@@ -110,8 +110,8 @@ pub enum BrokerSubcommands {
 	RegisterAccount,
 	/// De-register this broker account.
 	DeregisterAccount,
-	/// Set bound fee withdrawal address
-	BindWithdrawalAddress(EthereumAddressString),
+	/// Set bound fee withdrawal address.
+	BindFeeWithdrawalAddress(EthereumAddressString),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]

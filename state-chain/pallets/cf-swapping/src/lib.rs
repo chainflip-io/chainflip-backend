@@ -1661,8 +1661,8 @@ pub mod pallet {
 		/// Binds a broker account to a redeem address. This is used to allow a broker to redeem
 		/// their funds only to a specific address.
 		#[pallet::call_index(19)]
-		#[pallet::weight(T::WeightInfo::bind_broker_withdrawal_address())]
-		pub fn bind_broker_withdrawal_address(
+		#[pallet::weight(T::WeightInfo::bind_broker_fee_withdrawal_address())]
+		pub fn bind_broker_fee_withdrawal_address(
 			origin: OriginFor<T>,
 			address: EthereumAddress,
 		) -> DispatchResult {

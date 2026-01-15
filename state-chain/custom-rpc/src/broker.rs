@@ -719,7 +719,7 @@ where
 		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
-				RuntimeCall::from(pallet_cf_swapping::Call::bind_broker_withdrawal_address {
+				RuntimeCall::from(pallet_cf_swapping::Call::bind_broker_fee_withdrawal_address {
 					address,
 				}),
 				true,

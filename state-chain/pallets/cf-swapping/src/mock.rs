@@ -183,7 +183,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_parts(100, 0)
 	}
 
-	fn bind_broker_withdrawal_address() -> Weight {
+	fn bind_broker_fee_withdrawal_address() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 }
