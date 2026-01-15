@@ -2616,7 +2616,7 @@ mod bound_broker_withdrawal {
 			assert_ok!(Swapping::withdraw(
 				OriginTrait::signed(BROKER),
 				Asset::Sol,
-				EncodedAddress::Sol([0xbb; 32].into()),
+				EncodedAddress::Sol([0xbb; 32]),
 			));
 		});
 	}
