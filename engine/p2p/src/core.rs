@@ -33,6 +33,7 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
 use auth::Authenticator;
+use cf_primitives::AccountId;
 use cf_utilities::{
 	make_periodic_tick,
 	metrics::{
@@ -41,17 +42,16 @@ use cf_utilities::{
 	Port,
 };
 use serde::{Deserialize, Serialize};
-use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use x25519_dalek::StaticSecret;
 
-use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};
+use crate::pk_to_string;
 use monitor::MonitorEvent;
 
-use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
+use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
 
-use super::{EdPublicKey, P2PKey, XPublicKey};
+use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
@@ -287,7 +287,7 @@ impl Drop for P2PContext {
 	}
 }
 
-pub(super) async fn start(
+pub async fn start(
 	p2p_key: P2PKey,
 	port: Port,
 	current_peers: Vec<PeerInfo>,

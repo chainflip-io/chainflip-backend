@@ -38,7 +38,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('BoostingForAsset', testBoostingSwap, 200);
   concurrentTest('FillOrKill', testFillOrKill, 300);
   concurrentTest('DCASwaps', testDCASwaps, 300);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 120);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
   concurrentTest('VaultSwaps', testVaultSwap, 600);

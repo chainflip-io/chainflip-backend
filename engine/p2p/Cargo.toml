@@ -1,0 +1,50 @@
+
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+edition = "2021"
+name = "engine-p2p"
+version = "2.1.0"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["lib"]
+name = "engine_p2p"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+bincode = { workspace = true }
+hex = { workspace = true, default-features = true }
+futures = { workspace = true }
+num-traits = { workspace = true }
+serde = { workspace = true, default-features = true, features = [
+	"derive",
+	"rc",
+] }
+sha2 = { workspace = true, default-features = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+curve25519-dalek = { workspace = true, default-features = true, features = [
+	"serde",
+] }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+rand = { workspace = true, default-features = true, features = ["alloc"] }
+tracing = { workspace = true }
+x25519-dalek = { workspace = true, features = ["serde", "static_secrets"] }
+zmq = { workspace = true, features = ["vendored"] }
+
+# Local deps
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+multisig = { workspace = true }
+cf-utilities = { workspace = true, default-features = true }
+
+# substrate deps
+sp-core = { workspace = true, default-features = true }
+
+[dev-dependencies]
+cf-utilities = { workspace = true, default-features = true, features = [
+	"test-utils",
+]}

@@ -1915,10 +1915,9 @@ dependencies = [
  "chrono",
  "clap",
  "config",
- "curve25519-dalek 4.1.3",
  "custom-rpc",
- "dyn-clone",
  "ed25519-dalek",
+ "engine-p2p",
  "engine-upgrade-utils",
  "ethbloom",
  "ethereum",
@@ -1933,14 +1932,11 @@ dependencies = [
  "futures-util",
  "hex",
  "http 1.3.1",
- "httparse",
  "itertools 0.13.0",
  "jsonrpsee 0.23.2",
  "lazy_static",
  "mockall 0.13.1",
  "multisig",
- "num-bigint",
- "num-derive",
  "num-traits",
  "pallet-cf-account-roles",
  "pallet-cf-broadcast",
@@ -1961,7 +1957,6 @@ dependencies = [
  "parity-scale-codec",
  "pin-project",
  "rand",
- "regex",
  "reqwest",
  "rlp",
  "rocksdb",
@@ -1990,11 +1985,8 @@ dependencies = [
  "tracing",
  "url",
  "utilities",
- "warp",
  "web3",
- "x25519-dalek",
  "zeroize",
- "zmq",
 ]
 
 [[package]]
@@ -3429,6 +3421,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "engine-p2p"
+version = "2.1.0"
+dependencies = [
+ "anyhow",
+ "bincode 1.3.3",
+ "cf-chains",
+ "cf-primitives",
+ "curve25519-dalek 4.1.3",
+ "ed25519-dalek",
+ "futures",
+ "hex",
+ "multisig",
+ "num-traits",
+ "rand",
+ "serde",
+ "sha2 0.10.9",
+ "sp-core 34.0.0",
+ "tokio",
+ "tracing",
+ "utilities",
+ "x25519-dalek",
+ "zmq",
 ]
 
 [[package]]

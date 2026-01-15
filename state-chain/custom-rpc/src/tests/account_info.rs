@@ -102,6 +102,7 @@ fn test_broker_serialization() {
 			btc_vault_deposit_address: Some(
 				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 			),
+			bound_fee_withdrawal_address: Some(H160([0x04; 20])),
 		},
 	};
 	insta::assert_snapshot!(serde_json::to_string_pretty(&wrapper).unwrap());
