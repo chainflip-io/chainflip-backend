@@ -26,7 +26,7 @@ use api::{
 	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
-use cf_chains::eth::Address as EthereumAddress;
+use cf_chains::evm::Address as EthereumAddress;
 use cf_utilities::{clean_hex_address, round_f64, task_scope::task_scope};
 use chainflip_api::{
 	self as api,

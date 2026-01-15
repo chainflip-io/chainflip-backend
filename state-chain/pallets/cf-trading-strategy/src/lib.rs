@@ -57,7 +57,16 @@ const STRATEGY_ORDER_ID_1: OrderId = 1;
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
 #[derive(
-	Clone, Debug, Encode, Decode, TypeInfo, serde::Serialize, serde::Deserialize, PartialEq, Eq,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
+	Eq,
 )]
 pub enum TradingStrategy {
 	TickZeroCentered {
@@ -78,7 +87,17 @@ pub enum TradingStrategy {
 	},
 }
 
-#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	MinimumDeploymentAmountForStrategy { asset: Asset, amount: Option<AssetAmount> },
 	MinimumAddedFundsToStrategy { asset: Asset, amount: Option<AssetAmount> },
@@ -182,9 +201,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		type BalanceApi: BalanceApi<AccountId = Self::AccountId>;
 
 		/// LP address registration and verification.

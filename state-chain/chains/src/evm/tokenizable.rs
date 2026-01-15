@@ -22,9 +22,9 @@ pub trait Tokenizable {
 	fn tokenize(self) -> Token;
 }
 
-impl Tokenizable for ethereum_types::U256 {
+impl Tokenizable for sp_core::U256 {
 	fn tokenize(self) -> Token {
-		Token::Uint(self)
+		Token::Uint(ethabi::ethereum_types::U256(self.0))
 	}
 
 	fn param_type() -> ethabi::ParamType {
@@ -32,7 +32,7 @@ impl Tokenizable for ethereum_types::U256 {
 	}
 }
 
-impl Tokenizable for ethereum_types::H256 {
+impl Tokenizable for sp_core::H256 {
 	fn tokenize(self) -> Token {
 		Token::FixedBytes(self.0.into())
 	}
@@ -52,9 +52,9 @@ impl Tokenizable for u64 {
 	}
 }
 
-impl Tokenizable for ethereum_types::Address {
+impl Tokenizable for sp_core::H160 {
 	fn tokenize(self) -> Token {
-		Token::Address(self)
+		Token::Address(self.0.into())
 	}
 
 	fn param_type() -> ethabi::ParamType {

@@ -21,22 +21,23 @@ use super::*;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
+	sp_runtime::traits::One,
 	traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable},
 };
-
-use codec::Encode;
 use sp_std::vec;
 
 const SUPPLY_UPDATE_INTERVAL: u32 = 100;
 const INFLATION_RATE: u32 = 200;
 
 fn on_initialize_setup<T: Config>(should_mint: bool) -> BlockNumberFor<T> {
-	use frame_support::sp_runtime::{Digest, DigestItem};
-	type System<T> = frame_system::Pallet<T>;
-	let author_slot = 1u32;
-	let pre_digest =
-		Digest { logs: vec![DigestItem::PreRuntime(*b"aura", (author_slot as u64).encode())] };
-	System::<T>::initialize(&author_slot.into(), &System::<T>::parent_hash(), &pre_digest);
+	use frame_support::sp_runtime::{traits::BlockNumberProvider, Digest};
+
+	let pre_digest = Digest { logs: vec![] };
+	frame_system::Pallet::<T>::initialize(
+		&(frame_system::Pallet::<T>::current_block_number() + One::one()),
+		&frame_system::Pallet::<T>::parent_hash(),
+		&pre_digest,
+	);
 
 	if should_mint {
 		SupplyUpdateInterval::<T>::get() + 1u32.into()

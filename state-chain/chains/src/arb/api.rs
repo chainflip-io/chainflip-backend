@@ -28,7 +28,16 @@ use sp_std::marker::PhantomData;
 use self::evm::{api::transfer_fallback, Address, EvmCrypto};
 
 /// Chainflip api calls available on Arbitrum.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum ArbitrumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
@@ -85,7 +94,7 @@ where
 		transfer_param: TransferAssetParams<Arbitrum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -259,7 +268,7 @@ impl<E: ReplayProtectionProvider<Arbitrum> + EvmEnvironmentProvider<Arbitrum>> A
 }
 
 impl<E> ArbitrumApi<E> {
-	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

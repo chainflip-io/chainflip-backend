@@ -2,14 +2,14 @@ use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_roundi
 
 use super::*;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BoostPool {
 	// Fee charged by the pool
 	pub fee_bps: BasisPoints,
 	pub core_pool_id: CorePoolId,
 }
 
-#[derive(Encode, Decode, TypeInfo, Debug, PartialEq, Eq, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug, PartialEq, Eq, Clone)]
 pub struct BoostPoolContribution {
 	pub core_pool_id: CorePoolId,
 	pub loan_id: CoreLoanId,
@@ -17,19 +17,19 @@ pub struct BoostPoolContribution {
 	pub network_fee: AssetAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BoostPoolId {
 	pub asset: Asset,
 	pub tier: BoostPoolTier,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct OwedAmount<AmountT> {
 	pub total: AmountT,
 	pub fee: AmountT,
 }
 
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct BoostPoolDetails<AccountId> {
 	pub available_amounts: BTreeMap<AccountId, AssetAmount>,
 	pub pending_boosts:

@@ -32,7 +32,7 @@ use cf_chains::{
 	self,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
-	evm::H256,
+	evm::Hash as H256,
 	AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
 	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 };

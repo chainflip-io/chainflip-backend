@@ -11,7 +11,6 @@ use crate::electoral_systems::{
 	},
 };
 use cf_chains::witness_period::SaturatingStep;
-use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
 use scale_info::TypeInfo;

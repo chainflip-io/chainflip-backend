@@ -60,7 +60,7 @@ use syn::{
 )]
 pub fn derive(item: TokenStream) -> TokenStream {
 	let item2: TokenStream2 = item.into();
-	let ast: DeriveInput = syn::parse2(item2).unwrap();
+	let ast: DeriveInput = syn::parse2(item2).expect("Failed to parse input tokens");
 	let name_for_expansion: Expr = ast.attrs.iter()
 		.find(|attr| attr.path().is_ident("expand_name_with"))
 		.expect("When using the #[derive(GenericTypeInfo)] directive, you must provide the name to be used for expansion via #[expand_name_with(...)]").parse_args().unwrap();
@@ -78,12 +78,12 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 	match d {
 		syn::Fields::Named(fields_named) => {
 			let fields: Vec<TokenStream2> = fields_named.named.iter().map(|field| {
-                let ty = field.clone().ty;
-                let typename = match field.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
+				let ty = field.clone().ty;
+				let typename = match field.attrs.iter().find(|attr| attr.path().is_ident("replace_typename_with")){
 					Some(attr) => attr.parse_args::<Ident>().expect("replace_typename_with requires an argument").to_string(),
 					None => clean_type_string(&quote!(#ty).to_string())
 				};
-                let name = field.clone().ident.unwrap();
+				let name = field.clone().ident.expect("Named fields must have an identifier");
 				if field.attrs.iter().any(|attr| attr.path().is_ident("skip_name_expansion")){
 					quote!(.field(|f|
 						f.ty::<#ty>().type_name(#typename).name(::core::stringify!(#name))
@@ -93,7 +93,7 @@ fn derive_fields(d: Fields, name_for_expansion: Expr) -> TokenStream2 {
 						let full_typename = scale_info::prelude::format!("{}{}", #typename, #name_for_expansion).leak();
 						f.ty::<#ty>().type_name(full_typename).name(::core::stringify!(#name))}))
 				}
-            }).collect();
+			}).collect();
 			quote!(scale_info::build::Fields::named() #( #fields )* )
 		},
 		syn::Fields::Unnamed(fields_unnamed) => {

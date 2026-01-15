@@ -48,7 +48,8 @@ use custom_rpc::CustomApiClient;
 use futures::{stream, FutureExt, StreamExt};
 use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
 use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
-use sp_core::{bounded::BoundedVec, ConstU32, H256, U256};
+use sc_rpc::utils::{BoundedVecDeque, PendingSubscription};
+use sp_core::{bounded::BoundedVec, ConstU32, H256};
 use std::{
 	ops::Range,
 	path::PathBuf,
@@ -133,7 +134,7 @@ impl LpRpcApiServer for RpcServerImpl {
 
 	async fn transfer_asset(
 		&self,
-		amount: U256,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_account: AccountId32,
 	) -> RpcResult<H256> {
@@ -149,7 +150,7 @@ impl LpRpcApiServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn free_balances(&self) -> RpcResult<AssetMap<U256>> {
+	async fn free_balances(&self) -> RpcResult<AssetMap<NumberOrHex>> {
 		Ok(self
 			.api
 			.state_chain_client
@@ -159,7 +160,8 @@ impl LpRpcApiServer for RpcServerImpl {
 				self.api.state_chain_client.account_id(),
 				Some(self.api.state_chain_client.latest_finalized_block().hash),
 			)
-			.await?)
+			.await?
+			.map(Into::into))
 	}
 
 	async fn update_range_order(
@@ -323,7 +325,9 @@ impl LpRpcApiServer for RpcServerImpl {
 				.boxed();
 
 				tokio::spawn(async move {
-					sc_rpc::utils::pipe_from_stream(pending_sink, stream).await;
+					PendingSubscription::from(pending_sink)
+						.pipe_from_stream(stream, BoundedVecDeque::default())
+						.await;
 				});
 			},
 			Err(e) => {

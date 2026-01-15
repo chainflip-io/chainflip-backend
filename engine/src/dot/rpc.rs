@@ -37,11 +37,11 @@ use anyhow::{anyhow, bail, Result};
 pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_best_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>>;
 
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>>;
 }
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
@@ -79,9 +79,10 @@ impl DotSubClient {
 
 #[async_trait]
 impl DotSubscribeApi for DotSubClient {
+	#[expect(clippy::result_large_err)]
 	async fn subscribe_best_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
@@ -89,14 +90,15 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_best()
 				.await?
-				.map(|result| result.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| (block.hash(), block.header().clone())))
 				.map_err(|e| anyhow!("Error in best head stream: {e}")),
 		))
 	}
 
+	#[expect(clippy::result_large_err)]
 	async fn subscribe_finalized_heads(
 		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+	) -> Result<Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>> {
 		let client = create_online_client(&self.ws_endpoint, self.expected_genesis_hash).await?;
 
 		Ok(Box::pin(
@@ -104,7 +106,7 @@ impl DotSubscribeApi for DotSubClient {
 				.blocks()
 				.subscribe_finalized()
 				.await?
-				.map(|result| result.map(|block| block.header().clone()))
+				.map(|result| result.map(|block| (block.hash(), block.header().clone())))
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}

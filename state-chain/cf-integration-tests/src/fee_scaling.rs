@@ -6,7 +6,7 @@ use pallet_cf_flip::{FeeScalingRate, FeeScalingRateConfig};
 use pallet_cf_pools::RangeOrderSize;
 use pallet_transaction_payment::OnChargeTransaction;
 use sp_block_builder::runtime_decl_for_block_builder::BlockBuilderV6;
-use sp_keyring::test::AccountKeyring;
+use sp_keyring::sr25519::Keyring as AccountKeyring;
 use sp_runtime::{generic::Era, MultiSignature};
 use state_chain_runtime::{Balance, Flip, Runtime, RuntimeCall, SignedPayload, System};
 
@@ -18,6 +18,7 @@ pub fn apply_extrinsic_and_calculate_gas_fee(
 	let before = Flip::total_balance_of(&caller_account_id);
 
 	let extra = (
+		frame_system::AuthorizeCall::<Runtime>::new(),
 		frame_system::CheckNonZeroSender::<Runtime>::new(),
 		frame_system::CheckSpecVersion::<Runtime>::new(),
 		frame_system::CheckTxVersion::<Runtime>::new(),
@@ -27,10 +28,11 @@ pub fn apply_extrinsic_and_calculate_gas_fee(
 		frame_system::CheckWeight::<Runtime>::new(),
 		pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(0u128),
 		frame_metadata_hash_extension::CheckMetadataHash::<Runtime>::new(false),
+		frame_system::WeightReclaim::<Runtime>::new(),
 	);
 
 	let signed_payload = SignedPayload::new(call.clone(), extra.clone()).unwrap();
-	let signature = MultiSignature::Ed25519(caller.sign(&signed_payload.encode()));
+	let signature = MultiSignature::from(caller.sign(&signed_payload.encode()));
 	let ext = sp_runtime::generic::UncheckedExtrinsic::new_signed(
 		call,
 		caller_account_id.clone().into(),

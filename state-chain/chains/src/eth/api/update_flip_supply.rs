@@ -15,21 +15,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
+use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+)]
 pub struct UpdateFlipSupply {
 	/// The new total supply
-	pub new_total_supply: Uint,
+	pub new_total_supply: U256,
 	/// The current state chain block number
-	pub state_chain_block_number: Uint,
+	pub state_chain_block_number: U256,
 }
 
 impl UpdateFlipSupply {
-	pub fn new<TotalSupply: Into<Uint> + Clone, BlockNumber: Into<Uint> + Clone>(
+	pub fn new<TotalSupply: Into<U256> + Clone, BlockNumber: Into<U256> + Clone>(
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 	) -> Self {
@@ -44,7 +56,7 @@ impl EvmCall for UpdateFlipSupply {
 	const FUNCTION_NAME: &'static str = "updateFlipSupply";
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
-		vec![("newTotalSupply", Uint::param_type()), ("stateChainBlockNumber", Uint::param_type())]
+		vec![("newTotalSupply", U256::param_type()), ("stateChainBlockNumber", U256::param_type())]
 	}
 
 	fn function_call_args(&self) -> Vec<ethabi::Token> {
@@ -112,7 +124,7 @@ mod test_update_flip_supply {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
