@@ -739,6 +739,12 @@ pub mod pallet {
 	pub type VaultSwapMinimumBrokerFee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
 
+	/// Map of bound addresses for accounts.
+	#[pallet::storage]
+	#[pallet::getter(fn bound_broker_withdrawal_address)]
+	pub type BoundBrokerWithdrawalAddress<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[expect(clippy::large_enum_variant)]
@@ -906,6 +912,11 @@ pub mod pallet {
 			channel_opening_fee: T::Amount,
 			refund_address: EncodedAddress,
 		},
+		/// A broker has been bound to an address.
+		BoundBrokerWithdrawalAddress {
+			broker: T::AccountId,
+			address: EthereumAddress,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -988,6 +999,11 @@ pub mod pallet {
 		LiquidityDepositDisabled,
 		/// Account already exists, cannot opet a creation deposit channel
 		AccountAlreadyExists,
+		/// The broker is already bound to a withdrawal address.
+		BrokerAlreadyBound,
+		/// The broker tried to withdraw to an address which is not the address the broker is bound
+		/// to.
+		BrokerBoundWithdrwalAddressRestrictionViolated,
 	}
 
 	#[pallet::genesis_config]
@@ -1132,6 +1148,15 @@ pub mod pallet {
 					asset,
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
+
+			if ForeignChain::from(asset) == ForeignChain::Ethereum {
+				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
+					ensure!(
+						destination_address_internal == ForeignChainAddress::Eth(bound_address),
+						Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
+					);
+				}
+			}
 
 			Self::trigger_withdrawal(&account_id, asset, destination_address_internal)?;
 
@@ -1630,6 +1655,24 @@ pub mod pallet {
 				refund_address: T::AddressConverter::to_encoded_address(refund_address_internal),
 			});
 
+			Ok(())
+		}
+
+		/// Binds a broker account to a redeem address. This is used to allow a broker to redeem
+		/// their funds only to a specific address.
+		#[pallet::call_index(19)]
+		#[pallet::weight(T::WeightInfo::bind_broker_fee_withdrawal_address())]
+		pub fn bind_broker_fee_withdrawal_address(
+			origin: OriginFor<T>,
+			address: EthereumAddress,
+		) -> DispatchResult {
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
+			ensure!(
+				!BoundBrokerWithdrawalAddress::<T>::contains_key(&broker),
+				Error::<T>::BrokerAlreadyBound
+			);
+			BoundBrokerWithdrawalAddress::<T>::insert(&broker, address);
+			Self::deposit_event(Event::BoundBrokerWithdrawalAddress { broker, address });
 			Ok(())
 		}
 	}

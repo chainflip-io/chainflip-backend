@@ -335,5 +335,24 @@ mod benchmarks {
 		}
 	}
 
+	#[benchmark]
+	fn bind_broker_fee_withdrawal_address() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		let address: EthereumAddress = [0xab; 20].into();
+
+		#[extrinsic_call]
+		bind_broker_fee_withdrawal_address(RawOrigin::Signed(caller.clone()), address);
+
+		assert_eq!(
+			BoundBrokerWithdrawalAddress::<T>::get(&caller),
+			Some(address),
+			"Broker withdrawal address should be bound"
+		);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

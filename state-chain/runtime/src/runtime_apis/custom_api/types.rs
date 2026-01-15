@@ -315,6 +315,10 @@ pub struct RuntimeApiPenalty {
 	pub suspension_duration_blocks: u32,
 }
 
+pub mod before_version_10;
+pub mod before_version_15;
+pub mod before_version_3;
+
 pub mod old {
 	use super::*;
 
@@ -406,17 +410,7 @@ pub struct BrokerInfo<BtcAddress> {
 	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
-pub struct BrokerInfoLegacy {
-	pub earned_fees: Vec<(Asset, AssetAmount)>,
-}
-
-impl<A> From<BrokerInfoLegacy> for BrokerInfo<A> {
-	fn from(legacy: BrokerInfoLegacy) -> Self {
-		BrokerInfo { earned_fees: legacy.earned_fees, ..Default::default() }
-	}
+	pub bound_fee_withdrawal_address: Option<EthereumAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]

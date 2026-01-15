@@ -1,5 +1,7 @@
 use super::{account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoBeforeV7, *};
-use state_chain_runtime::runtime_apis::types::validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7;
+use state_chain_runtime::runtime_apis::types::{
+	before_version_10::BrokerInfo, validator_info_before_v7::ValidatorInfo as ValidatorInfoBeforeV7,
+};
 
 #[test]
 fn test_no_account_serialization() {
@@ -28,7 +30,7 @@ fn test_broker_serialization() {
 				(Asset::SolUsdc, 0),
 			],
 			btc_vault_deposit_address: Some(
-				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet).into(),
+				ScriptPubkey::Taproot([1u8; 32]).to_address(&BitcoinNetwork::Testnet),
 			),
 			bond: 0,
 			affiliates: vec![(

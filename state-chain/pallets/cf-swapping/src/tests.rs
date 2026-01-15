@@ -2520,3 +2520,104 @@ mod lending_liquidation_swaps {
 			});
 	}
 }
+
+mod bound_broker_withdrawal {
+	use super::*;
+
+	#[test]
+	fn can_bind_withdrawal_address() {
+		new_test_ext().execute_with(|| {
+			let address: EthereumAddress = [1; 20].into();
+
+			assert_ok!(Swapping::bind_broker_fee_withdrawal_address(
+				OriginTrait::signed(BROKER),
+				address
+			));
+
+			assert_eq!(BoundBrokerWithdrawalAddress::<Test>::get(BROKER), Some(address));
+
+			System::assert_has_event(RuntimeEvent::Swapping(
+				Event::<Test>::BoundBrokerWithdrawalAddress { broker: BROKER, address },
+			));
+
+			// Cannot bind again
+			assert_noop!(
+				Swapping::bind_broker_fee_withdrawal_address(
+					OriginTrait::signed(BROKER),
+					[2; 20].into()
+				),
+				Error::<Test>::BrokerAlreadyBound
+			);
+		});
+	}
+
+	#[test]
+	fn enforce_withdrawal_address_restriction_for_usdc() {
+		new_test_ext().execute_with(|| {
+			let bound_addr: EthereumAddress = [0xaa; 20].into();
+			let other_addr: EthereumAddress = [0xbb; 20].into();
+
+			assert_ok!(Swapping::bind_broker_fee_withdrawal_address(
+				OriginTrait::signed(BROKER),
+				bound_addr
+			));
+
+			// Fund broker
+			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Usdc, 1000);
+			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Eth, 1000);
+
+			// Withdraw to different address fails
+			assert_noop!(
+				Swapping::withdraw(
+					OriginTrait::signed(BROKER),
+					Asset::Usdc,
+					EncodedAddress::Eth(other_addr.into()),
+				),
+				Error::<Test>::BrokerBoundWithdrwalAddressRestrictionViolated
+			);
+			assert_noop!(
+				Swapping::withdraw(
+					OriginTrait::signed(BROKER),
+					Asset::Eth,
+					EncodedAddress::Eth(other_addr.into()),
+				),
+				Error::<Test>::BrokerBoundWithdrwalAddressRestrictionViolated
+			);
+
+			// Withdraw to bound address succeeds
+			assert_ok!(Swapping::withdraw(
+				OriginTrait::signed(BROKER),
+				Asset::Usdc,
+				EncodedAddress::Eth(bound_addr.into()),
+			));
+			assert_ok!(Swapping::withdraw(
+				OriginTrait::signed(BROKER),
+				Asset::Eth,
+				EncodedAddress::Eth(bound_addr.into()),
+			));
+		});
+	}
+
+	#[test]
+	fn no_restriction_for_other_chains() {
+		new_test_ext().execute_with(|| {
+			let bound_addr: EthereumAddress = [0xaa; 20].into();
+
+			assert_ok!(Swapping::bind_broker_fee_withdrawal_address(
+				OriginTrait::signed(BROKER),
+				bound_addr
+			));
+
+			// Fund broker with SOL
+			<Test as Config>::BalanceApi::credit_account(&BROKER, Asset::Sol, 1000);
+
+			// Withdraw BTC to different address succeeds (restriction only applies to Ethereum
+			// withdrawals)
+			assert_ok!(Swapping::withdraw(
+				OriginTrait::signed(BROKER),
+				Asset::Sol,
+				EncodedAddress::Sol([0xbb; 32]),
+			));
+		});
+	}
+}

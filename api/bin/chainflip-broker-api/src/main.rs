@@ -310,6 +310,10 @@ impl BrokerRpcApiServer for RpcServerImpl {
 			)
 			.await?)
 	}
+
+	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256> {
+		Ok(self.api.broker_api().bind_fee_withdrawal_address(address).await?)
+	}
 }
 
 #[derive(Parser, Debug, Clone, Default)]

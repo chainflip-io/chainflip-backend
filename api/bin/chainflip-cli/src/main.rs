@@ -89,9 +89,15 @@ async fn run_cli() -> Result<()> {
 					},
 					BrokerSubcommands::RegisterAccount => {
 						api.broker_api().register_account().await?;
+						println!("Broker account successfully registered.");
 					},
 					BrokerSubcommands::DeregisterAccount => {
 						api.broker_api().deregister_account().await?;
+						println!("Broker account successfully deregistered.");
+					},
+					BrokerSubcommands::BindFeeWithdrawalAddress(eth_address) => {
+						let _ = api.broker_api().bind_fee_withdrawal_address(<str>::parse(&eth_address.address)?).await?;
+						println!("Broker account bound to fee withdrawal address: {}", eth_address.address);
 					},
 				},
 				LiquidityProvider(subcommand) => match subcommand {
@@ -120,17 +126,21 @@ async fn run_cli() -> Result<()> {
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
+						println!("Liquidity provider account successfully registered.");
 					},
 					LiquidityProviderSubcommands::DeregisterAccount => {
 						api.lp_api().deregister_account().await?;
+						println!("Liquidity provider account successfully deregistered.");
 					},
 				},
 				Validator(subcommand) => match subcommand {
 					ValidatorSubcommands::RegisterAccount => {
 						api.validator_api().register_account().await?;
+						println!("Validator account successfully registered.");
 					},
 					ValidatorSubcommands::DeregisterAccount => {
 						api.validator_api().deregister_account().await?;
+						println!("Validator account successfully deregistered.");
 					},
 					ValidatorSubcommands::StopBidding => {
 						let tx_hash = api.validator_api().stop_bidding().await?;
