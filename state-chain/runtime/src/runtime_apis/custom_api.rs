@@ -31,8 +31,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::Bitcoin, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BoostConfiguration, BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance,
-	ForeignChain, NetworkEnvironment, SemVer,
+	BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
 use core::{ops::Range, str};
@@ -44,7 +44,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 pub use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,

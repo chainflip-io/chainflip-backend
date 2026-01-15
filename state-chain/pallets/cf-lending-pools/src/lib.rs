@@ -53,8 +53,8 @@ mod tests;
 mod benchmarking;
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostConfiguration, BoostPoolTier,
-	PrewitnessedDepositId, SwapRequestId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	SwapRequestId,
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
@@ -90,6 +90,14 @@ pub use pallet::*;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostConfiguration {
+	/// The fraction of the network fee that is deducted from the boost fee.
+	pub network_fee_deduction_from_boost_percent: Percent,
+	/// The minimum amount that can be added to the boost pool.
+	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+}
 
 #[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PalletSafeMode {
@@ -509,8 +517,6 @@ pub mod pallet {
 		PoolDoesNotExist,
 		/// The account id is not a member of the boost pool.
 		AccountNotFoundInPool,
-		/// You cannot add/remove 0 amount.
-		AmountMustBeNonZero,
 		/// Not enough available liquidity to boost a deposit
 		InsufficientBoostLiquidity,
 		// TODO: consolidate this with `InsufficientBoostLiquidity`?
@@ -584,6 +590,10 @@ pub mod pallet {
 				for update in updates {
 					match &update {
 						PalletConfigUpdate::SetBoostConfig { config } => {
+							ensure!(
+								config.minimum_add_funds_amount.values().all(|&min| min > 0),
+								Error::<T>::InvalidConfigurationParameters
+							);
 							BoostConfig::<T>::put(config.clone());
 						},
 						PalletConfigUpdate::SetLendingPoolConfiguration {
@@ -664,6 +674,10 @@ pub mod pallet {
 							minimum_update_collateral_amount_usd,
 							minimum_supply_amount_usd,
 						} => {
+							ensure!(
+								minimum_supply_amount_usd > &0,
+								Error::<T>::InvalidConfigurationParameters
+							);
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
 							config.minimum_update_collateral_amount_usd =
@@ -690,12 +704,11 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().add_boost_funds_enabled, Error::<T>::AddBoostFundsDisabled);
 
-			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 			let minimum = BoostConfig::<T>::get()
 				.minimum_add_funds_amount
 				.get(&asset)
 				.copied()
-				.unwrap_or(0);
+				.unwrap_or(1);
 			ensure!(amount >= minimum, Error::<T>::AmountBelowMinimum);
 
 			// `try_debit_account` does not account for any unswept open positions, so we sweep to
@@ -809,7 +822,6 @@ pub mod pallet {
 
 			let config = LendingConfig::<T>::get();
 
-			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 			ensure!(
 				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
 					config.minimum_supply_amount_usd,
@@ -850,7 +862,6 @@ pub mod pallet {
 			let config = LendingConfig::<T>::get();
 
 			if let Some(amount) = amount {
-				ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
 				ensure!(
 					OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
 						config.minimum_supply_amount_usd,

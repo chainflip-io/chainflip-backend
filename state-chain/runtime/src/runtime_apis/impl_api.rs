@@ -43,9 +43,9 @@ use cf_chains::{
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
 use cf_primitives::{
-	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber,
-	BoostConfiguration, BroadcastId, ChannelId, DcaParameters, EpochIndex, FlipBalance,
-	ForeignChain, IngressOrEgress, NetworkEnvironment, SemVer, STABLE_ASSET,
+	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
+	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
+	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochKey, GetBlockHeight, KeyProvider,
@@ -68,7 +68,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 use pallet_cf_funding::MinimumFunding;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
 	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,

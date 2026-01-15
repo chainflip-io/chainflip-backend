@@ -451,7 +451,7 @@ fn test_add_boost_funds() {
 				0,
 				TIER_5_BPS
 			),
-			crate::Error::<Test>::AmountMustBeNonZero
+			crate::Error::<Test>::AmountBelowMinimum
 		);
 
 		// Add some of the LP funds to the boost pool

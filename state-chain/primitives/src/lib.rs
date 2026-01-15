@@ -639,11 +639,3 @@ pub enum IngressOrEgress {
 	Egress,
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
 }
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct BoostConfiguration {
-	/// The fraction of the network fee that is deducted from the boost fee.
-	pub network_fee_deduction_from_boost_percent: Percent,
-	/// The minimum amount that can be added to the boost pool.
-	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
-}

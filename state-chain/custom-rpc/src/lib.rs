@@ -2155,7 +2155,7 @@ where
 								.minimum_add_funds_amount
 								.get(&asset)
 								.cloned()
-								.unwrap_or_default()
+								.unwrap_or(1_u128)
 								.into()
 						})
 					})?
