@@ -1149,7 +1149,7 @@ pub mod pallet {
 				)
 				.map_err(address_error_to_pallet_error::<T>)?;
 
-			if asset == Asset::Usdc {
+			if ForeignChain::from(asset) == ForeignChain::Ethereum {
 				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
 					ensure!(
 						destination_address_internal == ForeignChainAddress::Eth(bound_address),
