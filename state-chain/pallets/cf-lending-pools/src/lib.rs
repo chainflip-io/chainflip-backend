@@ -87,9 +87,17 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostConfiguration {
+	/// The fraction of the network fee that is deducted from the boost fee.
+	pub network_fee_deduction_from_boost_percent: Percent,
+	/// The minimum amount that can be added to the boost pool.
+	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+}
 
 #[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct PalletSafeMode {
@@ -139,8 +147,8 @@ impl cf_traits::SafeMode for PalletSafeMode {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum PalletConfigUpdate {
-	SetNetworkFeeDeductionFromBoost {
-		deduction_percent: Percent,
+	SetBoostConfig {
+		config: BoostConfiguration,
 	},
 	/// Updates pool/asset specific configuration. If `asset` is `None`, updates the default
 	/// configuration (one that applies to all assets). If `config` is `None`, removes
@@ -208,6 +216,17 @@ pub enum LoanRepaidActionType {
 	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
 	/// swap's output.
 	Liquidation { swap_request_id: SwapRequestId },
+}
+
+pub struct BoostConfigDefault {}
+
+impl Get<BoostConfiguration> for BoostConfigDefault {
+	fn get() -> BoostConfiguration {
+		BoostConfiguration {
+			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
+			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 11000_u128)]), // ~$10 usd
+		}
+	}
 }
 
 pub struct LendingConfigDefault {}
@@ -338,10 +357,6 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The fraction of the network fee that is deducted from the boost fee.
-	#[pallet::storage]
-	pub type NetworkFeeDeductionFromBoostPercent<T: Config> = StorageValue<_, Percent, ValueQuery>;
-
 	/// Stores Lending pools for each asset.
 	#[pallet::storage]
 	pub type GeneralLendingPools<T: Config> =
@@ -369,6 +384,11 @@ pub mod pallet {
 	/// Determines which accounts are allowed to use lending extrinsics.
 	#[pallet::storage]
 	pub type Whitelist<T: Config> = StorageValue<_, WhitelistStatus<T::AccountId>, ValueQuery>;
+
+	/// Stores boost-related configuration (updatable by governance).
+	#[pallet::storage]
+	pub type BoostConfig<T: Config> =
+		StorageValue<_, BoostConfiguration, ValueQuery, BoostConfigDefault>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -497,8 +517,6 @@ pub mod pallet {
 		PoolDoesNotExist,
 		/// The account id is not a member of the boost pool.
 		AccountNotFoundInPool,
-		/// You cannot add 0 amount to a pool.
-		AmountMustBeNonZero,
 		/// Not enough available liquidity to boost a deposit
 		InsufficientBoostLiquidity,
 		// TODO: consolidate this with `InsufficientBoostLiquidity`?
@@ -538,8 +556,7 @@ pub mod pallet {
 		EmptyCollateral,
 		/// The loan/supplied amount would be below the minimum allowed.
 		RemainingAmountBelowMinimum,
-		/// The amount specified to update a loan/collateral/supply must be at least the minimum
-		/// allowed amount.
+		/// The amount specified must be at least the minimum allowed.
 		AmountBelowMinimum,
 		/// No refund address has been set for the loan asset.
 		NoRefundAddressSet,
@@ -572,9 +589,13 @@ pub mod pallet {
 			LendingConfig::<T>::try_mutate(|config| {
 				for update in updates {
 					match &update {
-						PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-							deduction_percent,
-						} => NetworkFeeDeductionFromBoostPercent::<T>::set(*deduction_percent),
+						PalletConfigUpdate::SetBoostConfig { config } => {
+							ensure!(
+								config.minimum_add_funds_amount.values().all(|&min| min > 0),
+								Error::<T>::InvalidConfigurationParameters
+							);
+							BoostConfig::<T>::put(config.clone());
+						},
 						PalletConfigUpdate::SetLendingPoolConfiguration {
 							asset,
 							config: pool_config,
@@ -653,6 +674,10 @@ pub mod pallet {
 							minimum_update_collateral_amount_usd,
 							minimum_supply_amount_usd,
 						} => {
+							ensure!(
+								minimum_supply_amount_usd > &0,
+								Error::<T>::InvalidConfigurationParameters
+							);
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
 							config.minimum_update_collateral_amount_usd =
@@ -679,7 +704,12 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().add_boost_funds_enabled, Error::<T>::AddBoostFundsDisabled);
 
-			ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+			let minimum = BoostConfig::<T>::get()
+				.minimum_add_funds_amount
+				.get(&asset)
+				.copied()
+				.unwrap_or(1);
+			ensure!(amount >= minimum, Error::<T>::AmountBelowMinimum);
 
 			T::Balance::try_debit_account(&booster_id, asset, amount)?;
 
@@ -788,7 +818,6 @@ pub mod pallet {
 
 			let config = LendingConfig::<T>::get();
 
-			// - The user does not add amount that's too small
 			ensure!(
 				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
 					config.minimum_supply_amount_usd,
@@ -822,10 +851,14 @@ pub mod pallet {
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 
-			// 1. The user does not remove amount that's too small
-			// 2. The user does not leave amount in the pool that's too small
+			let config = LendingConfig::<T>::get();
+
 			if let Some(amount) = amount {
-				ensure!(amount > Zero::zero(), Error::<T>::AmountMustBeNonZero);
+				ensure!(
+					OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
+						config.minimum_supply_amount_usd,
+					Error::<T>::AmountBelowMinimum
+				);
 			}
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -835,8 +868,6 @@ pub mod pallet {
 
 				let WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount } =
 					pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;
-
-				let config = LendingConfig::<T>::get();
 
 				// Either the user removes everything, or they have to leave at least
 				// the minimum required amount in the pool (to prevent dust amounts from

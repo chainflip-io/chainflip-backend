@@ -145,8 +145,11 @@ mod benchmarks {
 	fn update_pallet_config(n: Linear<1, MAX_PALLET_CONFIG_UPDATE>) {
 		let origin = gov_origin::<T>();
 		let updates = vec![
-			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-				deduction_percent: Percent::from_percent(10),
+			PalletConfigUpdate::SetBoostConfig {
+				config: BoostConfiguration {
+					network_fee_deduction_from_boost_percent: Percent::from_percent(10),
+					minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 1_000u128)]),
+				},
 			};
 			n as usize
 		]

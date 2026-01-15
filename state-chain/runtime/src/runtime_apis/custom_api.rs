@@ -44,7 +44,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 pub use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -77,7 +77,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(13)]
+	#[api_version(14)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -331,6 +331,9 @@ decl_runtime_apis!(
 		#[changed_in(8)]
 		fn cf_boost_delay();
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
+		#[changed_in(14)]
+		fn cf_boost_config();
+		fn cf_boost_config() -> BoostConfiguration;
 		#[changed_in(9)]
 		fn cf_encode_non_native_call();
 		fn cf_encode_non_native_call(

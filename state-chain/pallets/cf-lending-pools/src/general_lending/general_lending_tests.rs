@@ -5046,8 +5046,25 @@ fn supply_minimum_is_enforced() {
 		assert_ok!(LendingPools::remove_lender_funds(
 			RuntimeOrigin::signed(LENDER),
 			LOAN_ASSET,
-			Some(MIN_SUPPLY_AMOUNT / 2)
+			Some(MIN_SUPPLY_AMOUNT)
 		));
+
+		// Add some more to test removing funds
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LENDER),
+			LOAN_ASSET,
+			MIN_SUPPLY_AMOUNT
+		));
+
+		// Cant remove an amount less than the minimum
+		assert_noop!(
+			LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				Some(MIN_SUPPLY_AMOUNT - 1)
+			),
+			Error::<Test>::AmountBelowMinimum
+		);
 
 		// Can remove all funds:
 		assert_ok!(LendingPools::remove_lender_funds(
