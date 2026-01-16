@@ -16,7 +16,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use cf_amm::common::Side;
+use cf_amm::{
+	common::Side,
+	math::{mul_div_ceil, output_amount_ceil},
+};
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
@@ -59,7 +62,7 @@ use sp_arithmetic::{
 	traits::{UniqueSaturatedInto, Zero},
 	Rounding,
 };
-use sp_runtime::traits::TrailingZeroInput;
+use sp_runtime::{traits::TrailingZeroInput, SaturatedConversion};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
@@ -253,6 +256,19 @@ impl NetworkFeeTracker {
 		self.accumulated_stable_amount.saturating_accrue(stable_amount);
 
 		FeeTaken { remaining_amount: stable_amount.saturating_sub(fee_taken), fee: fee_taken }
+	}
+
+	/// Uses the given price to estimate what the final network fee will be in basis points for the
+	/// given amount, taking into account the network fee minimum.
+	pub fn estimate_total_fee_bps_for_asset_amount(
+		&self,
+		amount: AssetAmount,
+		price: Price,
+	) -> BasisPoints {
+		let amount_usd: AssetAmount = output_amount_ceil(amount.into(), price).saturated_into();
+		let calculated_fee =
+			core::cmp::max(self.network_fee.rate * amount_usd, self.network_fee.minimum);
+		mul_div_ceil(calculated_fee.into(), MAX_BASIS_POINTS.into(), amount_usd).saturated_into()
 	}
 }
 
@@ -738,6 +754,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type VaultSwapMinimumBrokerFee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, BasisPoints, ValueQuery>;
+
+	#[pallet::storage]
+	pub type DefaultOraclePriceSlippageProtection<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, BasisPoints>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1943,6 +1963,10 @@ pub mod pallet {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 			Self::swap_into_stable_taking_fees(&mut swaps)?;
 
+			// TODO JAMIE: I think we want to do the check_swap_price_violation here on a single
+			// leg. then again after the second leg. Then we can ignore the network fee for
+			// calculating slippage.
+
 			// Swap from Stable asset, and complete the swap logic.
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
@@ -2830,20 +2854,20 @@ pub mod pallet {
 				dca_params
 			});
 
-			Self::deposit_event(Event::<T>::SwapRequested {
-				swap_request_id: request_id,
-				input_asset,
-				input_amount,
-				output_asset,
-				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
-				origin: origin.clone(),
-				broker_fees: broker_fees.clone(),
-				price_limits_and_expiry: price_limits_and_expiry.clone(),
-				dca_parameters: dca_params.clone(),
-			});
-
 			match request_type {
 				SwapRequestType::NetworkFee => {
+					Self::deposit_event(Event::<T>::SwapRequested {
+						swap_request_id: request_id,
+						input_asset,
+						input_amount,
+						output_asset,
+						request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
+						origin: origin.clone(),
+						broker_fees: broker_fees.clone(),
+						price_limits_and_expiry: price_limits_and_expiry.clone(),
+						dca_parameters: dca_params.clone(),
+					});
+
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
@@ -2868,6 +2892,18 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::IngressEgressFee => {
+					Self::deposit_event(Event::<T>::SwapRequested {
+						swap_request_id: request_id,
+						input_asset,
+						input_amount,
+						output_asset,
+						request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
+						origin: origin.clone(),
+						broker_fees: broker_fees.clone(),
+						price_limits_and_expiry: price_limits_and_expiry.clone(),
+						dca_parameters: dca_params.clone(),
+					});
+
 					// No minimum network fee for ingress/egress fee swaps
 					let fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
 						Pallet::<T>::get_network_fee_for_swap(input_asset, output_asset, false),
@@ -2918,14 +2954,71 @@ pub mod pallet {
 
 					// Add broker fees if any
 					if !broker_fees.is_empty() {
-						fees.push(FeeType::BrokerFee(broker_fees));
+						fees.push(FeeType::BrokerFee(broker_fees.clone()));
 					}
+
+					// Enforce the default oracle price protection
+					let processed_price_limits_and_expiry = price_limits_and_expiry
+						.as_ref()
+						.and_then(|limits| {
+							// Only apply default oracle protection if no slippage is already set
+							if limits.max_oracle_price_slippage.is_some() {
+								return Some(limits.clone());
+							}
+
+							// Check if we have oracle prices and default slippage settings for both
+							// assets
+							let input_oracle = T::PriceFeedApi::get_price(input_asset)?;
+							let _output_oracle = T::PriceFeedApi::get_price(output_asset)?;
+							let input_default_slippage =
+								DefaultOraclePriceSlippageProtection::<T>::get(input_asset)?;
+							let output_default_slippage =
+								DefaultOraclePriceSlippageProtection::<T>::get(output_asset)?;
+
+							// Calculate total fee slippage from fees
+							let fee_slippage_bps: BasisPoints = fees
+								.iter()
+								.map(|fee| match fee {
+									FeeType::NetworkFee(tracker) => tracker
+										.estimate_total_fee_bps_for_asset_amount(
+											chunk_input_amount,
+											input_oracle.price,
+										),
+									FeeType::BrokerFee(beneficiaries) =>
+										beneficiaries.iter().map(|b| b.bps).sum(),
+								})
+								.sum();
+
+							// Calculate the final price protection slippage
+							let minimum_oracle_protection = input_default_slippage
+								.saturating_add(output_default_slippage)
+								.saturating_add(fee_slippage_bps);
+
+							Some(PriceLimitsAndExpiry {
+								expiry_behaviour: limits.expiry_behaviour.clone(),
+								min_price: limits.min_price,
+								max_oracle_price_slippage: Some(minimum_oracle_protection),
+							})
+						})
+						.or(price_limits_and_expiry.clone());
+
+					Self::deposit_event(Event::<T>::SwapRequested {
+						swap_request_id: request_id,
+						input_asset,
+						input_amount,
+						output_asset,
+						request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
+						origin: origin.clone(),
+						broker_fees,
+						price_limits_and_expiry: processed_price_limits_and_expiry.clone(),
+						dca_parameters: dca_params.clone(),
+					});
 
 					let swap_id = Self::schedule_swap(
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						price_limits_and_expiry.as_ref(),
+						processed_price_limits_and_expiry.as_ref(),
 						SwapType::Swap,
 						fees.clone(),
 						request_id,
@@ -2947,7 +3040,7 @@ pub mod pallet {
 									input_asset,
 									output_asset,
 									chunk_input_amount,
-									price_limits_and_expiry.as_ref(),
+									processed_price_limits_and_expiry.as_ref(),
 									SwapType::Swap,
 									fees,
 									request_id,
@@ -2966,7 +3059,7 @@ pub mod pallet {
 							output_asset,
 							state: SwapRequestState::UserSwap {
 								output_action: output_action.clone(),
-								price_limits_and_expiry,
+								price_limits_and_expiry: processed_price_limits_and_expiry,
 								dca_state,
 							},
 						},

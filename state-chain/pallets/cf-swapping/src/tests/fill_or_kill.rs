@@ -639,7 +639,7 @@ mod oracle_swaps {
 					OUTPUT_ASSET,
 					RETRY_DURATION,
 					PriceLimits {
-						// Make sure we turn of the old min price check
+						// Make sure we turn off the old min price check
 						min_price: 0.into(),
 						// Set the maximum oracle price slippage to any value
 						max_oracle_price_slippage: Some(ORACLE_PRICE_SLIPPAGE),
@@ -1019,5 +1019,87 @@ mod oracle_swaps {
 				);
 			});
 		}
+	}
+
+	#[test]
+	fn will_use_default_oracle_price_protection() {
+		const INPUT_ASSET: Asset = Asset::Eth;
+		const OUTPUT_ASSET: Asset = Asset::Btc;
+		const INPUT_PROTECTION_BPS: BasisPoints = 100;
+		const OUTPUT_PROTECTION_BPS: BasisPoints = 200;
+		const NETWORK_FEE_BPS: BasisPoints = 50;
+		const BROKER1_FEE_BPS: BasisPoints = 15;
+		const BROKER2_FEE_BPS: BasisPoints = 10;
+		let min_price = U256::from(1000);
+
+		const EXPECTED_PRICE_PROTECTION_BPS: BasisPoints = INPUT_PROTECTION_BPS +
+			OUTPUT_PROTECTION_BPS +
+			NETWORK_FEE_BPS +
+			BROKER1_FEE_BPS +
+			BROKER2_FEE_BPS;
+
+		new_test_ext().execute_with(|| {
+			// Set the price, default oracle protections and network fee.
+			MockPriceFeedApi::set_price_usd(INPUT_ASSET, 10_000_000);
+			MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 20_000_000);
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				INPUT_ASSET,
+				Some(INPUT_PROTECTION_BPS),
+			);
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				OUTPUT_ASSET,
+				Some(OUTPUT_PROTECTION_BPS),
+			);
+			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::from_parts(NETWORK_FEE_BPS as u32 * 100),
+				// TODO JAMIE: another test that tests non-zero minimum fee
+				minimum: 0,
+			});
+
+			// Init a swap request that has no oracle price protection set. Triggering the
+			// default to be calculated and used.
+			let _ = Swapping::init_swap_request(
+				INPUT_ASSET,
+				INPUT_AMOUNT,
+				OUTPUT_ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain { account_id: 1 },
+				},
+				vec![
+					Beneficiary { account: BROKER, bps: BROKER1_FEE_BPS },
+					Beneficiary { account: 987, bps: BROKER2_FEE_BPS },
+				]
+				.try_into()
+				.unwrap(),
+				Some(PriceLimitsAndExpiry {
+					expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+						retry_duration: SWAP_DELAY_BLOCKS,
+						refund_address: AccountOrAddress::InternalAccount(1),
+						refund_ccm_metadata: None,
+					},
+					min_price,
+					max_oracle_price_slippage: None,
+				}),
+				None,
+				SwapOrigin::OnChainAccount(0),
+			);
+
+			// Check the event for the adjusted price protection
+			assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapRequested {
+				price_limits_and_expiry,
+				..
+			}) if *price_limits_and_expiry == Some(PriceLimitsAndExpiry {
+				expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+					retry_duration: SWAP_DELAY_BLOCKS,
+					refund_address: AccountOrAddress::InternalAccount(1),
+					refund_ccm_metadata: None,
+				},
+				min_price,
+				// Just the max oracle slippage has been changed
+				max_oracle_price_slippage: Some(EXPECTED_PRICE_PROTECTION_BPS),
+			}));
+		});
 	}
 }
