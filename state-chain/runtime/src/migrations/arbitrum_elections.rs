@@ -14,10 +14,13 @@ impl OnRuntimeUpgrade for Migration {
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		let _result =
+		let result =
 			pallet_cf_elections::Pallet::<Runtime, ArbitrumInstance>::internally_initialize(
 				arbitrum_elections::initial_state(),
 			);
+		if result.is_err() {
+			log::error!("Failed to initialize Arbitrum election pallet");
+		}
 		Weight::zero()
 	}
 

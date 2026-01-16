@@ -318,9 +318,9 @@ pub type PalletExecutionOrder = (
 	SolanaChainTracking,
 	AssethubChainTracking,
 	// Elections
+	GenericElections,
 	SolanaElections,
 	BitcoinElections,
-	GenericElections,
 	EthereumElections,
 	ArbitrumElections,
 	// Vaults

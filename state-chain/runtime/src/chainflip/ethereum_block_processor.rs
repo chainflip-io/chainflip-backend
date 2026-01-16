@@ -103,18 +103,32 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 							account_id,
 							redeemed_amount,
 						} => {
-							let _ = pallet_cf_funding::Pallet::<Runtime>::redeemed(
-								account_id,
+							if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redeemed(
+								account_id.clone(),
 								redeemed_amount,
-							);
+							) {
+								log::error!(
+									"Failed to execute Ethereum redemption: AccountId: {:?}, Amount: {:?}, Error: {:?}",
+									account_id,
+									redeemed_amount,
+									err
+								);
+							}
 						},
 						StateChainGatewayEvent::RedemptionExpired {
 							account_id,
 							block_number: _,
 						} => {
-							let _ = pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
-								account_id,
-							);
+							if let Err(err) =
+								pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
+									account_id.clone(),
+								) {
+								log::error!(
+									"Failed to execute Ethereum redemption expiry: AccountId: {:?}, Error: {:?}",
+									account_id,
+									err
+								);
+							}
 						},
 					};
 				},
@@ -158,17 +172,19 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 								)
 							}
 						},
-						EthereumKeyManagerEvent::GovernanceAction {
-							call_hash,
-							// TODO: Same as above, check that origin works and if not create inner
-							// function without origin
-						} => {
-							let _ =
+						EthereumKeyManagerEvent::GovernanceAction { call_hash } => {
+							if let Err(err) =
 								pallet_cf_governance::Pallet::<Runtime>::set_whitelisted_call_hash(
 									pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
 										.into(),
 									call_hash,
+								) {
+								log::error!(
+									"Failed to whitelist Ethereum governance call hash: {:?}, Error: {:?}",
+									call_hash,
+									err
 								);
+							}
 						},
 					};
 				},
