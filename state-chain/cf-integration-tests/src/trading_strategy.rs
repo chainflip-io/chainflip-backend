@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use cf_amm::math::price_at_tick;
+use cf_amm::math::Price;
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, FLIPPERINOS_PER_FLIP, STABLE_ASSET,
 };
@@ -63,7 +63,7 @@ fn basic_usage() {
 		(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),])
 		.build()
 		.execute_with(|| {
-			new_pool(BASE_ASSET, 0, price_at_tick(0).unwrap());
+			new_pool(BASE_ASSET, 0, Price::at_tick_zero());
 			turn_off_thresholds();
 
 			// Start trading strategy
@@ -133,7 +133,7 @@ fn can_close_strategy_with_fully_executed_orders() {
 		])
 		.build()
 		.execute_with(|| {
-			new_pool(BASE_ASSET, 0, price_at_tick(0).unwrap());
+			new_pool(BASE_ASSET, 0, Price::at_tick_zero());
 			turn_off_thresholds();
 
 			// Start trading strategy
@@ -202,7 +202,7 @@ fn inventory_based_strategy_basic_usage() {
         (ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),])
         .build()
         .execute_with(|| {
-            new_pool(BASE_ASSET, 0, price_at_tick(0).unwrap());
+            new_pool(BASE_ASSET, 0, Price::at_tick_zero());
             turn_off_thresholds();
 
             // Start trading strategy

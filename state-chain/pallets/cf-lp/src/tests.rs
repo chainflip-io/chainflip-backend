@@ -29,7 +29,6 @@ use cf_traits::{
 	PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
-use sp_core::U256;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -494,7 +493,7 @@ fn schedule_swap_checks() {
 						refund_address: cf_chains::AccountOrAddress::InternalAccount(LP_ACCOUNT),
 						refund_ccm_metadata: None,
 					},
-					min_price: U256::zero(),
+					min_price: Default::default(),
 					max_oracle_price_slippage: None,
 				}),
 				dca_params: None,

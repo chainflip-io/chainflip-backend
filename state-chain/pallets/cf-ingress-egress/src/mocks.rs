@@ -55,7 +55,7 @@ use frame_support::{
 	sp_runtime::traits::Zero,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::{ConstBool, ConstU64, U256};
+use sp_core::{ConstBool, ConstU64};
 
 type AccountId = u64;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -388,7 +388,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						ChannelRefundParametersForChain::<<Test as Config<I>>::TargetChain> {
 							retry_duration: 5,
 							refund_address: refund_address.clone(),
-							min_price: U256::zero(),
+							min_price: Default::default(),
 							refund_ccm_metadata: None,
 							max_oracle_price_slippage: None,
 						},

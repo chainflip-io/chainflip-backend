@@ -46,8 +46,9 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, inte
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_amm_math::PriceLimits;
 	use cf_chains::{AccountOrAddress, Chain};
-	use cf_primitives::{BlockNumber, ChannelId, EgressId, PriceLimits};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
 
 	use super::*;

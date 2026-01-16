@@ -16,19 +16,21 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use cf_amm::common::Side;
+use cf_amm::{
+	common::Side,
+	math::{Price, PriceLimits},
+};
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	eth::Address as EthereumAddress,
-	evm::U256,
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
 	SwapOrigin,
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, Price, PriceLimits, SwapId, SwapLeg,
-	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
-	PRICE_FRACTIONAL_BITS, SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
+	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -512,17 +514,13 @@ where
 pub mod pallet {
 	use core::{cmp::max, panic};
 
-	use cf_amm::math::{
-		adjust_price_by_bps, invert_price, mul_div_floor, output_amount_ceil, output_amount_floor,
-		relative_price,
-	};
 	use cf_chains::{
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 		Chain,
 	};
 	use cf_primitives::{
 		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		Price, PriceLimits, SwapId, SwapRequestId,
+		SwapId, SwapRequestId,
 	};
 	use cf_traits::{
 		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
@@ -1742,11 +1740,9 @@ pub mod pallet {
 									.map(|price| price.sell)?;
 
 							Some(
-								output_amount_ceil(
-									cf_amm::math::Amount::from(state.input_amount()),
-									sell_price,
-								)
-								.saturated_into(),
+								sell_price
+									.output_amount_ceil(state.input_amount())
+									.saturated_into(),
 							)
 						})?;
 
@@ -1898,8 +1894,7 @@ pub mod pallet {
 			let oracle_delta = if let Some(oracle_price) =
 				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
 			{
-				let oracle_amount =
-					output_amount_floor(swap.swap.input_amount.into(), oracle_price.price);
+				let oracle_amount = oracle_price.price.output_amount_floor(swap.swap.input_amount);
 				if oracle_amount.is_zero() {
 					None
 				} else {
@@ -1946,18 +1941,13 @@ pub mod pallet {
 						if oracle_price.stale {
 							return Err(SwapFailureReason::OraclePriceStale);
 						} else {
-							// Reduce the relative price by slippage_bps:
-							let min_oracle_price = cf_amm::math::mul_div_floor(
-								oracle_price.price,
-								(MAX_BASIS_POINTS - slippage_bps).into(),
-								MAX_BASIS_POINTS,
-							);
-							// Use the oracle price to calculate the minimum output needed
-							let min_output_amount = output_amount_floor(
-								swap.swap.input_amount.into(),
-								min_oracle_price,
-							)
-							.unique_saturated_into();
+							// Use the oracle price minus the slippage to calculate the minimum
+							// output needed
+							let min_output_amount = oracle_price
+								.price
+								.adjust_by_bps(slippage_bps, false)
+								.output_amount_floor(swap.swap.input_amount)
+								.unique_saturated_into();
 							if final_output < min_output_amount {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
@@ -1966,11 +1956,11 @@ pub mod pallet {
 				}
 
 				// Minimum price protection, aka FoK price protection
-				let min_price_output = output_amount_floor(
-					swap.swap.input_amount.into(),
-					params.price_limits.min_price,
-				)
-				.unique_saturated_into();
+				let min_price_output = params
+					.price_limits
+					.min_price
+					.output_amount_floor(swap.swap.input_amount)
+					.unique_saturated_into();
 				if final_output < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
@@ -2646,11 +2636,10 @@ pub mod pallet {
 
 			// Using $20 for swap simulation, large enough to allow a good estimation of the fee,
 			// but small enough to not exhaust the pool liquidity.
-			let estimation_input = output_amount_floor(
-				20_000_000u128.into(),
-				invert_price(utilities::hard_coded_price_for_asset(asset)),
-			)
-			.saturated_into();
+			let estimation_input = utilities::hard_coded_price_for_asset(asset)
+				.invert()
+				.output_amount_floor(20_000_000u128)
+				.saturated_into();
 
 			let estimation_output = with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
@@ -2668,14 +2657,10 @@ pub mod pallet {
 			}
 			.map(|estimation_output| {
 				// Get price in terms of `output_asset per input_asset`
-				let price = mul_div_floor(
-					estimation_output.into(),
-					U256::one() << PRICE_FRACTIONAL_BITS,
-					estimation_input,
-				);
+				let price = Price::from_amounts(estimation_output.into(), estimation_input.into());
 				// Convert the price to terms of `asset per usdc`
 				if side == Side::Buy {
-					invert_price(price)
+					price.invert()
 				} else {
 					price
 				}
@@ -3111,7 +3096,7 @@ pub mod pallet {
 							} else {
 								ORACLE_SLIPPAGE
 							};
-							adjust_price_by_bps(price_data.price, slippage_bps, side == Side::Buy)
+							price_data.price.adjust_by_bps(slippage_bps, side == Side::Buy)
 						})
 					}
 					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
@@ -3124,10 +3109,11 @@ pub mod pallet {
 				);
 					return 0;
 				}
-				let relative_price = relative_price(output_price, input_price);
+				let relative_price = output_price.relative_to(input_price);
 
 				// Finally calculate the required input amount
-				output_amount_ceil(desired_output_amount.into(), relative_price)
+				relative_price
+					.output_amount_ceil(desired_output_amount)
 					.saturated_into::<AssetAmount>()
 			};
 
@@ -3254,33 +3240,27 @@ impl<T: Config> AffiliateRegistry for Pallet<T> {
 }
 
 pub mod utilities {
-	use cf_amm::math::price_from_usd;
-
 	use super::*;
 
 	/// Provides a static price that can be used as a fallback when estimating fees/gas.
 	/// These prices are rough approximations of real market prices and should be updated
 	/// occasionally if the prices move significantly.
 	pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
-		use cf_primitives::{FLIP_DECIMALS, USD_DECIMALS};
-		const ETH_DECIMALS: u32 = 18;
-		const DOT_DECIMALS: u32 = 10;
-		const BTC_DECIMALS: u32 = 8;
-		const SOL_DECIMALS: u32 = 9;
-
-		match asset {
+		let price_usd_cents = match asset {
 			Asset::Usdc |
 			Asset::Usdt |
 			Asset::ArbUsdc |
 			Asset::SolUsdc |
 			Asset::HubUsdc |
-			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1
-			Asset::Flip => price_from_usd(4, FLIP_DECIMALS) / 10, // ~$0.40
-			Asset::Eth | Asset::ArbEth => price_from_usd(2_800, ETH_DECIMALS), // ~$2,800
-			Asset::Dot | Asset::HubDot => price_from_usd(2, DOT_DECIMALS), // ~$2
-			Asset::Btc => price_from_usd(86_500, BTC_DECIMALS),   // ~$86,500
-			Asset::Sol => price_from_usd(127, SOL_DECIMALS),      // ~$127
-		}
+			Asset::HubUsdt => 100, // $1
+			Asset::Flip => 40,                     // ~$0.40
+			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
+			Asset::Dot | Asset::HubDot => 200,     // ~$2
+			Asset::Btc => 8_650_000,               // ~$86,500
+			Asset::Sol => 12_700,                  // ~$127
+		};
+
+		Price::from_usd_cents(asset, price_usd_cents)
 	}
 
 	pub(super) fn split_off_highest_impact_swap<T: Config>(

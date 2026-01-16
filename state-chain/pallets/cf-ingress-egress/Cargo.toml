@@ -46,6 +46,7 @@ pallet-cf-governance = { workspace = true, default-features = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }
 cf-traits = { workspace = true, features = ["mocks"] }
+cf-amm-math = { workspace = true }
 
 [features]
 default = ["std"]

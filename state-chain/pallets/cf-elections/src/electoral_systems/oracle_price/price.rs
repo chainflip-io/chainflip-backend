@@ -22,8 +22,7 @@ use crate::{
 	electoral_systems::oracle_price::{primitives::BasisPoints, state_machine::PriceTrait},
 	generic_tools::*,
 };
-use cf_amm_math::{mul_div_floor_checked, PRICE_FRACTIONAL_BITS};
-use cf_primitives::Price;
+use cf_amm_math::{mul_div_floor_checked, Price};
 #[cfg(test)]
 use proptest::prelude::Strategy;
 use sp_core::U256;
@@ -117,6 +116,13 @@ impl<const U: Denom> Fraction<U> {
 	}
 }
 
+impl From<Price> for Fraction<{ u128::MAX }> {
+	fn from(price: Price) -> Self {
+		debug_assert_eq!(Price::FRACTIONAL_BITS, 128);
+		Fraction(price.as_raw())
+	}
+}
+
 impl<const U: Denom> Add<Fraction<U>> for Fraction<U> {
 	type Output = Fraction<U>;
 
@@ -193,8 +199,8 @@ pub type StatechainPrice = Fraction<{ u128::MAX }>;
 /// WARNING, this assumes PRICE_FRACTIONAL_BITS = 128!
 impl From<Fraction<{ u128::MAX }>> for Price {
 	fn from(fraction: Fraction<{ u128::MAX }>) -> Price {
-		debug_assert_eq!(PRICE_FRACTIONAL_BITS, 128);
-		fraction.0
+		debug_assert_eq!(Price::FRACTIONAL_BITS, 128);
+		Price::from_raw(fraction.0)
 	}
 }
 
