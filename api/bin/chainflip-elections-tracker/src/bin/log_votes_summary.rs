@@ -19,9 +19,7 @@
 use std::collections::BTreeMap;
 
 use cf_utilities::task_scope::{self};
-use chainflip_engine::state_chain_observer::client::{
-	StateChainClient, base_rpc_api::BaseRpcApi, storage_api::StorageApi,
-};
+use engine_sc_client::{StateChainClient, base_rpc_api::BaseRpcApi, storage_api::StorageApi};
 use futures::StreamExt;
 use futures_util::FutureExt;
 use pallet_cf_elections::{

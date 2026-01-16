@@ -26,15 +26,12 @@ use futures::Future;
 use futures_util::{stream, StreamExt};
 use tokio::sync::watch;
 
-use crate::{
-	state_chain_observer::client::{
-		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_BEHAVIOUR,
-		STATE_CHAIN_CONNECTION,
-	},
-	witness::common::{
-		chain_source::{ChainClient, ChainStream, Header},
-		RuntimeHasChain,
-	},
+use crate::witness::common::{
+	chain_source::{ChainClient, ChainStream, Header},
+	RuntimeHasChain,
+};
+use engine_sc_client::{
+	storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION,
 };
 
 use super::ChunkedByVault;

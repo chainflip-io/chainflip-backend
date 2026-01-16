@@ -26,13 +26,12 @@ use codec::Encode;
 use sp_core::H256;
 use tracing::info;
 
-use crate::{
-	p2p::PeerInfo,
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
-		storage_api::StorageApi,
-	},
+use crate::p2p::PeerInfo;
+
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	storage_api::StorageApi,
 };
 
 use engine_p2p::{pk_to_string, P2PKey};

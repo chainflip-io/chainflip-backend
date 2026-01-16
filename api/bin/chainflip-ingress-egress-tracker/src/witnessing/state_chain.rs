@@ -33,9 +33,7 @@ use chainflip_api::primitives::{
 	AffiliateDetails, AffiliateShortId, Affiliates, BasisPoints, Beneficiary, BroadcastId,
 	DcaParameters, ForeignChain, NetworkEnvironment,
 };
-use chainflip_engine::state_chain_observer::client::{
-	chain_api::ChainApi, storage_api::StorageApi, StateChainClient,
-};
+use engine_sc_client::{chain_api::ChainApi, storage_api::StorageApi, StateChainClient};
 use pallet_cf_broadcast::TransactionOutIdFor;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use serde::{Serialize, Serializer};
@@ -742,7 +740,7 @@ mod tests {
 	};
 	use cf_utilities::assert_ok;
 	use chainflip_api::primitives::AffiliateShortId;
-	use chainflip_engine::state_chain_observer::client::{mocks::MockStateChainClient, BlockInfo};
+	use engine_sc_client::{mocks::MockStateChainClient, BlockInfo};
 	use pallet_cf_ingress_egress::DepositWitness;
 	use sp_core::H160;
 	use std::collections::HashMap;

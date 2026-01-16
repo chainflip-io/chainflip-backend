@@ -16,14 +16,13 @@
 
 pub mod voter_api;
 
-use crate::{
-	retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		electoral_api::ElectoralApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
-	},
+use engine_sc_client::{
+	chain_api::ChainApi,
+	electoral_api::ElectoralApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilInBlock},
 };
+
+use crate::retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY};
 use anyhow::anyhow;
 use cf_primitives::MILLISECONDS_PER_BLOCK;
 use cf_utilities::{future_map::FutureMap, task_scope::Scope, UnendingStream};

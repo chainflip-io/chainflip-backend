@@ -34,14 +34,15 @@ use sp_core::H160;
 use crate::{
 	db::PersistentKeyDB,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-		STATE_CHAIN_CONNECTION,
-	},
 	witness::evm::erc20_deposits::usdc::UsdcEvents,
+};
+
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
+	STATE_CHAIN_CONNECTION,
 };
 
 use super::{
@@ -255,7 +256,6 @@ mod tests {
 
 	use crate::{
 		settings::{NodeContainer, WsHttpEndpoints},
-		state_chain_observer,
 		witness::common::epoch_source::EpochSource,
 	};
 
@@ -281,7 +281,7 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let (state_chain_stream, _unfinalised_state_chain_stream, state_chain_client) =
-					state_chain_observer::client::StateChainClient::connect_with_account(
+					engine_sc_client::StateChainClient::connect_with_account(
 						scope,
 						"ws://localhost:9944",
 						PathBuf::from("/Users/kylezs/Documents/cf-repos/chainflip-backend/localnet/init/keys/bashful/signing_key_file").as_path(),

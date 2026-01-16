@@ -35,7 +35,7 @@ pub use cf_rpc_types::lp::{
 	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
 };
 use cf_rpc_types::ExtrinsicResponse;
-use chainflip_engine::state_chain_observer::client::{
+use engine_sc_client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	DefaultRpcClient, StateChainClient,
 };

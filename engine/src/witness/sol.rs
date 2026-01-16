@@ -26,15 +26,15 @@ use crate::{
 		retry_rpc::{SolRetryRpcApi, SolRetryRpcClient},
 		rpc_client_api::{RpcBlockConfig, TransactionDetails},
 	},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
 };
 use anyhow::Result;
 use cf_chains::{
 	sol::{api::VaultSwapAccountAndSender, SolHash},
 	Chain,
+};
+use engine_sc_client::{
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
 };
 use futures::FutureExt;
 use pallet_cf_elections::{

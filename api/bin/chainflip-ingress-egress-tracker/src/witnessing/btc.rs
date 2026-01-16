@@ -21,15 +21,16 @@ use chainflip_api::primitives::EpochIndex;
 use chainflip_engine::{
 	btc::{retry_rpc::BtcRetryRpcClient, rpc::BtcRpcApi},
 	settings::NodeContainer,
-	state_chain_observer::client::{
-		stream_api::{StreamApi, UNFINALIZED},
-		StateChainClient,
-	},
 	witness::{
 		btc::{process_egress, source::BtcSource},
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 	},
 };
+use engine_sc_client::{
+	stream_api::{StreamApi, UNFINALIZED},
+	StateChainClient,
+};
+
 use futures::Future;
 use tokio::time::sleep;
 

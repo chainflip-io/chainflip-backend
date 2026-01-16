@@ -16,9 +16,7 @@
 
 use cf_chains::instances::{ChainInstanceAlias, ChainInstanceFor};
 use chainflip_api::primitives::BroadcastId;
-use chainflip_engine::state_chain_observer::client::{
-	chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
-};
+use engine_sc_client::{chain_api::ChainApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION};
 use pallet_cf_broadcast::TransactionOutIdFor;
 use sp_core::bounded::alloc::sync::Arc;
 
