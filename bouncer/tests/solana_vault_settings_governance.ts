@@ -10,7 +10,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getSolanaVaultIdl } from 'shared/contract_interfaces';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
-import { Vault } from '../../contract-interfaces/sol-program-idls/v1.2.3/vault';
+import { Vault } from '../../contract-interfaces/sol-program-idls/v1.3.0/vault';
 
 type VaultSwapSettings = {
   minNativeSwapAmount: number;

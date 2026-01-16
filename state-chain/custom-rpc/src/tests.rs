@@ -75,7 +75,7 @@ fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 		btc: btc::AssetMap { btc: v.clone() },
 		dot: dot::AssetMap { dot: v.clone() },
 		arb: arb::AssetMap { eth: v.clone(), usdc: v.clone(), usdt: v.clone() },
-		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone() },
+		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone(), usdt: v.clone() },
 		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v },
 	}
 }
@@ -135,7 +135,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(0u32.into()) },
 				dot: dot::AssetMap { dot: None },
 				arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()), usdt: Some(0u32.into()) },
-				sol: sol::AssetMap { sol: None, usdc: None },
+				sol: sol::AssetMap { sol: None, usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
 			},
 			network_fee_hundredth_pips: Permill::from_percent(100),
@@ -157,7 +157,7 @@ fn test_environment_serialization() {
 					usdc: 101112_u32.into(),
 					usdt: 0_u32.into(),
 				},
-				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 			},
 			network_fees: NetworkFees {
@@ -184,6 +184,7 @@ fn test_environment_serialization() {
 						sol: sol::AssetMap {
 							sol: Permill::from_perthousand(1),
 							usdc: Permill::from_perthousand(1),
+							usdt: Permill::from_perthousand(1),
 						},
 						hub: hub::AssetMap {
 							dot: Permill::from_perthousand(1),
@@ -215,6 +216,7 @@ fn test_environment_serialization() {
 						sol: sol::AssetMap {
 							sol: Permill::from_perthousand(20),
 							usdc: Permill::from_perthousand(456),
+							usdt: Permill::from_perthousand(561),
 						},
 						hub: hub::AssetMap {
 							dot: Permill::from_perthousand(20),
@@ -237,7 +239,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: 0u32.into() },
 				dot: dot::AssetMap { dot: 0u32.into() },
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into(), usdt: 0u32.into() },
-				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 			},
 			ingress_fees: any::AssetMap {
@@ -251,7 +253,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(0u32.into()) },
 				dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None, usdt: None },
-				sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
+				sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
 			},
 			egress_fees: any::AssetMap {
@@ -265,7 +267,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(0u32.into()) },
 				dot: dot::AssetMap { dot: Some((u64::MAX / 2 - 1).into()) },
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None, usdt: None },
-				sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
+				sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
 			},
 			witness_safety_margins: HashMap::from([
@@ -287,7 +289,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: 0u32.into() },
 				dot: dot::AssetMap { dot: 0u32.into() },
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into(), usdt: 0u32.into() },
-				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
+				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 			},
 			channel_opening_fees: HashMap::from([
@@ -787,6 +789,8 @@ fn vault_swap_details_serialization() {
 				token_vault_pda_account: SolAddress([0x00; 32]),
 				usdc_token_mint_pubkey: SolAddress([0x00; 32]),
 				usdc_token_vault_ata: SolAddress([0x00; 32]),
+				usdt_token_mint_pubkey: SolAddress([0x00; 32]),
+				usdt_token_vault_ata: SolAddress([0x00; 32]),
 				swap_endpoint_program: SolAddress([0x00; 32]),
 				swap_endpoint_program_data_account: SolAddress([0x00; 32]),
 				alt_manager_program: SolAddress([0x00; 32]),

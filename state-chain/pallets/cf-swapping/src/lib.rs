@@ -3231,6 +3231,7 @@ pub mod utilities {
 			Asset::ArbUsdc |
 			Asset::ArbUsdt |
 			Asset::SolUsdc |
+			Asset::SolUsdt |
 			Asset::HubUsdc |
 			Asset::HubUsdt => price_from_usd(1, USD_DECIMALS), // $1
 			Asset::Flip => price_from_usd(4, FLIP_DECIMALS) / 10, // ~$0.40

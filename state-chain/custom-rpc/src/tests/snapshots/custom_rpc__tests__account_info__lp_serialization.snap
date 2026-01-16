@@ -26,7 +26,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Solana": {
       "SOL": "0x3",
-      "USDC": "0x4"
+      "USDC": "0x4",
+      "USDT": "0x4"
     },
     "Assethub": {
       "DOT": "0xba43b7400",
@@ -65,7 +66,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Solana": {
       "SOL": "0x2",
-      "USDC": "0x4"
+      "USDC": "0x4",
+      "USDT": "0x6"
     },
     "Assethub": {
       "DOT": "0x12a05f200",
@@ -109,7 +111,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Solana": {
       "SOL": [],
-      "USDC": []
+      "USDC": [],
+      "USDT": []
     },
     "Assethub": {
       "DOT": [],

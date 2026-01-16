@@ -1,13 +1,14 @@
 use crate::*;
 
 use cf_chains::{eth::Address as EthereumAddress, evm::H256};
+use cf_utilities::bs58_array;
 use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
+
 pub struct NewAssetsMigration<T>(PhantomData<T>);
 
 impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		log::info!("🌮 Running migration for Environment pallet: Adding WBTC to EthereumSupportedAssets ...");
-
+		log::info!("🌮 Running migration for Environment pallet: Adding Wbtc to EthereumSupportedAssets ...");
 		// TODO ADD deployed addresses for testnet
 		let wbtc_address: EthereumAddress = match ChainflipNetworkEnvironment::<T>::get() {
 			NetworkEnvironment::Mainnet =>
@@ -19,6 +20,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T>
 		};
 		EthereumSupportedAssets::<T>::insert(EthAsset::Wbtc, wbtc_address);
 
+		log::info!("🌮 Running migration for Environment pallet: Adding ArbUsdt to ArbitrumSupportedAssets ...");
 		// TODO ADD deployed addresses for testnet
 		let arbusdt_address: EthereumAddress = match ChainflipNetworkEnvironment::<T>::get() {
 			NetworkEnvironment::Mainnet =>
@@ -30,9 +32,29 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T>
 		};
 		ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, arbusdt_address);
 
-		log::info!(
-			"🌮 Environment pallet migration completed: Added WBTC to EthereumSupportedAssets."
-		);
+		log::info!("🌮 Running migration for Environment pallet: Adding SolUsdt to SolanaApiEnvironment ...");
+		// TODO ADD deployed addresses for Mainnet and testnet
+		let (solusdt_pubkey, solusdt_ata) = match ChainflipNetworkEnvironment::<T>::get() {
+			NetworkEnvironment::Mainnet => (
+				SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+				SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+			),
+			NetworkEnvironment::Testnet => (
+				SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+				SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+			),
+			NetworkEnvironment::Development => (
+				SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+				SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+			),
+		};
+
+		SolanaApiEnvironment::<T>::mutate(|sol_api_environment| {
+			sol_api_environment.usdt_token_mint_pubkey = solusdt_pubkey;
+			sol_api_environment.usdt_token_vault_ata = solusdt_ata;
+		});
+
+		log::info!("🌮 Environment pallet migration completed: Added Wbtc, ArbUsdt and SolUsdt");
 
 		Weight::zero()
 	}
@@ -79,6 +101,27 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T>
 				hex_literal::hex!("5FC8d32690cc91D4c39d9d3abcBD16989F875707").into()
 			),
 		};
+
+		let solana_api_environment = SolanaApiEnvironment::<T>::get();
+
+		let (expected_solusdt_pubkey, expected_solusdt_ata) =
+			match ChainflipNetworkEnvironment::<T>::get() {
+				NetworkEnvironment::Mainnet => (
+					SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+					SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+				),
+				NetworkEnvironment::Testnet => (
+					SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+					SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+				),
+				NetworkEnvironment::Development => (
+					SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+					SolAddress(bs58_array("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3")),
+				),
+			};
+
+		assert_eq!(solana_api_environment.usdt_token_mint_pubkey, expected_solusdt_pubkey);
+		assert_eq!(solana_api_environment.usdt_token_vault_ata, expected_solusdt_ata);
 
 		Ok(())
 	}

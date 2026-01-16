@@ -140,6 +140,8 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
+	sol_usdt_token_mint_pubkey: SolAddress,
+	sol_usdt_token_vault_ata: SolAddress,
 	// We injected 10 nonce accounts at genesis and 40 more on an upgrade
 	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 50],
 	sol_swap_endpoint_program: SolAddress,
@@ -196,6 +198,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_PDA_ACCOUNT, sol_token_vault_pda_account);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_MINT_PUBKEY, sol_usdc_token_mint_pubkey);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_VAULT_ATA, sol_usdc_token_vault_ata);
+	from_env_var!(FromStr::from_str, SOL_USDT_TOKEN_MINT_PUBKEY, sol_usdt_token_mint_pubkey);
+	from_env_var!(FromStr::from_str, SOL_USDT_TOKEN_VAULT_ATA, sol_usdt_token_vault_ata);
 	from_env_var!(FromStr::from_str, SOL_SWAP_ENDPOINT_PROGRAM, sol_swap_endpoint_program);
 	from_env_var!(
 		FromStr::from_str,
@@ -308,6 +312,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_usdc_token_mint_pubkey,
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
+		sol_usdt_token_mint_pubkey,
+		sol_usdt_token_vault_ata,
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
@@ -387,6 +393,8 @@ pub fn inner_cf_development_config(
 		sol_usdc_token_mint_pubkey,
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
+		sol_usdt_token_mint_pubkey,
+		sol_usdt_token_vault_ata,
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
@@ -435,6 +443,8 @@ pub fn inner_cf_development_config(
 					usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 					token_vault_pda_account: sol_token_vault_pda_account,
 					usdc_token_vault_ata: sol_usdc_token_vault_ata,
+					usdt_token_mint_pubkey: sol_usdt_token_mint_pubkey,
+					usdt_token_vault_ata: sol_usdt_token_vault_ata,
 					swap_endpoint_program: sol_swap_endpoint_program,
 					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
 					alt_manager_program: sol_alt_manager_program,
@@ -487,6 +497,7 @@ pub fn inner_cf_development_config(
 				option_initial_state: Some(solana_elections::initial_state(
 					sol_vault_program,
 					sol_usdc_token_mint_pubkey,
+					sol_usdt_token_mint_pubkey,
 					sol_swap_endpoint_program_data_account,
 					SHARED_DATA_REFERENCE_LIFETIME,
 				)),
@@ -552,6 +563,8 @@ macro_rules! network_spec {
 					sol_usdc_token_mint_pubkey,
 					sol_token_vault_pda_account,
 					sol_usdc_token_vault_ata,
+					sol_usdt_token_mint_pubkey,
+					sol_usdt_token_vault_ata,
 					sol_durable_nonces_and_accounts,
 					sol_swap_endpoint_program,
 					sol_swap_endpoint_program_data_account,
@@ -632,6 +645,8 @@ macro_rules! network_spec {
 								usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 								token_vault_pda_account: sol_token_vault_pda_account,
 								usdc_token_vault_ata: sol_usdc_token_vault_ata,
+								usdt_token_mint_pubkey: sol_usdt_token_mint_pubkey,
+								usdt_token_vault_ata: sol_usdt_token_vault_ata,
 								swap_endpoint_program: sol_swap_endpoint_program,
 								swap_endpoint_program_data_account:
 									sol_swap_endpoint_program_data_account,
@@ -683,6 +698,7 @@ macro_rules! network_spec {
 							option_initial_state: Some(solana_elections::initial_state(
 								sol_vault_program,
 								sol_usdc_token_mint_pubkey,
+								sol_usdt_token_mint_pubkey,
 								sol_swap_endpoint_program_data_account,
 								SHARED_DATA_REFERENCE_LIFETIME,
 							)),

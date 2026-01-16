@@ -27,7 +27,8 @@ expression: broker
     },
     "Solana": {
       "SOL": "0x0",
-      "USDC": "0x0"
+      "USDC": "0x0",
+      "USDT": "0x0"
     },
     "Assethub": {
       "DOT": "0x0",

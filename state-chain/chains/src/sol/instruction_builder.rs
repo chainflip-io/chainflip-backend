@@ -25,7 +25,7 @@ use crate::{
 	address::EncodedAddress,
 	sol::{
 		sol_tx_core::{
-			consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+			consts::{SOL_USD_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
 			program_instructions::swap_endpoints::{
 				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
 			},
@@ -79,7 +79,10 @@ impl SolanaInstructionBuilder {
 		)
 	}
 
-	pub fn x_swap_usdc(
+	pub fn x_swap_token(
+		sol_token_vault_ata: SolAddress,
+		sol_token_mint_pubkey: SolAddress,
+		sol_token_decimals: u8,
 		api_environment: SolApiEnvironment,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
@@ -100,19 +103,81 @@ impl SolanaInstructionBuilder {
 				dst_token: destination_asset as u32,
 				ccm_parameters: ccm.map(|metadata| metadata.into()),
 				cf_parameters,
-				decimals: SOL_USDC_DECIMAL,
+				decimals: sol_token_decimals,
 			},
 			seed.into(),
 			api_environment.vault_program_data_account,
-			api_environment.usdc_token_vault_ata,
+			sol_token_vault_ata,
 			from,
 			from_token_account,
 			event_data_account,
 			api_environment.swap_endpoint_program_data_account,
 			token_supported_account,
 			token_program_id(),
-			api_environment.usdc_token_mint_pubkey,
+			sol_token_mint_pubkey,
 			system_program_id(),
+		)
+	}
+
+	pub fn x_swap_usdc(
+		api_environment: SolApiEnvironment,
+		destination_asset: Asset,
+		destination_address: EncodedAddress,
+		from: SolPubkey,
+		from_token_account: SolPubkey,
+		seed: SolSeed,
+		event_data_account: SolPubkey,
+		token_supported_account: SolPubkey,
+		input_amount: SolAmount,
+		cf_parameters: Vec<u8>,
+		ccm: Option<CcmChannelMetadataChecked>,
+	) -> SolInstruction {
+		Self::x_swap_token(
+			api_environment.usdc_token_vault_ata,
+			api_environment.usdc_token_mint_pubkey,
+			SOL_USD_DECIMAL,
+			api_environment,
+			destination_asset,
+			destination_address,
+			from,
+			from_token_account,
+			seed,
+			event_data_account,
+			token_supported_account,
+			input_amount,
+			cf_parameters,
+			ccm,
+		)
+	}
+
+	pub fn x_swap_usdt(
+		api_environment: SolApiEnvironment,
+		destination_asset: Asset,
+		destination_address: EncodedAddress,
+		from: SolPubkey,
+		from_token_account: SolPubkey,
+		seed: SolSeed,
+		event_data_account: SolPubkey,
+		token_supported_account: SolPubkey,
+		input_amount: SolAmount,
+		cf_parameters: Vec<u8>,
+		ccm: Option<CcmChannelMetadataChecked>,
+	) -> SolInstruction {
+		Self::x_swap_token(
+			api_environment.usdt_token_vault_ata,
+			api_environment.usdt_token_mint_pubkey,
+			SOL_USD_DECIMAL,
+			api_environment,
+			destination_asset,
+			destination_address,
+			from,
+			from_token_account,
+			seed,
+			event_data_account,
+			token_supported_account,
+			input_amount,
+			cf_parameters,
+			ccm,
 		)
 	}
 }

@@ -352,6 +352,7 @@ impl ExtBuilder {
 							SolanaIngressSettings {
 								vault_program: sol_test_values::VAULT_PROGRAM,
 								usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+								usdt_token_mint_pubkey: sol_test_values::USDT_TOKEN_MINT_PUB_KEY,
 							},
 							BackoffSettings { backoff_after_blocks: 600, backoff_frequency: 100 },
 						),
@@ -362,6 +363,7 @@ impl ExtBuilder {
 							swap_endpoint_data_account_address:
 								sol_test_values::SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS,
 							usdc_token_mint_pubkey: sol_test_values::USDC_TOKEN_MINT_PUB_KEY,
+							usdt_token_mint_pubkey: sol_test_values::USDT_TOKEN_MINT_PUB_KEY,
 						},
 						(),
 					),

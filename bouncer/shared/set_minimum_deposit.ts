@@ -48,6 +48,7 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
       );
       break;
     case 'SolUsdc':
+    case 'SolUsdt':
     case 'Sol':
       await submitGovernanceExtrinsic((api) =>
         api.tx.solanaIngressEgress.updatePalletConfig([

@@ -16,6 +16,7 @@ import { approveErc20 } from 'shared/approve_erc20';
 import { getCFTesterAbi } from 'shared/contract_interfaces';
 import { sendSol } from 'shared/send_sol';
 import { sendSolUsdc } from 'shared/send_solusdc';
+import { sendSolUsdt } from 'shared/send_solusdt';
 import { sendHubAsset } from 'shared/send_hubasset';
 import { Logger } from 'shared/utils/logger';
 
@@ -53,6 +54,8 @@ export async function send(
     }
     case 'SolUsdc':
       return sendSolUsdc(logger, address, amount);
+    case 'SolUsdt':
+      return sendSolUsdt(logger, address, amount);
     case 'HubDot':
     case 'HubUsdc':
     case 'HubUsdt':
