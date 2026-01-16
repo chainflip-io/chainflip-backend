@@ -210,15 +210,39 @@ async function incompatibleUpgradeNoBuild(
   // the old key for //BROKER_1 that has been in the keystore has to be removed,
   // before the node is started up again. Otherwise, it will have 2 broker keys
   // in it's keystore and is going to ignore both of them.
-  logger.info('Deleting //BROKER_1 key from keystore.');
-  logger.info('Current files in keystore:');
-  execSync('ls -la /tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/');
-  logger.info('Now deleting key.');
-  execSync(
-    'rm /tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/62726f6b8428e3f6bb38c830f4743c03964db293ad32583706ebe4708f9941e850190317',
-  );
-  logger.info('Files in keystore after deleting key.');
-  execSync('ls -la /tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/');
+  console.log('Deleting //BROKER_1 key from keystore.');
+  console.log('Current files in keystore:');
+  try {
+    await execWithLog(
+      'ls',
+      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
+      'ls',
+    );
+  } catch (err) {
+    console.log(`First ls failed with: ${err}`);
+  }
+  console.log('Now deleting key.');
+  try {
+    await execWithLog(
+      'rm',
+      [
+        '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/62726f6b9059e6d854b769a505d01148af212bf8cb7f8469a7153edce8dcaedd9d299125',
+      ],
+      'rm',
+    );
+  } catch (err) {
+    console.log(`rm failed with: ${err}`);
+  }
+  console.log('Files in keystore after deleting key.');
+  try {
+    await execWithLog(
+      'ls',
+      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
+      'ls',
+    );
+  } catch (err) {
+    console.log(`second ls failed with: ${err}`);
+  }
   // ^ remove this when UPGRADE_FROM is 2.1
 
   logger.info('Old broker and LP-API have crashed since we killed the node.');
