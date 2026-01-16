@@ -207,10 +207,10 @@ async function testInvalidBtcVaultSwap(logger: Logger) {
 
 export async function testVaultSwap(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
-  await Promise.all([
-    testFeeCollection(cf, Assets.Eth, testContext),
-    testFeeCollection(cf, Assets.ArbEth, testContext),
-    testFeeCollection(cf, Assets.Sol, testContext),
+  await cf.all([
+    (subcf) => testFeeCollection(subcf, Assets.Eth, testContext),
+    (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext),
+    (subcf) => testFeeCollection(subcf, Assets.Sol, testContext),
   ]);
 
   // Test the affiliate withdrawal functionality
