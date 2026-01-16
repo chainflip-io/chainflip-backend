@@ -22,7 +22,7 @@ source $LOCALNET_INIT_DIR/env/$NODE_COUNT/eth-aggkey.env
 source $LOCALNET_INIT_DIR/env/$NODE_COUNT/dot-aggkey.env
 
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/LP_API) --key-type=lqpr --scheme=sr25519
-$BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/BROKER_1) --key-type=brok --scheme=sr25519
+$BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/BROKER_API) --key-type=brok --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=aura --scheme=sr25519
 $BINARY_ROOT_PATH/chainflip-node key insert --chain=$CHAIN --base-path=/tmp/chainflip/$NODE_NAME/chaindata --suri=0x$(cat $KEYS_DIR/$NODE_NAME/signing_key_file) --key-type=gran --scheme=ed25519
 RUST_LOG=runtime=debug $BINARY_ROOT_PATH/chainflip-node --chain=$CHAIN \

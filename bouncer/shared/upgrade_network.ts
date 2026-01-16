@@ -12,6 +12,7 @@ import { execWithLog } from 'shared/utils/exec_with_log';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from './utils/substrate';
+import { AccountRole, setupAccount } from './setup_account';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -204,6 +205,46 @@ async function incompatibleUpgradeNoBuild(
   // let them shutdown
   await sleep(4000);
 
+  // Temporary, while upgrading from 2.0 to 2.1
+  // Because the localnet in 2.1 now uses a new account //BROKER_API,
+  // the old key for //BROKER_1 that has been in the keystore has to be removed,
+  // before the node is started up again. Otherwise, it will have 2 broker keys
+  // in it's keystore and is going to ignore both of them.
+  console.log('Deleting //BROKER_1 key from keystore.');
+  console.log('Current files in keystore:');
+  try {
+    await execWithLog(
+      'ls',
+      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
+      'ls',
+    );
+  } catch (err) {
+    console.log(`First ls failed with: ${err}`);
+  }
+  console.log('Now deleting key.');
+  try {
+    await execWithLog(
+      'rm',
+      [
+        '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/62726f6b9059e6d854b769a505d01148af212bf8cb7f8469a7153edce8dcaedd9d299125',
+      ],
+      'rm',
+    );
+  } catch (err) {
+    console.log(`rm failed with: ${err}`);
+  }
+  console.log('Files in keystore after deleting key.');
+  try {
+    await execWithLog(
+      'ls',
+      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
+      'ls',
+    );
+  } catch (err) {
+    console.log(`second ls failed with: ${err}`);
+  }
+  // ^ remove this when UPGRADE_FROM is 2.1
+
   logger.info('Old broker and LP-API have crashed since we killed the node.');
 
   logger.info('Starting the new node');
@@ -246,6 +287,12 @@ async function incompatibleUpgradeNoBuild(
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
 
   await sleep(4000);
+
+  // Temporary, while upgrading from 2.0 to 2.1
+  // Because the localnet in 2.1 now uses a new account //BROKER_API,
+  // this account has to be registered + funded before the broker api can start:
+  await setupAccount(logger, `//BROKER_API`, AccountRole.Broker, '200');
+  // ^ remove this when UPGRADE_FROM is 2.1
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
   logger.info('Started new broker and lp-api.');
