@@ -125,12 +125,18 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 							// TODO: Same as above, check that origin works and if not create inner
 							// function without origin
 						} => {
-							let _ =
+							if let Err(err) =
 								pallet_cf_governance::Pallet::<Runtime>::set_whitelisted_call_hash(
 									pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
 										.into(),
 									call_hash,
+								) {
+								log::error!(
+									"Failed to whitelist Arbitrum governance call hash: {:?}, Error: {:?}",
+									call_hash,
+									err
 								);
+							}
 						},
 					};
 				},
