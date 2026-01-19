@@ -37,6 +37,7 @@ const MAX_SOL_VAULT_SWAP_ADDITIONAL_METADATA_LENGTH = 150;
 // Solana's transaction size limits.
 const MAX_CCM_BYTES_SOL = 783;
 const MAX_CCM_BYTES_USDC = 694;
+const MAX_CCM_BYTES_USDT = 632;
 const SOLANA_BYTES_PER_ACCOUNT = 33;
 const BYTES_PER_ALT = 34; // 32 + 1 + 1 (for vector lengths)
 
@@ -120,8 +121,17 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
       return '0x';
     case 'Solana': {
       const messageLength = message.slice(2).length / 2;
-      let bytesAvailable =
-        (destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC) - messageLength;
+      let bytesAvailable: number;
+      if (destAsset === 'Sol') {
+        bytesAvailable = MAX_CCM_BYTES_SOL;
+      } else if (destAsset === 'SolUsdc') {
+        bytesAvailable = MAX_CCM_BYTES_USDC;
+      } else if (destAsset === 'SolUsdt') {
+        bytesAvailable = MAX_CCM_BYTES_USDT;
+      } else {
+        throw new Error(`Unsupported Solana asset: ${destAsset}`);
+      }
+      bytesAvailable -= messageLength;
       if (maxLength !== undefined) {
         bytesAvailable = Math.min(bytesAvailable, maxLength);
       }

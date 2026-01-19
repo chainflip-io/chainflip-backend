@@ -85,8 +85,9 @@ export function testAllSwaps(timeoutPerSwap: number) {
   );
 
   AssetsWithoutAssethubAndDot.sort().forEach((sourceAsset) => {
-    AssetsWithoutAssethubAndDot.sort().filter((destAsset) => sourceAsset !== destAsset).forEach(
-      (destAsset) => {
+    AssetsWithoutAssethubAndDot.sort()
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
@@ -107,8 +108,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, true);
         }
-      },
-    );
+      });
   });
 
   // Swaps from assethub paired with random chains.
