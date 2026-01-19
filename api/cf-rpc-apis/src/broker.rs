@@ -142,4 +142,6 @@ pub trait BrokerRpcApi {
 		boost_fee: Option<BasisPoints>,
 		refund_address: AddressString,
 	) -> RpcResult<AccountCreationDepositAddress>;
+	#[method(name = "bind_fee_withdrawal_address", aliases = ["broker_bindFeeWithdrawalAddress"])]
+	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256>;
 }

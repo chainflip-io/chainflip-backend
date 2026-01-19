@@ -14,6 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![feature(map_try_insert)]
+
 pub mod base_rpc_api;
 pub mod chain_api;
 pub mod electoral_api;
@@ -49,18 +51,14 @@ use cf_utilities::{
 	try_cached_stream::{MakeTryCachedStream, TryCachedStream},
 };
 
-use crate::{
-	constants::SIGNED_EXTRINSIC_LIFETIME,
-	state_chain_observer::client::{
-		base_rpc_api::SubxtInterface, storage_api::CheckBlockCompatibility,
-	},
-};
+/// Lifetime in blocks of submitted signed extrinsics
+pub const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
 
 use self::{
-	base_rpc_api::BaseRpcClient,
+	base_rpc_api::{BaseRpcClient, SubxtInterface},
 	chain_api::ChainApi,
 	extrinsic_api::{signed::SignedExtrinsicApi, unsigned},
-	storage_api::{BlockCompatibility, StorageApi},
+	storage_api::{BlockCompatibility, CheckBlockCompatibility, StorageApi},
 	stream_api::{StateChainStream, StreamApi, FINALIZED, UNFINALIZED},
 };
 
@@ -1061,7 +1059,7 @@ impl<
 #[cfg(any(test, feature = "client-mocks"))]
 pub mod mocks {
 	use super::RpcResult;
-	use crate::state_chain_observer::client::{
+	use crate::{
 		extrinsic_api::{signed::SignedExtrinsicApi, unsigned::UnsignedExtrinsicApi},
 		storage_api::StorageApi,
 		ChainApi,

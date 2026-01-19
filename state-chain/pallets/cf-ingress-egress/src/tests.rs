@@ -28,6 +28,7 @@ use crate::{
 	RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultDepositWitness,
 	WitnessSafetyMargin,
 };
+use cf_amm_math::Price;
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::{any::Asset, eth::Asset as EthAsset},
@@ -83,7 +84,7 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::{bounded_vec, H160, U256};
+use sp_core::{bounded_vec, H160};
 use sp_runtime::{DispatchError, DispatchResult};
 
 const ALICE_ETH_ADDRESS: EthereumAddress = H160([100u8; 20]);
@@ -95,7 +96,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 	ChannelRefundParametersForChain::<Ethereum> {
 		retry_duration: 0,
 		refund_address: ALICE_ETH_ADDRESS,
-		min_price: sp_core::U256::zero(),
+		min_price: Price::zero(),
 		refund_ccm_metadata: None,
 		max_oracle_price_slippage: None,
 	};
@@ -3712,7 +3713,7 @@ fn test_various_refund_reasons() {
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
@@ -3739,7 +3740,7 @@ fn test_various_refund_reasons() {
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 700,
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
@@ -3766,7 +3767,7 @@ fn test_various_refund_reasons() {
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
 				retry_duration: 0,
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_address: H160([1; 20]),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,

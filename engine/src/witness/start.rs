@@ -22,15 +22,15 @@ use crate::{
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED, UNFINALIZED},
-	},
 };
 use cf_utilities::task_scope::Scope;
+use engine_sc_client::{
+	chain_api::ChainApi,
+	electoral_api::ElectoralApi,
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED, UNFINALIZED},
+};
 use futures::try_join;
 use state_chain_runtime::{BitcoinInstance, SolanaInstance};
 

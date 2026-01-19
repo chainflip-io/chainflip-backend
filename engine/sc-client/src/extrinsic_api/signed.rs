@@ -36,7 +36,7 @@ use state_chain_runtime::{AccountId, Nonce};
 use tokio::sync::{mpsc, oneshot};
 use tracing::trace;
 
-use crate::constants::SIGNED_EXTRINSIC_LIFETIME;
+use crate::SIGNED_EXTRINSIC_LIFETIME;
 
 mod submission_watcher;
 

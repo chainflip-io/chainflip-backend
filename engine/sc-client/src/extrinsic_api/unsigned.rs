@@ -23,7 +23,7 @@ use sp_core::H256;
 use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::state_chain_observer::client::extrinsic_api::common::invalid_err_obj;
+use crate::extrinsic_api::common::invalid_err_obj;
 
 use super::{
 	super::{base_rpc_api, SUBSTRATE_BEHAVIOUR},

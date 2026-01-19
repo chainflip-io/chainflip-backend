@@ -20,7 +20,6 @@ use super::*;
 
 use cf_chains::{
 	address::EncodedAddress, benchmarking_value::BenchmarkValue, eth::Address as EthereumAddress,
-	evm::U256,
 };
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};
@@ -58,7 +57,7 @@ mod benchmarks {
 			refund_parameters: ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -104,7 +103,7 @@ mod benchmarks {
 			refund_parameters: ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -293,7 +292,7 @@ mod benchmarks {
 			refund_parameters: ChannelRefundParametersUncheckedEncoded {
 				retry_duration: 100,
 				refund_address: EncodedAddress::benchmark_value(),
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -333,6 +332,25 @@ mod benchmarks {
 				Error::<T>::InvalidUserSignatureData
 			);
 		}
+	}
+
+	#[benchmark]
+	fn bind_broker_fee_withdrawal_address() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Broker,
+		)
+		.unwrap();
+
+		let address: EthereumAddress = [0xab; 20].into();
+
+		#[extrinsic_call]
+		bind_broker_fee_withdrawal_address(RawOrigin::Signed(caller.clone()), address);
+
+		assert_eq!(
+			BoundBrokerWithdrawalAddress::<T>::get(&caller),
+			Some(address),
+			"Broker withdrawal address should be bound"
+		);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

@@ -15,16 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{PeerInfo, PeerUpdate};
-use crate::p2p::{
+use crate::{
 	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
 	OutgoingMultisigStageMessages, P2PKey,
 };
+use cf_primitives::AccountId;
 use cf_utilities::{
 	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
 	Port,
 };
 use sp_core::ed25519::Public;
-use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 

@@ -17,20 +17,16 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
-	dot::retry_rpc::mocks::MockDotRpcClient,
-	evm::retry_rpc::mocks::MockEvmRetryRpcClient,
-	sol::retry_rpc::mocks::MockSolRetryRpcClient,
-	state_chain_observer::{
-		client::{
-			extrinsic_api,
-			stream_api::{StateChainStream, FINALIZED},
-		},
-		test_helpers::test_header,
-	},
+	btc::retry_rpc::mocks::MockBtcRetryRpcClient, dot::retry_rpc::mocks::MockDotRpcClient,
+	evm::retry_rpc::mocks::MockEvmRetryRpcClient, sol::retry_rpc::mocks::MockSolRetryRpcClient,
+	state_chain_observer::test_helpers::test_header,
 };
 use cf_chains::{evm::Transaction, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
+use engine_sc_client::{
+	extrinsic_api,
+	stream_api::{StateChainStream, FINALIZED},
+};
 use futures::FutureExt;
 use mockall::predicate::eq;
 use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
@@ -45,10 +41,7 @@ use state_chain_runtime::{
 	AccountId, BitcoinInstance, EvmInstance, PolkadotCryptoInstance, Runtime, RuntimeCall,
 };
 
-use crate::{
-	settings::Settings,
-	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-};
+use crate::{settings::Settings, state_chain_observer::sc_observer};
 use cf_utilities::task_scope::task_scope;
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
@@ -56,11 +49,11 @@ use multisig::{
 	CryptoScheme, KeyId,
 };
 
+use engine_sc_client::{mocks::MockStateChainClient, stream_api::StreamApi, StateChainClient};
+
 use super::{crypto_compat::CryptoCompat, get_ceremony_id_counters_before_block};
 
-async fn start_sc_observer<
-	BlockStream: crate::state_chain_observer::client::stream_api::StreamApi<FINALIZED>,
->(
+async fn start_sc_observer<BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
 	eth_rpc: MockEvmRetryRpcClient,
@@ -759,18 +752,17 @@ async fn run_the_sc_observer() {
 		async {
 			let settings = Settings::new_test().unwrap();
 
-			let (sc_block_stream, _, state_chain_client) =
-				crate::state_chain_observer::client::StateChainClient::connect_with_account(
-					scope,
-					&settings.state_chain.ws_endpoint,
-					&settings.state_chain.signing_key_file,
-					AccountRole::Unregistered,
-					false,
-					false,
-					None,
-				)
-				.await
-				.unwrap();
+			let (sc_block_stream, _, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&settings.state_chain.ws_endpoint,
+				&settings.state_chain.signing_key_file,
+				AccountRole::Unregistered,
+				false,
+				false,
+				None,
+			)
+			.await
+			.unwrap();
 
 			sc_observer::start(
 				state_chain_client,

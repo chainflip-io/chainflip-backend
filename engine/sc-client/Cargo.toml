@@ -1,0 +1,65 @@
+[package]
+authors = ["Chainflip team <https://github.com/chainflip-io>"]
+edition = "2021"
+name = "engine-sc-client"
+version = "2.1.0"
+license = "Apache-2.0"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+futures-core = { workspace = true }
+futures-util = { workspace = true }
+hex = { workspace = true, default-features = true }
+itertools = { workspace = true, default-features = true }
+jsonrpsee = { workspace = true, features = ["full"] }
+lazy_static = { workspace = true }
+serde_json = { workspace = true, default-features = true }
+subxt = { workspace = true }
+thiserror = { workspace = true, default-features = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+pin-project = { workspace = true }
+tracing = { workspace = true }
+
+# Local deps
+cf-chains = { workspace = true, default-features = true }
+cf-primitives = { workspace = true, default-features = true }
+cf-node-client = { workspace = true }
+custom-rpc = { workspace = true }
+pallet-cf-account-roles = { workspace = true, default-features = true }
+pallet-cf-elections = { workspace = true, default-features = true }
+pallet-cf-environment = { workspace = true, default-features = true }
+pallet-cf-chain-tracking = { workspace = true, default-features = true }
+state-chain-runtime = { workspace = true, default-features = true }
+cf-utilities = { workspace = true, default-features = true }
+multisig = { workspace = true }
+
+# substrate deps
+codec = { workspace = true, default-features = true, features = [
+	"derive",
+	"full",
+] }
+frame-support = { workspace = true, default-features = true }
+frame-system = { workspace = true, default-features = true }
+sc-rpc-api = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-rpc = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+sp-version = { workspace = true, default-features = true }
+substrate-frame-rpc-system = { workspace = true }
+
+# Used only with feature client-mocks
+mockall = { workspace = true, features = ["nightly"], optional = true }
+
+[dev-dependencies]
+mockall = { workspace = true, features = ["nightly"] }
+pallet-cf-witnesser = { workspace = true, default-features = true }
+
+[features]
+client-mocks = ["mockall"]

@@ -19,11 +19,9 @@ use cf_chains::{address::ToHumanreadableAddress, instances::ChainInstanceFor, Ch
 use cf_primitives::{AssetAmount, EpochIndex, FlipBalance};
 use cf_rpc_types::SwapChannelInfo;
 use cf_utilities::task_scope;
-use chainflip_engine::state_chain_observer::client::{
-	chain_api::ChainApi, storage_api::StorageApi,
-};
 use codec::Decode;
 use custom_rpc::CustomApiClient;
+use engine_sc_client::{chain_api::ChainApi, storage_api::StorageApi};
 use frame_support::sp_runtime::DigestItem;
 use jsonrpsee::core::ClientError;
 use pallet_cf_ingress_egress::DepositChannelDetails;

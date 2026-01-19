@@ -711,10 +711,6 @@ pub mod pallet {
 				.unwrap_or(1);
 			ensure!(amount >= minimum, Error::<T>::AmountBelowMinimum);
 
-			// `try_debit_account` does not account for any unswept open positions, so we sweep to
-			// ensure we have the funds in our free balance before attempting to debit the account.
-			T::PoolApi::sweep(&booster_id)?;
-
 			T::Balance::try_debit_account(&booster_id, asset, amount)?;
 
 			let boost_pool: BoostPool =
@@ -827,10 +823,6 @@ pub mod pallet {
 					config.minimum_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
-
-			// `try_debit_account` does not account for any unswept open positions, so we sweep to
-			// ensure we have the funds in our free balance before attempting to debit the account.
-			T::PoolApi::sweep(&lender_id)?;
 
 			T::Balance::try_debit_account(&lender_id, asset, amount)?;
 

@@ -4,7 +4,6 @@ import { HDNodeWallet } from 'ethers';
 import {
   amountToFineAmountBigInt,
   createEvmWalletAndFund,
-  createStateChainKeypair,
   decodeFlipAddressForContract,
   defaultAssetAmounts,
   externalChainToScAccount,
@@ -20,7 +19,7 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
-import { setupOperatorAccount } from 'shared/setup_account';
+import { AccountRole, setupAccount } from 'shared/setup_account';
 import z from 'zod';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 
@@ -89,14 +88,13 @@ export async function testDelegate(logger: Logger) {
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
 
-  const operator = createStateChainKeypair(uri);
+  logger.info('Registering operator ' + uri + '...');
+  const operator = await setupAccount(logger, uri, AccountRole.Operator);
+
   let operatorPubkey = decodeFlipAddressForContract(operator.address);
   if (operatorPubkey.substr(0, 2) !== '0x') {
     operatorPubkey = '0x' + operatorPubkey;
   }
-
-  logger.info('Registering operator ' + operator.address + '...');
-  await setupOperatorAccount(logger, uri);
 
   logger.info('Approving Flip to SC Utils contract for delegation...');
   await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString(), wallet);

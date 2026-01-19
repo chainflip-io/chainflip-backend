@@ -17,7 +17,7 @@
 use crate::genesis::GENESIS_BALANCE;
 
 use super::{genesis, network, *};
-use cf_primitives::GENESIS_EPOCH;
+use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;

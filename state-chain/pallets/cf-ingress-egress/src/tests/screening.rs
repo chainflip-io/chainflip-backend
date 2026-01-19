@@ -36,7 +36,6 @@ use frame_support::{
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
-use sp_core::U256;
 use sp_runtime::DispatchError::BadOrigin;
 
 const DEFAULT_DEPOSIT_AMOUNT: u64 = 1_000;
@@ -93,7 +92,7 @@ mod helpers {
 			ChannelRefundParametersForChain::<Bitcoin> {
 				retry_duration: 100,
 				refund_address: ScriptPubkey::Taproot([0x01; 32]),
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
 			},
@@ -533,7 +532,7 @@ fn gets_rejected_if_vault_transaction_was_aborted_and_rejected() {
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 				retry_duration: 0,
-				min_price: U256::from(0),
+				min_price: Default::default(),
 				refund_address: ScriptPubkey::P2SH(DEFAULT_BTC_ADDRESS),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,

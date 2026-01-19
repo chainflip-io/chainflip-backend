@@ -52,15 +52,13 @@ use cf_chains::instances::{
 };
 pub use cf_node_client::WaitForResult;
 
-pub use chainflip_engine::{
-	settings,
-	state_chain_observer::client::{
-		base_rpc_api::{BaseRpcApi, RawRpcApi},
-		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
-		storage_api::StorageApi,
-		BlockInfo,
-	},
+pub use chainflip_engine::settings;
+pub use engine_sc_client::{
+	base_rpc_api::{BaseRpcApi, RawRpcApi},
+	chain_api::ChainApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	storage_api::StorageApi,
+	BlockInfo,
 };
 
 pub mod lp;
@@ -72,7 +70,7 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use cf_rpc_types::lp::LiquidityDepositChannelDetails;
 pub use cf_rpc_types::{self as rpc_types, broker::*};
 use cf_utilities::task_scope::Scope;
-use chainflip_engine::state_chain_observer::client::{
+use engine_sc_client::{
 	base_rpc_api::BaseRpcClient, extrinsic_api::signed::UntilInBlock, DefaultRpcClient,
 	StateChainClient,
 };
@@ -682,6 +680,24 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		// Worst case, we need to wait for the transaction to be finalized.
 		let extrinsic_data = finalized_fut.until_finalized().await?;
 		extract_account_creation_deposit_address(extrinsic_data.events, extrinsic_data.header)
+	}
+
+	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> Result<H256> {
+		let extrinsic_data = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::bind_broker_fee_withdrawal_address { address },
+			)
+			.await?
+			.until_in_block()
+			.await?;
+
+		extract_event!(
+			extrinsic_data.events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::BoundBrokerWithdrawalAddress,
+			{ .. },
+			extrinsic_data.tx_hash
+		)
 	}
 }
 

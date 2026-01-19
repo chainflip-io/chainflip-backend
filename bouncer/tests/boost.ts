@@ -34,25 +34,19 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  const extrinsicResult = await cf.stepToExtrinsicIncluded((api) =>
-    api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-  );
-
-  if (extrinsicResult.ok) {
-    cf.info('waiting for stop boosting event');
-    return cf.expectEvent(
-      'LendingPools.StoppedBoosting',
-      lendingPoolsStoppedBoosting.refine(
+  return cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
+    expectedEvent: {
+      name: 'LendingPools.StoppedBoosting',
+      schema: lendingPoolsStoppedBoosting.refine(
         (event) =>
           event.boosterId === cf.requirements.account.keypair.address &&
           event.boostPool.asset === asset &&
           event.boostPool.tier === boostTier,
       ),
-    );
-  }
-
-  cf.info(`Already stopped boosting (${extrinsicResult.error})`);
-  return undefined;
+    },
+  });
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
@@ -66,25 +60,23 @@ export async function addBoostFunds(
 
   // Add funds to the boost pool
   cf.debug(`Adding boost funds of ${amount} ${asset} at ${boostTier}bps`);
-  await cf.stepToExtrinsicIncluded((api) =>
-    api.tx.lendingPools.addBoostFunds(
-      shortChainFromAsset(asset).toUpperCase(),
-      amountToFineAmount(amount.toString(), assetDecimals(asset)),
-      boostTier,
-    ),
-  );
-
-  const result = await cf.expectEvent(
-    'LendingPools.BoostFundsAdded',
-    lendingPoolsBoostFundsAdded.refine(
-      (event) =>
-        event.boosterId === cf.requirements.account.keypair.address &&
-        event.boostPool.asset === asset &&
-        event.boostPool.tier === boostTier,
-    ),
-  );
-
-  return result;
+  return cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.addBoostFunds(
+        shortChainFromAsset(asset).toUpperCase(),
+        amountToFineAmount(amount.toString(), assetDecimals(asset)),
+        boostTier,
+      ),
+    expectedEvent: {
+      name: 'LendingPools.BoostFundsAdded',
+      schema: lendingPoolsBoostFundsAdded.refine(
+        (event) =>
+          event.boosterId === cf.requirements.account.keypair.address &&
+          event.boostPool.asset === asset &&
+          event.boostPool.tier === boostTier,
+      ),
+    },
+  });
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
@@ -107,8 +99,13 @@ async function testBoostingForAsset(
   );
   cf.debug(`Testing boosting`);
 
-  // Start with a clean slate by stopping boosting before the test
-  const preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
+  cf.debug('Starting the test with a clean slate by stopping boosting');
+  let preTestStopBoostingEvent;
+  try {
+    preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
+  } catch (err) {
+    cf.info(`Already stopped boosting (${err})`);
+  }
   assert.strictEqual(
     preTestStopBoostingEvent?.pendingBoosts.length ?? 0,
     0,
@@ -125,7 +122,7 @@ async function testBoostingForAsset(
   );
 
   // Add boost funds
-  await depositLiquidity(cf.logger, asset, amount * 1.01, false, lpUri);
+  await depositLiquidity(cf, asset, amount * 1.01);
   await addBoostFunds(cf, asset, boostFee, amount);
 
   // Do a swap
@@ -210,6 +207,7 @@ async function testBoostingForAsset(
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
   await using chainflip = await getChainflipApi();
 
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
@@ -222,9 +220,9 @@ export async function testBoostingSwap(testContext: TestContext) {
 
   // Create the boost pool if it doesn't exist
   if (!boostPool?.feeBps) {
-    await createBoostPools(testContext.logger, [{ asset: Assets.Btc, tier: boostPoolTier }]);
+    await createBoostPools(cf, [{ asset: Assets.Btc, tier: boostPoolTier }]);
   } else {
-    testContext.trace(`Boost pool already exists for tier ${boostPoolTier}`);
+    cf.trace(`Boost pool already exists for tier ${boostPoolTier}`);
   }
 
   // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.

@@ -56,7 +56,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
-import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
+import { ChainflipIO } from './utils/chainflip_io';
+import { Err, Ok, Result } from './utils/result';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -227,7 +228,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          return '2UooihWEqsL6C1aadx56ViJN3pgv4as7arJ5pXQRz45F';
+          return 'DqL9M6z83qk3QXDP2r9jAiyf6PSSdpSC5Ck7Rb8yWVmS';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bitcoin::{hashes::Hash as btcHash, opcodes::all::OP_RETURN, ScriptBuf};
-use cf_amm::math::{bounded_sqrt_price, sqrt_price_to_price};
+use cf_amm::math::Price;
 use cf_chains::{
 	assets::btc::Asset as BtcAsset,
 	btc::{
@@ -170,10 +170,10 @@ pub fn try_extract_vault_swap_witness(
 				retry_duration: data.parameters.retry_duration.into(),
 				refund_address,
 				// Derive min price (encoded as min output amount to save space):
-				min_price: sqrt_price_to_price(bounded_sqrt_price(
+				min_price: Price::from_amounts_bounded(
 					data.parameters.min_output_amount.into(),
 					deposit_amount.into(),
-				)),
+				),
 				// Bitcoin should never have a ccm refund
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: if data.parameters.max_oracle_price_slippage == u8::MAX {
@@ -360,10 +360,10 @@ mod tests {
 				refund_params: ChannelRefundParametersForChain::<Bitcoin> {
 					retry_duration: MOCK_SWAP_PARAMS.parameters.retry_duration.into(),
 					refund_address: refund_pubkey,
-					min_price: sqrt_price_to_price(bounded_sqrt_price(
+					min_price: Price::from_amounts_bounded(
 						MOCK_SWAP_PARAMS.parameters.min_output_amount.into(),
 						DEPOSIT_AMOUNT.into(),
-					)),
+					),
 					refund_ccm_metadata: None,
 					max_oracle_price_slippage: None,
 				},

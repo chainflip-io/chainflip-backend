@@ -42,7 +42,7 @@ use tracing::{debug, error, info, warn};
 
 use cf_node_client::{error_decoder, signer, ExtrinsicData};
 
-use crate::state_chain_observer::client::{
+use crate::{
 	base_rpc_api,
 	extrinsic_api::common::invalid_err_obj,
 	storage_api::{CheckBlockCompatibility, StorageApi},

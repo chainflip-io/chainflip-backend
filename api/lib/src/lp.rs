@@ -21,21 +21,21 @@ use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 pub use cf_amm::{
 	common::{PoolPairsMap, Side},
-	math::{Amount, Tick},
+	math::{Amount, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
-	EgressId, PriceLimits, SwapRequestId, WaitFor,
+	EgressId, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
 	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
 };
 use cf_rpc_types::ExtrinsicResponse;
-use chainflip_engine::state_chain_observer::client::{
+use engine_sc_client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	DefaultRpcClient, StateChainClient,
 };

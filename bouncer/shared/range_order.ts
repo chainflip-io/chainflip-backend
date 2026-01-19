@@ -13,13 +13,12 @@ export async function rangeOrder(
   logger: Logger,
   ccy: Asset,
   amount: number,
-  lpKey?: string,
-  orderId?: number,
+  lpUri = process.env.LP_URI || '//LP_1',
+  orderId = 0,
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
   await using chainflip = await getChainflipApi();
 
-  const lpUri = lpKey ?? (process.env.LP_URI || '//LP_1');
   const lp = createStateChainKeypair(lpUri);
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -35,7 +34,7 @@ export async function rangeOrder(
   const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
   const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
   const unsub = await chainflip.tx.liquidityPools
-    .setRangeOrder(ccy.toLowerCase(), 'usdc', orderId || 0, [-887272, 887272], {
+    .setRangeOrder(ccy.toLowerCase(), 'usdc', orderId, [-887272, 887272], {
       Liquidity: { Liquidity: liquidity },
     })
     .signAndSend(lp, { nonce }, waiter);

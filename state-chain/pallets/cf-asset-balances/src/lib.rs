@@ -18,11 +18,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddress};
-use cf_primitives::{AccountId, Asset, AssetAmount};
+use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AssetWithholding, BalanceApi, Chainflip, EgressApi, KeyProvider,
-	LiabilityTracker, ScheduledEgressDetails,
+	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip, EgressApi,
+	KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -100,6 +100,8 @@ pub mod pallet {
 
 		/// Polkadot environment.
 		type PolkadotKeyProvider: KeyProvider<PolkadotCrypto>;
+
+		type PoolApi: PoolApi<AccountId = Self::AccountId>;
 
 		/// Safe mode configuration.
 		type SafeMode: Get<PalletSafeMode>;
@@ -439,6 +441,11 @@ where
 			return Ok(())
 		}
 
+		// Sweep LP earnings before debiting to ensure all available funds are accounted for
+		if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::LiquidityProvider) {
+			T::PoolApi::sweep(account_id)?;
+		}
+
 		let new_balance = FreeBalances::<T>::try_mutate_exists(account_id, asset, |balance| {
 			let new_balance = match balance.take() {
 				None => Err(Error::<T>::InsufficientBalance),
@@ -462,6 +469,9 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		if T::AccountRoleRegistry::has_account_role(who, AccountRole::LiquidityProvider) {
+			let _ = T::PoolApi::sweep(who);
+		}
 		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 

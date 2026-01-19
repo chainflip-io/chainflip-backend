@@ -27,7 +27,7 @@ use sp_std::vec;
 mod benchmarks {
 	use super::*;
 	use crate::general_lending::{GeneralLoan, LiquidationStatus};
-	use cf_amm_math::price_from_usd_fine_amount;
+	use cf_amm_math::Price;
 	use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
 	use frame_support::sp_runtime::FixedU64;
 
@@ -37,7 +37,7 @@ mod benchmarks {
 	const NUMBER_OF_LENDERS: u32 = 1000;
 
 	fn set_asset_price_in_usd<T: Config>(asset: Asset, price: AssetAmount) {
-		<T as Config>::PriceApi::set_price(asset, price_from_usd_fine_amount(price));
+		<T as Config>::PriceApi::set_price(asset, Price::from_usd_fine_amount(price));
 	}
 
 	fn create_boost_pool<T: Config>() {

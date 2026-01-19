@@ -1,115 +1,110 @@
-import assert from 'assert';
 import { cfMutex, handleSubstrateError, createStateChainKeypair } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { Logger } from 'shared/utils/logger';
+// eslint-disable-next-line no-restricted-imports
+import { KeyringPair } from '@polkadot/keyring/types';
 
-export async function setupLpAccount(logger: Logger, uri: string) {
-  const lp = createStateChainKeypair(uri);
+export enum AccountRole {
+  Unregistered,
+  LiquidityProvider,
+  Broker,
+  Operator,
+}
 
+async function getAccountRole(address: string): Promise<AccountRole> {
   await using chainflip = await getChainflipApi();
 
-  // Check for existing role
-  logger.trace(`Checking existing role for ${uri}`);
-  const role = JSON.stringify(await chainflip.query.accountRoles.accountRoles(lp.address)).replace(
+  const role = JSON.stringify(await chainflip.query.accountRoles.accountRoles(address)).replace(
     /"/g,
     '',
   );
-  if (role === 'LiquidityProvider') {
-    logger.debug(`${lp.address} is already registered as an LP`);
-    return lp;
-  }
-  if (role !== 'null' && role !== 'Unregistered') {
-    throw new Error(`Cannot register ${uri} as LP because it has a role: ${role}`);
-  }
 
-  // Register as LP
-  await fundFlip(logger, lp.address, '1000');
-  logger.debug(`Registering ${lp.address} as an LP...`);
-  const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
-    test: (event) => event.data.accountId === lp.address,
-  }).event;
+  switch (role) {
+    case 'null':
+    case 'Unregistered':
+      return AccountRole.Unregistered;
+    case 'LiquidityProvider':
+      return AccountRole.LiquidityProvider;
+    case 'Broker':
+      return AccountRole.Broker;
+    case 'Operator':
+      return AccountRole.Operator;
+    default:
+      throw new Error(`Unknown account role: ${role}`);
+  }
+}
+
+/**
+ * Checks if the account is already registered as the given role and if not, registers it and funds it with some Flip.
+ * Errors if the account is already registered with a different role.
+ * @param uri The URI of the account to set up. eg '//LP_1'
+ * @param accountRole The role to register the account as. eg AccountRole.LiquidityProvider
+ * @param flipFundAmount (optional) The amount of Flip to fund the account with. Default is '1000'.
+ * @return The KeyringPair of the set up account.
+ */
+export async function setupAccount(
+  logger: Logger,
+  uri: string,
+  accountRole: AccountRole,
+  flipFundAmount = '1000',
+): Promise<KeyringPair> {
+  const account = createStateChainKeypair(uri);
 
   await cfMutex.runExclusive(uri, async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
-    await chainflip.tx.liquidityProvider
-      .registerLpAccount()
-      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
-  });
-  await eventHandle;
+    await using chainflip = await getChainflipApi();
 
-  logger.debug(`${lp.address} successfully registered as an LP`);
+    // Check for existing role
+    logger.trace(`Checking existing role for ${uri}`);
+    const role = await getAccountRole(account.address);
 
-  return lp;
-}
+    if (role === accountRole) {
+      logger.debug(`${account.address} is already registered as an ${AccountRole[accountRole]}`);
+      return;
+    }
+    if (role !== AccountRole.Unregistered) {
+      throw new Error(
+        `Cannot register ${uri} as ${AccountRole[accountRole]} because it has a role: ${role}`,
+      );
+    }
 
-/// Sets up a broker account by registering it as a broker if it is not already registered and funding it with 1000 Flip.
-export async function setupBrokerAccount(logger: Logger, uri: string) {
-  await using chainflip = await getChainflipApi();
+    // Fund the account
+    await fundFlip(logger, account.address, flipFundAmount);
 
-  const broker = createStateChainKeypair(uri);
-
-  const role = JSON.stringify(
-    await chainflip.query.accountRoles.accountRoles(broker.address),
-  ).replace(/"/g, '');
-
-  if (role === 'null' || role === 'Unregistered') {
-    await fundFlip(logger, broker.address, '1000');
-    logger.debug(`Registering ${broker.address} as a Broker...`);
-
+    // Register account
+    logger.debug(`Registering ${account.address} as an ${AccountRole[accountRole]}...`);
     const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
-      test: (event) => event.data.accountId === broker.address,
+      test: (event) => event.data.accountId === account.address,
+      timeoutSeconds: 30,
     }).event;
 
-    await cfMutex.runExclusive(uri, async () => {
-      const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-      await chainflip.tx.swapping
-        .registerAsBroker()
-        .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
-    });
-    await eventHandle;
-
-    logger.debug(`${broker.address} successfully registered as a Broker`);
-  } else {
-    assert.strictEqual(
-      role,
-      'Broker',
-      `Cannot register ${uri} as broker because it has a role: ${role}`,
-    );
-  }
-}
-
-export async function setupOperatorAccount(logger: Logger, uri: string) {
-  const operator = createStateChainKeypair(uri);
-
-  logger.debug(`Registering ${operator.address} as an Operator...`);
-
-  await using chainflip = await getChainflipApi();
-
-  const role = JSON.stringify(
-    await chainflip.query.accountRoles.accountRoles(operator.address),
-  ).replace(/"/g, '');
-
-  if (role === 'null' || role === 'Unregistered') {
-    await fundFlip(logger, operator.address, '1000');
-
-    const eventHandle = observeEvent(logger, 'accountRoles:AccountRoleRegistered', {
-      test: (event) => event.data.accountId === operator.address && event.data.role === 'Operator',
-    }).event;
-
-    await cfMutex.runExclusive(uri, async () => {
-      const nonce = await chainflip.rpc.system.accountNextIndex(operator.address);
-      await chainflip.tx.validator
-        .registerAsOperator(
+    const nonce = await chainflip.rpc.system.accountNextIndex(account.address);
+    let extrinsic;
+    switch (accountRole) {
+      case AccountRole.LiquidityProvider:
+        extrinsic = chainflip.tx.liquidityProvider.registerLpAccount();
+        break;
+      case AccountRole.Broker:
+        extrinsic = chainflip.tx.swapping.registerAsBroker();
+        break;
+      case AccountRole.Operator:
+        extrinsic = chainflip.tx.validator.registerAsOperator(
           {
             feeBps: 2_000,
             delegationAcceptance: 'Allow',
           },
           uri,
-        )
-        .signAndSend(operator, { nonce }, handleSubstrateError(chainflip));
-    });
+        );
+        break;
+      default:
+        throw new Error(`Unsupported registration as account role: ${accountRole}`);
+    }
+
+    await extrinsic.signAndSend(account, { nonce }, handleSubstrateError(chainflip));
+
     await eventHandle;
-  }
-  logger.debug(`${operator.address} successfully registered as an Operator`);
+    logger.debug(`${account.address} successfully registered as an ${AccountRole[accountRole]}`);
+  });
+
+  return account;
 }

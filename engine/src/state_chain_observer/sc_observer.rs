@@ -43,22 +43,20 @@ use std::{
 };
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
-use super::client::chain_api::ChainApi;
 use crate::{
-	btc::rpc::BtcRpcApi,
-	dot::retry_rpc::DotRetryRpcApi,
-	evm::retry_rpc::EvmRetrySigningRpcApi,
+	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetryRpcApi, evm::retry_rpc::EvmRetrySigningRpcApi,
 	sol::retry_rpc::SolRetryRpcApi,
-	state_chain_observer::client::{
-		extrinsic_api::{
-			signed::{SignedExtrinsicApi, UntilFinalized},
-			unsigned::UnsignedExtrinsicApi,
-		},
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-	},
 };
 use cf_utilities::task_scope::{task_scope, Scope};
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::{
+		signed::{SignedExtrinsicApi, UntilFinalized},
+		unsigned::UnsignedExtrinsicApi,
+	},
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
+};
 use multisig::{
 	bitcoin::BtcCryptoScheme, client::MultisigClientApi, ed25519::SolCryptoScheme,
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
@@ -664,7 +662,7 @@ where
 		+ 'static
 		+ Send
 		+ Sync
-		+ super::client::storage_api::StorageApi,
+		+ engine_sc_client::storage_api::StorageApi,
 {
 	let events: Vec<_> = state_chain_client
 		.storage_value::<pallet_cf_cfe_interface::CfeEvents<Runtime>>(block_hash)

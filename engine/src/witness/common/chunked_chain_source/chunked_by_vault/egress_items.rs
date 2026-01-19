@@ -19,14 +19,10 @@ use std::sync::Arc;
 use cf_chains::{instances::ChainInstanceFor, Chain, ChainCrypto};
 use cf_utilities::task_scope::Scope;
 
-use crate::{
-	state_chain_observer::client::{
-		storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION,
-	},
-	witness::common::{
-		chunked_chain_source::chunked_by_vault::monitored_items::MonitoredSCItems, RuntimeHasChain,
-	},
+use crate::witness::common::{
+	chunked_chain_source::chunked_by_vault::monitored_items::MonitoredSCItems, RuntimeHasChain,
 };
+use engine_sc_client::{storage_api::StorageApi, stream_api::StreamApi, STATE_CHAIN_CONNECTION};
 
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
