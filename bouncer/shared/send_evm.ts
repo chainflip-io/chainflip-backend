@@ -77,7 +77,7 @@ export async function signAndSendTxEvm(
     throw new Error('Receipt not found');
   }
 
-  logger.trace(
+  logger.debug(
     'Transaction complete, tx_hash: ' +
       receipt.transactionHash +
       ' blockNumber: ' +
