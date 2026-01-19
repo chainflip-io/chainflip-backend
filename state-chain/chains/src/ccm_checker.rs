@@ -271,7 +271,7 @@ impl CcmValidityChecker {
 						// unnecessary because USDT for CCM is not useful.
 						SolAsset::SolUsdt =>
 							MAX_USER_CCM_BYTES_USDC -
-								2 * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION +
+								2 * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION -
 									ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION),
 					} {
 					return Err(CcmValidityError::CcmIsTooLong)
