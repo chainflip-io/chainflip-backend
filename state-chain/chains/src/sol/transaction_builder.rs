@@ -338,7 +338,7 @@ impl SolanaTransactionBuilder {
 		sol_api_environment: &SolApiEnvironment,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
 		let to_ata =
-			derive_associated_token_account(to_address, sol_api_environment.usdc_token_mint_pubkey)
+			derive_associated_token_account(to_address, token_mint_pubkey)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
 		let instructions = Self::create_transfer_token_instructions(
