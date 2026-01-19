@@ -180,25 +180,25 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
 export async function testFillOrKill(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
-  await Promise.all([
-    testMinPriceRefund(cf, Assets.Flip, 500),
-    testMinPriceRefund(cf, Assets.Eth, 1),
-    // testMinPriceRefund(testContext.logger, Assets.HubDot, 100), // flaky, so we don't test HubDot
-    testMinPriceRefund(cf, Assets.Btc, 0.1),
-    testMinPriceRefund(cf, Assets.Usdc, 1000),
-    testMinPriceRefund(cf, Assets.Sol, 10),
-    testMinPriceRefund(cf, Assets.SolUsdc, 1000),
-    testMinPriceRefund(cf, Assets.Flip, 500, true),
-    testMinPriceRefund(cf, Assets.Eth, 1, true),
-    testMinPriceRefund(cf, Assets.ArbEth, 5, true),
-    testMinPriceRefund(cf, Assets.Sol, 10, true),
-    testMinPriceRefund(cf, Assets.Sol, 1000, true),
-    testMinPriceRefund(cf, Assets.ArbUsdc, 5, false, true),
-    testMinPriceRefund(cf, Assets.Usdc, 1, false, true),
-    testMinPriceRefund(cf, Assets.SolUsdc, 1, false, true),
-    testMinPriceRefund(cf, Assets.ArbEth, 5, true, true),
-    testMinPriceRefund(cf, Assets.Sol, 10, true, true),
-    testMinPriceRefund(cf, Assets.Usdc, 10, true, true),
-    testOracleSwapsFoK(cf),
+  await cf.all([
+    (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500),
+    (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1),
+    // subcf => testMinPriceRefund(subcf, Assets.HubDot, 100), // flaky, so we don't test HubDot
+    (subcf) => testMinPriceRefund(subcf, Assets.Btc, 0.1),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1000),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10),
+    (subcf) => testMinPriceRefund(subcf, Assets.SolUsdc, 1000),
+    (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbEth, 5, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 1000, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbUsdc, 5, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.SolUsdc, 1, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.ArbEth, 5, true, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 10, true, true),
+    (subcf) => testOracleSwapsFoK(subcf),
   ]);
 }
