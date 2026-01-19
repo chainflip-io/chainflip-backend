@@ -169,6 +169,14 @@ async function incompatibleUpgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
+  // Temporary, while upgrading from 2.0 to 2.1
+  // Because the localnet in 2.1 now uses a new account //BROKER_API,
+  // this account has to be registered + funded before the broker api can start.
+  // But, since we need the broker api to run `setupAccount`, we do this *before* any
+  // of the upgrade procedures, on the old network.
+  await setupAccount(logger, `//BROKER_API`, AccountRole.Broker, '200');
+  // ^ remove this when UPGRADE_FROM is 2.1
+
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
   logger.info('Killing the old engines');
@@ -287,12 +295,6 @@ async function incompatibleUpgradeNoBuild(
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
 
   await sleep(4000);
-
-  // Temporary, while upgrading from 2.0 to 2.1
-  // Because the localnet in 2.1 now uses a new account //BROKER_API,
-  // this account has to be registered + funded before the broker api can start:
-  await setupAccount(logger, `//BROKER_API`, AccountRole.Broker, '200');
-  // ^ remove this when UPGRADE_FROM is 2.1
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
   logger.info('Started new broker and lp-api.');
