@@ -271,6 +271,12 @@ macro_rules! assert_invariants {
 				snapshot,
 				System::block_number()
 			);
+			assert!(
+				CurrentAuthorities::<Test>::get().contains(&managed_validator),
+				"Managed validator {:?} in snapshot but not in current authorities at block {:?}",
+				managed_validator,
+				System::block_number()
+			);
 		}
 		for authority in ValidatorPallet::current_authorities() {
 			// Check if authority is managed by an operator

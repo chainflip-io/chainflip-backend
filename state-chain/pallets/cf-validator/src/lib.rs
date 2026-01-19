@@ -1969,10 +1969,10 @@ impl<T: Config> Pallet<T> {
 
 		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
 			if let Some(snapshot) = snapshots.get_mut(&operator) {
-				let delegator_balance = T::FundingInfo::balance(&delegator);
-				snapshot
-					.delegators
-					.insert(delegator.clone(), core::cmp::min(max_bid, delegator_balance));
+				let bid = core::cmp::min(max_bid, T::FundingInfo::balance(&delegator));
+				if bid > Zero::zero() {
+					snapshot.delegators.insert(delegator.clone(), bid);
+				}
 			}
 		}
 
@@ -2194,6 +2194,10 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 				Error::<T>::StillBidding
 			);
 		}
+		ensure!(
+			!DelegationChoice::<T>::contains_key(validator_id.into_ref()),
+			Error::<T>::StillBidding
+		);
 
 		Ok(())
 	}
