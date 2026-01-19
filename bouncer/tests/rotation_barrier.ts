@@ -47,7 +47,7 @@ export async function testRotationBarrier(testContext: TestContext) {
     })
     .signAndSend(lp, { nonce }, waiter);
 
-  const events = await promise;
+  const events = (await promise).events;
   unsub();
 
   const egressId = events
