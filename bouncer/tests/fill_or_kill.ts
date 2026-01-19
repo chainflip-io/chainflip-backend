@@ -31,7 +31,12 @@ async function testMinPriceRefund<A = []>(
   ccmRefund = false,
   oracleSwap = false,
 ) {
-  const cf = parentCf.withChildLogger(`FoK_${sourceAsset}_${amount}`);
+  const vaultText = swapViaVault ? '_vault' : '';
+  const ccmRefundText = ccmRefund ? '_ccmRefund' : '';
+  const oracleSwapText = oracleSwap ? '_oracleSwap' : '';
+  const cf = parentCf.withChildLogger(
+    `FoK_${sourceAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
+  );
   const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
   const refundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
