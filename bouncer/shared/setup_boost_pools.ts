@@ -4,13 +4,8 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { Logger, throwError } from 'shared/utils/logger';
-import {
-  ChainflipIO,
-  fullAccountFromUri,
-  newChainflipIO,
-  WithLpAccount,
-} from 'shared/utils/chainflip_io';
+import { throwError } from 'shared/utils/logger';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export type BoostPoolId = {
   asset: Asset;
