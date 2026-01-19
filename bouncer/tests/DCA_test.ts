@@ -124,7 +124,7 @@ async function testDCASwap<A = []>(
   assert.strictEqual(
     observeSwapExecutedEvents.length,
     numberOfChunks,
-    'Unexpected number of SwapExecuted events',
+    `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${observeSwapExecutedEvents.length}`,
   );
 
   // Check the chunk interval of all chunks
