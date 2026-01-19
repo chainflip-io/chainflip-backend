@@ -1137,6 +1137,71 @@ fn swaps_get_retried_after_failure() {
 }
 
 #[test]
+fn fee_swap_is_retried_after_failure() {
+	const EXECUTE_AT_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const RETRY_AT_BLOCK: u64 = EXECUTE_AT_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
+
+	new_test_ext()
+		.then_execute_at_block(INIT_BLOCK, |_| {
+			assert_eq!(SwapRetryDelay::<Test>::get(), DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
+
+			Swapping::init_swap_request(
+				Asset::Usdc,
+				1000,
+				Asset::Flip,
+				SwapRequestType::NetworkFee,
+				Default::default(),
+				None,
+				None,
+				SwapOrigin::Internal,
+			);
+
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SwapRequestId(1),
+					..
+				}),
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_id: SwapId(1),
+					execute_at: EXECUTE_AT_BLOCK,
+					..
+				}),
+			);
+
+			// Make sure that the swap initially fails:
+			MockSwappingApi::set_swaps_should_fail(true);
+		})
+		.then_process_blocks_until_block(EXECUTE_AT_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRescheduled {
+					swap_id: SwapId(1),
+					execute_at: RETRY_AT_BLOCK,
+					reason: SwapFailureReason::PriceImpactLimit,
+				})
+			);
+
+			assert_eq!(get_scheduled_swap_block(SwapId(1)), Some(RETRY_AT_BLOCK));
+
+			// Make sure that the swap will now succeed:
+			MockSwappingApi::set_swaps_should_fail(false);
+		})
+		.then_process_blocks_until_block(RETRY_AT_BLOCK)
+		.then_execute_with(|_| {
+			assert_event_sequence!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
+				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
+					swap_request_id: SwapRequestId(1),
+					reason: SwapRequestCompletionReason::Executed
+				}),
+			);
+		});
+}
+
+#[test]
 fn deposit_address_ready_event_contains_correct_parameters() {
 	new_test_ext().execute_with(|| {
 		let dca_parameters = DcaParameters { number_of_chunks: 5, chunk_interval: 2 };

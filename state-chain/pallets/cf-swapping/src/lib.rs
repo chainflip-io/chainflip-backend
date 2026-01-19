@@ -2589,22 +2589,25 @@ pub mod pallet {
 		) {
 			SwapRequests::<T>::mutate(swap.swap_request_id, |request| {
 				if let Some(request) = request {
-					if let SwapRequestState::UserSwap { dca_state, .. } = &mut request.state {
-						ScheduledSwaps::<T>::mutate(|swaps| {
-							// Reschedule the main swap that was taken from the storage.
-							let execute_at = swap.execute_at.saturating_add(retry_delay);
-							let main_swap_id = swap.swap_id;
-							swap.execute_at = execute_at;
-							swaps.insert(main_swap_id, swap);
-							Self::deposit_event(Event::<T>::SwapRescheduled {
-								swap_id: main_swap_id,
-								execute_at,
-								reason,
-							});
+					ScheduledSwaps::<T>::mutate(|swaps| {
+						// Reschedule the main swap that just failed (it was taken from the storage
+						// and needs to be put back):
+						let execute_at = swap.execute_at.saturating_add(retry_delay);
+						let main_swap_id = swap.swap_id;
+						swap.execute_at = execute_at;
+						swaps.insert(main_swap_id, swap);
+						Self::deposit_event(Event::<T>::SwapRescheduled {
+							swap_id: main_swap_id,
+							execute_at,
+							reason,
+						});
+
+						// For multi-chunk/DCA swaps (currently only user swaps can be DCA), also
+						// reschedule any other chunks that may have been scheduled previously (but
+						// haven't been processed yet):
+						if let SwapRequestState::UserSwap { dca_state, .. } = &mut request.state {
 							for swap_id in dca_state.scheduled_chunks.iter().copied() {
 								if swap_id != main_swap_id {
-									// All other scheduled swaps for this request need to also be
-									// rescheduled.
 									if let Some(s) = swaps.get_mut(&swap_id) {
 										s.execute_at.saturating_accrue(retry_delay);
 										Self::deposit_event(Event::<T>::SwapRescheduled {
@@ -2619,8 +2622,8 @@ pub mod pallet {
 									}
 								}
 							}
-						})
-					}
+						}
+					})
 				} else {
 					log_or_panic!(
 						"Swap request {} not found for rescheduling",
