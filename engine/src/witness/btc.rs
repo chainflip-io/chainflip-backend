@@ -55,7 +55,7 @@ use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	witness::btc::deposits::{deposit_witnesses, map_script_addresses},
 };
-use anyhow::{bail, Result};
+use anyhow::Result;
 use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,

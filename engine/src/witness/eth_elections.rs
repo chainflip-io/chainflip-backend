@@ -14,23 +14,30 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::witness::{
-	common::block_height::{witness_headers, HeaderClient},
-	eth::{
-		sc_utils::{
-			CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
-			DepositToVaultAndScCallFilter, ScUtilsEvents,
-		},
-		state_chain_gateway::{
-			FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
-			StateChainGatewayEvents,
-		},
-	},
+use crate::{
+	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
-		contract_common::{events_at_block, query_election_block},
-		erc20_deposits::Erc20Events,
-		key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
-		vault::{handle_vault_events, VaultEventConfig, VaultEvents},
+		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
+		rpc::EvmRpcSigningClient,
+	},
+	witness::{
+		common::block_height::{witness_headers, HeaderClient},
+		eth::{
+			sc_utils::{
+				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,
+				DepositToVaultAndScCallFilter, ScUtilsEvents,
+			},
+			state_chain_gateway::{
+				FundedFilter, RedemptionExecutedFilter, RedemptionExpiredFilter,
+				StateChainGatewayEvents,
+			},
+		},
+		evm::{
+			contract_common::{events_at_block, query_election_block},
+			erc20_deposits::Erc20Events,
+			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
+			vault::{handle_vault_events, VaultEventConfig, VaultEvents},
+		},
 	},
 };
 use cf_chains::{eth::EthereumTrackedData, evm::ToAccountId32, Ethereum, ForeignChain};
@@ -38,6 +45,10 @@ use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset};
 use cf_utilities::{
 	context,
 	task_scope::{self, Scope},
+};
+use engine_sc_client::{
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
 use futures::FutureExt;
 use itertools::Itertools;
@@ -61,18 +72,6 @@ use state_chain_runtime::{
 	EthereumInstance,
 };
 use std::{collections::HashMap, sync::Arc};
-
-use crate::{
-	elections::voter_api::{CompositeVoter, VoterApi},
-	evm::{
-		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-		rpc::EvmRpcSigningClient,
-	},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
-	},
-};
 
 use anyhow::{Context, Result};
 

@@ -33,6 +33,10 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset};
 use cf_utilities::task_scope::{self, Scope};
+use engine_sc_client::{
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
+};
 use ethers::types::{Bloom, Bytes};
 use futures::FutureExt;
 use itertools::Itertools;
@@ -59,10 +63,6 @@ use crate::{
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		rpc::EvmRpcSigningClient,
-	},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 	},
 };
 

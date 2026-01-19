@@ -225,12 +225,6 @@ async function main(): Promise<void> {
         expectedEvent: { name: 'Environment.BitcoinBlockNumberSetForVault' },
       }),
     (subcf) =>
-      subcf.submitGovernance({ //TODO: Not sure this is needed anymore
-        extrinsic: async (api) =>
-          api.tx.environment.witnessInitializeArbitrumVault(await arbClient.eth.getBlockNumber()),
-        expectedEvent: { name: 'Environment.ArbitrumInitialized' },
-      }),
-    (subcf) =>
       subcf.submitGovernance({
         extrinsic: async (api) =>
           api.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),

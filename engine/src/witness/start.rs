@@ -109,7 +109,8 @@ where
 		}
 	};
 
-	let start_arb = super::arb2::start(scope, arb_client.clone(), state_chain_client.clone());
+	let start_arb =
+		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
 
 	let start_sol = super::sol::start(scope, sol_client, state_chain_client.clone());
 

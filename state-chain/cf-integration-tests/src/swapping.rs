@@ -43,8 +43,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET,
-	SWAP_DELAY_BLOCKS,
+	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{

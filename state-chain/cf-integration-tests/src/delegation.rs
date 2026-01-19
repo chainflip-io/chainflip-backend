@@ -26,7 +26,7 @@ use crate::{
 };
 
 use cf_primitives::{AccountRole, AssetAmount, FlipBalance};
-use cf_traits::{AccountInfo, EpochInfo, FundingSource};
+use cf_traits::{AccountInfo, EpochInfo, FundAccount, FundingSource};
 use frame_support::assert_ok;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, PerU16, Permill};

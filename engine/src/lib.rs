@@ -36,9 +36,7 @@ pub mod dot;
 pub mod evm;
 pub mod sol;
 
-use crate::{
-	evm::cached_rpc::EvmCachingClient, state_chain_observer::client::CreateStateChainClientError,
-};
+use crate::evm::cached_rpc::EvmCachingClient;
 use ::multisig::{
 	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };

@@ -23,7 +23,9 @@ use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
 use cf_primitives::{AccountRole, AssetAmount};
-use cf_traits::{AccountRoleRegistry, KeyRotationStatusOuter, SafeMode, SetSafeMode, FundAccount, FundingSource};
+use cf_traits::{
+	AccountRoleRegistry, FundAccount, FundingSource, KeyRotationStatusOuter, SafeMode, SetSafeMode,
+};
 use cf_utilities::assert_matches;
 use frame_benchmarking::v2::*;
 use frame_support::{
@@ -62,13 +64,11 @@ pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>
 }
 
 fn fund_account<T: RuntimeConfig>(account: &T::AccountId, amount: AssetAmount) {
-	assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
-		T::EnsureWitnessed::try_successful_origin().unwrap(),
+	pallet_cf_funding::Pallet::<T>::fund_account(
 		account.clone(),
 		amount.unique_saturated_into(),
-		Default::default(),
-		Default::default()
-	));
+		FundingSource::EthTransaction { tx_hash: Default::default(), funder: Default::default() },
+	);
 }
 
 /// Initialises bidders for the auction by funding each one, registering session keys and peer ids

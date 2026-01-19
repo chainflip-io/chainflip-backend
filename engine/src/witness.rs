@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod arb;
-pub mod arb2;
+pub mod arb_elections;
 pub mod btc;
 pub mod common;
 pub mod dot;
