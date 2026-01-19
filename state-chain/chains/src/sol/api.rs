@@ -310,50 +310,28 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						durable_nonce,
 						compute_price,
 					),
-					SolAsset::SolUsdc => {
-						let ata = derive_associated_token_account(
-							transfer_param.to,
-							sol_api_environment.usdc_token_mint_pubkey,
-						)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						SolanaTransactionBuilder::transfer_token(
-							ata.address,
-							transfer_param.amount,
-							transfer_param.to,
-							sol_api_environment.vault_program,
-							sol_api_environment.vault_program_data_account,
-							sol_api_environment.token_vault_pda_account,
-							sol_api_environment.usdc_token_vault_ata,
-							sol_api_environment.usdc_token_mint_pubkey,
-							agg_key,
-							durable_nonce,
-							compute_price,
-							SOL_USD_DECIMAL,
-							vec![sol_api_environment.address_lookup_table_account.clone()],
-						)
-					},
-					SolAsset::SolUsdt => {
-						let ata = derive_associated_token_account(
-							transfer_param.to,
-							sol_api_environment.usdt_token_mint_pubkey,
-						)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						SolanaTransactionBuilder::transfer_token(
-							ata.address,
-							transfer_param.amount,
-							transfer_param.to,
-							sol_api_environment.vault_program,
-							sol_api_environment.vault_program_data_account,
-							sol_api_environment.token_vault_pda_account,
-							sol_api_environment.usdt_token_vault_ata,
-							sol_api_environment.usdt_token_mint_pubkey,
-							agg_key,
-							durable_nonce,
-							compute_price,
-							SOL_USD_DECIMAL,
-							vec![sol_api_environment.address_lookup_table_account.clone()],
-						)
-					},
+					SolAsset::SolUsdc => SolanaTransactionBuilder::transfer_token(
+						transfer_param.amount,
+						transfer_param.to,
+						agg_key,
+						durable_nonce,
+						compute_price,
+						sol_api_environment.usdc_token_vault_ata,
+						sol_api_environment.usdc_token_mint_pubkey,
+						SOL_USD_DECIMAL,
+						&sol_api_environment,
+					),
+					SolAsset::SolUsdt => SolanaTransactionBuilder::transfer_token(
+						transfer_param.amount,
+						transfer_param.to,
+						agg_key,
+						durable_nonce,
+						compute_price,
+						sol_api_environment.usdt_token_vault_ata,
+						sol_api_environment.usdt_token_mint_pubkey,
+						SOL_USD_DECIMAL,
+						&sol_api_environment,
+					),
 				}?;
 
 				Ok((
@@ -970,52 +948,32 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 				),
 			// Refund user without fetch - the fetching of tokens for Vault swaps is done separately
 			// as part of the environment's pallet `fetch_and_batch_close_vault_swap_accounts`.
-			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdc) => {
-				let ata = derive_associated_token_account(
-					address,
-					sol_api_environment.usdc_token_mint_pubkey,
-				)
-				.map_err(|_| RejectError::Other)?;
+			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdc) =>
 				SolanaTransactionBuilder::transfer_token(
-					ata.address,
 					amount,
 					address,
-					sol_api_environment.vault_program,
-					sol_api_environment.vault_program_data_account,
-					sol_api_environment.token_vault_pda_account,
+					agg_key,
+					durable_nonce,
+					compute_price,
 					sol_api_environment.usdc_token_vault_ata,
 					sol_api_environment.usdc_token_mint_pubkey,
-					agg_key,
-					durable_nonce,
-					compute_price,
 					SOL_USD_DECIMAL,
-					vec![sol_api_environment.address_lookup_table_account.clone()],
-				)
-			},
+					&sol_api_environment,
+				),
 			// Refund user without fetch - the fetching of tokens for Vault swaps is done separately
 			// as part of the environment's pallet `fetch_and_batch_close_vault_swap_accounts`.
-			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdt) => {
-				let ata = derive_associated_token_account(
-					address,
-					sol_api_environment.usdt_token_mint_pubkey,
-				)
-				.map_err(|_| RejectError::Other)?;
+			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdt) =>
 				SolanaTransactionBuilder::transfer_token(
-					ata.address,
 					amount,
 					address,
-					sol_api_environment.vault_program,
-					sol_api_environment.vault_program_data_account,
-					sol_api_environment.token_vault_pda_account,
-					sol_api_environment.usdt_token_vault_ata,
-					sol_api_environment.usdt_token_mint_pubkey,
 					agg_key,
 					durable_nonce,
 					compute_price,
+					sol_api_environment.usdt_token_vault_ata,
+					sol_api_environment.usdt_token_mint_pubkey,
 					SOL_USD_DECIMAL,
-					vec![sol_api_environment.address_lookup_table_account.clone()],
-				)
-			},
+					&sol_api_environment,
+				),
 		}
 		.map_err(|_| RejectError::FailedToBuildRejection)?;
 

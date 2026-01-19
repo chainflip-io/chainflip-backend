@@ -327,27 +327,27 @@ impl SolanaTransactionBuilder {
 
 	/// Create an instruction to `transfer` token.
 	pub fn transfer_token(
-		ata: SolAddress,
 		amount: SolAmount,
-		address: SolAddress,
-		vault_program: SolAddress,
-		vault_program_data_account: SolAddress,
-		token_vault_pda_account: SolAddress,
-		token_vault_ata: SolAddress,
-		token_mint_pubkey: SolAddress,
+		to_address: SolAddress,
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
 		token_decimals: u8,
-		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
+		sol_api_environment: &SolApiEnvironment,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let to_ata =
+			derive_associated_token_account(to_address, sol_api_environment.usdc_token_mint_pubkey)
+				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
 		let instructions = Self::create_transfer_token_instructions(
-			ata,
+			to_ata.address,
 			amount,
-			address,
-			vault_program,
-			vault_program_data_account,
-			token_vault_pda_account,
+			to_address,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			sol_api_environment.token_vault_pda_account,
 			token_vault_ata,
 			token_mint_pubkey,
 			agg_key,
@@ -360,7 +360,7 @@ impl SolanaTransactionBuilder {
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN),
-			address_lookup_tables,
+			vec![sol_api_environment.address_lookup_table_account.clone()],
 		)
 	}
 
@@ -927,32 +927,22 @@ pub mod test {
 	fn can_create_transfer_usdc_token_transaction() {
 		let env = api_env();
 		let to_pubkey = TRANSFER_TO_ACCOUNT;
-		let to_pubkey_ata =
-			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-				to_pubkey,
-				env.usdc_token_mint_pubkey,
-			)
-			.unwrap();
 
 		let transaction = SolanaTransactionBuilder::transfer_token(
-			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
-			env.vault_program,
-			env.vault_program_data_account,
-			env.token_vault_pda_account,
-			env.usdc_token_vault_ata,
-			env.usdc_token_mint_pubkey,
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
+			env.usdt_token_vault_ata,
+			env.usdt_token_mint_pubkey,
 			SOL_USD_DECIMAL,
-			vec![chainflip_alt()],
+			&env,
 		)
 		.unwrap();
 
 		// Serialized tx built in `create_transfer_token` test
-		let expected_serialized_tx = hex_literal::hex!("01abc6484a0ab9ccaddff295edfae87effabae1313748b63c517fb9b5143ef88d703f6c02deecb0461eeabec0514bbca5061f950d50a2a564555e0dd3e31eb7b068001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec461600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000031e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000503030109000404000000040009038096980000000000040005029b27010007060002050b030a010106070c000d08020b0a1136b4eeaf4a557ebc00ca9a3b0000000006013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10105050d09030204").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01d5a5ea70ca3f9ac062af6de5e8981e9c7d395dfbc3fa7be8482a8385f9bb57113ea664eda967ef80e409a45fffa742ef9ae551c01ec9ac5c08192ca1927c5f0c8001000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616dad0fa06b8d244bffdd03c040a2c6cc35b4cb77eada8522113f82adcae8b29b600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a931e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd46b198d3efdbc9673d29f3a2bcb3e70e699164df8cad366563693aa7ba0e7d28a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000504030106000404000000050009038096980000000000050005029b2701000b0600020809040701010a070c000d030209071136b4eeaf4a557ebc00ca9a3b000000000600").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -961,32 +951,22 @@ pub mod test {
 	fn can_create_transfer_usdt_token_transaction() {
 		let env = api_env();
 		let to_pubkey = TRANSFER_TO_ACCOUNT;
-		let to_pubkey_ata =
-			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-				to_pubkey,
-				env.usdt_token_mint_pubkey,
-			)
-			.unwrap();
 
 		let transaction = SolanaTransactionBuilder::transfer_token(
-			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
-			env.vault_program,
-			env.vault_program_data_account,
-			env.token_vault_pda_account,
-			env.usdt_token_vault_ata,
-			env.usdt_token_mint_pubkey,
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
+			env.usdt_token_vault_ata,
+			env.usdt_token_mint_pubkey,
 			SOL_USD_DECIMAL,
-			vec![chainflip_alt()],
+			&env,
 		)
 		.unwrap();
 
 		// Serialized tx built in `create_transfer_token` test
-		let expected_serialized_tx = hex_literal::hex!("01b1fa23f718f59873a4741d2492d7c600b427e6075a1c61cf717516471b93618424450be12f846c18cc34bb10dca683028e966e2b620e2bcc7c423ce50e244903800100060af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192d773abc32ab6cfab6e0ee9c42f85eb56090ec1e10d8b0d9eb89a4ae6b3720694dad0fa06b8d244bffdd03c040a2c6cc35b4cb77eada8522113f82adcae8b29b600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000031e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd46b198d3efdbc9673d29f3a2bcb3e70e699164df8cad366563693aa7ba0e7d28a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900050403010a000404000000050009038096980000000000050005029b270100090600020607040b010108070c000d0302070b1136b4eeaf4a557ebc00ca9a3b0000000006013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a100040d090204").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01d5a5ea70ca3f9ac062af6de5e8981e9c7d395dfbc3fa7be8482a8385f9bb57113ea664eda967ef80e409a45fffa742ef9ae551c01ec9ac5c08192ca1927c5f0c8001000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec4616dad0fa06b8d244bffdd03c040a2c6cc35b4cb77eada8522113f82adcae8b29b600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a931e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd46b198d3efdbc9673d29f3a2bcb3e70e699164df8cad366563693aa7ba0e7d28a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000504030106000404000000050009038096980000000000050005029b2701000b0600020809040701010a070c000d030209071136b4eeaf4a557ebc00ca9a3b000000000600").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}

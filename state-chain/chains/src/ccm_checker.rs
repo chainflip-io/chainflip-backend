@@ -246,7 +246,7 @@ impl CcmValidityChecker {
 					ccm_accounts.cf_receiver.pubkey.into(),
 				]);
 
-				if asset == SolAsset::SolUsdc || asset == SolAsset::SolUsdt  {
+				if asset == SolAsset::SolUsdc || asset == SolAsset::SolUsdt {
 					seen_addresses.insert(TOKEN_PROGRAM_ID);
 				}
 				let mut accounts_length = ccm_accounts.additional_accounts.len() *
@@ -499,6 +499,10 @@ mod test {
 		);
 		assert_ok!(
 			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbUsdc, DEST_ADDR),
+			DecodedCcmAdditionalData::NotRequired
+		);
+		assert_ok!(
+			CcmValidityChecker::check_and_decode(&ccm, Asset::ArbUsdt, DEST_ADDR),
 			DecodedCcmAdditionalData::NotRequired
 		);
 		assert_ok!(
