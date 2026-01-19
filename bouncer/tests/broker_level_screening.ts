@@ -34,7 +34,7 @@ import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { testSol, testSolVaultSwap } from './broker_level_screening/sol';
+import { testSol, testSolVaultSwap } from 'tests/broker_level_screening/sol';
 
 const brokerUri = '//BROKER_1';
 

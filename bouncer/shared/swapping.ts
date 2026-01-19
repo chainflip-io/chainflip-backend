@@ -14,7 +14,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { estimateCcmCfTesterGas } from 'shared/send_evm';
 import { Logger } from 'shared/utils/logger';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 let swapCount = 1;
 

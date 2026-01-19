@@ -56,8 +56,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
-import { ChainflipIO } from './utils/chainflip_io';
-import { Err, Ok, Result } from './utils/result';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { Err, Ok, Result } from 'shared/utils/result';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();

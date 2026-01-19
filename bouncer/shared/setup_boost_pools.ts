@@ -10,7 +10,7 @@ import {
   fullAccountFromUri,
   newChainflipIO,
   WithLpAccount,
-} from './utils/chainflip_io';
+} from 'shared/utils/chainflip_io';
 
 export type BoostPoolId = {
   asset: Asset;
