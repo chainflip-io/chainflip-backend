@@ -16,9 +16,11 @@ cd ..
 # Check whether a specific subdirectory is dirty
 EVENTS_DIR="bouncer/generated/events"
 
-if ! git diff --quiet -- "$EVENTS_DIR"; then
-  echo "ERROR: Event schemas in '$EVENTS_DIR' are not up to date! Please run `./commands/generate_event_schemas.ts` to regenerate schemas and commit them."
+if [[ -n "$(git status --porcelain -- "$EVENTS_DIR")" ]]; then
+  echo "ERROR: Event schemas in '$EVENTS_DIR' are not up to date! Please run ./commands/generate_event_schemas.ts to regenerate schemas and commit them."
+  echo ""
   echo "The following schema changes have not been comitted:"
+  echo ""
   git status -- "$EVENTS_DIR"
   exit 1
 fi
