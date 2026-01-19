@@ -142,12 +142,12 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { fullResult, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
       const unsub = await ext.signAndSend(this.requirements.account.keypair, { nonce }, waiter);
-      const result = extractExtrinsicResult(chainflipApi, await fullResult);
+      const result = extractExtrinsicResult(chainflipApi, await promise);
       unsub();
 
       if (!result.ok) {
