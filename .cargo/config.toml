@@ -5,6 +5,8 @@ CF_SOL_PROGRAM_IDL_ROOT = { value = "contract-interfaces/sol-program-idls", rela
 CF_SOL_PROGRAM_IDL_TAG = "v1.3.0"
 CF_ARB_CONTRACT_ABI_ROOT = { value = "contract-interfaces/arb-contract-abis", relative = true }
 CF_TEST_CONFIG_ROOT = { value = "engine/config/testing", relative = true }
+# Required by some compilers to allow zeromq to use old cmake version.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
 # `rustup completions --help` to find out how to set this up.
