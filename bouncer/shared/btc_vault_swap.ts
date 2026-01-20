@@ -115,6 +115,7 @@ export async function buildAndSendBtcVaultSwap(
 
   logger.trace('Sending BTC vault swap transaction');
   const txid = await sendVaultTransaction(
+    logger,
     BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
@@ -166,6 +167,7 @@ export async function buildAndSendInvalidBtcVaultSwap(
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
   const txid = await sendVaultTransaction(
+    logger,
     // wrong encoded payload
     '0x6a3a0101701b90c687681727ada344f4e440f1a82ae548f66400602b04924ddf21970000000000000000ff010002001e02003d7c6c69666949c04689',
     depositAmountBtc,
