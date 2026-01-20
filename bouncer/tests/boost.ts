@@ -25,6 +25,7 @@ import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stopp
 import { ChainflipIO, newChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 export async function stopBoosting(
@@ -225,6 +226,25 @@ export async function testBoostingSwap(testContext: TestContext) {
     cf.trace(`Boost pool already exists for tier ${boostPoolTier}`);
   }
 
-  // Pre-witnessing is only enabled for btc at the moment. Add the other assets here when it's enabled for them.
+  // Set the config. Only the network fee deduction really matters, as it will effect the expected earnings.
+  // Setting them to the same as the default values, Just in case they are different (eg. upgrade test).
+  cf.info(`Setting boost pool config via governance`);
+  const minimums: [Asset, string][] = [[Assets.Btc, '11000']];
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.lendingPools.updatePalletConfig([
+      {
+        SetBoostConfig: {
+          config: {
+            networkFeeDeductionFromBoostPercent: 50,
+            minimumAddFundsAmount: new Map(
+              minimums.map(([asset, amount]) => [{ [asset]: {} }, amount]),
+            ),
+          },
+        },
+      },
+    ]),
+  );
+
+  // Pre-witnessing is only enabled for btc.
   await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1, testContext);
 }
