@@ -182,18 +182,7 @@ async fn run_main(
 				.context("Failed to open database")?,
 			);
 
-			let (
-				eth_outgoing_sender,
-				eth_incoming_receiver,
-				dot_outgoing_sender,
-				dot_incoming_receiver,
-				btc_outgoing_sender,
-				btc_incoming_receiver,
-				sol_outgoing_sender,
-				sol_incoming_receiver,
-				p2p_ready_receiver,
-				p2p_fut,
-			) = p2p::start(
+			let (multisig_channels, p2p_ready_receiver, p2p_fut) = p2p::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				settings.node_p2p.clone(),
@@ -212,6 +201,7 @@ async fn run_main(
 			)
 			.await?;
 
+			let (eth_outgoing_sender, eth_incoming_receiver) = multisig_channels.eth;
 			let (eth_multisig_client, eth_multisig_client_backend_future) =
 				multisig::start_client::<EthSigning>(
 					state_chain_client.account_id(),
@@ -223,6 +213,7 @@ async fn run_main(
 
 			scope.spawn(eth_multisig_client_backend_future);
 
+			let (dot_outgoing_sender, dot_incoming_receiver) = multisig_channels.dot;
 			let (dot_multisig_client, dot_multisig_client_backend_future) =
 				multisig::start_client::<PolkadotSigning>(
 					state_chain_client.account_id(),
@@ -234,6 +225,7 @@ async fn run_main(
 
 			scope.spawn(dot_multisig_client_backend_future);
 
+			let (btc_outgoing_sender, btc_incoming_receiver) = multisig_channels.btc;
 			let (btc_multisig_client, btc_multisig_client_backend_future) =
 				multisig::start_client::<BtcSigning>(
 					state_chain_client.account_id(),
@@ -245,6 +237,7 @@ async fn run_main(
 
 			scope.spawn(btc_multisig_client_backend_future);
 
+			let (sol_outgoing_sender, sol_incoming_receiver) = multisig_channels.sol;
 			let (sol_multisig_client, sol_multisig_client_backend_future) =
 				multisig::start_client::<SolSigning>(
 					state_chain_client.account_id(),
