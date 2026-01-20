@@ -807,7 +807,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 180,
+  timeoutSeconds = 120,
 ): Promise<number> {
   logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance

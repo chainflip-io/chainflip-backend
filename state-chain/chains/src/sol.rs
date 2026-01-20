@@ -86,7 +86,6 @@ pub const MAX_SOL_FETCHES_PER_TX: usize = 5;
 // All function parameters are already accounted except additional_accounts and message.
 pub const MAX_USER_CCM_BYTES_SOL: usize = MAX_TRANSACTION_LENGTH - 449usize; // 783 bytes left
 pub const MAX_USER_CCM_BYTES_USDC: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
-pub const MAX_USER_CCM_BYTES_USDT: usize = MAX_TRANSACTION_LENGTH - 538usize; // 694 bytes left
 
 /// Maximum number of Accounts Lookup Tables user can pass in as part of CCM call.
 pub const MAX_CCM_USER_ALTS: u8 = 3u8;
