@@ -5,7 +5,6 @@ import {
   createEvmWallet,
   decodeSolAddress,
   externalChainToScAccount,
-  handleSubstrateError,
   newAssetAddress,
   shortChainFromAsset,
   sleep,
@@ -19,7 +18,7 @@ import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { Enum, Bytes as TsBytes } from 'scale-ts';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { environmentNonNativeSignedCall } from 'generated/events/environment/nonNativeSignedCall';
 import { accountRolesAccountRoleRegistered } from 'generated/events/accountRoles/accountRoleRegistered';
 import { environmentBatchCompleted } from 'generated/events/environment/batchCompleted';
@@ -372,22 +371,26 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
     .send();
 }
 
-async function testSpecialLpDeposit<A = []>(cf: ChainflipIO<A>, asset: Asset) {
+async function testSpecialLpDeposit<A = []>(parentcf: ChainflipIO<A>, asset: Asset) {
   await using chainflip = await getChainflipApi();
 
   const initialFlipToBeSentToGateway = (
     await chainflip.query.swapping.flipToBeSentToGateway()
   ).toJSON() as number;
 
-  cf.info('Setting up a broker account');
-  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
-  const broker = await setupAccount(cf.logger, brokerUri, AccountRole.Broker);
+  parentcf.info('Setting up a broker account');
+  const brokerUri = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}` as `//${string}`;
+  const broker = await setupAccount(parentcf.logger, brokerUri, AccountRole.Broker);
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
-  cf.info('evmScAccount for special LP deposit channel:', evmScAccount);
+  parentcf.info('evmScAccount for special LP deposit channel:', evmScAccount);
   const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
   const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
+
+  const cf = parentcf.with({
+    account: fullAccountFromUri(brokerUri, 'Broker'),
+  });
 
   let addressBytes;
 
@@ -418,38 +421,37 @@ async function testSpecialLpDeposit<A = []>(cf: ChainflipIO<A>, asset: Asset) {
 
   const evmSignatureEip712 = await evmWallet.signTypedData(domain, types, message);
 
-  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-  await chainflip.tx.swapping
-    .requestAccountCreationDepositAddress(
-      {
-        Ethereum: {
-          signature: evmSignatureEip712,
-          signer: evmWallet.address,
-          sigType: 'Eip712',
+  const eventResult = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.swapping.requestAccountCreationDepositAddress(
+        {
+          Ethereum: {
+            signature: evmSignatureEip712,
+            signer: evmWallet.address,
+            sigType: 'Eip712',
+          },
         },
-      },
-      {
-        nonce: transactionMetadata.nonce,
-        expiryBlock: transactionMetadata.expiry_block,
-      },
-      asset,
-      0,
-      { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
-    )
-    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+        {
+          nonce: transactionMetadata.nonce,
+          expiryBlock: transactionMetadata.expiry_block,
+        },
+        asset,
+        0,
+        { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
+      ),
+    expectedEvent: {
+      name: 'Swapping.AccountCreationDepositAddressReady',
+      schema: swappingAccountCreationDepositAddressReady.refine(
+        (event) =>
+          event.requestedBy === broker.address &&
+          event.requestedFor === evmScAccount &&
+          event.depositAddress.chain === chainFromAsset(asset),
+      ),
+    },
+  });
+  const depositAddress = eventResult.depositAddress.address;
 
   cf.info('Opening special deposit channel and depositing..');
-
-  const eventResult = await cf.stepUntilEvent(
-    'Swapping.AccountCreationDepositAddressReady',
-    swappingAccountCreationDepositAddressReady.refine(
-      (event) =>
-        event.requestedBy === broker.address &&
-        event.requestedFor === evmScAccount &&
-        event.depositAddress.chain === chainFromAsset(asset),
-    ),
-  );
-  const depositAddress = eventResult.depositAddress.address;
 
   await send(cf.logger, asset, depositAddress);
 
