@@ -24,8 +24,9 @@ use std::{
 	sync::{Arc, RwLock},
 };
 
-use cf_primitives::AccountId;
 use tracing::{info, info_span, trace, warn};
+
+use crate::message::AccountId;
 
 use super::{socket::DO_NOT_LINGER, PeerInfo};
 

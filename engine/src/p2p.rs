@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod multisig_adapter;
 mod peer_info_submitter;
 
 use std::{
@@ -30,14 +31,10 @@ use engine_sc_client::{
 	stream_api::{StreamApi, FINALIZED},
 };
 
-use engine_p2p::{
-	core::{PeerInfo, PeerUpdate},
-	MultisigMessageReceiver, MultisigMessageSender,
-};
+use engine_p2p::core::{PeerInfo, PeerUpdate};
+pub use multisig_adapter::{MultisigChannels, MultisigMessageReceiver, MultisigMessageSender};
 
 use anyhow::Context;
-use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
-use engine_p2p::muxer::P2PMuxer;
 use futures::{Future, FutureExt, StreamExt};
 use sp_core::H256;
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
@@ -52,14 +49,7 @@ pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	settings: P2PSettings,
 	initial_block_hash: H256,
 ) -> anyhow::Result<(
-	MultisigMessageSender<EvmCrypto>,
-	MultisigMessageReceiver<EvmCrypto>,
-	MultisigMessageSender<PolkadotCrypto>,
-	MultisigMessageReceiver<PolkadotCrypto>,
-	MultisigMessageSender<BitcoinCrypto>,
-	MultisigMessageReceiver<BitcoinCrypto>,
-	MultisigMessageSender<SolanaCrypto>,
-	MultisigMessageReceiver<SolanaCrypto>,
+	MultisigChannels,
 	oneshot::Receiver<()>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
@@ -101,17 +91,9 @@ where
 
 	let (p2p_ready_sender, p2p_ready_receiver) = oneshot::channel();
 
-	let (
-		eth_outgoing_sender,
-		eth_incoming_receiver,
-		dot_outgoing_sender,
-		dot_incoming_receiver,
-		btc_outgoing_sender,
-		btc_incoming_receiver,
-		sol_outgoing_sender,
-		sol_incoming_receiver,
-		muxer_future,
-	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
+	// Create multisig channels with topic muxer
+	let (multisig_channels, muxer_future) =
+		MultisigChannels::new(incoming_message_receiver, outgoing_message_sender);
 
 	let fut = task_scope(move |scope| {
 		async move {
@@ -165,18 +147,7 @@ where
 		.boxed()
 	});
 
-	Ok((
-		eth_outgoing_sender,
-		eth_incoming_receiver,
-		dot_outgoing_sender,
-		dot_incoming_receiver,
-		btc_outgoing_sender,
-		btc_incoming_receiver,
-		sol_outgoing_sender,
-		sol_incoming_receiver,
-		p2p_ready_receiver,
-		fut,
-	))
+	Ok((multisig_channels, p2p_ready_receiver, fut))
 }
 
 /// Monitors the State Chain for peer registration events and sends them to the P2P client.
