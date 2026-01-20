@@ -303,6 +303,10 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 456u32),
 				(ForeignChain::Assethub, 2u32),
 			]),
+			boost_minimum_add_funds_amounts: any::AssetMap {
+				btc: btc::AssetMap { btc: 10000u128.into() },
+				..Default::default()
+			},
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),

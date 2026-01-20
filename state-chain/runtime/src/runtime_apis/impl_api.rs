@@ -68,7 +68,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 use pallet_cf_funding::MinimumFunding;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
 	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
@@ -1289,6 +1289,10 @@ impl_runtime_apis! {
 				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
 			}
+		}
+
+		fn cf_boost_config() -> BoostConfiguration {
+			pallet_cf_lending_pools::BoostConfig::<Runtime>::get()
 		}
 
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {

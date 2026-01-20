@@ -242,6 +242,9 @@ build-localnet() {
     KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
   fi
 
+  echo "📐 Updating event schemas ..."
+  cd bouncer && ./commands/generate_event_schemas.ts && cd ..
+
   print_success
 }
 

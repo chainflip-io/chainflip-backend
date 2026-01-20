@@ -40,6 +40,10 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_22_check_blocktime.yml
     secrets: inherit
+  check-event-schemas:
+    needs: [build]
+    uses: ./.github/workflows/_23_check_event_schemas.yml
+    secrets: inherit
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
