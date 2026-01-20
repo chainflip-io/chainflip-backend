@@ -33,7 +33,6 @@ use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering;
 
 use auth::Authenticator;
-use cf_primitives::AccountId;
 use cf_utilities::{
 	make_periodic_tick,
 	metrics::{
@@ -49,7 +48,10 @@ use x25519_dalek::StaticSecret;
 use crate::pk_to_string;
 use monitor::MonitorEvent;
 
-use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
+use crate::{
+	message::{AccountId, OutgoingMessage},
+	EdPublicKey, P2PKey, XPublicKey,
+};
 
 use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
@@ -293,7 +295,7 @@ pub async fn start(
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
-	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 ) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
@@ -350,7 +352,7 @@ fn disconnect_socket(_socket: ConnectedOutgoingSocket) {
 impl P2PContext {
 	async fn control_loop(
 		mut self,
-		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 		mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
@@ -384,15 +386,15 @@ impl P2PContext {
 		}
 	}
 
-	fn send_messages(&mut self, messages: OutgoingMultisigStageMessages) {
+	fn send_messages(&mut self, messages: OutgoingMessage) {
 		match messages {
-			OutgoingMultisigStageMessages::Broadcast(account_ids, payload) => {
-				trace!("Broadcasting a message to all {} peers", account_ids.len());
-				for acc_id in account_ids {
+			OutgoingMessage::Broadcast { recipients, payload } => {
+				trace!("Broadcasting a message to all {} peers", recipients.len());
+				for acc_id in recipients {
 					self.send_message(acc_id, payload.clone());
 				}
 			},
-			OutgoingMultisigStageMessages::Private(messages) => {
+			OutgoingMessage::Private { messages } => {
 				trace!("Sending private messages to all {} peers", messages.len());
 				for (acc_id, payload) in messages {
 					self.send_message(acc_id, payload);
@@ -651,44 +653,46 @@ impl P2PContext {
 
 		// This OS thread is for incoming messages
 		// TODO: combine this with the authentication thread?
-		std::thread::spawn(move || loop {
-			if stop_thread.load(Ordering::Relaxed) {
-				break
-			}
+		std::thread::spawn(move || {
+			loop {
+				if stop_thread.load(Ordering::Relaxed) {
+					break
+				}
 
-			let mut parts = match receive_multipart(&socket) {
-				Ok(parts) => parts,
-				Err(zmq::Error::EAGAIN) => {
-					std::thread::sleep(Duration::from_millis(100));
-					continue
-				},
-				Err(e) => panic!("Failed to receive multipart: {e}"),
-			};
+				let mut parts = match receive_multipart(&socket) {
+					Ok(parts) => parts,
+					Err(zmq::Error::EAGAIN) => {
+						std::thread::sleep(Duration::from_millis(100));
+						continue
+					},
+					Err(e) => panic!("Failed to receive multipart: {e}"),
+				};
 
-			P2P_MSG_RECEIVED.inc();
-			// We require that all messages exchanged between
-			// peers only consist of one part. ZMQ dealer
-			// sockets automatically prepend a sender id
-			// (which we ignore) to every message, giving
-			// us a 2 part message.
-			if parts.len() == 2 {
-				let msg = &mut parts[1];
+				P2P_MSG_RECEIVED.inc();
+				// We require that all messages exchanged between
+				// peers only consist of one part. ZMQ dealer
+				// sockets automatically prepend a sender id
+				// (which we ignore) to every message, giving
+				// us a 2 part message.
+				if parts.len() == 2 {
+					let msg = &mut parts[1];
 
-				// This value is ZMQ convention for the public
-				// key of message's origin
-				const PUBLIC_KEY_TAG: &str = "User-Id";
-				let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
+					// This value is ZMQ convention for the public
+					// key of message's origin
+					const PUBLIC_KEY_TAG: &str = "User-Id";
+					let pubkey = msg.gets(PUBLIC_KEY_TAG).expect("pubkey is always present");
 
-				let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
-				let pubkey = XPublicKey::from(pubkey);
+					let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
+					let pubkey = XPublicKey::from(pubkey);
 
-				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
-			} else {
-				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
-				warn!(
-					"Ignoring a multipart message with unexpected number of parts ({})",
-					parts.len()
-				)
+					incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
+				} else {
+					P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
+					warn!(
+						"Ignoring a multipart message with unexpected number of parts ({})",
+						parts.len()
+					)
+				}
 			}
 		});
 

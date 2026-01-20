@@ -20,9 +20,10 @@ use cf_primitives::CeremonyId;
 use multisig::{ChainSigning, MultisigClient};
 use tracing::{info, info_span, Instrument};
 
-use crate::db::KeyStore;
-
-use engine_p2p::{MultisigMessageReceiver, MultisigMessageSender};
+use crate::{
+	db::KeyStore,
+	p2p::{MultisigMessageReceiver, MultisigMessageSender},
+};
 
 use state_chain_runtime::AccountId;
 
@@ -47,12 +48,12 @@ pub fn start_client<C: ChainSigning>(
 
 		let ceremony_manager = CeremonyManager::<C>::new(
 			my_account_id,
-			outgoing_p2p_message_sender.0,
+			outgoing_p2p_message_sender.inner(),
 			latest_ceremony_id,
 		);
 
 		ceremony_manager
-			.run(ceremony_request_receiver, incoming_p2p_message_receiver.0)
+			.run(ceremony_request_receiver, incoming_p2p_message_receiver.into_inner())
 			.instrument(info_span!("MultisigClient", chain = C::NAME))
 	};
 

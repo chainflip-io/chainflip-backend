@@ -17,9 +17,9 @@
 use super::{PeerInfo, PeerUpdate};
 use crate::{
 	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
-	OutgoingMultisigStageMessages, P2PKey,
+	message::AccountId,
+	OutgoingMessage, P2PKey,
 };
-use cf_primitives::AccountId;
 use cf_utilities::{
 	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
 	Port,
@@ -44,7 +44,7 @@ const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(1000);
 
 struct Node {
 	account_id: AccountId,
-	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
+	msg_sender: UnboundedSender<OutgoingMessage>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 }
@@ -142,10 +142,9 @@ async fn connect_two_nodes() {
 	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 	node1
 		.msg_sender
-		.send(OutgoingMultisigStageMessages::Private(vec![(
-			pi2.account_id.clone(),
-			b"test".to_vec(),
-		)]))
+		.send(OutgoingMessage::Private {
+			messages: vec![(pi2.account_id.clone(), b"test".to_vec())],
+		})
 		.unwrap();
 
 	let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
@@ -153,10 +152,9 @@ async fn connect_two_nodes() {
 
 async fn send_and_receive_message(from: &Node, to: &mut Node) -> Option<(AccountId, Vec<u8>)> {
 	from.msg_sender
-		.send(OutgoingMultisigStageMessages::Private(vec![(
-			to.account_id.clone(),
-			b"test".to_vec(),
-		)]))
+		.send(OutgoingMessage::Private {
+			messages: vec![(to.account_id.clone(), b"test".to_vec())],
+		})
 		.unwrap();
 
 	recv_with_custom_timeout(&mut to.msg_receiver, MAX_CONNECTION_DELAY).await
