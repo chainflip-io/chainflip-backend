@@ -56,7 +56,8 @@ fn boost_pools_for_asset_iter<T: Config>(
 pub fn get_boost_pool_details<T: Config>(
 	asset: Asset,
 ) -> BTreeMap<BoostPoolTier, BoostPoolDetails<T::AccountId>> {
-	let network_fee_deduction_percent = NetworkFeeDeductionFromBoostPercent::<T>::get();
+	let network_fee_deduction_percent =
+		BoostConfig::<T>::get().network_fee_deduction_from_boost_percent;
 
 	boost_pools_for_asset_iter::<T>(asset)
 		.map(|(tier, core_pool)| {
@@ -142,7 +143,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 
 		let mut used_pools = BTreeMap::new();
 
-		let network_fee_portion = NetworkFeeDeductionFromBoostPercent::<T>::get();
+		let network_fee_portion = BoostConfig::<T>::get().network_fee_deduction_from_boost_percent;
 
 		let sorted_boost_pools = BoostPools::<T>::iter_prefix(asset)
 			.map(|(tier, pool)| (tier, pool.core_pool_id))

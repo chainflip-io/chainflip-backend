@@ -15,7 +15,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
 use crate::Pallet;
 
-pub type PalletMigration<T> = (PlaceholderMigration<1, Pallet<T>>,);
+mod boost_config_migration;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		1,
+		2,
+		boost_config_migration::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<2, Pallet<T>>,
+);
