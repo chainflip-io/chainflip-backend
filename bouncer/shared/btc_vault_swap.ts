@@ -58,7 +58,7 @@ async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise
   const unsub = await chainflip.tx.swapping
     .openPrivateBtcChannel()
     .signAndSend(broker, { nonce }, waiter);
-  const events = await promise;
+  const events = (await promise).events;
   unsub();
   release();
 
@@ -192,7 +192,7 @@ export async function registerAffiliate(
     .registerAffiliate(withdrawalAddress)
     .signAndSend(broker, { nonce }, waiter);
 
-  const events = await promise;
+  const events = (await promise).events;
   unsub();
 
   return events
