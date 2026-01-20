@@ -382,14 +382,6 @@ pub mod sol_test_values {
 			.unwrap()
 			.address;
 
-		let usdt_token_vault_ata =
-			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-				TOKEN_VAULT_PDA_ACCOUNT,
-				USDT_TOKEN_MINT_PUB_KEY,
-			)
-			.unwrap()
-			.address;
-
 		SolAddressLookupTableAccount {
 			key: const_address("4EQ4ZTskvNwkBaQjBJW5grcmV5Js82sUooNLHNTpdHdi").into(),
 			addresses: vec![
@@ -409,7 +401,6 @@ pub mod sol_test_values {
 					sol_prim::consts::SYSTEM_PROGRAM_ID,
 					sol_prim::consts::SYS_VAR_RECENT_BLOCKHASHES,
 					usdc_token_vault_ata,
-					usdt_token_vault_ata,
 				],
 				NONCE_ACCOUNTS.to_vec(),
 			]
