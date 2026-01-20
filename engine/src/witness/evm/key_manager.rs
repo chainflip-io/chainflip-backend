@@ -33,7 +33,7 @@ use super::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block2,
+	contract_common::events_at_block_deprecated,
 };
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
@@ -112,22 +112,18 @@ where
 	Runtime: pallet_cf_vaults::Config<Config::Instance, Chain = Config::Chain>
 		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
 {
-	let mut result = Vec::new();
-
-	for event in events {
-		if let Some(mapped) = handle_key_manager_event::<Config>(
+	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
+		handle_key_manager_event::<Config>(
 			config,
 			event.event_parameters,
 			event.tx_hash,
 			block_height,
 		)
-		.await?
-		{
-			result.push(mapped);
-		}
-	}
-
-	Ok(result)
+	}))
+	.await?
+	.into_iter()
+	.flatten()
+	.collect())
 }
 
 async fn handle_key_manager_event<Config>(
@@ -232,7 +228,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let eth_rpc = eth_rpc.clone();
 			let mut process_calls = vec![];
 			async move {
-				for event in events_at_block2::<Inner::Chain, KeyManagerEvents, _>(
+				for event in events_at_block_deprecated::<Inner::Chain, KeyManagerEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,

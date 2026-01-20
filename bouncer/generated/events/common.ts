@@ -144,6 +144,7 @@ export const palletCfLendingPoolsPalletSafeMode = z.object({
   withdrawLenderFunds: cfTraitsSafeModeSafeModeSet,
   addCollateral: cfTraitsSafeModeSafeModeSet,
   removeCollateral: cfTraitsSafeModeSafeModeSet,
+  liquidationsEnabled: z.boolean(),
 });
 
 export const palletCfReputationPalletSafeMode = z.object({ reportingEnabled: z.boolean() });
@@ -205,6 +206,16 @@ export const stateChainRuntimeChainflipGenericElectionsGenericElectionsSafeMode 
   oraclePriceElections: z.boolean(),
 });
 
+export const stateChainRuntimeChainflipEthereumElectionsEthereumElectionsSafeMode = z.object({
+  stateChainGatewayWitnessing: z.boolean(),
+  keyManagerWitnessing: z.boolean(),
+  scUtilsWitnessing: z.boolean(),
+});
+
+export const stateChainRuntimeChainflipArbitrumElectionsArbitrumElectionsSafeMode = z.object({
+  keyManagerWitnessing: z.boolean(),
+});
+
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
@@ -234,6 +245,8 @@ export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   ingressEgressSolana: palletCfIngressEgressPalletSafeMode,
   ingressEgressAssethub: palletCfIngressEgressPalletSafeMode,
   electionsGeneric: stateChainRuntimeChainflipGenericElectionsGenericElectionsSafeMode,
+  ethereumElections: stateChainRuntimeChainflipEthereumElectionsEthereumElectionsSafeMode,
+  arbitrumElections: stateChainRuntimeChainflipArbitrumElectionsArbitrumElectionsSafeMode,
 });
 
 export const palletCfEnvironmentSafeModeUpdate = z.discriminatedUnion('__kind', [
@@ -453,6 +466,11 @@ export const palletCfValidatorDelegationChange = z.discriminatedUnion('__kind', 
   z.object({ __kind: z.literal('Increase'), value: numberOrHex }),
   z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
 ]);
+
+export const palletCfGovernanceGovernanceCouncil = z.object({
+  members: z.array(accountId),
+  threshold: z.number(),
+});
 
 export const palletCfTokenholderGovernanceProposal = z.discriminatedUnion('__kind', [
   z.object({
@@ -1745,20 +1763,20 @@ export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('_
   }),
 ]);
 
-export const palletCfLendingPoolsGeneralLendingInterestRateConfiguration = z.object({
+export const palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration = z.object({
   interestAtZeroUtilisation: z.number(),
   junctionUtilisation: z.number(),
   interestAtJunctionUtilisation: z.number(),
   interestAtMaxUtilisation: z.number(),
 });
 
-export const palletCfLendingPoolsGeneralLendingLendingPoolConfiguration = z.object({
+export const palletCfLendingPoolsGeneralLendingConfigLendingPoolConfiguration = z.object({
   originationFee: z.number(),
   liquidationFee: z.number(),
-  interestRateCurve: palletCfLendingPoolsGeneralLendingInterestRateConfiguration,
+  interestRateCurve: palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration,
 });
 
-export const palletCfLendingPoolsGeneralLendingLtvThresholds = z.object({
+export const palletCfLendingPoolsGeneralLendingConfigLtvThresholds = z.object({
   target: z.number(),
   topup: z.number().nullish(),
   softLiquidation: z.number(),
@@ -1768,7 +1786,7 @@ export const palletCfLendingPoolsGeneralLendingLtvThresholds = z.object({
   lowLtv: z.number(),
 });
 
-export const palletCfLendingPoolsGeneralLendingNetworkFeeContributions = z.object({
+export const palletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions = z.object({
   extraInterest: z.number(),
   fromOriginationFee: z.number(),
   fromLiquidationFee: z.number(),
@@ -1780,15 +1798,15 @@ export const palletCfLendingPoolsPalletConfigUpdate = z.discriminatedUnion('__ki
   z.object({
     __kind: z.literal('SetLendingPoolConfiguration'),
     asset: cfPrimitivesChainsAssetsAnyAsset.nullish(),
-    config: palletCfLendingPoolsGeneralLendingLendingPoolConfiguration.nullish(),
+    config: palletCfLendingPoolsGeneralLendingConfigLendingPoolConfiguration.nullish(),
   }),
   z.object({
     __kind: z.literal('SetLtvThresholds'),
-    ltvThresholds: palletCfLendingPoolsGeneralLendingLtvThresholds,
+    ltvThresholds: palletCfLendingPoolsGeneralLendingConfigLtvThresholds,
   }),
   z.object({
     __kind: z.literal('SetNetworkFeeContributions'),
-    contributions: palletCfLendingPoolsGeneralLendingNetworkFeeContributions,
+    contributions: palletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions,
   }),
   z.object({ __kind: z.literal('SetFeeSwapIntervalBlocks'), value: z.number() }),
   z.object({ __kind: z.literal('SetInterestPaymentIntervalBlocks'), value: z.number() }),
@@ -1819,10 +1837,14 @@ export const palletCfLendingPoolsBoostBoostPoolId = z.object({
   tier: z.number(),
 });
 
-export const palletCfLendingPoolsCollateralAddedActionType = simpleEnum([
-  'Manual',
-  'SystemTopup',
-  'SystemLiquidationExcessAmount',
+export const palletCfLendingPoolsCollateralAddedActionType = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Manual') }),
+  z.object({ __kind: z.literal('SystemTopup') }),
+  z.object({
+    __kind: z.literal('SystemLiquidationExcessAmount'),
+    loanId: numberOrHex,
+    swapRequestId: numberOrHex,
+  }),
 ]);
 
 export const palletCfLendingPoolsGeneralLendingLiquidationType = simpleEnum([
@@ -1835,6 +1857,11 @@ export const palletCfLendingPoolsGeneralLendingLiquidationCompletionReason = sim
   'FullySwapped',
   'LtvChange',
   'ManualAbort',
+]);
+
+export const palletCfLendingPoolsLoanRepaidActionType = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Manual') }),
+  z.object({ __kind: z.literal('Liquidation'), swapRequestId: numberOrHex }),
 ]);
 
 export const palletCfLendingPoolsGeneralLendingWhitelistWhitelistUpdate = z.discriminatedUnion(
@@ -1878,4 +1905,22 @@ export const stateChainRuntimeChainflipGenericElectionsOraclePriceUpdate = z.obj
 export const stateChainRuntimeChainflipGenericElectionsGenericElectoralEvents = z.object({
   __kind: z.literal('OraclePricesUpdated'),
   prices: z.array(stateChainRuntimeChainflipGenericElectionsOraclePriceUpdate),
+});
+
+export const palletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionIdentifierExtra =
+  simpleEnum(['A', 'B', 'C', 'D', 'EE', 'FF', 'G', 'HH']);
+
+export const stateChainRuntimeChainflipEthereumElectionsEthereumElectoralEvents = z.object({
+  __kind: z.literal('ReorgDetected'),
+  reorgedBlocks: z.object({ start: numberOrHex, end: numberOrHex }),
+});
+
+export const cfChainsWitnessPeriodBlockWitnessRange = z.object({ root: numberOrHex });
+
+export const stateChainRuntimeChainflipArbitrumElectionsArbitrumElectoralEvents = z.object({
+  __kind: z.literal('ReorgDetected'),
+  reorgedBlocks: z.object({
+    start: cfChainsWitnessPeriodBlockWitnessRange,
+    end: cfChainsWitnessPeriodBlockWitnessRange,
+  }),
 });

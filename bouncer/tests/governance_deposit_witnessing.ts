@@ -10,6 +10,7 @@ import {
   newAssetAddress,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Test that governance can trigger deposit witnessing for a deposit made with the wrong asset.
 // Scenario:
@@ -20,10 +21,10 @@ import { TestContext } from 'shared/utils/test_context';
 // 5. Verify the swap completes successfully
 export async function testGovernanceDepositWitnessing(testContext: TestContext) {
   const logger = testContext.logger;
-
+  const cf: ChainflipIO<[]> = await newChainflipIO(logger, []);
   // Step 1: Open deposit channel for USDC -> Flip
   const destAddress = await newAssetAddress('Flip', 'GOV_WITNESS_TEST');
-  const swapParams = await requestNewSwap(logger, 'Usdc', 'Flip', destAddress);
+  const swapParams = await requestNewSwap(cf, 'Usdc', 'Flip', destAddress);
 
   logger.info(
     `Deposit channel created: channelId=${swapParams.channelId}, address=${swapParams.depositAddress}`,
@@ -72,7 +73,7 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
 
   // Step 7: Set up swap observer before governance call
   const swapRequestedHandle = observeSwapRequested(
-    logger,
+    cf,
     'Usdt',
     'Flip',
     { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
@@ -99,11 +100,11 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
 
   // Step 9: Verify swap was triggered
   const swapEvent = await swapRequestedHandle;
-  logger.info(`Swap requested with ID: ${swapEvent.data.swapRequestId}`);
+  logger.info(`Swap requested with ID: ${swapEvent.swapRequestId}`);
 
   // Step 10: Verify swap completes
   await observeEvent(logger, 'swapping:SwapRequestCompleted', {
-    test: (event) => event.data.swapRequestId === swapEvent.data.swapRequestId,
+    test: (event) => BigInt(event.data.swapRequestId) === swapEvent.swapRequestId,
     historicalCheckBlocks: 10,
   }).event;
 

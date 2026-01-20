@@ -68,7 +68,7 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 	}
 }
 
-pub async fn events_at_block2<Chain, EventParameters, EvmRpcClient>(
+pub async fn events_at_block_deprecated<Chain, EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
 	contract_address: H160,
 	eth_rpc: &EvmRpcClient,
@@ -320,31 +320,32 @@ where
 				(eth, erc20)
 			},
 		);
-
-	let eth_ingresses = eth_ingresses_at_block(
+	let (address_states, events) = futures::try_join!(
 		address_states(
 			client,
 			address_checker_address,
 			block.parent_hash,
 			block.hash,
 			eth_deposit_channels.clone(),
-		)
-		.await?,
-		events_at_block::<Chain, VaultEvents, _>(
-			block.bloom,
-			block_heigh,
-			block.hash,
-			vault_address,
-			client,
-		)
-		.await?
-		.into_iter()
-		.filter_map(|event| match event.event_parameters {
-			VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
-			_ => None,
-		})
-		.collect(),
+		),
+		async {
+			Ok(events_at_block::<Chain, VaultEvents, _>(
+				block.bloom,
+				block_heigh,
+				block.hash,
+				vault_address,
+				client,
+			)
+			.await?
+			.into_iter()
+			.filter_map(|event| match event.event_parameters {
+				VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
+				_ => None,
+			})
+			.collect::<Vec<_>>())
+		}
 	)?;
+	let eth_ingresses = eth_ingresses_at_block(address_states, events)?;
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
 

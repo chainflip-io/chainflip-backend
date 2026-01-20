@@ -20,7 +20,7 @@ use crate::evm::rpc::{node_interface::NodeInterfaceRpcApi, EvmRpcApi};
 
 use super::EvmRetryRpcClient;
 
-use crate::evm::retry_rpc::RequestLog;
+use crate::evm::retry_rpc::{RequestLog, MAX_RETRY_FOR_WITH_RESULT};
 
 #[async_trait::async_trait]
 pub trait NodeInterfaceRetryRpcApi {
@@ -91,7 +91,6 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
 				),
 				Box::pin(move |client| {
 					let tx_data = tx_data.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.gas_estimate_components(
@@ -102,7 +101,7 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
 							.await
 					})
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}

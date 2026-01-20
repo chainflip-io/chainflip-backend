@@ -203,7 +203,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.get_logs
 			.get_or_fetch(
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_logs(block_hash, contract_address).await })
 				}),
 				(block_hash, contract_address),
@@ -214,10 +213,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 	async fn chain_id(&self) -> anyhow::Result<U256> {
 		self.chain_id
 			.get_or_fetch(
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.chain_id().await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.chain_id().await })),
 				(),
 			)
 			.await
@@ -227,7 +223,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.transaction_receipt
 			.get_or_fetch(
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
 				tx_hash,
@@ -241,10 +236,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
 		self.block
 			.get_or_fetch(
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.block(block_number).await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
 				block_number,
 			)
 			.await
@@ -254,7 +246,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.block_by_hash
 			.get_or_fetch(
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_by_hash(block_hash).await })
 				}),
 				block_hash,
@@ -266,7 +257,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.block_with_txs
 			.get_or_fetch(
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_with_txs(block_number).await })
 				}),
 				block_number,
@@ -284,7 +274,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.get_or_fetch(
 				Box::pin(move |client| {
 					let reward_percentiles = reward_percentiles.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.fee_history(block_count, newest_block, reward_percentiles).await
 					})
@@ -298,7 +287,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 		self.get_transaction
 			.get_or_fetch(
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(tx_hash).await })
 				}),
 				tx_hash,
@@ -316,7 +304,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 			.get_or_fetch(
 				Box::pin(move |client| {
 					let range = range.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_logs_range(range, contract_address).await })
 				}),
 				(rangee, contract_address),
@@ -326,10 +313,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmCachingClient<Rpc> {
 	async fn get_block_number(&self) -> anyhow::Result<U64> {
 		self.get_block_number
 			.get_or_fetch(
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.get_block_number().await })
-				}),
+				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
 				(),
 			)
 			.await
@@ -351,7 +335,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 			.get_or_fetch(
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.address_states(block_hash, contract_address, addresses).await
 					})
@@ -373,15 +356,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
 
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						AddressCheckerRetryRpcApiWithResult::balances(
-							&client,
-							block_hash,
-							contract_address,
-							addresses,
-						)
-						.await
+						client.balances(block_hash, contract_address, addresses).await
 					})
 				}),
 				(block_hash, contract_address, addressess),
@@ -399,14 +375,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 			.get_or_fetch(
 				Box::pin(move |client| {
 					let aggregator_addresses = aggregator_addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
-						AddressCheckerRetryRpcApiWithResult::query_price_feeds(
-							&client,
-							contract_address,
-							aggregator_addresses,
-						)
-						.await
+						client.query_price_feeds(contract_address, aggregator_addresses).await
 					})
 				}),
 				(contract_address, aggregator_addressess),
@@ -428,7 +398,6 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
 			.get_or_fetch(
 				Box::pin(move |client| {
 					let tx_data = tx_data.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.gas_estimate_components(

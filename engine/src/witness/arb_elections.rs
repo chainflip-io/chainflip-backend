@@ -87,13 +87,8 @@ impl HeaderClient<ArbitrumChain, Arbitrum> for ArbitrumBlockHeightWitnesserVoter
 		} else {
 			(*range.start(), *range.end())
 		};
-		let futures = vec![self.client.block((start).into()), self.client.block((end).into())];
-		let [block_start, block_end]: [_; 2] = futures::future::join_all(futures)
-			.await
-			.into_iter()
-			.collect::<anyhow::Result<Vec<_>>>()?
-			.try_into()
-			.map_err(|_| anyhow::anyhow!("Failed to convert to array"))?;
+		let (block_start, block_end) =
+			futures::try_join!(self.client.block((start).into()), self.client.block((end).into()))?;
 		Ok(Header {
 			block_height: BlockWitnessRange::try_new(start)
 				.map_err(|_| anyhow!("Failed to create block witness range"))?,
@@ -107,16 +102,10 @@ impl HeaderClient<ArbitrumChain, Arbitrum> for ArbitrumBlockHeightWitnesserVoter
 		height: BlockWitnessRange<Arbitrum>,
 	) -> anyhow::Result<Header<ArbitrumChain>> {
 		let range = height.into_range_inclusive();
-		let futures = vec![
+		let (block_start, block_end) = futures::try_join!(
 			self.client.block((*range.start()).into()),
-			self.client.block((*range.end()).into()),
-		];
-		let [block_start, block_end]: [_; 2] = futures::future::join_all(futures)
-			.await
-			.into_iter()
-			.collect::<anyhow::Result<Vec<_>>>()?
-			.try_into()
-			.map_err(|_| anyhow::anyhow!("Failed to convert to array"))?;
+			self.client.block((*range.end()).into())
+		)?;
 		Ok(Header {
 			block_height: height,
 			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,

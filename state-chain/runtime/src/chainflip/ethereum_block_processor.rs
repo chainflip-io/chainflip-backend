@@ -156,7 +156,6 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 							tx_metadata,
 							transaction_ref,
 						} => {
-							#[allow(clippy::unit_arg)]
 							if let Err(err) = EthereumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 								tx_out_id,
@@ -219,107 +218,34 @@ impl Hook<HookTypeFor<TypesScUtilsWitnessing, ExecuteHook>> for TypesScUtilsWitn
 	}
 }
 
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataDepositChannel, u32),
-	) -> Vec<EthEvent<DepositWitness<Ethereum>>> {
-		let mut results: Vec<EthEvent<DepositWitness<Ethereum>>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|deposit_witness| EthEvent::Witness(deposit_witness.clone()))
-					.collect::<Vec<_>>(),
-			)
+#[macro_export]
+macro_rules! impl_rules_hook {
+	($types:ty, $block_data:ty, $event:ty) => {
+		impl Hook<HookTypeFor<$types, RulesHook>> for $types {
+			fn run(
+				&mut self,
+				(age, block_data, safety_margin): (Range<u32>, $block_data, u32),
+			) -> Vec<$event> {
+				if age.contains(&safety_margin) {
+					block_data.into_iter().map(<$event>::Witness).collect()
+				} else {
+					vec![]
+				}
+			}
 		}
-		results
-	}
+	};
 }
 
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataVaultDeposit, u32),
-	) -> Vec<EthEvent<EthereumVaultEvent>> {
-		let mut results: Vec<EthEvent<EthereumVaultEvent>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|vault_deposit| EthEvent::Witness(vault_deposit.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
-impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, RulesHook>>
-	for TypesStateChainGatewayWitnessing
-{
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataStateChainGateway, u32),
-	) -> Vec<EthEvent<StateChainGatewayEvent>> {
-		let mut results: Vec<EthEvent<StateChainGatewayEvent>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(block_data.into_iter().map(EthEvent::Witness).collect::<Vec<_>>())
-		}
-		results
-	}
-}
-
-impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManagerWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataKeyManager, u32),
-	) -> Vec<EthEvent<EthereumKeyManagerEvent>> {
-		let mut results: Vec<EthEvent<EthereumKeyManagerEvent>> = vec![];
-		// No safety margin for egress success
-		if age.contains(&0u32) {
-			results.extend(
-				block_data
-					.clone()
-					.into_iter()
-					.filter_map(|event| match event {
-						EthereumKeyManagerEvent::AggKeySetByGovKey { .. } |
-						EthereumKeyManagerEvent::GovernanceAction { .. } => None,
-						EthereumKeyManagerEvent::SignatureAccepted { .. } =>
-							Some(EthEvent::Witness(event)),
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.into_iter()
-					.filter_map(|event| match event {
-						EthereumKeyManagerEvent::AggKeySetByGovKey { .. } |
-						EthereumKeyManagerEvent::GovernanceAction { .. } => Some(EthEvent::Witness(event)),
-						EthereumKeyManagerEvent::SignatureAccepted { .. } => None,
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
-
-impl Hook<HookTypeFor<TypesScUtilsWitnessing, RulesHook>> for TypesScUtilsWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataScUtils, u32),
-	) -> Vec<EthEvent<ScUtilsCall>> {
-		let mut results: Vec<EthEvent<ScUtilsCall>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|call| EthEvent::Witness(call.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
+impl_rules_hook!(
+	TypesDepositChannelWitnessing,
+	BlockDataDepositChannel,
+	EthEvent<DepositWitness<Ethereum>>
+);
+impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, EthEvent<EthereumVaultEvent>);
+impl_rules_hook!(
+	TypesStateChainGatewayWitnessing,
+	BlockDataStateChainGateway,
+	EthEvent<StateChainGatewayEvent>
+);
+impl_rules_hook!(TypesKeyManagerWitnessing, BlockDataKeyManager, EthEvent<EthereumKeyManagerEvent>);
+impl_rules_hook!(TypesScUtilsWitnessing, BlockDataScUtils, EthEvent<ScUtilsCall>);

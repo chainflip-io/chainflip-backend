@@ -34,14 +34,10 @@ where
 
 	let best_block_number = client.best_block_number().await?;
 	if best_block_number < witness_from_index {
+		tracing::debug!("{tag:?}: no new blocks since best block height={:?} for witness_from={witness_from_index:?}", best_block_number);
 		return Ok(None)
 	}
 	let best_block_header = client.best_block_header().await?;
-
-	if best_block_header.block_height < witness_from_index {
-		tracing::debug!("{tag:?}: no new blocks since best block height={:?} for witness_from={witness_from_index:?}", best_block_header.block_height);
-		return Ok(None);
-	}
 
 	// The `latest_block_height == 0` is a special case for when starting up the
 	// electoral system for the first time.

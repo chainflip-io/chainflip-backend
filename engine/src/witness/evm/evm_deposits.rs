@@ -39,7 +39,7 @@ use sp_core::U256;
 
 use crate::evm::rpc::address_checker::*;
 
-use super::{contract_common::events_at_block2, vault::FetchedNativeFilter};
+use super::{contract_common::events_at_block_deprecated, vault::FetchedNativeFilter};
 use crate::witness::common::chain_source::Header;
 
 use super::super::common::chunked_chain_source::chunked_by_vault::{
@@ -110,7 +110,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								addresses,
 							)
 							.await?,
-							events_at_block2::<Inner::Chain, VaultEvents, _>(
+							events_at_block_deprecated::<Inner::Chain, VaultEvents, _>(
 								Header {
 									index: header.index,
 									hash: header.hash,
@@ -271,7 +271,7 @@ mod tests {
 		witness::common::chain_source::Header,
 	};
 
-	use super::{super::contract_common::events_at_block2, *};
+	use super::{super::contract_common::events_at_block_deprecated, *};
 	use cf_chains::{Chain, Ethereum};
 	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
@@ -445,7 +445,7 @@ mod tests {
 				.unwrap();
 
 				let fetched_native_events =
-					events_at_block2::<cf_chains::Ethereum, VaultEvents, _>(
+					events_at_block_deprecated::<cf_chains::Ethereum, VaultEvents, _>(
 						Header {
 							index: block_number,
 							parent_hash: Some(block.parent_hash),

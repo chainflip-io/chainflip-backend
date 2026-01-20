@@ -59,6 +59,7 @@ const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
+pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 
 impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
@@ -368,7 +369,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 				),
 				Box::pin(move |client| {
 					let range = range.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.get_logs(
@@ -381,7 +381,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 							.await
 					})
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -394,7 +394,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 					Some(format!("{block_hash:?}, {contract_address:?}")),
 				),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client
 							.get_logs(
@@ -403,7 +402,7 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 							.await
 					})
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -412,11 +411,8 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("chain_id".to_string(), None),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.chain_id().await })
-				}),
-				2,
+				Box::pin(move |client| Box::pin(async move { client.chain_id().await })),
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -426,10 +422,9 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			.request_with_limit(
 				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.transaction_receipt(tx_hash).await })
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -438,11 +433,8 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.block(block_number).await })
-				}),
-				2,
+				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -452,10 +444,9 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			.request_with_limit(
 				RequestLog::new("block_by_hash".to_string(), Some(format!("{block_hash}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_by_hash(block_hash).await })
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -465,10 +456,9 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			.request_with_limit(
 				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.block_with_txs(block_number).await })
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -487,12 +477,11 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 				),
 				Box::pin(move |client| {
 					let reward_percentiles = reward_percentiles.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.fee_history(block_count, newest_block, &reward_percentiles).await
 					})
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -502,10 +491,9 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 			.request_with_limit(
 				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
 				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move { client.get_transaction(tx_hash).await })
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -514,11 +502,8 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new("get_block_number".to_string(), None),
-				Box::pin(move |client| {
-					#[allow(clippy::redundant_async_block)]
-					Box::pin(async move { client.get_block_number().await })
-				}),
-				2,
+				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}

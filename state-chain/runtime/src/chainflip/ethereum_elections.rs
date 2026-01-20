@@ -446,7 +446,6 @@ pub struct EthereumKeyManagerWitnessing;
 	TxMetadata,
 	TxRef
 ))]
-#[allow(clippy::large_enum_variant)]
 pub enum KeyManagerEvent<AggKey, BlockNumber, TxInId, TxOutId, SignerId, TxFee, TxMetadata, TxRef> {
 	AggKeySetByGovKey {
 		new_public_key: AggKey,

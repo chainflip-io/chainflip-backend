@@ -18,6 +18,7 @@ use ethers::prelude::*;
 
 use crate::evm::{
 	cached_rpc::AddressCheckerRetryRpcApiWithResult,
+	retry_rpc::MAX_RETRY_FOR_WITH_RESULT,
 	rpc::{
 		address_checker::{AddressCheckerRpcApi, *},
 		EvmRpcApi,
@@ -140,12 +141,11 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.address_states(block_hash, contract_address, addresses).await
 					})
 				}),
-				2,
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -164,7 +164,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 				),
 				Box::pin(move |client| {
 					let addresses = addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.balances(block_hash, contract_address, addresses).await
 					})
@@ -187,7 +186,6 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 				),
 				Box::pin(move |client| {
 					let aggregator_addresses = aggregator_addresses.clone();
-					#[allow(clippy::redundant_async_block)]
 					Box::pin(async move {
 						client.query_price_feeds(contract_address, aggregator_addresses).await
 					})

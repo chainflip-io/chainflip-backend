@@ -7,7 +7,7 @@ use crate::{
 		},
 		elections::TypesFor,
 	},
-	ArbitrumBroadcaster, ArbitrumIngressEgress, Runtime,
+	impl_rules_hook, ArbitrumBroadcaster, ArbitrumIngressEgress, Runtime,
 };
 use cf_chains::{instances::ArbitrumInstance, Arbitrum};
 use codec::{Decode, Encode};
@@ -104,7 +104,6 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 							tx_metadata,
 							transaction_ref,
 						} => {
-							#[allow(clippy::unit_arg)]
 							if let Err(err) = ArbitrumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 								tx_out_id,
@@ -145,75 +144,10 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 	}
 }
 
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataDepositChannel, u32),
-	) -> Vec<ArbEvent<DepositWitness<Arbitrum>>> {
-		let mut results: Vec<ArbEvent<DepositWitness<Arbitrum>>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|deposit_witness| ArbEvent::Witness(deposit_witness.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
-
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, RulesHook>> for TypesVaultDepositWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataVaultDeposit, u32),
-	) -> Vec<ArbEvent<ArbitrumVaultEvent>> {
-		let mut results: Vec<ArbEvent<ArbitrumVaultEvent>> = vec![];
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|vault_deposit| ArbEvent::Witness(vault_deposit.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
-
-impl Hook<HookTypeFor<TypesKeyManagerWitnessing, RulesHook>> for TypesKeyManagerWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataKeyManager, u32),
-	) -> Vec<ArbEvent<ArbitrumKeyManagerEvent>> {
-		let mut results: Vec<ArbEvent<ArbitrumKeyManagerEvent>> = vec![];
-		// No safety margin for egress success
-		if age.contains(&0u32) {
-			results.extend(
-				block_data
-					.clone()
-					.into_iter()
-					.filter_map(|event| match event {
-						ArbitrumKeyManagerEvent::AggKeySetByGovKey { .. } |
-						ArbitrumKeyManagerEvent::GovernanceAction { .. } => None,
-						ArbitrumKeyManagerEvent::SignatureAccepted { .. } =>
-							Some(ArbEvent::Witness(event)),
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.into_iter()
-					.filter_map(|event| match event {
-						ArbitrumKeyManagerEvent::AggKeySetByGovKey { .. } |
-						ArbitrumKeyManagerEvent::GovernanceAction { .. } => Some(ArbEvent::Witness(event)),
-						ArbitrumKeyManagerEvent::SignatureAccepted { .. } => None,
-					})
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
-	}
-}
+impl_rules_hook!(
+	TypesDepositChannelWitnessing,
+	BlockDataDepositChannel,
+	ArbEvent<DepositWitness<Arbitrum>>
+);
+impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, ArbEvent<ArbitrumVaultEvent>);
+impl_rules_hook!(TypesKeyManagerWitnessing, BlockDataKeyManager, ArbEvent<ArbitrumKeyManagerEvent>);
