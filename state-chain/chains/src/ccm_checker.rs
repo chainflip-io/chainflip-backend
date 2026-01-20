@@ -265,7 +265,14 @@ impl CcmValidityChecker {
 					match asset {
 						SolAsset::Sol => MAX_USER_CCM_BYTES_SOL,
 						SolAsset::SolUsdc => MAX_USER_CCM_BYTES_USDC,
-						SolAsset::SolUsdt => MAX_USER_CCM_BYTES_USDC,
+						// USDT's mint pubkey and token vault ATA have not been added to the
+						// protocol's ALT. They could be added to the ALT implementing the
+						// logic in the Sol Api to expand the ALT via governance but it seems
+						// unnecessary because USDT for CCM is not useful.
+						SolAsset::SolUsdt =>
+							MAX_USER_CCM_BYTES_USDC -
+								2 * (ACCOUNT_KEY_LENGTH_IN_TRANSACTION -
+									ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION),
 					} {
 					return Err(CcmValidityError::CcmIsTooLong)
 				}

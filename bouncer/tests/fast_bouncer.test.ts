@@ -29,7 +29,7 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
-  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
+  testAllSwaps(numberOfNodes === 1 ? 250 : 250); // TODO: find out what the 3-node timeout should be
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);

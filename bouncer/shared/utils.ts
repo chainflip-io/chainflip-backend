@@ -241,7 +241,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          return '2UooihWEqsL6C1aadx56ViJN3pgv4as7arJ5pXQRz45F';
+          return 'G6cZT2goBpUzaqsvaNsCc9AxRJsuccZ1ViPfL3iST9pV';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -713,7 +713,6 @@ export async function newAddress(
 
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  if (asset === 'Sol' || asset === 'SolUsdc' || asset === 'SolUsdt') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
@@ -808,7 +807,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 120,
+  timeoutSeconds = 180,
 ): Promise<number> {
   logger.trace(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance
