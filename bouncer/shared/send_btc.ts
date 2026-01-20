@@ -15,6 +15,7 @@ export const btcClient = new Client({
 });
 
 async function assertCanSubmitRawTx(rawTx: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const check: any = await btcClient.testMempoolAccept([rawTx]);
   if (!check[0].allowed) {
     throw new Error(`Bitcoin tx failed mempool accept check with '${check[0]['reject-reason']}'`);
