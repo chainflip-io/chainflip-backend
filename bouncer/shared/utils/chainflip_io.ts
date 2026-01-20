@@ -189,6 +189,37 @@ export class ChainflipIO<Requirements> {
     });
   }
 
+  private async impl_submitUnsignedExtrinsic(arg: { extrinsic: ExtrinsicFromApi }): Promise<void> {
+    this.runExclusively('submitUnsignedExtrinsic', async () => {
+      await using chainflipApi = await getChainflipApi();
+      const extrinsic = await arg.extrinsic(chainflipApi);
+
+      // generate readable description for logging
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { section, method, args } = (extrinsic.toHuman() as any).method;
+      const readable = `${section}.${method}(${JSON.stringify(args)})`;
+
+      this.debug(`Submitting unsigned extrinsic '${readable}'`);
+
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock');
+      const unsub = await extrinsic.send(waiter);
+      const result = extractExtrinsicResult(chainflipApi, await promise);
+      unsub();
+
+      if (!result.ok) {
+        throw new Error(`'${readable}' failed (${result.error})`);
+      }
+
+      this.debug(`Successfully submitted extrinsic with hash ${result.value.txHash}`);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.lastIoBlockHeight = (result.value as any).blockNumber.toNumber();
+
+      return result.value;
+    })
+
+  }
+
   /**
    * Submits a governance extrinsic and updates `lastIoBlockHeight` to the block were the extrinsic was included.
    * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
@@ -275,7 +306,7 @@ export class ChainflipIO<Requirements> {
    * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
    */
   private wrapWithExpectEvent<A extends object>(
-    f: (a: A) => Promise<void>,
+    f: (a: A) => Promise<EventFilter>,
   ): <Schema extends z.ZodTypeAny>(
     a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
   ) => Promise<z.infer<Schema>> {
@@ -636,3 +667,8 @@ export function fullAccountFromUri<A extends AccountType>(
 
 // ------------ Other ---------------
 export type Severity = 'Error' | 'Warn' | 'Info' | 'Debug' | 'Trace';
+
+/** Additional filter to apply when searching for events */
+type EventFilter = {
+  txHash?: string
+}
