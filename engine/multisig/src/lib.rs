@@ -29,6 +29,10 @@ pub use client::{MultisigClient, MultisigMessage};
 pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
+/// P2P interface types for ceremony messaging
+pub mod p2p_interface;
+
+pub use p2p_interface::ReceivedCeremonyMessage;
 
 /// Maximum number of payloads in a single bitcoin signing ceremony
 // We choose 20,000 because this is approaching the theoretical maximum number of UTXOs in a single
