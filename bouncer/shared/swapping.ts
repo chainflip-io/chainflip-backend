@@ -158,7 +158,15 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
       length = ARB_MAX_CCM_MSG_LENGTH;
       break;
     case 'Solana':
-      length = destAsset === 'Sol' ? MAX_CCM_BYTES_SOL : MAX_CCM_BYTES_USDC;
+      if (destAsset === 'Sol') {
+        length = MAX_CCM_BYTES_SOL;
+      } else if (destAsset === 'SolUsdc') {
+        length = MAX_CCM_BYTES_USDC;
+      } else if (destAsset === 'SolUsdt') {
+        length = MAX_CCM_BYTES_USDT;
+      } else {
+        throw new Error(`Unsupported Solana asset: ${destAsset}`);
+      }
       break;
     default:
       throw new Error(`Unsupported chain: ${destChain}`);
