@@ -45,24 +45,26 @@ pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 12;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
-	eth_usdc_address: hex_literal::hex!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-	eth_usdt_address: hex_literal::hex!("Dc64a140Aa3E981100a9becA4E685f962f0cF6C9"),
-	eth_wbtc_address: hex_literal::hex!("B7f8BC63BbcaD18155201308C8f3540b07f84F5e"),
-	state_chain_gateway_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
-	eth_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
-	eth_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	eth_key_manager_address: hex_literal::hex!("a16E02E87b7454126E5E10d957A927A7F5B5d2be"),
+	state_chain_gateway_address: hex_literal::hex!("eEBe00Ac0756308ac4AaBfD76c05c4F3088B8883"),
+	eth_vault_address: hex_literal::hex!("B7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968"),
+	flip_token_address: hex_literal::hex!("10C6E9530F1C1AF873a391030a1D9E8ed0630D26"),
+	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
+	eth_usdc_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
+	eth_usdt_address: hex_literal::hex!("0DCd1Bf9A1b36cE34237eEaFef220932846BCD82"),
+	eth_wbtc_address: hex_literal::hex!("67d269191c92Caf3cD7723F116c85e6E9bf55933"),
+	eth_sc_utils_address: hex_literal::hex!("c5a5C42992dECbae36851359345FE25997F5C42d"),
+
 	arb_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
 	arb_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
-	arb_usdc_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
-	arb_usdt_token_address: hex_literal::hex!("5FC8d32690cc91D4c39d9d3abcBD16989F875707"),
-	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
-	eth_sc_utils_address: hex_literal::hex!("610178dA211FEF7D417bC0e6FeD39F05609AD788"),
 	arb_address_checker_address: hex_literal::hex!("9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"),
+	arb_usdc_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
+	arb_usdt_token_address: hex_literal::hex!("9A676e781A523b5d0C0e43731313A708CB607508"),
+
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 	eth_init_agg_key: hex_literal::hex!(
-		"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6"
+		"0361ef4fcc2f464a81f4f1a60387056e937d67e6f7f717936c143b4b0102f710d6"
 	),
 	#[cfg(feature = "runtime-benchmarks")]
 	// Set initial agg key for benchmarking API call building
