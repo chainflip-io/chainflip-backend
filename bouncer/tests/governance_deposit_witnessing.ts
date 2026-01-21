@@ -10,7 +10,7 @@ import {
   newAssetAddress,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
-import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Test that governance can trigger deposit witnessing for a deposit made with the wrong asset.
 // Scenario:
