@@ -56,7 +56,8 @@ import {
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
-import { ChainflipIO, Err, Ok, Result } from './utils/chainflip_io';
+import { ChainflipIO } from './utils/chainflip_io';
+import { Err, Ok, Result } from './utils/result';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -1149,15 +1150,16 @@ export function waitForExt(
   waitForStatus: 'InBlock' | 'Finalized',
   mutexRelease?: () => void,
 ): {
-  promise: Promise<EventRecord[]>;
+  promise: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
 } {
-  const { promise, resolve, reject } = deferredPromise<EventRecord[]>();
+  const { promise, resolve, reject } = deferredPromise<ISubmittableResult>();
   let release = !!mutexRelease;
   const dispatchErrorHandler = handleDispatchError(api, false);
   return {
     promise,
-    waiter: ({ events, status, dispatchError }) => {
+    waiter: (all) => {
+      const { status, dispatchError } = all;
       if (release) {
         mutexRelease!();
         release = false;
@@ -1175,11 +1177,11 @@ export function waitForExt(
         return;
       }
       if (waitForStatus === 'InBlock' && status.isInBlock === true) {
-        resolve(events);
+        resolve(all);
         return;
       }
       if (waitForStatus === 'Finalized' && status.isFinalized === true) {
-        resolve(events);
+        resolve(all);
         return;
       }
       if (status.isDropped || status.isInvalid || status.isUsurped || status.isRetracted) {
@@ -1269,10 +1271,8 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
 
 export function extractExtrinsicResult(
   chainflipApi: DisposableApiPromise,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsicResult: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Result<any, string> {
+  extrinsicResult: ISubmittableResult,
+): Result<ISubmittableResult, string> {
   if (extrinsicResult.dispatchError) {
     let error;
     if (extrinsicResult.dispatchError.isModule) {
@@ -1541,7 +1541,7 @@ export async function submitExtrinsic(
   const unsub = await extrinsic.signAndSend(account, { nonce }, waiter);
   let events: EventRecord[] = [];
   try {
-    events = await promise;
+    events = (await promise).events;
   } catch (error) {
     unsub();
     throw error;

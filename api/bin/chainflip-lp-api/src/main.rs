@@ -15,9 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use cf_amm_math::PriceLimits;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, PriceLimits, WaitFor,
+	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::LpRpcApiServer, ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,

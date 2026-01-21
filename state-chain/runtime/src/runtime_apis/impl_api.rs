@@ -68,7 +68,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 use pallet_cf_funding::MinimumFunding;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
 	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
@@ -702,11 +702,9 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_free_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
-			LiquidityPools::sweep(&account_id).unwrap();
 			AssetBalances::free_balances(&account_id)
 		}
 		fn cf_lp_total_balances(account_id: AccountId) -> AssetMap<AssetAmount> {
-			LiquidityPools::sweep(&account_id).unwrap();
 			let free_balances = AssetBalances::free_balances(&account_id);
 			let open_order_balances = LiquidityPools::open_order_balances(&account_id);
 
@@ -761,7 +759,6 @@ impl_runtime_apis! {
 		fn cf_common_account_info(
 			account_id: &AccountId,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
-			LiquidityPools::sweep(account_id).unwrap();
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
 				.map(|(operator, max_bid)| DelegationInfo { operator, bid: core::cmp::min(flip_account.total(), max_bid) });
@@ -1177,7 +1174,8 @@ impl_runtime_apis! {
 				btc_vault_deposit_address: BrokerPrivateBtcChannels::<Runtime>::get(&account_id)
 					.map(|channel| derive_btc_vault_deposit_addresses(channel).current),
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
-				bond: account_info.bond()
+				bond: account_info.bond(),
+				bound_fee_withdrawal_address: Swapping::bound_broker_withdrawal_address(account_id),
 			}
 		}
 
@@ -1275,6 +1273,10 @@ impl_runtime_apis! {
 				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
 			}
+		}
+
+		fn cf_boost_config() -> BoostConfiguration {
+			pallet_cf_lending_pools::BoostConfig::<Runtime>::get()
 		}
 
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth> {
@@ -1769,8 +1771,6 @@ impl_runtime_apis! {
 			type Strategy = pallet_cf_trading_strategy::TradingStrategy;
 
 			fn to_strategy_info(lp_id: AccountId, strategy_id: AccountId, strategy: Strategy) -> TradingStrategyInfo<AssetAmount> {
-
-				LiquidityPools::sweep(&strategy_id).unwrap();
 
 				let free_balances = AssetBalances::free_balances(&strategy_id);
 				let open_order_balances = LiquidityPools::open_order_balances(&strategy_id);

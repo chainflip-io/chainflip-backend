@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_amm::math::Price;
 use frame_support::traits::Time;
 use pallet_cf_lending_pools::{GeneralLendingPools, WhitelistStatus};
 use pallet_cf_swapping::SwapRequestCompletionReason;
@@ -29,7 +30,6 @@ use crate::{
 	LIQUIDITY_PROVIDER,
 };
 
-use cf_amm::math::price_at_tick;
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, DcaParameters, FLIPPERINOS_PER_FLIP,
 	SWAP_DELAY_BLOCKS,
@@ -64,8 +64,8 @@ fn basic_lending() {
 		.build()
 		.execute_with(|| {
 			// Set the prices.
-			let loan_price = price_at_tick(0).unwrap();
-			let collateral_price = price_at_tick(0).unwrap();
+			let loan_price = Price::at_tick_zero();
+			let collateral_price = Price::at_tick_zero();
 			ChainlinkOracle::set_price(LOAN_ASSET, loan_price);
 			ChainlinkOracle::set_price(COLLATERAL_ASSET, collateral_price);
 
@@ -112,7 +112,10 @@ fn basic_lending() {
 			assert_eq!(AssetBalances::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
 			// Now change the price so that the loan is liquidated
-			ChainlinkOracle::set_price(COLLATERAL_ASSET, collateral_price / 2);
+			ChainlinkOracle::set_price(
+				COLLATERAL_ASSET,
+				Price::from_raw(collateral_price.as_raw() / 2),
+			);
 		})
 		.then_execute_at_next_block(|_| {
 			assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));

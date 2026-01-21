@@ -14,96 +14,37 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-mod core;
-mod muxer;
 mod peer_info_submitter;
 
 use std::{
-	marker::PhantomData,
 	net::{IpAddr, Ipv4Addr},
 	sync::Arc,
 };
 
-use crate::{
-	p2p::core::ed25519_secret_key_to_x25519_secret_key,
-	settings::P2P as P2PSettings,
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-	},
+use crate::settings::P2P as P2PSettings;
+
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
 };
 
-use self::core::X25519KeyPair;
-
-pub use self::{
+use engine_p2p::{
 	core::{PeerInfo, PeerUpdate},
-	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
+	MultisigMessageReceiver, MultisigMessageSender,
 };
+
 use anyhow::Context;
-use cf_chains::{
-	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, ChainCrypto,
-};
-use cf_primitives::AccountId;
+use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto};
+use engine_p2p::muxer::P2PMuxer;
 use futures::{Future, FutureExt, StreamExt};
-use multisig::p2p::OutgoingMultisigStageMessages;
-use muxer::P2PMuxer;
-use sp_core::{ed25519, H256};
-use tokio::sync::{
-	mpsc::{UnboundedReceiver, UnboundedSender},
-	oneshot,
-};
+use sp_core::H256;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
 use tracing::{error, info_span, Instrument};
 use zeroize::Zeroizing;
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
-
-type EdPublicKey = ed25519::Public;
-type XPublicKey = x25519_dalek::PublicKey;
-
-pub struct MultisigMessageSender<C: ChainCrypto>(
-	pub UnboundedSender<OutgoingMultisigStageMessages>,
-	PhantomData<C>,
-);
-
-impl<C: ChainCrypto> MultisigMessageSender<C> {
-	pub fn new(sender: UnboundedSender<OutgoingMultisigStageMessages>) -> Self {
-		MultisigMessageSender(sender, PhantomData)
-	}
-}
-pub struct MultisigMessageReceiver<C: ChainCrypto>(
-	pub UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
-	PhantomData<C>,
-);
-
-impl<C: ChainCrypto> MultisigMessageReceiver<C> {
-	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
-		MultisigMessageReceiver(receiver, PhantomData)
-	}
-}
-
-struct P2PKey {
-	signing_key: ed25519_dalek::SigningKey,
-	encryption_key: X25519KeyPair,
-}
-
-impl P2PKey {
-	fn new(ed25519_secret_key: &ed25519_dalek::SecretKey) -> Self {
-		let x_secret_key = ed25519_secret_key_to_x25519_secret_key(ed25519_secret_key);
-		P2PKey {
-			signing_key: ed25519_dalek::SigningKey::from_bytes(ed25519_secret_key),
-			encryption_key: X25519KeyPair {
-				public_key: (&x_secret_key).into(),
-				secret_key: x_secret_key,
-			},
-		}
-	}
-}
-
-fn pk_to_string(pk: &XPublicKey) -> String {
-	hex::encode(pk.as_bytes())
-}
 
 pub async fn start<StateChainClient, BlockStream: StreamApi<FINALIZED>>(
 	state_chain_client: Arc<StateChainClient>,
@@ -139,7 +80,7 @@ where
 			hex::decode_to_slice(str, &mut ed_secret_key[..]).map_err(anyhow::Error::msg)
 		})?;
 
-		P2PKey::new(&ed_secret_key)
+		engine_p2p::P2PKey::new(&ed_secret_key)
 	};
 
 	let current_peers =
@@ -189,7 +130,7 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
-					core::start(
+					engine_p2p::core::start(
 						node_key,
 						settings.port,
 						current_peers,

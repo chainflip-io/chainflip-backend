@@ -46,8 +46,9 @@ impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, inte
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_amm_math::PriceLimits;
 	use cf_chains::{AccountOrAddress, Chain};
-	use cf_primitives::{BlockNumber, ChannelId, EgressId, PriceLimits};
+	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
 
 	use super::*;
@@ -291,7 +292,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
-			T::PoolApi::sweep(&account_id)?;
 
 			ensure!(
 				T::PoolApi::pools().iter().all(|asset_pair| {
@@ -358,8 +358,6 @@ pub mod pallet {
 
 			Self::ensure_has_refund_address_for_asset(&account_id, output_asset)?;
 
-			T::PoolApi::sweep(&account_id)?;
-
 			T::BalanceApi::try_debit_account(&account_id, input_asset, amount)
 				.map_err(|_| Error::<T>::InsufficientBalance)?;
 
@@ -410,8 +408,6 @@ impl<T: Config> Pallet<T> {
 						),
 						Error::<T>::NoLiquidityRefundAddressRegistered
 					);
-					// Sweep earned fees
-					T::PoolApi::sweep(&account_id)?;
 
 					// Debit the asset from the account.
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
@@ -436,9 +432,6 @@ impl<T: Config> Pallet<T> {
 						destination_address_internal.chain() == ForeignChain::from(asset),
 						Error::<T>::InvalidEgressAddress
 					);
-
-					// Sweep earned fees
-					T::PoolApi::sweep(&account_id)?;
 
 					// Debit the asset from the account.
 					T::BalanceApi::try_debit_account(&account_id, asset, amount)?;

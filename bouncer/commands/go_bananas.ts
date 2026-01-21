@@ -21,7 +21,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { globalLogger } from 'shared/utils/logger';
 import { lpApiEndpoint } from 'shared/json_rpc';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function call(method: string, params: any, id: string) {
@@ -279,7 +279,9 @@ const price = new Map<Asset, number>([
 ]);
 
 async function bananas() {
-  const cf = await newChainflipIO(globalLogger, []);
+  const cf = await newChainflipIO(globalLogger, {
+    account: fullAccountFromUri('//LP_1', 'LP'),
+  });
   const liquidityUsdc = 10000;
 
   await Promise.all([
@@ -293,77 +295,77 @@ async function bananas() {
     createLpPool(cf.logger, 'ArbUsdt', price.get('ArbUsdc')!),
   ]);
 
-  await Promise.all([
-    depositLiquidity(cf.logger, 'Usdc', 8 * liquidityUsdc),
-    depositLiquidity(cf.logger, 'Eth', (2 * liquidityUsdc) / price.get('Eth')!),
-    depositLiquidity(cf.logger, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
-    depositLiquidity(cf.logger, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
-    depositLiquidity(cf.logger, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
-    depositLiquidity(cf.logger, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
-    depositLiquidity(cf.logger, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
-    depositLiquidity(cf.logger, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
-    depositLiquidity(cf.logger, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
+  await cf.all([
+    (subcf) => depositLiquidity(subcf, 'Usdc', 8 * liquidityUsdc),
+    (subcf) => depositLiquidity(subcf, 'Eth', (2 * liquidityUsdc) / price.get('Eth')!),
+    (subcf) => depositLiquidity(subcf, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
+    (subcf) => depositLiquidity(subcf, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
+    (subcf) => depositLiquidity(subcf, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    (subcf) => depositLiquidity(subcf, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
+    (subcf) => depositLiquidity(subcf, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
+    (subcf) => depositLiquidity(subcf, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
+    (subcf) => depositLiquidity(subcf, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
   ]);
 
   await cf.all([
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'Eth',
         price.get('Eth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Eth')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'Btc',
         price.get('Btc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Btc')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'Flip',
         price.get('Flip')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Flip')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'Usdt',
         price.get('Usdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Usdt')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'Wbtc',
         price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'ArbEth',
         price.get('ArbEth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbEth')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'ArbUsdc',
         price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
         liquidityUsdc,
       ),
-    (subCf) =>
+    (subcf) =>
       playLp(
-        subCf,
+        subcf,
         'ArbUsdt',
         price.get('ArbUsdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdt')),
         liquidityUsdc,
       ),
-    (subCf) => playSwapper(subCf),
-    (subCf) => launchTornado(subCf),
+    (subcf) => playSwapper(subcf),
+    (subcf) => launchTornado(subcf),
   ]);
 }
 

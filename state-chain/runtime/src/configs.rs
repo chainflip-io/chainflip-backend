@@ -669,7 +669,7 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
 	type AnyChainGovKeyBroadcaster = TokenholderGovernanceBroadcaster;
 	type CommKeyBroadcaster = TokenholderGovernanceBroadcaster;
-	type ProposalFee = ConstU128<{ 1_000 * FLIPPERINOS_PER_FLIP }>;
+	type ProposalFee = ConstU128<{ 1_000 * cf_primitives::FLIPPERINOS_PER_FLIP }>;
 	type EnactmentDelay = ConstU32<{ 7 * DAYS }>;
 }
 
@@ -958,6 +958,7 @@ impl pallet_cf_asset_balances::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
+	type PoolApi = LiquidityPools;
 	type SafeMode = RuntimeSafeMode;
 }
 

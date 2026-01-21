@@ -84,5 +84,6 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "withdrawal_address": "0xdededededededededededededededededededede"
     }
   ],
-  "btc_vault_deposit_address": "tb1pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsn60vlk"
+  "btc_vault_deposit_address": "tb1pqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsn60vlk",
+  "bound_fee_withdrawal_address": "0x0404040404040404040404040404040404040404"
 }

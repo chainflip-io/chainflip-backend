@@ -120,7 +120,7 @@ register_checks! {
 			let valid_assets = get_all_latest_prices_with_statechain_encoding(&post.unsynchronised_state)
 				.into_iter()
 				.filter_map(|(asset, (price, status))| {
-					let price: StatechainPrice = Fraction::from_raw(price);
+					let price: StatechainPrice = price.into();
 					let converted_price = convert_unit(
 						price,
 						PriceUnit { base_asset: PriceAsset::Fine, quote_asset: PriceAsset::Fine },

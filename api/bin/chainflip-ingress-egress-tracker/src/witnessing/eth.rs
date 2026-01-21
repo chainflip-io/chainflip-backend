@@ -24,10 +24,6 @@ use std::sync::Arc;
 use chainflip_engine::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 	settings::NodeContainer,
-	state_chain_observer::client::{
-		stream_api::{StreamApi, UNFINALIZED},
-		StateChainClient,
-	},
 	witness::{
 		common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSourceBuilder},
 		eth::EthCallBuilder,
@@ -38,6 +34,10 @@ use chainflip_engine::{
 			source::EvmSource,
 		},
 	},
+};
+use engine_sc_client::{
+	stream_api::{StreamApi, UNFINALIZED},
+	StateChainClient,
 };
 
 use crate::DepositTrackerSettings;

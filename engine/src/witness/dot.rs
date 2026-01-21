@@ -44,13 +44,13 @@ use crate::{
 		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
 		PolkadotHash,
 	},
-	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi,
-		storage_api::StorageApi,
-		stream_api::{StreamApi, FINALIZED},
-		STATE_CHAIN_CONNECTION,
-	},
 	witness::common::chain_source::extension::ChainSourceExt,
+};
+use engine_sc_client::{
+	extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+	stream_api::{StreamApi, FINALIZED},
+	STATE_CHAIN_CONNECTION,
 };
 
 use anyhow::Result;

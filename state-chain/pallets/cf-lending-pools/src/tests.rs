@@ -46,6 +46,11 @@ fn setup() {
 		]
 	));
 
+	BoostConfig::<Test>::set(BoostConfiguration {
+		network_fee_deduction_from_boost_percent: Percent::from_percent(0),
+		minimum_add_funds_amount: BTreeMap::default(),
+	});
+
 	<Test as crate::Config>::Balance::credit_account(
 		&BOOSTER_1,
 		Asset::Eth,
@@ -112,6 +117,11 @@ fn can_update_all_config_items() {
 	new_test_ext().execute_with(|| {
 		const NEW_NETWORK_FEE_DEDUCTION: Percent = Percent::from_percent(50);
 
+		let new_boost_config = BoostConfiguration {
+			network_fee_deduction_from_boost_percent: NEW_NETWORK_FEE_DEDUCTION,
+			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 15000_u128)]),
+		};
+
 		const NEW_LENDING_POOL_CONFIG: LendingPoolConfiguration = LendingPoolConfiguration {
 			origination_fee: Permill::from_percent(1),
 			liquidation_fee: Permill::from_percent(2),
@@ -156,10 +166,8 @@ fn can_update_all_config_items() {
 		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
 		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
 
-		const UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST: PalletConfigUpdate =
-			PalletConfigUpdate::SetNetworkFeeDeductionFromBoost {
-				deduction_percent: NEW_NETWORK_FEE_DEDUCTION,
-			};
+		let update_boost_config: PalletConfigUpdate =
+			PalletConfigUpdate::SetBoostConfig { config: new_boost_config.clone() };
 
 		const UPDATE_LENDING_POOL_CONFIG: PalletConfigUpdate =
 			PalletConfigUpdate::SetLendingPoolConfiguration {
@@ -212,7 +220,7 @@ fn can_update_all_config_items() {
 		};
 
 		// Check that the default values are different from the new ones
-		assert_ne!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
+		assert_ne!(BoostConfig::<Test>::get(), new_boost_config);
 		assert_ne!(
 			LendingConfig::<Test>::get().fee_swap_interval_blocks,
 			NEW_FEE_SWAP_INTERVAL_BLOCKS
@@ -263,7 +271,7 @@ fn can_update_all_config_items() {
 		assert_ok!(LendingPools::update_pallet_config(
 			RuntimeOrigin::root(),
 			vec![
-				UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST,
+				update_boost_config.clone(),
 				UPDATE_LENDING_POOL_CONFIG,
 				UPDATE_LTV_THRESHOLDS,
 				UPDATE_NETWORK_FEE_CONTRIBUTIONS,
@@ -280,7 +288,7 @@ fn can_update_all_config_items() {
 		));
 
 		// Check that the new values were set
-		assert_eq!(NetworkFeeDeductionFromBoostPercent::<Test>::get(), NEW_NETWORK_FEE_DEDUCTION);
+		assert_eq!(BoostConfig::<Test>::get(), new_boost_config);
 
 		assert_eq!(
 			LendingConfig::<Test>::get(),
@@ -308,9 +316,7 @@ fn can_update_all_config_items() {
 		// Check that the events were emitted
 		assert_events_eq!(
 			Test,
-			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
-				update: UPDATE_NETWORK_FEE_DEDUCTION_FROM_BOOST
-			}),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated { update: update_boost_config }),
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
 				update: UPDATE_LENDING_POOL_CONFIG
 			}),
@@ -445,7 +451,7 @@ fn test_add_boost_funds() {
 				0,
 				TIER_5_BPS
 			),
-			crate::Error::<Test>::AmountMustBeNonZero
+			crate::Error::<Test>::AmountBelowMinimum
 		);
 
 		// Add some of the LP funds to the boost pool
@@ -476,11 +482,25 @@ fn basic_boosting() {
 	new_test_ext().execute_with(|| {
 		const BOOST_FUNDS: AssetAmount = 500_000_000;
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
+		const MINIMUM_ADD_FUNDS_AMOUNT: AssetAmount = 10_000;
 		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 
 		setup();
 
-		NetworkFeeDeductionFromBoostPercent::<Test>::set(Percent::from_percent(50));
+		BoostConfig::<Test>::set(BoostConfiguration {
+			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
+			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, MINIMUM_ADD_FUNDS_AMOUNT)]),
+		});
+
+		assert_noop!(
+			LendingPools::add_boost_funds(
+				RuntimeOrigin::signed(BOOSTER_1),
+				Asset::Btc,
+				MINIMUM_ADD_FUNDS_AMOUNT - 1,
+				TIER_5_BPS
+			),
+			crate::Error::<Test>::AmountBelowMinimum
+		);
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
@@ -857,7 +877,10 @@ fn boost_pool_details() {
 
 		const NETWORK_FEE_DEDUCTION: Percent = Percent::from_percent(50);
 
-		NetworkFeeDeductionFromBoostPercent::<Test>::set(NETWORK_FEE_DEDUCTION);
+		BoostConfig::<Test>::set(BoostConfiguration {
+			network_fee_deduction_from_boost_percent: NETWORK_FEE_DEDUCTION,
+			minimum_add_funds_amount: BTreeMap::default(),
+		});
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),

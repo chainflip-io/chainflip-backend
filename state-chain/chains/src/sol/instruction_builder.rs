@@ -252,7 +252,7 @@ mod test {
 
 	fn channel_refund_parameters() -> ChannelRefundParametersForChain<Solana> {
 		ChannelRefundParametersForChain::<Solana> {
-			min_price: sp_core::U256::default(),
+			min_price: Default::default(),
 			refund_address: DESTINATION_ADDRESS_SOL,
 			retry_duration: 10u32,
 			refund_ccm_metadata: None,

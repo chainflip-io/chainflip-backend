@@ -20,10 +20,8 @@ use crate::settings::{
 };
 use anyhow::{Context, Result};
 use api::{
-	lp::LpApi,
-	primitives::{EpochIndex, FLIP_DECIMALS},
-	queries::QueryApi,
-	AccountId32, GovernanceApi, KeyPair, OperatorApi, StateChainApi, ValidatorApi,
+	lp::LpApi, primitives::EpochIndex, queries::QueryApi, AccountId32, GovernanceApi, KeyPair,
+	OperatorApi, StateChainApi, ValidatorApi,
 };
 use bigdecimal::BigDecimal;
 use cf_chains::eth::Address as EthereumAddress;
@@ -33,7 +31,7 @@ use chainflip_api::{
 	lp::LiquidityDepositChannelDetails,
 	primitives::{state_chain_runtime, FLIPPERINOS_PER_FLIP},
 	rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome},
-	BrokerApi,
+	Asset, BrokerApi,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -89,9 +87,15 @@ async fn run_cli() -> Result<()> {
 					},
 					BrokerSubcommands::RegisterAccount => {
 						api.broker_api().register_account().await?;
+						println!("Broker account successfully registered.");
 					},
 					BrokerSubcommands::DeregisterAccount => {
 						api.broker_api().deregister_account().await?;
+						println!("Broker account successfully deregistered.");
+					},
+					BrokerSubcommands::BindFeeWithdrawalAddress(eth_address) => {
+						let _ = api.broker_api().bind_fee_withdrawal_address(<str>::parse(&eth_address.address)?).await?;
+						println!("Broker account bound to fee withdrawal address: {}", eth_address.address);
 					},
 				},
 				LiquidityProvider(subcommand) => match subcommand {
@@ -120,17 +124,21 @@ async fn run_cli() -> Result<()> {
 					},
 					LiquidityProviderSubcommands::RegisterAccount => {
 						api.lp_api().register_account().await?;
+						println!("Liquidity provider account successfully registered.");
 					},
 					LiquidityProviderSubcommands::DeregisterAccount => {
 						api.lp_api().deregister_account().await?;
+						println!("Liquidity provider account successfully deregistered.");
 					},
 				},
 				Validator(subcommand) => match subcommand {
 					ValidatorSubcommands::RegisterAccount => {
 						api.validator_api().register_account().await?;
+						println!("Validator account successfully registered.");
 					},
 					ValidatorSubcommands::DeregisterAccount => {
 						api.validator_api().deregister_account().await?;
+						println!("Validator account successfully deregistered.");
 					},
 					ValidatorSubcommands::StopBidding => {
 						let tx_hash = api.validator_api().stop_bidding().await?;
@@ -217,7 +225,7 @@ fn flip_to_redemption_amount(amount: Option<f64>) -> RedemptionAmount {
 		Some(amount_float) => {
 			let atomic_amount = ((round_f64(amount_float, MAX_DECIMAL_PLACES) *
 				10_f64.powi(MAX_DECIMAL_PLACES as i32)) as u128) *
-				10_u128.pow(FLIP_DECIMALS - MAX_DECIMAL_PLACES);
+				10_u128.pow(Asset::Flip.decimals() - MAX_DECIMAL_PLACES);
 			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => RedemptionAmount::Max,

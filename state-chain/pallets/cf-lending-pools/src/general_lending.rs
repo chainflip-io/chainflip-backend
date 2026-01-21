@@ -1,4 +1,4 @@
-use cf_amm_math::{invert_price, Price};
+use cf_amm_math::Price;
 use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use core_lending_pool::ScaledAmountHP;
@@ -393,6 +393,7 @@ impl<T: Config> LoanAccount<T> {
 					Some(loan) => {
 						let excess_amount = loan.repay_via_liquidation(
 							swap_progress.accumulated_output_amount,
+							swap_request_id,
 							is_voluntary,
 						);
 
@@ -410,7 +411,10 @@ impl<T: Config> LoanAccount<T> {
 					// is added to the account's collateral balance:
 					self.add_new_collateral(
 						BTreeMap::from([(to_asset, excess_amount)]),
-						CollateralAddedActionType::SystemLiquidationExcessAmount { loan_id },
+						CollateralAddedActionType::SystemLiquidationExcessAmount {
+							loan_id,
+							swap_request_id,
+						},
 					);
 				}
 
@@ -952,6 +956,7 @@ impl<T: Config> GeneralLoan<T> {
 	fn repay_via_liquidation(
 		&mut self,
 		provided_amount: AssetAmount,
+		swap_request_id: SwapRequestId,
 		is_voluntary: bool,
 	) -> AssetAmount {
 		let config = LendingConfig::<T>::get();
@@ -985,14 +990,21 @@ impl<T: Config> GeneralLoan<T> {
 			provided_amount.saturating_sub(liquidation_fee)
 		};
 
-		self.repay_principal(provided_amount_after_fees)
+		self.repay_principal(
+			provided_amount_after_fees,
+			LoanRepaidActionType::Liquidation { swap_request_id },
+		)
 	}
 
 	/// Repays (fully or partially) the loan with `provided_amount` (that was either debited from
 	/// the account or received during liquidation). Returns any unused amount. The caller is
 	/// responsible for making sure that all pending interest has already been collected (via
 	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
-	fn repay_principal(&mut self, provided_amount: AssetAmount) -> AssetAmount {
+	fn repay_principal(
+		&mut self,
+		provided_amount: AssetAmount,
+		action_type: LoanRepaidActionType,
+	) -> AssetAmount {
 		// Making sure the user doesn't pay more than the total principal plus liquidation fee:
 		let repayment_amount = core::cmp::min(provided_amount, self.owed_principal);
 
@@ -1006,6 +1018,7 @@ impl<T: Config> GeneralLoan<T> {
 			Pallet::<T>::deposit_event(Event::LoanRepaid {
 				loan_id: self.id,
 				amount: repayment_amount,
+				action_type,
 			});
 		}
 
@@ -1346,7 +1359,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 			T::Balance::try_debit_account(borrower_id, loan_asset, repayment_amount)?;
 
-			let excess_amount = loan.repay_principal(repayment_amount);
+			let excess_amount =
+				loan.repay_principal(repayment_amount, LoanRepaidActionType::Manual);
 
 			if excess_amount > 0 {
 				T::Balance::credit_account(borrower_id, loan_asset, excess_amount);
@@ -1576,7 +1590,8 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						// NOTE: this might fully repaid the loan, but we don't want to settle
 						// the loan just yet as there may be more liquidation swaps to process for
 						// the loan.
-						Some(loan) => loan.repay_via_liquidation(output_amount, is_voluntary),
+						Some(loan) =>
+							loan.repay_via_liquidation(output_amount, swap_request_id, is_voluntary),
 						None => {
 							// In some cases it may be possible for the loan to no longer exist if
 							// e.g. the principal was fully covered by a prior liquidation swap or
@@ -1590,7 +1605,10 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 					if excess_amount > 0 {
 						loan_account.add_new_collateral(
 							BTreeMap::from([(liquidation_swap.to_asset, excess_amount)]),
-							CollateralAddedActionType::SystemLiquidationExcessAmount { loan_id },
+							CollateralAddedActionType::SystemLiquidationExcessAmount {
+								loan_id,
+								swap_request_id,
+							},
 						);
 					}
 

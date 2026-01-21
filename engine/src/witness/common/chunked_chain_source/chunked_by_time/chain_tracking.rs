@@ -18,12 +18,10 @@ use std::sync::Arc;
 
 use cf_chains::{instances::ChainInstanceFor, ChainState};
 
-use crate::{
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain},
-};
+use crate::witness::common::{chain_source::Header, RuntimeCallHasChain, RuntimeHasChain};
 use cf_chains::Chain;
 use cf_utilities::metrics::CHAIN_TRACKING;
+use engine_sc_client::extrinsic_api::signed::SignedExtrinsicApi;
 
 use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 

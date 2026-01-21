@@ -25,7 +25,7 @@ serde = { workspace = true, features = ["derive"] }
 # local dependencies
 pallet-cf-elections = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
-chainflip-engine = { workspace = true }
+engine-sc-client = { workspace = true }
 custom-rpc = { workspace = true }
 state-chain-runtime = { workspace = true, default-features = true }
 cf-utilities = { workspace = true, default-features = true }

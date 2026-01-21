@@ -207,9 +207,9 @@ mod tests {
 	use crate::{
 		evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcClient},
 		settings::{NodeContainer, WsHttpEndpoints},
-		state_chain_observer::client::StateChainClient,
 		witness::common::{chain_source::extension::ChainSourceExt, epoch_source::EpochSource},
 	};
+	use engine_sc_client::StateChainClient;
 
 	#[ignore = "requires connection to live network"]
 	#[tokio::test]

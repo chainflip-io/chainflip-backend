@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod client;
 /// Reads events from state chain
 mod sc_observer;
 

@@ -14,6 +14,7 @@ import {
   getEvmEndpoint,
   getSolConnection,
   deferredPromise,
+  runWithTimeout,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
@@ -159,7 +160,12 @@ async function main(): Promise<void> {
   const createAssethubVault = async () => {
     // Step a
     cf.info('Requesting Assethub Vault creation');
-    const { vaultAddress: hubVaultAddress } = await createPolkadotVault(assethub);
+    const { vaultAddress: hubVaultAddress } = await runWithTimeout(
+      createPolkadotVault(assethub),
+      90,
+      cf.logger,
+      'Creating Assethub vault',
+    );
     cf.info(`AssetHub vault created, address: ${hubVaultAddress}`);
 
     // Step b
@@ -173,17 +179,21 @@ async function main(): Promise<void> {
       hubProxyAdded,
     ]);
 
+    cf.debug(`Assethub Vault Proxy rotated and funded`);
+
     return { hubVaultAddress, hubVaultEvent };
   };
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
     await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
+    cf.debug('Arbitrum key inserted');
   };
 
   const insertSolanaKey = async () => {
     cf.info('Inserting Solana key in the programs');
     await initializeSolanaPrograms(cf.logger, solKey);
+    cf.debug('Solana key inserted');
   };
 
   const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([

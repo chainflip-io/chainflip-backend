@@ -719,7 +719,7 @@ mod vault_swaps {
 										),
 										refund_ccm_metadata: None
 									},
-									min_price: U256::zero(),
+									min_price: Default::default(),
 									max_oracle_price_slippage: None
 								}),
 								dca_params: Some(DcaParameters {

@@ -1,6 +1,5 @@
 import assert from 'assert';
 import {
-  isValidHexHash,
   isValidEthAddress,
   amountToFineAmount,
   sleep,
@@ -20,9 +19,13 @@ import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, loggerChild } from 'shared/utils/logger';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
+import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
+import { swappingCreditedOnChain } from 'generated/events/swapping/creditedOnChain';
 
 const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
 const testRpcAsset = stateChainAssetFromAsset(testAsset);
@@ -33,18 +36,22 @@ const testAssetAmount = parseInt(
 const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
-async function provideLiquidityAndTestAssetBalances(logger: Logger) {
+async function provideLiquidityAndTestAssetBalances<A = []>(parentcf: ChainflipIO<A>) {
+  const cf = parentcf.with({
+    account: fullAccountFromUri('//LP_API', 'LP'),
+  });
+
   const fineAmountToProvide = parseInt(
     amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
   );
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(logger, testAsset, amountToProvide, true, '//LP_API');
+  await depositLiquidity(cf, testAsset, amountToProvide);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
   let ethBalance = 0;
   do {
-    const balances = await lpApiRpc(logger, `lp_asset_balances`, []);
+    const balances = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
     ethBalance = parseInt(balances.Ethereum.Eth);
     retryCount++;
     if (retryCount > 14) {
@@ -58,52 +65,51 @@ async function provideLiquidityAndTestAssetBalances(logger: Logger) {
   } while (ethBalance < fineAmountToProvide);
 }
 
-async function testRegisterLiquidityRefundAddress(parentLogger: Logger) {
-  const logger = loggerChild(parentLogger, 'testRegisterLiquidityRefundAddress');
-  const observeRefundAddressRegisteredEvent = observeEvent(
-    logger,
-    'liquidityProvider:LiquidityRefundAddressRegistered',
-    {
-      test: (event) => event.data.address.Eth === testAddress,
-    },
-  );
-
-  const registerRefundAddress = await lpApiRpc(logger, `lp_register_liquidity_refund_address`, [
+async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
+  const txhash = await lpApiRpc(cf.logger, `lp_register_liquidity_refund_address`, [
     'Ethereum',
     testAddress,
   ]);
-  if (!isValidHexHash(await registerRefundAddress)) {
-    throw new Error(`Unexpected lp_register_liquidity_refund_address result`);
-  }
-  await observeRefundAddressRegisteredEvent.event;
+  await cf.stepToTransactionIncluded({
+    hash: txhash,
+    expectedEvent: {
+      name: 'LiquidityProvider.LiquidityRefundAddressRegistered',
+      schema: liquidityProviderLiquidityRefundAddressRegistered.refine(
+        (event) => event.address.__kind === 'Eth' && event.address.value === testAddress,
+      ),
+    },
+  });
 
   // TODO: Check that the correct address is now set on the SC
 }
 
-async function testLiquidityDepositLegacy(logger: Logger) {
+async function testLiquidityDepositLegacy<A = []>(cf: ChainflipIO<A>) {
   const lpAccount = createStateChainKeypair('//LP_API');
 
-  const observeLiquidityDepositAddressReadyEvent = observeEvent(
-    logger,
-    'liquidityProvider:LiquidityDepositAddressReady',
-    {
-      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
-    },
-  ).event;
-
   await assert.rejects(
-    () => lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
+    () => lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'InBlock']),
     (e: Error) => e.message.includes('InBlock waiting is not allowed for this method'),
     `Unexpected lp_request_liquidity_deposit_address result. Expected to return an error because InBlock waiting is not allowed`,
   );
 
-  const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_request_liquidity_deposit_address`, [testRpcAsset, 'Finalized'])
-  ).tx_details.response.deposit_address;
-  const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
+  const rpcResult = await lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address`, [
+    testRpcAsset,
+    'Finalized',
+  ]);
+  const liquidityDepositAddress = rpcResult.tx_details.response.deposit_address;
+  const liquidityDepositEvent = await cf.stepToTransactionIncluded({
+    hash: rpcResult.tx_details.tx_hash,
+    expectedEvent: {
+      name: 'LiquidityProvider.LiquidityDepositAddressReady',
+      schema: liquidityProviderLiquidityDepositAddressReady.refine(
+        (event) =>
+          event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
+      ),
+    },
+  });
 
   assert.strictEqual(
-    liquidityDepositEvent.data.depositAddress.Eth,
+    liquidityDepositEvent.depositAddress.address,
     liquidityDepositAddress,
     `Incorrect deposit address`,
   );
@@ -113,42 +119,40 @@ async function testLiquidityDepositLegacy(logger: Logger) {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
-    timeoutSeconds: 120,
-    test: (event) =>
-      event.data.asset === testAsset &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(testAssetAmount),
-      ),
-  }).event;
   await sendEvmNative(
-    logger,
+    cf.logger,
     chainFromAsset(testAsset),
     liquidityDepositAddress,
     String(testAmount),
   );
-  await observeAccountCreditedEvent;
+  await cf.stepUntilEvent(
+    'AssetBalances.AccountCredited',
+    assetBalancesAccountCredited.refine(
+      (event) =>
+        event.asset === testAsset &&
+        isWithinOnePercent(BigInt(event.amountCredited), BigInt(testAssetAmount)),
+    ),
+  );
 }
 
-async function testLiquidityDeposit(logger: Logger) {
+async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
   const lpAccount = createStateChainKeypair('//LP_API');
 
-  const observeLiquidityDepositAddressReadyEvent = observeEvent(
-    logger,
-    'liquidityProvider:LiquidityDepositAddressReady',
-    {
-      test: (event) => event.data.depositAddress.Eth && event.data.accountId === lpAccount.address,
-    },
-  ).event;
+  const rpcResult = await lpApiRpc(cf.logger, `lp_request_liquidity_deposit_address_v2`, [
+    testRpcAsset,
+  ]);
+  const liquidityDepositAddress = rpcResult.response.deposit_address;
 
-  const liquidityDepositAddress = (
-    await lpApiRpc(logger, `lp_request_liquidity_deposit_address_v2`, [testRpcAsset])
-  ).response.deposit_address;
-  const liquidityDepositEvent = await observeLiquidityDepositAddressReadyEvent;
+  cf.ifYouCallThisYouHaveToRefactor_stepToBlockHeight(rpcResult.block_number);
+  const liquidityDepositEvent = await cf.expectEvent(
+    'LiquidityProvider.LiquidityDepositAddressReady',
+    liquidityProviderLiquidityDepositAddressReady.refine(
+      (event) => event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
+    ),
+  );
 
   assert.strictEqual(
-    liquidityDepositEvent.data.depositAddress.Eth,
+    liquidityDepositEvent.depositAddress.address,
     liquidityDepositAddress,
     `Incorrect deposit address`,
   );
@@ -158,31 +162,30 @@ async function testLiquidityDeposit(logger: Logger) {
   );
 
   // Send funds to the deposit address and watch for deposit event
-  const observeAccountCreditedEvent = observeEvent(logger, 'assetBalances:AccountCredited', {
-    timeoutSeconds: 120,
-    test: (event) =>
-      event.data.asset === testAsset &&
-      isWithinOnePercent(
-        BigInt(event.data.amountCredited.replace(/,/g, '')),
-        BigInt(testAssetAmount),
-      ),
-  }).event;
   await sendEvmNative(
-    logger,
+    cf.logger,
     chainFromAsset(testAsset),
     liquidityDepositAddress,
     String(testAmount),
   );
-  await observeAccountCreditedEvent;
+  await cf.stepUntilEvent(
+    'AssetBalances.AccountCredited',
+    assetBalancesAccountCredited.refine(
+      (event) =>
+        event.accountId === lpAccount.address &&
+        event.asset === testAsset &&
+        isWithinOnePercent(BigInt(event.amountCredited), BigInt(testAssetAmount)),
+    ),
+  );
 
   // Also test the old liquidity deposit RPC (must be tested sequentially)
-  await testLiquidityDepositLegacy(logger);
+  await testLiquidityDepositLegacy(cf);
 }
 
-async function testWithdrawAsset(logger: Logger) {
+async function testWithdrawAsset<A = []>(cf: ChainflipIO<A>) {
   const oldBalance = await getBalance(testAsset, testAddress);
 
-  const result = await lpApiRpc(logger, `lp_withdraw_asset`, [
+  const result = await lpApiRpc(cf.logger, `lp_withdraw_asset`, [
     testAssetAmount,
     testRpcAsset,
     testAddress,
@@ -193,10 +196,10 @@ async function testWithdrawAsset(logger: Logger) {
   assert.strictEqual(chain, testRpcAsset.chain, `Unexpected withdraw asset result`);
   assert(egressId > 0, `Unexpected egressId: ${egressId}`);
 
-  await observeBalanceIncrease(logger, testAsset, testAddress, oldBalance);
+  await observeBalanceIncrease(cf.logger, testAsset, testAddress, oldBalance);
 }
 
-async function testTransferAsset(logger: Logger) {
+async function testTransferAsset<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
   const amountToTransfer = testAssetAmount.toString(16);
 
@@ -216,7 +219,7 @@ async function testTransferAsset(logger: Logger) {
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);
 
-  const result = await lpApiRpc(logger, `lp_transfer_asset`, [
+  const result = await lpApiRpc(cf.logger, `lp_transfer_asset`, [
     amountToTransfer,
     testRpcAsset,
     destinationLpAccount.address,
@@ -251,9 +254,9 @@ async function testTransferAsset(logger: Logger) {
   );
 }
 
-async function testRegisterWithExistingLpAccount(logger: Logger) {
+async function testRegisterWithExistingLpAccount<A = []>(cf: ChainflipIO<A>) {
   try {
-    await lpApiRpc(logger, `lp_register_account`, []);
+    await lpApiRpc(cf.logger, `lp_register_account`, []);
     throw new Error(`Unexpected lp_register_account result`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -266,7 +269,7 @@ async function testRegisterWithExistingLpAccount(logger: Logger) {
 }
 
 /// Test lp_set_range_order and lp_update_range_order by minting, updating, and burning a range order.
-async function testRangeOrder(logger: Logger) {
+async function testRangeOrder<A = []>(cf: ChainflipIO<A>) {
   const range = { start: 1, end: 2 };
   const orderId = 74398; // Arbitrary order id so it does not interfere with other tests
   const zeroAssetAmounts = {
@@ -277,7 +280,7 @@ async function testRangeOrder(logger: Logger) {
   };
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(logger, `lp_set_range_order`, [
+  await lpApiRpc(cf.logger, `lp_set_range_order`, [
     testRpcAsset,
     'USDC',
     orderId,
@@ -288,7 +291,7 @@ async function testRangeOrder(logger: Logger) {
 
   // Mint a range order
   const mintRangeOrder = (
-    await lpApiRpc(logger, `lp_set_range_order`, [
+    await lpApiRpc(cf.logger, `lp_set_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -310,7 +313,7 @@ async function testRangeOrder(logger: Logger) {
 
   // Update the range order
   const updateRangeOrder = (
-    await lpApiRpc(logger, `lp_update_range_order`, [
+    await lpApiRpc(cf.logger, `lp_update_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -340,7 +343,7 @@ async function testRangeOrder(logger: Logger) {
 
   // Burn the range order
   const burnRangeOrder = (
-    await lpApiRpc(logger, `lp_set_range_order`, [
+    await lpApiRpc(cf.logger, `lp_set_range_order`, [
       testRpcAsset,
       'USDC',
       orderId,
@@ -362,9 +365,9 @@ async function testRangeOrder(logger: Logger) {
   assert.strictEqual(matchBurn, true, `Expected burn of range order to decrease liquidity to 0`);
 }
 
-async function testGetOpenSwapChannels(logger: Logger) {
+async function testGetOpenSwapChannels<A = []>(cf: ChainflipIO<A>) {
   // TODO: Test with some SwapChannelInfo data
-  const openSwapChannels = await lpApiRpc(logger, `lp_get_open_swap_channels`, []);
+  const openSwapChannels = await lpApiRpc(cf.logger, `lp_get_open_swap_channels`, []);
   assert(openSwapChannels.ethereum, `Missing ethereum swap channel info`);
   assert(openSwapChannels.polkadot, `Missing polkadot swap channel info`);
   assert(openSwapChannels.bitcoin, `Missing bitcoin swap channel info`);
@@ -372,16 +375,16 @@ async function testGetOpenSwapChannels(logger: Logger) {
 
 /// Test lp_set_limit_order and lp_update_limit_order by minting, updating, and burning a limit order.
 
-async function testLimitOrder(logger: Logger) {
+async function testLimitOrder<A = []>(cf: ChainflipIO<A>) {
   const orderId = 98432; // Arbitrary order id so it does not interfere with other tests
   const tick = 2;
 
   // Cleanup after any unfinished previous test so it does not interfere with this test
-  await lpApiRpc(logger, `lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
+  await lpApiRpc(cf.logger, `lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0]);
 
   // Mint a limit order
   const mintLimitOrder = (
-    await lpApiRpc(logger, `lp_set_limit_order`, [
+    await lpApiRpc(cf.logger, `lp_set_limit_order`, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -405,7 +408,7 @@ async function testLimitOrder(logger: Logger) {
 
   // Update the limit order
   const updateLimitOrder = (
-    await lpApiRpc(logger, `lp_update_limit_order`, [
+    await lpApiRpc(cf.logger, `lp_update_limit_order`, [
       testRpcAsset,
       'USDC',
       'sell',
@@ -436,7 +439,14 @@ async function testLimitOrder(logger: Logger) {
 
   // Burn the limit order
   const burnLimitOrder = (
-    await lpApiRpc(logger, `lp_set_limit_order`, [testRpcAsset, 'USDC', 'sell', orderId, tick, 0])
+    await lpApiRpc(cf.logger, `lp_set_limit_order`, [
+      testRpcAsset,
+      'USDC',
+      'sell',
+      orderId,
+      tick,
+      0,
+    ])
   ).tx_details.response;
 
   assert(burnLimitOrder.length >= 1, `Empty burn limit order result`);
@@ -453,47 +463,52 @@ async function testLimitOrder(logger: Logger) {
   assert.strictEqual(matchBurn, true, `Expected burn of limit order to decrease liquidity to 0`);
 }
 
-async function testInternalSwap(logger: Logger) {
+async function testInternalSwap<A = []>(cf: ChainflipIO<A>) {
   const lp = createStateChainKeypair('//LP_API');
 
   // Start an on chain swap
-  const swapRequestId = (
-    await lpApiRpc(logger, `lp_schedule_swap`, [
-      testAssetAmount,
-      testRpcAsset,
-      'USDC',
-      0, // retry duration
-      { min_price: '0x0', max_oracle_price_slippage: null },
-      undefined, // DCA params
-    ])
-  ).tx_details.response.swap_request_id;
-  logger.debug(`On chain swap request id: ${swapRequestId}`);
+  const rpcResult = await lpApiRpc(cf.logger, `lp_schedule_swap`, [
+    testAssetAmount,
+    testRpcAsset,
+    'USDC',
+    0, // retry duration
+    { min_price: '0x0', max_oracle_price_slippage: null },
+    undefined, // DCA params
+  ]);
+  const swapRequestId = rpcResult.tx_details.response.swap_request_id;
+  cf.debug(`On chain swap request id: ${swapRequestId}`);
   assert(swapRequestId > 0, 'Unexpected on chain swap request id');
 
+  await cf.stepToTransactionIncluded({ hash: rpcResult.tx_details.tx_hash });
+
   // Wait for the swap to complete
-  await observeEvent(logger, 'swapping:CreditedOnChain', {
-    test: (event) =>
-      event.data.accountId === lp.address &&
-      Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 3,
-  }).event;
+  await cf.stepUntilEvent(
+    'Swapping.CreditedOnChain',
+    swappingCreditedOnChain.refine(
+      (event) => event.accountId === lp.address && Number(event.swapRequestId) === swapRequestId,
+    ),
+  );
 }
 
 /// Runs all of the LP commands via the LP API Json RPC Server that is running and checks that the returned data is as expected
 export async function testLpApi(testContext: TestContext) {
-  // Provide the amount of liquidity needed for the tests
-  await provideLiquidityAndTestAssetBalances(testContext.logger);
+  const parentcf = await newChainflipIO(testContext.logger, []);
 
-  await Promise.all([
-    testRegisterLiquidityRefundAddress(testContext.logger),
-    testLiquidityDeposit(testContext.logger),
-    testWithdrawAsset(testContext.logger),
-    testRegisterWithExistingLpAccount(testContext.logger),
-    testRangeOrder(testContext.logger),
-    testLimitOrder(testContext.logger),
-    testGetOpenSwapChannels(testContext.logger),
-    testInternalSwap(testContext.logger),
+  // Provide the amount of liquidity needed for the tests
+  await provideLiquidityAndTestAssetBalances(parentcf);
+
+  await parentcf.all([
+    (cf) =>
+      testRegisterLiquidityRefundAddress(cf.withChildLogger('testRegisterLiquidityRefundAddress')),
+    (cf) => testLiquidityDeposit(cf.withChildLogger('testLiquidityDeposit')),
+    (cf) => testWithdrawAsset(cf.withChildLogger('testWithdrawAsset')),
+    (cf) =>
+      testRegisterWithExistingLpAccount(cf.withChildLogger('testRegisterWithExistingLpAccount')),
+    (cf) => testRangeOrder(cf.withChildLogger('testRangeOrder')),
+    (cf) => testLimitOrder(cf.withChildLogger('testLimitOrder')),
+    (cf) => testGetOpenSwapChannels(cf.withChildLogger('testGetOpenSwapChannels')),
+    (cf) => testInternalSwap(cf.withChildLogger('testInternalSwap')),
   ]);
 
-  await testTransferAsset(testContext.logger);
+  await testTransferAsset(parentcf);
 }

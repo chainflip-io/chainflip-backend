@@ -48,7 +48,8 @@ macro_rules! assets {
 							json: $asset_json:literal,
 							gas: $asset_gas:literal,
 							index: $asset_index:literal,
-							usd_stablecoin: $asset_usd_stablecoin:literal
+							usd_stablecoin: $asset_usd_stablecoin:literal,
+							decimals: $asset_decimals:literal
 							$(,$asset_legacy_encoding:tt)?$(,)?
 						}
 					),+$(,)?
@@ -138,6 +139,13 @@ macro_rules! assets {
 					match self {
 						$(
 							$(Self::$asset_variant => $asset_usd_stablecoin,)+
+						)+
+					}
+				}
+				pub const fn decimals(&self) -> u32 {
+					match self {
+						$(
+							$(Self::$asset_variant => $asset_decimals,)+
 						)+
 					}
 				}
@@ -686,6 +694,7 @@ assets!(
 				gas: true,
 				index: 1,
 				usd_stablecoin: false,
+				decimals: 18,
 				legacy_encoding,
 			},
 			Asset {
@@ -696,6 +705,7 @@ assets!(
 				gas: false,
 				index: 2,
 				usd_stablecoin: false,
+				decimals: 18,
 				legacy_encoding,
 			},
 			Asset {
@@ -706,6 +716,7 @@ assets!(
 				gas: false,
 				index: 3,
 				usd_stablecoin: true,
+				decimals: 6,
 				legacy_encoding,
 			},
 			Asset {
@@ -716,6 +727,7 @@ assets!(
 				gas: false,
 				index: 8,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 			Asset {
 				variant: Wbtc,
@@ -725,6 +737,7 @@ assets!(
 				gas: false,
 				index: 14,
 				usd_stablecoin: false,
+				decimals: 8,
 			}
 		],
 	},
@@ -742,6 +755,7 @@ assets!(
 				gas: true,
 				index: 4,
 				usd_stablecoin: false,
+				decimals: 10,
 				legacy_encoding,
 			},
 		],
@@ -760,6 +774,7 @@ assets!(
 				gas: true,
 				index: 5,
 				usd_stablecoin: false,
+				decimals: 8,
 				legacy_encoding,
 			},
 		],
@@ -778,6 +793,7 @@ assets!(
 				gas: true,
 				index: 6,
 				usd_stablecoin: false,
+				decimals: 18,
 			},
 			Asset {
 				variant: ArbUsdc,
@@ -787,6 +803,7 @@ assets!(
 				gas: false,
 				index: 7,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 			Asset {
 				variant: ArbUsdt,
@@ -796,6 +813,7 @@ assets!(
 				gas: false,
 				index: 15,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 		],
 	},
@@ -813,6 +831,7 @@ assets!(
 				gas: true,
 				index: 9,
 				usd_stablecoin: false,
+				decimals: 9,
 			},
 			Asset {
 				variant: SolUsdc,
@@ -822,6 +841,7 @@ assets!(
 				gas: false,
 				index: 10,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 			Asset {
 				variant: SolUsdt,
@@ -831,6 +851,7 @@ assets!(
 				gas: false,
 				index: 16,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 		],
 	},
@@ -848,6 +869,7 @@ assets!(
 				gas: true,
 				index: 11,
 				usd_stablecoin: false,
+				decimals: 10,
 			},
 			Asset {
 				variant: HubUsdt,
@@ -857,6 +879,7 @@ assets!(
 				gas: false,
 				index: 12,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 			Asset {
 				variant: HubUsdc,
@@ -866,6 +889,7 @@ assets!(
 				gas: false,
 				index: 13,
 				usd_stablecoin: true,
+				decimals: 6,
 			},
 		],
 	},

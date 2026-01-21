@@ -28,7 +28,7 @@ use crate::{
 	witness_call, BROKER,
 };
 use cf_amm::{
-	math::{price_at_tick, Price, Tick},
+	math::{Price, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
@@ -43,8 +43,8 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, PriceLimits, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -81,7 +81,7 @@ const ETH_REFUND_PARAMS: ChannelRefundParametersForChain<Ethereum> =
 	ChannelRefundParametersForChain::<Ethereum> {
 		retry_duration: 5,
 		refund_address: H160([100u8; 20]),
-		min_price: sp_core::U256::zero(),
+		min_price: Price::zero(),
 		refund_ccm_metadata: None,
 		max_oracle_price_slippage: None,
 	};
@@ -398,7 +398,7 @@ pub fn setup_pool_and_accounts(assets: Vec<Asset>, order_type: OrderType) {
 	new_account(&ZION, AccountRole::Broker);
 
 	for (order_id, asset) in (0..).zip(assets) {
-		new_pool(asset, 0u32, price_at_tick(0).unwrap());
+		new_pool(asset, 0u32, Price::at_tick_zero());
 		add_liquidity(&DORIS, asset, 10_000_000 * DECIMALS, order_type, Some(order_id));
 	}
 }
@@ -412,8 +412,8 @@ fn basic_pool_setup_provision_and_swap() {
 		])
 		.build()
 		.execute_with(|| {
-			new_pool(Asset::Eth, 0, price_at_tick(0).unwrap());
-			new_pool(Asset::Flip, 0, price_at_tick(0).unwrap());
+			new_pool(Asset::Eth, 0, Price::at_tick_zero());
+			new_pool(Asset::Flip, 0, Price::at_tick_zero());
 			register_refund_addresses(&DORIS);
 
 			// Use the same decimals amount for all assets.
@@ -992,8 +992,8 @@ fn order_fills_subscription() {
 
 			assert_ne!(POOL_FEE, 0);
 
-			new_pool(Asset::Eth, POOL_FEE, price_at_tick(0).unwrap());
-			new_pool(Asset::Flip, POOL_FEE, price_at_tick(0).unwrap());
+			new_pool(Asset::Eth, POOL_FEE, Price::at_tick_zero());
+			new_pool(Asset::Flip, POOL_FEE, Price::at_tick_zero());
 
 			register_refund_addresses(&DORIS);
 
@@ -1014,7 +1014,7 @@ fn order_fills_subscription() {
 				Asset::Usdc,
 				0,
 				PriceLimits {
-					min_price: price_at_tick(-100).unwrap(),
+					min_price: Price::from_tick(-100).unwrap(),
 					max_oracle_price_slippage: None,
 				},
 				None,
@@ -1026,7 +1026,7 @@ fn order_fills_subscription() {
 				Asset::Eth,
 				0,
 				PriceLimits {
-					min_price: price_at_tick(-100).unwrap(),
+					min_price: Price::from_tick(-100).unwrap(),
 					max_oracle_price_slippage: None,
 				},
 				None,
@@ -1039,7 +1039,7 @@ fn order_fills_subscription() {
 				Asset::Flip,
 				0,
 				PriceLimits {
-					min_price: price_at_tick(-100).unwrap(),
+					min_price: Price::from_tick(-100).unwrap(),
 					max_oracle_price_slippage: None,
 				},
 				None,

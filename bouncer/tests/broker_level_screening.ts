@@ -22,7 +22,6 @@ import {
   getChainContractId,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import Keyring from 'polkadot/keyring';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBtcBalance } from 'shared/get_btc_balance';
@@ -34,12 +33,10 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { testSol, testSolVaultSwap } from './broker_level_screening/sol';
 
-const keyring = new Keyring({ type: 'sr25519' });
 const brokerUri = '//BROKER_1';
-const broker = keyring.createFromUri(brokerUri);
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -505,6 +502,7 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
   const BTC_WHITELIST_PREFIX = '3ed3ce16dbc61ca64eaac5a96e809a8f6b8fb02fc586c9dab2385ea1690a7db6';
   const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
   const ARB_WHITELIST_PREFIX = '3d3491b8c14ff78a5176bc3b6ebe516f6b8fb02fc586c9dab2385ea1690a7db6';
+  const SOL_WHITELIST_PREFIX = '8595efe3a571f61007e89f4416b858b16b8fb02fc586c9dab2385ea1690a7db6';
 
   const decodeHexStringToByteArray = (hex: string) => {
     let hexString = hex;
@@ -516,7 +514,12 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
     return result;
   };
 
-  for (const prefix of [BTC_WHITELIST_PREFIX, ETH_WHITELIST_PREFIX, ARB_WHITELIST_PREFIX]) {
+  for (const prefix of [
+    BTC_WHITELIST_PREFIX,
+    ETH_WHITELIST_PREFIX,
+    ARB_WHITELIST_PREFIX,
+    SOL_WHITELIST_PREFIX,
+  ]) {
     await submitGovernanceExtrinsic((api) =>
       api.tx.governance.callAsSudo(
         api.tx.system.setStorage([
@@ -677,7 +680,7 @@ export async function testBrokerLevelScreening(
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
-  await setWhitelistedBroker(broker.addressRaw);
+  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
   await parentcf.all([
     // --- LP deposits ---
     (cf) => testEvmLiquidityDeposit(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),

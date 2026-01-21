@@ -51,6 +51,8 @@ use crate::{
 	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaIngressEgress,
 	SolanaThresholdSigner, System, Validator,
 };
+#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
+use cf_amm::math::Price;
 use cf_chains::{
 	address::{
 		decode_and_validate_address_for_asset, to_encoded_address, try_from_encoded_address,
@@ -1127,7 +1129,7 @@ impl cf_traits::PriceFeedApi for ChainlinkOracle {
 	}
 
 	#[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
-	fn set_price(asset: assets::any::Asset, price: cf_primitives::Price) {
+	fn set_price(asset: assets::any::Asset, price: Price) {
 		generic_elections::set_price(asset, price);
 	}
 }

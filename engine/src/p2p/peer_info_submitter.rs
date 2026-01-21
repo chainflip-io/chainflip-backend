@@ -26,16 +26,15 @@ use codec::Encode;
 use sp_core::H256;
 use tracing::info;
 
-use crate::{
-	p2p::PeerInfo,
-	state_chain_observer::client::{
-		chain_api::ChainApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
-		storage_api::StorageApi,
-	},
+use crate::p2p::PeerInfo;
+
+use engine_sc_client::{
+	chain_api::ChainApi,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	storage_api::StorageApi,
 };
 
-use super::P2PKey;
+use engine_p2p::{pk_to_string, P2PKey};
 
 async fn update_registered_peer_id<StateChainClient>(
 	p2p_key: &P2PKey,
@@ -101,7 +100,7 @@ where
 
 		info!(
 		"Registering node's peer info. Address: [{ip_address}]:{cfe_port}, x25519 public key: {}. {extra_info}.",
-	super::pk_to_string(&public_encryption_key));
+	pk_to_string(&public_encryption_key));
 
 		update_registered_peer_id(p2p_key, state_chain_client, ip_address, cfe_port).await?;
 		info!("Our peer info registration is now up to date!");

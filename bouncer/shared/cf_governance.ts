@@ -30,7 +30,7 @@ export async function submitExistingGovernanceExtrinsic(
     .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
     .signAndSend(snowWhite, { nonce }, waiter);
 
-  const events = await promise;
+  const events = (await promise).events;
   unsub();
 
   const proposalId = events

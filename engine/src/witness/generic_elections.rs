@@ -34,12 +34,12 @@ use crate::{
 		retry_rpc::{address_checker::AddressCheckerRetryRpcApi, EvmRetryRpcClient},
 		rpc::{address_checker::PriceFeedData as EthPriceFeedData, EvmRpcSigningClient},
 	},
-	state_chain_observer::client::{
-		chain_api::ChainApi, electoral_api::ElectoralApi,
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
-	},
 };
 use anyhow::{anyhow, Result};
+use engine_sc_client::{
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
+	storage_api::StorageApi,
+};
 
 /// IMPORTANT: These strings have to match with the price feed "description" as returned by
 /// chainlink.

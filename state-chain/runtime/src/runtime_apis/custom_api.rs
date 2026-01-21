@@ -44,7 +44,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 pub use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
-pub use pallet_cf_lending_pools::BoostPoolDetails;
+pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
 	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
@@ -77,7 +77,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(13)]
+	#[api_version(15)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -193,9 +193,13 @@ decl_runtime_apis!(
 		) -> before_version_9::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
-		fn cf_broker_info(account_id: AccountId32) -> BrokerInfoLegacy;
+		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
 		#[changed_in(10)]
-		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<String>;
+		fn cf_broker_info(account_id: AccountId32) -> before_version_10::BrokerInfo;
+		#[changed_in(15)]
+		fn cf_broker_info(
+			account_id: AccountId32,
+		) -> before_version_15::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
@@ -292,6 +296,8 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		fn cf_network_fees() -> NetworkFees;
+		#[changed_in(12)]
+		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
@@ -329,6 +335,9 @@ decl_runtime_apis!(
 		#[changed_in(8)]
 		fn cf_boost_delay();
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
+		#[changed_in(14)]
+		fn cf_boost_config();
+		fn cf_boost_config() -> BoostConfiguration;
 		#[changed_in(9)]
 		fn cf_encode_non_native_call();
 		fn cf_encode_non_native_call(

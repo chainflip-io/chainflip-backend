@@ -11,7 +11,7 @@ type EventTime = {
   endBeforeBlock?: number;
 };
 
-export type EventDescription = { name: EventName; schema: z.ZodTypeAny };
+export type EventDescription = { name: EventName; schema: z.ZodTypeAny; txHash?: string };
 
 export type EventDescriptions = Record<string, EventDescription>;
 
@@ -51,6 +51,8 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
       ? SingleEventResult<'event', Q['schema']>
       : never;
 
+// ------------ Querying for block height --------------
+
 export const highestBlock = async (): Promise<number> => {
   const result = await prisma.block.findFirst({
     orderBy: {
@@ -60,18 +62,66 @@ export const highestBlock = async (): Promise<number> => {
   return result?.height ?? 0;
 };
 
-// ------------ Querying the indexer database --------------
+// ------------ Querying for transaction hashes --------------
+
+async function findTxHash(txhash: string) {
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const result = await prisma.extrinsic.findFirst({
+      where: {
+        hash: { equals: txhash },
+      },
+      include: {
+        block: true,
+      },
+    });
+
+    if (result) {
+      return result;
+    }
+
+    await sleep(500);
+  }
+}
+
+/**
+ * Searches for a block that contains the given txhash in the indexer database.
+ *
+ * WARNING: This expects the txhash to be eventually available, and will loop indefinitely if it isn't found.
+ *
+ * @param txhash transaction hash to look for
+ * @returns block height of the block where the transaction was found
+ */
+export async function blockHeightOfTransactionHash(txhash: string): Promise<number> {
+  return (await findTxHash(txhash)).block.height;
+}
+
+// ------------ Querying for events --------------
 export const findOneEventOfMany = async <Descriptions extends EventDescriptions>(
   logger: Logger,
   descriptions: Descriptions,
   timing: EventTime,
 ): Promise<OneOfEventsResult<Descriptions>> => {
+  // before searching for events, we collect all call ids for events that have an associated txhash
+  const callIdsList: { [x: string]: string | undefined }[] = await Promise.all(
+    Object.entries(descriptions).map(([key, description]) =>
+      description.txHash
+        ? findTxHash(description.txHash).then((tx) => ({ [key]: tx.callId }))
+        : Promise.resolve({ [key]: undefined }),
+    ),
+  );
+  const callIds = Object.assign(callIdsList) as { [x: string]: string | undefined };
+
+  // now we search for all events, and if provided we require
+  //  - the block height to be restricted to the ones allowed by `timings`
+  //  - the callId that's associated with the event to be the one belonging to the provided `txHash`
   let foundEventsKeyAndData: { key: string; data: unknown; blockHeight: number }[] = [];
   while (foundEventsKeyAndData.length === 0) {
     const matchingEvents = await prisma.event.findMany({
       where: {
-        OR: Object.values(descriptions).map((d) => ({
+        OR: Object.entries(descriptions).map(([key, d]) => ({
           name: d.name.startsWith('.') ? { endsWith: d.name } : { equals: d.name },
+          callId: callIds[key],
         })),
         block: {
           height: {

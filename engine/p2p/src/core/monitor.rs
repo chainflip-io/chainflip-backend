@@ -24,8 +24,8 @@
 //! The workaround is to "subscribe" to socket events and reconnect
 //! manually on receiving `HANDSHAKE_FAILED_AUTH` error.
 
+use cf_primitives::AccountId;
 use serde::{Deserialize, Serialize};
-use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::{info, info_span, trace, warn};
 

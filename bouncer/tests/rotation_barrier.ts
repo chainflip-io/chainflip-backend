@@ -12,30 +12,33 @@ import {
   observeBalanceIncrease,
   waitForExt,
 } from 'shared/utils';
+import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Testing broadcast through vault rotations
 export async function testRotationBarrier(testContext: TestContext) {
-  const { logger } = testContext;
-
-  const lpUri = process.env.LP_URI || '//LP_1';
+  const lpUri = (process.env.LP_URI || '//LP_1') as `//${string}`;
   const withdrawalAddress = await newAssetAddress(Assets.ArbEth);
 
-  await depositLiquidity(logger, Assets.ArbEth, 5, false, lpUri);
+  const cf = await newChainflipIO(testContext.logger, {
+    account: fullAccountFromUri(lpUri, 'LP'),
+  });
+
+  await depositLiquidity(cf, Assets.ArbEth, 5);
 
   await submitGovernanceExtrinsic((api) => api.tx.validator.forceRotation());
   // Wait for the activation key to be created and the activation key to be sent for signing
-  logger.info(`Vault rotation initiated`);
-  await observeEvent(logger, 'evmThresholdSigner:KeygenSuccess').event;
-  logger.info(`Waiting for the bitcoin key handover`);
-  await observeEvent(logger, 'bitcoinThresholdSigner:KeyHandoverSuccessReported').event;
-  logger.info(`Waiting for EVM key activation transaction to be sent for signing`);
-  await observeEvent(logger, 'evmThresholdSigner:ThresholdSignatureRequest').event;
+  cf.info(`Vault rotation initiated`);
+  await observeEvent(cf.logger, 'evmThresholdSigner:KeygenSuccess').event;
+  cf.info(`Waiting for the bitcoin key handover`);
+  await observeEvent(cf.logger, 'bitcoinThresholdSigner:KeyHandoverSuccessReported').event;
+  cf.info(`Waiting for EVM key activation transaction to be sent for signing`);
+  await observeEvent(cf.logger, 'evmThresholdSigner:ThresholdSignatureRequest').event;
 
-  const broadcastAborted = observeBadEvent(logger, ':BroadcastAborted', {});
+  const broadcastAborted = observeBadEvent(cf.logger, ':BroadcastAborted', {});
 
-  logger.info(`Submitting withdrawal request.`);
+  cf.info(`Submitting withdrawal request.`);
   const api = await getChainflipApi();
-  const { promise, waiter } = waitForExt(api, logger, 'InBlock', await cfMutex.acquire(lpUri));
+  const { promise, waiter } = waitForExt(api, cf.logger, 'InBlock', await cfMutex.acquire(lpUri));
   const lp = createStateChainKeypair(lpUri);
   const nonce = Number(await api.rpc.system.accountNextIndex(lp.address));
   const unsub = await api.tx.liquidityProvider
@@ -44,32 +47,32 @@ export async function testRotationBarrier(testContext: TestContext) {
     })
     .signAndSend(lp, { nonce }, waiter);
 
-  const events = await promise;
+  const events = (await promise).events;
   unsub();
 
   const egressId = events
     .find(({ event }) => event.method.endsWith('WithdrawalEgressScheduled'))
     ?.event.data[0].toHuman();
 
-  logger.info(
+  cf.info(
     `Withdrawal extrinsic included in a block, scheduled egress ID ${JSON.stringify(egressId)}`,
   );
 
-  const event = await observeEvent(logger, 'arbitrumIngressEgress:BatchBroadcastRequested', {
+  const event = await observeEvent(cf.logger, 'arbitrumIngressEgress:BatchBroadcastRequested', {
     test: (e) => JSON.stringify(e.data.egressIds).includes(JSON.stringify(egressId)),
     historicalCheckBlocks: 10,
   }).event;
 
   const broadcastId = Number(event.data.broadcastId);
 
-  await observeEvent(logger, 'arbitrumBroadcaster:TransactionBroadcastRequest', {
+  await observeEvent(cf.logger, 'arbitrumBroadcaster:TransactionBroadcastRequest', {
     test: (e) => Number(e.data.broadcastId) === broadcastId,
     historicalCheckBlocks: 10,
   }).event;
 
-  logger.info(`Broadcast requested for egress ID ${egressId}. Waiting for balance increase...`);
+  cf.info(`Broadcast requested for egress ID ${egressId}. Waiting for balance increase...`);
 
-  await observeBalanceIncrease(logger, Assets.ArbEth, withdrawalAddress);
+  await observeBalanceIncrease(cf.logger, Assets.ArbEth, withdrawalAddress);
 
   await broadcastAborted.stop();
 }

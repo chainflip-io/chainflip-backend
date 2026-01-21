@@ -19,6 +19,7 @@ use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, sol::SolAddress};
 use cf_primitives::{
 	AccountId, AccountRole, BlockNumber, ChainflipNetwork, FlipBalance, NetworkEnvironment,
+	FLIPPERINOS_PER_FLIP,
 };
 use cf_utilities::bs58_array;
 use pallet_cf_elections::generic_tools::Array;
@@ -454,6 +455,12 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 			AccountRole::LiquidityProvider,
 			100 * FLIPPERINOS_PER_FLIP,
 			Some(b"Chainflip Testnet LP BOOST".to_vec()),
+		),
+		(
+			get_account_id_from_seed::<sr25519::Public>("BROKER_API"),
+			AccountRole::Broker,
+			200 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet Broker Api".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_1"),

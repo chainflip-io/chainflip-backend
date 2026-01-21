@@ -253,6 +253,8 @@ pub enum RpcAccountInfo {
 		affiliates: Vec<RpcAffiliate>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		bound_fee_withdrawal_address: Option<EthereumAddress>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
@@ -310,6 +312,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 					earned_fees,
 					affiliates,
 					btc_vault_deposit_address: btc_vault_deposit_address.map(Into::into),
+					bound_fee_withdrawal_address: None,
 				},
 			},
 			OldRpcAccountInfo::LiquidityProvider {
@@ -377,7 +380,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 
 pub mod account_info_before_api_v7 {
 	use super::*;
-	use state_chain_runtime::runtime_apis::types::validator_info_before_v7;
+	use state_chain_runtime::runtime_apis::types::{before_version_10, validator_info_before_v7};
 
 	#[expect(clippy::large_enum_variant)]
 	#[derive(Serialize, Deserialize, Clone)]
@@ -432,11 +435,11 @@ pub mod account_info_before_api_v7 {
 			}
 		}
 
-		pub fn broker(broker_info: BrokerInfo<AddressString>, balance: u128) -> Self {
+		pub fn broker(broker_info: before_version_10::BrokerInfo, balance: u128) -> Self {
 			Self::Broker {
 				flip_balance: balance.into(),
 				bond: broker_info.bond.into(),
-				btc_vault_deposit_address: broker_info.btc_vault_deposit_address,
+				btc_vault_deposit_address: broker_info.btc_vault_deposit_address.map(Into::into),
 				earned_fees: cf_chains::assets::any::AssetMap::from_iter_or_default(
 					broker_info
 						.earned_fees
@@ -636,6 +639,7 @@ pub struct IngressEgressEnvironment {
 	pub channel_opening_fees: HashMap<ForeignChain, NumberOrHex>,
 	pub ingress_delays: HashMap<ForeignChain, u32>,
 	pub boost_delays: HashMap<ForeignChain, u32>,
+	pub boost_minimum_add_funds_amounts: any::AssetMap<NumberOrHex>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1646,8 +1650,15 @@ where
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLendingPool<U256>>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_lending_pools(hash, asset).map(|lending_pools| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 12 {
+				#[expect(deprecated)]
+				api.cf_lending_pools_before_version_12(hash, asset)
+					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
+			} else {
+				api.cf_lending_pools(hash, asset)
+			}
+			.map(|lending_pools| {
 				lending_pools
 					.into_iter()
 					.map(|pool| RpcLendingPool::<U256> {
@@ -1784,7 +1795,7 @@ where
 	) -> RpcResult<RpcAccountInfoWrapper> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
 			if api_version < 7 {
-				use account_info_before_api_v7::RpcAccountInfo;
+				use account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoLegacy;
 				let balance = api.cf_account_flip_balance(hash, &account_id)?;
 				let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
 
@@ -1794,7 +1805,7 @@ where
 						.unwrap_or(AccountRole::Unregistered)
 					{
 						AccountRole::Unregistered =>
-							RpcAccountInfo::unregistered(balance, asset_balances),
+							RpcAccountInfoLegacy::unregistered(balance, asset_balances),
 						AccountRole::Broker => {
 							let info = if api_version < 3 {
 								#[expect(deprecated)]
@@ -1803,12 +1814,11 @@ where
 							} else {
 								#[expect(deprecated)]
 								api.cf_broker_info_before_version_10(hash, account_id.clone())?
-									.map(Into::into)
 							};
 
-							RpcAccountInfo::broker(info, balance)
+							RpcAccountInfoLegacy::broker(info, balance)
 						},
-						AccountRole::LiquidityProvider => RpcAccountInfo::lp(
+						AccountRole::LiquidityProvider => RpcAccountInfoLegacy::lp(
 							#[expect(deprecated)]
 							api.cf_liquidity_provider_info_before_version_9(
 								hash,
@@ -1822,7 +1832,7 @@ where
 							#[expect(deprecated)]
 							let info = api.cf_validator_info_before_version_7(hash, &account_id)?;
 
-							RpcAccountInfo::validator(info)
+							RpcAccountInfoLegacy::validator(info)
 						},
 						// No other roles existed before v7
 						_ =>
@@ -1857,15 +1867,22 @@ where
 								earned_fees,
 								btc_vault_deposit_address,
 								affiliates,
+								bound_fee_withdrawal_address,
 								..
 							} = if api_version < 10 {
 								#[expect(deprecated)]
 								api.cf_broker_info_before_version_10(hash, account_id.clone())?
-									.map(Into::into)
+									.into()
 							} else {
 								let network = api.cf_network_environment(hash)?.into();
-								api.cf_broker_info(hash, account_id.clone())?
-									.map(|pubkey| pubkey.to_address(&network))
+								if api_version < 15 {
+									#[expect(deprecated)]
+									api.cf_broker_info_before_version_15(hash, account_id.clone())?
+										.into()
+								} else {
+									api.cf_broker_info(hash, account_id.clone())?
+								}
+								.map(|pubkey| pubkey.to_address(&network))
 							};
 							RpcAccountInfo::Broker {
 								earned_fees: AssetMap::from_iter_or_default(
@@ -1873,6 +1890,7 @@ where
 								),
 								affiliates: affiliates.into_iter().map(Into::into).collect(),
 								btc_vault_deposit_address,
+								bound_fee_withdrawal_address,
 							}
 						},
 						AccountRole::LiquidityProvider => {
@@ -2140,6 +2158,20 @@ where
 				channel_opening_fees,
 				ingress_delays,
 				boost_delays,
+				boost_minimum_add_funds_amounts: if version >= 14 {
+					any::AssetMap::try_from_fn(|asset| {
+						api.cf_boost_config(hash).map(|config| {
+							config
+								.minimum_add_funds_amount
+								.get(&asset)
+								.cloned()
+								.unwrap_or(1_u128)
+								.into()
+						})
+					})?
+				} else {
+					any::AssetMap::default()
+				},
 			})
 		})
 	}

@@ -4,6 +4,7 @@ pub mod account_info;
 pub mod before_v7;
 pub mod eip712;
 
+use cf_amm::math::{Price, SqrtPrice};
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -117,6 +118,14 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 		)
 		.unwrap(),
 	}
+}
+
+pub fn price_from_u128(value: u128) -> Price {
+	Price::from_raw(value.into())
+}
+
+pub fn sqrt_price_from_u128(value: u128) -> SqrtPrice {
+	SqrtPrice::from_raw(value.into())
 }
 
 #[test]
@@ -316,6 +325,10 @@ fn test_environment_serialization() {
 				(ForeignChain::Solana, 456u32),
 				(ForeignChain::Assethub, 2u32),
 			]),
+			boost_minimum_add_funds_amounts: any::AssetMap {
+				btc: btc::AssetMap { btc: 10000u128.into() },
+				..Default::default()
+			},
 		},
 		funding: FundingEnvironment {
 			redemption_tax: 0u32.into(),
@@ -507,8 +520,11 @@ fn auction_state_serialization() {
 
 #[test]
 fn pool_price_v1_serialization() {
-	let val =
-		PoolPriceV1 { price: 12345678u128.into(), sqrt_price: 87654321u128.into(), tick: -100i32 };
+	let val = PoolPriceV1 {
+		price: price_from_u128(12345678u128),
+		sqrt_price: sqrt_price_from_u128(87654321u128),
+		tick: -100i32,
+	};
 
 	insta::assert_json_snapshot!(val);
 }
@@ -519,9 +535,9 @@ fn pool_price_v2_serialization() {
 		base_asset: any::Asset::Eth,
 		quote_asset: any::Asset::Usdc,
 		price: pallet_cf_pools::PoolPriceV2 {
-			sell: Some(1234567u128.into()),
-			buy: Some(1234567u128.into()),
-			range_order: 1234567u128.into(),
+			sell: Some(sqrt_price_from_u128(1234567u128)),
+			buy: Some(sqrt_price_from_u128(1234567u128)),
+			range_order: sqrt_price_from_u128(1234567u128),
 		},
 	};
 
@@ -548,8 +564,14 @@ fn pool_pairs_map_serialization() {
 #[test]
 fn pool_order_book_serialization() {
 	let val = PoolOrderbook {
-		bids: vec![PoolOrder { amount: 12345678u128.into(), sqrt_price: 87654321u128.into() }],
-		asks: vec![PoolOrder { amount: 23456789u128.into(), sqrt_price: 98765432u128.into() }],
+		bids: vec![PoolOrder {
+			amount: 12345678u128.into(),
+			sqrt_price: sqrt_price_from_u128(87654321u128),
+		}],
+		asks: vec![PoolOrder {
+			amount: 23456789u128.into(),
+			sqrt_price: sqrt_price_from_u128(98765432u128),
+		}],
 	};
 
 	insta::assert_json_snapshot!(val);
@@ -577,21 +599,21 @@ fn ask_bid_map_serialization() {
 	let val = AskBidMap::<UnidirectionalPoolDepth> {
 		asks: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(123456.into()),
+				price: Some(sqrt_price_from_u128(123456)),
 				depth: 654321.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(234567.into()),
+				price: Some(sqrt_price_from_u128(234567)),
 				depth: 765432.into(),
 			},
 		},
 		bids: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(345678.into()),
+				price: Some(sqrt_price_from_u128(345678)),
 				depth: 876543.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(456789.into()),
+				price: Some(sqrt_price_from_u128(456789)),
 				depth: 987654.into(),
 			},
 		},
@@ -823,7 +845,7 @@ fn vault_swap_input_serialization() {
 	let refund_parameter = RefundParametersRpc {
 		retry_duration: 1000u32,
 		refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
-		min_price: 1234.into(),
+		min_price: price_from_u128(1234),
 		refund_ccm_metadata: Some(ccm_unchecked()),
 		max_oracle_price_slippage: Some(200u16),
 	};
@@ -1064,7 +1086,7 @@ fn swap_deposit_address_serialization() {
 		refund_parameters: RefundParametersRpc {
 			retry_duration: 1000u32,
 			refund_address: "E2aBDC008BaEa1d4Dd2eeE4f0BEa61f6f91897cC".to_string().into(),
-			min_price: 1234.into(),
+			min_price: price_from_u128(1234),
 			refund_ccm_metadata: Some(ccm_unchecked()),
 			max_oracle_price_slippage: Some(200u16),
 		},

@@ -21,7 +21,9 @@ use crate::threshold_signing::{
 };
 
 use cf_chains::{address::EncodedAddress, evm::TransactionFee};
-use cf_primitives::{AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
+use cf_primitives::{
+	AccountRole, BlockNumber, EpochIndex, FlipBalance, TxId, FLIPPERINOS_PER_FLIP, GENESIS_EPOCH,
+};
 use cf_test_utilities::assert_events_eq;
 use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo, KeyRotator};
 use cfe_events::{KeyHandoverRequest, ThresholdSignatureRequest, TxBroadcastRequest};
