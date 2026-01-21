@@ -1754,6 +1754,11 @@ export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('_
   }),
 ]);
 
+export const palletCfLendingPoolsBoostConfiguration = z.object({
+  networkFeeDeductionFromBoostPercent: z.number(),
+  minimumAddFundsAmount: z.array(z.tuple([cfPrimitivesChainsAssetsAnyAsset, numberOrHex])),
+});
+
 export const palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration = z.object({
   interestAtZeroUtilisation: z.number(),
   junctionUtilisation: z.number(),
@@ -1785,7 +1790,7 @@ export const palletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions = z
 });
 
 export const palletCfLendingPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('SetNetworkFeeDeductionFromBoost'), deductionPercent: z.number() }),
+  z.object({ __kind: z.literal('SetBoostConfig'), config: palletCfLendingPoolsBoostConfiguration }),
   z.object({
     __kind: z.literal('SetLendingPoolConfiguration'),
     asset: cfPrimitivesChainsAssetsAnyAsset.nullish(),
@@ -1831,7 +1836,11 @@ export const palletCfLendingPoolsBoostBoostPoolId = z.object({
 export const palletCfLendingPoolsCollateralAddedActionType = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Manual') }),
   z.object({ __kind: z.literal('SystemTopup') }),
-  z.object({ __kind: z.literal('SystemLiquidationExcessAmount'), loanId: numberOrHex }),
+  z.object({
+    __kind: z.literal('SystemLiquidationExcessAmount'),
+    loanId: numberOrHex,
+    swapRequestId: numberOrHex,
+  }),
 ]);
 
 export const palletCfLendingPoolsGeneralLendingLiquidationType = simpleEnum([
@@ -1844,6 +1853,11 @@ export const palletCfLendingPoolsGeneralLendingLiquidationCompletionReason = sim
   'FullySwapped',
   'LtvChange',
   'ManualAbort',
+]);
+
+export const palletCfLendingPoolsLoanRepaidActionType = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('Manual') }),
+  z.object({ __kind: z.literal('Liquidation'), swapRequestId: numberOrHex }),
 ]);
 
 export const palletCfLendingPoolsGeneralLendingWhitelistWhitelistUpdate = z.discriminatedUnion(
