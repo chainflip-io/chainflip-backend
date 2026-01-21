@@ -133,11 +133,9 @@ pub async fn query_election_block<
 						parent_hash: if C::WITNESS_PERIOD == 1 {
 							block.parent_hash
 						} else {
-							let block_number_range = block
-								.number
-								.ok_or(anyhow::anyhow!("No block number"))?
-								.low_u64()
-								.into_range_inclusive();
+							let block_number_range = C::block_witness_range(
+								block.number.ok_or(anyhow::anyhow!("No block number"))?.low_u64(),
+							);
 							client.block((*block_number_range.start()).into()).await?.parent_hash
 						},
 						bloom: if C::WITNESS_PERIOD == 1 {
