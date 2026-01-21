@@ -5,6 +5,7 @@ import { getEvmNativeBalance } from 'shared/get_evm_native_balance';
 import { getErc20Balance } from 'shared/get_erc20_balance';
 import { getSolBalance } from 'shared/get_sol_balance';
 import { getSolUsdcBalance } from 'shared/get_solusdc_balance';
+import { getSolUsdtBalance } from 'shared/get_solusdt_balance';
 import { getHubAssetBalance, getHubDotBalance } from 'shared/get_hub_balance';
 
 export async function getBalance(asset: Asset, address: string): Promise<string> {
@@ -43,6 +44,9 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
       break;
     case 'SolUsdc':
       result = await getSolUsdcBalance(address);
+      break;
+    case 'SolUsdt':
+      result = await getSolUsdtBalance(address);
       break;
     case 'HubDot':
       result = await getHubDotBalance(address);

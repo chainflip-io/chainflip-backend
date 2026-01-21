@@ -370,6 +370,41 @@ pub fn solana_vault_swap<A>(
 					channel_metadata,
 				)
 			},
+			Asset::SolUsdt => {
+				let token_supported_account =
+					cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
+						api_environment.vault_program,
+						api_environment.usdt_token_mint_pubkey,
+					)
+						.map_err(|_| "Failed to derive supported token account")?;
+
+				let from_token_account = match from_token_account {
+					Some(token_account) => SolPubkey::try_from(token_account)
+						.map_err(|_| "Failed to decode the source token account")?,
+					// Defaulting to the user's associated token account
+					None => derive_associated_token_account(
+						from.into(),
+						api_environment.usdt_token_mint_pubkey,
+					)
+					.map_err(|_| "Failed to derive the associated token account")?
+					.address
+					.into(),
+				};
+
+				SolanaInstructionBuilder::x_swap_usdt(
+					api_environment,
+					destination_asset,
+					destination_address,
+					from,
+					from_token_account,
+					seed,
+					event_data_account,
+					token_supported_account.address.into(),
+					input_amount,
+					cf_parameters,
+					channel_metadata,
+				)
+			},
 			_ => Err("Invalid source_asset: Not a Solana asset.")?,
 		}
 		.into(),
@@ -420,6 +455,9 @@ pub fn decode_bitcoin_vault_swap(
 pub fn decode_solana_vault_swap(
 	instruction: SolInstruction,
 ) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
+	let api_environment =
+		SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
+
 	let DecodedXSwapParams {
 		amount,
 		src_asset,
@@ -435,7 +473,7 @@ pub fn decode_solana_vault_swap(
 		affiliate_fees,
 		ccm,
 		seed,
-	} = cf_chains::sol::decode_sol_instruction_data(&instruction)?;
+	} = cf_chains::sol::decode_sol_instruction_data(&instruction, &api_environment)?;
 
 	Ok(VaultSwapInputEncoded {
 		source_asset: src_asset,

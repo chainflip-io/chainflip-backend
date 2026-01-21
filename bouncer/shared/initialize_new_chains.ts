@@ -208,26 +208,35 @@ export async function initializeSolanaPrograms(logger: Logger, solKey: string) {
     enableTokenSupportDiscriminatorString.map(Number),
   );
 
-  const solUsdcMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdc'));
+  const tokenAndSupportedAccounts = [
+    [
+      new PublicKey(getContractAddress('Solana', 'SolUsdc')),
+      new PublicKey(getContractAddress('Solana', 'SolUsdcTokenSupport')),
+    ],
+    [
+      new PublicKey(getContractAddress('Solana', 'SolUsdt')),
+      new PublicKey(getContractAddress('Solana', 'SolUsdtTokenSupport')),
+    ],
+  ];
 
-  const tokenSupportedAccount = new PublicKey(getContractAddress('Solana', 'SolUsdcTokenSupport'));
-
-  tx.add(
-    new TransactionInstruction({
-      data: Buffer.concat([
-        Buffer.from(enableTokenSupportDiscriminator.buffer),
-        bigNumberToU64Buffer(5n * 10n ** 6n), // minTokenSwapAmount
-      ]),
-      keys: [
-        { pubkey: dataAccount, isSigner: false, isWritable: true },
-        { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
-        { pubkey: tokenSupportedAccount, isSigner: false, isWritable: true },
-        { pubkey: solUsdcMintPubkey, isSigner: false, isWritable: false },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      programId: solanaVaultProgramId,
-    }),
-  );
+  for (const [tokenMintPubkey, tokenSupportedAccount] of tokenAndSupportedAccounts) {
+    tx.add(
+      new TransactionInstruction({
+        data: Buffer.concat([
+          Buffer.from(enableTokenSupportDiscriminator.buffer),
+          bigNumberToU64Buffer(5n * 10n ** 6n), // minTokenSwapAmount
+        ]),
+        keys: [
+          { pubkey: dataAccount, isSigner: false, isWritable: true },
+          { pubkey: whaleKeypair.publicKey, isSigner: true, isWritable: false },
+          { pubkey: tokenSupportedAccount, isSigner: false, isWritable: true },
+          { pubkey: tokenMintPubkey, isSigner: false, isWritable: false },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: solanaVaultProgramId,
+      }),
+    );
+  }
   await signAndSendTxSol(logger, tx);
 
   // Set Governance authority to the new AggKey (State Chain)

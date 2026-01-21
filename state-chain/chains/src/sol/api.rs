@@ -32,7 +32,7 @@ use crate::{
 	ccm_checker::{check_ccm_for_blacklisted_accounts, CcmValidityError, DecodedCcmAdditionalData},
 	sol::{
 		sol_tx_core::{
-			address_derivation::derive_associated_token_account, consts::SOL_USDC_DECIMAL,
+			address_derivation::derive_associated_token_account, consts::SOL_USD_DECIMAL,
 		},
 		transaction_builder::SolanaTransactionBuilder,
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolAsset, SolHash,
@@ -310,28 +310,28 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 						durable_nonce,
 						compute_price,
 					),
-					SolAsset::SolUsdc => {
-						let ata = derive_associated_token_account(
-							transfer_param.to,
-							sol_api_environment.usdc_token_mint_pubkey,
-						)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-						SolanaTransactionBuilder::transfer_token(
-							ata.address,
-							transfer_param.amount,
-							transfer_param.to,
-							sol_api_environment.vault_program,
-							sol_api_environment.vault_program_data_account,
-							sol_api_environment.token_vault_pda_account,
-							sol_api_environment.usdc_token_vault_ata,
-							sol_api_environment.usdc_token_mint_pubkey,
-							agg_key,
-							durable_nonce,
-							compute_price,
-							SOL_USDC_DECIMAL,
-							vec![sol_api_environment.address_lookup_table_account.clone()],
-						)
-					},
+					SolAsset::SolUsdc => SolanaTransactionBuilder::transfer_token(
+						transfer_param.amount,
+						transfer_param.to,
+						agg_key,
+						durable_nonce,
+						compute_price,
+						sol_api_environment.usdc_token_vault_ata,
+						sol_api_environment.usdc_token_mint_pubkey,
+						SOL_USD_DECIMAL,
+						&sol_api_environment,
+					),
+					SolAsset::SolUsdt => SolanaTransactionBuilder::transfer_token(
+						transfer_param.amount,
+						transfer_param.to,
+						agg_key,
+						durable_nonce,
+						compute_price,
+						sol_api_environment.usdt_token_vault_ata,
+						sol_api_environment.usdt_token_mint_pubkey,
+						SOL_USD_DECIMAL,
+						&sol_api_environment,
+					),
 				}?;
 
 				Ok((
@@ -477,7 +477,32 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					agg_key,
 					durable_nonce,
 					compute_price,
-					SOL_USDC_DECIMAL,
+					SOL_USD_DECIMAL,
+					compute_limit,
+					address_lookup_tables,
+				),
+				SolAsset::SolUsdt => SolanaTransactionBuilder::ccm_transfer_token(
+					derive_associated_token_account(
+						transfer_param.to,
+						sol_api_environment.usdt_token_mint_pubkey,
+					)
+					.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?
+					.address,
+					transfer_param.amount,
+					transfer_param.to,
+					source_chain,
+					source_address,
+					message,
+					ccm_accounts,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					sol_api_environment.token_vault_pda_account,
+					sol_api_environment.usdt_token_vault_ata,
+					sol_api_environment.usdt_token_mint_pubkey,
+					agg_key,
+					durable_nonce,
+					compute_price,
+					SOL_USD_DECIMAL,
 					compute_limit,
 					address_lookup_tables,
 				),
@@ -877,7 +902,33 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 					sol_api_environment.token_vault_pda_account,
 					sol_api_environment.usdc_token_vault_ata,
 					sol_api_environment.usdc_token_mint_pubkey,
-					SOL_USDC_DECIMAL,
+					SOL_USD_DECIMAL,
+					sol_api_environment.clone(),
+					agg_key,
+					durable_nonce,
+					compute_price,
+					vec![sol_api_environment.clone().address_lookup_table_account],
+				)
+			},
+			// Fetch token and transfer (refund) user
+			(Transfer { address, amount }, Fetch { deposit_fetch_id }, SolAsset::SolUsdt) => {
+				let ata = derive_associated_token_account(
+					address,
+					sol_api_environment.usdt_token_mint_pubkey,
+				)
+				.map_err(|_| RejectError::Other)?;
+				let fetch_params = FetchAssetParams { deposit_fetch_id, asset };
+				SolanaTransactionBuilder::refund_token(
+					fetch_params,
+					ata.address,
+					amount,
+					address,
+					sol_api_environment.vault_program,
+					sol_api_environment.vault_program_data_account,
+					sol_api_environment.token_vault_pda_account,
+					sol_api_environment.usdt_token_vault_ata,
+					sol_api_environment.usdt_token_mint_pubkey,
+					SOL_USD_DECIMAL,
 					sol_api_environment.clone(),
 					agg_key,
 					durable_nonce,
@@ -897,28 +948,32 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 				),
 			// Refund user without fetch - the fetching of tokens for Vault swaps is done separately
 			// as part of the environment's pallet `fetch_and_batch_close_vault_swap_accounts`.
-			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdc) => {
-				let ata = derive_associated_token_account(
-					address,
-					sol_api_environment.usdc_token_mint_pubkey,
-				)
-				.map_err(|_| RejectError::Other)?;
+			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdc) =>
 				SolanaTransactionBuilder::transfer_token(
-					ata.address,
 					amount,
 					address,
-					sol_api_environment.vault_program,
-					sol_api_environment.vault_program_data_account,
-					sol_api_environment.token_vault_pda_account,
-					sol_api_environment.usdc_token_vault_ata,
-					sol_api_environment.usdc_token_mint_pubkey,
 					agg_key,
 					durable_nonce,
 					compute_price,
-					SOL_USDC_DECIMAL,
-					vec![sol_api_environment.address_lookup_table_account.clone()],
-				)
-			},
+					sol_api_environment.usdc_token_vault_ata,
+					sol_api_environment.usdc_token_mint_pubkey,
+					SOL_USD_DECIMAL,
+					&sol_api_environment,
+				),
+			// Refund user without fetch - the fetching of tokens for Vault swaps is done separately
+			// as part of the environment's pallet `fetch_and_batch_close_vault_swap_accounts`.
+			(Transfer { address, amount }, NotRequired, SolAsset::SolUsdt) =>
+				SolanaTransactionBuilder::transfer_token(
+					amount,
+					address,
+					agg_key,
+					durable_nonce,
+					compute_price,
+					sol_api_environment.usdt_token_vault_ata,
+					sol_api_environment.usdt_token_mint_pubkey,
+					SOL_USD_DECIMAL,
+					&sol_api_environment,
+				),
 		}
 		.map_err(|_| RejectError::FailedToBuildRejection)?;
 

@@ -268,6 +268,7 @@ impl SolTrackedData {
 		let compute_limit_with_overhead = compute_limit.saturating_add(match asset {
 			SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
 			SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+			SolAsset::SolUsdt => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
 		});
 		sp_std::cmp::min(MAX_COMPUTE_UNITS_PER_CCM_TRANSFER, compute_limit_with_overhead)
 	}
@@ -308,6 +309,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 						match asset {
 							assets::sol::Asset::Sol => COMPUTE_UNITS_PER_FETCH_NATIVE,
 							assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_FETCH_TOKEN,
+							assets::sol::Asset::SolUsdt => COMPUTE_UNITS_PER_FETCH_TOKEN,
 						},
 				);
 				self.calculate_transaction_fee(compute_units_per_fetch)
@@ -326,12 +328,14 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 						match asset {
 							assets::sol::Asset::Sol => COMPUTE_UNITS_PER_TRANSFER_NATIVE,
 							assets::sol::Asset::SolUsdc => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
+							assets::sol::Asset::SolUsdt => COMPUTE_UNITS_PER_TRANSFER_TOKEN,
 						},
 				);
 				let gas_fee = self.calculate_transaction_fee(compute_units_per_transfer);
 				match asset {
 					assets::sol::Asset::Sol => gas_fee,
 					assets::sol::Asset::SolUsdc => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+					assets::sol::Asset::SolUsdt => gas_fee.saturating_add(TOKEN_ACCOUNT_RENT),
 				}
 			},
 			IngressOrEgress::EgressCcm { gas_budget, message_length: _ } => {
@@ -340,6 +344,7 @@ impl FeeEstimationApi<Solana> for SolTrackedData {
 				match asset {
 					assets::sol::Asset::Sol => ccm_fee,
 					assets::sol::Asset::SolUsdc => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
+					assets::sol::Asset::SolUsdt => ccm_fee.saturating_add(TOKEN_ACCOUNT_RENT),
 				}
 			},
 		}
@@ -504,6 +509,10 @@ pub struct SolApiEnvironment {
 	pub usdc_token_mint_pubkey: SolAddress,
 	pub usdc_token_vault_ata: SolAddress,
 
+	// For Usdc token
+	pub usdt_token_mint_pubkey: SolAddress,
+	pub usdt_token_vault_ata: SolAddress,
+
 	// For program swaps API calls.
 	pub swap_endpoint_program: SolAddress,
 	pub swap_endpoint_program_data_account: SolAddress,
@@ -537,6 +546,7 @@ pub struct DecodedXSwapParams {
 
 pub fn decode_sol_instruction_data(
 	instruction: &SolInstruction,
+	api_environment: &SolApiEnvironment,
 ) -> Result<DecodedXSwapParams, &'static str> {
 	let data = instruction.data.clone();
 	let (
@@ -601,17 +611,26 @@ pub fn decode_sol_instruction_data(
 				data,
 			)
 			.map_err(|_| "Failed to deserialize SolInstruction")?;
+
+			let token_mint_pubkey: SolAddress = instruction
+				.accounts
+				.get(sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize)
+				.ok_or("Invalid accounts in SolInstruction")?
+				.pubkey
+				.into();
+
+			let src_asset = if token_mint_pubkey == api_environment.usdc_token_mint_pubkey {
+				AnyChainAsset::SolUsdc
+			} else if token_mint_pubkey == api_environment.usdt_token_mint_pubkey {
+				AnyChainAsset::SolUsdt
+			} else {
+				Err("Unsupported input solana token")?
+			};
+
 			Ok((
 				amount,
-				AnyChainAsset::SolUsdc,
-				Some(
-					instruction
-						.accounts
-						.get(sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize)
-						.ok_or("Invalid accounts in SolInstruction")?
-						.pubkey
-						.into(),
-				),
+				src_asset,
+				Some(token_mint_pubkey),
 				dst_chain,
 				dst_address,
 				dst_token,
@@ -709,10 +728,11 @@ mod test {
 	fn can_calculate_gas_limit() {
 		const TEST_EGRESS_BUDGET: u128 = 80_000u128;
 
-		for asset in &[SolAsset::Sol, SolAsset::SolUsdc] {
+		for asset in &[SolAsset::Sol, SolAsset::SolUsdc, SolAsset::SolUsdt] {
 			let default_compute_limit = match asset {
 				SolAsset::Sol => CCM_COMPUTE_UNITS_OVERHEAD_NATIVE,
 				SolAsset::SolUsdc => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
+				SolAsset::SolUsdt => CCM_COMPUTE_UNITS_OVERHEAD_TOKEN,
 			};
 
 			let mut tx_compute_limit: u32 =
@@ -806,7 +826,7 @@ mod test {
 		);
 
 		assert_eq!(
-			decode_sol_instruction_data(&instruction),
+			decode_sol_instruction_data(&instruction, &sol_test_values::api_env()),
 			Ok(DecodedXSwapParams {
 				amount: input_amount.into(),
 				src_asset: Asset::Sol,
@@ -877,7 +897,7 @@ mod test {
 		);
 
 		assert_eq!(
-			decode_sol_instruction_data(&instruction),
+			decode_sol_instruction_data(&instruction, &sol_test_values::api_env()),
 			Ok(DecodedXSwapParams {
 				amount: input_amount.into(),
 				src_asset: Asset::Sol,
@@ -902,7 +922,7 @@ mod test {
 		let destination_asset = Asset::Sol;
 		let destination_address = EncodedAddress::Sol([0xF0; 32]);
 		let from = SolPubkey([0xF1; 32]);
-		let from_token_account = SolPubkey([0xF4; 32]);
+		let from_token_account = SolPubkey::from(sol_test_values::USDC_TOKEN_MINT_PUB_KEY);
 		let seed: &[u8] = &[0xF2; 32];
 		let event_data_account =
 			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)
@@ -947,10 +967,80 @@ mod test {
 		);
 
 		assert_eq!(
-			decode_sol_instruction_data(&instruction),
+			decode_sol_instruction_data(&instruction, &sol_test_values::api_env()),
 			Ok(DecodedXSwapParams {
 				amount: input_amount.into(),
 				src_asset: Asset::SolUsdc,
+				src_address: from.into(),
+				from_token_account: Some(from_token_account.into()),
+				dst_address: destination_address,
+				dst_token: destination_asset,
+				refund_parameters: refund_parameters.map_address(Into::into),
+				dca_parameters: Some(dca_parameters),
+				boost_fee,
+				broker_id,
+				broker_commission,
+				affiliate_fees,
+				ccm: Some(sol_test_values::ccm_metadata_v1_unchecked()),
+				seed: seed.to_vec().try_into().unwrap(),
+			})
+		);
+	}
+
+	#[test]
+	fn can_decode_x_swap_usdt_sol_instruction() {
+		let destination_asset = Asset::Sol;
+		let destination_address = EncodedAddress::Sol([0xF0; 32]);
+		let from = SolPubkey([0xF1; 32]);
+		let from_token_account = SolPubkey::from(sol_test_values::USDT_TOKEN_MINT_PUB_KEY);
+		let seed: &[u8] = &[0xF2; 32];
+		let event_data_account =
+			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)
+				.unwrap()
+				.address;
+		let token_supported_account = SolPubkey([0xF5; 32]);
+		let input_amount = 1_000_000_000u64;
+		let refund_parameters = ChannelRefundParametersForChain::<Solana> {
+			retry_duration: 15u32,
+			refund_address: SolAddress([0xF3; 32]),
+			min_price: 0.into(),
+			refund_ccm_metadata: None,
+			max_oracle_price_slippage: None,
+		};
+		let dca_parameters = DcaParameters { number_of_chunks: 10u32, chunk_interval: 10u32 };
+		let boost_fee = 10u8;
+		let broker_id = AccountId32::new([0xF4; 32]);
+		let broker_commission = 11;
+		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
+		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
+
+		let instruction = SolanaInstructionBuilder::x_swap_usdt(
+			sol_test_values::api_env(),
+			destination_asset,
+			destination_address.clone(),
+			from,
+			from_token_account,
+			seed.to_vec().try_into().unwrap(),
+			event_data_account.into(),
+			token_supported_account,
+			input_amount,
+			build_and_encode_cf_parameters(
+				refund_parameters.clone(),
+				Some(dca_parameters.clone()),
+				boost_fee,
+				broker_id.clone(),
+				broker_commission,
+				affiliate_fees.clone().try_into().unwrap(),
+				Some(&channel_metadata),
+			),
+			Some(channel_metadata.clone()),
+		);
+
+		assert_eq!(
+			decode_sol_instruction_data(&instruction, &sol_test_values::api_env()),
+			Ok(DecodedXSwapParams {
+				amount: input_amount.into(),
+				src_asset: Asset::SolUsdt,
 				src_address: from.into(),
 				from_token_account: Some(from_token_account.into()),
 				dst_address: destination_address,

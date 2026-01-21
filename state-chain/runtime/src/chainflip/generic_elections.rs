@@ -84,6 +84,7 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 		any::Asset::ArbUsdt => Some(UsdtUsd),
 		any::Asset::Sol => Some(SolUsd),
 		any::Asset::SolUsdc => Some(UsdcUsd),
+		any::Asset::SolUsdt => Some(UsdtUsd),
 		any::Asset::HubDot => None,
 		any::Asset::HubUsdt => Some(UsdtUsd),
 		any::Asset::HubUsdc => Some(UsdcUsd),

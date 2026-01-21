@@ -97,6 +97,10 @@ expression: val
       {
         "chain": "Arbitrum",
         "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "add_lender_funds": [
@@ -158,6 +162,10 @@ expression: val
       },
       {
         "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
         "asset": "USDT"
       }
     ],
@@ -221,6 +229,10 @@ expression: val
       {
         "chain": "Arbitrum",
         "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "add_collateral": [
@@ -283,6 +295,10 @@ expression: val
       {
         "chain": "Arbitrum",
         "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "remove_collateral": [
@@ -344,6 +360,10 @@ expression: val
       },
       {
         "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
         "asset": "USDT"
       }
     ],

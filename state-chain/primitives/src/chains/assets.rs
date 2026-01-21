@@ -823,6 +823,15 @@ assets!(
 				index: 10,
 				usd_stablecoin: true,
 			},
+			Asset {
+				variant: SolUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 16,
+				usd_stablecoin: true,
+			},
 		],
 	},
 	Chain {
@@ -897,6 +906,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(12).unwrap(), any::Asset::HubUsdt);
 		assert_eq!(any::Asset::try_from(13).unwrap(), any::Asset::HubUsdc);
 		assert_eq!(any::Asset::try_from(14).unwrap(), any::Asset::Wbtc);
+		assert_eq!(any::Asset::try_from(15).unwrap(), any::Asset::ArbUsdt);
+		assert_eq!(any::Asset::try_from(16).unwrap(), any::Asset::SolUsdt);
 	}
 
 	#[test]
@@ -913,6 +924,7 @@ mod test_assets {
 		assert_conversion!(arb, ArbUsdt);
 		assert_conversion!(sol, Sol);
 		assert_conversion!(sol, SolUsdc);
+		assert_conversion!(sol, SolUsdt);
 		assert_conversion!(hub, HubDot);
 
 		assert_incompatible!(eth, Dot);
@@ -947,6 +959,7 @@ mod test_assets {
 		assert_eq!(assert_ok!(any::Asset::from_str("Arbitrum-Eth")), any::Asset::ArbEth);
 		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Sol")), any::Asset::Sol);
 		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Usdc")), any::Asset::SolUsdc);
+		assert_eq!(assert_ok!(any::Asset::from_str("Solana-Usdt")), any::Asset::SolUsdt);
 		assert_eq!(assert_ok!(any::Asset::from_str("Assethub-Dot")), any::Asset::HubDot);
 
 		assert_err!(any::Asset::from_str("Ethereum-BTC"));
@@ -1134,7 +1147,7 @@ mod test_assets {
 			btc(Btc),
 			dot(Dot),
 			arb(ArbEth, ArbUsdc, ArbUsdt),
-			sol(Sol, SolUsdc),
+			sol(Sol, SolUsdc, SolUsdt),
 			hub(HubDot)
 		);
 

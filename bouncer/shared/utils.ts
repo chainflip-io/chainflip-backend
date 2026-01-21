@@ -214,11 +214,21 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';
         case 'SolUsdc':
           return process.env.SOL_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+        case 'SolUsdt':
+          return process.env.SOL_USDT_ADDRESS ?? '8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF';
         case 'SolUsdcTokenSupport':
           return PublicKey.findProgramAddressSync(
             [
               Buffer.from('supported_token'),
               new PublicKey(getContractAddress('Solana', 'SolUsdc')).toBuffer(),
+            ],
+            new PublicKey(getContractAddress('Solana', 'VAULT')),
+          )[0].toBase58();
+        case 'SolUsdtTokenSupport':
+          return PublicKey.findProgramAddressSync(
+            [
+              Buffer.from('supported_token'),
+              new PublicKey(getContractAddress('Solana', 'SolUsdt')).toBuffer(),
             ],
             new PublicKey(getContractAddress('Solana', 'VAULT')),
           )[0].toBase58();
@@ -231,7 +241,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'SWAP_ENDPOINT_NATIVE_VAULT_ACCOUNT':
           return 'EWaGcrFXhf9Zq8yxSdpAa75kZmDXkRxaP17sYiL6UpZN';
         case 'USER_ADDRESS_LOOKUP_TABLE':
-          return '2UooihWEqsL6C1aadx56ViJN3pgv4as7arJ5pXQRz45F';
+          return 'DqL9M6z83qk3QXDP2r9jAiyf6PSSdpSC5Ck7Rb8yWVmS';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -258,6 +268,7 @@ export function shortChainFromAsset(asset: Asset) {
       return 'Arb';
     case 'Sol':
     case 'SolUsdc':
+    case 'SolUsdt':
       return 'Sol';
     case 'HubDot':
     case 'HubUsdc':
@@ -293,6 +304,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'ArbUsdt':
     case 'Flip':
     case 'SolUsdc':
+    case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
       return '500';
@@ -689,6 +701,7 @@ export async function newAddress(
       break;
     case 'Sol':
     case 'SolUsdc':
+    case 'SolUsdt':
       rawAddress = newSolAddress(seed);
       break;
     default:
@@ -700,7 +713,6 @@ export async function newAddress(
 
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

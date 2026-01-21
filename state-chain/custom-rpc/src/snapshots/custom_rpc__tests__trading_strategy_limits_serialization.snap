@@ -24,7 +24,8 @@ expression: val
     },
     "Solana": {
       "SOL": 123456,
-      "USDC": 123456
+      "USDC": 123456,
+      "USDT": 123456
     },
     "Assethub": {
       "DOT": 123456,
@@ -53,7 +54,8 @@ expression: val
     },
     "Solana": {
       "SOL": 654321,
-      "USDC": 654321
+      "USDC": 654321,
+      "USDT": 654321
     },
     "Assethub": {
       "DOT": 654321,
