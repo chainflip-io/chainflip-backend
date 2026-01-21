@@ -21,11 +21,14 @@ import {
   findOneEventOfMany,
   EventDescriptions,
   AllOfEventsResult,
-  SingleEventResult,
   blockHeightOfTransactionHash,
   highestBlock,
+  EventFilter,
+  EventDescription,
+  DataOf,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
+import { JsonValue } from 'generated/prisma/runtime/library';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -198,7 +201,7 @@ export class ChainflipIO<Requirements> {
     this.impl_submitGovernance(arg),
   );
 
-  private async impl_submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<void> {
+  private async impl_submitGovernance(arg: { extrinsic: ExtrinsicFromApi }): Promise<EventFilter> {
     // we only wrap the governance submission by `runExclusively`
     // because the second half invokes `stepUntilEvent` which has its own `runExclusively` wrapper.
     const proposalId = await this.runExclusively('submitGovernance', async () => {
@@ -230,6 +233,12 @@ export class ChainflipIO<Requirements> {
     this.debug(
       `Governance proposal with id ${proposalId} executed in block ${this.lastIoBlockHeight}`,
     );
+
+    // Since governance extrinsics are not executed in the extrinsic where they've been proposed,
+    // we don't return a filter containing the txhash. We might consider a different filter here
+    // in the future. Currently, when passing `expectedEvent`, it will accept any matching event
+    // in the same block.
+    return {};
   }
 
   /**
@@ -244,8 +253,8 @@ export class ChainflipIO<Requirements> {
     this.impl_stepToTransactionIncluded(arg),
   );
 
-  private async impl_stepToTransactionIncluded(arg: { hash: string }): Promise<void> {
-    await this.runExclusively('stepToTransactionIncluded', async () => {
+  private async impl_stepToTransactionIncluded(arg: { hash: string }): Promise<EventFilter> {
+    return this.runExclusively('stepToTransactionIncluded', async () => {
       if (!isValidHexHash(arg.hash)) {
         throw new Error(
           `Expected transaction hash but got ${arg.hash} when trying to step to tx included`,
@@ -263,6 +272,8 @@ export class ChainflipIO<Requirements> {
         - current lastIoBlockHeight: ${this.lastIoBlockHeight}
         - found tx in ${height}`);
       }
+
+      return { txHash: arg.hash };
     });
   }
 
@@ -275,14 +286,18 @@ export class ChainflipIO<Requirements> {
    * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
    */
   private wrapWithExpectEvent<A extends object>(
-    f: (a: A) => Promise<void>,
+    f: (a: A) => Promise<EventFilter>,
   ): <Schema extends z.ZodTypeAny>(
     a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
   ) => Promise<z.infer<Schema>> {
     return async (arg) => {
-      await f(arg);
+      const eventFilter = await f(arg);
       if (arg.expectedEvent) {
-        return this.expectEvent(arg.expectedEvent.name, arg.expectedEvent.schema ?? z.any());
+        return this.expectEvent({
+          name: arg.expectedEvent.name,
+          schema: arg.expectedEvent.schema ?? z.any(),
+          filter: eventFilter,
+        });
       }
       return Promise.resolve();
     };
@@ -333,22 +348,17 @@ export class ChainflipIO<Requirements> {
    * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
    * @returns The data of the first matching event, well-typed according to the provided schema.
    */
-  async expectEvent<Z extends z.ZodTypeAny = z.ZodTypeAny>(
-    name: EventName,
-    schema?: Z,
-  ): Promise<z.infer<Z>> {
+  async expectEvent<D extends EventDescription>(description: D): Promise<DataOf<D>> {
     return this.runExclusively('expectEvent', async () => {
-      this.debug(`Expecting event ${name} in block ${this.lastIoBlockHeight}`);
-      const event = await findOneEventOfMany(
+      this.debug(`Expecting event ${description.name} in block ${this.lastIoBlockHeight}`);
+      return findOneEventOfMany(
         this.logger,
-        { event: { name, schema: schema ?? z.any() } },
+        { event: description },
         {
           startFromBlock: this.lastIoBlockHeight,
           endBeforeBlock: this.lastIoBlockHeight + 1,
         },
       );
-
-      return event.data;
     });
   }
 
@@ -395,10 +405,8 @@ export class ChainflipIO<Requirements> {
             cf.stepUntilOneEventOf({ [key]: event }),
       ),
     );
-    const merged: Record<string, SingleEventResult<string, z.ZodTypeAny>> = Object.assign(
-      {},
-      ...results.map((res) => ({ [res.key]: res })),
-    );
+    const merged: Record<string, { key: string; data: JsonValue; blockHeight: number }> =
+      Object.assign({}, ...results.map((res) => ({ [res.key]: res })));
 
     this.debug(`got all the following event data: ${JSON.stringify(merged)}`);
 
