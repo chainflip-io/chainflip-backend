@@ -96,12 +96,11 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
 		"B2d8rCk5jXUfjgYMpVRARQqZ4xh49XNMf7GYUFtdZd6q",
 	)),
-	// TODO: FIX once deployed
 	sol_usdt_token_mint_pubkey: SolAddress(bs58_array(
-		"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+		"FvuqJYh8YeEmarW5qkSrYeEgzaTKktgL3vhgBy2Csy4o",
 	)),
 	sol_usdt_token_vault_ata: SolAddress(bs58_array(
-		"8KNqCBB1LKWbtjNxY9v2g1fSBKm2ZRgNNv7rmx2bE6Ce",
+		"2LyjbUW592tgVsLn4EczYdhMzHp5DkKhjcCfkRfXMyst",
 	)),
 	sol_durable_nonces_and_accounts: [
 		(

@@ -8,7 +8,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@chainflip/cli": "1.12.1-wbtc-dev.6",
+    "@chainflip/cli": "1.12.1-wbtc-dev.7",
     "@chainflip/processor": "2.0.4",
     "@chainflip/utils": "0.11.2-wbtc-dev.2",
     "@coral-xyz/anchor": "^0.30.1",

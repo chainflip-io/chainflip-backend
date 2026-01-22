@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/cli':
-        specifier: 1.12.1-wbtc-dev.6
-        version: 1.12.1-wbtc-dev.6(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
+        specifier: 1.12.1-wbtc-dev.7
+        version: 1.12.1-wbtc-dev.7(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@chainflip/processor':
         specifier: 2.0.4
         version: 2.0.4
@@ -166,8 +166,8 @@ packages:
   '@chainflip/bitcoin@1.2.7':
     resolution: {integrity: sha512-De/3Oe53xCvolYsYydK+/wQ1qorPsvbsRX7idA4m86sHQTxlZ4hP5LU7lb3xhOyqrl94LMd56iCRLgoFlzmsCA==}
 
-  '@chainflip/cli@1.12.1-wbtc-dev.6':
-    resolution: {integrity: sha512-455Joxhccvwi1fX4ZXlS66coaJMUdCxRGKflfNeh6DQBGURhdPQsbssVEpP56GySj1vOURxRV7bARVh9h41h7g==}
+  '@chainflip/cli@1.12.1-wbtc-dev.7':
+    resolution: {integrity: sha512-OJOSXya13dQYjBFTG/8qp3tEL9z7OLbtRVOhsM0DAOGPBBKCT5UtyypI+aJwTQuAVjtzAStBJMdPvyyodAd1fw==}
     hasBin: true
     peerDependencies:
       axios: ^1.10.0
@@ -4316,7 +4316,7 @@ snapshots:
     transitivePeerDependencies:
       - typescript
 
-  '@chainflip/cli@1.12.1-wbtc-dev.6(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
+  '@chainflip/cli@1.12.1-wbtc-dev.7(axios@1.13.2)(bufferutil@4.1.0)(ethers@6.14.4(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
       '@chainflip/bitcoin': 1.2.7(typescript@5.9.3)
       '@chainflip/rpc': 2.0.6-wbtc-dev.4
