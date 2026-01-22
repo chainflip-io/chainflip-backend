@@ -54,7 +54,12 @@ pub fn encode_eip712_using_type_info<T: TypeInfo + Encode + 'static>(
 	let minimized_scale_value = MinimizedScaleValue::try_from(minimized_value).map_err(|e| {
 		Eip712Error::Message(format!("Failed to convert scale value into MinimizedScaleValue: {e}"))
 	})?;
-	let typed_data = TypedData { domain, types, primary_type, message: minimized_scale_value };
+	let typed_data = TypedData {
+		domain,
+		types,
+		primary_type: primary_type.name,
+		message: minimized_scale_value,
+	};
 
 	Ok(typed_data)
 }
@@ -79,7 +84,12 @@ pub fn encode_eip712_using_type_info_fast<T: TypeInfo + Encode + 'static>(
 	let minimized_scale_value = MinimizedScaleValue::try_from(minimized_value).map_err(|e| {
 		Eip712Error::Message(format!("Failed to convert scale value into MinimizedScaleValue: {e}"))
 	})?;
-	let typed_data = TypedData { domain, types, primary_type, message: minimized_scale_value };
+	let typed_data = TypedData {
+		domain,
+		types,
+		primary_type: primary_type.name,
+		message: minimized_scale_value,
+	};
 
 	Ok(typed_data)
 }
@@ -88,73 +98,57 @@ pub fn recursively_construct_types(
 	v: Value,
 	ty: MetaType,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
-) -> Result<(String, Value), &'static str> {
+) -> Result<(TypeName, Value), &'static str> {
 	//handle errors
 	let t = ty.type_info();
 
-	let (mut type_name, (maybe_add_type, value)): (String, (AddTypeOrNot, Value)) =
+	let (mut type_name, maybe_add_type, value): (TypeName, AddTypeOrNot, Value) =
 		match (t.type_def, v.value.clone()) {
 			(TypeDef::Composite(type_def_composite), ValueDef::Composite(comp_value)) =>
 			// if the type is primitive_types::H160, we interpret it as an address. We also map
 			// other primitives to solidity primitives directly without recursing further.
 				match t.path.segments.as_slice() {
 					["primitive_types", "H160"] => (
-						"address".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
-						),
+						TypeName { name: "address".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "U256"] => (
-						"uint256".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							stringify_primitive_integers_types(extract_primitive_types(
-								comp_value,
-							)?)?,
-						),
+						TypeName { name: "uint256".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						stringify_primitive_integers_types(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "U128"] => (
-						"uint128".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							stringify_primitive_integers_types(extract_primitive_types(
-								comp_value,
-							)?)?,
-						),
+						TypeName { name: "uint128".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						stringify_primitive_integers_types(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H128"] => (
-						"bytes".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
-						),
+						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H256"] => (
-						"bytes".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
-						),
+						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H384"] => (
-						"bytes".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
-						),
+						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H512"] => (
-						"bytes".to_string(),
-						(
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
-						),
+						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						AddTypeOrNot::DontAdd,
+						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
-					path => (
+					path => process_composite(
+						type_def_composite.fields,
+						comp_value,
+						types,
 						concatenate_name_segments(path.to_vec())?,
-						process_composite(type_def_composite.fields, comp_value, types)?,
-					),
+					)?,
 				},
 			(TypeDef::Variant(type_def_variant), ValueDef::Variant(value_variant)) =>
 			// find the variant in type_def_variant that matches the variant the value is
@@ -166,20 +160,23 @@ pub fn recursively_construct_types(
 					.map(|variant| -> Result<_, &'static str> {
 						if variant.fields.is_empty() {
 							Ok((
-								"string".to_string(),
-								(
-									AddTypeOrNot::DontAdd,
-									Value::string(value_variant.name.to_string()),
-								),
+								TypeName { name: "string".to_string(), contains_type_id: true },
+								AddTypeOrNot::DontAdd,
+								Value::string(value_variant.name.to_string()),
 							))
 						} else {
-							Ok((
-								// Should never error. Its a composite type so the name has to
-								// exist
+							// concatenate_name_segments should never error. Its a composite type so
+							// the name has to exist
+							let (mut type_name, add_type_or_not, value) = process_composite(
+								variant.fields,
+								value_variant.values,
+								types,
 								concatenate_name_segments(t.path.segments)? +
 									"__" + &value_variant.name.to_string(),
-								process_composite(variant.fields, value_variant.values, types)?,
-							))
+							)?;
+							// since variant struct itself is a instantiable type
+							type_name.contains_type_id = true;
+							Ok((type_name, add_type_or_not, value))
 						}
 					})
 					.ok_or("variant name in value should match one of the variants in type def")??,
@@ -201,13 +198,21 @@ pub fn recursively_construct_types(
 					// convert the type name of the sequence to something like "TypeName[]".
 					// If its a sequence of type u8, then we interpret it as bytes.
 					// empty vec![] ensures that we dont add this type to types list
-					if type_name == "uint8" {
+					if type_name.name == "uint8" {
 						(
-							"bytes".to_string(),
-							(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+							TypeName { name: "bytes".to_string(), contains_type_id: false },
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(modified_value)?,
 						)
 					} else {
-						(type_name.clone() + "[]", (AddTypeOrNot::DontAdd, modified_value))
+						(
+							TypeName {
+								name: type_name.name.clone() + "[]",
+								contains_type_id: type_names.iter().any(|tn| tn.contains_type_id),
+							},
+							AddTypeOrNot::DontAdd,
+							modified_value,
+						)
 					}
 				} else {
 					recursively_construct_types(
@@ -215,7 +220,7 @@ pub fn recursively_construct_types(
 						MetaType::new::<EmptySequence>(),
 						types,
 					)
-					.map(|(n, v)| (n, (AddTypeOrNot::DontAdd, v)))?
+					.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
 				}
 			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
@@ -234,28 +239,31 @@ pub fn recursively_construct_types(
 					// convert the type name of the array to something like "TypeName[len]".
 					// If its a sequence of type u8, then we interpret it as bytes.
 					// vec![] ensures that we dont add this type to types list
-					if type_name == "uint8" {
+					if type_name.name == "uint8" {
 						(
-							"bytes".to_string(),
-							(AddTypeOrNot::DontAdd, scale_value_bytes_to_hex(modified_value)?),
+							TypeName { name: "bytes".to_string(), contains_type_id: false },
+							AddTypeOrNot::DontAdd,
+							scale_value_bytes_to_hex(modified_value)?,
 						)
 					} else {
 						(
-							type_name.clone() + "[" + &type_def_array.len.to_string() + "]",
-							(AddTypeOrNot::DontAdd, modified_value),
+							TypeName {
+								name: type_name.name.clone() +
+									"[" + &type_def_array.len.to_string() +
+									"]",
+								contains_type_id: type_names.iter().any(|tn| tn.contains_type_id),
+							},
+							AddTypeOrNot::DontAdd,
+							modified_value,
 						)
 					}
 				} else {
-					recursively_construct_types(
-						modified_value,
-						MetaType::new::<EmptyArray>(),
-						types,
-					)
-					.map(|(n, v)| (n, (AddTypeOrNot::DontAdd, v)))?
+					recursively_construct_types(modified_value, type_def_array.type_param, types)
+						.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
 				}
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_fields, values): (_, Vec<(String, Value)>) = type_def_tuple
+				let (type_fields_and_ids, values): (Vec<_>, Vec<_>) = type_def_tuple
 					.fields
 					.clone()
 					.into_iter()
@@ -264,56 +272,68 @@ pub fn recursively_construct_types(
 					.map(|(i, (ty, value))| -> Result<_, &'static str> {
 						let (type_name, value) =
 							recursively_construct_types(value.clone(), ty, types)?;
-						let field_name = type_name.clone() + "__" + &i.to_string();
+						let field_name = type_name.name.clone() + "__" + &i.to_string();
 						Ok((
-							Eip712DomainType {
-								// In case of unnamed type_fields, we decide to name it by its type
-								// name appended by its index in the tuple
-								name: field_name.clone(),
-								r#type: type_name,
-							},
+							(
+								Eip712DomainType {
+									// In case of unnamed type_fields, we decide to name it by its
+									// type name appended by its index in the tuple
+									name: field_name.clone(),
+									r#type: type_name.name,
+								},
+								type_name.contains_type_id,
+							),
 							(field_name, value),
 						))
 					})
 					.collect::<Result<Vec<_>, _>>()?
 					.into_iter()
 					.unzip();
+				let (type_fields, ids): (Vec<_>, Vec<_>) = type_fields_and_ids.into_iter().unzip();
 				(
 					// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash
 					// of the type_fields}". Naming it so will display it in metamask
 					// which will indicate to the signer that this is indeed a tuple. The 4
 					// bytes of hash is just to avoid name collisions in case there are
 					// multiple unnamed tuples.
-					"UnnamedTuple__".to_string() +
-						&hex::encode(&keccak256(format!("{type_fields:?}"))[..4]),
-					(AddTypeOrNot::AddType { type_fields }, Value::named_composite(values)),
+					TypeName {
+						name: "UnnamedTuple__".to_string() +
+							&hex::encode(&keccak256(format!("{type_fields:?}"))[..4]),
+						contains_type_id: ids.into_iter().any(|id| id),
+					},
+					AddTypeOrNot::AddType { type_fields },
+					Value::named_composite(values),
 				)
 			},
 			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
-				match type_def_primitive {
-					TypeDefPrimitive::Bool => "bool".to_string(),
-					TypeDefPrimitive::Char => "string".to_string(),
-					TypeDefPrimitive::Str => "string".to_string(),
-					TypeDefPrimitive::U8 => "uint8".to_string(),
-					TypeDefPrimitive::U16 => "uint16".to_string(),
-					TypeDefPrimitive::U32 => "uint32".to_string(),
-					TypeDefPrimitive::U64 => "uint64".to_string(),
-					TypeDefPrimitive::U128 => "uint128".to_string(),
-					TypeDefPrimitive::U256 => "uint256".to_string(),
-					TypeDefPrimitive::I8 => "int8".to_string(),
-					TypeDefPrimitive::I16 => "int16".to_string(),
-					TypeDefPrimitive::I32 => "int32".to_string(),
-					TypeDefPrimitive::I64 => "int64".to_string(),
-					TypeDefPrimitive::I128 => "int128".to_string(),
-					TypeDefPrimitive::I256 => "int256".to_string(),
+				TypeName {
+					name: match type_def_primitive {
+						TypeDefPrimitive::Bool => "bool".to_string(),
+						TypeDefPrimitive::Char => "string".to_string(),
+						TypeDefPrimitive::Str => "string".to_string(),
+						TypeDefPrimitive::U8 => "uint8".to_string(),
+						TypeDefPrimitive::U16 => "uint16".to_string(),
+						TypeDefPrimitive::U32 => "uint32".to_string(),
+						TypeDefPrimitive::U64 => "uint64".to_string(),
+						TypeDefPrimitive::U128 => "uint128".to_string(),
+						TypeDefPrimitive::U256 => "uint256".to_string(),
+						TypeDefPrimitive::I8 => "int8".to_string(),
+						TypeDefPrimitive::I16 => "int16".to_string(),
+						TypeDefPrimitive::I32 => "int32".to_string(),
+						TypeDefPrimitive::I64 => "int64".to_string(),
+						TypeDefPrimitive::I128 => "int128".to_string(),
+						TypeDefPrimitive::I256 => "int256".to_string(),
+					},
+					contains_type_id: false,
 				},
-				(AddTypeOrNot::DontAdd, v),
+				AddTypeOrNot::DontAdd,
+				v,
 			),
 
 			(TypeDef::Compact(type_def_compact), _) => {
 				let (type_name, c_value) =
 					recursively_construct_types(v.clone(), type_def_compact.type_param, types)?;
-				(type_name, (AddTypeOrNot::DontAdd, c_value))
+				(type_name, AddTypeOrNot::DontAdd, c_value)
 			},
 			// this is only used when scale-info's bitvec feature is enabled and since we dont use
 			// that feature, this variant should be unreachable.
@@ -325,15 +345,15 @@ pub fn recursively_construct_types(
 	if let AddTypeOrNot::AddType { type_fields } = maybe_add_type {
 		// If there are generic parameters to this type, append uniqueness to the type name to avoid
 		// collisions
-		if t.type_params.len() > 0 {
-			type_name =
-				type_name + "__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..4]);
+		if type_name.contains_type_id || t.type_params.len() > 0 {
+			type_name.name =
+				type_name.name + "__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
 		}
 
 		//TODO: maybe use the full path as the type name to avoid collisions due to same name types
 		// in different paths
 
-		types.insert(type_name.clone(), type_fields);
+		types.insert(type_name.name.clone(), type_fields);
 	}
 
 	Ok((type_name, value))
@@ -343,7 +363,8 @@ fn process_composite(
 	type_fields: Vec<Field>,
 	comp_value: Composite<()>,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
-) -> Result<(AddTypeOrNot, Value), &'static str> {
+	type_main_name: String,
+) -> Result<(TypeName, AddTypeOrNot, Value), &'static str> {
 	match comp_value {
 		Composite::Named(fs) => {
 			let fs_map = fs.into_iter().collect::<BTreeMap<_, _>>();
@@ -357,7 +378,10 @@ fn process_composite(
 						fs_map.get(&field_name).ok_or("field with this name has to exist")?.clone();
 					let (type_name, value) = recursively_construct_types(value, field.ty, types)?;
 					Ok((
-						Eip712DomainType { name: field_name.clone(), r#type: type_name },
+						(
+							Eip712DomainType { name: field_name.clone(), r#type: type_name.name },
+							type_name.contains_type_id,
+						),
 						(field_name, value),
 					))
 				})
@@ -374,18 +398,32 @@ fn process_composite(
 						recursively_construct_types(value.clone(), field.ty, types)?;
 					// In case of unnamed type_fields, we decide to name it by its type name
 					// appended by its index in the tuple
-					let field_name = type_name.clone() + "_" + &i.to_string();
+					let field_name = type_name.name.clone() + "_" + &i.to_string();
 					Ok((
-						Eip712DomainType { name: field_name.clone(), r#type: type_name },
+						(
+							Eip712DomainType { name: field_name.clone(), r#type: type_name.name },
+							type_name.contains_type_id,
+						),
 						(field_name, value),
 					))
 				})
 				.collect::<Result<_, _>>()
 		},
 	}
-	.map(|v: Vec<(Eip712DomainType, (String, Value))>| {
-		let (type_fields, vals): (_, Vec<(String, Value)>) = v.into_iter().unzip();
-		(AddTypeOrNot::AddType { type_fields }, Value::named_composite(vals))
+	.map(|v: Vec<((Eip712DomainType, bool), (String, Value))>| {
+		let (type_and_ids, vals): (Vec<_>, Vec<_>) = v.into_iter().unzip();
+		let (type_fields, maybe_extra_ids): (Vec<_>, Vec<_>) = type_and_ids.into_iter().unzip();
+		(
+			// if any of the types of the fields of this composite type carries with it a type id
+			// in its name, we need to propagate that to the outer type which should also carry
+			// a type_id
+			TypeName {
+				name: type_main_name,
+				contains_type_id: maybe_extra_ids.into_iter().any(|id| id),
+			},
+			AddTypeOrNot::AddType { type_fields },
+			Value::named_composite(vals),
+		)
 	})
 }
 
@@ -513,7 +551,7 @@ pub mod benchmark_helpers {
 			recursively_construct_types(value, MetaType::new::<T>(), &mut types).map_err(|e| {
 				Eip712Error::Message(format!("error while constructing types: {e}"))
 			})?;
-		Ok((primary_type, minimized_value, types))
+		Ok((primary_type.name, minimized_value, types))
 	}
 
 	/// Step 4: Convert scale_value::Value to MinimizedScaleValue.
