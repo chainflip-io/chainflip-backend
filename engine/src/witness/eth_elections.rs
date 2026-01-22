@@ -148,7 +148,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 		self.vault_address
 	}
 
-	async fn get_events_for_asset(
+	async fn get_events_for_erc20_asset(
 		&self,
 		asset: EthAsset,
 		bloom: Option<ethers::types::Bloom>,

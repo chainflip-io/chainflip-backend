@@ -258,7 +258,7 @@ pub trait DepositChannelWitnesserConfig<Chain: cf_chains::Chain, CT: ChainTypes>
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
 	fn address_checker_address(&self) -> H160;
 	fn vault_address(&self) -> H160;
-	async fn get_events_for_asset(
+	async fn get_events_for_erc20_asset(
 		&self,
 		asset: Chain::ChainAsset,
 		bloom: Option<Bloom>,
@@ -346,7 +346,7 @@ where
 	// Handle each asset type separately with its specific event type
 	for (asset, deposit_channels) in erc20_deposit_channels {
 		if let Some(events) = config
-			.get_events_for_asset(asset, block.bloom, block_height, block.hash)
+			.get_events_for_erc20_asset(asset, block.bloom, block_height, block.hash)
 			.await?
 		{
 			let asset_ingresses = events
