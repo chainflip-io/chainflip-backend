@@ -73,7 +73,7 @@ pub struct ArbitrumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<ArbitrumChain, Arbitrum> for ArbitrumBlockHeightWitnesserVoter {
+impl HeaderClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
 	async fn best_block_header(&self) -> anyhow::Result<Header<ArbitrumChain>> {
 		self.block_header_by_height(self.best_block_number().await?).await
 	}
@@ -116,7 +116,7 @@ impl VoterApi<ArbitrumBlockHeightWitnesserES> for ArbitrumBlockHeightWitnesserVo
 		_settings: <ArbitrumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<ArbitrumBlockHeightWitnesserES, _, ArbitrumChain, Arbitrum>(
+		witness_headers::<ArbitrumBlockHeightWitnesserES, _, ArbitrumChain>(
 			self,
 			properties,
 			ARBITRUM_MAINNET_SAFETY_BUFFER,

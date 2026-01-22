@@ -77,7 +77,7 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<BitcoinChain, Bitcoin> for BtcCachingClient {
+impl HeaderClient<BitcoinChain> for BtcCachingClient {
 	async fn best_block_header(&self) -> anyhow::Result<Header<BitcoinChain>> {
 		let best_hash = self.best_block_hash().await?;
 		let best_header = self.block_header(best_hash).await?;
@@ -128,7 +128,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<BitcoinBlockHeightWitnesserES, _, BitcoinChain, Bitcoin>(
+		witness_headers::<BitcoinBlockHeightWitnesserES, _, BitcoinChain>(
 			&self.client,
 			properties,
 			BITCOIN_MAINNET_SAFETY_BUFFER,
