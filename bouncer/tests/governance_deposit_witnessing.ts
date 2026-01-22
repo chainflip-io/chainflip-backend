@@ -1,7 +1,6 @@
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
+import { observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
 import {
   observeSwapRequested,
   SwapRequestType,
@@ -11,6 +10,7 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 
 // Test that governance can trigger deposit witnessing for a deposit made with the wrong asset.
 // Scenario:
@@ -20,18 +20,17 @@ import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 // 4. Submit governance extrinsic to trigger witnessing with USDT
 // 5. Verify the swap completes successfully
 export async function testGovernanceDepositWitnessing(testContext: TestContext) {
-  const logger = testContext.logger;
-  const cf: ChainflipIO<[]> = await newChainflipIO(logger, []);
+  const cf: ChainflipIO<[]> = await newChainflipIO(testContext.logger, []);
   // Step 1: Open deposit channel for USDC -> Flip
   const destAddress = await newAssetAddress('Flip', 'GOV_WITNESS_TEST');
   const swapParams = await requestNewSwap(cf, 'Usdc', 'Flip', destAddress);
 
-  logger.info(
+  cf.info(
     `Deposit channel created: channelId=${swapParams.channelId}, address=${swapParams.depositAddress}`,
   );
 
   // Step 2: Set up observer to catch unexpected swaps (should NOT trigger during wait period)
-  const badSwapObserver = observeBadEvent(logger, 'swapping:SwapRequested', {
+  const badSwapObserver = observeBadEvent(cf.logger, 'swapping:SwapRequested', {
     test: (event) => {
       if (typeof event.data.origin === 'object' && 'DepositChannel' in event.data.origin) {
         return Number(event.data.origin.DepositChannel.channelId) === swapParams.channelId;
@@ -41,10 +40,10 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
   });
 
   // Step 3: Send USDT (wrong asset) to USDC deposit address and capture the block number
-  logger.info('Sending USDT to USDC deposit channel (should not trigger swap)...');
-  const txReceipt = await send(logger, 'Usdt', swapParams.depositAddress);
+  cf.info('Sending USDT to USDC deposit channel (should not trigger swap)...');
+  const txReceipt = await send(cf.logger, 'Usdt', swapParams.depositAddress);
   const depositBlockNumber = Number(txReceipt.blockNumber);
-  logger.info(`USDT deposit transaction included in Ethereum block ${depositBlockNumber}`);
+  cf.info(`USDT deposit transaction included in Ethereum block ${depositBlockNumber}`);
 
   // Step 4: Wait to confirm no automatic witnessing occurs
   await sleep(30000);
@@ -82,31 +81,33 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
 
   // Step 8: Submit governance extrinsic to trigger witnessing with USDT
   // Use the block number where the USDT deposit happened, and actual deposit channel state from chain
-  logger.info(
+  cf.info(
     `Submitting governance extrinsic to trigger deposit witnessing at block ${depositBlockNumber}...`,
   );
-  await submitGovernanceExtrinsic(async (api) => {
-    const depositChannel = {
-      channelId: depositChannelDetails.depositChannel.channelId,
-      address: depositChannelDetails.depositChannel.address,
-      asset: 'Usdt', // Override to USDT instead of USDC
-      state: depositChannelDetails.depositChannel.state,
-    };
+  await cf.submitGovernance({
+    extrinsic: async (api) => {
+      const depositChannel = {
+        channelId: depositChannelDetails.depositChannel.channelId,
+        address: depositChannelDetails.depositChannel.address,
+        asset: 'Usdt', // Override to USDT instead of USDC
+        state: depositChannelDetails.depositChannel.state,
+      };
 
-    const properties = [depositBlockNumber, { DepositChannels: [depositChannel] }];
+      const properties = [depositBlockNumber, { DepositChannels: [depositChannel] }];
 
-    return api.tx.ethereumElections.startNewBlockWitnesserElection(properties);
-  }, logger);
+      return api.tx.ethereumElections.startNewBlockWitnesserElection(properties);
+    },
+  });
 
   // Step 9: Verify swap was triggered
   const swapEvent = await swapRequestedHandle;
-  logger.info(`Swap requested with ID: ${swapEvent.swapRequestId}`);
+  cf.info(`Swap requested with ID: ${swapEvent.swapRequestId}`);
 
   // Step 10: Verify swap completes
-  await observeEvent(logger, 'swapping:SwapRequestCompleted', {
-    test: (event) => BigInt(event.data.swapRequestId) === swapEvent.swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+  await cf.stepUntilEvent(
+    'Swapping.SwapRequestCompleted',
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapEvent.swapRequestId),
+  );
 
-  logger.info('Test completed successfully! Governance-triggered witnessing worked.');
+  cf.info('Test completed successfully! Governance-triggered witnessing worked.');
 }
