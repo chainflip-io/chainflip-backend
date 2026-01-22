@@ -21,7 +21,7 @@ use crate::{
 		rpc::EvmRpcSigningClient,
 	},
 	witness::{
-		common::block_height::{witness_headers, HeaderClient},
+		common::block_height_witnesser::{witness_headers, HeaderClient},
 		eth::{
 			sc_utils::{
 				CallScFilter, DepositAndScCallFilter, DepositToScGatewayAndScCallFilter,

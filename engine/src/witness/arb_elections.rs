@@ -16,7 +16,7 @@
 use crate::{
 	evm::retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
 	witness::{
-		common::block_height::{witness_headers, HeaderClient},
+		common::block_height_witnesser::{witness_headers, HeaderClient},
 		evm::{
 			contract_common::{events_at_block, query_election_block},
 			erc20_deposits::Erc20Events,

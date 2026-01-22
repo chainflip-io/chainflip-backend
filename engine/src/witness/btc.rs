@@ -23,7 +23,7 @@ use crate::{
 	btc::rpc::{BtcRpcApi, VerboseTransaction},
 	witness::{
 		btc::fees::predict_fees,
-		common::block_height::{witness_headers, HeaderClient},
+		common::block_height_witnesser::{witness_headers, HeaderClient},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
