@@ -3234,3 +3234,200 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		assert_eq!(total_minted, REWARD_AMOUNT);
 	});
 }
+
+#[cfg(test)]
+mod keygen_failure_with_delegation {
+	use super::*;
+	use crate::delegation::DelegationSnapshot;
+	use cf_traits::KeyRotationStatusOuter;
+
+	const OPERATOR: u64 = 1000;
+	const VALIDATOR_1: u64 = 100;
+	const VALIDATOR_2: u64 = 101;
+	const VALIDATOR_3: u64 = 102;
+	const DELEGATOR: u64 = 200;
+
+	fn setup_operator_with_validators() {
+		// Synchronize MockEpochInfo with the pallet's CurrentEpoch
+		// This is necessary because from_auction_outcome uses T::EpochInfo::epoch_index()
+		// which in tests returns MockEpochInfo's value, not CurrentEpoch storage
+		MockEpochInfo::set_epoch(GENESIS_EPOCH);
+
+		// Add default test bids first to ensure auction will succeed
+		set_default_test_bids();
+
+		// Register operator
+		MockFlip::credit_funds(&OPERATOR, 1000);
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OPERATOR),
+			OPERATOR_SETTINGS,
+			vanity()
+		));
+
+		// Setup validators with high bids so they win the auction
+		// Default WINNING_BIDS are 120, 120, 110, 105 so we need higher amounts
+		add_bids(vec![
+			Bid { bidder_id: VALIDATOR_1, amount: 500 },
+			Bid { bidder_id: VALIDATOR_2, amount: 400 },
+			Bid { bidder_id: VALIDATOR_3, amount: 300 },
+		]);
+
+		// Claim and accept validators
+		for validator in [VALIDATOR_1, VALIDATOR_2, VALIDATOR_3] {
+			assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OPERATOR), validator));
+			assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(validator), OPERATOR));
+		}
+
+		// Setup a delegator
+		MockFlip::credit_funds(&DELEGATOR, 500);
+		assert_ok!(ValidatorPallet::delegate(
+			OriginTrait::signed(DELEGATOR),
+			OPERATOR,
+			DelegationAmount::Max
+		));
+	}
+
+	#[test]
+	fn move_validator_to_delegator_works() {
+		new_test_ext().execute_with(|| {
+			let mut snapshot = DelegationSnapshot::<u64, u128> {
+				operator: OPERATOR,
+				validators: BTreeMap::from_iter([(VALIDATOR_1, 150), (VALIDATOR_2, 120)]),
+				delegators: BTreeMap::from_iter([(DELEGATOR, 500)]),
+				delegation_fee_bps: 2000,
+			};
+
+			// Move validator 1 to delegators
+			assert!(snapshot.move_validator_to_delegator(VALIDATOR_1));
+			assert!(!snapshot.validators.contains_key(&VALIDATOR_1));
+			assert_eq!(snapshot.delegators.get(&VALIDATOR_1), Some(&150));
+			assert_eq!(snapshot.validators.len(), 1);
+			assert_eq!(snapshot.delegators.len(), 2);
+
+			// Try to move a non-existent validator
+			assert!(!snapshot.move_validator_to_delegator(999));
+		});
+	}
+
+	#[test]
+	fn keygen_failure_updates_delegation_snapshot() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			// Start rotation - this will create delegation snapshots
+			ValidatorPallet::start_authority_rotation();
+
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+
+			// Verify initial snapshot has all 3 validators
+			let initial_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert_eq!(initial_snapshot.validators.len(), 3);
+			assert!(initial_snapshot.validators.contains_key(&VALIDATOR_1));
+			assert!(initial_snapshot.validators.contains_key(&VALIDATOR_2));
+			assert!(initial_snapshot.validators.contains_key(&VALIDATOR_3));
+
+			// Verify ValidatorToOperator mapping exists
+			assert_eq!(
+				ValidatorToOperator::<Test>::get(next_epoch, VALIDATOR_1),
+				Some(OPERATOR),
+				"VALIDATOR_1 should be mapped to OPERATOR"
+			);
+
+			// Simulate keygen failure with VALIDATOR_1 as offender
+			MockKeyRotatorA::failed([VALIDATOR_1]);
+			System::reset_events();
+
+			// Check key rotator status before on_initialize
+			let status = <Test as crate::Config>::KeyRotator::status();
+			assert!(
+				matches!(status, AsyncResult::Ready(KeyRotationStatusOuter::Failed(ref offenders)) if offenders.contains(&VALIDATOR_1)),
+				"Expected Failed status with VALIDATOR_1 as offender, got: {:?}",
+				status
+			);
+
+			// Check rotation phase
+			assert!(matches!(
+				CurrentRotationPhase::<Test>::get(),
+				RotationPhase::KeygensInProgress(..)
+			));
+
+			Pallet::<Test>::on_initialize(1);
+
+			// Verify snapshot was updated - VALIDATOR_1 moved to delegators
+			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert_eq!(
+				updated_snapshot.validators.len(),
+				2,
+				"Snapshot validators: {:?}, delegators: {:?}",
+				updated_snapshot.validators,
+				updated_snapshot.delegators
+			);
+			assert!(!updated_snapshot.validators.contains_key(&VALIDATOR_1));
+			assert!(updated_snapshot.validators.contains_key(&VALIDATOR_2));
+			assert!(updated_snapshot.validators.contains_key(&VALIDATOR_3));
+
+			// VALIDATOR_1 should now be a delegator
+			assert!(updated_snapshot.delegators.contains_key(&VALIDATOR_1));
+			assert_eq!(updated_snapshot.delegators.get(&VALIDATOR_1), Some(&500));
+		});
+	}
+
+	#[test]
+	fn keygen_failure_emits_auction_completed_when_snapshot_updated() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			// Start rotation
+			ValidatorPallet::start_authority_rotation();
+
+			// Verify we're in KeygensInProgress
+			assert!(matches!(
+				CurrentRotationPhase::<Test>::get(),
+				RotationPhase::KeygensInProgress(..)
+			));
+
+			// Simulate keygen failure
+			MockKeyRotatorA::failed([VALIDATOR_1]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+
+			// Should emit AuctionCompleted event (re-auction happened)
+			assert!(System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			}));
+		});
+	}
+
+	#[test]
+	fn independent_validator_failure_does_not_trigger_reauction() {
+		new_test_ext().execute_with(|| {
+			// Setup independent validators (no operator) using add_bids
+			set_default_test_bids();
+			let independent_validator = 500u64;
+			add_bids(vec![Bid { bidder_id: independent_validator, amount: 200 }]);
+
+			// Start rotation
+			ValidatorPallet::start_authority_rotation();
+
+			// Get current phase to verify keygen started
+			let phase = CurrentRotationPhase::<Test>::get();
+			assert!(matches!(phase, RotationPhase::KeygensInProgress(..)));
+
+			// Simulate keygen failure with independent validator
+			MockKeyRotatorA::failed([independent_validator]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+
+			// Should NOT emit AuctionCompleted (no re-auction for independent validators)
+			// The rotation should just proceed with retry (or abort depending on min size)
+			let auction_completed_emitted = System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			});
+
+			assert!(
+				!auction_completed_emitted,
+				"AuctionCompleted should not be emitted for independent validator failure"
+			);
+		});
+	}
+}
