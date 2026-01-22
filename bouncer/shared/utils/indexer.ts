@@ -16,15 +16,11 @@ export type EventFilter = {
   txHash?: string;
 };
 
-export type EventDescription = {
+export type EventDescription<Schema = z.ZodTypeAny> = {
   name: EventName;
-  schema?: z.ZodTypeAny;
+  schema?: Schema;
   additionalFilter?: EventFilter;
 };
-
-export type DataOf<D extends EventDescription> = D['schema'] extends z.ZodTypeAny
-  ? z.infer<D['schema']>
-  : JsonValue;
 
 export type EventDescriptions = Record<string, EventDescription>;
 
@@ -42,18 +38,18 @@ export type EventQuery = EventDescription | OneOfEventsQuery | AllOfEventsQuery;
 
 // ------------ Result types of event queries  ---------------
 
-export type SingleEventResult<Key, Event extends EventDescription> = {
+export type SingleEventResult<Key, Schema extends z.ZodTypeAny | undefined> = {
   key: Key;
-  data: DataOf<Event>;
+  data: Schema extends z.ZodTypeAny ? z.infer<Schema> : JsonValue;
   blockHeight: number;
 };
 
 export type OneOfEventsResult<Descriptions extends Record<string, EventDescription>> = {
-  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]>;
+  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]['schema']>;
 }[keyof Descriptions];
 
 export type AllOfEventsResult<Descriptions extends Record<string, EventDescription>> = {
-  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]>;
+  [Key in keyof Descriptions]: SingleEventResult<Key, Descriptions[Key]['schema']>;
 };
 
 export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuery
@@ -61,7 +57,7 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
   : Q extends AllOfEventsQuery
     ? AllOfEventsResult<Q['allOf']>
     : Q extends EventDescription
-      ? SingleEventResult<'event', Q>
+      ? SingleEventResult<'event', Q['schema']>
       : never;
 
 // ------------ Querying for block height --------------
@@ -196,7 +192,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
     );
   }
 
-  return foundEventsKeyAndData[0];
+  return foundEventsKeyAndData[0] as OneOfEventsResult<Descriptions>;
 };
 
 // ------------ General fix  ---------------

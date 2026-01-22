@@ -25,7 +25,6 @@ import {
   highestBlock,
   EventFilter,
   EventDescription,
-  DataOf,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
 import { JsonValue } from 'generated/prisma/runtime/library';
@@ -296,7 +295,7 @@ export class ChainflipIO<Requirements> {
         return this.expectEvent({
           name: arg.expectedEvent.name,
           schema: arg.expectedEvent.schema ?? z.any(),
-          filter: eventFilter,
+          additionalFilter: eventFilter,
         });
       }
       return Promise.resolve();
@@ -348,7 +347,9 @@ export class ChainflipIO<Requirements> {
    * various to fields to have specific values (e.g. ChannelId should have a certain expected value).
    * @returns The data of the first matching event, well-typed according to the provided schema.
    */
-  async expectEvent<D extends EventDescription>(description: D): Promise<DataOf<D>> {
+  async expectEvent<Schema extends z.ZodTypeAny>(
+    description: EventDescription<Schema>,
+  ): Promise<z.infer<Schema>> {
     return this.runExclusively('expectEvent', async () => {
       this.debug(`Expecting event ${description.name} in block ${this.lastIoBlockHeight}`);
       return findOneEventOfMany(
