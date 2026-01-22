@@ -133,7 +133,7 @@ pub struct EthereumDepositChannelWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereum>
+impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereum, EthereumChain>
 	for EthereumDepositChannelWitnesserVoter
 {
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
@@ -161,7 +161,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 		};
 
 		let events = match asset {
-			EthAsset::Usdc => events_at_block::<cf_chains::Ethereum, UsdcEvents, _>(
+			EthAsset::Usdc => events_at_block::<cf_chains::Ethereum, UsdcEvents, EthereumChain, _>(
 				bloom,
 				block_height,
 				block_hash,
@@ -176,7 +176,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 				log_index: event.log_index,
 			})
 			.collect::<Vec<_>>(),
-			EthAsset::Flip => events_at_block::<cf_chains::Ethereum, FlipEvents, _>(
+			EthAsset::Flip => events_at_block::<cf_chains::Ethereum, FlipEvents, EthereumChain, _>(
 				bloom,
 				block_height,
 				block_hash,
@@ -191,7 +191,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 				log_index: event.log_index,
 			})
 			.collect::<Vec<_>>(),
-			EthAsset::Usdt => events_at_block::<cf_chains::Ethereum, UsdtEvents, _>(
+			EthAsset::Usdt => events_at_block::<cf_chains::Ethereum, UsdtEvents, EthereumChain, _>(
 				bloom,
 				block_height,
 				block_hash,
@@ -266,7 +266,7 @@ impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesse
 		let (block, return_block_hash) =
 			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Ethereum, VaultEvents, _>(
+		let events = events_at_block::<cf_chains::Ethereum, VaultEvents, EthereumChain, _>(
 			block.bloom,
 			block_height,
 			block.hash,
@@ -303,14 +303,15 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 		let (block, return_block_hash) =
 			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Ethereum, StateChainGatewayEvents, _>(
-			block.bloom,
-			block_height,
-			block.hash,
-			self.state_chain_gateway_address,
-			&self.client,
-		)
-		.await?;
+		let events =
+			events_at_block::<cf_chains::Ethereum, StateChainGatewayEvents, EthereumChain, _>(
+				block.bloom,
+				block_height,
+				block.hash,
+				self.state_chain_gateway_address,
+				&self.client,
+			)
+			.await?;
 
 		let mut result: Vec<SCStateChainGatewayEvent> = Vec::new();
 		for event in events {
@@ -382,7 +383,7 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 		let (block, return_block_hash) =
 			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Ethereum, KeyManagerEvents, _>(
+		let events = events_at_block::<cf_chains::Ethereum, KeyManagerEvents, EthereumChain, _>(
 			block.bloom,
 			block_height,
 			block.hash,
@@ -415,7 +416,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 		let (block, return_block_hash) =
 			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Ethereum, ScUtilsEvents, _>(
+		let events = events_at_block::<cf_chains::Ethereum, ScUtilsEvents, EthereumChain, _>(
 			block.bloom,
 			block_height,
 			block.hash,

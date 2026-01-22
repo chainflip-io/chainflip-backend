@@ -25,7 +25,6 @@ use crate::{
 		},
 	},
 };
-use anyhow::anyhow;
 use cf_chains::{
 	arb::ArbitrumTrackedData,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
@@ -76,25 +75,7 @@ pub struct ArbitrumBlockHeightWitnesserVoter {
 #[async_trait::async_trait]
 impl HeaderClient<ArbitrumChain, Arbitrum> for ArbitrumBlockHeightWitnesserVoter {
 	async fn best_block_header(&self) -> anyhow::Result<Header<ArbitrumChain>> {
-		let best_number = self.client.get_block_number().await?.low_u64();
-		let range =
-			block_witness_range(<Arbitrum as ChainWitnessConfig>::WITNESS_PERIOD, best_number);
-		let (start, end) = if *range.end() != best_number {
-			(
-				range.start().saturating_sub(<Arbitrum as ChainWitnessConfig>::WITNESS_PERIOD),
-				range.start().saturating_sub(1),
-			)
-		} else {
-			(*range.start(), *range.end())
-		};
-		let (block_start, block_end) =
-			futures::try_join!(self.client.block((start).into()), self.client.block((end).into()))?;
-		Ok(Header {
-			block_height: BlockWitnessRange::try_new(start)
-				.map_err(|_| anyhow!("Failed to create block witness range"))?,
-			hash: block_end.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
-			parent_hash: block_start.parent_hash,
-		})
+		self.block_header_by_height(self.best_block_number().await?).await
 	}
 
 	async fn block_header_by_height(
@@ -154,7 +135,7 @@ pub struct ArbitrumDepositChannelWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitrum>
+impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitrum, ArbitrumChain>
 	for ArbitrumDepositChannelWitnesserVoter
 {
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
@@ -173,7 +154,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 		&self,
 		asset: ArbAsset,
 		bloom: Option<Bloom>,
-		block_height: u64,
+		block_height: BlockWitnessRange<Arbitrum>,
 		block_hash: sp_core::H256,
 	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
 		use crate::witness::evm::{
@@ -181,21 +162,22 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 		};
 
 		let events = match asset {
-			ArbAsset::ArbUsdc => events_at_block::<cf_chains::Arbitrum, UsdcEvents, _>(
-				bloom,
-				block_height,
-				block_hash,
-				self.usdc_contract_address,
-				&self.client,
-			)
-			.await?
-			.into_iter()
-			.map(|event| crate::witness::evm::contract_common::Event {
-				event_parameters: event.event_parameters.into(),
-				tx_hash: event.tx_hash,
-				log_index: event.log_index,
-			})
-			.collect::<Vec<_>>(),
+			ArbAsset::ArbUsdc =>
+				events_at_block::<cf_chains::Arbitrum, UsdcEvents, ArbitrumChain, _>(
+					bloom,
+					block_height,
+					block_hash,
+					self.usdc_contract_address,
+					&self.client,
+				)
+				.await?
+				.into_iter()
+				.map(|event| crate::witness::evm::contract_common::Event {
+					event_parameters: event.event_parameters.into(),
+					tx_hash: event.tx_hash,
+					log_index: event.log_index,
+				})
+				.collect::<Vec<_>>(),
 			_ => return Ok(None), // Skip unsupported assets
 		};
 		Ok(Some(events))
@@ -256,18 +238,16 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 		let (block, return_block_hash) =
 			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
-		let root_block_height = *block_height.root();
-
-		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, _>(
+		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, ArbitrumChain, _>(
 			block.bloom,
-			root_block_height,
+			block_height,
 			block.hash,
 			self.vault_address,
 			&self.client,
 		)
 		.await?;
 
-		let result = handle_vault_events(self, events, root_block_height)?;
+		let result = handle_vault_events(self, events, *block_height.root())?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
@@ -300,18 +280,16 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 		let (block, return_block_hash) =
 			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
-		let root_block_height = *block_height.root();
-
-		let events = events_at_block::<cf_chains::Arbitrum, KeyManagerEvents, _>(
+		let events = events_at_block::<cf_chains::Arbitrum, KeyManagerEvents, ArbitrumChain, _>(
 			block.bloom,
-			root_block_height,
+			block_height,
 			block.hash,
 			self.key_manager_address,
 			&self.client,
 		)
 		.await?;
 
-		let result = handle_key_manager_events(self, events, root_block_height).await?;
+		let result = handle_key_manager_events(self, events, *block_height.root()).await?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}

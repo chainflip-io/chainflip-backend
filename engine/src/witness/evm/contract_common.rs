@@ -102,7 +102,7 @@ where
 	.collect::<anyhow::Result<Vec<_>>>()
 }
 
-pub struct Block {
+pub struct EvmBlockHeader {
 	pub hash: H256,
 	pub parent_hash: H256,
 	pub bloom: Option<Bloom>,
@@ -115,7 +115,7 @@ pub async fn query_election_block<
 	client: &EvmCachingClient<EvmRpcSigningClient>,
 	block_height: CT::ChainBlockNumber,
 	election_type: EngineElectionType<CT>,
-) -> Result<(Block, Option<CT::ChainBlockHash>)> {
+) -> Result<(EvmBlockHeader, Option<CT::ChainBlockHash>)> {
 	match election_type {
 		EngineElectionType::ByHash(hash) => {
 			let block = client.block_by_hash(hash).await?;
@@ -128,7 +128,7 @@ pub async fn query_election_block<
 					));
 				}
 				Ok((
-					Block {
+					EvmBlockHeader {
 						hash: block_hash,
 						parent_hash: if C::WITNESS_PERIOD == 1 {
 							block.parent_hash
@@ -165,7 +165,7 @@ pub async fn query_election_block<
 					));
 				}
 				Ok((
-					Block {
+					EvmBlockHeader {
 						hash: block_hash,
 						parent_hash: if C::WITNESS_PERIOD == 1 {
 							block.parent_hash
@@ -215,9 +215,9 @@ where
 		.zip(previous_address_states.into_iter().zip(address_states)))
 }
 
-pub async fn events_at_block<Chain, EventParameters, EvmCachingClient>(
+pub async fn events_at_block<Chain, EventParameters, CT: ChainTypes, EvmCachingClient>(
 	data: Option<Bloom>,
-	block_number: Chain::ChainBlockNumber,
+	block_number: CT::ChainBlockNumber,
 	block_hash: H256,
 	contract_address: H160,
 	eth_rpc: &EvmCachingClient,
@@ -227,7 +227,6 @@ where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
 	EvmCachingClient: EvmRetryRpcApiWithResult,
 {
-	assert!(Chain::is_block_witness_root(block_number));
 	if Chain::WITNESS_PERIOD == 1 {
 		let mut contract_bloom = Bloom::default();
 		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
@@ -243,7 +242,7 @@ where
 		}
 	} else {
 		eth_rpc
-			.get_logs_range(Chain::block_witness_range(block_number), contract_address)
+			.get_logs_range(block_number.into_range_inclusive(), contract_address)
 			.await?
 	}
 	.into_iter()
@@ -255,7 +254,7 @@ where
 
 /// Trait for deposit channel witnesser configuration
 #[async_trait::async_trait]
-pub trait DepositChannelWitnesserConfig<Chain: cf_chains::Chain> {
+pub trait DepositChannelWitnesserConfig<Chain: cf_chains::Chain, CT: ChainTypes> {
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
 	fn address_checker_address(&self) -> H160;
 	fn vault_address(&self) -> H160;
@@ -263,7 +262,7 @@ pub trait DepositChannelWitnesserConfig<Chain: cf_chains::Chain> {
 		&self,
 		asset: Chain::ChainAsset,
 		bloom: Option<Bloom>,
-		block_height: u64,
+		block_height: CT::ChainBlockNumber,
 		block_hash: H256,
 	) -> Result<Option<Vec<Event<super::erc20_deposits::Erc20Events>>>>;
 }
@@ -279,7 +278,7 @@ pub async fn witness_deposit_channels_generic<
 		DepositDetails = cf_chains::evm::DepositDetails,
 	>,
 	CT: ChainTypes<ChainBlockHash = H256>,
-	Config: DepositChannelWitnesserConfig<Chain>,
+	Config: DepositChannelWitnesserConfig<Chain, CT>,
 >(
 	config: &Config,
 	block_height: CT::ChainBlockNumber,
@@ -287,7 +286,6 @@ pub async fn witness_deposit_channels_generic<
 	deposit_addresses: Vec<DepositChannel<Chain>>,
 ) -> Result<(Vec<pallet_cf_ingress_egress::DepositWitness<Chain>>, Option<CT::ChainBlockHash>)>
 where
-	CT::ChainBlockNumber: cf_chains::witness_period::SaturatingStep,
 	Chain::ChainAmount: TryFrom<sp_core::U256>,
 	<Chain::ChainAmount as TryFrom<sp_core::U256>>::Error: std::fmt::Debug,
 {
@@ -301,8 +299,6 @@ where
 
 	let (block, return_block_hash) =
 		query_election_block::<CT, Chain>(client, block_height, election_type).await?;
-
-	let block_heigh = *block_height.into_range_inclusive().start();
 
 	let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
 		deposit_addresses.into_iter().fold(
@@ -327,9 +323,9 @@ where
 			eth_deposit_channels.clone(),
 		),
 		async {
-			Ok(events_at_block::<Chain, VaultEvents, _>(
+			Ok(events_at_block::<Chain, VaultEvents, CT, _>(
 				block.bloom,
-				block_heigh,
+				block_height,
 				block.hash,
 				vault_address,
 				client,
@@ -349,8 +345,9 @@ where
 
 	// Handle each asset type separately with its specific event type
 	for (asset, deposit_channels) in erc20_deposit_channels {
-		if let Some(events) =
-			config.get_events_for_asset(asset, block.bloom, block_heigh, block.hash).await?
+		if let Some(events) = config
+			.get_events_for_asset(asset, block.bloom, block_height, block.hash)
+			.await?
 		{
 			let asset_ingresses = events
 			.into_iter()
