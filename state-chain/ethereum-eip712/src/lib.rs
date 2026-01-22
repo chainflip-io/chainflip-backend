@@ -93,6 +93,16 @@ pub fn encode_eip712_using_type_info_fast<T: TypeInfo + Encode + 'static>(
 
 	Ok(typed_data)
 }
+pub struct TypeName {
+	name: String,
+	// This is a flag that can be set while passing the type_name of a type through the recursion.
+	// This tells the outer types that have this type in the type tree, that this is a type
+	// instantiated from an enum variant. More generally, this flag is used to communicate this
+	// type can take multiple possible shapes and the current shape is one of them. These kind of
+	// types have a unique identifier attached to its type name, that is unique to each instance of
+	// the type.
+	contains_type_id: bool,
+}
 
 pub fn recursively_construct_types(
 	v: Value,
