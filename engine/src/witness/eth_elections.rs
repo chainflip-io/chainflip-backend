@@ -81,7 +81,7 @@ pub struct EthereumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<EthereumChain, Ethereum> for EthereumBlockHeightWitnesserVoter {
+impl HeaderClient<EthereumChain> for EthereumBlockHeightWitnesserVoter {
 	async fn best_block_header(&self) -> anyhow::Result<Header<EthereumChain>> {
 		let best_number = self.client.get_block_number().await?;
 		let block = self.client.block(best_number).await?;
@@ -112,7 +112,7 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EthereumBlockHeightWitnesserVo
 		_settings: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<EthereumBlockHeightWitnesserES, _, EthereumChain, Ethereum>(
+		witness_headers::<EthereumBlockHeightWitnesserES, _, EthereumChain>(
 			self,
 			properties,
 			ETHEREUM_MAINNET_SAFETY_BUFFER,
