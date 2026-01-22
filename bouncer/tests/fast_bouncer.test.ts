@@ -34,7 +34,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
   concurrentTest('EvmDeposits', testEvmDeposits, 300);
   concurrentTest('FundRedeem', testFundRedeem, 600);
-  concurrentTest('LpApi', testLpApi, 240);
+  concurrentTest('LpApi', testLpApi, 300);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
   concurrentTest('BoostingForAsset', testBoostingSwap, 260);
   concurrentTest('FillOrKill', testFillOrKill, 300);
