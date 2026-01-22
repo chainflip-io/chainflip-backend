@@ -18,6 +18,7 @@ use crate::{
 	hash::keccak256,
 };
 use minimized_scale_value::MinimizedScaleValue;
+use scale_info::prelude::vec;
 
 pub mod build_eip712_data;
 pub mod eip712;
@@ -192,127 +193,112 @@ pub fn recursively_construct_types(
 					.ok_or("variant name in value should match one of the variants in type def")??,
 
 			(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_names, values): (Vec<_>, Vec<_>) = fs
-					.into_iter()
-					.map(|f| recursively_construct_types(f, type_def_sequence.type_param, types))
-					.collect::<Result<Vec<_>, _>>()?
-					.into_iter()
-					.unzip();
-
-				let modified_value =
-					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
+				let (contains_type_id, type_fields, modified_values) = process_tuple(
+					vec![type_def_sequence.type_param; fs.len()],
+					fs,
+					types,
+					|_, i| i.to_string(),
+				)?;
 
 				// If the sequence is empty, there is no use, constructing the type of the array
 				// elements, and so we map the empty array to an Empty type called EmptySequence
-				if let Some(type_name) = type_names.first() {
+				if let Some(type_name) = type_fields.first() {
 					// convert the type name of the sequence to something like "TypeName[]".
 					// If its a sequence of type u8, then we interpret it as bytes.
 					// empty vec![] ensures that we dont add this type to types list
-					if type_name.name == "uint8" {
+					if type_name.r#type == "uint8" {
 						(
 							TypeName { name: "bytes".to_string(), contains_type_id: false },
 							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(modified_value)?,
+							scale_value_bytes_to_hex(Value::unnamed_composite(
+								modified_values.into_iter().map(|(_, v)| v),
+							))?,
 						)
 					} else {
 						(
 							TypeName {
-								name: type_name.name.clone() + "[]",
-								contains_type_id: type_names.iter().any(|tn| tn.contains_type_id),
+								name: "ArrayOf__".to_string() +
+									//todo: try to get the real name of the array here
+									&type_name.r#type + &hex::encode(
+									&keccak256(format!("{type_fields:?}"))[..4]),
+								contains_type_id,
 							},
-							AddTypeOrNot::DontAdd,
-							modified_value,
+							AddTypeOrNot::AddType { type_fields },
+							Value::named_composite(modified_values),
 						)
 					}
 				} else {
 					recursively_construct_types(
-						modified_value,
-						MetaType::new::<EmptySequence>(),
+						Value::string("Empty"),
+						MetaType::new::<String>(),
 						types,
 					)
 					.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
 				}
 			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_names, values): (Vec<_>, Vec<_>) = fs
-					.into_iter()
-					.map(|f| recursively_construct_types(f, type_def_array.type_param, types))
-					.collect::<Result<Vec<_>, _>>()?
-					.into_iter()
-					.unzip();
-				let modified_value =
-					Value::without_context(ValueDef::Composite(Composite::Unnamed(values)));
+				debug_assert!((type_def_array.len as usize) == fs.len());
+
+				let (contains_type_id, type_fields, modified_values) =
+					process_tuple(vec![type_def_array.type_param; fs.len()], fs, types, |_, i| {
+						i.to_string()
+					})?;
 
 				// If the array is empty, there is no use, constructing the type of the array
 				// elements, and so we map the empty array to an Empty type called EmptyArray
-				if let Some(type_name) = type_names.first() {
+				if let Some(type_name) = type_fields.first() {
 					// convert the type name of the array to something like "TypeName[len]".
 					// If its a sequence of type u8, then we interpret it as bytes.
 					// vec![] ensures that we dont add this type to types list
-					if type_name.name == "uint8" {
+					if type_name.r#type == "uint8" {
 						(
 							TypeName { name: "bytes".to_string(), contains_type_id: false },
 							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(modified_value)?,
+							scale_value_bytes_to_hex(Value::unnamed_composite(
+								modified_values.into_iter().map(|(_, v)| v),
+							))?,
 						)
 					} else {
 						(
 							TypeName {
-								name: type_name.name.clone() +
-									"[" + &type_def_array.len.to_string() +
-									"]",
-								contains_type_id: type_names.iter().any(|tn| tn.contains_type_id),
+								name: "ArrayOf__".to_string() +
+									//todo: try to get the real name of the array here
+									&type_name.r#type + &hex::encode(
+									&keccak256(format!("{type_fields:?}"))[..4],
+								),
+								contains_type_id,
 							},
-							AddTypeOrNot::DontAdd,
-							modified_value,
+							AddTypeOrNot::AddType { type_fields },
+							Value::named_composite(modified_values),
 						)
 					}
 				} else {
-					recursively_construct_types(modified_value, type_def_array.type_param, types)
-						.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
+					recursively_construct_types(
+						Value::string("Empty"),
+						MetaType::new::<String>(),
+						types,
+					)
+					.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
 				}
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (type_fields_and_ids, values): (Vec<_>, Vec<_>) = type_def_tuple
-					.fields
-					.clone()
-					.into_iter()
-					.zip(fs.into_iter())
-					.enumerate()
-					.map(|(i, (ty, value))| -> Result<_, &'static str> {
-						let (type_name, value) =
-							recursively_construct_types(value.clone(), ty, types)?;
-						let field_name = type_name.name.clone() + "__" + &i.to_string();
-						Ok((
-							(
-								Eip712DomainType {
-									// In case of unnamed type_fields, we decide to name it by its
-									// type name appended by its index in the tuple
-									name: field_name.clone(),
-									r#type: type_name.name,
-								},
-								type_name.contains_type_id,
-							),
-							(field_name, value),
-						))
-					})
-					.collect::<Result<Vec<_>, _>>()?
-					.into_iter()
-					.unzip();
-				let (type_fields, ids): (Vec<_>, Vec<_>) = type_fields_and_ids.into_iter().unzip();
+				let (contains_type_id, type_fields, modified_values) =
+					process_tuple(type_def_tuple.fields, fs, types, |type_name, i| {
+						type_name + "__" + &i.to_string()
+					})?;
+				// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash
+				// of the type_fields}". Naming it so will display it in metamask
+				// which will indicate to the signer that this is indeed a tuple. The 4
+				// bytes of hash is just to avoid name collisions in case there are
+				// multiple unnamed tuples.
 				(
-					// In case of tuple, we decide to name it "UnnamedTuple_{first 4 bytes of hash
-					// of the type_fields}". Naming it so will display it in metamask
-					// which will indicate to the signer that this is indeed a tuple. The 4
-					// bytes of hash is just to avoid name collisions in case there are
-					// multiple unnamed tuples.
 					TypeName {
 						name: "UnnamedTuple__".to_string() +
 							&hex::encode(&keccak256(format!("{type_fields:?}"))[..4]),
-						contains_type_id: ids.into_iter().any(|id| id),
+						contains_type_id,
 					},
 					AddTypeOrNot::AddType { type_fields },
-					Value::named_composite(values),
+					Value::named_composite(modified_values),
 				)
 			},
 			(TypeDef::Primitive(type_def_primitive), ValueDef::Primitive(_p)) => (
@@ -360,13 +346,45 @@ pub fn recursively_construct_types(
 				type_name.name + "__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
 		}
 
-		//TODO: maybe use the full path as the type name to avoid collisions due to same name types
-		// in different paths
-
 		types.insert(type_name.name.clone(), type_fields);
 	}
 
 	Ok((type_name, value))
+}
+
+#[expect(clippy::type_complexity)]
+fn process_tuple(
+	tuple_types: Vec<MetaType>,
+	values: Vec<Value>,
+	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
+	field_name: impl Fn(String, usize) -> String,
+) -> Result<(bool, Vec<Eip712DomainType>, Vec<(String, Value)>), &'static str> {
+	let (type_fields_and_ids, modified_values): (Vec<_>, Vec<_>) = tuple_types
+		.clone()
+		.into_iter()
+		.zip(values.into_iter())
+		.enumerate()
+		.map(|(i, (ty, value))| -> Result<_, &'static str> {
+			let (type_name, value) = recursively_construct_types(value.clone(), ty, types)?;
+			let field_name = field_name(type_name.name.clone(), i);
+			Ok((
+				(
+					Eip712DomainType {
+						// In case of unnamed type_fields, we decide to name it by its
+						// type name appended by its index in the tuple
+						name: field_name.clone(),
+						r#type: type_name.name,
+					},
+					type_name.contains_type_id,
+				),
+				(field_name, value),
+			))
+		})
+		.collect::<Result<Vec<_>, _>>()?
+		.into_iter()
+		.unzip();
+	let (type_fields, ids): (Vec<_>, Vec<_>) = type_fields_and_ids.into_iter().unzip();
+	Ok((ids.into_iter().any(|id| id), type_fields, modified_values))
 }
 
 fn process_composite(
@@ -515,7 +533,7 @@ fn concatenate_name_segments(segments: Vec<&'static str>) -> Result<String, &'st
 }
 
 #[derive(TypeInfo, Clone, Encode)]
-pub struct EmptySequence;
+pub struct Eip712EmptyType;
 #[derive(TypeInfo, Clone, Encode)]
 pub struct EmptyArray;
 
@@ -851,4 +869,16 @@ pub mod tests {
 			metadata: None,
 		});
 	}
+
+	// pub type Acb = (u64, u8);
+	// #[test]
+	// fn test_tuple_type_info_registry() {
+	// 	// Create a registry for the tuple type (u64, u8)
+	// 	let mut registry = Registry::new();
+	// 	let id = registry.register_type(&MetaType::new::<String>());
+
+	// 	let portable_registry: scale_info::PortableRegistry = registry.into();
+
+	// 	println!("{portable_registry:#?}");
+	// }
 }
