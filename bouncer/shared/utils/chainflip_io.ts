@@ -121,16 +121,15 @@ export class ChainflipIO<Requirements> {
    * @returns The well-typed event data of the expected event if one was provided. Otherwise the full, untyped result object
    * that was returned by the extrinsic.
    */
-  async submitExtrinsic<
-    Data extends Requirements & { account: FullAccount<AccountType> },
-    Schema extends z.ZodTypeAny,
-  >(
+  submitExtrinsic = this.wrapWithExpectEvent<
+    Requirements & WithAccount<AccountType>,
+    { extrinsic: ExtrinsicFromApi }
+  >(this.impl_submitExtrinsic);
+
+  private async impl_submitExtrinsic<Data extends Requirements & WithAccount<AccountType>>(
     this: ChainflipIO<Data>,
-    arg: {
-      extrinsic: ExtrinsicFromApi;
-      expectedEvent?: { name: EventName; schema?: Schema };
-    },
-  ): Promise<z.infer<Schema>> {
+    arg: { extrinsic: ExtrinsicFromApi },
+  ): Promise<EventFilter> {
     return this.runExclusively('submitExtrinsic', async () => {
       await using chainflipApi = await getChainflipApi();
       const ext = await arg.extrinsic(chainflipApi);
@@ -161,33 +160,9 @@ export class ChainflipIO<Requirements> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.lastIoBlockHeight = (result.value as any).blockNumber.toNumber();
 
-      // extract event data if expected
-      if (arg.expectedEvent) {
-        const txHash = `${result.value.txHash}`;
-        this.debug(
-          `Searching for event ${arg.expectedEvent.name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
-        );
-        const event = await findOneEventOfMany(
-          this.logger,
-          {
-            event: {
-              name: arg.expectedEvent.name,
-              schema: arg.expectedEvent.schema ?? z.any(),
-              txHash,
-            },
-          },
-          {
-            startFromBlock: this.lastIoBlockHeight,
-            endBeforeBlock: this.lastIoBlockHeight + 1,
-          },
-        );
-        this.debug(
-          `Found event ${arg.expectedEvent.name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
-        );
-        return event.data;
-      }
-
-      return result;
+      return {
+        txHash: `${result.value.txHash}`,
+      };
     });
   }
 
@@ -284,13 +259,14 @@ export class ChainflipIO<Requirements> {
    * @param f Method to be executed
    * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
    */
-  private wrapWithExpectEvent<A extends object>(
-    f: (a: A) => Promise<EventFilter>,
+  private wrapWithExpectEvent<R2, A extends object>(
+    f: (this: ChainflipIO<R2>, a: A) => Promise<EventFilter>,
   ): <Schema extends z.ZodTypeAny>(
+    this: ChainflipIO<R2>,
     a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
   ) => Promise<z.infer<Schema>> {
-    return async (arg) => {
-      const eventFilter = await f(arg);
+    return async function (this: ChainflipIO<R2>, arg) {
+      const eventFilter = await f.call(this, arg);
       if (arg.expectedEvent) {
         return this.expectEvent({
           name: arg.expectedEvent.name,
