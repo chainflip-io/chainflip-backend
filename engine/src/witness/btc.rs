@@ -119,6 +119,13 @@ impl HeaderClient<BitcoinChain> for BtcCachingClient {
 		let best_header = self.block_header(best_hash).await?;
 		Ok(best_header.height)
 	}
+	
+	async fn block_header_by_hash(
+				&self,
+				hash: <BitcoinChain as ChainTypes>::ChainBlockHash,
+			) -> anyhow::Result<Header<BitcoinChain>> {
+			todo!()
+		}
 }
 
 #[async_trait::async_trait]

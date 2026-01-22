@@ -13,7 +13,11 @@ pub trait HeaderClient<Chain: ChainTypes> {
 	async fn best_block_header(&self) -> anyhow::Result<Header<Chain>>;
 	async fn block_header_by_height(
 		&self,
-		height: <Chain as ChainTypes>::ChainBlockNumber,
+		height: Chain::ChainBlockNumber,
+	) -> anyhow::Result<Header<Chain>>;
+	async fn block_header_by_hash(
+		&self,
+		hash: &Chain::ChainBlockHash,
 	) -> anyhow::Result<Header<Chain>>;
 	async fn best_block_number(&self) -> anyhow::Result<<Chain as ChainTypes>::ChainBlockNumber>;
 }

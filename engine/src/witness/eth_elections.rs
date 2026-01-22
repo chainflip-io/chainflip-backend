@@ -103,6 +103,13 @@ impl HeaderClient<EthereumChain> for EthereumBlockHeightWitnesserVoter {
 	async fn best_block_number(&self) -> anyhow::Result<u64> {
 		Ok(self.client.get_block_number().await?.low_u64())
 	}
+	
+	async fn block_header_by_hash(
+				&self,
+				hash: <EthereumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockHash,
+			) -> anyhow::Result<Header<EthereumChain>> {
+			todo!()
+		}
 }
 
 #[async_trait::async_trait]

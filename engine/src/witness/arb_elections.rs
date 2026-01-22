@@ -107,6 +107,13 @@ impl HeaderClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
 		}
 		Ok(block_witness_range.saturating_backward(1))
 	}
+	
+	async fn block_header_by_hash(
+				&self,
+				hash: <ArbitrumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockHash,
+			) -> anyhow::Result<Header<ArbitrumChain>> {
+			todo!()
+		}
 }
 
 #[async_trait::async_trait]
