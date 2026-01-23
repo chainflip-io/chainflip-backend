@@ -14,6 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(incomplete_features)]
+#![feature(unsized_const_params)]
+#![feature(generic_const_items)]
+#![feature(adt_const_params)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;
@@ -25,6 +29,10 @@ pub mod safe_mode;
 pub use safe_mode::*;
 pub mod lending;
 mod swapping;
+mod hook;
+pub use hook::*;
+mod validate;
+pub use validate::*;
 
 pub use swapping::{
 	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
