@@ -30,7 +30,7 @@ use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{
 	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
 };
-use cf_primitives::{chains::Bitcoin, EpochIndex};
+use cf_primitives::EpochIndex;
 use futures_core::Future;
 
 use cf_utilities::task_scope::{self, Scope};

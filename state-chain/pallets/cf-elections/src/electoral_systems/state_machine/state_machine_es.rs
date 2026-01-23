@@ -89,7 +89,8 @@ pub struct StatemachineElectoralSystem<ES: StatemachineElectoralSystemTypes> {
 	_phantom: core::marker::PhantomData<ES>,
 }
 
-impl<ES: StatemachineElectoralSystemTypes> ElectoralSystemTypes for StatemachineElectoralSystem<ES>
+impl<ES: StatemachineElectoralSystemTypes> ElectoralSystemTypes
+	for StatemachineElectoralSystem<ES>
 {
 	type ValidatorId = ES::ValidatorId;
 	type StateChainBlockNumber = ES::StateChainBlockNumber;
@@ -146,8 +147,7 @@ impl<ES: StatemachineElectoralSystemTypes> ElectoralSystemTypes for Statemachine
 ///    step transitions, and thus doesn't notice that `A` got removed and added back.
 ///  - In the currently implemented ESs this is not a problem, but has to be checked when new state
 ///    machines are designed.
-impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElectoralSystem<ES>
-{
+impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElectoralSystem<ES> {
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
 		_previous_vote: Option<(

@@ -278,7 +278,7 @@ pub(crate) mod tests {
 					RulesHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
+			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
 		},
 		*,
 	};
@@ -310,15 +310,18 @@ pub(crate) mod tests {
 	}
 
 	impl<
-			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
-			E: Clone,
-		> Hook<HookTypeFor<Types, RulesHook>> for Types
+			N: ChainBlockNumberTrait,
+			H: ChainBlockHashTrait,
+			D: BlockDataTrait,
+			// Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
+			// E: Clone,
+		> Hook<HookTypeFor<TypesFor<(N, H, Vec<D>)>, RulesHook>> for TypesFor<(N, H, Vec<D>)>
 	{
 		fn run(
 			&mut self,
-			(age, block_data, safety_margin): (Range<u32>, Vec<E>, u32),
-		) -> Vec<MockBtcEvent<E>> {
-			let mut results: Vec<MockBtcEvent<E>> = vec![];
+			(age, block_data, safety_margin): (Range<u32>, Vec<D>, u32),
+		) -> Vec<MockBtcEvent<D>> {
+			let mut results: Vec<MockBtcEvent<D>> = vec![];
 			if age.contains(&0u32) {
 				results.extend(
 					block_data

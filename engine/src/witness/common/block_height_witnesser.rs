@@ -1,4 +1,4 @@
-use cf_chains::{witness_period::SaturatingStep, ChainWitnessConfig};
+use cf_chains::witness_period::SaturatingStep;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
 		primitives::{Header, NonemptyContinuousHeaders},
