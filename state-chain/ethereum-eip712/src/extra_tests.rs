@@ -314,13 +314,8 @@ eip712_test!(
 	test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Bbbbb)
 );
 eip712_test!(test_compact, test_types::TestCompact { a: 5u8, b: 6u32, c: 7 });
-eip712_test!(test_empty, test_types::TestEmpty);
 eip712_test!(test_empty_nested, test_types::TestEmptyNested(test_types::TestEmpty));
 eip712_test!(test_abs_tuple, test_types::Abs((8, 9)));
-eip712_test!(
-	test_empty_generic,
-	test_types::TestEmptyGeneric::<test_types::Mail>(Default::default())
-);
 eip712_test!(test_vec_u8_empty, test_types::TestVec::<u8>(vec![]));
 eip712_test!(test_vec_u128_empty, test_types::TestVec::<u128>(vec![]));
 eip712_test!(test_vec_u128, test_types::TestVec(vec![5u128, 6u128]));

@@ -33,8 +33,6 @@ fn test_process_deposits_call() {
 }
 #[test]
 fn test_process_deposits_call_empty() {
-	use cf_chains::sol::VaultSwapOrDepositChannelId;
-	use pallet_cf_ingress_egress::DepositWitness;
 	let hash = test_build_eip712_typed_data(RuntimeCall::SolanaIngressEgress(
 		pallet_cf_ingress_egress::Call::process_deposits {
 			deposit_witnesses: vec![],
