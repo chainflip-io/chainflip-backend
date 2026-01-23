@@ -113,7 +113,7 @@ pub fn recursively_construct_types(
 	//handle errors
 	let t = ty.type_info();
 
-	let (mut type_name, maybe_add_type, value): (TypeName, AddTypeOrNot, Value) =
+	let (mut type_name, maybe_add_type, mut value): (TypeName, AddTypeOrNot, Value) =
 		match (t.type_def, v.value.clone()) {
 			(TypeDef::Composite(type_def_composite), ValueDef::Composite(comp_value)) =>
 			// if the type is primitive_types::H160, we interpret it as an address. We also map
@@ -339,14 +339,22 @@ pub fn recursively_construct_types(
 		};
 
 	if let AddTypeOrNot::AddType { type_fields } = maybe_add_type {
-		// If there are generic parameters to this type, append uniqueness to the type name to avoid
-		// collisions
-		if type_name.contains_type_id || t.type_params.len() > 0 {
-			type_name.name =
-				type_name.name + "__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
-		}
+		if type_fields.is_empty() {
+			(type_name, value) = recursively_construct_types(
+				Value::string("Empty"),
+				MetaType::new::<String>(),
+				types,
+			)?;
+		} else {
+			// If there are generic parameters to this type, append uniqueness to the type name to
+			// avoid collisions
+			if type_name.contains_type_id || t.type_params.len() > 0 {
+				type_name.name = type_name.name +
+					"__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
+			}
 
-		types.insert(type_name.name.clone(), type_fields);
+			types.insert(type_name.name.clone(), type_fields);
+		}
 	}
 
 	Ok((type_name, value))
