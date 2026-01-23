@@ -1349,7 +1349,16 @@ pub struct OraclePrice {
 }
 
 pub trait PriceFeedApi {
+	/// The price of the given asset.
+	///
+	/// Price is the amount of USD obtained for 1 unit of the asset.
+	///
+	/// In buy/sell terms, this is the USD-denominated sell price of the asset.
 	fn get_price(asset: Asset) -> Option<OraclePrice>;
+	/// Get the relative price of asset1 in terms of asset2.
+	///
+	/// If assset1 price rises or asset2 price drops, the relative price increases.
+	/// If asset1 price drops or asset2 price rises, the relative price decreases.
 	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
 		if let (Some(price_1), Some(price_2)) = (Self::get_price(asset1), Self::get_price(asset2)) {
 			Some(OraclePrice {
@@ -1359,6 +1368,36 @@ pub trait PriceFeedApi {
 		} else {
 			None
 		}
+	}
+	/// Get a fresh (non-stale) buy price of input_asset in terms of output_asset.
+	///
+	/// If the input price drops or output price rises, the buy price increases, meaning more
+	/// input_asset is required to buy 1 unit of output_asset.
+	///
+	/// Returns None if the price is stale or not available.
+	fn fresh_buy_price(input_asset: Asset, output_asset: Asset) -> Option<Price> {
+		Self::get_relative_price(output_asset, input_asset).and_then(|oracle_price| {
+			if !oracle_price.stale {
+				Some(oracle_price.price)
+			} else {
+				None
+			}
+		})
+	}
+	/// Get a fresh (non-stale) sell price of input_asset in terms of output_asset.
+	///
+	/// If the input price rises or output price drops, the sell price increases, meaning more
+	/// output_asset is obtained for 1 unit of input_asset.
+	///
+	/// Returns None if the price is stale or not available.
+	fn fresh_sell_price(input_asset: Asset, output_asset: Asset) -> Option<Price> {
+		Self::get_relative_price(input_asset, output_asset).and_then(|oracle_price| {
+			if !oracle_price.stale {
+				Some(oracle_price.price)
+			} else {
+				None
+			}
+		})
 	}
 	#[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 	fn set_price(asset: Asset, price: Price);

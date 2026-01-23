@@ -422,6 +422,20 @@ impl Price {
 		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
 	}
 
+	/// The price obtained by selling `input` amount of asset to receive `output` amount of asset.
+	///
+	/// Higher sell price is better for the seller (more output for the same input).
+	pub fn sell_price(input: Amount, output: Amount) -> Self {
+		Self::from_amounts(output, input)
+	}
+
+	/// The price of buying `output` amount of asset with `input` amount of asset.
+	///
+	/// Higher buy price is worse for the buyer (less output for the same input).
+	pub fn buy_price(input: Amount, output: Amount) -> Self {
+		Self::from_amounts(input, output)
+	}
+
 	/// Compute the price of asset 1 (self) in terms of asset 2 (given).
 	/// Both prices must have the same quote asset (eg. USD).
 	pub fn relative_to(self, price: Price) -> Self {

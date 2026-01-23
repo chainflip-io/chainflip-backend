@@ -1886,24 +1886,22 @@ pub mod pallet {
 		}
 
 		/// Calculate executed price delta from the oracle price.
+		///
 		/// Returns signed basis points where negative means worse than oracle price (as expected
 		/// for most swaps).
 		pub(super) fn get_delta_from_oracle_price(
-			from_amount: AssetAmount,
-			to_amount: AssetAmount,
-			from_asset: Asset,
-			to_asset: Asset,
-		) -> Option<Result<SignedBasisPoints, SwapFailureReason>> {
-			if let Some(oracle_price) = T::PriceFeedApi::get_relative_price(from_asset, to_asset) {
-				if oracle_price.stale {
-					return Some(Err(SwapFailureReason::OraclePriceStale));
-				} else {
-					let execution_price = Price::from_amounts(to_amount.into(), from_amount.into());
-					return Some(Ok(execution_price.bps_difference(&oracle_price.price)));
-				}
-			}
-
-			None
+			input_amount: AssetAmount,
+			output_amount: AssetAmount,
+			input_asset: Asset,
+			output_asset: Asset,
+		) -> Result<SignedBasisPoints, SwapFailureReason> {
+			T::PriceFeedApi::fresh_sell_price(input_asset, output_asset)
+				.ok_or(SwapFailureReason::OraclePriceStale)
+				.map(|oracle_price| {
+					let execution_price =
+						Price::sell_price(input_amount.into(), output_amount.into());
+					execution_price.bps_difference_from(&oracle_price)
+				})
 		}
 
 		/// Enforce price protections. Must be called after the final output has been set.
@@ -1919,21 +1917,16 @@ pub mod pallet {
 				// Oracle price protection, aka Live price protection (LPP)
 				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
 					if let Some(stable_amount_after_fees) = swap.stable_amount {
-						// Calculate the stable amount before fees
-						let stable_amount_before_fees =
-							stable_amount_after_fees + swap.fees_amount();
-
 						// Calculate the slippage from oracle prices for both legs of the swap
 						let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
 							0
 						} else {
 							Self::get_delta_from_oracle_price(
 								swap.swap.input_amount,
-								stable_amount_before_fees,
+								stable_amount_after_fees + swap.fees_amount(),
 								swap.input_asset(),
 								STABLE_ASSET,
-							)
-							.unwrap_or(Ok(0))?
+							)?
 						};
 						let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
 							0
@@ -1943,12 +1936,11 @@ pub mod pallet {
 								final_output,
 								STABLE_ASSET,
 								swap.output_asset(),
-							)
-							.unwrap_or(Ok(0))?
+							)?
 						};
 
-						let total_slippage = -to_stable_delta.saturating_add(from_stable_delta);
-						if total_slippage > max_slippage.saturated_into() {
+						let total_slippage = to_stable_delta.saturating_add(from_stable_delta);
+						if -total_slippage > max_slippage.saturated_into() {
 							return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 						}
 					}
@@ -1992,9 +1984,7 @@ pub mod pallet {
 							swap.input_asset(),
 							swap.output_asset(),
 						)
-						.transpose()
-						.ok()
-						.flatten();
+						.ok();
 
 						non_violating_swaps.push(swap);
 					},

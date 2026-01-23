@@ -1047,7 +1047,6 @@ mod oracle_swaps {
 					swap_state.input_asset(),
 					swap_state.output_asset(),
 				)
-				.unwrap()
 				.unwrap();
 				assert_eq!(oracle_delta, EXPECTED_DELTA_BPS);
 			});
