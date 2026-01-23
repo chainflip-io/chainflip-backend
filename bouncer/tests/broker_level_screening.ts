@@ -669,6 +669,7 @@ export async function testBrokerLevelScreening(
   await parentcf.all([
     (cf) => testSol(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testSol(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testSol(cf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testEvm(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testEvm(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testEvm(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
@@ -696,6 +697,7 @@ export async function testBrokerLevelScreening(
     (cf) => testEvmVaultSwap(cf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testSolVaultSwap(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     (cf) => testSolVaultSwap(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (cf) => testSolVaultSwap(cf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 
   await setMockmode(previousMockmode);
