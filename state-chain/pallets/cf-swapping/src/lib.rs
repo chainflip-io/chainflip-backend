@@ -28,9 +28,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId, SwapLeg, SwapRequestId,
-	BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS, SECONDS_PER_BLOCK,
-	STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	BlockNumber, ChannelId, DcaParameters, ForeignChain, SignedBasisPoints, SwapId, SwapLeg,
+	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -85,8 +85,6 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
-
-type SignedBasisPoints = i16;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
@@ -161,6 +159,10 @@ impl<T: Config> SwapState<T> {
 
 	fn input_amount(&self) -> AssetAmount {
 		self.swap.input_amount
+	}
+
+	fn fees_amount(&self) -> AssetAmount {
+		self.network_fee_taken.unwrap_or_default() + self.broker_fee_taken.unwrap_or_default()
 	}
 
 	fn refund_params(&self) -> &Option<SwapRefundParameters> {
@@ -1883,44 +1885,25 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Calculate executed price delta from the oracle price and save the result to the swap
-		/// state. Must be called after the final output has been set.
-		pub(super) fn calculate_oracle_delta(swap: &mut SwapState<T>) {
-			let Some(final_output) = swap.final_output else {
-				log_or_panic!("Final output should be set");
-				return;
-			};
-
-			let oracle_delta = if let Some(oracle_price) =
-				T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
-			{
-				let oracle_amount = oracle_price.price.output_amount_floor(swap.swap.input_amount);
-				if oracle_amount.is_zero() {
-					None
+		/// Calculate executed price delta from the oracle price.
+		/// Returns signed basis points where negative means worse than oracle price (as expected
+		/// for most swaps).
+		pub(super) fn get_delta_from_oracle_price(
+			from_amount: AssetAmount,
+			to_amount: AssetAmount,
+			from_asset: Asset,
+			to_asset: Asset,
+		) -> Option<Result<SignedBasisPoints, SwapFailureReason>> {
+			if let Some(oracle_price) = T::PriceFeedApi::get_relative_price(from_asset, to_asset) {
+				if oracle_price.stale {
+					return Some(Err(SwapFailureReason::OraclePriceStale));
 				} else {
-					let output_bps = cf_amm::math::mul_div_ceil(
-						final_output.into(),
-						MAX_BASIS_POINTS.into(),
-						oracle_amount,
-					);
-
-					let (delta_bps, sign) = if output_bps < MAX_BASIS_POINTS.into() {
-						(MAX_BASIS_POINTS.saturating_sub(output_bps.saturated_into()), -1)
-					} else {
-						(
-							output_bps
-								.saturated_into::<BasisPoints>()
-								.saturating_sub(MAX_BASIS_POINTS),
-							1,
-						)
-					};
-					Some(delta_bps.saturated_into::<SignedBasisPoints>() * sign)
+					let execution_price = Price::from_amounts(to_amount.into(), from_amount.into());
+					return Some(Ok(execution_price.bps_difference(&oracle_price.price)));
 				}
-			} else {
-				None
-			};
+			}
 
-			swap.oracle_delta = oracle_delta;
+			None
 		}
 
 		/// Enforce price protections. Must be called after the final output has been set.
@@ -1933,24 +1916,40 @@ pub mod pallet {
 			};
 
 			if let Some(params) = swap.refund_params() {
-				// Live price protection, aka oracle price protection
-				if let Some(slippage_bps) = params.price_limits.max_oracle_price_slippage {
-					if let Some(oracle_price) =
-						T::PriceFeedApi::get_relative_price(swap.input_asset(), swap.output_asset())
-					{
-						if oracle_price.stale {
-							return Err(SwapFailureReason::OraclePriceStale);
+				// Oracle price protection, aka Live price protection (LPP)
+				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
+					if let Some(stable_amount_after_fees) = swap.stable_amount {
+						// Calculate the stable amount before fees
+						let stable_amount_before_fees =
+							stable_amount_after_fees + swap.fees_amount();
+
+						// Calculate the slippage from oracle prices for both legs of the swap
+						let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
+							0
 						} else {
-							// Use the oracle price minus the slippage to calculate the minimum
-							// output needed
-							let min_output_amount = oracle_price
-								.price
-								.adjust_by_bps(slippage_bps, false)
-								.output_amount_floor(swap.swap.input_amount)
-								.unique_saturated_into();
-							if final_output < min_output_amount {
-								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
-							}
+							Self::get_delta_from_oracle_price(
+								swap.swap.input_amount,
+								stable_amount_before_fees,
+								swap.input_asset(),
+								STABLE_ASSET,
+							)
+							.unwrap_or(Ok(0))?
+						};
+						let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
+							0
+						} else {
+							Self::get_delta_from_oracle_price(
+								stable_amount_after_fees,
+								final_output,
+								STABLE_ASSET,
+								swap.output_asset(),
+							)
+							.unwrap_or(Ok(0))?
+						};
+
+						let total_slippage = -to_stable_delta.saturating_add(from_stable_delta);
+						if total_slippage > max_slippage.saturated_into() {
+							return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 						}
 					}
 				}
@@ -1987,7 +1986,16 @@ pub mod pallet {
 				.into_iter()
 				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
 					Ok(()) => {
-						Self::calculate_oracle_delta(&mut swap);
+						swap.oracle_delta = Self::get_delta_from_oracle_price(
+							swap.input_amount(),
+							swap.final_output.unwrap_or(0),
+							swap.input_asset(),
+							swap.output_asset(),
+						)
+						.transpose()
+						.ok()
+						.flatten();
+
 						non_violating_swaps.push(swap);
 					},
 					Err(reason) => {

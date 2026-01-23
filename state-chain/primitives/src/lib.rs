@@ -113,6 +113,8 @@ pub type GasAmount = u128;
 
 pub type BasisPoints = u16;
 
+pub type SignedBasisPoints = i16;
+
 pub type BroadcastId = u32;
 
 /// The `log1.0001(price)` rounded to the nearest integer. Note [Price] is always

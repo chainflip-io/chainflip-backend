@@ -19,10 +19,11 @@
 pub mod test_utilities;
 
 pub use cf_primitives::Tick;
-use cf_primitives::{Asset, BasisPoints, MAX_BASIS_POINTS};
+use cf_primitives::{Asset, BasisPoints, SignedBasisPoints, MAX_BASIS_POINTS};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::{U256, U512};
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
@@ -498,6 +499,18 @@ impl Price {
 		let adjusted_bps = if increase { MAX_BASIS_POINTS + bps } else { MAX_BASIS_POINTS - bps };
 		Self(mul_div_floor(self.0, U256::from(adjusted_bps), MAX_BASIS_POINTS))
 	}
+
+	/// Calculates the basis points difference between this price and another price, assuming they
+	/// are both prices of the same base/quote pair.
+	pub fn bps_difference(&self, other_price: &Price) -> SignedBasisPoints {
+		let difference_bps = mul_div_ceil(self.0, MAX_BASIS_POINTS.into(), other_price.0);
+		let (delta_bps, sign) = if difference_bps < MAX_BASIS_POINTS.into() {
+			(U256::from(MAX_BASIS_POINTS).saturating_sub(difference_bps), -1)
+		} else {
+			(difference_bps.saturating_sub(U256::from(MAX_BASIS_POINTS)), 1)
+		};
+		delta_bps.saturated_into::<SignedBasisPoints>() * sign
+	}
 }
 
 /// The minimum tick that may be passed to `sqrt_price_at_tick` computed from log base 1.0001 of
@@ -748,5 +761,13 @@ mod test {
 			price.output_amount_floor(U256::from(123 * 10u128.pow(18))),
 			price.invert().input_amount_floor(U256::from(123 * 10u128.pow(18)))
 		);
+	}
+
+	#[test]
+	fn test_price_bps_difference() {
+		let price_1 = Price::from_usd_cents(Asset::Eth, 9500);
+		let price_2 = Price::from_usd_cents(Asset::Eth, 10000);
+		assert_eq!(price_1.bps_difference(&price_2), -500 + 1); // ((9500 / 10000) - 1) * 10000 = -500 (plus rounding error)
+		assert_eq!(price_2.bps_difference(&price_1), 527); // ((10000 / 9500) - 1) * 10000 = 526.3
 	}
 }

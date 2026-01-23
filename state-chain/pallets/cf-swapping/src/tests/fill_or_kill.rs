@@ -600,11 +600,16 @@ fn test_zero_refund_amount_remaining() {
 mod oracle_swaps {
 
 	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+	use sp_runtime::SaturatedConversion;
 
 	use super::*;
 
 	#[test]
 	fn basic_oracle_swap() {
+		// We want to test a 2 leg swap with oracle price slippage protection.
+		const INPUT_ASSET: Asset = Asset::Eth;
+		const OUTPUT_ASSET: Asset = Asset::Btc;
+
 		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const CHUNK_2_RETRY_BLOCK: u64 = CHUNK_2_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64;
@@ -618,9 +623,24 @@ mod oracle_swaps {
 		const ORACLE_PRICE_SLIPPAGE: BasisPoints = 100; // 1% slippage
 		const NEW_SWAP_RATE: f64 = 1.97; // Reduced by more than 1%
 
-		// Set the price to match the swap rate at first
-		const OUTPUT_ASSET_PRICE: u128 = 2;
-		const INPUT_ASSET_PRICE: u128 = OUTPUT_ASSET_PRICE * SWAP_RATE;
+		// Set the price to match the swap rate for each leg
+		const OUTPUT_ASSET_PRICE: u128 = 100_000_000;
+		const STABLE_PRICE: u128 = OUTPUT_ASSET_PRICE * SWAP_RATE;
+		const INPUT_ASSET_PRICE: u128 = STABLE_PRICE * SWAP_RATE;
+
+		const NETWORK_FEE_BPS: u32 = 100;
+		const BROKER_FEE_BPS: u16 = 100;
+		let network_fee = Permill::from_parts(NETWORK_FEE_BPS * 100);
+		// Using a large enough minimum that it will be applied in the test to ensure the oracle
+		// price protection does not trigger on the first chunk because of it.
+		let network_fee_minimum = network_fee * CHUNK_AMOUNT * 2;
+
+		// Also checking the oracle delta value is set correctly (with rounding error)
+		let expected_oracle_delta = Some(
+			-(NETWORK_FEE_BPS.saturated_into::<SignedBasisPoints>() +
+				BROKER_FEE_BPS.saturated_into::<SignedBasisPoints>() -
+				1),
+		);
 
 		new_test_ext()
 			.execute_with(|| {
@@ -628,35 +648,56 @@ mod oracle_swaps {
 
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, INPUT_ASSET_PRICE);
 				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, OUTPUT_ASSET_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, STABLE_PRICE);
+
+				NetworkFee::<Test>::set(FeeRateAndMinimum {
+					rate: network_fee,
+					minimum: network_fee_minimum,
+				});
 
 				// Execution price is exactly the same as the oracle price,
 				// so the first chunk should go through
 				SwapRate::set(SWAP_RATE as f64);
 
-				Swapping::init_internal_swap_request(
+				Swapping::init_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
-					RETRY_DURATION,
-					PriceLimits {
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::Egress {
+							output_address: ForeignChainAddress::Eth([2; 20].into()),
+							ccm_deposit_metadata: None,
+						},
+					},
+					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
+					Some(PriceLimitsAndExpiry {
+						expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+							retry_duration: RETRY_DURATION,
+							refund_address: AccountOrAddress::InternalAccount(LP_ACCOUNT),
+							refund_ccm_metadata: None,
+						},
 						// Make sure we turn of the old min price check
 						min_price: Price::zero(),
 						// Set the maximum oracle price slippage to any value
 						max_oracle_price_slippage: Some(ORACLE_PRICE_SLIPPAGE),
-					},
+					}),
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
-					LP_ACCOUNT,
+					SwapOrigin::OnChainAccount(LP_ACCOUNT),
 				);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted {
+					RuntimeEvent::Swapping(
+						Event::SwapExecuted {
 						input_amount: CHUNK_AMOUNT,
-						output_amount,
+						network_fee,
+						oracle_delta,
 						..
-					}) if *output_amount == CHUNK_AMOUNT * SWAP_RATE
+					},
+					// Make sure the network fee minimum was taken
+					) if *network_fee == network_fee_minimum && *oracle_delta == expected_oracle_delta
 				);
 
 				// Turn the swap rate down to trigger the oracle slippage protection
@@ -681,11 +722,7 @@ mod oracle_swaps {
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted {
-						input_amount: CHUNK_AMOUNT,
-						output_amount,
-						..
-					}) if *output_amount == (CHUNK_AMOUNT as f64 * NEW_SWAP_RATE) as u128
+					RuntimeEvent::Swapping(Event::SwapExecuted { input_amount: CHUNK_AMOUNT, .. })
 				);
 
 				assert_has_matching_event!(
@@ -939,23 +976,37 @@ mod oracle_swaps {
 		use super::*;
 
 		// Values from an actual swap
-		const INPUT_AMOUNT: AssetAmount = 1259988846035050000; // 1.25 ETH
-		const OUTPUT_AMOUNT: AssetAmount = 5200905; // 0.052 BTC
+		const INPUT_AMOUNT: AssetAmount = 9000632;
+		const OUTPUT_AMOUNT: AssetAmount = 2695410274420764757;
+		const STABLE_AMOUNT: AssetAmount = 8020476946;
+		const BROKER_FEE: AssetAmount = 12048789; // 15 bps
+		const NETWORK_FEE: AssetAmount = 8040566; // 10 bps
 
-		// Real price values
-		static ETH_PRICE: &str = "1564376722621961188695537448999"; // $4597.29
-		static BTC_PRICE: &str = "378682551463232527188289505131228390582386"; // $111284.80
+		// Stable amount before fees = 8020476946 + 12048789 + 8040566 = $8040.566301
+		// Oracle stable amount = 0.09000632 * 89487 = $8054.4
+		// delta on first leg = ((8040.6 / 8054.4) - 1) * 10000 = -17.13 bps
+		// Eth oracle amount = 8020.476946 / 2972 = 2.698679995 Eth
+		// Delta on second leg = (( 2.695410274 / 2.698679995 ) - 1) * 10000 = -12.1 bps
+		// Total slippage = 12.1 + 17.13 = 29.23 bps
+		const EXPECTED_SLIPPAGE_BPS: SignedBasisPoints = 29;
 
-		// oracle amount = 5,205,144
-		// delta = 0.00081438669% = 8.14 bps
-		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(-8);
+		// Relative price = 89487 / 2972 = 30.110026917900402 Eth per Btc
+		// Oracle output amount = 0.09000632 * 30.110026917900402 = 2.710092717981157 Eth
+		// Total delta = (( 2.695410274420764757 / 2.710092717981157 ) - 1) * 10000 = -54.18 bps
+		// Sanity check by adding fees to slippage = 29 + 15 + 10 = 54
+		const EXPECTED_DELTA_BPS: SignedBasisPoints = -54;
 
 		fn set_prices() {
-			let eth_price = U256::from_dec_str(ETH_PRICE).unwrap();
-			let btc_price = U256::from_dec_str(BTC_PRICE).unwrap();
+			// Prices taken at similar time to the swap values above
+			let eth_price = Price::from_usd(Asset::Eth, 2972);
+			let btc_price = Price::from_usd(Asset::Btc, 89487);
+			let usdc_price = Price::from_raw(
+				U256::from_dec_str("340214310447554275770681932510281857813").unwrap(), // $0.9997
+			);
 
-			MockPriceFeedApi::set_price(Asset::Eth, Some(Price::from_raw(eth_price)));
-			MockPriceFeedApi::set_price(Asset::Btc, Some(Price::from_raw(btc_price)));
+			MockPriceFeedApi::set_price(Asset::Eth, Some(eth_price));
+			MockPriceFeedApi::set_price(Asset::Btc, Some(btc_price));
+			MockPriceFeedApi::set_price(Asset::Usdc, Some(usdc_price));
 		}
 
 		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test> {
@@ -963,8 +1014,8 @@ mod oracle_swaps {
 				swap: Swap::new(
 					0.into(),
 					0.into(),
-					Asset::Eth,
 					Asset::Btc,
+					Asset::Eth,
 					INPUT_AMOUNT,
 					Some(SwapRefundParameters {
 						refund_block: 10,
@@ -976,10 +1027,10 @@ mod oracle_swaps {
 					vec![],
 					Default::default(),
 				),
-				// Fees and stable amount are not used in this test
-				network_fee_taken: None,
-				broker_fee_taken: None,
-				stable_amount: None,
+
+				network_fee_taken: Some(NETWORK_FEE),
+				broker_fee_taken: Some(BROKER_FEE),
+				stable_amount: Some(STABLE_AMOUNT),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
 			}
@@ -989,9 +1040,16 @@ mod oracle_swaps {
 		fn oracle_delta_real_world_values() {
 			new_test_ext().execute_with(|| {
 				set_prices();
-				let mut swap_state = test_swap_state(None);
-				Pallet::<Test>::calculate_oracle_delta(&mut swap_state);
-				assert_eq!(swap_state.oracle_delta, EXPECTED_DELTA);
+				let swap_state = test_swap_state(None);
+				let oracle_delta = Pallet::<Test>::get_delta_from_oracle_price(
+					swap_state.input_amount(),
+					swap_state.final_output.unwrap_or(0),
+					swap_state.input_asset(),
+					swap_state.output_asset(),
+				)
+				.unwrap()
+				.unwrap();
+				assert_eq!(oracle_delta, EXPECTED_DELTA_BPS);
 			});
 		}
 
@@ -1000,12 +1058,10 @@ mod oracle_swaps {
 			new_test_ext().execute_with(|| {
 				set_prices();
 
-				// Oracle delta that is below the slippage limit will pass
-				// Note: setting the slippage to the exact expected delta here will still fail
-				// because the actual oracle delta (8.14) is slightly above 8.
+				// Oracle slippage that is below or equal to the slippage limit will pass
 				assert_eq!(
 					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
-						EXPECTED_DELTA.unwrap().unsigned_abs() + 1
+						EXPECTED_SLIPPAGE_BPS.unsigned_abs()
 					))),
 					Ok(())
 				);
@@ -1013,7 +1069,7 @@ mod oracle_swaps {
 				// Oracle delta that is above the slippage limit will fail
 				assert_eq!(
 					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
-						EXPECTED_DELTA.unwrap().unsigned_abs() - 1
+						EXPECTED_SLIPPAGE_BPS.unsigned_abs() - 1
 					))),
 					Err(SwapFailureReason::OraclePriceSlippageExceeded)
 				);
