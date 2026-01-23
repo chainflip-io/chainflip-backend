@@ -1,10 +1,11 @@
 use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 use core::ops::RangeInclusive;
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 use itertools::Either;
 use sp_core::H256;
-use sp_std::vec::Vec;
-
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque},
+	vec::Vec,
+};
 
 /// A type which can be validated.
 pub trait Validate {

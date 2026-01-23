@@ -23,11 +23,12 @@ use crate::electoral_systems::{
 		},
 	},
 	state_machine::{
-		core::{hook_test_utils::MockHook, TypesFor, Validate},
+		core::TypesFor,
 		state_machine::{AbstractApi, InputOf, Statemachine},
 		test_utils::BTreeMultiSet,
 	},
 };
+use cf_traits::{hook_test_utils::MockHook, Validate};
 use chainstate_simulation::*;
 
 macro_rules! try_get {
@@ -287,9 +288,9 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	use std::fmt::Write;
 
 	use crate::electoral_systems::{
-		block_height_witnesser::BlockHeightWitnesserSettings,
-		state_machine::core::hook_test_utils::ConstantHook,
+		block_height_witnesser::BlockHeightWitnesserSettings, state_machine::core::TypesFor,
 	};
+	use cf_traits::hook_test_utils::ConstantHook;
 	let mut printed: String = Default::default();
 	for output in total_outputs.clone() {
 		if output.len() == 0 {

@@ -6,9 +6,9 @@ use core::{
 use crate::electoral_systems::{
 	block_height_witnesser::{ChainBlockNumberOf, ChainTypes},
 	block_witnesser::state_machine::BWProcessorTypes,
-	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, Validate};
 use cf_utilities::macros::*;
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
@@ -278,10 +278,11 @@ pub(crate) mod tests {
 					RulesHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor},
+			state_machine::core::TypesFor,
 		},
 		*,
 	};
+	use cf_traits::{hook_test_utils::MockHook, Hook};
 	use core::ops::Range;
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;

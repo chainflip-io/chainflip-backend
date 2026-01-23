@@ -1,5 +1,5 @@
 use super::{
-	super::state_machine::core::*,
+	super::state_machine::core::{defx, TypesFor},
 	block_processor::BlockProcessorEvent,
 	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
@@ -12,14 +12,12 @@ use crate::{
 			MaybeArbitrary, TestTraits,
 		},
 		block_witnesser::block_processor::BlockProcessor,
-		state_machine::{
-			core::Validate,
-			state_machine::{AbstractApi, Statemachine},
-		},
+		state_machine::state_machine::{AbstractApi, Statemachine},
 	},
 	generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, HookType, Validate};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -496,7 +494,7 @@ pub mod tests {
 		},
 		prop_do,
 	};
-	use hook_test_utils::*;
+	use cf_traits::hook_test_utils::*;
 
 	fn generate_state<
 		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,

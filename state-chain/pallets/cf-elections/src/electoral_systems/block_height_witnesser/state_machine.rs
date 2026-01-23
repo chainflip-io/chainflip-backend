@@ -1,16 +1,14 @@
 use super::{
-	super::state_machine::{core::Validate, state_machine::Statemachine},
+	super::state_machine::state_machine::Statemachine,
 	primitives::{MergeFailure, NonemptyContinuousHeaders, NonemptyContinuousHeadersError},
 	BHWTypes, ChainBlockNumberOf, ChainProgress, ChainTypes, HeightWitnesserProperties,
 };
 use crate::electoral_systems::{
 	block_height_witnesser::{primitives::ContinuousHeaders, BlockHeightWitnesserSettings},
-	state_machine::{
-		core::{defx, Hook},
-		state_machine::AbstractApi,
-	},
+	state_machine::{core::defx, state_machine::AbstractApi},
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, Validate};
 use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
@@ -227,11 +225,12 @@ pub mod tests {
 				ReorgHook,
 			},
 			block_witnesser::state_machine::HookTypeFor,
-			state_machine::core::{hook_test_utils::MockHook, TypesFor},
+			state_machine::core::TypesFor,
 		},
 		prop_do,
 	};
 	use cf_chains::{self, witness_period::BlockWitnessRange, ChainWitnessConfig};
+	use cf_traits::hook_test_utils::MockHook;
 	use proptest::{
 		arbitrary::arbitrary_with,
 		prelude::{any, prop, Arbitrary, Just, Strategy},

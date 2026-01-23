@@ -45,32 +45,3 @@ macro_rules! impls {
     };
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
-
-/// Adds the type parameters to all given implementatios
-macro_rules! implementations {
-	([$($Name:tt)*], [$($Parameters:tt)*], impl { $($Implementation:tt)* } $($rest:tt)* ) => {
-
-		impl <$($Parameters)*> $($Name)* {
-			$($Implementation)*
-		}
-
-		crate::macros::implementations! {
-			[$($Name)*], [$($Parameters)*], $($rest)*
-		}
-	};
-
-	([$($Name:tt)*], [$($Parameters:tt)*], impl$(<$($TraitParamName:ident: $TraitParamPath:path),*>)? $Trait:path { $($TraitDef:tt)* } $($rest:tt)* ) => {
-
-		impl <$($Parameters)*, $($($TraitParamName: $TraitParamPath),*)?> $Trait for $($Name)* {
-			$($TraitDef)*
-		}
-
-		crate::macros::implementations! {
-			[$($Name)*], [$($Parameters)*], $($rest)*
-		}
-
-	};
-
-	([$($Name:tt)*], [$($Parameters:tt)*],) => {}
-}
-pub(crate) use implementations;

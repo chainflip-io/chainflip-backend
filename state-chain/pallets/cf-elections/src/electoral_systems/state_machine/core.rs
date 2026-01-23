@@ -14,6 +14,34 @@ use sp_std::{fmt::Debug, vec::Vec};
 
 use crate::generic_tools::common_traits::*;
 
+/// Adds the type parameters to all given implementatios
+macro_rules! implementations {
+	([$($Name:tt)*], [$($Parameters:tt)*], impl { $($Implementation:tt)* } $($rest:tt)* ) => {
+
+		impl <$($Parameters)*> $($Name)* {
+			$($Implementation)*
+		}
+		crate::electoral_systems::state_machine::core::implementations!  {
+			[$($Name)*], [$($Parameters)*], $($rest)*
+		}
+	};
+
+	([$($Name:tt)*], [$($Parameters:tt)*], impl$(<$($TraitParamName:ident: $TraitParamPath:path),*>)? $Trait:path { $($TraitDef:tt)* } $($rest:tt)* ) => {
+
+		impl <$($Parameters)*, $($($TraitParamName: $TraitParamPath),*)?> $Trait for $($Name)* {
+			$($TraitDef)*
+		}
+
+		crate::electoral_systems::state_machine::core::implementations!  {
+			[$($Name)*], [$($Parameters)*], $($rest)*
+		}
+
+	};
+
+	([$($Name:tt)*], [$($Parameters:tt)*],) => {}
+}
+pub(crate) use implementations;
+
 /// Derive error enum cases from a struct or enum definition
 macro_rules! derive_error_enum {
 	($Error:ident [$($ParamsDef:tt)*], struct { $( $(#[doc = $doc_text:tt])* $vis:vis $Field:ident: $Type:ty, )* } { $( $property:ident ),* }
@@ -25,7 +53,7 @@ macro_rules! derive_error_enum {
 		pub enum $Error<$($ParamsDef)*> {
 
 			$(
-				$Field(<$Type as Validate>::Error),
+				$Field(<$Type as cf_traits::Validate>::Error),
 			)*
 
 			$(
@@ -104,7 +132,7 @@ macro_rules! defx {
 			}
 		}
 
-		impl<$($ParamName: $($ParamType)?),*> Validate for $Name<$($ParamName),*> {
+		impl<$($ParamName: $($ParamType)?),*> cf_traits::Validate for $Name<$($ParamName),*> {
 
 			type Error = $Error<$($ParamName),*>;
 
@@ -145,7 +173,7 @@ pub(crate) struct TypesFor<Tag> {
 	_phantom: sp_std::marker::PhantomData<Tag>,
 }
 
-impl<Tag> Validate for TypesFor<Tag> {
+impl<Tag> cf_traits::Validate for TypesFor<Tag> {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
@@ -164,4 +192,3 @@ impl<Tag: Sync + Send> Arbitrary for TypesFor<Tag> {
 
 	type Strategy = impl Strategy<Value = Self> + Clone + Sync + Send;
 }
-

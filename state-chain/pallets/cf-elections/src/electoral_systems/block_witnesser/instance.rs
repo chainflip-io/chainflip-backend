@@ -16,14 +16,12 @@ use crate::{
 				ExecuteHook, HookTypeFor, ProcessedUpToHook, RulesHook, SafeModeEnabledHook,
 			},
 		},
-		state_machine::{
-			core::{defx, hook_test_utils::EmptyHook, Hook, Validate},
-			state_machine_es::StatemachineElectoralSystemTypes,
-		},
+		state_machine::{core::defx, state_machine_es::StatemachineElectoralSystemTypes},
 	},
 	generic_tools::*,
 	vote_storage,
 };
+use cf_traits::{hook_test_utils::EmptyHook, Hook, Validate};
 
 use sp_std::vec::Vec;
 

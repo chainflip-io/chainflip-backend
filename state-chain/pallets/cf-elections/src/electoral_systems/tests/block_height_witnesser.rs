@@ -7,10 +7,11 @@ use crate::electoral_systems::{
 	},
 	state_machine::{
 		consensus::{ConsensusMechanism, SuccessThreshold},
-		core::{hook_test_utils::EmptyHook, TypesFor},
+		core::TypesFor,
 		state_machine::AbstractApi,
 	},
 };
+use cf_traits::hook_test_utils::EmptyHook;
 
 struct BlockHeightWitnesserDefinition;
 

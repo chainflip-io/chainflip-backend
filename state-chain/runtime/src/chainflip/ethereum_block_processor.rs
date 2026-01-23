@@ -12,13 +12,12 @@ use crate::{
 	EthereumBroadcaster, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
-use cf_traits::{FundAccount, FundingSource};
+use cf_traits::{FundAccount, FundingSource, Hook};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
-	state_machine::core::Hook,
+use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
+	ExecuteHook, HookTypeFor, RulesHook,
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_std::{vec, vec::Vec};

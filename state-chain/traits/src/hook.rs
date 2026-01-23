@@ -1,4 +1,3 @@
-
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -11,19 +10,19 @@ pub trait HookType {
 	type Output;
 }
 
-impl<A,B> HookType for (A,B) {
+impl<A, B> HookType for (A, B) {
 	type Input = A;
 	type Output = B;
 }
 
-pub trait Hook<T: HookType, const NAME: &'static str = "">: Validate {
+pub trait Hook<T: HookType>: Validate {
 	fn run(&mut self, input: T::Input) -> T::Output;
 }
 
 pub mod hook_test_utils {
 	use super::*;
 	use cf_utilities::impls;
-use codec::MaxEncodedLen;
+	use codec::MaxEncodedLen;
 	#[cfg(test)]
 	use proptest_derive::Arbitrary;
 
@@ -42,7 +41,9 @@ use codec::MaxEncodedLen;
 		Deserialize,
 	)]
 	#[cfg_attr(test, derive(Arbitrary))]
-	#[serde(bound = "T::Input: Serialize + for<'d> Deserialize<'d>, WrappedHook: Serialize + for<'d> Deserialize<'d>")]
+	#[serde(
+		bound = "T::Input: Serialize + for<'d> Deserialize<'d>, WrappedHook: Serialize + for<'d> Deserialize<'d>"
+	)]
 	pub struct MockHook<
 		T: HookType,
 		const NAME: &'static str = "",

@@ -16,7 +16,7 @@ use cf_chains::{
 	witness_period::{BlockWitnessRange, SaturatingStep},
 	Arbitrum, Chain, DepositChannel,
 };
-use cf_traits::{impl_pallet_safe_mode, Chainflip};
+use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
@@ -43,9 +43,8 @@ use pallet_cf_elections::{
 			CompositeRunner,
 		},
 		liveness::Liveness,
-		state_machine::{
-			core::{hook_test_utils::EmptyHook, Hook},
-			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
+		state_machine::state_machine_es::{
+			StatemachineElectoralSystem, StatemachineElectoralSystemTypes,
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},
 	},

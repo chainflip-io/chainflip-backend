@@ -1,24 +1,27 @@
 use crate::{
-	chainflip::bitcoin_elections::{
-		BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataDepositChannel,
-		BlockDataVaultDeposit, EgressBlockData,
+	chainflip::{
+		bitcoin_elections::{
+			BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataDepositChannel,
+			BlockDataVaultDeposit, EgressBlockData,
+		},
+		elections::TypesFor,
 	},
 	BitcoinBroadcaster, BitcoinIngressEgress, Runtime,
 };
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
 use cf_primitives::chains::Bitcoin;
+use cf_traits::Hook;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
-	state_machine::core::Hook,
+use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
+	ExecuteHook, HookTypeFor, RulesHook,
 };
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
 
-use super::{bitcoin_elections::BitcoinDepositChannelWitnessing, elections::TypesFor};
+use super::bitcoin_elections::BitcoinDepositChannelWitnessing;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
