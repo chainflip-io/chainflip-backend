@@ -233,7 +233,15 @@ pub fn recursively_construct_types(
 						MetaType::new::<String>(),
 						types,
 					)
-					.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
+					.map(|(n, v)| {
+						(
+							// since in the empty case we are changing the type to string, we have
+							// to mark it as containing type id
+							TypeName { name: n.name, contains_type_id: true },
+							AddTypeOrNot::DontAdd,
+							v,
+						)
+					})?
 				}
 			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
@@ -278,7 +286,13 @@ pub fn recursively_construct_types(
 						MetaType::new::<String>(),
 						types,
 					)
-					.map(|(n, v)| (n, AddTypeOrNot::DontAdd, v))?
+					.map(|(n, v)| {
+						(
+							TypeName { name: n.name, contains_type_id: true },
+							AddTypeOrNot::DontAdd,
+							v,
+						)
+					})?
 				}
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
@@ -877,16 +891,4 @@ pub mod tests {
 			metadata: None,
 		});
 	}
-
-	// pub type Acb = (u64, u8);
-	// #[test]
-	// fn test_tuple_type_info_registry() {
-	// 	// Create a registry for the tuple type (u64, u8)
-	// 	let mut registry = Registry::new();
-	// 	let id = registry.register_type(&MetaType::new::<String>());
-
-	// 	let portable_registry: scale_info::PortableRegistry = registry.into();
-
-	// 	println!("{portable_registry:#?}");
-	// }
 }

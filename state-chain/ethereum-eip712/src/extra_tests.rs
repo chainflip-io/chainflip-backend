@@ -13,7 +13,7 @@ use std::{
 	process::{Command, Stdio},
 };
 
-mod test_types {
+pub mod test_types {
 	use super::*;
 	#[derive(TypeInfo, Encode)]
 	pub enum TestEnum<T, S> {
@@ -72,6 +72,76 @@ mod test_types {
 
 	#[derive(Encode, TypeInfo)]
 	pub struct TestI128(pub i128);
+
+	pub mod test_complex_type_with_vecs_and_enums {
+		use super::*;
+		// Define complex types with vectors and enums
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithVector {
+			pub items: Vec<u32>,
+			pub description: String,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum StatusEnum {
+			Active,
+			Pending { reason: String },
+			Completed { count: u64, timestamp: u128 },
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithEnum {
+			pub status: StatusEnum,
+			pub id: u64,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum Priority {
+			Low,
+			Medium,
+			High,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithBoth {
+			pub tags: Vec<String>,
+			pub priority: Priority,
+			pub nested_items: Vec<u16>,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct ComplexRoot {
+			pub field_with_vector: TypeWithVector,
+			pub field_with_vector_2: TypeWithVector,
+			pub field_with_enum: TypeWithEnum,
+			pub field_with_both: TypeWithBoth,
+			pub field_with_enum_2: TypeWithEnum,
+			pub field_with_enum_3: TypeWithEnum,
+		}
+	}
+
+	pub mod test_vec_of_enum {
+		use super::*;
+		// Simple enum type
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum Color {
+			Red,
+			Green,
+			Blue { intensity: u8 },
+		}
+
+		// Struct with Vec of enum
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct InnerStruct {
+			pub colors: Vec<Color>,
+		}
+
+		// Root struct with one field
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct SimpleRoot {
+			pub inner: InnerStruct,
+		}
+	}
 }
 
 #[derive(Debug, Deserialize)]
