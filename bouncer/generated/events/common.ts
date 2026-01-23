@@ -1751,6 +1751,11 @@ export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('_
   }),
 ]);
 
+export const palletCfLendingPoolsBoostConfiguration = z.object({
+  networkFeeDeductionFromBoostPercent: z.number(),
+  minimumAddFundsAmount: z.array(z.tuple([cfPrimitivesChainsAssetsAnyAsset, numberOrHex])),
+});
+
 export const palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration = z.object({
   interestAtZeroUtilisation: z.number(),
   junctionUtilisation: z.number(),
@@ -1782,7 +1787,7 @@ export const palletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions = z
 });
 
 export const palletCfLendingPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('SetNetworkFeeDeductionFromBoost'), deductionPercent: z.number() }),
+  z.object({ __kind: z.literal('SetBoostConfig'), config: palletCfLendingPoolsBoostConfiguration }),
   z.object({
     __kind: z.literal('SetLendingPoolConfiguration'),
     asset: cfPrimitivesChainsAssetsAnyAsset.nullish(),
