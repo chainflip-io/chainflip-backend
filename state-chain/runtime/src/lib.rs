@@ -246,6 +246,10 @@ mod runtime {
 
 	#[runtime::pallet_index(55)]
 	pub type GenericElections = pallet_cf_elections;
+	#[runtime::pallet_index(56)]
+	pub type EthereumElections = pallet_cf_elections<Instance1>;
+	#[runtime::pallet_index(57)]
+	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
 }
 
 /// The address format for describing accounts.
@@ -314,9 +318,11 @@ pub type PalletExecutionOrder = (
 	SolanaChainTracking,
 	AssethubChainTracking,
 	// Elections
+	GenericElections,
 	SolanaElections,
 	BitcoinElections,
-	GenericElections,
+	EthereumElections,
+	ArbitrumElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -371,6 +377,8 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,
+	migrations::ethereum_elections::Migration,
+	migrations::arbitrum_elections::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not

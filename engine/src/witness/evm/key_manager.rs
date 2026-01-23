@@ -33,7 +33,7 @@ use super::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block,
+	contract_common::events_at_block_deprecated,
 };
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
@@ -60,6 +60,135 @@ impl Key {
 }
 
 use anyhow::Result;
+
+use crate::evm::{
+	cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
+	rpc::EvmRpcSigningClient,
+};
+use pallet_cf_broadcast::{
+	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
+};
+use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
+use state_chain_runtime::{chainflip::ethereum_elections::KeyManagerEvent, Runtime};
+
+use super::contract_common::Event as ContractEvent;
+
+////////////////////////////////////////////////////////
+// Elections code
+
+/// Configuration trait for chain-specific key manager event handling.
+pub trait KeyManagerEventConfig {
+	type Chain: Chain<
+		ChainAccount = H160,
+		ChainCrypto = cf_chains::evm::EvmCrypto,
+		ChainBlockNumber = u64,
+		TransactionFee = TransactionFee,
+		TransactionMetadata = EvmTransactionMetadata,
+		TransactionRef = H256,
+	>;
+	type Instance: 'static;
+
+	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
+}
+
+pub type KeyManagerEventResult<I> = KeyManagerEvent<
+	AggKeyFor<Runtime, I>,
+	ChainBlockNumberFor<Runtime, I>,
+	TransactionInIdFor<Runtime, I>,
+	TransactionOutIdFor<Runtime, I>,
+	SignerIdFor<Runtime, I>,
+	TransactionFeeFor<Runtime, I>,
+	TransactionMetadataFor<Runtime, I>,
+	TransactionRefFor<Runtime, I>,
+>;
+
+pub async fn handle_key_manager_events<Config>(
+	config: &Config,
+	events: Vec<ContractEvent<KeyManagerEvents>>,
+	block_height: u64,
+) -> Result<Vec<KeyManagerEventResult<Config::Instance>>>
+where
+	Config: KeyManagerEventConfig,
+	Runtime: pallet_cf_vaults::Config<Config::Instance, Chain = Config::Chain>
+		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
+{
+	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
+		handle_key_manager_event::<Config>(
+			config,
+			event.event_parameters,
+			event.tx_hash,
+			block_height,
+		)
+	}))
+	.await?
+	.into_iter()
+	.flatten()
+	.collect())
+}
+
+async fn handle_key_manager_event<Config>(
+	config: &Config,
+	event: KeyManagerEvents,
+	tx_hash: H256,
+	block_height: u64,
+) -> Result<Option<KeyManagerEventResult<Config::Instance>>>
+where
+	Config: KeyManagerEventConfig,
+	Runtime: pallet_cf_vaults::Config<Config::Instance, Chain = Config::Chain>
+		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
+{
+	Ok(Some(match event {
+		KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
+			new_agg_key, ..
+		}) => KeyManagerEventResult::<Config::Instance>::AggKeySetByGovKey {
+			new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(new_agg_key.serialize()),
+			block_number: block_height,
+			tx_id: tx_hash,
+		},
+		KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter { sig_data, .. }) => {
+			let TransactionReceipt { gas_used, effective_gas_price, from, to, .. } =
+				config.client().transaction_receipt(tx_hash).await?;
+
+			let gas_used = gas_used
+				.ok_or_else(|| {
+					anyhow::anyhow!("No gas_used on Transaction receipt for tx_hash: {}", tx_hash)
+				})?
+				.try_into()
+				.map_err(anyhow::Error::msg)?;
+			let effective_gas_price = effective_gas_price
+				.ok_or_else(|| {
+					anyhow::anyhow!(
+						"No effective_gas_price on Transaction receipt for tx_hash: {}",
+						tx_hash
+					)
+				})?
+				.try_into()
+				.map_err(anyhow::Error::msg)?;
+
+			let transaction = config.client().get_transaction(tx_hash).await?;
+			let tx_metadata = EvmTransactionMetadata {
+				contract: to.expect("To have a contract"),
+				max_fee_per_gas: transaction.max_fee_per_gas,
+				max_priority_fee_per_gas: transaction.max_priority_fee_per_gas,
+				gas_limit: Some(transaction.gas),
+			};
+
+			KeyManagerEventResult::<Config::Instance>::SignatureAccepted {
+				tx_out_id: SchnorrVerificationComponents {
+					s: sig_data.sig.into(),
+					k_times_g_address: sig_data.k_times_g_address.into(),
+				},
+				signer_id: from,
+				tx_fee: TransactionFee { effective_gas_price, gas_used },
+				tx_metadata,
+				transaction_ref: transaction.hash,
+			}
+		},
+		KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message }) =>
+			KeyManagerEventResult::<Config::Instance>::GovernanceAction { call_hash: message },
+		_ => return Ok(None),
+	}))
+}
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn key_manager_witnessing<
@@ -99,7 +228,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let eth_rpc = eth_rpc.clone();
 			let mut process_calls = vec![];
 			async move {
-				for event in events_at_block::<Inner::Chain, KeyManagerEvents, _>(
+				for event in events_at_block_deprecated::<Inner::Chain, KeyManagerEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,

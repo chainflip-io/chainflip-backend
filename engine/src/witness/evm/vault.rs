@@ -14,21 +14,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::evm::retry_rpc::EvmRetryRpcApi;
-use anyhow::{anyhow, Result};
-use codec::Decode;
-use ethers::types::Bloom;
-use futures_core::Future;
-use sp_core::H256;
-use std::collections::HashMap;
-
 use super::{
 	super::common::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::{events_at_block, Event},
+	contract_common::{events_at_block_deprecated, Event},
 };
+use crate::evm::retry_rpc::EvmRetryRpcApi;
+use anyhow::{anyhow, Result};
+use codec::Decode;
+use ethers::types::Bloom;
+use futures_core::Future;
+use itertools::Itertools;
+use sp_core::H256;
+use std::collections::HashMap;
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
@@ -40,7 +40,11 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
-use state_chain_runtime::{EthereumInstance, Runtime, RuntimeCall};
+use pallet_cf_ingress_egress::VaultDepositWitness;
+use state_chain_runtime::{
+	chainflip::ethereum_elections::VaultEvents as SCVaultEvents, EthereumInstance, Runtime,
+	RuntimeCall,
+};
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
@@ -332,7 +336,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			let supported_assets = supported_assets.clone();
 			let mut process_calls = vec![];
 			async move {
-				for event in events_at_block::<Inner::Chain, VaultEvents, _>(
+				for event in events_at_block_deprecated::<Inner::Chain, VaultEvents, _>(
 					header,
 					contract_address,
 					&eth_rpc,
@@ -361,4 +365,244 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			}
 		})
 	}
+}
+
+////////////////////////////////////////////////////////
+// Elections code
+
+/// Configuration trait for chain-specific vault event handling.
+///
+/// Implement this trait to provide the chain-specific parameters needed for
+/// the generic vault event handler.
+pub trait VaultEventConfig {
+	type Chain: Chain<
+		ChainAccount = H160,
+		ChainAmount = u128,
+		DepositDetails = DepositDetails,
+		ChainCrypto = cf_chains::evm::EvmCrypto,
+	>;
+	type Instance: 'static;
+
+	const FOREIGN_CHAIN: ForeignChain;
+
+	fn supported_assets(&self) -> &HashMap<H160, Asset>;
+}
+
+fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
+	from: Primitive,
+) -> Result<CfType>
+where
+	<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
+{
+	from.try_into().map_err(|err| {
+		anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
+	})
+}
+
+fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
+	EncodedAddress::from_chain_bytes(chain, bytes)
+		.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
+}
+
+pub fn handle_vault_events<Config>(
+	config: &Config,
+	events: Vec<Event<VaultEvents>>,
+	block_height: u64,
+) -> Result<Vec<SCVaultEvents<VaultDepositWitness<Runtime, Config::Instance>, Config::Chain>>>
+where
+	Config: VaultEventConfig,
+	H160: IntoForeignChainAddress<Config::Chain>,
+	<Config::Chain as Chain>::ChainAsset: TryFrom<Asset>,
+	<<Config::Chain as Chain>::ChainAsset as TryFrom<Asset>>::Error: std::fmt::Debug,
+	Runtime: pallet_cf_ingress_egress::Config<Config::Instance, TargetChain = Config::Chain>,
+{
+	let mut result = Vec::new();
+
+	for event in events {
+		if let Some(mapped) = handle_vault_event::<Config>(
+			config,
+			event.event_parameters,
+			event.tx_hash,
+			block_height,
+		)? {
+			result.push(mapped);
+		}
+	}
+
+	Ok(result)
+}
+
+fn handle_vault_event<Config>(
+	config: &Config,
+	event: VaultEvents,
+	tx_hash: H256,
+	block_height: u64,
+) -> Result<Option<SCVaultEvents<VaultDepositWitness<Runtime, Config::Instance>, Config::Chain>>>
+where
+	Config: VaultEventConfig,
+	H160: IntoForeignChainAddress<Config::Chain>,
+	<Config::Chain as Chain>::ChainAsset: TryFrom<Asset>,
+	<<Config::Chain as Chain>::ChainAsset as TryFrom<Asset>>::Error: std::fmt::Debug,
+	Runtime: pallet_cf_ingress_egress::Config<Config::Instance, TargetChain = Config::Chain>,
+{
+	Ok(Some(match event {
+		VaultEvents::SwapNativeFilter(SwapNativeFilter {
+			dst_chain,
+			dst_address,
+			dst_token,
+			amount,
+			sender: _,
+			cf_parameters,
+		}) => {
+			let (vault_swap_parameters, ()) =
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+			SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
+				<Config::Chain as Chain>::GAS_ASSET,
+				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				tx_hash,
+				vault_swap_parameters
+			))
+		},
+		VaultEvents::SwapTokenFilter(SwapTokenFilter {
+			dst_chain,
+			dst_address,
+			dst_token,
+			src_token,
+			amount,
+			sender: _,
+			cf_parameters,
+		}) => {
+			let (vault_swap_parameters, ()) =
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+			let asset = *config
+				.supported_assets()
+				.get(&src_token)
+				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
+
+			SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
+				asset,
+				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				None,
+				tx_hash,
+				vault_swap_parameters
+			))
+		},
+		VaultEvents::XcallNativeFilter(XcallNativeFilter {
+			dst_chain,
+			dst_address,
+			dst_token,
+			amount,
+			sender,
+			message,
+			gas_amount,
+			cf_parameters,
+		}) => {
+			let (vault_swap_parameters, ccm_additional_data) =
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+			SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
+				<Config::Chain as Chain>::GAS_ASSET,
+				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				Some(CcmDepositMetadata {
+					source_chain: Config::FOREIGN_CHAIN,
+					source_address: Some(
+						IntoForeignChainAddress::<Config::Chain>::into_foreign_chain_address(
+							sender
+						)
+					),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						ccm_additional_data,
+					},
+				}),
+				tx_hash,
+				vault_swap_parameters
+			))
+		},
+		VaultEvents::XcallTokenFilter(XcallTokenFilter {
+			dst_chain,
+			dst_address,
+			dst_token,
+			src_token,
+			amount,
+			sender,
+			message,
+			gas_amount,
+			cf_parameters,
+		}) => {
+			let (vault_swap_parameters, ccm_additional_data) =
+				decode_cf_parameters(&cf_parameters[..], block_height)?;
+
+			let asset = *config
+				.supported_assets()
+				.get(&src_token)
+				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
+
+			SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
+				asset,
+				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
+				try_into_primitive(dst_token)?,
+				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
+				Some(CcmDepositMetadata {
+					source_chain: Config::FOREIGN_CHAIN,
+					source_address: Some(
+						IntoForeignChainAddress::<Config::Chain>::into_foreign_chain_address(
+							sender
+						)
+					),
+					channel_metadata: CcmChannelMetadata {
+						message: message
+							.to_vec()
+							.try_into()
+							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
+						gas_budget: try_into_primitive(gas_amount)?,
+						ccm_additional_data,
+					},
+				}),
+				tx_hash,
+				vault_swap_parameters
+			))
+		},
+		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
+			recipient,
+			amount,
+		}) => SCVaultEvents::TransferNativeFailedFilter {
+			asset: <Config::Chain as Chain>::GAS_ASSET,
+			amount: try_into_primitive::<_, AssetAmount>(amount)?,
+			destination_address: recipient,
+		},
+		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
+			recipient,
+			amount,
+			token,
+			reason: _,
+		}) => {
+			let asset = *config
+				.supported_assets()
+				.get(&token)
+				.ok_or_else(|| anyhow!("Asset {token:?} not found"))?;
+
+			SCVaultEvents::TransferTokenFailedFilter {
+				asset: asset
+					.try_into()
+					.expect("Asset translated from address must be supported by the chain."),
+				amount: try_into_primitive(amount)?,
+				destination_address: recipient,
+			}
+		},
+		_ => return Ok(None),
+	}))
 }

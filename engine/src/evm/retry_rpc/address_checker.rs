@@ -16,9 +16,13 @@
 
 use ethers::prelude::*;
 
-use crate::evm::rpc::{
-	address_checker::{AddressCheckerRpcApi, *},
-	EvmRpcApi,
+use crate::evm::{
+	cached_rpc::AddressCheckerRetryRpcApiWithResult,
+	retry_rpc::MAX_RETRY_FOR_WITH_RESULT,
+	rpc::{
+		address_checker::{AddressCheckerRpcApi, *},
+		EvmRpcApi,
+	},
 };
 
 use super::EvmRetryRpcClient;
@@ -114,6 +118,79 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApi for EvmRet
 					})
 				}),
 				MAX_QUERY_PRICE_FEED_RETRIES,
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
+	for EvmRetryRpcClient<Rpc>
+{
+	async fn address_states(
+		&self,
+		block_hash: H256,
+		contract_address: H160,
+		addresses: Vec<H160>,
+	) -> anyhow::Result<Vec<AddressState>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"address_states".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					let addresses = addresses.clone();
+					Box::pin(async move {
+						client.address_states(block_hash, contract_address, addresses).await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn balances(
+		&self,
+		block_hash: H256,
+		contract_address: H160,
+		addresses: Vec<H160>,
+	) -> anyhow::Result<Vec<U256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"balances".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					let addresses = addresses.clone();
+					Box::pin(async move {
+						client.balances(block_hash, contract_address, addresses).await
+					})
+				}),
+				2,
+			)
+			.await
+	}
+
+	async fn query_price_feeds(
+		&self,
+		contract_address: H160,
+		aggregator_addresses: Vec<H160>,
+	) -> anyhow::Result<(U256, U256, Vec<PriceFeedData>)> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"query_price_feeds".to_string(),
+					Some(format!("{contract_address:?}, {aggregator_addresses:?}")),
+				),
+				Box::pin(move |client| {
+					let aggregator_addresses = aggregator_addresses.clone();
+					Box::pin(async move {
+						client.query_price_feeds(contract_address, aggregator_addresses).await
+					})
+				}),
+				2,
 			)
 			.await
 	}

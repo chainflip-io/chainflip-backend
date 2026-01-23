@@ -26,7 +26,10 @@ use cf_utilities::task_scope::Scope;
 use futures_core::Future;
 
 use crate::{
-	evm::rpc::{EvmRpcApi, EvmSigningRpcApi},
+	evm::{
+		cached_rpc::EvmRetryRpcApiWithResult,
+		rpc::{EvmRpcApi, EvmSigningRpcApi},
+	},
 	retrier::{
 		Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY,
 	},
@@ -56,6 +59,7 @@ const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 const MAX_BROADCAST_RETRIES: Attempt = 2;
+pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 
 impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
@@ -216,7 +220,7 @@ pub trait EvmRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-pub trait EvmRetrySigningRpcApi: EvmRetryRpcApi {
+pub trait EvmRetrySigningRpcApi: EvmRetryRpcApiWithResult {
 	async fn broadcast_transaction(
 		&self,
 		tx: cf_chains::evm::Transaction,
@@ -344,6 +348,162 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcApi for EvmRetryRpcClient<Rpc> {
 				Box::pin(move |client| {
 					Box::pin(async move { client.get_transaction(tx_hash).await })
 				}),
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl<Rpc: EvmRpcApi> EvmRetryRpcApiWithResult for EvmRetryRpcClient<Rpc> {
+	async fn get_logs_range(
+		&self,
+		range: std::ops::RangeInclusive<u64>,
+		contract_address: H160,
+	) -> anyhow::Result<Vec<Log>> {
+		assert!(!range.is_empty());
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"get_logs_range".to_string(),
+					Some(format!("{range:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					let range = range.clone();
+					Box::pin(async move {
+						client
+							.get_logs(
+								// The `from_block` and `to_block` are inclusive
+								Filter::new()
+									.address(contract_address)
+									.from_block(*range.start())
+									.to_block(*range.end()),
+							)
+							.await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"get_logs".to_string(),
+					Some(format!("{block_hash:?}, {contract_address:?}")),
+				),
+				Box::pin(move |client| {
+					Box::pin(async move {
+						client
+							.get_logs(
+								Filter::new().address(contract_address).at_block_hash(block_hash),
+							)
+							.await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn chain_id(&self) -> anyhow::Result<U256> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("chain_id".to_string(), None),
+				Box::pin(move |client| Box::pin(async move { client.chain_id().await })),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("transaction_receipt".to_string(), Some(format!("{tx_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.transaction_receipt(tx_hash).await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block".to_string(), Some(format!("{block_number}"))),
+				Box::pin(move |client| Box::pin(async move { client.block(block_number).await })),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_by_hash".to_string(), Some(format!("{block_hash}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.block_by_hash(block_hash).await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("block_with_txs".to_string(), Some(format!("{block_number}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.block_with_txs(block_number).await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn fee_history(
+		&self,
+		block_count: U256,
+		newest_block: BlockNumber,
+		reward_percentiles: Vec<f64>,
+	) -> anyhow::Result<FeeHistory> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"fee_history".to_string(),
+					Some(format!("{block_count}, {newest_block}, {reward_percentiles:?}")),
+				),
+				Box::pin(move |client| {
+					let reward_percentiles = reward_percentiles.clone();
+					Box::pin(async move {
+						client.fee_history(block_count, newest_block, &reward_percentiles).await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_transaction".to_string(), Some(format!("{tx_hash:?}"))),
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_transaction(tx_hash).await })
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
+			)
+			.await
+	}
+
+	async fn get_block_number(&self) -> Result<U64> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new("get_block_number".to_string(), None),
+				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
@@ -522,27 +682,31 @@ pub mod mocks {
 		}
 
 		#[async_trait::async_trait]
-		impl EvmRetryRpcApi for EvmRetryRpcClient {
-			async fn get_logs_range(&self, range: std::ops::RangeInclusive<u64>, contract_address: H160) -> Vec<Log>;
+		impl EvmRetryRpcApiWithResult for EvmRetryRpcClient {
+			async fn get_logs_range(&self, range: std::ops::RangeInclusive<u64>, contract_address: H160) -> anyhow::Result<Vec<Log>>;
 
-			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
+			async fn get_logs(&self, block_hash: H256, contract_address: H160) -> anyhow::Result<Vec<Log>>;
 
-			async fn chain_id(&self) -> U256;
+			async fn chain_id(&self) -> anyhow::Result<U256>;
 
-			async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt;
+			async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt>;
 
-			async fn block(&self, block_number: U64) -> Block<H256>;
+			async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>>;
 
-			async fn block_with_txs(&self, block_number: U64) -> Block<Transaction>;
+			async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>>;
 
 			async fn fee_history(
 				&self,
 				block_count: U256,
 				newest_block: BlockNumber,
 				reward_percentiles: Vec<f64>,
-			) -> FeeHistory;
+			) -> anyhow::Result<FeeHistory>;
 
-			async fn get_transaction(&self, tx_hash: H256) -> Transaction;
+			async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction>;
+
+			async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>>;
+
+			async fn get_block_number(&self) -> anyhow::Result<U64>;
 		}
 	}
 }
@@ -575,7 +739,7 @@ mod tests {
 				)
 				.unwrap();
 
-				let chain_id = retry_client.chain_id().await;
+				let chain_id = EvmRetryRpcApi::chain_id(&retry_client).await;
 				println!("chain_id: {}", chain_id);
 
 				Ok(())

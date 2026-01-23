@@ -43,7 +43,7 @@ use cf_chains::{
 	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
 	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
 	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, RejectError, SwapOrigin,
-	TransferAssetParams, TransferForRejection,
+	TransferAssetParams, TransferFallback, TransferForRejection,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
@@ -1515,33 +1515,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let current_epoch = T::EpochInfo::epoch_index();
-			match <T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
-				TransferAssetParams { asset, amount, to: destination_address.clone() },
-			) {
-				Ok(api_call) => {
-					let (broadcast_id, _) = T::Broadcaster::threshold_sign(api_call);
-					FailedForeignChainCalls::<T, I>::append(
-						current_epoch,
-						FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
-					);
-					Self::deposit_event(Event::<T, I>::TransferFallbackRequested {
-						asset,
-						amount,
-						destination_address,
-						broadcast_id,
-						egress_details: None,
-					});
-				},
-				// The only way this can fail is if the target chain is unsupported, which should
-				// never happen.
-				Err(err) => {
-					log_or_panic!(
-						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}, Error: {:?}",
-						asset, amount, destination_address, err
-					);
-				},
-			};
+			Self::vault_transfer_failed_inner(asset, amount, destination_address);
+
 			Ok(())
 		}
 
@@ -2375,11 +2350,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		ensure!(
-			deposit_channel_details.deposit_channel.asset == *asset,
-			Error::<T, I>::AssetMismatch
-		);
-
 		let channel_id = deposit_channel_details.deposit_channel.channel_id;
 
 		if DepositChannelPool::<T, I>::get(channel_id).is_some() {
@@ -2463,6 +2433,40 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		Ok(())
+	}
+
+	pub fn vault_transfer_failed_inner(
+		asset: TargetChainAsset<T, I>,
+		amount: TargetChainAmount<T, I>,
+		destination_address: TargetChainAccount<T, I>,
+	) {
+		let current_epoch = T::EpochInfo::epoch_index();
+		match <T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(
+			TransferAssetParams { asset, amount, to: destination_address.clone() },
+		) {
+			Ok(api_call) => {
+				let (broadcast_id, _) = T::Broadcaster::threshold_sign(api_call);
+				FailedForeignChainCalls::<T, I>::append(
+					current_epoch,
+					FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
+				);
+				Self::deposit_event(Event::<T, I>::TransferFallbackRequested {
+					asset,
+					amount,
+					destination_address,
+					broadcast_id,
+					egress_details: None,
+				});
+			},
+			// The only way this can fail is if the target chain is unsupported, which should
+			// never happen.
+			Err(err) => {
+				log_or_panic!(
+						"Failed to construct TransferFallback call. Asset: {:?}, amount: {:?}, Destination: {:?}, Error: {:?}",
+						asset, amount, destination_address, err
+					);
+			},
+		};
 	}
 
 	// Look up the minimum broker fee that has been set by the broker and increase the given broker

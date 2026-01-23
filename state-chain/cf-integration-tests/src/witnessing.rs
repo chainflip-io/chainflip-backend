@@ -75,11 +75,9 @@ fn can_punish_failed_witnesser() {
 			let new_authorities = (0..50)
 				.map(|_| {
 					let node = testnet.create_engine();
-					testnet.state_chain_gateway_contract.fund_account(
-						node.clone(),
-						INITIAL_FUNDING,
-						epoch,
-					);
+					testnet
+						.state_chain_gateway_contract
+						.fund_account(node.clone(), INITIAL_FUNDING);
 					node
 				})
 				.collect::<BTreeSet<_>>();

@@ -36,9 +36,10 @@ use super::{
 		chain_source::Header,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::events_at_block,
+	contract_common::events_at_block_deprecated,
 };
 
+#[derive(Debug)]
 pub enum Erc20Events {
 	TransferFilter { to: H160, from: H160, value: U256 },
 	Other,
@@ -123,7 +124,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.map(|deposit_channel| deposit_channel.deposit_channel.address)
 					.collect::<HashSet<_>>();
 
-				let deposit_witnesses = events_at_block::<Inner::Chain, Events, _>(
+				let deposit_witnesses = events_at_block_deprecated::<Inner::Chain, Events, _>(
 					Header {
 						index: header.index,
 						hash: header.hash,
