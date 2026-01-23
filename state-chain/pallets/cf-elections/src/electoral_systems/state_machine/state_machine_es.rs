@@ -25,7 +25,7 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 	type StateChainBlockNumber: Parameter + Member + Ord;
 
 	type OnFinalizeReturnItem;
-	type VoteStorage: VoteStorage;
+	type VoteStorage: VoteStorage<Properties: Default>;
 
 	type Statemachine: StatemachineForES<Self> + 'static;
 	type ConsensusMechanism: ConsensusMechanismForES<Self> + 'static;
@@ -36,8 +36,14 @@ pub trait StatemachineElectoralSystemTypes: 'static + Sized {
 /// Convenience wrapper of the `Statemachine` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the state machine's associated types for it
 /// to be possible to derive an electoral system.
-pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> =
-	Statemachine<Output = Result<ES::OnFinalizeReturnItem, &'static str>>;
+pub trait StatemachineForES<ES: StatemachineElectoralSystemTypes> = Statemachine<
+	Output = Result<ES::OnFinalizeReturnItem, &'static str>,
+	State: Parameter + Member + MaybeSerializeDeserialize,
+	Settings: Parameter + Member + MaybeSerializeDeserialize,
+	Query: Parameter + Member,
+	Response: Parameter + Member + Eq,
+	Context: Debug + Clone,
+>;
 
 /// Convenience wrapper of the `ConsensusMechanism` trait. Given an electoral system `ES`,
 /// this trait defines the conditions on the consensus mechanism's associated types for it
@@ -84,11 +90,6 @@ pub struct StatemachineElectoralSystem<ES: StatemachineElectoralSystemTypes> {
 }
 
 impl<ES: StatemachineElectoralSystemTypes> ElectoralSystemTypes for StatemachineElectoralSystem<ES>
-where
-	<ES::Statemachine as Statemachine>::State: Parameter + Member + MaybeSerializeDeserialize,
-	<ES::Statemachine as Statemachine>::Settings: Parameter + Member + MaybeSerializeDeserialize,
-	<ES::Statemachine as AbstractApi>::Query: Parameter + Member,
-	<ES::Statemachine as AbstractApi>::Response: Parameter + Member + Eq,
 {
 	type ValidatorId = ES::ValidatorId;
 	type StateChainBlockNumber = ES::StateChainBlockNumber;
@@ -146,14 +147,6 @@ where
 ///  - In the currently implemented ESs this is not a problem, but has to be checked when new state
 ///    machines are designed.
 impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElectoralSystem<ES>
-where
-	<ES::VoteStorage as VoteStorage>::Properties: Default,
-	<ES::Statemachine as Statemachine>::State: Parameter + Member + MaybeSerializeDeserialize,
-	<ES::Statemachine as Statemachine>::Settings: Parameter + Member + MaybeSerializeDeserialize,
-	<ES::Statemachine as AbstractApi>::Query: Parameter + Member,
-	<ES::Statemachine as AbstractApi>::Response: Parameter + Member + Eq,
-
-	<ES::Statemachine as Statemachine>::Context: Debug + Clone,
 {
 	fn generate_vote_properties(
 		_election_identifier: crate::electoral_system::ElectionIdentifierOf<Self>,
