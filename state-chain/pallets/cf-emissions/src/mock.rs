@@ -24,14 +24,14 @@ use cf_chains::{
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		broadcaster::MockBroadcaster, egress_handler::MockEgressHandler,
-		flip_burn_info::MockFlipBurnOrMoveInfo,
+		flip_burn_info::MockFlipBurnOrMoveInfo, waived_fees::WaivedFeesMock,
 	},
-	Issuance, RewardsDistribution, WaivedFees,
+	Issuance, RewardsDistribution,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, parameter_types};
 use frame_system::{self as system};
 use scale_info::TypeInfo;
@@ -70,19 +70,27 @@ parameter_types! {
 	pub const HeartbeatBlockInterval: u64 = 150;
 }
 
-// Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, RuntimeCall);
-
 impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
+	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
+	type RuntimeHoldReason = ();
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockUpdateFlipSupply {
 	pub new_total_supply: FlipBalance,
 	pub block_number: u64,
@@ -131,7 +139,7 @@ impl ApiCall<MockEthereumChainCrypto> for MockUpdateFlipSupply {
 pub struct MockStateChainGatewayProvider;
 
 impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
-	fn state_chain_gateway_address() -> cf_chains::eth::Address {
+	fn state_chain_gateway_address() -> cf_chains::evm::Address {
 		[0xcc; 20].into()
 	}
 }
@@ -152,7 +160,6 @@ impl RewardsDistribution for FlipDistribution {
 }
 
 impl pallet_cf_emissions::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = MockUpdateFlipSupply;

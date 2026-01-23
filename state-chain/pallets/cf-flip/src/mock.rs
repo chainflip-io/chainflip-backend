@@ -18,7 +18,7 @@
 
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
-use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, WaivedFees};
+use cf_traits::{impl_mock_chainflip, mocks::waived_fees::WaivedFeesMock, Funding};
 use frame_support::{
 	derive_impl, parameter_types,
 	traits::{ConstU128, ConstU8, HandleLifetime},
@@ -57,15 +57,12 @@ parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
 
-// Implement mock for WaivedFees
-impl_mock_waived_fees!(AccountId, RuntimeCall);
-
 impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
+	type WaivedFees = WaivedFeesMock<Self>;
+	type RuntimeHoldReason = ();
 	type CallIndexer = ();
 }
 
@@ -80,6 +77,7 @@ impl pallet_transaction_payment::Config for Test {
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type LengthToFee = ConstantMultiplier<u128, ConstU128<1_000_000>>;
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

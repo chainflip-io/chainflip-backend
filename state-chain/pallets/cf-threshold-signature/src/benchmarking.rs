@@ -71,7 +71,6 @@ fn generate_authority_set<T: Config<I>, I: 'static>(
 	authority_set
 }
 
-#[expect(clippy::multiple_bound_locations)]
 #[instance_benchmarks( where
 	T: frame_system::Config
 	+ pallet_cf_validator::Config
@@ -98,7 +97,7 @@ mod benchmarks {
 		signature_success(RawOrigin::None, ceremony_id, signature);
 
 		let last_event = frame_system::Pallet::<T>::events().pop().unwrap().event;
-		let expected: <T as crate::Config<I>>::RuntimeEvent =
+		let expected: <T as frame_system::Config>::RuntimeEvent =
 			Event::<T, I>::ThresholdSignatureSuccess { request_id, ceremony_id }.into();
 		assert_eq!(last_event, *expected.into_ref());
 	}

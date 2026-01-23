@@ -22,8 +22,7 @@ use crate::evm::retry_rpc::EvmRetryRpcApi;
 
 use super::super::common::chain_source::Header;
 use anyhow::{anyhow, Result};
-use sp_core::{H160, H256, U256};
-
+use cf_chains::evm::{Address as EvmAddress, H256, U256};
 use ethers::{
 	abi::ethereum_types::BloomInput,
 	types::{Bloom, Log},
@@ -65,7 +64,7 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 
 pub async fn events_at_block<Chain, EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
-	contract_address: H160,
+	contract_address: EvmAddress,
 	eth_rpc: &EvmRpcClient,
 ) -> Result<Vec<Event<EventParameters>>>
 where

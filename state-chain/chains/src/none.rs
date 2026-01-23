@@ -15,12 +15,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use crate::eth::H160;
 use cf_primitives::chains::assets::any::AssetMap;
+use codec::DecodeWithMemTracking;
 use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum NoneChain {}
 
 impl Chain for NoneChain {
@@ -28,7 +28,7 @@ impl Chain for NoneChain {
 	const GAS_ASSET: Self::ChainAsset = assets::any::Asset::Usdc;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
-	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(H160([0; 20]));
+	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(evm::Address::zero());
 
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;

@@ -34,23 +34,29 @@ pub const CHARLIE: <Test as frame_system::Config>::AccountId = 125u64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
-frame_support::construct_runtime!(
-	pub enum Test {
-		System: frame_system,
-		LiquidityPools: pallet_cf_pools,
-	}
-);
+#[frame_support::runtime]
+mod runtime {
+
+	#[runtime::runtime]
+	#[runtime::derive(RuntimeCall, RuntimeEvent, RuntimeError, RuntimeOrigin)]
+	pub struct Test;
+
+	#[runtime::pallet_index(0)]
+	pub type System = frame_system;
+	#[runtime::pallet_index(1)]
+	pub type LiquidityPools = pallet_cf_pools;
+}
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl system::Config for Test {
 	type Block = Block;
+	type RuntimeTask = ();
 }
 
 impl_mock_chainflip!(Test);
 
 impl_mock_runtime_safe_mode!(pools: PalletSafeMode);
 impl pallet_cf_pools::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = cf_traits::mocks::balance_api::MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type LpRegistrationApi = MockLpRegistration;

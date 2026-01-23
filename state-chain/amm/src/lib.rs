@@ -21,7 +21,7 @@ mod tests;
 use core::convert::Infallible;
 
 use cf_amm_math::{mul_div_floor, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
 	SetFeesError, Side, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
@@ -37,7 +37,15 @@ pub mod range_orders;
 pub use cf_amm_math as math;
 
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
 )]
 pub struct PoolState<LiquidityProvider: Ord> {
 	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,

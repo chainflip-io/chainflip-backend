@@ -199,7 +199,6 @@ impl ChannelIdAllocator for MockChannelIdAllocator {
 }
 
 impl pallet_cf_swapping::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type AddressConverter = MockAddressConverter;

@@ -14,29 +14,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
-use cf_chains::{Chain, Ethereum};
-use ethers::{prelude::abigen, types::Bloom};
-use sp_core::{H160, H256};
-use tracing::{info, warn};
-
-use super::super::{
-	common::{
-		chain_source::ChainClient,
-		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
+use crate::{
+	evm::retry_rpc::EvmRetryRpcApi,
+	witness::{
+		common::{
+			chain_source::ChainClient,
+			chunked_chain_source::chunked_by_vault::{
+				builder::ChunkedByVaultBuilder, ChunkedByVault,
+			},
+		},
+		evm::contract_common::events_at_block,
 	},
-	evm::contract_common::events_at_block,
 };
-use crate::evm::retry_rpc::EvmRetryRpcApi;
-use cf_chains::evm::ToAccountId32;
+use anyhow::Result;
+use cf_chains::{evm::ToAccountId32, Chain, Ethereum};
 use cf_primitives::{Asset, EpochIndex};
+use ethers::{prelude::*, types::Bloom};
 use futures_core::Future;
 use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
+use sp_core::{H160, H256};
+use std::collections::HashMap;
+use tracing::{info, warn};
 
 abigen!(ScUtils, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IScUtils.json");
-
-use anyhow::Result;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn sc_utils_witnessing<

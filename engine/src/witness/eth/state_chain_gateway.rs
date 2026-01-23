@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{Chain, Ethereum};
-use ethers::{prelude::abigen, types::Bloom};
+use ethers::{prelude::*, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
 
