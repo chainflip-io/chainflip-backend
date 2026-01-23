@@ -11,6 +11,7 @@ import {
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
+import { z } from 'zod';
 
 // Test that governance can trigger deposit witnessing for a deposit made with the wrong asset.
 // Scenario:
@@ -70,16 +71,7 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
     throw new Error(`Deposit channel not found for address ${swapParams.depositAddress}`);
   }
 
-  // Step 7: Set up swap observer before governance call
-  const swapRequestedHandle = observeSwapRequested(
-    cf,
-    'Usdt',
-    'Flip',
-    { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
-    SwapRequestType.Regular,
-  );
-
-  // Step 8: Submit governance extrinsic to trigger witnessing with USDT
+  // Step 7: Submit governance extrinsic to trigger witnessing with USDT
   // Use the block number where the USDT deposit happened, and actual deposit channel state from chain
   cf.info(
     `Submitting governance extrinsic to trigger deposit witnessing at block ${depositBlockNumber}...`,
@@ -99,11 +91,18 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
     },
   });
 
-  // Step 9: Verify swap was triggered
-  const swapEvent = await swapRequestedHandle;
+  // Step 8: Wait for swap to be triggered.
+  const swapEvent = await observeSwapRequested(
+    cf,
+    'Usdt',
+    'Flip',
+    { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+    SwapRequestType.Regular,
+  );
+
   cf.info(`Swap requested with ID: ${swapEvent.swapRequestId}`);
 
-  // Step 10: Verify swap completes
+  // Step 9: Verify swap completes
   await cf.stepUntilEvent(
     'Swapping.SwapRequestCompleted',
     swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapEvent.swapRequestId),
