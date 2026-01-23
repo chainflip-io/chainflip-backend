@@ -49,7 +49,7 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
     ethereumAdvancedEnough: {
       name: 'EthereumChainTracking.ChainStateUpdated',
       schema: ethereumChainTrackingChainStateUpdated.refine(
-        (event) => event.newChainState.blockHeight === BigInt(depositBlockNumber + 10),
+        (event) => event.newChainState.blockHeight >= BigInt(depositBlockNumber + 10),
       ),
     },
   });
