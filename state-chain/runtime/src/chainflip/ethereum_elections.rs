@@ -1,4 +1,4 @@
-use core::ops::RangeInclusive;
+use core::ops::{Range, RangeInclusive};
 
 use crate::{
 	chainflip::{
@@ -14,6 +14,7 @@ use cf_chains::{
 	Chain, DepositChannel, Ethereum,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
+use cf_utilities::derive_common_traits;
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
@@ -26,10 +27,11 @@ use pallet_cf_elections::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
-			BlockHeightWitnesserSettings, ChainProgress, ChainTypes, ReorgHook,
+			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
+			instance::{BlockWitnesserInstance, DerivedBlockWitnesser},
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
@@ -51,7 +53,9 @@ use pallet_cf_elections::{
 };
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
+use pallet_cf_ingress_egress::{
+	BlockWitnesserEvent, DepositWitness, ProcessedUpTo, VaultDepositWitness,
+};
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -141,6 +145,78 @@ impls! {
 pub type EthereumBlockHeightWitnesserES =
 	StatemachineElectoralSystem<TypesFor<EthereumBlockHeightWitnesser>>;
 
+// ------------------------ generic deposit channels -------------------
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum DepositChannelEvent<T> {
+	PreWitness(T),
+	Witness(T),
+}
+
+pub struct JustWitnessAtSafetyMarginImpl<BlockEntry>(sp_std::marker::PhantomData<BlockEntry>);
+type JustWitnessAtSafetyMargin<BlockEntry> = TypesFor<JustWitnessAtSafetyMarginImpl<BlockEntry>>;
+
+impl<BlockEntry> Hook<((Range<u32>, Vec<BlockEntry>, u32), Vec<BlockWitnesserEvent<BlockEntry>>)>
+	for JustWitnessAtSafetyMargin<BlockEntry>
+{
+	fn run(&mut self, (ages, block_data, safety_margin): <((Range<u32>, Vec<BlockEntry>, u32), Vec<BlockWitnesserEvent<BlockEntry>>) as cf_traits::HookType>::Input) -> <((Range<u32>, BlockEntry, u32), Vec<BlockWitnesserEvent<BlockEntry>>) as cf_traits::HookType>::Output{
+		if ages.contains(&safety_margin) {
+			block_data.into_iter().map(BlockWitnesserEvent::Witness).collect()
+		} else {
+			Vec::new()
+		}
+	}
+}
+
+// ------------------------ deposit channel witnessing ---------------------------
+// alternative deposit channel witnessing
+
+impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
+	const BWNAME: &'static str = "DepositChannel";
+	type Chain = EthereumChain;
+	type BlockEntry = DepositWitness<Ethereum>;
+	type Event = BlockWitnesserEvent<DepositWitness<Ethereum>>;
+	type Runtime = Runtime;
+	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
+
+	type ElectionProperties = ElectionPropertiesDepositChannel;
+
+	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
+
+	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
+		EthereumIngressEgress::active_deposit_channels_at(
+			// we advance by SAFETY_BUFFER before checking opened_at
+			height.saturating_forward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
+			// we don't advance for expiry
+			height,
+		)
+		.into_iter()
+		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+		.collect()
+	}
+
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+		>>::get()
+		.deposit_channel_witnessing_enabled
+	}
+
+	fn processed_up_to(
+		up_to: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<
+			Self::Chain,
+		>,
+	) {
+		// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks
+		// have been additionally processed.
+		ProcessedUpTo::<Runtime, EthereumInstance>::set(
+			up_to.saturating_backward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
+		);
+	}
+}
+
 // ------------------------ deposit channel witnessing ---------------------------
 /// The electoral system for deposit channel witnessing
 pub struct EthereumDepositChannelWitnessing;
@@ -148,91 +224,92 @@ pub struct EthereumDepositChannelWitnessing;
 type ElectionPropertiesDepositChannel = Vec<DepositChannel<Ethereum>>;
 pub(crate) type BlockDataDepositChannel = Vec<DepositWitness<Ethereum>>;
 
-impls! {
-	for TypesFor<EthereumDepositChannelWitnessing>:
+// impls! {
+// 	for TypesFor<EthereumDepositChannelWitnessing>:
 
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-		type BlockData = BlockDataDepositChannel;
+// 	/// Associating BW processor types
+// 	BWProcessorTypes {
+// 		type Chain = EthereumChain;
+// 		type BlockData = BlockDataDepositChannel;
 
-		type Event = EthEvent<DepositWitness<Ethereum>>;
-		type Rules = Self;
-		type Execute = Self;
-		type DebugEventHook = EmptyHook;
+// 		type Event = EthEvent<DepositWitness<Ethereum>>;
+// 		type Rules = Self;
+// 		type Execute = Self;
+// 		type DebugEventHook = EmptyHook;
 
-		const BWNAME: &'static str = "DepositChannel";
-	}
+// 		const BWNAME: &'static str = "DepositChannel";
+// 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ElectionPropertiesDepositChannel;
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = Self;
-		type ElectionTrackerDebugEventHook = EmptyHook;
-	}
+// 	/// Associating BW types to the struct
+// 	BWTypes {
+// 		type ElectionProperties = ElectionPropertiesDepositChannel;
+// 		type ElectionPropertiesHook = Self;
+// 		type SafeModeEnabledHook = Self;
+// 		type ProcessedUpToHook = Self;
+// 		type ElectionTrackerDebugEventHook = EmptyHook;
+// 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<eth::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
+// 	/// Associating the state machine and consensus mechanism to the struct
+// 	StatemachineElectoralSystemTypes {
+// 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
+// 		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<eth::H256>)>;
+// 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
-		type OnFinalizeReturnItem = ();
+// 		type OnFinalizeReturnItem = ();
 
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
+// 		// the actual state machine and consensus mechanisms of this ES
+// 		type Statemachine = BWStatemachine<Self>;
+// 		type ConsensusMechanism = BWConsensus<Self>;
+// 	}
 
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
-				pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
-			>>::get()
-			.deposit_channel_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
+// 	/// implementation of safe mode reading hook
+// 	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+// 		fn run(&mut self, _input: ()) -> SafeModeStatus {
+// 			if <<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
+// 				pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+// 			>>::get()
+// 			.deposit_channel_witnessing_enabled
+// 			{
+// 				SafeModeStatus::Disabled
+// 			} else {
+// 				SafeModeStatus::Enabled
+// 			}
+// 		}
+// 	}
 
-	/// implementation of reading deposit channels hook
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(
-			&mut self,
-			height: <Ethereum as Chain>::ChainBlockNumber,
-		) -> Vec<DepositChannel<Ethereum>> {
+// 	/// implementation of reading deposit channels hook
+// 	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
+// 		fn run(
+// 			&mut self,
+// 			height: <Ethereum as Chain>::ChainBlockNumber,
+// 		) -> Vec<DepositChannel<Ethereum>> {
 
-			EthereumIngressEgress::active_deposit_channels_at(
-				// we advance by SAFETY_BUFFER before checking opened_at
-				height.saturating_forward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
-				// we don't advance for expiry
-				height
-			).into_iter().map(|deposit_channel_details| {
-				deposit_channel_details.deposit_channel
-			}).collect()
-		}
-	}
+// 			EthereumIngressEgress::active_deposit_channels_at(
+// 				// we advance by SAFETY_BUFFER before checking opened_at
+// 				height.saturating_forward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize),
+// 				// we don't advance for expiry
+// 				height
+// 			).into_iter().map(|deposit_channel_details| {
+// 				deposit_channel_details.deposit_channel
+// 			}).collect()
+// 		}
+// 	}
 
-	/// implementation of processed_up_to hook, this enables expiration of deposit channels
-	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
-		fn run(
-			&mut self,
-			up_to: <Ethereum as Chain>::ChainBlockNumber,
-		) {
-			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have been additionally processed.
-			ProcessedUpTo::<Runtime, EthereumInstance>::set(up_to.saturating_backward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize));
-		}
-	}
-}
+// 	/// implementation of processed_up_to hook, this enables expiration of deposit channels
+// 	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
+// 		fn run(
+// 			&mut self,
+// 			up_to: <Ethereum as Chain>::ChainBlockNumber,
+// 		) {
+// 			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have
+// been additionally processed. 			ProcessedUpTo::<Runtime,
+// EthereumInstance>::set(up_to.saturating_backward(ETHEREUM_MAINNET_SAFETY_BUFFER as usize)); 		}
+// 	}
+// }
 /// Generating the state machine-based electoral system
 pub type EthereumDepositChannelWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumDepositChannelWitnessing>>;
+	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<EthereumDepositChannelWitnessing>>>;
+// StatemachineElectoralSystem<TypesFor<EthereumDepositChannelWitnessing>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
 /// The electoral system for vault deposit witnessing

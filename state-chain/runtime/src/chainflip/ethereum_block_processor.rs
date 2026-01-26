@@ -36,19 +36,19 @@ type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
-	for TypesDepositChannelWitnessing
-{
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<DepositWitness<Ethereum>>)>) {
-		for (block, event) in events {
-			match event {
-				EthEvent::Witness(deposit) => {
-					EthereumIngressEgress::process_channel_deposit_full_witness(deposit, block);
-				},
-			}
-		}
-	}
-}
+// impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
+// 	for TypesDepositChannelWitnessing
+// {
+// 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<DepositWitness<Ethereum>>)>) {
+// 		for (block, event) in events {
+// 			match event {
+// 				EthEvent::Witness(deposit) => {
+// 					EthereumIngressEgress::process_channel_deposit_full_witness(deposit, block);
+// 				},
+// 			}
+// 		}
+// 	}
+// }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
 		for (block, event) in events {
@@ -235,11 +235,11 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-impl_rules_hook!(
-	TypesDepositChannelWitnessing,
-	BlockDataDepositChannel,
-	EthEvent<DepositWitness<Ethereum>>
-);
+// impl_rules_hook!(
+// 	TypesDepositChannelWitnessing,
+// 	BlockDataDepositChannel,
+// 	EthEvent<DepositWitness<Ethereum>>
+// );
 impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, EthEvent<EthereumVaultEvent>);
 impl_rules_hook!(
 	TypesStateChainGatewayWitnessing,

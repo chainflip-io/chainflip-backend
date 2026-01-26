@@ -13,6 +13,80 @@ macro_rules! derive_common_traits {
 }
 pub use derive_common_traits;
 
+#[macro_export]
+macro_rules! define_empty_struct {
+	(
+		[$name:ident: $path:path, $($rest:tt)*]
+		[$($names:tt)*]
+		[$($names_and_bounds:tt)*]
+		$vis:vis struct $struct_name:ident
+	) => {
+		define_empty_struct!{
+			[$($rest)*]
+			[$($names)* $name, ]
+			[$($names_and_bounds)* $name:$path, ]
+			$vis struct $struct_name
+		}
+	};
+	(
+		[$name:ident: $l:lifetime, $($rest:tt)*]
+		[$($names:tt)*]
+		[$($names_and_bounds:tt)*]
+		$vis:vis struct $struct_name:ident
+	) => {
+		define_empty_struct!{
+			[$($rest)*]
+			[$($names)* $name, ]
+			[$($names_and_bounds)* $name:$l, ]
+			$vis struct $struct_name
+		}
+	};
+
+	// handling the last entry
+	( [$name:ident: $path:path >;]  $($rest:tt)* ) => { define_empty_struct!{ [ $name:$path, >; ] $($rest)* }};
+	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
+
+
+	// the main branch
+	(
+		[>;]
+		[$($names:tt)*]
+		[$($names_and_bounds:tt)*]
+		$vis:vis struct $struct_name:ident
+	) => {
+		derive_common_traits!{
+			#[derive(TypeInfo, DefaultNoBound)]
+			#[scale_info(skip_type_params(T, I))]
+			$vis struct $struct_name<$($names_and_bounds)*>
+			(
+				sp_std::marker::PhantomData
+				<
+				($($names)*)
+				>
+			);
+
+			impl<$($names_and_bounds)*> Validate for $struct_name<$($names)*> {
+				type Error = ();
+
+				fn is_valid(&self) -> Result<(), Self::Error> {
+					Ok(())
+				}
+			}
+		}
+	};
+	(
+		$vis:vis struct $struct_name:ident<$($rest:tt)*
+	) => {
+		define_empty_struct!{
+			[$($rest)*]
+			[]
+			[]
+			$vis struct $struct_name
+		}
+	};
+}
+pub use define_empty_struct;
+
 /// Syntax sugar for implementing multiple traits for a single type.
 ///
 /// Example use:

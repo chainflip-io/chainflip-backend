@@ -28,21 +28,28 @@ use sp_std::vec::Vec;
 pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 	const BWNAME: &'static str;
 
-	type Config: Chainflip;
+	type Runtime: Chainflip;
 
 	// TODO move these conditions as deep as possible (into the "common" trait definitions)
 	type Chain: ChainTypes<
 		ChainBlockHash: Parameter + Send + Sync,
 		ChainBlockNumber: Parameter + Send + Sync,
 	>;
-	type BlockData: BlockDataTrait + Parameter + Send + Sync;
+	type BlockEntry: BlockDataTrait + Parameter + Send + Sync;
 	type Event: CommonTraits + Ord + Encode + Member;
 	type ElectionProperties: MaybeArbitrary + CommonTraits + TestTraits + Send + Sync;
 
-	type RulesHook: Hook<((Range<u32>, Self::BlockData, u32), Self::Event)>;
+	type ExecuteHook: Hook<((Self::Event, ChainBlockNumberOf<Self::Chain>), ())>
+		+ Default
+		+ CommonTraits
+		+ Sync
+		+ Send;
+	type RulesHook: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<Self::Event>)>
+		+ Default
+		+ CommonTraits
+		+ Sync
+		+ Send;
 
-	fn execute(events: Vec<(ChainBlockNumberOf<Self::Chain>, Self::Event)>);
-	fn rules(block: (Range<u32>, Self::BlockData, u32)) -> Vec<Self::Event>;
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties;
 	fn is_enabled() -> bool;
 	fn processed_up_to(height: ChainBlockNumberOf<Self::Chain>);
@@ -51,6 +58,8 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 defx! {
 	#[derive(TypeInfo, DefaultNoBound)]
 	pub struct DerivedBlockWitnesser[Instance: BlockWitnesserInstance] {
+		pub rules: Instance::RulesHook,
+		pub execute: Instance::ExecuteHook,
 		pub _phantom: sp_std::marker::PhantomData<Instance>,
 	}
 
@@ -61,21 +70,24 @@ impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, Execu
 	for DerivedBlockWitnesser<I>
 {
 	fn run(&mut self, input: Vec<(ChainBlockNumberOf<I::Chain>, I::Event)>) {
-		I::execute(input);
+		// TODO: deduplicate!
+		for (block_height, event) in input {
+			self.execute.run((event, block_height));
+		}
 	}
 }
 
 impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, RulesHook>>
 	for DerivedBlockWitnesser<I>
 {
-	fn run(&mut self, input: (Range<u32>, I::BlockData, u32)) -> Vec<I::Event> {
-		I::rules(input)
+	fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<I::Event> {
+		self.rules.run(input)
 	}
 }
 
 impl<I: BlockWitnesserInstance> BWProcessorTypes for DerivedBlockWitnesser<I> {
 	type Chain = I::Chain;
-	type BlockData = I::BlockData;
+	type BlockData = Vec<I::BlockEntry>;
 	type Event = I::Event;
 	type Rules = Self;
 	type Execute = Self;
@@ -121,11 +133,11 @@ impl<I: BlockWitnesserInstance> BWTypes for DerivedBlockWitnesser<I> {
 }
 
 impl<I: BlockWitnesserInstance> StatemachineElectoralSystemTypes for DerivedBlockWitnesser<I> {
-	type ValidatorId = <I::Config as Chainflip>::ValidatorId;
-	type StateChainBlockNumber = BlockNumberFor<I::Config>;
+	type ValidatorId = <I::Runtime as Chainflip>::ValidatorId;
+	type StateChainBlockNumber = BlockNumberFor<I::Runtime>;
 	type OnFinalizeReturnItem = ();
 	type VoteStorage =
-		vote_storage::bitmap::Bitmap<(I::BlockData, Option<ChainBlockHashOf<I::Chain>>)>;
+		vote_storage::bitmap::Bitmap<(Vec<I::BlockEntry>, Option<ChainBlockHashOf<I::Chain>>)>;
 	type Statemachine = BWStatemachine<Self>;
 	type ConsensusMechanism = BWConsensus<Self>;
 	type ElectoralSettings = ();
