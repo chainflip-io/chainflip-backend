@@ -25,15 +25,13 @@ impl MockPriceFeedApi {
 
 	/// A helper function to update asset prices (in atomic USD units)
 	pub fn set_price_usd_fine(asset: cf_primitives::Asset, price_usd_fine: AssetAmount) {
-		todo!()
-		// Self::set_price(asset, Some(Price::from_usd_fine_amount(price_usd_fine)));
+		Self::set_price(asset, Some(Price::from_usd_fine_amount(price_usd_fine)));
 	}
 
 	/// Sets the price of an asset in whole USD units, automatically scaling to the asset's
 	/// decimals.
 	pub fn set_price_usd(asset: cf_primitives::Asset, dollar_amount: u32) {
-		todo!()
-		// Self::set_price(asset, Some(Price::from_usd(asset, dollar_amount)));
+		Self::set_price(asset, Some(Price::from_usd(asset, dollar_amount)));
 	}
 }
 
