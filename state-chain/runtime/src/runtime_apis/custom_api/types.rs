@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
@@ -33,6 +34,7 @@ use ethereum_eip712::eip712::TypedData;
 pub use frame_support::BoundedVec;
 use frame_support::{sp_runtime::AccountId32, DefaultNoBound};
 use n_functor::derive_n_functor;
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
@@ -622,14 +624,6 @@ mod serialize_vanity_name {
 	}
 }
 
-use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
-
-// ============ Witnessed Events Raw Types ============
-// Raw event data returned by the runtime API; conversion happens in the RPC layer.
-
-use crate::chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
-use pallet_cf_broadcast::TransactionConfirmation;
-
 type EthereumVaultDeposits =
 	Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>)>;
 type ArbitrumVaultDeposits =
@@ -654,7 +648,7 @@ pub enum RawWitnessedEvents {
 	},
 }
 
-// ============ End Witnessed Events Raw Types ============
+use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct RpcLendingConfig {
