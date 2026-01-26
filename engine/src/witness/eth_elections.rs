@@ -129,6 +129,7 @@ pub struct EthereumDepositChannelWitnesserVoter {
 	vault_address: H160,
 	usdc_contract_address: H160,
 	usdt_contract_address: H160,
+	wbtc_contract_address: H160,
 	flip_contract_address: H160,
 }
 
@@ -157,7 +158,9 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
 		use crate::witness::evm::{
 			contract_common::events_at_block,
-			erc20_deposits::{flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents},
+			erc20_deposits::{
+				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
+			},
 		};
 
 		let events = match asset {
@@ -196,6 +199,21 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereu
 				block_height,
 				block_hash,
 				self.usdt_contract_address,
+				&self.client,
+			)
+			.await?
+			.into_iter()
+			.map(|event| crate::witness::evm::contract_common::Event {
+				event_parameters: event.event_parameters.into(),
+				tx_hash: event.tx_hash,
+				log_index: event.log_index,
+			})
+			.collect::<Vec<_>>(),
+			EthAsset::Wbtc => events_at_block::<cf_chains::Ethereum, WbtcEvents, EthereumChain, _>(
+				bloom,
+				block_height,
+				block_hash,
+				self.wbtc_contract_address,
 				&self.client,
 			)
 			.await?
@@ -637,6 +655,9 @@ where
 	let usdt_contract_address =
 		*supported_erc20_tokens.get(&EthAsset::Usdt).context("USDT not supported")?;
 
+	let wbtc_contract_address =
+		*supported_erc20_tokens.get(&EthAsset::Wbtc).context("WBTC not supported")?;
+
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -663,6 +684,7 @@ where
 							vault_address,
 							usdc_contract_address,
 							usdt_contract_address,
+							wbtc_contract_address,
 							flip_contract_address,
 						},
 						EthereumVaultDepositWitnesserVoter {
