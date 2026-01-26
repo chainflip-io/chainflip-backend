@@ -16,6 +16,8 @@
 
 pub mod types;
 
+pub use types::RawWitnessedEvents;
+
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -348,5 +350,12 @@ decl_runtime_apis!(
 			nonce_or_account: NonceOrAccount,
 			encoding: EncodingType,
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
+		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(16)]
+		fn cf_ingress_egress();
+		fn cf_ingress_egress(
+			chain: ForeignChain,
+		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
 	}
 );
