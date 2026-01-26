@@ -14,12 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{monitor::MonitorEvent, ConnectionState, P2PContext, PeerInfo, PeerUpdate};
-use crate::{
-	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
-	message::AccountId,
-	OutgoingMessage, P2PKey,
+use super::{
+	monitor::MonitorEvent, ConnectionState, P2PContext, PeerInfo, PeerUpdate, ZmqPeerInfo,
+	ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD,
 };
+use crate::{message::AccountId, OutgoingMessage, P2PKey};
 use cf_utilities::{
 	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
 	Port,
@@ -234,7 +233,7 @@ fn create_context(
 	our_account_id: AccountId,
 ) -> (P2PContext, UnboundedReceiver<MonitorEvent>, UnboundedReceiver<AccountId>) {
 	let (incoming_message_sender, _incoming_message_receiver) =
-		fair_channel(super::INCOMING_MESSAGE_PER_PEER_LIMIT);
+		tokio::sync::mpsc::unbounded_channel();
 
 	P2PContext::spawn(
 		P2PKey::new(create_keypair().as_bytes()).encryption_key,
@@ -255,7 +254,9 @@ fn connection_state<'a>(
 #[tokio::test]
 async fn reconnect_timer_keeps_reconnected_peer() {
 	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
-	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8096);
+	let peer =
+		ZmqPeerInfo::try_from(create_node_info(AccountId::new([2; 32]), &create_keypair(), 8096))
+			.unwrap();
 	let peer_id = peer.account_id.clone();
 
 	context.add_or_update_peer(peer.clone());
@@ -279,7 +280,9 @@ async fn reconnect_timer_keeps_reconnected_peer() {
 #[tokio::test(start_paused = true)]
 async fn reconnect_timer_keeps_stale_peer() {
 	let (mut context, _monitor_events, _reconnects) = create_context(AccountId::new([1; 32]));
-	let peer = create_node_info(AccountId::new([2; 32]), &create_keypair(), 8097);
+	let peer =
+		ZmqPeerInfo::try_from(create_node_info(AccountId::new([2; 32]), &create_keypair(), 8097))
+			.unwrap();
 	let peer_id = peer.account_id.clone();
 
 	context.add_or_update_peer(peer);
