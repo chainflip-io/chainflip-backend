@@ -1,4 +1,5 @@
 use cf_traits::Chainflip;
+use codec::EncodeLike;
 use core::ops::Range;
 use frame_support::{pallet_prelude::*, DefaultNoBound};
 
@@ -29,25 +30,17 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 
 	type Runtime: Chainflip;
 
-	// TODO move these conditions as deep as possible (into the "common" trait definitions)
-	type Chain: ChainTypes<
-		ChainBlockHash: Parameter + Send + Sync,
-		ChainBlockNumber: Parameter + Send + Sync,
-	>;
-	type BlockEntry: BlockDataTrait + Parameter + Send + Sync;
-	type Event: CommonTraits + Ord + Encode + Member;
-	type ElectionProperties: MaybeArbitrary + CommonTraits + TestTraits + Send + Sync;
+	type Chain: ChainTypes;
+	type BlockEntry: BlockDataTrait;
+	type Event: CommonTraits + Ord;
+	type ElectionProperties: MaybeArbitrary + CommonTraits;
 
 	type ExecuteHook: Hook<((Self::Event, ChainBlockNumberOf<Self::Chain>), ())>
 		+ Default
-		+ CommonTraits
-		+ Sync
-		+ Send;
+		+ CommonTraits;
 	type RulesHook: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<Self::Event>)>
 		+ Default
-		+ CommonTraits
-		+ Sync
-		+ Send;
+		+ CommonTraits;
 
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties;
 	fn is_enabled() -> bool;

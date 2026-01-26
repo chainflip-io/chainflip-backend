@@ -1,3 +1,4 @@
+use codec::EncodeLike;
 pub use codec::{Decode, Encode};
 pub use enum_iterator::Sequence;
 pub use scale_info::TypeInfo;
@@ -21,7 +22,8 @@ where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 #[cfg(not(test))]
 pub trait MaybeArbitrary = core::any::Any;
 
-pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo + 'static;
+pub trait CommonTraits =
+	Debug + Clone + Encode + EncodeLike + Decode + Serde + Eq + TypeInfo + 'static + Send + Sync;
 
 //-------- derive macros ----------
 #[cfg(test)]

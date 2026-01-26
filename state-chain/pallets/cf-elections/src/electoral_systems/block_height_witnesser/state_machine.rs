@@ -222,7 +222,7 @@ pub mod tests {
 				primitives::{ContinuousHeaders, NonemptyContinuousHeaders},
 				BlockHeightChangeHook, BlockHeightWitnesserSettings, ChainBlockHashOf,
 				ChainBlockHashTrait, ChainBlockNumberOf, ChainBlockNumberTrait, ChainTypes,
-				ReorgHook,
+				CommonTraits, ReorgHook,
 			},
 			block_witnesser::state_machine::HookTypeFor,
 			state_machine::core::TypesFor,
@@ -331,7 +331,7 @@ pub mod tests {
 		})
 	}
 
-	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> ChainTypes
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: CommonTraits + 'static> ChainTypes
 		for TypesFor<(N, H, D)>
 	{
 		type ChainBlockNumber = N;
@@ -340,7 +340,7 @@ pub mod tests {
 		const NAME: &'static str = "Mock";
 	}
 
-	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: 'static> BHWTypes
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: CommonTraits + 'static> BHWTypes
 		for TypesFor<(N, H, D)>
 	{
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;

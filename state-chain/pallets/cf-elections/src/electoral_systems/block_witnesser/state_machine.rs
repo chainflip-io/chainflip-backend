@@ -1,5 +1,5 @@
 use super::{
-	super::state_machine::core::{defx, TypesFor},
+	super::state_machine::core::defx,
 	block_processor::BlockProcessorEvent,
 	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
@@ -7,10 +7,7 @@ use super::{
 use crate::electoral_systems::state_machine::state_machine::InputOf;
 use crate::{
 	electoral_systems::{
-		block_height_witnesser::{
-			ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
-			MaybeArbitrary, TestTraits,
-		},
+		block_height_witnesser::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
 		block_witnesser::block_processor::BlockProcessor,
 		state_machine::state_machine::{AbstractApi, Statemachine},
 	},
@@ -108,7 +105,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DebugEventHook> {
 	type Output = ();
 }
 
-pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static;
+pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static + Send + Sync;
 pub trait BWProcessorTypes: Sized + 'static + Debug + Clone + Eq {
 	type Chain: ChainTypes;
 	type BlockData: BlockDataTrait;
@@ -491,6 +488,7 @@ pub mod tests {
 		electoral_systems::{
 			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
 			block_witnesser::primitives::STATIC_SAFETY_BUFFER_FOR_TESTS,
+			state_machine::core::TypesFor,
 		},
 		prop_do,
 	};
