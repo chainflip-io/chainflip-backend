@@ -34,7 +34,7 @@ use engine_sc_client::{
 	storage_api::StorageApi,
 };
 
-use engine_p2p::{pk_to_string, P2PKey};
+use engine_p2p::P2PKey;
 
 async fn update_registered_peer_id<StateChainClient>(
 	p2p_key: &P2PKey,
@@ -68,6 +68,24 @@ where
 	Ok(())
 }
 
+/// Check if the peer info needs to be updated.
+///
+/// Compares IP, port, and Ed25519 public key (both transports now store this).
+fn peer_info_needs_update(
+	p2p_key: &P2PKey,
+	ip_address: Ipv6Addr,
+	cfe_port: Port,
+	previous: &Option<PeerInfo>,
+) -> bool {
+	match previous {
+		None => true,
+		Some(peer_info) =>
+			peer_info.ip != ip_address ||
+				peer_info.port != cfe_port ||
+				peer_info.ed_pubkey != p2p_key.signing_key.verifying_key().to_bytes(),
+	}
+}
+
 pub(super) async fn ensure_peer_info_registered<StateChainClient>(
 	p2p_key: &P2PKey,
 	state_chain_client: &Arc<StateChainClient>,
@@ -83,11 +101,7 @@ where
 		IpAddr::V6(ipv6) => ipv6,
 	};
 
-	let public_encryption_key = p2p_key.encryption_key.public_key;
-
-	if Some((ip_address, cfe_port, public_encryption_key)) !=
-		previous_registered_peer_info.as_ref().map(|pi| (pi.ip, pi.port, pi.pubkey))
-	{
+	if peer_info_needs_update(p2p_key, ip_address, cfe_port, &previous_registered_peer_info) {
 		let extra_info = match previous_registered_peer_info.as_ref() {
 			Some(peer_info) => {
 				format!(
@@ -98,9 +112,10 @@ where
 			None => String::from("Node previously did not have a registered address"),
 		};
 
+		let ed25519_pubkey = hex::encode(p2p_key.signing_key.verifying_key().to_bytes());
 		info!(
-		"Registering node's peer info. Address: [{ip_address}]:{cfe_port}, x25519 public key: {}. {extra_info}.",
-	pk_to_string(&public_encryption_key));
+			"Registering node's peer info. Address: [{ip_address}]:{cfe_port}, Ed25519 public key: {ed25519_pubkey}. {extra_info}."
+		);
 
 		update_registered_peer_id(p2p_key, state_chain_client, ip_address, cfe_port).await?;
 		info!("Our peer info registration is now up to date!");

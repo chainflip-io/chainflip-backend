@@ -43,15 +43,13 @@ use cf_utilities::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use x25519_dalek::StaticSecret;
-
-use crate::pk_to_string;
-use monitor::MonitorEvent;
 
 use crate::{
+	ed25519_public_key_to_x25519_public_key,
 	message::{AccountId, OutgoingMessage},
-	EdPublicKey, P2PKey, XPublicKey,
+	pk_to_string, EdPublicKey, P2PKey, X25519KeyPair, XPublicKey,
 };
+use monitor::MonitorEvent;
 
 use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
@@ -67,12 +65,6 @@ pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 /// How often to check for "stale" connections
 pub const ACTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
-#[derive(Clone)]
-pub struct X25519KeyPair {
-	pub public_key: XPublicKey,
-	pub secret_key: StaticSecret,
-}
-
 #[derive(Debug)]
 pub enum PeerUpdate {
 	Registered(PeerInfo),
@@ -82,6 +74,7 @@ pub enum PeerUpdate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
 	pub account_id: AccountId,
+	pub ed_pubkey: [u8; 32],
 	pub pubkey: XPublicKey,
 	pub ip: Ipv6Addr,
 	pub port: Port,
@@ -97,7 +90,7 @@ impl PeerInfo {
 		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&ed_public_key.0).unwrap();
 		let x_public_key = ed25519_public_key_to_x25519_public_key(&ed_public_key);
 
-		PeerInfo { account_id, pubkey: x_public_key, ip, port }
+		PeerInfo { account_id, ed_pubkey: ed_public_key.to_bytes(), pubkey: x_public_key, ip, port }
 	}
 
 	pub fn zmq_endpoint(&self) -> String {
@@ -116,34 +109,6 @@ impl std::fmt::Display for PeerInfo {
 			self.port,
 		)
 	}
-}
-
-pub fn ed25519_secret_key_to_x25519_secret_key(
-	ed25519_sk: &ed25519_dalek::SecretKey,
-) -> x25519_dalek::StaticSecret {
-	use sha2::{Digest, Sha512};
-	let mut h: Sha512 = Sha512::new();
-	let mut hash: [u8; 64] = [0u8; 64];
-	let mut digest: [u8; 32] = [0u8; 32];
-
-	h.update(ed25519_sk);
-	hash.copy_from_slice(h.finalize().as_slice());
-
-	digest.copy_from_slice(&hash[..32]);
-	x25519_dalek::StaticSecret::from(digest)
-}
-
-pub fn ed25519_public_key_to_x25519_public_key(
-	ed25519_pk: &ed25519_dalek::VerifyingKey,
-) -> x25519_dalek::PublicKey {
-	use curve25519_dalek::edwards::CompressedEdwardsY;
-	let ed_point = CompressedEdwardsY::from_slice(&ed25519_pk.to_bytes())
-		.expect("VerifyingKey::to_bytes returns 32 bytes.")
-		.decompress()
-		.unwrap();
-	let x_point = ed_point.to_montgomery();
-
-	x25519_dalek::PublicKey::from(x_point.to_bytes())
 }
 
 struct ReconnectContext {
