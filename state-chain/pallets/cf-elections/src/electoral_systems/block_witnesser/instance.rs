@@ -39,6 +39,8 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 	type Event: CommonTraits + Ord + Encode + Member;
 	type ElectionProperties: MaybeArbitrary + CommonTraits + TestTraits + Send + Sync;
 
+	type RulesHook: Hook<((Range<u32>, Self::BlockData, u32), Self::Event)>;
+
 	fn execute(events: Vec<(ChainBlockNumberOf<Self::Chain>, Self::Event)>);
 	fn rules(block: (Range<u32>, Self::BlockData, u32)) -> Vec<Self::Event>;
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties;
