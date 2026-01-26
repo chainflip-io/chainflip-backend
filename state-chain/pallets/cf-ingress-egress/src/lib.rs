@@ -3658,10 +3658,7 @@ impl<T: Config<I>, I: 'static>
 				);
 			},
 			BlockWitnesserEvent::Witness(deposit_witness) => {
-				let _ = Pallet::<T, I>::process_channel_deposit_full_witness(
-					deposit_witness,
-					block_height,
-				);
+				Pallet::<T, I>::process_channel_deposit_full_witness(deposit_witness, block_height);
 			},
 		}
 	}

@@ -1,6 +1,5 @@
 use cf_traits::Chainflip;
 use cf_utilities::impls;
-use codec::EncodeLike;
 use core::ops::Range;
 use frame_support::{pallet_prelude::*, DefaultNoBound};
 
@@ -130,4 +129,3 @@ impls! {
 	}
 
 }
-

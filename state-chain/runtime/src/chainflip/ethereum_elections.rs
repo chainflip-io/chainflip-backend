@@ -14,7 +14,6 @@ use cf_chains::{
 	Chain, DepositChannel, Ethereum,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
-use cf_utilities::derive_common_traits;
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
@@ -35,7 +34,7 @@ use pallet_cf_elections::{
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
-				ElectionPropertiesHook, HookTypeFor, ProcessedUpToHook, SafeModeEnabledHook,
+				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
 			},
 		},
 		composite::{
@@ -171,19 +170,19 @@ impl<BlockEntry> Hook<((Range<u32>, Vec<BlockEntry>, u32), Vec<BlockWitnesserEve
 }
 
 // ------------------------ deposit channel witnessing ---------------------------
-/// The electoral system for deposit channel witnessing
 
 impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	const BWNAME: &'static str = "DepositChannel";
+
 	type Chain = EthereumChain;
 	type BlockEntry = DepositWitness<Ethereum>;
 	type Event = BlockWitnesserEvent<DepositWitness<Ethereum>>;
-	type Runtime = Runtime;
-	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
-
 	type ElectionProperties = Vec<DepositChannel<Ethereum>>;
 
+	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
 	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
+
+	type Runtime = Runtime;
 
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		EthereumIngressEgress::active_deposit_channels_at(
@@ -217,6 +216,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	}
 }
 
+/// The electoral system for deposit channel witnessing
 pub struct EthereumDepositChannelWitnessing;
 
 /// Generating the state machine-based electoral system

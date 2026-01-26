@@ -3,10 +3,10 @@ use crate::{
 		elections::TypesFor,
 		ethereum_elections::{
 			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,
-			BlockDataVaultDeposit, EthereumDepositChannelWitnessing, EthereumKeyManagerEvent,
-			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
-			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing,
-			EthereumVaultEvent, ScUtilsCall, StateChainGatewayEvent,
+			BlockDataVaultDeposit, EthereumKeyManagerEvent, EthereumKeyManagerWitnessing,
+			EthereumScUtilsWitnessing, EthereumStateChainGatewayWitnessing,
+			EthereumVaultDepositWitnessing, EthereumVaultEvent, ScUtilsCall,
+			StateChainGatewayEvent,
 		},
 	},
 	EthereumBroadcaster, EthereumIngressEgress, Runtime,
@@ -28,7 +28,6 @@ pub enum EthEvent<T> {
 	Witness(T),
 }
 
-type TypesDepositChannelWitnessing = TypesFor<EthereumDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<EthereumVaultDepositWitnessing>;
 type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;

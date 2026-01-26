@@ -502,6 +502,7 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 #[cfg(test)]
 pub mod tests {
+	use crate::electoral_systems::state_machine::core::TypesFor;
 	use proptest::prelude::{any, Just, Strategy};
 
 	use super::*;

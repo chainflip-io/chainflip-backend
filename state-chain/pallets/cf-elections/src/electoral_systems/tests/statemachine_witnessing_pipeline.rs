@@ -287,9 +287,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 	use std::fmt::Write;
 
-	use crate::electoral_systems::{
-		block_height_witnesser::BlockHeightWitnesserSettings, state_machine::core::TypesFor,
-	};
+	use crate::electoral_systems::block_height_witnesser::BlockHeightWitnesserSettings;
 	use cf_traits::hook_test_utils::ConstantHook;
 	let mut printed: String = Default::default();
 	for output in total_outputs.clone() {

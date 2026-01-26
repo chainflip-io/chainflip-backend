@@ -1,18 +1,10 @@
-use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
-use core::ops::RangeInclusive;
 #[cfg(test)]
 use proptest::prelude::{Arbitrary, Strategy};
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet, vec_deque::VecDeque};
 
 use codec::{Decode, Encode};
 use derive_where::derive_where;
-use itertools::Either;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_core::H256;
-use sp_std::{fmt::Debug, vec::Vec};
-
-use crate::generic_tools::common_traits::*;
 
 /// Adds the type parameters to all given implementatios
 macro_rules! implementations {
