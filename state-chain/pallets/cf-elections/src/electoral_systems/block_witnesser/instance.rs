@@ -1,4 +1,5 @@
 use cf_traits::Chainflip;
+use cf_utilities::impls;
 use codec::EncodeLike;
 use core::ops::Range;
 use frame_support::{pallet_prelude::*, DefaultNoBound};
@@ -58,79 +59,75 @@ defx! {
 	validate _this (else DerivedBlockWitnesserError) {}
 }
 
-impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, ExecuteHook>>
-	for DerivedBlockWitnesser<I>
-{
-	fn run(&mut self, input: Vec<(ChainBlockNumberOf<I::Chain>, I::Event)>) {
-		// TODO: deduplicate!
-		for (block_height, event) in input {
-			self.execute.run((event, block_height));
+impls! {
+	for DerivedBlockWitnesser<I> where (I: BlockWitnesserInstance):
+
+	impl Hook<HookTypeFor<Self, ExecuteHook>> {
+		fn run(&mut self, input: Vec<(ChainBlockNumberOf<I::Chain>, I::Event)>) {
+			// TODO: deduplicate!
+			for (block_height, event) in input {
+				self.execute.run((event, block_height));
+			}
 		}
 	}
-}
 
-impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, RulesHook>>
-	for DerivedBlockWitnesser<I>
-{
-	fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<I::Event> {
-		self.rules.run(input)
-	}
-}
-
-impl<I: BlockWitnesserInstance> BWProcessorTypes for DerivedBlockWitnesser<I> {
-	type Chain = I::Chain;
-	type BlockData = Vec<I::BlockEntry>;
-	type Event = I::Event;
-	type Rules = Self;
-	type Execute = Self;
-	type DebugEventHook = EmptyHook;
-
-	const BWNAME: &'static str = I::BWNAME;
-}
-
-impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, ElectionPropertiesHook>>
-	for DerivedBlockWitnesser<I>
-{
-	fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) -> I::ElectionProperties {
-		I::election_properties(input)
-	}
-}
-
-impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, SafeModeEnabledHook>>
-	for DerivedBlockWitnesser<I>
-{
-	fn run(&mut self, _input: ()) -> SafeModeStatus {
-		if I::is_enabled() {
-			SafeModeStatus::Disabled
-		} else {
-			SafeModeStatus::Enabled
+	impl Hook<HookTypeFor<Self, RulesHook>> {
+		fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<I::Event> {
+			self.rules.run(input)
 		}
 	}
-}
 
-impl<I: BlockWitnesserInstance> Hook<HookTypeFor<DerivedBlockWitnesser<I>, ProcessedUpToHook>>
-	for DerivedBlockWitnesser<I>
-{
-	fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) {
-		I::processed_up_to(input);
+	impl Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
+		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) -> I::ElectionProperties {
+			I::election_properties(input)
+		}
 	}
+
+	impl Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+		fn run(&mut self, _input: ()) -> SafeModeStatus {
+			if I::is_enabled() {
+				SafeModeStatus::Disabled
+			} else {
+				SafeModeStatus::Enabled
+			}
+		}
+	}
+
+	impl Hook<HookTypeFor<Self, ProcessedUpToHook>> {
+		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) {
+			I::processed_up_to(input);
+		}
+	}
+
+	impl BWProcessorTypes {
+		type Chain = I::Chain;
+		type BlockData = Vec<I::BlockEntry>;
+		type Event = I::Event;
+		type Rules = Self;
+		type Execute = Self;
+		type DebugEventHook = EmptyHook;
+
+		const BWNAME: &'static str = I::BWNAME;
+	}
+
+	impl BWTypes {
+		type ElectionProperties = I::ElectionProperties;
+		type ElectionPropertiesHook = Self;
+		type SafeModeEnabledHook = Self;
+		type ProcessedUpToHook = Self;
+		type ElectionTrackerDebugEventHook = EmptyHook;
+	}
+
+	impl StatemachineElectoralSystemTypes {
+		type ValidatorId = <I::Runtime as Chainflip>::ValidatorId;
+		type StateChainBlockNumber = BlockNumberFor<I::Runtime>;
+		type OnFinalizeReturnItem = ();
+		type VoteStorage =
+			vote_storage::bitmap::Bitmap<(Vec<I::BlockEntry>, Option<ChainBlockHashOf<I::Chain>>)>;
+		type Statemachine = BWStatemachine<Self>;
+		type ConsensusMechanism = BWConsensus<Self>;
+		type ElectoralSettings = ();
+	}
+
 }
 
-impl<I: BlockWitnesserInstance> BWTypes for DerivedBlockWitnesser<I> {
-	type ElectionProperties = I::ElectionProperties;
-	type ElectionPropertiesHook = Self;
-	type SafeModeEnabledHook = Self;
-	type ProcessedUpToHook = Self;
-	type ElectionTrackerDebugEventHook = EmptyHook;
-}
-
-impl<I: BlockWitnesserInstance> StatemachineElectoralSystemTypes for DerivedBlockWitnesser<I> {
-	type ValidatorId = <I::Runtime as Chainflip>::ValidatorId;
-	type StateChainBlockNumber = BlockNumberFor<I::Runtime>;
-	type OnFinalizeReturnItem = ();
-	type VoteStorage =
-		vote_storage::bitmap::Bitmap<(Vec<I::BlockEntry>, Option<ChainBlockHashOf<I::Chain>>)>;
-	type Statemachine = BWStatemachine<Self>;
-	type ConsensusMechanism = BWConsensus<Self>;
-	type ElectoralSettings = ();
-}
