@@ -1181,7 +1181,13 @@ pub mod pallet {
 									ForeignChain::Arbitrum |
 									ForeignChain::Bitcoin |
 									ForeignChain::Ethereum => ProcessedUpTo::<T, I>::get(),
-									_ => T::ChainTracking::get_block_height(),
+									ForeignChain::Assethub | ForeignChain::Polkadot =>
+										T::ChainTracking::get_block_height(),
+									ForeignChain::Solana => {
+										// MANAGE_CHANNEL_LIFETIME = false for solana, this branch
+										// is unreachable
+										unreachable!()
+									},
 								},
 							)
 						}
