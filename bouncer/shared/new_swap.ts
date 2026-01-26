@@ -6,7 +6,7 @@ import {
   newAssetAddress,
 } from 'shared/utils';
 import { brokerApiEndpoint } from 'shared/json_rpc';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 const defaultCommissionBps = 100; // 1%
 
