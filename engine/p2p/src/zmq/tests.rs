@@ -14,12 +14,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{PeerInfo, PeerUpdate};
-use crate::{
-	core::{ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD},
-	message::AccountId,
-	OutgoingMessage, P2PKey,
-};
+use super::{PeerInfo, PeerUpdate, ACTIVITY_CHECK_INTERVAL, MAX_INACTIVITY_THRESHOLD};
+use crate::{message::AccountId, OutgoingMessage, P2PKey};
 use cf_utilities::{
 	testing::{expect_recv_with_timeout, recv_with_custom_timeout},
 	Port,

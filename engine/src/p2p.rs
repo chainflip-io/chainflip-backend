@@ -31,7 +31,9 @@ use engine_sc_client::{
 	stream_api::{StreamApi, FINALIZED},
 };
 
-use engine_p2p::core::{PeerInfo, PeerUpdate};
+// Re-export from the active transport (ZMQ is the default)
+pub use engine_p2p::quic::{PeerInfo, PeerUpdate};
+
 pub use multisig_adapter::{MultisigChannels, MultisigMessageReceiver, MultisigMessageSender};
 
 use anyhow::Context;
@@ -112,7 +114,7 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
-					engine_p2p::core::start(
+					start_transport(
 						node_key,
 						settings.port,
 						current_peers,
@@ -148,6 +150,31 @@ where
 	});
 
 	Ok((multisig_channels, p2p_ready_receiver, fut))
+}
+
+/// Start the P2P transport layer (currently uses QUIC).
+async fn start_transport(
+	node_key: engine_p2p::P2PKey,
+	port: cf_utilities::Port,
+	current_peers: Vec<PeerInfo>,
+	our_account_id: cf_primitives::AccountId,
+	incoming_message_sender: tokio::sync::mpsc::UnboundedSender<(
+		cf_primitives::AccountId,
+		Vec<u8>,
+	)>,
+	outgoing_message_receiver: tokio::sync::mpsc::UnboundedReceiver<engine_p2p::OutgoingMessage>,
+	peer_update_receiver: tokio::sync::mpsc::UnboundedReceiver<PeerUpdate>,
+) -> anyhow::Result<()> {
+	engine_p2p::quic::start(
+		node_key,
+		port,
+		current_peers,
+		our_account_id,
+		incoming_message_sender,
+		outgoing_message_receiver,
+		peer_update_receiver,
+	)
+	.await
 }
 
 /// Monitors the State Chain for peer registration events and sends them to the P2P client.
