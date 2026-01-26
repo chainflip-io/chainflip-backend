@@ -27,9 +27,9 @@ use cf_chains::{
 	SwapOrigin,
 };
 use cf_primitives::{
-	AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries, Beneficiary,
-	BlockNumber, ChannelId, DcaParameters, ForeignChain, SignedBasisPoints, SwapId, SwapLeg,
-	SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
+	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
+	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, MAX_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -521,8 +521,8 @@ pub mod pallet {
 		Chain,
 	};
 	use cf_primitives::{
-		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
-		SwapId, SwapRequestId,
+		basis_points::SignedHundredthBasisPoints, AffiliateShortId, Asset, AssetAmount,
+		BasisPoints, BlockNumber, DcaParameters, EgressId, SwapId, SwapRequestId,
 	};
 	use cf_traits::{
 		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
@@ -1887,21 +1887,30 @@ pub mod pallet {
 
 		/// Calculate executed price delta from the oracle price.
 		///
-		/// Returns signed basis points where negative means worse than oracle price (as expected
-		/// for most swaps).
+		/// Returns signed hundredth basis points where negative means worse than oracle price (as
+		/// expected for most swaps).
+		///
+		/// Returns:
+		/// - `Ok(Some(delta))` if the oracle price is available and fresh
+		/// - `Ok(None)` if the oracle price is unavailable (No prices for this asset: skip the
+		///   check)
+		/// - `Err(OraclePriceStale)` if the oracle price is stale
 		pub(super) fn get_delta_from_oracle_price(
 			input_amount: AssetAmount,
 			output_amount: AssetAmount,
 			input_asset: Asset,
 			output_asset: Asset,
-		) -> Result<SignedBasisPoints, SwapFailureReason> {
-			T::PriceFeedApi::fresh_sell_price(input_asset, output_asset)
-				.ok_or(SwapFailureReason::OraclePriceStale)
-				.map(|oracle_price| {
+		) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
+			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
+				Some(oracle_price) if oracle_price.stale =>
+					Err(SwapFailureReason::OraclePriceStale),
+				Some(oracle_price) => {
 					let execution_price =
 						Price::sell_price(input_amount.into(), output_amount.into());
-					execution_price.bps_difference_from(&oracle_price)
-				})
+					Ok(Some(execution_price.hundredth_bps_difference_from(&oracle_price.price)))
+				},
+				None => Ok(None), // Price unavailable - skip the check
+			}
 		}
 
 		/// Enforce price protections. Must be called after the final output has been set.
@@ -1917,9 +1926,10 @@ pub mod pallet {
 				// Oracle price protection, aka Live price protection (LPP)
 				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
 					if let Some(stable_amount_after_fees) = swap.stable_amount {
-						// Calculate the slippage from oracle prices for both legs of the swap
+						// Calculate the slippage from oracle prices for both legs of the swap.
+						// If any price is unavailable (None), skip the oracle check for that leg.
 						let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
-							0
+							Some(Default::default())
 						} else {
 							Self::get_delta_from_oracle_price(
 								swap.swap.input_amount,
@@ -1929,7 +1939,7 @@ pub mod pallet {
 							)?
 						};
 						let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
-							0
+							Some(Default::default())
 						} else {
 							Self::get_delta_from_oracle_price(
 								stable_amount_after_fees,
@@ -1939,9 +1949,16 @@ pub mod pallet {
 							)?
 						};
 
-						let total_slippage = to_stable_delta.saturating_add(from_stable_delta);
-						if -total_slippage > max_slippage.saturated_into() {
-							return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+						// Only check slippage if both legs have oracle prices available
+						if let (Some(to_stable), Some(from_stable)) =
+							(to_stable_delta, from_stable_delta)
+						{
+							let total_slippage = to_stable.saturating_add(&from_stable);
+							if total_slippage
+								.breaches_limit(SignedBasisPoints::negative_slippage(max_slippage))
+							{
+								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+							}
 						}
 					}
 				}
@@ -1984,7 +2001,9 @@ pub mod pallet {
 							swap.input_asset(),
 							swap.output_asset(),
 						)
-						.ok();
+						.ok()
+						.flatten()
+						.map(|delta| delta.pessimistic_rounded_into());
 
 						non_violating_swaps.push(swap);
 					},

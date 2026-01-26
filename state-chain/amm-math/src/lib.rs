@@ -19,7 +19,9 @@
 pub mod test_utilities;
 
 pub use cf_primitives::Tick;
-use cf_primitives::{Asset, BasisPoints, SignedBasisPoints, MAX_BASIS_POINTS};
+use cf_primitives::{
+	basis_points::SignedHundredthBasisPoints, Asset, BasisPoints, MAX_BASIS_POINTS,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -518,11 +520,12 @@ impl Price {
 	///
 	/// The `from` implies that if the other price is lower than self, the result will be positive,
 	/// and if the other price is higher than self, the result will be negative.
-	pub fn bps_difference_from(&self, other_price: &Price) -> SignedBasisPoints {
+	pub fn hundredth_bps_difference_from(&self, other_price: &Price) -> SignedHundredthBasisPoints {
 		let abs_diff = self.0.abs_diff(other_price.0);
-		let abs_diff_bps = mul_div_ceil(abs_diff, MAX_BASIS_POINTS.into(), other_price.0);
+		let max_hundredth_bps = U256::from(100 * MAX_BASIS_POINTS as u32);
+		let abs_diff_bps = mul_div_ceil(abs_diff, max_hundredth_bps, other_price.0);
 		let sign = if self.0 < other_price.0 { -1 } else { 1 };
-		abs_diff_bps.saturated_into::<SignedBasisPoints>() * sign
+		SignedHundredthBasisPoints(abs_diff_bps.saturated_into::<i32>() * sign)
 	}
 }
 
@@ -780,12 +783,12 @@ mod test {
 	fn test_price_bps_difference() {
 		let ref_price = Price::from_usd_fine_amount(100000);
 		let price_1 = Price::from_usd_fine_amount(95000); // ok
-		let price_1_1 = Price::from_usd_fine_amount(94999); // over the limit
+		let price_1_1 = Price::from_usd_fine_amount(94999); // under the limit
 		let price_2 = Price::from_usd_fine_amount(105000); // ok
 		let price_2_1 = Price::from_usd_fine_amount(105001); // over the limit
-		assert_eq!(price_1.bps_difference_from(&ref_price), -500);
-		assert_eq!(price_1_1.bps_difference_from(&ref_price), -501);
-		assert_eq!(price_2.bps_difference_from(&ref_price), 500);
-		assert_eq!(price_2_1.bps_difference_from(&ref_price), 501);
+		assert_eq!(*price_1.hundredth_bps_difference_from(&ref_price), -500 * 100);
+		assert!(*price_1_1.hundredth_bps_difference_from(&ref_price) < -500 * 100);
+		assert_eq!(*price_2.hundredth_bps_difference_from(&ref_price), 500 * 100);
+		assert!(*price_2_1.hundredth_bps_difference_from(&ref_price) > 500 * 100);
 	}
 }

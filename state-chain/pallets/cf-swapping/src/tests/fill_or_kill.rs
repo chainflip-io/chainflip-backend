@@ -598,11 +598,8 @@ fn test_zero_refund_amount_remaining() {
 }
 
 mod oracle_swaps {
-
-	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
-	use sp_runtime::SaturatedConversion;
-
 	use super::*;
+	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 	#[test]
 	fn basic_oracle_swap() {
@@ -636,11 +633,8 @@ mod oracle_swaps {
 		let network_fee_minimum = network_fee * CHUNK_AMOUNT * 2;
 
 		// Also checking the oracle delta value is set correctly (with rounding error)
-		let expected_oracle_delta = Some(
-			-(NETWORK_FEE_BPS.saturated_into::<SignedBasisPoints>() +
-				BROKER_FEE_BPS.saturated_into::<SignedBasisPoints>() -
-				1),
-		);
+		let expected_oracle_delta =
+			Some(SignedBasisPoints::negative_slippage(NETWORK_FEE_BPS as u16 + BROKER_FEE_BPS));
 
 		new_test_ext()
 			.execute_with(|| {
@@ -875,7 +869,7 @@ mod oracle_swaps {
 
 		// The expected delta is lower than the sum of the bps's because of the order the fees/rate
 		// are applied
-		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(-297);
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-297));
 
 		new_test_ext()
 			.execute_with(|| {
@@ -927,7 +921,7 @@ mod oracle_swaps {
 		const SWAP_RATE_BPS: u32 = 100;
 		const NETWORK_FEE_BPS: u32 = 10;
 		const BROKER_FEE_BPS: u16 = 10;
-		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(80);
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(80));
 
 		new_test_ext()
 			.execute_with(|| {
@@ -973,6 +967,8 @@ mod oracle_swaps {
 	}
 
 	mod oracle_swap_calculations_with_real_world_values {
+		use cf_primitives::basis_points::SignedHundredthBasisPoints;
+
 		use super::*;
 
 		// Values from an actual swap
@@ -981,20 +977,6 @@ mod oracle_swaps {
 		const STABLE_AMOUNT: AssetAmount = 8020476946;
 		const BROKER_FEE: AssetAmount = 12048789; // 15 bps
 		const NETWORK_FEE: AssetAmount = 8040566; // 10 bps
-
-		// Stable amount before fees = 8020476946 + 12048789 + 8040566 = $8040.566301
-		// Oracle stable amount = 0.09000632 * 89487 = $8054.4
-		// delta on first leg = ((8040.6 / 8054.4) - 1) * 10000 = -17.13 bps
-		// Eth oracle amount = 8020.476946 / 2972 = 2.698679995 Eth
-		// Delta on second leg = (( 2.695410274 / 2.698679995 ) - 1) * 10000 = -12.1 bps
-		// Total slippage = 12.1 + 17.13 = 29.23 bps
-		const EXPECTED_SLIPPAGE_BPS: SignedBasisPoints = 29;
-
-		// Relative price = 89487 / 2972 = 30.110026917900402 Eth per Btc
-		// Oracle output amount = 0.09000632 * 30.110026917900402 = 2.710092717981157 Eth
-		// Total delta = (( 2.695410274420764757 / 2.710092717981157 ) - 1) * 10000 = -54.18 bps
-		// Sanity check by adding fees to slippage = 29 + 15 + 10 = 54
-		const EXPECTED_DELTA_BPS: SignedBasisPoints = -54;
 
 		fn set_prices() {
 			// Prices taken at similar time to the swap values above
@@ -1038,6 +1020,13 @@ mod oracle_swaps {
 
 		#[test]
 		fn oracle_delta_real_world_values() {
+			// Relative price = 89487 / 2972 = 30.110026917900402 Eth per Btc
+			// Oracle output amount = 0.09000632 * 30.110026917900402 = 2.710092717981157 Eth
+			// Total delta = (( 2.695410274420764757 / 2.710092717981157 ) - 1) * 10000 = -54.18 bps
+			// Sanity check by adding fees to slippage = 29 + 15 + 10 = 54
+			const EXPECTED_DELTA_BPS: SignedHundredthBasisPoints =
+				SignedHundredthBasisPoints(-5418);
+
 			new_test_ext().execute_with(|| {
 				set_prices();
 				let swap_state = test_swap_state(None);
@@ -1047,6 +1036,7 @@ mod oracle_swaps {
 					swap_state.input_asset(),
 					swap_state.output_asset(),
 				)
+				.unwrap()
 				.unwrap();
 				assert_eq!(oracle_delta, EXPECTED_DELTA_BPS);
 			});
@@ -1054,23 +1044,29 @@ mod oracle_swaps {
 
 		#[test]
 		fn oracle_swap_price_violation_real_world_values() {
+			// Stable amount before fees = 8020476946 + 12048789 + 8040566 = $8040.566301
+			// Oracle stable amount = 0.09000632 * 89487 = $8054.4
+			// delta on first leg = ((8040.6 / 8054.4) - 1) * 10000 = -17.13 bps
+			// Eth oracle amount = 8020.476946 / 2972 = 2.698679995 Eth
+			// Delta on second leg = (( 2.695410274 / 2.698679995 ) - 1) * 10000 = -12.1 bps
+			// Total slippage = 12.1 + 17.13 = 29.23 bps
+			// => So a slippage limit of 30 bps should pass, while 29 bps should fail
+			const EXPECTED_FAILING_SLIPPAGE_LIMIT: BasisPoints = 29;
+
 			new_test_ext().execute_with(|| {
 				set_prices();
 
 				// Oracle slippage that is below or equal to the slippage limit will pass
-				assert_eq!(
-					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
-						EXPECTED_SLIPPAGE_BPS.unsigned_abs()
-					))),
-					Ok(())
-				);
+				assert_ok!(Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
+					EXPECTED_FAILING_SLIPPAGE_LIMIT + 1
+				))));
 
 				// Oracle delta that is above the slippage limit will fail
-				assert_eq!(
+				assert_err!(
 					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
-						EXPECTED_SLIPPAGE_BPS.unsigned_abs() - 1
+						EXPECTED_FAILING_SLIPPAGE_LIMIT
 					))),
-					Err(SwapFailureReason::OraclePriceSlippageExceeded)
+					SwapFailureReason::OraclePriceSlippageExceeded
 				);
 			});
 		}

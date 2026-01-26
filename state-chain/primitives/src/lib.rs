@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(int_roundings)]
 
 //! Chainflip Primitives
 //!
@@ -34,6 +35,7 @@ use sp_std::{
 	vec::Vec,
 };
 
+pub mod basis_points;
 pub mod chains;
 
 #[macro_export]
@@ -112,8 +114,6 @@ pub type AssetAmount = u128;
 pub type GasAmount = u128;
 
 pub type BasisPoints = u16;
-
-pub type SignedBasisPoints = i16;
 
 pub type BroadcastId = u32;
 
