@@ -17,8 +17,13 @@
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
-	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
+	self,
+	address::EncodedAddress,
+	assets::any::AssetMap,
+	eth::Address as EthereumAddress,
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	sol::SolInstructionRpc,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain, GasAmount};
@@ -30,6 +35,7 @@ use frame_support::{sp_runtime::AccountId32, DefaultNoBound};
 use n_functor::derive_n_functor;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
 	before_v12, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
 	RpcLendingPool, RpcLoanAccount,
@@ -43,7 +49,7 @@ use pallet_cf_trading_strategy::TradingStrategy;
 pub use pallet_cf_validator::DelegationSnapshot;
 use pallet_cf_validator::OperatorSettings;
 use scale_info::{prelude::string::String, TypeInfo};
-pub use serde::{Deserialize, Serialize};
+pub use serde::{Deserialize, Serialize, Serializer};
 use sp_core::U256;
 use sp_runtime::{DispatchError, Permill};
 pub use sp_std::{
@@ -614,6 +620,38 @@ mod serialize_vanity_name {
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
+
+// ============ Witnessed Events Raw Types ============
+// Raw event data returned by the runtime API; conversion happens in the RPC layer.
+
+use crate::chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
+use pallet_cf_broadcast::TransactionConfirmation;
+
+type EthereumVaultDeposits =
+	Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>)>;
+type ArbitrumVaultDeposits =
+	Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, ArbitrumInstance>, Arbitrum>)>;
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub enum RawWitnessedEvents {
+	Bitcoin {
+		deposits: Vec<(u64, DepositWitness<Bitcoin>)>,
+		vault_deposits: Vec<(u64, VaultDepositWitness<Runtime, BitcoinInstance>)>,
+		broadcasts: Vec<(u64, TransactionConfirmation<Runtime, BitcoinInstance>)>,
+	},
+	Ethereum {
+		deposits: Vec<(u64, DepositWitness<Ethereum>)>,
+		vault_deposits: EthereumVaultDeposits,
+		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+	},
+	Arbitrum {
+		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
+		vault_deposits: ArbitrumVaultDeposits,
+		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+	},
+}
+
+// ============ End Witnessed Events Raw Types ============
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct RpcLendingConfig {

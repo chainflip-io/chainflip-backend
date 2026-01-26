@@ -28,6 +28,7 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo, UtxoId},
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
+	refund_parameters::ChannelRefundParametersUnchecked,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
 		SolPubkey, VaultSwapOrDepositChannelId,
@@ -38,7 +39,8 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets::{any, arb, btc, dot, eth, hub},
-	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
+	ApiWaitForResult, AssetAndAmount, Beneficiary, DcaParameters, PrewitnessedDepositId,
+	FLIPPERINOS_PER_FLIP,
 };
 
 use state_chain_runtime::{
@@ -757,6 +759,91 @@ fn runtime_safe_mode_serialization() {
 	let val = RuntimeSafeMode::default();
 
 	insta::assert_json_snapshot!(val);
+}
+
+#[test]
+fn witnessed_events_serialization() {
+	use cf_chains::instances::EthereumInstance;
+	use cf_primitives::NetworkEnvironment;
+	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+
+	// Create the raw DepositWitness and convert it to test the serialization
+	let deposit_witness: DepositWitness<Ethereum> = DepositWitness {
+		deposit_address: H160([0x11; 20]),
+		asset: cf_chains::assets::eth::Asset::Eth,
+		amount: 100u128,
+		deposit_details: cf_chains::evm::DepositDetails { tx_hashes: Some(vec![H256([0x22; 32])]) },
+	};
+
+	let converted_deposit = crate::convert_deposit_witness::<Ethereum>(
+		&deposit_witness,
+		1,
+		NetworkEnvironment::Mainnet,
+	);
+
+	// Create the raw VaultDepositWitness and convert it to test the serialization
+	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
+		VaultDepositWitness {
+			input_asset: cf_chains::assets::eth::Asset::Eth,
+			deposit_address: None,
+			channel_id: None,
+			deposit_amount: 500u128,
+			deposit_details: cf_chains::evm::DepositDetails {
+				tx_hashes: Some(vec![H256([0x22; 32])]),
+			},
+			output_asset: any::Asset::Flip,
+			destination_address: EncodedAddress::Eth([0x44; 20]),
+			deposit_metadata: None,
+			tx_id: H256([0x10; 32]),
+			broker_fee: Some(Beneficiary { account: AccountId32::new([0x11; 32]), bps: 2 }),
+			affiliate_fees: vec![].try_into().unwrap(),
+			refund_params: ChannelRefundParametersUnchecked {
+				retry_duration: 0,
+				refund_address: H160::from_slice(&[
+					0x54, 0x1f, 0x56, 0x32, 0x37, 0xa3, 0x09, 0xb3, 0xa6, 0x1e, 0x33, 0xbd, 0xf0,
+					0x7a, 0x89, 0x30, 0xbd, 0xba, 0x8d, 0x99,
+				]),
+				min_price: Price::from_raw(0u128.into()),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 10, chunk_interval: 2 }),
+			boost_fee: 5,
+		};
+
+	let converted_vault_deposit = crate::convert_vault_deposit_witness::<Runtime, EthereumInstance>(
+		&vault_deposit_witness,
+		3,
+		NetworkEnvironment::Mainnet,
+	);
+
+	// Note: BroadcastWitnessInfo is constructed directly because the conversion functions
+	// (convert_bitcoin_broadcast, convert_evm_broadcast) depend on runtime storage lookups
+	// for broadcast_id which cannot be easily mocked in unit tests.
+	let response = RpcWitnessedEventsResponse {
+		deposits: vec![converted_deposit],
+		broadcasts: vec![BroadcastWitnessInfo {
+			broadcast_chain_block_height: 2,
+			broadcast_id: 7,
+			tx_out_id: RpcTransactionId::Bitcoin {
+				hash: BitcoinHash(H256([
+					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+					0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+					0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+				])),
+			},
+			tx_ref: RpcTransactionRef::Bitcoin {
+				hash: BitcoinHash(H256([
+					0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c,
+					0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+					0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+				])),
+			},
+		}],
+		vault_deposits: vec![converted_vault_deposit],
+	};
+
+	insta::assert_json_snapshot!(response);
 }
 
 #[test]
