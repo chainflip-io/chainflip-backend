@@ -23,7 +23,7 @@ pub mod hook_test_utils {
 	use super::*;
 	use cf_utilities::impls;
 	use codec::MaxEncodedLen;
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	use proptest_derive::Arbitrary;
 
 	#[derive(
@@ -40,7 +40,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	#[cfg_attr(test, derive(Arbitrary))]
+	#[cfg_attr(feature = "test", derive(Arbitrary))]
 	#[serde(
 		bound = "T::Input: Serialize + for<'d> Deserialize<'d>, WrappedHook: Serialize + for<'d> Deserialize<'d>"
 	)]
@@ -90,7 +90,7 @@ pub mod hook_test_utils {
 		impl Hook<T> where (T::Input: Clone + Debug)
 		{
 			fn run(&mut self, input: T::Input) -> T::Output {
-				#[cfg(test)]
+				#[cfg(feature = "test")]
 				if !NAME.is_empty() {
 					println!("{} called for {input:?}", NAME);
 				}
@@ -114,7 +114,7 @@ pub mod hook_test_utils {
 		Serialize,
 		Deserialize,
 	)]
-	#[cfg_attr(test, derive(Arbitrary))]
+	#[cfg_attr(feature = "test", derive(Arbitrary))]
 	#[serde(bound = "T::Output: Serialize + for<'d> Deserialize<'d>")]
 	pub struct ConstantHook<T: HookType> {
 		pub state: T::Output,
