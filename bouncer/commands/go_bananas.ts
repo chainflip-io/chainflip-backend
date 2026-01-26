@@ -240,7 +240,7 @@ const swapAmount = new Map<Asset, string>([
   ['Flip', '3'],
   ['ArbEth', '0.03'],
   ['ArbUsdc', '30'],
-  ['ArbUsdt', '40'],
+  ['ArbUsdt', '12'],
 ]);
 
 async function playSwapper<A = []>(cf: ChainflipIO<A>) {
