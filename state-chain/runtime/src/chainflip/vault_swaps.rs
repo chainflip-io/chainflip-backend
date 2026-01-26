@@ -47,7 +47,9 @@ use cf_primitives::{
 use cf_traits::{AffiliateRegistry, SwapParameterValidation};
 use codec::Decode;
 
+use cf_chains::sol::SolAsset;
 use frame_support::pallet_prelude::DispatchError;
+use sol_prim::consts::SOL_USD_DECIMAL;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
@@ -335,11 +337,23 @@ pub fn solana_vault_swap<A>(
 				cf_parameters,
 				channel_metadata,
 			),
-			Asset::SolUsdc => {
+			Asset::SolUsdc | Asset::SolUsdt => {
+				let (token_mint_pubkey, token_vault_ata) = match source_asset {
+					Asset::SolUsdc => (
+						api_environment.usdc_token_mint_pubkey,
+						api_environment.usdc_token_vault_ata,
+					),
+					Asset::SolUsdt => (
+						api_environment.usdt_token_mint_pubkey,
+						api_environment.usdt_token_vault_ata,
+					),
+					_ => unreachable!("outer match restricts this arm to SolUsdc/SolUsdt"),
+				};
+
 				let token_supported_account =
 						cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
 							api_environment.vault_program,
-							api_environment.usdc_token_mint_pubkey,
+							token_mint_pubkey,
 						)
 						.map_err(|_| "Failed to derive supported token account")?;
 
@@ -347,51 +361,16 @@ pub fn solana_vault_swap<A>(
 					Some(token_account) => SolPubkey::try_from(token_account)
 						.map_err(|_| "Failed to decode the source token account")?,
 					// Defaulting to the user's associated token account
-					None => derive_associated_token_account(
-						from.into(),
-						api_environment.usdc_token_mint_pubkey,
-					)
-					.map_err(|_| "Failed to derive the associated token account")?
-					.address
-					.into(),
+					None => derive_associated_token_account(from.into(), token_mint_pubkey)
+						.map_err(|_| "Failed to derive the associated token account")?
+						.address
+						.into(),
 				};
 
-				SolanaInstructionBuilder::x_swap_usdc(
-					api_environment,
-					destination_asset,
-					destination_address,
-					from,
-					from_token_account,
-					seed,
-					event_data_account,
-					token_supported_account.address.into(),
-					input_amount,
-					cf_parameters,
-					channel_metadata,
-				)
-			},
-			Asset::SolUsdt => {
-				let token_supported_account =
-					cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
-						api_environment.vault_program,
-						api_environment.usdt_token_mint_pubkey,
-					)
-						.map_err(|_| "Failed to derive supported token account")?;
-
-				let from_token_account = match from_token_account {
-					Some(token_account) => SolPubkey::try_from(token_account)
-						.map_err(|_| "Failed to decode the source token account")?,
-					// Defaulting to the user's associated token account
-					None => derive_associated_token_account(
-						from.into(),
-						api_environment.usdt_token_mint_pubkey,
-					)
-					.map_err(|_| "Failed to derive the associated token account")?
-					.address
-					.into(),
-				};
-
-				SolanaInstructionBuilder::x_swap_usdt(
+				SolanaInstructionBuilder::x_swap_token(
+					token_vault_ata,
+					token_mint_pubkey,
+					SOL_USD_DECIMAL,
 					api_environment,
 					destination_asset,
 					destination_address,

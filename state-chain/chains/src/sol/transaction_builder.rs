@@ -58,6 +58,7 @@ use crate::{
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
+use cf_primitives::Asset;
 use sp_std::{vec, vec::Vec};
 
 fn system_program_id() -> SolAddress {
@@ -158,42 +159,22 @@ impl SolanaTransactionBuilder {
 
 				Ok((instruction, compute_units))
 			},
-			SolAsset::SolUsdc => {
-				let ata = derive_associated_token_account(
-					param.deposit_fetch_id.address,
-					sol_api_environment.usdc_token_mint_pubkey,
-				)
-				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-				let fetch_pda_and_bump =
-					derive_fetch_account(ata.address, sol_api_environment.vault_program)
-						.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
-
-				let compute_units = COMPUTE_UNITS_PER_FETCH_TOKEN +
-					Self::derivation_compute_units(fetch_pda_and_bump.bump);
-
-				let instruction = VaultProgram::with_id(sol_api_environment.vault_program)
-					.fetch_tokens(
-						param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
-						param.deposit_fetch_id.bump,
-						SOL_USD_DECIMAL,
-						sol_api_environment.vault_program_data_account,
-						agg_key,
-						param.deposit_fetch_id.address,
-						ata.address,
-						sol_api_environment.usdc_token_vault_ata,
+			SolAsset::SolUsdc | SolAsset::SolUsdt => {
+				let (token_mint_pubkey, token_vault_ata) = match param.asset {
+					SolAsset::SolUsdc => (
 						sol_api_environment.usdc_token_mint_pubkey,
-						token_program_id(),
-						fetch_pda_and_bump.address,
-						system_program_id(),
-					);
+						sol_api_environment.usdc_token_vault_ata,
+					),
+					SolAsset::SolUsdt => (
+						sol_api_environment.usdt_token_mint_pubkey,
+						sol_api_environment.usdt_token_vault_ata,
+					),
+					_ => unreachable!("outer match restricts this arm to SolUsdc/SolUsdt"),
+				};
 
-				Ok((instruction, compute_units))
-			},
-			SolAsset::SolUsdt => {
 				let ata = derive_associated_token_account(
 					param.deposit_fetch_id.address,
-					sol_api_environment.usdt_token_mint_pubkey,
+					token_mint_pubkey,
 				)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
@@ -213,8 +194,8 @@ impl SolanaTransactionBuilder {
 						agg_key,
 						param.deposit_fetch_id.address,
 						ata.address,
-						sol_api_environment.usdt_token_vault_ata,
-						sol_api_environment.usdt_token_mint_pubkey,
+						token_vault_ata,
+						token_mint_pubkey,
 						token_program_id(),
 						fetch_pda_and_bump.address,
 						system_program_id(),

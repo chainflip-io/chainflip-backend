@@ -722,6 +722,7 @@ mod test {
 		ChannelLifecycleHooks, ChannelRefundParametersForChain,
 	};
 	use cf_primitives::{chains::assets::any::Asset, AffiliateShortId};
+	use sol_prim::consts::SOL_USD_DECIMAL;
 	use sp_runtime::AccountId32;
 
 	#[test]
@@ -944,7 +945,10 @@ mod test {
 		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
 		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
 
-		let instruction = SolanaInstructionBuilder::x_swap_usdc(
+		let instruction = SolanaInstructionBuilder::x_swap_token(
+			sol_test_values::api_env().usdc_token_vault_ata,
+			sol_test_values::api_env().usdc_token_mint_pubkey,
+			SOL_USD_DECIMAL,
 			sol_test_values::api_env(),
 			destination_asset,
 			destination_address.clone(),
@@ -1014,7 +1018,10 @@ mod test {
 		let affiliate_fees = vec![AffiliateAndFee { affiliate: AffiliateShortId(0u8), fee: 12u8 }];
 		let channel_metadata = sol_test_values::ccm_parameter_v1().channel_metadata;
 
-		let instruction = SolanaInstructionBuilder::x_swap_usdt(
+		let instruction = SolanaInstructionBuilder::x_swap_token(
+			sol_test_values::api_env().usdt_token_vault_ata,
+			sol_test_values::api_env().usdt_token_mint_pubkey,
+			SOL_USD_DECIMAL,
 			sol_test_values::api_env(),
 			destination_asset,
 			destination_address.clone(),

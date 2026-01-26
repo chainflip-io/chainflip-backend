@@ -118,68 +118,6 @@ impl SolanaInstructionBuilder {
 			system_program_id(),
 		)
 	}
-
-	pub fn x_swap_usdc(
-		api_environment: SolApiEnvironment,
-		destination_asset: Asset,
-		destination_address: EncodedAddress,
-		from: SolPubkey,
-		from_token_account: SolPubkey,
-		seed: SolSeed,
-		event_data_account: SolPubkey,
-		token_supported_account: SolPubkey,
-		input_amount: SolAmount,
-		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadataChecked>,
-	) -> SolInstruction {
-		Self::x_swap_token(
-			api_environment.usdc_token_vault_ata,
-			api_environment.usdc_token_mint_pubkey,
-			SOL_USD_DECIMAL,
-			api_environment,
-			destination_asset,
-			destination_address,
-			from,
-			from_token_account,
-			seed,
-			event_data_account,
-			token_supported_account,
-			input_amount,
-			cf_parameters,
-			ccm,
-		)
-	}
-
-	pub fn x_swap_usdt(
-		api_environment: SolApiEnvironment,
-		destination_asset: Asset,
-		destination_address: EncodedAddress,
-		from: SolPubkey,
-		from_token_account: SolPubkey,
-		seed: SolSeed,
-		event_data_account: SolPubkey,
-		token_supported_account: SolPubkey,
-		input_amount: SolAmount,
-		cf_parameters: Vec<u8>,
-		ccm: Option<CcmChannelMetadataChecked>,
-	) -> SolInstruction {
-		Self::x_swap_token(
-			api_environment.usdt_token_vault_ata,
-			api_environment.usdt_token_mint_pubkey,
-			SOL_USD_DECIMAL,
-			api_environment,
-			destination_asset,
-			destination_address,
-			from,
-			from_token_account,
-			seed,
-			event_data_account,
-			token_supported_account,
-			input_amount,
-			cf_parameters,
-			ccm,
-		)
-	}
 }
 
 #[cfg(test)]
@@ -396,7 +334,10 @@ mod test {
 			.into();
 
 		let transaction = into_transaction(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Eth,
 				DESTINATION_ADDRESS_ETH,
@@ -437,7 +378,10 @@ mod test {
 			.into();
 
 		let transaction = into_transaction(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Sol,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
@@ -487,7 +431,10 @@ mod test {
 		);
 
 		assert_eq!(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Sol,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
@@ -532,7 +479,10 @@ mod test {
 			vault_swap_account(VAULT_SWAP_SEED)
 		);
 
-		let token_instruction_acc = SolanaInstructionBuilder::x_swap_usdc(
+		let token_instruction_acc = SolanaInstructionBuilder::x_swap_token(
+			api_env().usdc_token_vault_ata,
+			api_env().usdc_token_mint_pubkey,
+			SOL_USD_DECIMAL,
 			api_env(),
 			Asset::Sol,
 			EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
