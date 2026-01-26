@@ -2794,6 +2794,7 @@ dependencies = [
  "jsonrpsee 0.23.2",
  "log",
  "lru 0.16.3",
+ "pallet-cf-broadcast",
  "pallet-cf-elections",
  "pallet-cf-environment",
  "pallet-cf-funding",
