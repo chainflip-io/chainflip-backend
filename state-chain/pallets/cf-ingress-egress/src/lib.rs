@@ -1177,10 +1177,11 @@ pub mod pallet {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								if T::TargetChain::NAME == "Bitcoin" {
-									ProcessedUpTo::<T, I>::get()
-								} else {
-									T::ChainTracking::get_block_height()
+								match <T as Config<I>>::TargetChain::get() {
+									ForeignChain::Arbitrum |
+									ForeignChain::Bitcoin |
+									ForeignChain::Ethereum => ProcessedUpTo::<T, I>::get(),
+									_ => T::ChainTracking::get_block_height(),
 								},
 							)
 						}
