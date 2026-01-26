@@ -1156,6 +1156,36 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<u8>>;
 
+	#[method(name = "ethereum_electoral_data")]
+	fn cf_ethereum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "ethereum_filter_votes")]
+	fn cf_ethereum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "arbitrum_electoral_data")]
+	fn cf_arbitrum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "arbitrum_filter_votes")]
+	fn cf_arbitrum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
 	#[method(name = "generic_electoral_data")]
 	fn cf_generic_electoral_data(
 		&self,
@@ -2475,6 +2505,26 @@ where
 		})
 	}
 
+	fn cf_ethereum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_ethereum_electoral_data(hash, validator))
+	}
+
+	fn cf_ethereum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_ethereum_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
 	fn cf_generic_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
@@ -2492,6 +2542,26 @@ where
 	) -> RpcResult<Vec<u8>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_generic_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
+	fn cf_arbitrum_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_arbitrum_electoral_data(hash, validator))
+	}
+
+	fn cf_arbitrum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_arbitrum_filter_votes(hash, validator, proposed_votes)
 		})
 	}
 

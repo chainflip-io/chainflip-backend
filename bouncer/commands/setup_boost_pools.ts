@@ -6,6 +6,8 @@
 
 import { setupBoostPools } from 'shared/setup_boost_pools';
 import { runWithTimeoutAndExit } from 'shared/utils';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 
-await runWithTimeoutAndExit(setupBoostPools(globalLogger), 120);
+const cf = await newChainflipIO(globalLogger, {});
+await runWithTimeoutAndExit(setupBoostPools(cf), 120);

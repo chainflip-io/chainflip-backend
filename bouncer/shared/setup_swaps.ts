@@ -2,7 +2,7 @@ import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { Asset } from 'shared/utils';
-import { ChainflipIO, fullAccountFromUri } from './utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export const deposits = new Map<Asset, number>([
   ['Eth', 1000],

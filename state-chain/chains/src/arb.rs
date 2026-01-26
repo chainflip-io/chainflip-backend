@@ -21,7 +21,7 @@ pub mod benchmarking;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
-	*,
+	ChainWitnessConfig, *,
 };
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
@@ -40,6 +40,11 @@ use self::evm::EvmCrypto;
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 42161;
 pub const CHAIN_ID_ARBITRUM_SEPOLIA: u64 = 421614;
+
+impl ChainWitnessConfig for Arbitrum {
+	type ChainBlockNumber = u64;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
+}
 
 impl Chain for Arbitrum {
 	const NAME: &'static str = "Arbitrum";
@@ -80,6 +85,8 @@ impl Chain for Arbitrum {
 	TypeInfo,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 #[codec(mel_bound())]
 pub struct ArbitrumTrackedData {

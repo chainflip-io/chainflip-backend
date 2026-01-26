@@ -26,7 +26,7 @@ export async function sendErc20(
 
     const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
 
-    logger.trace(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
+  logger.debug(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
 
     return await signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
   } catch (error) {

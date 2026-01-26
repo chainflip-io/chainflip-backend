@@ -637,6 +637,22 @@ impl_runtime_apis! {
 		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			GenericElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
+
+		fn cf_ethereum_electoral_data(account_id: AccountId) -> Vec<u8> {
+			EthereumElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_ethereum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			EthereumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_arbitrum_electoral_data(account_id: AccountId) -> Vec<u8> {
+			ArbitrumElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			ArbitrumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
 	}
 
 	// -- Custom API --

@@ -18,7 +18,7 @@ impl<T: BHWTypes> Default for BlockHeightWitnesserConsensus<T> {
 impl<T: BHWTypes> ConsensusMechanism for BlockHeightWitnesserConsensus<T> {
 	type Vote = NonemptyContinuousHeaders<T::Chain>;
 	type Result = NonemptyContinuousHeaders<T::Chain>;
-	type Settings = (SuccessThreshold, HeightWitnesserProperties<T>);
+	type Settings = (SuccessThreshold, HeightWitnesserProperties<T::Chain>);
 
 	fn insert_vote(&mut self, vote: Self::Vote) {
 		self.votes.push(vote);

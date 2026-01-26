@@ -20,7 +20,7 @@ use crate::evm::rpc::{node_interface::NodeInterfaceRpcApi, EvmRpcApi};
 
 use super::EvmRetryRpcClient;
 
-use crate::evm::retry_rpc::RequestLog;
+use crate::evm::retry_rpc::{RequestLog, MAX_RETRY_FOR_WITH_RESULT};
 
 #[async_trait::async_trait]
 pub trait NodeInterfaceRetryRpcApi {
@@ -58,6 +58,50 @@ impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApi for EvmRetry
 							.await
 					})
 				}),
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+pub trait NodeInterfaceRetryRpcApiWithResult {
+	async fn gas_estimate_components(
+		&self,
+		destination_address: H160,
+		contract_creation: bool,
+		tx_data: Bytes,
+	) -> anyhow::Result<(u64, u64, U256, U256)>;
+}
+
+#[async_trait::async_trait]
+impl<Rpc: EvmRpcApi + NodeInterfaceRpcApi> NodeInterfaceRetryRpcApiWithResult
+	for EvmRetryRpcClient<Rpc>
+{
+	async fn gas_estimate_components(
+		&self,
+		destination_address: H160,
+		contract_creation: bool,
+		tx_data: Bytes,
+	) -> anyhow::Result<(u64, u64, U256, U256)> {
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"gas_estimate_components".to_string(),
+					Some(format!("{destination_address:?}, {contract_creation:?}")),
+				),
+				Box::pin(move |client| {
+					let tx_data = tx_data.clone();
+					Box::pin(async move {
+						client
+							.gas_estimate_components(
+								destination_address,
+								contract_creation,
+								tx_data,
+							)
+							.await
+					})
+				}),
+				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}

@@ -17,17 +17,17 @@ import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
-import { ChainflipIO, WithLpAccount } from './utils/chainflip_io';
+import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
 export async function depositLiquidity<A extends WithLpAccount>(
-  parentcf: ChainflipIO<A>,
+  cf: ChainflipIO<A>,
   ccy: Asset,
   givenAmount: number,
 ) {
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
-  const lpUri = parentcf.requirements.account.uri;
-  const cf = parentcf.withChildLogger(`${JSON.stringify({ ccy, amount, lpUri })}`);
+  const lpUri = cf.requirements.account.uri;
+  cf.debug(`Depositing ${amount}${ccy} of liquidity for ${lpUri}`);
 
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
