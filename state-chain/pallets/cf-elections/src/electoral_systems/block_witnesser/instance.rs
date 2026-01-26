@@ -22,7 +22,6 @@ use crate::{
 	vote_storage,
 };
 use cf_traits::{hook_test_utils::EmptyHook, Hook, Validate};
-
 use sp_std::vec::Vec;
 
 pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {

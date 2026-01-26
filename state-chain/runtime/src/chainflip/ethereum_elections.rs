@@ -848,7 +848,9 @@ impl_pallet_safe_mode! {
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
-	DepositChannels(ElectionPropertiesDepositChannel),
+	DepositChannels(
+		<TypesFor<EthereumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
+	),
 	Vaults(()),
 	StateChainGateway(()),
 	KeyManager(()),

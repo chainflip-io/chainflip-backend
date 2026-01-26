@@ -2,9 +2,9 @@ use crate::{
 	chainflip::{
 		elections::TypesFor,
 		ethereum_elections::{
-			BlockDataDepositChannel, BlockDataKeyManager, BlockDataScUtils,
-			BlockDataStateChainGateway, BlockDataVaultDeposit, EthereumDepositChannelWitnessing,
-			EthereumKeyManagerEvent, EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
+			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,
+			BlockDataVaultDeposit, EthereumDepositChannelWitnessing, EthereumKeyManagerEvent,
+			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
 			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing,
 			EthereumVaultEvent, ScUtilsCall, StateChainGatewayEvent,
 		},
@@ -19,7 +19,6 @@ use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
 	ExecuteHook, HookTypeFor, RulesHook,
 };
-use pallet_cf_ingress_egress::DepositWitness;
 use sp_std::{vec, vec::Vec};
 
 #[derive(
@@ -36,19 +35,6 @@ type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-// impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
-// 	for TypesDepositChannelWitnessing
-// {
-// 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<DepositWitness<Ethereum>>)>) {
-// 		for (block, event) in events {
-// 			match event {
-// 				EthEvent::Witness(deposit) => {
-// 					EthereumIngressEgress::process_channel_deposit_full_witness(deposit, block);
-// 				},
-// 			}
-// 		}
-// 	}
-// }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
 		for (block, event) in events {
