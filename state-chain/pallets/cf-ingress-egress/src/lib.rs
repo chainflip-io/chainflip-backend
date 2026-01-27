@@ -1186,7 +1186,7 @@ pub mod pallet {
 									ForeignChain::Solana => {
 										// MANAGE_CHANNEL_LIFETIME = false for solana, this branch
 										// is unreachable
-										unreachable!()
+										Default::default()
 									},
 								},
 							)
