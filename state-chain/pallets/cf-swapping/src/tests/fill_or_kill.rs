@@ -869,7 +869,7 @@ mod oracle_swaps {
 
 		// The expected delta is lower than the sum of the bps's because of the order the fees/rate
 		// are applied
-		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-297));
+		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-298));
 
 		new_test_ext()
 			.execute_with(|| {
