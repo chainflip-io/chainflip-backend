@@ -509,7 +509,7 @@ pub struct SolApiEnvironment {
 	pub usdc_token_mint_pubkey: SolAddress,
 	pub usdc_token_vault_ata: SolAddress,
 
-	// For Usdc token
+	// For Usdt token
 	pub usdt_token_mint_pubkey: SolAddress,
 	pub usdt_token_vault_ata: SolAddress,
 

@@ -16,8 +16,8 @@ pub struct VaultAddresses {
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
 
-impl From<super::before_version_16::VaultAddresses> for super::VaultAddresses {
-	fn from(old: super::before_version_16::VaultAddresses) -> Self {
+impl From<VaultAddresses> for super::VaultAddresses {
+	fn from(old: VaultAddresses) -> Self {
 		Self {
 			ethereum: old.ethereum,
 			arbitrum: old.arbitrum,

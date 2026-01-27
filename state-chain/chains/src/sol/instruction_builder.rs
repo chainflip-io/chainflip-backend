@@ -25,7 +25,7 @@ use crate::{
 	address::EncodedAddress,
 	sol::{
 		sol_tx_core::{
-			consts::{SOL_USD_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+			consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
 			program_instructions::swap_endpoints::{
 				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
 			},
@@ -141,6 +141,7 @@ mod test {
 		chains::Solana, AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters,
 		MAX_AFFILIATES,
 	};
+	use sol_prim::consts::SOL_USD_DECIMAL;
 	use sp_core::ConstU32;
 	use sp_runtime::BoundedVec;
 

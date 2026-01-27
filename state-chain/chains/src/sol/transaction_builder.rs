@@ -58,7 +58,6 @@ use crate::{
 	},
 	FetchAssetParams, ForeignChainAddress,
 };
-use cf_primitives::Asset;
 use sp_std::{vec, vec::Vec};
 
 fn system_program_id() -> SolAddress {
