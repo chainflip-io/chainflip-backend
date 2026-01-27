@@ -206,6 +206,16 @@ export const stateChainRuntimeChainflipGenericElectionsGenericElectionsSafeMode 
   oraclePriceElections: z.boolean(),
 });
 
+export const stateChainRuntimeChainflipEthereumElectionsEthereumElectionsSafeMode = z.object({
+  stateChainGatewayWitnessing: z.boolean(),
+  keyManagerWitnessing: z.boolean(),
+  scUtilsWitnessing: z.boolean(),
+});
+
+export const stateChainRuntimeChainflipArbitrumElectionsArbitrumElectionsSafeMode = z.object({
+  keyManagerWitnessing: z.boolean(),
+});
+
 export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   emissions: palletCfEmissionsPalletSafeMode,
   funding: palletCfFundingPalletSafeMode,
@@ -235,6 +245,8 @@ export const stateChainRuntimeSafeModeInnerRuntimeSafeMode = z.object({
   ingressEgressSolana: palletCfIngressEgressPalletSafeMode,
   ingressEgressAssethub: palletCfIngressEgressPalletSafeMode,
   electionsGeneric: stateChainRuntimeChainflipGenericElectionsGenericElectionsSafeMode,
+  ethereumElections: stateChainRuntimeChainflipEthereumElectionsEthereumElectionsSafeMode,
+  arbitrumElections: stateChainRuntimeChainflipArbitrumElectionsArbitrumElectionsSafeMode,
 });
 
 export const palletCfEnvironmentSafeModeUpdate = z.discriminatedUnion('__kind', [
@@ -1751,6 +1763,11 @@ export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('_
   }),
 ]);
 
+export const palletCfLendingPoolsBoostConfiguration = z.object({
+  networkFeeDeductionFromBoostPercent: z.number(),
+  minimumAddFundsAmount: z.array(z.tuple([cfPrimitivesChainsAssetsAnyAsset, numberOrHex])),
+});
+
 export const palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration = z.object({
   interestAtZeroUtilisation: z.number(),
   junctionUtilisation: z.number(),
@@ -1782,7 +1799,7 @@ export const palletCfLendingPoolsGeneralLendingConfigNetworkFeeContributions = z
 });
 
 export const palletCfLendingPoolsPalletConfigUpdate = z.discriminatedUnion('__kind', [
-  z.object({ __kind: z.literal('SetNetworkFeeDeductionFromBoost'), deductionPercent: z.number() }),
+  z.object({ __kind: z.literal('SetBoostConfig'), config: palletCfLendingPoolsBoostConfiguration }),
   z.object({
     __kind: z.literal('SetLendingPoolConfiguration'),
     asset: cfPrimitivesChainsAssetsAnyAsset.nullish(),
@@ -1893,4 +1910,22 @@ export const stateChainRuntimeChainflipGenericElectionsOraclePriceUpdate = z.obj
 export const stateChainRuntimeChainflipGenericElectionsGenericElectoralEvents = z.object({
   __kind: z.literal('OraclePricesUpdated'),
   prices: z.array(stateChainRuntimeChainflipGenericElectionsOraclePriceUpdate),
+});
+
+export const palletCfElectionsElectoralSystemsCompositeTuple8ImplsCompositeElectionIdentifierExtra =
+  simpleEnum(['A', 'B', 'C', 'D', 'EE', 'FF', 'G', 'HH']);
+
+export const stateChainRuntimeChainflipEthereumElectionsEthereumElectoralEvents = z.object({
+  __kind: z.literal('ReorgDetected'),
+  reorgedBlocks: z.object({ start: numberOrHex, end: numberOrHex }),
+});
+
+export const cfChainsWitnessPeriodBlockWitnessRange = z.object({ root: numberOrHex });
+
+export const stateChainRuntimeChainflipArbitrumElectionsArbitrumElectoralEvents = z.object({
+  __kind: z.literal('ReorgDetected'),
+  reorgedBlocks: z.object({
+    start: cfChainsWitnessPeriodBlockWitnessRange,
+    end: cfChainsWitnessPeriodBlockWitnessRange,
+  }),
 });

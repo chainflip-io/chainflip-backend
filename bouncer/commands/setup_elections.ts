@@ -6,11 +6,12 @@
 // For example: ./commands/setup_elections.ts
 
 import { setupElections } from 'shared/setup_elections';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger, loggerChild } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
-  const logger = loggerChild(globalLogger, 'setup_elections');
-  await setupElections(logger);
+  const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_elections'), {});
+  await setupElections(cf);
   process.exit(0);
 }
 

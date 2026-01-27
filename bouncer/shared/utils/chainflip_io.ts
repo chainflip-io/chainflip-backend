@@ -24,8 +24,8 @@ import {
   SingleEventResult,
   blockHeightOfTransactionHash,
   highestBlock,
-} from './indexer';
-import { Logger } from './logger';
+} from 'shared/utils/indexer';
+import { Logger } from 'shared/utils/logger';
 
 export class ChainflipIO<Requirements> {
   /**

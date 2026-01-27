@@ -2,6 +2,7 @@ New or removed pallets:
   AccountRoles: added
   ArbitrumBroadcaster: added
   ArbitrumChainTracking: added
+  ArbitrumElections: added
   ArbitrumIngressEgress: added
   ArbitrumVault: added
   AssetBalances: added
@@ -19,6 +20,7 @@ New or removed pallets:
   Environment: added
   EthereumBroadcaster: added
   EthereumChainTracking: added
+  EthereumElections: added
   EthereumIngressEgress: added
   EthereumVault: added
   EvmThresholdSigner: added

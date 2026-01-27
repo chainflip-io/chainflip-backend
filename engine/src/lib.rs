@@ -36,6 +36,7 @@ pub mod dot;
 pub mod evm;
 pub mod sol;
 
+use crate::evm::cached_rpc::EvmCachingClient;
 use ::multisig::{
 	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };
@@ -257,16 +258,19 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				EvmCachingClient::new(
 					scope,
-					settings.eth.private_key_file,
-					settings.eth.nodes,
-					expected_eth_chain_id,
-					"eth_rpc",
-					"eth_subscribe_client",
-					"Ethereum",
-					cf_chains::Ethereum::WITNESS_PERIOD,
-				)?
+					EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+						scope,
+						settings.eth.private_key_file,
+						settings.eth.nodes,
+						expected_eth_chain_id,
+						"eth_rpc",
+						"eth_subscribe_client",
+						"Ethereum",
+						cf_chains::Ethereum::WITNESS_PERIOD,
+					)?,
+				)
 			};
 			let arb_client = {
 				let expected_arb_chain_id = web3::types::U256::from(
@@ -277,16 +281,19 @@ async fn run_main(
 						.await
 						.expect(STATE_CHAIN_CONNECTION),
 				);
-				EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+				EvmCachingClient::new(
 					scope,
-					settings.arb.private_key_file,
-					settings.arb.nodes,
-					expected_arb_chain_id,
-					"arb_rpc",
-					"arb_subscribe_client",
-					"Arbitrum",
-					cf_chains::Arbitrum::WITNESS_PERIOD,
-				)?
+					EvmRetryRpcClient::<EvmRpcSigningClient>::new(
+						scope,
+						settings.arb.private_key_file,
+						settings.arb.nodes,
+						expected_arb_chain_id,
+						"arb_rpc",
+						"arb_subscribe_client",
+						"Arbitrum",
+						cf_chains::Arbitrum::WITNESS_PERIOD,
+					)?,
+				)
 			};
 
 			let btc_client = {

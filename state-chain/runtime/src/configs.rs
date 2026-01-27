@@ -1027,6 +1027,24 @@ impl pallet_cf_elections::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 }
 
+impl pallet_cf_elections::Config<Instance1> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::ethereum_elections::EthereumElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::ethereum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config<Instance4> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Arbitrum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::arbitrum_elections::ArbitrumElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration = chainflip::arbitrum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
 impl pallet_cf_trading_strategy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;

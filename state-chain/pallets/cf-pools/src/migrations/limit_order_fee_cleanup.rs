@@ -24,23 +24,28 @@ pub struct RemoveLimitOrderFeeFromPoolState<T>(PhantomData<T>);
 mod old {
 
 	use core::ops::Range;
+	use frame_support::{pallet_prelude::OptionQuery, storage_alias, Twox64Concat};
 	use sp_std::collections::btree_map::BTreeMap;
 
 	use cf_primitives::Tick;
 	use cf_traits::{OrderId, PoolPairsMap};
-	use codec::Decode;
+	use codec::{Decode, Encode};
 
-	use crate::Config;
+	use crate::{AssetPair, Config, Pallet};
 
 	use super::*;
 
-	#[derive(Decode)]
+	#[storage_alias(pallet_name)]
+	pub type Pools<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, AssetPair, Pool<T>, OptionQuery>;
+
+	#[derive(Decode, Encode)]
 	pub struct PoolState<LiquidityProvider: Ord> {
 		pub limit_orders: limit_orders::migration_support::PoolStateV7<LiquidityProvider>,
 		pub range_orders: cf_amm::range_orders::PoolState<LiquidityProvider>,
 	}
 
-	#[derive(Decode)]
+	#[derive(Decode, Encode)]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
 		/// with the underlying pool.
@@ -85,7 +90,7 @@ impl<T: crate::Config> UncheckedOnRuntimeUpgrade for RemoveLimitOrderFeeFromPool
 	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, sp_runtime::DispatchError> {
 		use codec::Encode;
 
-		let pool_count = Pools::<T>::iter().count() as u32;
+		let pool_count = old::Pools::<T>::iter().count() as u32;
 		log::info!("Pre-upgrade: Found {} pools to migrate", pool_count);
 
 		Ok(pool_count.encode())

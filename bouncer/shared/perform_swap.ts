@@ -32,7 +32,7 @@ import { Logger, throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
-import { ChainflipIO } from './utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export type SwapParams = {
   sourceAsset: Asset;

@@ -14086,6 +14086,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
+ "generic-typeinfo-derive",
  "hex",
  "hex-literal",
  "log",

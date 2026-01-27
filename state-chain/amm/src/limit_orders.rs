@@ -892,7 +892,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 pub mod migration_support {
 	use super::*;
 
-	#[derive(Decode)]
+	#[derive(Decode, Encode)]
 	pub struct PositionV7 {
 		pool_instance: u128,
 		amount: Amount,
@@ -901,7 +901,7 @@ pub mod migration_support {
 		original_amount: Amount,
 	}
 
-	#[derive(Decode)]
+	#[derive(Decode, Encode)]
 	pub struct PoolStateV7<LiquidityProvider: Ord> {
 		_fee_hundredth_pips: u32, // this field is being removed
 		next_pool_instance: u128,

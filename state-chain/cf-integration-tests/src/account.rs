@@ -18,7 +18,6 @@
 
 use crate::network;
 use cf_chains::eth::Address as EthereumAddress;
-use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
 use frame_support::assert_noop;
 use pallet_cf_account_roles::VanityNames;
@@ -39,11 +38,9 @@ fn account_deletion_removes_relevant_storage_items() {
 
 		let min_funding = MinimumFunding::<Runtime>::get();
 
-		testnet.state_chain_gateway_contract.fund_account(
-			backup_node.clone(),
-			min_funding,
-			GENESIS_EPOCH,
-		);
+		testnet
+			.state_chain_gateway_contract
+			.fund_account(backup_node.clone(), min_funding);
 		testnet.move_forward_blocks(1);
 
 		network::Cli::register_as_validator(&backup_node);
@@ -86,11 +83,9 @@ fn account_deletion_removes_relevant_storage_items() {
 		// Sign the redemption request
 		testnet.move_forward_blocks(1);
 
-		testnet.state_chain_gateway_contract.execute_redemption(
-			backup_node.clone(),
-			min_funding,
-			GENESIS_EPOCH,
-		);
+		testnet
+			.state_chain_gateway_contract
+			.execute_redemption(backup_node.clone(), min_funding);
 
 		// Let witnesses be registered, completing the redeeming process. This should trigger an
 		// account deletion.

@@ -26,9 +26,9 @@ async function main(): Promise<void> {
 
   await cf.all([
     (subcf) => setupSwaps(subcf),
-    (subcf) => setupBoostPools(subcf.logger),
+    (subcf) => setupBoostPools(subcf),
     (subcf) => setupLendingPools(subcf),
-    (subcf) => setupElections(subcf.logger),
+    (subcf) => setupElections(subcf),
   ]);
   cf.info('Setup concurrent complete');
 }

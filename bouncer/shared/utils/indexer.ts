@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sleep } from 'shared/utils';
-import prisma from './prisma_client';
-import { Logger } from './logger';
+import prisma from 'shared/utils/prisma_client';
+import { Logger } from 'shared/utils/logger';
 
 // ------------ primitives event types ------------
 

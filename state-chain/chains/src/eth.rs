@@ -23,7 +23,7 @@ pub mod deposit_address;
 
 use crate::{
 	evm::{DeploymentStatus, EvmFetchId, EvmTransactionMetadata, Transaction},
-	Chain, FeeEstimationApi, *,
+	Chain, ChainWitnessConfig, FeeEstimationApi, *,
 };
 use assets::eth::Asset as EthAsset;
 pub use cf_primitives::chains::Ethereum;
@@ -50,6 +50,11 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 pub const REFERENCE_ETH_PRICE_IN_USD: AssetAmount = 4_200_000_000u128; //4200 usd
 pub const REFERENCE_FLIP_PRICE_IN_USD: AssetAmount = 450_000u128; //0.45 usd
 pub const ONE_ETH: AssetAmount = 1_000_000_000_000_000_000u128;
+
+impl ChainWitnessConfig for Ethereum {
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
+	type ChainBlockNumber = u64;
+}
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
@@ -90,6 +95,8 @@ impl Chain for Ethereum {
 	TypeInfo,
 	Serialize,
 	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
