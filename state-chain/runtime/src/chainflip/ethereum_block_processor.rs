@@ -220,11 +220,6 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-// impl_rules_hook!(
-// 	TypesDepositChannelWitnessing,
-// 	BlockDataDepositChannel,
-// 	EthEvent<DepositWitness<Ethereum>>
-// );
 impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, EthEvent<EthereumVaultEvent>);
 impl_rules_hook!(
 	TypesStateChainGatewayWitnessing,

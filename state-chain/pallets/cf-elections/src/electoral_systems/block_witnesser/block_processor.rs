@@ -310,13 +310,8 @@ pub(crate) mod tests {
 		Witness(E),
 	}
 
-	impl<
-			N: ChainBlockNumberTrait,
-			H: ChainBlockHashTrait,
-			D: BlockDataTrait,
-			// Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
-			// E: Clone,
-		> Hook<HookTypeFor<TypesFor<(N, H, Vec<D>)>, RulesHook>> for TypesFor<(N, H, Vec<D>)>
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: BlockDataTrait>
+		Hook<HookTypeFor<TypesFor<(N, H, Vec<D>)>, RulesHook>> for TypesFor<(N, H, Vec<D>)>
 	{
 		fn run(
 			&mut self,

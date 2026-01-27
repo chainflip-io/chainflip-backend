@@ -25,6 +25,9 @@ use crate::{
 use cf_traits::{hook_test_utils::EmptyHook, Hook, Validate};
 use sp_std::vec::Vec;
 
+/// A new BlockWitnesser electoral system instance can be derived by implementing this trait.
+/// Once you have `I: BlockWitnesserInstance` then `DerivedBlockWitnesser<I>` implements all
+/// the traits that are required for a block witnesser.
 pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 	const BWNAME: &'static str;
 
@@ -48,6 +51,8 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 }
 
 defx! {
+	/// Struct that carries all the data associated to a block witnesser. All implementation details
+	/// are derived from the given BlockWitnesser instance.
 	#[derive(TypeInfo, DefaultNoBound)]
 	pub struct DerivedBlockWitnesser[Instance: BlockWitnesserInstance] {
 		pub rules: Instance::RulesHook,
@@ -58,6 +63,7 @@ defx! {
 	validate _this (else DerivedBlockWitnesserError) {}
 }
 
+// All the implementations, derived from `I: BlockWitnesserInstance`.
 impls! {
 	for DerivedBlockWitnesser<I> where (I: BlockWitnesserInstance):
 

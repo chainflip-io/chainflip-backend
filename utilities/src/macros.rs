@@ -13,6 +13,14 @@ macro_rules! derive_common_traits {
 }
 pub use derive_common_traits;
 
+/// Adds #[derive] statements for commonly used traits, including `Validate`. Automatically
+/// generates the body of the struct, containing just a PhantomData with all type variables.
+/// Use like:
+///
+/// use utilities::macros::define_empty_struct;
+/// define_empty_struct! {
+///     struct SomeStruct<A: Ord, B: 'static>;
+/// }
 #[macro_export]
 macro_rules! define_empty_struct {
 	(
@@ -21,7 +29,7 @@ macro_rules! define_empty_struct {
 		[$($names_and_bounds:tt)*]
 		$vis:vis struct $struct_name:ident
 	) => {
-		define_empty_struct!{
+		crate::macros::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name:$path, ]
@@ -34,7 +42,7 @@ macro_rules! define_empty_struct {
 		[$($names_and_bounds:tt)*]
 		$vis:vis struct $struct_name:ident
 	) => {
-		define_empty_struct!{
+		crate::macros::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name:$l, ]
@@ -43,8 +51,8 @@ macro_rules! define_empty_struct {
 	};
 
 	// handling the last entry
-	( [$name:ident: $path:path >;]  $($rest:tt)* ) => { define_empty_struct!{ [ $name:$path, >; ] $($rest)* }};
-	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
+	( [$name:ident: $path:path >;]  $($rest:tt)* ) => { crate::macros::define_empty_struct!{ [ $name:$path, >; ] $($rest)* }};
+	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { crate::macros::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
 
 	// the main branch
@@ -54,7 +62,7 @@ macro_rules! define_empty_struct {
 		[$($names_and_bounds:tt)*]
 		$vis:vis struct $struct_name:ident
 	) => {
-		derive_common_traits!{
+		crate::macros::derive_common_traits!{
 			#[derive(TypeInfo, DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
 			$vis struct $struct_name<$($names_and_bounds)*>
@@ -77,7 +85,7 @@ macro_rules! define_empty_struct {
 	(
 		$vis:vis struct $struct_name:ident<$($rest:tt)*
 	) => {
-		define_empty_struct!{
+		crate::macros::define_empty_struct!{
 			[$($rest)*]
 			[]
 			[]
