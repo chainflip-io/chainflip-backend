@@ -2042,9 +2042,33 @@ mod witnessed_events {
 		}
 	}
 
+	macro_rules! extract_block_data {
+		($state:expr, $height_converter:expr) => {{
+			let mut result = Vec::new();
+			for (height, info) in $state.block_processor.blocks_data.iter() {
+				let block_height: u64 = $height_converter(height);
+				result.extend(info.block_data.iter().cloned().map(|item| (block_height, item)));
+			}
+			result
+		}};
+	}
+
+	macro_rules! extract_witnessed_events_for_state {
+		(
+			deposits: $deposits_state:expr,
+			vault_deposits: $vault_deposits_state:expr,
+			broadcasts: $broadcasts_state:expr,
+			height: $height_converter:expr $(,)?
+		) => {{
+			let deposits = extract_block_data!($deposits_state, |h| $height_converter(h));
+			let vault_deposits =
+				extract_block_data!($vault_deposits_state, |h| $height_converter(h));
+			let broadcasts = extract_block_data!($broadcasts_state, |h| $height_converter(h));
+			(deposits, vault_deposits, broadcasts)
+		}};
+	}
+
 	fn extract_bitcoin_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
-		// Bitcoin composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2), Egress(3),
-		// FeeTracking(4), Liveness(5))
 		let state =
 			ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get().ok_or_else(|| {
 				DispatchErrorWithMessage::RawMessage(
@@ -2052,36 +2076,17 @@ mod witnessed_events {
 				)
 			})?;
 
-		let deposit_state = &state.1;
-		let vault_deposit_state = &state.2;
-		let egress_state = &state.3;
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &u64| *h,
+		);
 
-		let mut deposits = Vec::new();
-		let mut vault_deposits = Vec::new();
-		let mut broadcasts = Vec::new();
-
-		// Extract deposits from deposit channel witnessing
-		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
-			deposits.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
-		}
-
-		// Extract vault deposits
-		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
-			vault_deposits
-				.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
-		}
-
-		// Extract broadcasts (egress witnessing)
-		for (height, info) in egress_state.block_processor.blocks_data.iter() {
-			broadcasts.extend(info.block_data.iter().cloned().map(|tx| (*height, tx)));
-		}
-
-		Ok(RawWitnessedEvents::Bitcoin { deposits, broadcasts, vault_deposits })
+		Ok(RawWitnessedEvents::Bitcoin { deposits, vault_deposits, broadcasts })
 	}
 
 	fn extract_ethereum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
-		// Ethereum composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2),
-		// StateChainGateway(3), KeyManager(4), ScUtils(5), FeeTracking(6), Liveness(7))
 		let state =
 			ElectoralUnsynchronisedState::<Runtime, EthereumInstance>::get().ok_or_else(|| {
 				DispatchErrorWithMessage::RawMessage(
@@ -2089,34 +2094,17 @@ mod witnessed_events {
 				)
 			})?;
 
-		let deposit_state = &state.1;
-		let vault_deposit_state = &state.2;
-		let key_manager_state = &state.4;
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.4,
+			height: |h: &u64| *h,
+		);
 
-		let mut deposits = Vec::new();
-		let mut vault_deposits = Vec::new();
-		let mut broadcasts = Vec::new();
-
-		// Extract deposits from deposit channel witnessing
-		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
-			deposits.extend(info.block_data.iter().cloned().map(|witness| (*height, witness)));
-		}
-
-		// Extract raw vault events
-		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
-			vault_deposits.extend(info.block_data.iter().cloned().map(|event| (*height, event)));
-		}
-
-		for (height, info) in key_manager_state.block_processor.blocks_data.iter() {
-			broadcasts.extend(info.block_data.iter().cloned().map(|event| (*height, event)));
-		}
-		// Ethereum doesn't have separate egress witnessing in the block processor
-		Ok(RawWitnessedEvents::Ethereum { deposits, broadcasts, vault_deposits })
+		Ok(RawWitnessedEvents::Ethereum { deposits, vault_deposits, broadcasts })
 	}
 
 	fn extract_arbitrum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
-		// Arbitrum composite: (BlockHeight(0), DepositChannel(1), VaultDeposit(2), KeyManager(3),
-		// FeeTracking(4), Liveness(5))
 		let state =
 			ElectoralUnsynchronisedState::<Runtime, ArbitrumInstance>::get().ok_or_else(|| {
 				DispatchErrorWithMessage::RawMessage(
@@ -2124,34 +2112,13 @@ mod witnessed_events {
 				)
 			})?;
 
-		let deposit_state = &state.1;
-		let vault_deposit_state = &state.2;
-		let key_manager_state = &state.3;
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root(),
+		);
 
-		let mut deposits = Vec::new();
-		let mut vault_deposits = Vec::new();
-		let mut broadcasts = Vec::new();
-
-		// Extract deposits from deposit channel witnessing
-		// Arbitrum uses BlockWitnessRange, so we need to get the root block number
-		for (height, info) in deposit_state.block_processor.blocks_data.iter() {
-			let block_height: u64 = *height.root();
-			deposits.extend(info.block_data.iter().cloned().map(|witness| (block_height, witness)));
-		}
-
-		// Extract raw vault events
-		for (height, info) in vault_deposit_state.block_processor.blocks_data.iter() {
-			let block_height: u64 = *height.root();
-			vault_deposits
-				.extend(info.block_data.iter().cloned().map(|event| (block_height, event)));
-		}
-
-		for (height, info) in key_manager_state.block_processor.blocks_data.iter() {
-			let block_height: u64 = *height.root();
-			broadcasts.extend(info.block_data.iter().cloned().map(|event| (block_height, event)));
-		}
-
-		// Arbitrum doesn't have separate egress witnessing in the block processor
-		Ok(RawWitnessedEvents::Arbitrum { deposits, broadcasts, vault_deposits })
+		Ok(RawWitnessedEvents::Arbitrum { deposits, vault_deposits, broadcasts })
 	}
 }

@@ -823,10 +823,10 @@ fn witnessed_events_serialization() {
 			affiliate_fees: vec![].try_into().unwrap(),
 			refund_params: ChannelRefundParametersUnchecked {
 				retry_duration: 0,
-				refund_address: H160::from_slice(&[
-					0x54, 0x1f, 0x56, 0x32, 0x37, 0xa3, 0x09, 0xb3, 0xa6, 0x1e, 0x33, 0xbd, 0xf0,
-					0x7a, 0x89, 0x30, 0xbd, 0xba, 0x8d, 0x99,
-				]),
+				refund_address: H160::from_slice(
+					&hex::decode("541f563237a309b3a61e33bdf07a8930bdba8d99")
+						.expect("valid hex refund address"),
+				),
 				min_price: Price::from_raw(0u128.into()),
 				refund_ccm_metadata: None,
 				max_oracle_price_slippage: None,
