@@ -81,7 +81,7 @@ use super::contract_common::Event as ContractEvent;
 /// Configuration trait for chain-specific key manager event handling.
 pub trait KeyManagerEventConfig {
 	type Chain: Chain<
-		ChainAccount = H160,
+		ChainAccount = EvmAddress,
 		ChainCrypto = cf_chains::evm::EvmCrypto,
 		ChainBlockNumber = u64,
 		TransactionFee = TransactionFee,
@@ -177,7 +177,7 @@ where
 
 			KeyManagerEventResult::<Config::Instance>::SignatureAccepted {
 				tx_out_id: SchnorrVerificationComponents {
-					s: sig_data.sig.into(),
+					s: sig_data.sig.to_big_endian(),
 					k_times_g_address: sig_data.k_times_g_address.into(),
 				},
 				signer_id: from,
@@ -324,14 +324,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
-
+	use super::*;
 	use std::{path::PathBuf, str::FromStr};
 
 	use cf_chains::{Chain, Ethereum};
 	use cf_primitives::AccountRole;
 	use cf_utilities::task_scope::task_scope;
 	use futures_util::FutureExt;
-	use sp_core::{H160, U256};
+	use sp_core::U256;
 
 	use super::super::source::EvmSource;
 
@@ -390,7 +390,7 @@ mod tests {
 							println!("Witnessed call: {:?}", call);
 						},
 						retry_client,
-						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
+						EvmAddress::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
 					)
 					.spawn(scope);
 

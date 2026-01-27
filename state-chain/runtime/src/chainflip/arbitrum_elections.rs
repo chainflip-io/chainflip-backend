@@ -11,7 +11,8 @@ use crate::{
 	ArbitrumChainTracking, ArbitrumIngressEgress, Runtime,
 };
 use cf_chains::{
-	arb::{self, ArbitrumTrackedData},
+	arb::ArbitrumTrackedData,
+	evm,
 	instances::ArbitrumInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
 	Arbitrum, Chain, DepositChannel,
@@ -78,7 +79,7 @@ pub struct ArbitrumChainTag;
 pub type ArbitrumChain = TypesFor<ArbitrumChainTag>;
 impl ChainTypes for ArbitrumChain {
 	type ChainBlockNumber = BlockWitnessRange<Arbitrum>;
-	type ChainBlockHash = arb::H256;
+	type ChainBlockHash = evm::H256;
 	const NAME: &'static str = "Arbitrum";
 }
 
@@ -176,7 +177,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<arb::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -272,7 +273,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<arb::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -353,7 +354,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<arb::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -389,7 +390,7 @@ pub type ArbitrumKeyManagerWitnessingES =
 // ------------------------ liveness ---------------------------
 pub type ArbitrumLiveness = Liveness<
 	<Arbitrum as Chain>::ChainBlockNumber,
-	arb::H256,
+	evm::H256,
 	ReportFailedLivenessCheck<Arbitrum>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,

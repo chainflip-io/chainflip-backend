@@ -19,7 +19,7 @@ use crate::evm::{
 	retry_rpc::EvmRetryRpcApi,
 	rpc::{address_checker::AddressState, EvmRpcSigningClient},
 };
-use cf_chains::{witness_period::SaturatingStep, DepositChannel};
+use cf_chains::{evm::Address as EvmAddress, witness_period::SaturatingStep, DepositChannel};
 use ethers::{
 	abi::{ethereum_types::BloomInput, RawLog},
 	types::{Bloom, Log},
