@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 codec = { workspace = true, default-features = true }
+bitcoin = { workspace = true }
 
 # Chainflip Runtime
 state-chain-runtime = { workspace = true, default-features = true }

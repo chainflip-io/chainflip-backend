@@ -2782,6 +2782,7 @@ name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitcoin",
  "cf-amm",
  "cf-amm-math",
  "cf-chains",

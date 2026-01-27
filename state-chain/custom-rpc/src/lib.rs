@@ -17,6 +17,7 @@
 #![feature(duration_constructors)]
 
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
+use bitcoin::{hashes::Hash as BitcoinHash, Txid};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
 	common::{PoolPairsMap, Side},
@@ -47,7 +48,7 @@ use cf_rpc_apis::{
 	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
-use cf_utilities::{rpc::NumberOrHex, ArrayCollect};
+use cf_utilities::rpc::NumberOrHex;
 use core::ops::Range;
 use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
@@ -820,38 +821,24 @@ type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
-/// A wrapper type for bitcoin hashes that serializes the hash in reverse.
-#[derive(Debug, Clone, Deserialize)]
-pub struct BitcoinHash(pub sp_core::H256);
-
-impl Serialize for BitcoinHash {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		sp_core::H256(self.0.to_fixed_bytes().into_iter().rev().collect_array())
-			.serialize(serializer)
-	}
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcTransactionRef {
-	Bitcoin { hash: BitcoinHash },
+	Bitcoin { hash: Txid },
 	Evm { hash: cf_chains::evm::H256 },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RpcTransactionId {
-	Bitcoin { hash: BitcoinHash },
+	Bitcoin { hash: Txid },
 	Evm { signature: cf_chains::evm::SchnorrVerificationComponents },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DepositDetails {
-	Bitcoin { tx_id: BitcoinHash, vout: u32 },
+	Bitcoin { tx_id: Txid, vout: u32 },
 	Evm { tx_hashes: Vec<cf_chains::evm::H256> },
 }
 
@@ -983,8 +970,14 @@ fn convert_bitcoin_broadcast(
 	Some(BroadcastWitnessInfo {
 		broadcast_chain_block_height: height,
 		broadcast_id,
-		tx_out_id: RpcTransactionId::Bitcoin { hash: BitcoinHash(tx_confirmation.tx_out_id) },
-		tx_ref: RpcTransactionRef::Bitcoin { hash: BitcoinHash(tx_confirmation.transaction_ref) },
+		tx_out_id: RpcTransactionId::Bitcoin {
+			hash: Txid::from_slice(tx_confirmation.tx_out_id.as_bytes())
+				.expect("bitcoin txid hash"),
+		},
+		tx_ref: RpcTransactionRef::Bitcoin {
+			hash: Txid::from_slice(tx_confirmation.transaction_ref.as_bytes())
+				.expect("bitcoin txid hash"),
+		},
 	})
 }
 
@@ -1032,7 +1025,10 @@ trait IntoRpcDepositDetails {
 
 impl IntoRpcDepositDetails for cf_chains::btc::Utxo {
 	fn into_rpc_deposit_details(self) -> Option<DepositDetails> {
-		Some(DepositDetails::Bitcoin { tx_id: BitcoinHash(self.id.tx_id), vout: self.id.vout })
+		Some(DepositDetails::Bitcoin {
+			tx_id: Txid::from_slice(self.id.tx_id.as_bytes()).expect("bitcoin txid hash"),
+			vout: self.id.vout,
+		})
 	}
 }
 
