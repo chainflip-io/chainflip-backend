@@ -192,108 +192,12 @@ pub fn recursively_construct_types(
 					})
 					.ok_or("variant name in value should match one of the variants in type def")??,
 
-			(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (contains_type_id, type_fields, modified_values) = process_tuple(
-					vec![type_def_sequence.type_param; fs.len()],
-					fs,
-					types,
-					|_, i| i.to_string(),
-				)?;
+			(TypeDef::Sequence(type_def_sequence), ValueDef::Composite(Composite::Unnamed(fs))) =>
+				process_array(type_def_sequence.type_param, fs, types)?,
 
-				// If the sequence is empty, there is no use, constructing the type of the array
-				// elements, and so we map the empty array to an Empty type called EmptySequence
-				if let Some(type_name) = type_fields.first() {
-					// convert the type name of the sequence to something like "TypeName[]".
-					// If its a sequence of type u8, then we interpret it as bytes.
-					// empty vec![] ensures that we dont add this type to types list
-					if type_name.r#type == "uint8" {
-						(
-							TypeName { name: "bytes".to_string(), contains_type_id: false },
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(Value::unnamed_composite(
-								modified_values.into_iter().map(|(_, v)| v),
-							))?,
-						)
-					} else {
-						(
-							TypeName {
-								name: "ArrayOf__".to_string() +
-									//todo: try to get the real name of the array here
-									&type_name.r#type + &hex::encode(
-									&keccak256(format!("{type_fields:?}"))[..4]),
-								contains_type_id,
-							},
-							AddTypeOrNot::AddType { type_fields },
-							Value::named_composite(modified_values),
-						)
-					}
-				} else {
-					recursively_construct_types(
-						Value::string("Empty"),
-						MetaType::new::<String>(),
-						types,
-					)
-					.map(|(n, v)| {
-						(
-							// since in the empty case we are changing the type to string, we have
-							// to mark it as containing type id
-							TypeName { name: n.name, contains_type_id: true },
-							AddTypeOrNot::DontAdd,
-							v,
-						)
-					})?
-				}
-			},
 			(TypeDef::Array(type_def_array), ValueDef::Composite(Composite::Unnamed(fs))) => {
 				debug_assert!((type_def_array.len as usize) == fs.len());
-
-				let (contains_type_id, type_fields, modified_values) =
-					process_tuple(vec![type_def_array.type_param; fs.len()], fs, types, |_, i| {
-						i.to_string()
-					})?;
-
-				// If the array is empty, there is no use, constructing the type of the array
-				// elements, and so we map the empty array to an Empty type called EmptyArray
-				if let Some(type_name) = type_fields.first() {
-					// convert the type name of the array to something like "TypeName[len]".
-					// If its a sequence of type u8, then we interpret it as bytes.
-					// vec![] ensures that we dont add this type to types list
-					if type_name.r#type == "uint8" {
-						(
-							TypeName { name: "bytes".to_string(), contains_type_id: false },
-							AddTypeOrNot::DontAdd,
-							scale_value_bytes_to_hex(Value::unnamed_composite(
-								modified_values.into_iter().map(|(_, v)| v),
-							))?,
-						)
-					} else {
-						(
-							TypeName {
-								name: "ArrayOf__".to_string() +
-									//todo: try to get the real name of the array here
-									&type_name.r#type + &hex::encode(
-									&keccak256(format!("{type_fields:?}"))[..4],
-								),
-								contains_type_id,
-							},
-							AddTypeOrNot::AddType { type_fields },
-							Value::named_composite(modified_values),
-						)
-					}
-				} else {
-					recursively_construct_types(
-						Value::string("Empty"),
-						MetaType::new::<String>(),
-						types,
-					)
-					.map(|(n, v)| {
-						(
-							TypeName { name: n.name, contains_type_id: true },
-							AddTypeOrNot::DontAdd,
-							v,
-						)
-					})?
-				}
+				process_array(type_def_array.type_param, fs, types)?
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
 				let (contains_type_id, type_fields, modified_values) =
@@ -372,6 +276,56 @@ pub fn recursively_construct_types(
 	}
 
 	Ok((type_name, value))
+}
+
+fn process_array(
+	ty: MetaType,
+	values: Vec<Value>,
+	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
+) -> Result<(TypeName, AddTypeOrNot, Value), &'static str> {
+	let (contains_type_id, type_fields, modified_values) =
+		process_tuple(vec![ty; values.len()], values, types, |_, i| i.to_string())?;
+
+	// If the sequence is empty, there is no use, constructing the type of the array
+	// elements, and so we map the empty array to an Empty type called EmptySequence
+	if let Some(type_name) = type_fields.first() {
+		// convert the type name of the sequence to something like "TypeName[]".
+		// If its a sequence of type u8, then we interpret it as bytes.
+		// empty vec![] ensures that we dont add this type to types list
+		if type_name.r#type == "uint8" {
+			Ok((
+				TypeName { name: "bytes".to_string(), contains_type_id: false },
+				AddTypeOrNot::DontAdd,
+				scale_value_bytes_to_hex(Value::unnamed_composite(
+					modified_values.into_iter().map(|(_, v)| v),
+				))?,
+			))
+		} else {
+			Ok((
+				TypeName {
+					name: "ArrayOf__".to_string() +
+						&type_name.r#type + &hex::encode(
+						&keccak256(format!("{type_fields:?}"))[..4],
+					),
+					contains_type_id,
+				},
+				AddTypeOrNot::AddType { type_fields },
+				Value::named_composite(modified_values),
+			))
+		}
+	} else {
+		recursively_construct_types(Value::string("Empty"), MetaType::new::<String>(), types).map(
+			|(n, v)| {
+				Ok((
+					// since in the empty case we are changing the type to string, we have
+					// to mark it as containing type id
+					TypeName { name: n.name, contains_type_id: true },
+					AddTypeOrNot::DontAdd,
+					v,
+				))
+			},
+		)?
+	}
 }
 
 #[expect(clippy::type_complexity)]

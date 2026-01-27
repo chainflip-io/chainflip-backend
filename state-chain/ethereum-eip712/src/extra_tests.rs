@@ -384,3 +384,50 @@ eip712_test!(test_i128_min, test_types::TestI128(i128::MIN));
 eip712_test!(test_i128_max, test_types::TestI128(i128::MAX));
 eip712_test!(test_i128_negative_large, test_types::TestI128(-(JS_MAX_SAFE_INTEGER as i128 + 1)));
 eip712_test!(test_enum_negative_large, test_types::TestEnum::<i32, ()>::A(i32::MIN));
+eip712_test!(
+	test_complex_root,
+	test_types::test_complex_type_with_vecs_and_enums::ComplexRoot {
+		field_with_vector: test_types::test_complex_type_with_vecs_and_enums::TypeWithVector {
+			items: vec![1, 2, 3, 4, 5],
+			description: "Test description".to_string(),
+		},
+		field_with_vector_2: test_types::test_complex_type_with_vecs_and_enums::TypeWithVector {
+			items: vec![],
+			description: "Empty items".to_string(),
+		},
+		field_with_enum: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Pending {
+				reason: "Waiting for approval".to_string()
+			},
+			id: 42,
+		},
+		field_with_both: test_types::test_complex_type_with_vecs_and_enums::TypeWithBoth {
+			tags: vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()],
+			priority: test_types::test_complex_type_with_vecs_and_enums::Priority::High,
+			nested_items: vec![100, 200, 300],
+		},
+		field_with_enum_2: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Active,
+			id: 50
+		},
+		field_with_enum_3: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Completed {
+				count: 5,
+				timestamp: 6
+			},
+			id: 60,
+		},
+	}
+);
+eip712_test!(
+	test_simple_root,
+	test_types::test_vec_of_enum::SimpleRoot {
+		inner: test_types::test_vec_of_enum::InnerStruct {
+			colors: vec![
+				test_types::test_vec_of_enum::Color::Red,
+				test_types::test_vec_of_enum::Color::Blue { intensity: 128 },
+				test_types::test_vec_of_enum::Color::Green
+			],
+		},
+	}
+);
