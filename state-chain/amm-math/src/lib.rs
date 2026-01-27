@@ -19,10 +19,13 @@
 pub mod test_utilities;
 
 pub use cf_primitives::Tick;
-use cf_primitives::{Asset, BasisPoints, MAX_BASIS_POINTS};
+use cf_primitives::{
+	basis_points::SignedHundredthBasisPoints, Asset, BasisPoints, MAX_BASIS_POINTS,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::{U256, U512};
 
 /// Represents an amount of an asset, in its smallest unit i.e. Ethereum has 10^-18 precision, and
@@ -421,6 +424,20 @@ impl Price {
 		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
 	}
 
+	/// The price obtained by selling `input` amount of asset to receive `output` amount of asset.
+	///
+	/// Higher sell price is better for the seller (more output for the same input).
+	pub fn sell_price(input: Amount, output: Amount) -> Self {
+		Self::from_amounts(output, input)
+	}
+
+	/// The price of buying `output` amount of asset with `input` amount of asset.
+	///
+	/// Higher buy price is worse for the buyer (less output for the same input).
+	pub fn buy_price(input: Amount, output: Amount) -> Self {
+		Self::from_amounts(input, output)
+	}
+
 	/// Compute the price of asset 1 (self) in terms of asset 2 (given).
 	/// Both prices must have the same quote asset (eg. USD).
 	pub fn relative_to(self, price: Price) -> Self {
@@ -497,6 +514,18 @@ impl Price {
 	pub fn adjust_by_bps(self, bps: BasisPoints, increase: bool) -> Self {
 		let adjusted_bps = if increase { MAX_BASIS_POINTS + bps } else { MAX_BASIS_POINTS - bps };
 		Self(mul_div_floor(self.0, U256::from(adjusted_bps), MAX_BASIS_POINTS))
+	}
+	/// Calculates the basis points difference from some other price to this one, assuming they
+	/// are both prices of the same base/quote pair.
+	///
+	/// The `from` implies that if the other price is lower than self, the result will be positive,
+	/// and if the other price is higher than self, the result will be negative.
+	pub fn hundredth_bps_difference_from(&self, other_price: &Price) -> SignedHundredthBasisPoints {
+		let abs_diff = self.0.abs_diff(other_price.0);
+		let max_hundredth_bps = U256::from(100 * MAX_BASIS_POINTS as u32);
+		let abs_diff_bps = mul_div_ceil(abs_diff, max_hundredth_bps, other_price.0);
+		let sign = if self.0 < other_price.0 { -1 } else { 1 };
+		SignedHundredthBasisPoints(abs_diff_bps.saturated_into::<i32>() * sign)
 	}
 }
 
@@ -748,5 +777,18 @@ mod test {
 			price.output_amount_floor(U256::from(123 * 10u128.pow(18))),
 			price.invert().input_amount_floor(U256::from(123 * 10u128.pow(18)))
 		);
+	}
+
+	#[test]
+	fn test_price_bps_difference() {
+		let ref_price = Price::from_usd_fine_amount(100000);
+		let price_1 = Price::from_usd_fine_amount(95000); // ok
+		let price_1_1 = Price::from_usd_fine_amount(94999); // under the limit
+		let price_2 = Price::from_usd_fine_amount(105000); // ok
+		let price_2_1 = Price::from_usd_fine_amount(105001); // over the limit
+		assert_eq!(*price_1.hundredth_bps_difference_from(&ref_price), -500 * 100);
+		assert!(*price_1_1.hundredth_bps_difference_from(&ref_price) < -500 * 100);
+		assert_eq!(*price_2.hundredth_bps_difference_from(&ref_price), 500 * 100);
+		assert!(*price_2_1.hundredth_bps_difference_from(&ref_price) > 500 * 100);
 	}
 }

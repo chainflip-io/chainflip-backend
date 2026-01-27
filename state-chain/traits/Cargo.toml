@@ -18,7 +18,8 @@ strum = { version = "0.26.3", default-features = false }
 cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cfe-events = { workspace = true }
-cf-amm = { workspace = true}
+cf-amm = { workspace = true }
+cf-amm-math = { workspace = true }
 
 # # Parity deps
 codec = { workspace = true, features = ["derive"] }
@@ -28,8 +29,7 @@ frame-benchmarking = { workspace = true, optional = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 sp-std = { workspace = true }
-sp-runtime = {workspace = true}
-cf-amm-math = { workspace = true }
+sp-runtime = { workspace = true }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
