@@ -1009,7 +1009,6 @@ impl pallet_cf_elections::Config for Runtime {
 
 impl pallet_cf_elections::Config<Instance1> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::ethereum_elections::EthereumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1020,7 +1019,6 @@ impl pallet_cf_elections::Config<Instance1> for Runtime {
 
 impl pallet_cf_elections::Config<Instance4> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Arbitrum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::arbitrum_elections::ArbitrumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
