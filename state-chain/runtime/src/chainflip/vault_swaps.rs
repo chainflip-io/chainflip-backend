@@ -47,7 +47,6 @@ use cf_primitives::{
 use cf_traits::{AffiliateRegistry, SwapParameterValidation};
 use codec::Decode;
 
-use cf_chains::sol::SolAsset;
 use frame_support::pallet_prelude::DispatchError;
 use sol_prim::consts::SOL_USD_DECIMAL;
 use sp_core::U256;
