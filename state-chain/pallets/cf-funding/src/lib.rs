@@ -1179,7 +1179,7 @@ impl<T: Config> GetMinimumFunding for Pallet<T> {
 }
 
 derive_common_traits! {
-	#[derive(PartialOrd, Ord, DecodeWithMemTracking, TypeInfo)]
+	#[derive(PartialOrd, Ord, TypeInfo)]
 	pub struct EthereumDepositAndSCCall {
 		pub deposit: EthereumDeposit,
 		pub call: Vec<u8>,

@@ -11,7 +11,7 @@ use crate::{
 };
 use cf_chains::{instances::ArbitrumInstance, Arbitrum};
 use cf_traits::Hook;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
 use pallet_cf_broadcast::TransactionConfirmation;
@@ -23,7 +23,18 @@ use pallet_cf_ingress_egress::DepositWitness;
 use sp_std::{vec, vec::Vec};
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub enum ArbEvent<T> {
 	Witness(T),

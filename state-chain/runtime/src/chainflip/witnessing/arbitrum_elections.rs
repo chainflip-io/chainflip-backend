@@ -21,6 +21,7 @@ use cf_chains::{
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use cf_utilities::impls;
+use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
@@ -87,7 +88,7 @@ impl ChainTypes for ArbitrumChain {
 
 pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum ArbitrumElectoralEvents {
 	ReorgDetected {
 		reorged_blocks: RangeInclusive<<ArbitrumChain as ChainTypes>::ChainBlockNumber>,
@@ -578,7 +579,7 @@ impl_pallet_safe_mode! {
 	key_manager_witnessing,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(ElectionPropertiesDepositChannel),
 	Vaults(()),

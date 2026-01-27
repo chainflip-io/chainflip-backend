@@ -14,6 +14,7 @@ use cf_chains::{
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use cf_utilities::impls;
+use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
@@ -87,7 +88,7 @@ impl ChainTypes for EthereumChain {
 
 pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum EthereumElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<<Ethereum as Chain>::ChainBlockNumber> },
 }
@@ -203,6 +204,7 @@ pub struct EthereumVaultDepositWitnessing;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	GenericTypeInfo,
 	Deserialize,
 	Serialize,
@@ -304,7 +306,18 @@ pub type EthereumVaultDepositWitnessingES =
 pub struct EthereumStateChainGatewayWitnessing;
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub enum StateChainGatewayEvent {
 	Funded {
@@ -391,7 +404,18 @@ pub type EthereumStateChainGatewayWitnessingES =
 pub struct EthereumKeyManagerWitnessing;
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 #[scale_info(skip_type_params(
 	AggKey,
@@ -501,7 +525,18 @@ pub type EthereumKeyManagerWitnessingES =
 pub struct EthereumScUtilsWitnessing;
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub struct ScUtilsCall {
 	pub deposit_and_call: EthereumDepositAndSCCall,
@@ -815,7 +850,7 @@ impl_pallet_safe_mode! {
 	sc_utils_witnessing
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
 		<TypesFor<EthereumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
