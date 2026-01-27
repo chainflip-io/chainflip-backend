@@ -63,7 +63,7 @@ use cf_traits::{
 	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
 	SwapRequestHandler, SwapRequestType, Validate, INITIAL_FLIP_FUNDING,
 };
-use cf_utilities::{define_empty_struct, derive_common_traits};
+use cf_utilities::define_empty_struct;
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},

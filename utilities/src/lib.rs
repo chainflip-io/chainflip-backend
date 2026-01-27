@@ -31,6 +31,7 @@ pub use without_std::*;
 #[cfg(any(feature = "test-utils", test))]
 pub mod testing;
 
+#[macro_use]
 pub mod macros;
 
 pub type Port = u16;
