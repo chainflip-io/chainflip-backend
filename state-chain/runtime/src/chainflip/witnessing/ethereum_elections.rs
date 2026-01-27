@@ -9,9 +9,7 @@ use crate::{
 	AccountId, EthereumChainTracking, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{
-	eth::{self, EthereumTrackedData},
-	instances::EthereumInstance,
-	witness_period::SaturatingStep,
+	eth::EthereumTrackedData, evm, instances::EthereumInstance, witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
@@ -83,7 +81,7 @@ pub struct EthereumChainTag;
 pub type EthereumChain = TypesFor<EthereumChainTag>;
 impl ChainTypes for EthereumChain {
 	type ChainBlockNumber = <Ethereum as Chain>::ChainBlockNumber;
-	type ChainBlockHash = eth::H256;
+	type ChainBlockHash = evm::H256;
 	const NAME: &'static str = "Ethereum";
 }
 
@@ -267,7 +265,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<eth::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -312,7 +310,7 @@ pub enum StateChainGatewayEvent {
 	Funded {
 		account_id: AccountId,
 		amount: FlipBalance<Runtime>,
-		funder: eth::Address,
+		funder: evm::Address,
 		tx_hash: EthTransactionHash,
 	},
 	RedemptionExecuted {
@@ -356,7 +354,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataStateChainGateway, Option<eth::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataStateChainGateway, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -466,7 +464,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<eth::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -545,7 +543,7 @@ impls! {
 	/// Associating the state machine and consensus mechanism to the struct
 	StatemachineElectoralSystemTypes {
 		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataScUtils, Option<eth::H256>)>;
+		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataScUtils, Option<evm::H256>)>;
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
 
 		type OnFinalizeReturnItem = ();
@@ -581,7 +579,7 @@ pub type EthereumScUtilsWitnessingES =
 // ------------------------ liveness ---------------------------
 pub type EthereumLiveness = Liveness<
 	<Ethereum as Chain>::ChainBlockNumber,
-	eth::H256,
+	evm::H256,
 	ReportFailedLivenessCheck<Ethereum>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,

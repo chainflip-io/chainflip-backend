@@ -129,8 +129,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 	async fn address_states(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> anyhow::Result<Vec<AddressState>> {
 		self.rpc_retry_client
 			.request_with_limit(
@@ -152,8 +152,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 	async fn balances(
 		&self,
 		block_hash: H256,
-		contract_address: H160,
-		addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		addresses: Vec<EvmAddress>,
 	) -> anyhow::Result<Vec<U256>> {
 		self.rpc_retry_client
 			.request_with_limit(
@@ -174,8 +174,8 @@ impl<Rpc: EvmRpcApi + AddressCheckerRpcApi> AddressCheckerRetryRpcApiWithResult
 
 	async fn query_price_feeds(
 		&self,
-		contract_address: H160,
-		aggregator_addresses: Vec<H160>,
+		contract_address: EvmAddress,
+		aggregator_addresses: Vec<EvmAddress>,
 	) -> anyhow::Result<(U256, U256, Vec<PriceFeedData>)> {
 		self.rpc_retry_client
 			.request_with_limit(

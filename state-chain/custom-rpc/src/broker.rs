@@ -712,7 +712,7 @@ where
 		Err(CfApiError::from(PoolClientError::UnexpectedEndOfStream))?
 	}
 
-	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256> {
+	async fn bind_fee_withdrawal_address(&self, address: EvmAddress) -> RpcResult<H256> {
 		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(

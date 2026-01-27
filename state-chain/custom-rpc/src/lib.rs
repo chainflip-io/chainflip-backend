@@ -254,7 +254,7 @@ pub enum RpcAccountInfo {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
-		bound_fee_withdrawal_address: Option<EthereumAddress>,
+		bound_fee_withdrawal_address: Option<EvmAddress>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,

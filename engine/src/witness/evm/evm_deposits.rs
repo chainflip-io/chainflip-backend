@@ -18,7 +18,7 @@ use super::{
 	super::common::chunked_chain_source::chunked_by_vault::{
 		builder::ChunkedByVaultBuilder, ChunkedByVault,
 	},
-	contract_common::{events_at_block, events_at_block_deprecated},
+	contract_common::events_at_block_deprecated,
 	vault::FetchedNativeFilter,
 };
 use crate::{

@@ -22,7 +22,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
-	evm::{Address as EthereumAddress, U256},
+	evm::Address as EthereumAddress,
 	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
 	SwapOrigin,
 };

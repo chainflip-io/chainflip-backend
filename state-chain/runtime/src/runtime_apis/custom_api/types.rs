@@ -412,7 +412,7 @@ pub struct BrokerInfo<BtcAddress> {
 	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
-	pub bound_fee_withdrawal_address: Option<EthereumAddress>,
+	pub bound_fee_withdrawal_address: Option<EvmAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
