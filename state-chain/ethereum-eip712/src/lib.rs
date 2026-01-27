@@ -98,11 +98,11 @@ pub struct TypeName {
 	name: String,
 	// This is a flag that can be set while passing the type_name of a type through the recursion.
 	// This tells the outer types that have this type in the type tree, that this is a type
-	// instantiated from an enum variant. More generally, this flag is used to communicate this
-	// type can take multiple possible shapes and the current shape is one of them. These kind of
-	// types have a unique identifier attached to its type name, that is unique to each instance of
-	// the type.
-	contains_type_id: bool,
+	// instantiated from an enum variant or, more generally, that the type is morphable. This
+	// flag is used to communicate to the outer types that this type can take multiple possible
+	// shapes and the current shape is one of them. In most cases, these kind of types have a
+	// unique identifier attached to its type name, that is unique to each instance of the type.
+	requires_type_id_suffix: bool,
 }
 
 pub fn recursively_construct_types(
@@ -120,37 +120,37 @@ pub fn recursively_construct_types(
 			// other primitives to solidity primitives directly without recursing further.
 				match t.path.segments.as_slice() {
 					["primitive_types", "H160"] => (
-						TypeName { name: "address".to_string(), contains_type_id: false },
+						TypeName { name: "address".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "U256"] => (
-						TypeName { name: "uint256".to_string(), contains_type_id: false },
+						TypeName { name: "uint256".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						stringify_primitive_integers_types(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "U128"] => (
-						TypeName { name: "uint128".to_string(), contains_type_id: false },
+						TypeName { name: "uint128".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						stringify_primitive_integers_types(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H128"] => (
-						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						TypeName { name: "bytes".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H256"] => (
-						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						TypeName { name: "bytes".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H384"] => (
-						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						TypeName { name: "bytes".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
 					["primitive_types", "H512"] => (
-						TypeName { name: "bytes".to_string(), contains_type_id: false },
+						TypeName { name: "bytes".to_string(), requires_type_id_suffix: false },
 						AddTypeOrNot::DontAdd,
 						scale_value_bytes_to_hex(extract_primitive_types(comp_value)?)?,
 					),
@@ -171,7 +171,10 @@ pub fn recursively_construct_types(
 					.map(|variant| -> Result<_, &'static str> {
 						if variant.fields.is_empty() {
 							Ok((
-								TypeName { name: "string".to_string(), contains_type_id: true },
+								TypeName {
+									name: "string".to_string(),
+									requires_type_id_suffix: true,
+								},
 								AddTypeOrNot::DontAdd,
 								Value::string(value_variant.name.to_string()),
 							))
@@ -186,7 +189,7 @@ pub fn recursively_construct_types(
 									"__" + &value_variant.name.to_string(),
 							)?;
 							// since variant struct itself is a instantiable type
-							type_name.contains_type_id = true;
+							type_name.requires_type_id_suffix = true;
 							Ok((type_name, add_type_or_not, value))
 						}
 					})
@@ -200,7 +203,7 @@ pub fn recursively_construct_types(
 				process_array(type_def_array.type_param, fs, types)?
 			},
 			(TypeDef::Tuple(type_def_tuple), ValueDef::Composite(Composite::Unnamed(fs))) => {
-				let (contains_type_id, type_fields, modified_values) =
+				let (requires_type_id_suffix, type_fields, modified_values) =
 					process_tuple(type_def_tuple.fields, fs, types, |type_name, i| {
 						type_name + "__" + &i.to_string()
 					})?;
@@ -213,7 +216,7 @@ pub fn recursively_construct_types(
 					TypeName {
 						name: "UnnamedTuple__".to_string() +
 							&hex::encode(&keccak256(format!("{type_fields:?}"))[..4]),
-						contains_type_id,
+						requires_type_id_suffix,
 					},
 					AddTypeOrNot::AddType { type_fields },
 					Value::named_composite(modified_values),
@@ -238,7 +241,7 @@ pub fn recursively_construct_types(
 						TypeDefPrimitive::I128 => "int128".to_string(),
 						TypeDefPrimitive::I256 => "int256".to_string(),
 					},
-					contains_type_id: false,
+					requires_type_id_suffix: false,
 				},
 				AddTypeOrNot::DontAdd,
 				v,
@@ -266,7 +269,7 @@ pub fn recursively_construct_types(
 		} else {
 			// If there are generic parameters to this type, append uniqueness to the type name to
 			// avoid collisions
-			if type_name.contains_type_id || t.type_params.len() > 0 {
+			if type_name.requires_type_id_suffix || t.type_params.len() > 0 {
 				type_name.name = type_name.name +
 					"__" + &hex::encode(&keccak256(format!("{type_fields:?}"))[..8]);
 			}
@@ -283,7 +286,7 @@ fn process_array(
 	values: Vec<Value>,
 	types: &mut BTreeMap<String, Vec<Eip712DomainType>>,
 ) -> Result<(TypeName, AddTypeOrNot, Value), &'static str> {
-	let (contains_type_id, type_fields, modified_values) =
+	let (requires_type_id_suffix, type_fields, modified_values) =
 		process_tuple(vec![ty; values.len()], values, types, |_, i| i.to_string())?;
 
 	// If the sequence is empty, there is no use, constructing the type of the array
@@ -294,7 +297,7 @@ fn process_array(
 		// empty vec![] ensures that we dont add this type to types list
 		if type_name.r#type == "uint8" {
 			Ok((
-				TypeName { name: "bytes".to_string(), contains_type_id: false },
+				TypeName { name: "bytes".to_string(), requires_type_id_suffix: false },
 				AddTypeOrNot::DontAdd,
 				scale_value_bytes_to_hex(Value::unnamed_composite(
 					modified_values.into_iter().map(|(_, v)| v),
@@ -307,7 +310,7 @@ fn process_array(
 						&type_name.r#type + &hex::encode(
 						&keccak256(format!("{type_fields:?}"))[..4],
 					),
-					contains_type_id,
+					requires_type_id_suffix,
 				},
 				AddTypeOrNot::AddType { type_fields },
 				Value::named_composite(modified_values),
@@ -319,7 +322,7 @@ fn process_array(
 				Ok((
 					// since in the empty case we are changing the type to string, we have
 					// to mark it as containing type id
-					TypeName { name: n.name, contains_type_id: true },
+					TypeName { name: n.name, requires_type_id_suffix: true },
 					AddTypeOrNot::DontAdd,
 					v,
 				))
@@ -351,7 +354,7 @@ fn process_tuple(
 						name: field_name.clone(),
 						r#type: type_name.name,
 					},
-					type_name.contains_type_id,
+					type_name.requires_type_id_suffix,
 				),
 				(field_name, value),
 			))
@@ -384,7 +387,7 @@ fn process_composite(
 					Ok((
 						(
 							Eip712DomainType { name: field_name.clone(), r#type: type_name.name },
-							type_name.contains_type_id,
+							type_name.requires_type_id_suffix,
 						),
 						(field_name, value),
 					))
@@ -406,7 +409,7 @@ fn process_composite(
 					Ok((
 						(
 							Eip712DomainType { name: field_name.clone(), r#type: type_name.name },
-							type_name.contains_type_id,
+							type_name.requires_type_id_suffix,
 						),
 						(field_name, value),
 					))
@@ -423,7 +426,7 @@ fn process_composite(
 			// a type_id
 			TypeName {
 				name: type_main_name,
-				contains_type_id: maybe_extra_ids.into_iter().any(|id| id),
+				requires_type_id_suffix: maybe_extra_ids.into_iter().any(|id| id),
 			},
 			AddTypeOrNot::AddType { type_fields },
 			Value::named_composite(vals),
