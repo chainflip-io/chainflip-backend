@@ -1953,8 +1953,11 @@ pub mod pallet {
 						if let (Some(to_stable), Some(from_stable)) =
 							(to_stable_delta, from_stable_delta)
 						{
-							let total_slippage = to_stable.saturating_add(&from_stable);
-							if total_slippage
+							if to_stable
+								.saturating_add(&from_stable)
+								// The swapper expresses the limit as a worst acceptable *sell*
+								// price, so slippage needs to be measured in the negative
+								// direction (lower sell price is worse).
 								.breaches_limit(SignedBasisPoints::negative_slippage(max_slippage))
 							{
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);

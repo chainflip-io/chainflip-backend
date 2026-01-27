@@ -867,8 +867,7 @@ mod oracle_swaps {
 		const NETWORK_FEE_BPS: u32 = 100;
 		const BROKER_FEE_BPS: u16 = 100;
 
-		// The expected delta is lower than the sum of the bps's because of the order the fees/rate
-		// are applied
+		// The expected delta is 0.99^3-1 = -0.029701 = -297.01 bps, rounded away from zero to -298
 		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-298));
 
 		new_test_ext()

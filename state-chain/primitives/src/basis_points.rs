@@ -92,16 +92,22 @@ mod tests {
 	}
 
 	#[test]
-	fn breaches_limit_checks_sign_and_magnitude() {
-		assert!(SignedHundredthBasisPoints(101).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(100).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(-101).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(-1).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(0).breaches_limit(SignedBasisPoints(1)));
-		assert!(!SignedHundredthBasisPoints(0).breaches_limit(SignedBasisPoints(-1)));
-		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(SignedBasisPoints(-1)));
-		assert!(SignedHundredthBasisPoints(-101).breaches_limit(SignedBasisPoints(-1)));
+	fn breaches_limit_checks_direction_and_magnitude() {
+		// Positive limit: slippage must not exceed the limit (only checks upward)
+		let pos_limit = SignedBasisPoints(1);
+		assert!(SignedHundredthBasisPoints(101).breaches_limit(pos_limit));
+		assert!(!SignedHundredthBasisPoints(100).breaches_limit(pos_limit));
+		assert!(!SignedHundredthBasisPoints(0).breaches_limit(pos_limit));
+		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(pos_limit));
+
+		// Negative limit: slippage must not go below the limit (only checks downward)
+		let neg_limit = SignedBasisPoints(-1);
+		assert!(SignedHundredthBasisPoints(-101).breaches_limit(neg_limit));
+		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(neg_limit));
+		assert!(!SignedHundredthBasisPoints(0).breaches_limit(neg_limit));
+		assert!(!SignedHundredthBasisPoints(100).breaches_limit(neg_limit));
+
+		// Zero limit: any non-zero slippage is a breach
 		assert!(SignedHundredthBasisPoints(1).breaches_limit(SignedBasisPoints(0)));
 		assert!(SignedHundredthBasisPoints(-1).breaches_limit(SignedBasisPoints(0)));
 		assert!(!SignedHundredthBasisPoints(0).breaches_limit(SignedBasisPoints(0)));
