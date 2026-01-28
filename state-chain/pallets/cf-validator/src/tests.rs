@@ -3442,6 +3442,27 @@ mod keygen_failure_with_delegation {
 	}
 
 	#[test]
+	fn keygen_failure_excludes_banned_managed_from_primary_candidates() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			ValidatorPallet::start_authority_rotation();
+			MockKeyRotatorA::failed([VALIDATOR_1]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+
+			if let RotationPhase::KeygensInProgress(state) = CurrentRotationPhase::<Test>::get() {
+				assert!(
+					!state.primary_candidates.contains(&VALIDATOR_1),
+					"banned managed validator should be excluded from primary candidates"
+				);
+			} else {
+				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
+			}
+		});
+	}
+
+	#[test]
 	fn reauction_failure_aborts_rotation_without_persisting_snapshots() {
 		new_test_ext().execute_with(|| {
 			setup_operator_with_validators();
@@ -3515,6 +3536,47 @@ mod keygen_failure_with_delegation {
 	}
 
 	#[test]
+	fn handover_failure_with_non_candidate_does_not_reauction_or_update_snapshots() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			ValidatorPallet::start_authority_rotation();
+			MockKeyRotatorA::keygen_success();
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+			assert!(matches!(
+				CurrentRotationPhase::<Test>::get(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+			let initial_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(initial_snapshot.validators.contains_key(&VALIDATOR_1));
+
+			MockKeyRotatorA::failed([DELEGATOR]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(2);
+
+			assert!(matches!(
+				CurrentRotationPhase::<Test>::get(),
+				RotationPhase::KeyHandoversInProgress(..)
+			));
+
+			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(updated_snapshot.validators.contains_key(&VALIDATOR_1));
+			assert!(!updated_snapshot.delegators.contains_key(&VALIDATOR_1));
+
+			let auction_completed_emitted = System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			});
+			assert!(
+				!auction_completed_emitted,
+				"AuctionCompleted should not be emitted for non-candidate handover failure"
+			);
+		});
+	}
+
+	#[test]
 	fn independent_validator_failure_does_not_trigger_reauction() {
 		new_test_ext().execute_with(|| {
 			// Setup independent validators (no operator) using add_bids
@@ -3543,6 +3605,62 @@ mod keygen_failure_with_delegation {
 			assert!(
 				!auction_completed_emitted,
 				"AuctionCompleted should not be emitted for independent validator failure"
+			);
+		});
+	}
+
+	#[test]
+	fn offender_already_delegator_does_not_trigger_reauction() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			ValidatorPallet::start_authority_rotation();
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+			let mut snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(snapshot.move_validator_to_delegator(VALIDATOR_1));
+			DelegationSnapshots::<Test>::insert(next_epoch, OPERATOR, snapshot);
+
+			MockKeyRotatorA::failed([VALIDATOR_1]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+
+			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(!updated_snapshot.validators.contains_key(&VALIDATOR_1));
+			assert!(updated_snapshot.delegators.contains_key(&VALIDATOR_1));
+
+			let auction_completed_emitted = System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			});
+			assert!(
+				!auction_completed_emitted,
+				"AuctionCompleted should not be emitted when offender already moved"
+			);
+		});
+	}
+
+	#[test]
+	fn missing_validator_to_operator_mapping_skips_snapshot_update() {
+		new_test_ext().execute_with(|| {
+			setup_operator_with_validators();
+
+			ValidatorPallet::start_authority_rotation();
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+			ValidatorToOperator::<Test>::remove(next_epoch, VALIDATOR_1);
+
+			MockKeyRotatorA::failed([VALIDATOR_1]);
+			System::reset_events();
+			Pallet::<Test>::on_initialize(1);
+
+			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
+			assert!(updated_snapshot.validators.contains_key(&VALIDATOR_1));
+			assert!(!updated_snapshot.delegators.contains_key(&VALIDATOR_1));
+
+			let auction_completed_emitted = System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			});
+			assert!(
+				!auction_completed_emitted,
+				"AuctionCompleted should not be emitted when validator-to-operator mapping is missing"
 			);
 		});
 	}
