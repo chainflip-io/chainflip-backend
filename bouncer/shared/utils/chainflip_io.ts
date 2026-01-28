@@ -167,6 +167,52 @@ export class ChainflipIO<Requirements> {
   }
 
   /**
+   * Submits an unsigned extrinsic and updates the `lastIoBlockHeight` to the block height were the extrinsic was included.
+   * @param arg.extrinsic Function that takes a `DisposableApiPromise` and builds the extrinsic that should be submitted.
+   * @param arg.expectedEvent Optional event description containing `name` and optionally `schema`, describing the event
+   * that's expected to be emitted during execution of the extrinsic
+   * @returns The well-typed event data of the expected event if one was provided. Otherwise the full, untyped result object
+   * that was returned by the extrinsic.
+   */
+  submitUnsignedExtrinsic = this.wrapWithExpectEvent((arg: { extrinsic: ExtrinsicFromApi }) =>
+    this.impl_submitUnsignedExtrinsic(arg),
+  );
+
+  private async impl_submitUnsignedExtrinsic(arg: {
+    extrinsic: ExtrinsicFromApi;
+  }): Promise<EventFilter> {
+    return this.runExclusively('submitUnsignedExtrinsic', async () => {
+      await using chainflipApi = await getChainflipApi();
+      const extrinsic = await arg.extrinsic(chainflipApi);
+
+      // generate readable description for logging
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { section, method, args } = (extrinsic.toHuman() as any).method;
+      const readable = `${section}.${method}(${JSON.stringify(args)})`;
+
+      this.debug(`Submitting unsigned extrinsic '${readable}'`);
+
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock');
+      const unsub = await extrinsic.send(waiter);
+      const result = extractExtrinsicResult(chainflipApi, await promise);
+      unsub();
+
+      if (!result.ok) {
+        throw new Error(`'${readable}' failed (${result.error})`);
+      }
+
+      this.debug(`Successfully submitted unsigned extrinsic with hash ${result.value.txHash}`);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.lastIoBlockHeight = (result.value as any).blockNumber.toNumber();
+
+      return {
+        txHash: `${result.value.txHash}`,
+      };
+    });
+  }
+
+  /**
    * Submits a governance extrinsic and updates `lastIoBlockHeight` to the block were the extrinsic was included.
    * @param arg Object containing `extrinsic: (api: DisposableChainflipApi) => any` that should be submitted as governance proposal
    * and optionally an entry `expectedEvent` describing the event we expect to be emitted when the extrinsic is included.

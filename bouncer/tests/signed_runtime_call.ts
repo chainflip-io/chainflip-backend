@@ -140,24 +140,25 @@ async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
   cf.debug('EIP712 Signature:', evmSignatureEip712);
 
   // Submit to the SC
-  await chainflip.tx.environment
-    .nonNativeSignedCall(
-      {
-        call: hexRuntimeCall,
-        transactionMetadata: {
-          nonce: transactionMetadata.nonce,
-          expiryBlock: transactionMetadata.expiry_block,
+  await cf.submitUnsignedExtrinsic({
+    extrinsic: (api) =>
+      api.tx.environment.nonNativeSignedCall(
+        {
+          call: hexRuntimeCall,
+          transactionMetadata: {
+            nonce: transactionMetadata.nonce,
+            expiryBlock: transactionMetadata.expiry_block,
+          },
         },
-      },
-      {
-        Ethereum: {
-          signature: evmSignatureEip712,
-          signer: evmWallet.address,
-          sigType: 'Eip712',
+        {
+          Ethereum: {
+            signature: evmSignatureEip712,
+            signer: evmWallet.address,
+            sigType: 'Eip712',
+          },
         },
-      },
-    )
-    .send();
+      ),
+  });
 
   cf.info('EVM EIP-712 signed call submitted, waiting for events...');
   await observeNonNativeSignedCallAndRole(cf, evmScAccount);
@@ -211,22 +212,23 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
   const hexSignature = '0x' + Buffer.from(signedBytes).toString('hex');
 
   // Submit as unsigned extrinsic - no broker needed
-  await chainflip.tx.environment
-    .nonNativeSignedCall(
-      {
-        // Solana prefix will be added in the SC previous to signature verification
-        call: hexBatchRuntimeCall,
-        transactionMetadata: svmTransactionMetadata,
-      },
-      {
-        Solana: {
-          signature: hexSignature,
-          signer: hexSigner,
-          sigType: 'Domain',
+  await cf.submitUnsignedExtrinsic({
+    extrinsic: (api) =>
+      api.tx.environment.nonNativeSignedCall(
+        {
+          // Solana prefix will be added in the SC previous to signature verification
+          call: hexBatchRuntimeCall,
+          transactionMetadata: svmTransactionMetadata,
         },
-      },
-    )
-    .send();
+        {
+          Solana: {
+            signature: hexSignature,
+            signer: hexSigner,
+            sigType: 'Domain',
+          },
+        },
+      ),
+  });
 
   cf.info('SVM Domain signed call batch submitted, waiting for events...');
 
@@ -278,22 +280,23 @@ async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
   const evmSignature = await evmWallet.signMessage(evmString);
 
   // Submit as unsigned extrinsic - no broker needed
-  await chainflip.tx.environment
-    .nonNativeSignedCall(
-      // Ethereum prefix will be added in the SC previous to signature verification
-      {
-        call: hexRuntimeCall,
-        transactionMetadata: personalSignMetadata,
-      },
-      {
-        Ethereum: {
-          signature: evmSignature,
-          signer: evmWallet.address,
-          sig_type: 'PersonalSign',
+  await cf.submitUnsignedExtrinsic({
+    extrinsic: (api) =>
+      api.tx.environment.nonNativeSignedCall(
+        // Ethereum prefix will be added in the SC previous to signature verification
+        {
+          call: hexRuntimeCall,
+          transactionMetadata: personalSignMetadata,
         },
-      },
-    )
-    .send();
+        {
+          Ethereum: {
+            signature: evmSignature,
+            signer: evmWallet.address,
+            sig_type: 'PersonalSign',
+          },
+        },
+      ),
+  });
 
   cf.info('EVM PersonalSign signed call submitted, waiting for events...');
   await observeNonNativeSignedCallAndRole(cf, evmScAccount);
@@ -351,24 +354,25 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
   // Doing it afterwards to make debugging of the signing faster (not waiting for the funding).
   await fundFlip(cf.logger, evmScAccount, '1000');
 
-  await chainflip.tx.environment
-    .nonNativeSignedCall(
-      {
-        call: hexRuntimeCall,
-        transactionMetadata: {
-          nonce: transactionMetadata.nonce,
-          expiryBlock: transactionMetadata.expiry_block,
+  await cf.submitUnsignedExtrinsic({
+    extrinsic: (api) =>
+      api.tx.environment.nonNativeSignedCall(
+        {
+          call: hexRuntimeCall,
+          transactionMetadata: {
+            nonce: transactionMetadata.nonce,
+            expiryBlock: transactionMetadata.expiry_block,
+          },
         },
-      },
-      {
-        Ethereum: {
-          signature: evmSignatureEip712,
-          signer: evmWallet.address,
-          sigType: 'Eip712',
+        {
+          Ethereum: {
+            signature: evmSignatureEip712,
+            signer: evmWallet.address,
+            sigType: 'Eip712',
+          },
         },
-      },
-    )
-    .send();
+      ),
+  });
 }
 
 async function testSpecialLpDeposit<A = []>(parentcf: ChainflipIO<A>, asset: Asset) {
