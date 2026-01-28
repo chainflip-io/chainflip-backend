@@ -259,13 +259,14 @@ export class ChainflipIO<Requirements> {
    * @param f Method to be executed
    * @returns A function that's similar to `f` but additionally takes an `expectedEvent` parameter.
    */
+  // eslint-disable-next-line class-methods-use-this
   private wrapWithExpectEvent<R2, A extends object>(
     f: (this: ChainflipIO<R2>, a: A) => Promise<EventFilter>,
   ): <Schema extends z.ZodTypeAny>(
     this: ChainflipIO<R2>,
     a: A & { expectedEvent?: { name: EventName; schema?: Schema } },
   ) => Promise<z.infer<Schema>> {
-    return async function (this: ChainflipIO<R2>, arg) {
+    return async function wrapped(this: ChainflipIO<R2>, arg) {
       const eventFilter = await f.call(this, arg);
       if (arg.expectedEvent) {
         return this.expectEvent({
