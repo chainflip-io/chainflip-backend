@@ -22,6 +22,15 @@ impl Validate for Type {
 	}
 }
 
+#[duplicate::duplicate_item(Container; [ Vec ]; [ VecDeque ]; [ BTreeSet ]; [ Option ]; )]
+impl<A: Validate> Validate for Container<A> {
+	type Error = A::Error;
+
+	fn is_valid(&self) -> Result<(), Self::Error> {
+		self.iter().try_for_each(Validate::is_valid)
+	}
+}
+
 impl<T> Validate for sp_std::marker::PhantomData<T> {
 	type Error = ();
 
@@ -42,44 +51,12 @@ impl<A: Validate, B: Validate> Validate for BTreeMap<A, B> {
 	}
 }
 
-impl<A: Validate> Validate for BTreeSet<A> {
-	type Error = A::Error;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().try_for_each(Validate::is_valid)
-	}
-}
-
 #[cfg(test)]
 impl Validate for String {
 	type Error = ();
 
 	fn is_valid(&self) -> Result<(), Self::Error> {
 		Ok(())
-	}
-}
-
-impl<A: Validate> Validate for Vec<A> {
-	type Error = A::Error;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().try_for_each(Validate::is_valid)
-	}
-}
-
-impl<A: Validate> Validate for VecDeque<A> {
-	type Error = A::Error;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.iter().try_for_each(Validate::is_valid)
-	}
-}
-
-impl<A: Validate> Validate for Option<A> {
-	type Error = A::Error;
-
-	fn is_valid(&self) -> Result<(), Self::Error> {
-		self.as_ref().map(Validate::is_valid).unwrap_or(Ok(()))
 	}
 }
 

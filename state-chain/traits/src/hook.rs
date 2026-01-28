@@ -44,6 +44,14 @@ pub mod hook_test_utils {
 	#[serde(
 		bound = "T::Input: Serialize + for<'d> Deserialize<'d>, WrappedHook: Serialize + for<'d> Deserialize<'d>"
 	)]
+	/// A hook wrapper that's useful for tests and mocking. It has the same behaviour as the
+	/// hook inside, but additionally keeps a history of all inputs that it has been called with.
+	///
+	/// This is useful for tests when you want to verify that a hook has indeed been called with
+	/// the expected data.
+	///
+	/// By default the `WrappedHook` inside is a `ConstantHook` because that's what we would usually
+	/// use in tests.
 	pub struct MockHook<
 		T: HookType,
 		const NAME: &'static str = "",
@@ -116,6 +124,14 @@ pub mod hook_test_utils {
 	)]
 	#[cfg_attr(feature = "test", derive(Arbitrary))]
 	#[serde(bound = "T::Output: Serialize + for<'d> Deserialize<'d>")]
+	/// A hook that does nothing and always returns the value that's stored inside of it.
+	///
+	/// The value that should be returned can chosen when constructing the hook with
+	/// `ConstantHook::new(value)`; It can also be updated by modifying `hook.state` during
+	/// execution of the test.
+	///
+	/// This should be mostly useful for mocking hooks, where instead of dispatching
+	/// into e.g. a pallet, we want to control what the return value will be.
 	pub struct ConstantHook<T: HookType> {
 		pub state: T::Output,
 		pub _phantom: sp_std::marker::PhantomData<T>,
