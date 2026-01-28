@@ -97,3 +97,71 @@ pub fn to_ethers_typed_data(
 			.collect(),
 	})
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_complex_root_ethers_typed_data() {
+		use crate::{
+			eip712::Eip712, extra_tests::test_types::test_complex_type_with_vecs_and_enums::*,
+		};
+
+		// Create instance with complex nested data
+		let test_value = ComplexRoot {
+			field_with_vector: TypeWithVector {
+				items: vec![1, 2, 3, 4, 5],
+				description: "Test description".to_string(),
+			},
+			field_with_vector_2: TypeWithVector {
+				items: vec![],
+				description: "Empty items".to_string(),
+			},
+			field_with_enum: TypeWithEnum {
+				status: StatusEnum::Pending { reason: "Waiting for approval".to_string() },
+				id: 42,
+			},
+			field_with_both: TypeWithBoth {
+				tags: vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()],
+				priority: Priority::High,
+				nested_items: vec![100, 200, 300],
+			},
+			field_with_enum_2: TypeWithEnum { status: StatusEnum::Active, id: 50 },
+			field_with_enum_3: TypeWithEnum {
+				status: StatusEnum::Completed { count: 5, timestamp: 6 },
+				id: 60,
+			},
+		};
+
+		// Build EIP-712 typed data
+		let typed_data = build_eip712_typed_data(test_value, "Chainflip-Mainnet".to_string(), 1)
+			.expect("Failed to build EIP-712 typed data");
+
+		assert_eq!(
+			hex::encode(crate::hash::keccak256(typed_data.encode_eip712().unwrap())),
+			"04b0dc2bec528652b0cf86897ab9ba001be647c920995aeeb2ae291c247e6674"
+		);
+	}
+
+	#[test]
+	fn test_simple_root_ethers_typed_data() {
+		use crate::{eip712::Eip712, extra_tests::test_types::test_vec_of_enum::*};
+
+		// Create instance with sample data
+		let test_value = SimpleRoot {
+			inner: InnerStruct {
+				colors: vec![Color::Red, Color::Blue { intensity: 128 }, Color::Green],
+			},
+		};
+
+		// Build EIP-712 typed data
+		let typed_data = build_eip712_typed_data(test_value, "Chainflip-Mainnet".to_string(), 1)
+			.expect("Failed to build EIP-712 typed data");
+
+		assert_eq!(
+			hex::encode(crate::hash::keccak256(typed_data.encode_eip712().unwrap())),
+			"e3be730ad92618b9a3de27d3d12cdff5bea2a3fe8dd7f4d6f117267088456c8c"
+		);
+	}
+}

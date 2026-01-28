@@ -838,10 +838,10 @@ fn can_build_eip_712_payload_and_validate() {
 		let version = 20000;
 		let transaction_metadata = TransactionMetadata { nonce: 0, expiry_block: 61 };
 
-		let signer: EvmAddress = EvmAddress::from_str("0x274fA0a0A529AACa83Aa0084cb6DC4AC54EC4fEA").unwrap();
+		let signer: EvmAddress = EvmAddress::from_str("0xdacf8edb52259cd904f2e1f55fc68290ee639499").unwrap();
 		let signature_data: SignatureData = SignatureData::Ethereum {
             signature: hex_literal::hex!(
-                "9db5c4c49903e1c3da9cfb4dc366fdb0a17b3843129c89b2e2bb311bbd3566400bd5f5ee1f4bf265f3c2d313f6fced6e33a74fe927d9f91ab9190dd86735b89a1b"
+                "003aaaed1e83de13291b302ee9e10979b43f42894a65fe847b0afcf14f973b85254beda2e3483f9884692a0dfbbe4f05f704f0856311ec4cd75afdfb6868cc031b"
             ).into(),
             signer,
             sig_type: EthEncodingType::Eip712,
