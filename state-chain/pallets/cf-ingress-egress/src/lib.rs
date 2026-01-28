@@ -47,9 +47,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
-	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
-	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
-	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	BlockWitnesserEvent, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter,
+	EgressId, EpochIndex, ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId,
+	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -3638,14 +3638,6 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 			);
 		}
 	}
-}
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub enum BlockWitnesserEvent<T> {
-	PreWitness(T),
-	Witness(T),
 }
 
 define_empty_struct! {
