@@ -53,13 +53,13 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
-		20,
 		21,
+		22,
 		wbtc_arbusdt_solusdt::NewAssetsMigration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<21, Pallet<T>>,
+	PlaceholderMigration<22, Pallet<T>>,
 );
 
 #[cfg(test)]

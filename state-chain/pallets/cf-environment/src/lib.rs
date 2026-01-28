@@ -71,7 +71,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(21);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
