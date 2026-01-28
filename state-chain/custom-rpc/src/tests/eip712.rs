@@ -28,7 +28,18 @@ fn test_process_deposits_call() {
 		},
 	));
 
-	assert_eq!(hash, "ee8c4e6d9fd7b7bb167f1703b32875e24ce29be859f123c5c95c6b97a8ef06cf");
+	assert_eq!(hash, "5e1c1cfb8456606615e323b994053074a3fc0c4a4ae22e5c073729303ecd69a8");
+}
+#[test]
+fn test_process_deposits_call_empty() {
+	let hash = test_build_eip712_typed_data(RuntimeCall::SolanaIngressEgress(
+		pallet_cf_ingress_egress::Call::process_deposits {
+			deposit_witnesses: vec![],
+			block_height: 6u64,
+		},
+	));
+
+	assert_eq!(hash, "789c70f8d5c2330d73911bd034de3dcf5fb1e199437c27d71d081ca90f2458b4");
 }
 
 #[test]
@@ -45,7 +56,7 @@ fn test_swap_request_call() {
 			dca_params: None,
 		}));
 
-	assert_eq!(hash, "43ad4628e1b07ca4887cb8cad3995898a744e68f4ee5d3f6488d3596e6186c3b");
+	assert_eq!(hash, "3a59241b00ef3a42f1b754953515b78cc7c30ca6825fb8841e82eced3372f8a1");
 }
 
 fn test_build_eip712_typed_data(call: RuntimeCall) -> String {
@@ -66,27 +77,12 @@ fn test_build_eip712_typed_data(call: RuntimeCall) -> String {
 
 	println!(
 		"Typed Data: {:#?}",
-		serde_json::to_writer_pretty(std::io::stdout(), &typed_data_result).unwrap()
-	);
-
-	let domain = ethereum_eip712::eip712::EIP712Domain {
-		name: Some(chainflip_network.as_str().to_string()),
-		version: Some(spec_version.to_string()),
-		chain_id: None,
-		verifying_contract: None,
-		salt: None,
-	};
-
-	hex::encode(ethereum_eip712::hash::keccak256(
-		ethereum_eip712::encode_eip712_using_type_info_fast(
-			pallet_cf_environment::submit_runtime_call::ChainflipExtrinsic {
-				call,
-				transaction_metadata,
-			},
-			domain,
+		serde_json::to_writer_pretty(
+			std::io::stdout(),
+			&to_ethers_typed_data(typed_data_result.clone()).unwrap()
 		)
 		.unwrap()
-		.encode_eip712()
-		.unwrap(),
-	))
+	);
+
+	hex::encode(ethereum_eip712::hash::keccak256(typed_data_result.encode_eip712().unwrap()))
 }
