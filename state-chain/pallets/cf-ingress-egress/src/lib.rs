@@ -61,13 +61,13 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, Hook,
 	IngressEgressFeeApi, IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider,
 	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, Validate, INITIAL_FLIP_FUNDING,
+	SwapRequestHandler, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use cf_utilities::define_empty_struct;
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
-	transactional, DefaultNoBound, OrdNoBound, PartialOrdNoBound,
+	transactional, OrdNoBound, PartialOrdNoBound,
 };
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
