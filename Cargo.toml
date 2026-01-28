@@ -137,8 +137,9 @@ pin-project = { version = "1.1.3" }
 predicates = { version = "3.0" }
 proc-macro2 = { version = "1.0.79" }
 prometheus = { version = "0.13.0", default-features = false }
-proptest = { version = "1.6" }
-proptest-derive = { version = "0.5.1" }
+# Lock these, some proptests break with newer versions
+proptest = { version = "=1.6" }
+proptest-derive = { version = "=0.5.1" }
 quickcheck = { version = "1.0.3" }
 quickcheck_macros = { version = "1" }
 quote = { version = "1.0.35" }
@@ -174,7 +175,8 @@ tokio = { version = "1.44.2" }
 tokio-stream = { version = "0.1.14" }
 toml = { version = "0.8.10" }
 tracing = { version = "0.1.37" }
-tracing-subscriber = { version = "0.3.19" }
+# See: https://github.com/tokio-rs/tracing/issues/3369
+tracing-subscriber = { version = "=0.3.19" }
 typenum = { version = "1.15" }
 url = { version = "2.4" }
 warp = { version = "0.3.6" }
