@@ -197,7 +197,16 @@ impls! {
 	}
 }
 
-// ------------------ witness rules -----------------
+// ------------------ rules hook implementations -----------------
+// We currently have two different rulesets for dispatching BW events:
+// 1. Just witness when it has reached the safety margin
+// 2. Prewitness when a deposit has age 0, and witness when it reached the safety margin
+//
+// The (1.) method is used by Arbitrum and Ethereum, and (2.) is used by Bitcoin witnessing.
+//
+// Here both rulesets are defined generically, such that BW instantiations have to reference either of
+// - JustWitnessAtSafetyMargin
+// - PrewitnessImmediatelyAndWitnessAtSafetyMargin
 
 define_empty_struct! {
 	pub struct JustWitnessAtSafetyMargin<BlockEntry>;
