@@ -24,7 +24,7 @@ pub use derive_common_traits;
 #[macro_export]
 macro_rules! define_empty_struct {
 	(
-		[$name:ident: $path:path, $($rest:tt)*]
+		[$name:ident $(: $path:path)?, $($rest:tt)*]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
 		$vis:vis struct $struct_name:ident
@@ -32,7 +32,7 @@ macro_rules! define_empty_struct {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
-			[$($names_and_bounds)* $name:$path, ]
+			[$($names_and_bounds)* $name $(:$path)?, ]
 			$vis struct $struct_name
 		}
 	};
@@ -51,7 +51,7 @@ macro_rules! define_empty_struct {
 	};
 
 	// handling the last entry
-	( [$name:ident: $path:path >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$path, >; ] $($rest)* }};
+	( [$name:ident $(: $path:path)? >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name $(:$path)?, >; ] $($rest)* }};
 	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
 

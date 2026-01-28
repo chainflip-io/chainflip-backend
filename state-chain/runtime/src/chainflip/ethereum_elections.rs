@@ -1,4 +1,4 @@
-use core::ops::{Range, RangeInclusive};
+use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
@@ -13,6 +13,7 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
+use cf_primitives::BlockWitnesserEvent;
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -30,7 +31,7 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
-			instance::{BlockWitnesserInstance, DerivedBlockWitnesser},
+			instance::{BlockWitnesserInstance, DerivedBlockWitnesser, JustWitnessAtSafetyMargin},
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
@@ -52,9 +53,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{
-	BlockWitnesserEvent, DepositWitness, ProcessedUpTo, VaultDepositWitness,
-};
+use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -143,31 +142,6 @@ impls! {
 /// Generating the state machine-based electoral system
 pub type EthereumBlockHeightWitnesserES =
 	StatemachineElectoralSystem<TypesFor<EthereumBlockHeightWitnesser>>;
-
-// ------------------------ generic deposit channels -------------------
-
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub enum DepositChannelEvent<T> {
-	PreWitness(T),
-	Witness(T),
-}
-
-pub struct JustWitnessAtSafetyMarginImpl<BlockEntry>(sp_std::marker::PhantomData<BlockEntry>);
-type JustWitnessAtSafetyMargin<BlockEntry> = TypesFor<JustWitnessAtSafetyMarginImpl<BlockEntry>>;
-
-impl<BlockEntry> Hook<((Range<u32>, Vec<BlockEntry>, u32), Vec<BlockWitnesserEvent<BlockEntry>>)>
-	for JustWitnessAtSafetyMargin<BlockEntry>
-{
-	fn run(&mut self, (ages, block_data, safety_margin): <((Range<u32>, Vec<BlockEntry>, u32), Vec<BlockWitnesserEvent<BlockEntry>>) as cf_traits::HookType>::Input) -> <((Range<u32>, BlockEntry, u32), Vec<BlockWitnesserEvent<BlockEntry>>) as cf_traits::HookType>::Output{
-		if ages.contains(&safety_margin) {
-			block_data.into_iter().map(BlockWitnesserEvent::Witness).collect()
-		} else {
-			Vec::new()
-		}
-	}
-}
 
 // ------------------------ deposit channel witnessing ---------------------------
 

@@ -1,15 +1,14 @@
 use crate::{
 	chainflip::{
 		bitcoin_elections::{
-			BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataDepositChannel,
-			BlockDataVaultDeposit, EgressBlockData,
+			BitcoinEgressWitnessing, BitcoinVaultDepositWitnessing, BlockDataVaultDeposit,
+			EgressBlockData,
 		},
 		elections::TypesFor,
 	},
 	BitcoinBroadcaster, BitcoinIngressEgress, Runtime,
 };
 use cf_chains::{btc::BlockNumber, instances::BitcoinInstance};
-use cf_primitives::chains::Bitcoin;
 use cf_traits::Hook;
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -18,10 +17,8 @@ use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
 	ExecuteHook, HookTypeFor, RulesHook,
 };
-use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+use pallet_cf_ingress_egress::VaultDepositWitness;
 use sp_std::{collections::btree_map::BTreeMap, vec, vec::Vec};
-
-use super::bitcoin_elections::BitcoinDepositChannelWitnessing;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
@@ -39,7 +36,6 @@ impl<T> BtcEvent<T> {
 	}
 }
 
-type TypesDepositChannelWitnessing = TypesFor<BitcoinDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<BitcoinVaultDepositWitnessing>;
 
 type TypesEgressWitnessing = TypesFor<BitcoinEgressWitnessing>;
@@ -64,29 +60,6 @@ fn dedup_events<T: Ord + Clone>(
 	}
 
 	chosen.into_values().collect()
-}
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
-	for TypesDepositChannelWitnessing
-{
-	fn run(&mut self, events: Vec<(BlockNumber, BtcEvent<DepositWitness<Bitcoin>>)>) {
-		let deduped_events = dedup_events(events);
-		for (block, event) in &deduped_events {
-			match event {
-				BtcEvent::PreWitness(deposit) => {
-					let _ = BitcoinIngressEgress::process_channel_deposit_prewitness(
-						deposit.clone(),
-						*block,
-					);
-				},
-				BtcEvent::Witness(deposit) => {
-					BitcoinIngressEgress::process_channel_deposit_full_witness(
-						deposit.clone(),
-						*block,
-					);
-				},
-			}
-		}
-	}
 }
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(
@@ -139,32 +112,6 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 				},
 			}
 		}
-	}
-}
-
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, RulesHook>> for TypesDepositChannelWitnessing {
-	fn run(
-		&mut self,
-		(age, block_data, safety_margin): (Range<u32>, BlockDataDepositChannel, u32),
-	) -> Vec<BtcEvent<DepositWitness<Bitcoin>>> {
-		let mut results: Vec<BtcEvent<DepositWitness<Bitcoin>>> = vec![];
-		if age.contains(&0u32) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|deposit_witness| BtcEvent::PreWitness(deposit_witness.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		if age.contains(&safety_margin) {
-			results.extend(
-				block_data
-					.iter()
-					.map(|deposit_witness| BtcEvent::Witness(deposit_witness.clone()))
-					.collect::<Vec<_>>(),
-			)
-		}
-		results
 	}
 }
 

@@ -602,3 +602,13 @@ pub enum IngressOrEgress {
 	Egress,
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
 }
+
+// ------ election based witnessing ------
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BlockWitnesserEvent<T> {
+	PreWitness(T),
+	Witness(T),
+}
