@@ -329,7 +329,7 @@ export class ChainflipIO<Requirements> {
   ): Promise<z.infer<Schema>> {
     return this.runExclusively('expectEvent', async () => {
       this.debug(`Expecting event ${description.name} in block ${this.lastIoBlockHeight}`);
-      return findOneEventOfMany(
+      const result = await findOneEventOfMany(
         this.logger,
         { event: description },
         {
@@ -337,6 +337,7 @@ export class ChainflipIO<Requirements> {
           endBeforeBlock: this.lastIoBlockHeight + 1,
         },
       );
+      return result.data;
     });
   }
 
