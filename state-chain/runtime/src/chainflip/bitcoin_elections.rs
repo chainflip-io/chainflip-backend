@@ -15,7 +15,7 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	Bitcoin, Chain, DepositChannel,
 };
-use cf_primitives::{AccountId, BlockWitnesserEvent, ChannelId};
+use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{hook_test_utils::EmptyHook, Chainflip, Hook};
 use cf_utilities::derive_common_traits;
@@ -151,7 +151,6 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 	type Runtime = Runtime;
 	type Chain = BitcoinChain;
 	type BlockEntry = DepositWitness<Bitcoin>;
-	type Event = BlockWitnesserEvent<DepositWitness<Bitcoin>>;
 	type ElectionProperties = Vec<DepositChannel<Bitcoin>>;
 	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
 	type RulesHook = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;

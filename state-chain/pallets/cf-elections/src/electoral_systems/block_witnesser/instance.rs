@@ -3,6 +3,7 @@ use cf_traits::Chainflip;
 use cf_utilities::impls;
 use core::ops::Range;
 use frame_support::{pallet_prelude::*, DefaultNoBound};
+use sp_std::collections::btree_map::BTreeMap;
 
 use frame_system::pallet_prelude::BlockNumberFor;
 use serde::{Deserialize, Serialize};
@@ -36,13 +37,12 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 
 	type Chain: ChainTypes;
 	type BlockEntry: BlockDataTrait;
-	type Event: CommonTraits + Ord;
 	type ElectionProperties: MaybeArbitrary + CommonTraits;
 
-	type ExecuteHook: Hook<((Self::Event, ChainBlockNumberOf<Self::Chain>), ())>
+	type ExecuteHook: Hook<((BlockWitnesserEvent<Self::BlockEntry>, ChainBlockNumberOf<Self::Chain>), ())>
 		+ Default
 		+ CommonTraits;
-	type RulesHook: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<Self::Event>)>
+	type RulesHook: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<BlockWitnesserEvent<Self::BlockEntry>>)>
 		+ Default
 		+ CommonTraits;
 
@@ -69,16 +69,32 @@ impls! {
 	for DerivedBlockWitnesser<I> where (I: BlockWitnesserInstance):
 
 	impl Hook<HookTypeFor<Self, ExecuteHook>> {
-		fn run(&mut self, input: Vec<(ChainBlockNumberOf<I::Chain>, I::Event)>) {
-			// TODO: deduplicate!
-			for (block_height, event) in input {
+		fn run(&mut self, all_events: Vec<(ChainBlockNumberOf<I::Chain>, BlockWitnesserEvent<I::BlockEntry>)>) {
+
+			// ------ deduplicate events -------
+			let mut chosen_events: BTreeMap<I::BlockEntry, _> = BTreeMap::new();
+
+			for (block_height, event) in all_events {
+				let witness = event.inner_witness().clone();
+
+				// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
+				if !chosen_events.contains_key(&witness) ||
+					(matches!(chosen_events.get(&witness), Some((_, BlockWitnesserEvent::PreWitness(_)))) &&
+						matches!(event, BlockWitnesserEvent::Witness(_)))
+				{
+					chosen_events.insert(witness, (block_height, event));
+				}
+			}
+
+			// ------ execute events -------
+			for (block_height, event) in chosen_events.into_values() {
 				self.execute.run((event, block_height));
 			}
 		}
 	}
 
 	impl Hook<HookTypeFor<Self, RulesHook>> {
-		fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<I::Event> {
+		fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<BlockWitnesserEvent<I::BlockEntry>> {
 			self.rules.run(input)
 		}
 	}
@@ -96,7 +112,7 @@ impls! {
 	impl BWProcessorTypes {
 		type Chain = I::Chain;
 		type BlockData = Vec<I::BlockEntry>;
-		type Event = I::Event;
+		type Event = BlockWitnesserEvent<I::BlockEntry>;
 		type Rules = Self;
 		type Execute = Self;
 		type DebugEventHook = EmptyHook;
@@ -179,8 +195,6 @@ impls! {
 			I::processed_up_to(input);
 		}
 	}
-
-
 }
 
 // ------------------ witness rules -----------------

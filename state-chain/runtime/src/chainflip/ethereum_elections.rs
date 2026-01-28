@@ -13,7 +13,6 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
-use cf_primitives::BlockWitnesserEvent;
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -147,16 +146,12 @@ pub type EthereumBlockHeightWitnesserES =
 
 impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	const BWNAME: &'static str = "DepositChannel";
-
+	type Runtime = Runtime;
 	type Chain = EthereumChain;
 	type BlockEntry = DepositWitness<Ethereum>;
-	type Event = BlockWitnesserEvent<DepositWitness<Ethereum>>;
 	type ElectionProperties = Vec<DepositChannel<Ethereum>>;
-
 	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
 	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
-
-	type Runtime = Runtime;
 
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		EthereumIngressEgress::active_deposit_channels_at(

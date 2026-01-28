@@ -612,3 +612,10 @@ pub enum BlockWitnesserEvent<T> {
 	PreWitness(T),
 	Witness(T),
 }
+impl<T> BlockWitnesserEvent<T> {
+	pub fn inner_witness(&self) -> &T {
+		match self {
+			BlockWitnesserEvent::PreWitness(w) | BlockWitnesserEvent::Witness(w) => w,
+		}
+	}
+}
