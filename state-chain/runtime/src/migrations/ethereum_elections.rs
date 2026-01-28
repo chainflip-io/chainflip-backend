@@ -1,4 +1,6 @@
-use crate::{chainflip::ethereum_elections::ETHEREUM_MAINNET_SAFETY_BUFFER, *};
+#[cfg(feature = "try-runtime")]
+use crate::chainflip::ethereum_elections::ETHEREUM_MAINNET_SAFETY_BUFFER;
+use crate::*;
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
 use crate::chainflip::ethereum_elections;
