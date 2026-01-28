@@ -74,6 +74,14 @@ type Version = SemVer;
 
 type Ed25519Signature = ed25519::Signature;
 
+type AuctionOutcomeWithDelegators<T> = (
+	AuctionOutcome<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
+	BTreeMap<
+		<T as frame_system::Config>::AccountId,
+		DelegationSnapshot<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
+	>,
+);
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
 	/// Note the `min_stake` is in whole FLIP, not flipperinos.
@@ -548,7 +556,7 @@ pub mod pallet {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
-				RotationPhase::KeygensInProgress(mut rotation_state) => {
+				RotationPhase::KeygensInProgress( rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::KeyRotator::status() {
 						AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete) => {
@@ -1715,13 +1723,7 @@ impl<T: Config> Pallet<T> {
 		auction_bids: impl Fn(
 			&BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
 		) -> Vec<Bid<T::AccountId, T::Amount>>,
-	) -> Result<
-		(
-			AuctionOutcome<T::AccountId, T::Amount>,
-			BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
-		),
-		AuctionError,
-	> {
+	) -> Result<AuctionOutcomeWithDelegators<T>, AuctionError> {
 		let mut current_outcome = resolver.resolve_auction(auction_bids(&delegation_snapshots))?;
 		loop {
 			let old_snapshots = delegation_snapshots.clone();
@@ -1892,16 +1894,8 @@ impl<T: Config> Pallet<T> {
 		mut rotation_state: RuntimeRotationState<T>,
 		offenders: &BTreeSet<ValidatorIdOf<T>>,
 		context: &'static str,
-	) -> Result<
-		(
-			RuntimeRotationState<T>,
-			Option<(
-				AuctionOutcome<T::AccountId, T::Amount>,
-				BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
-			)>,
-		),
-		RotationError,
-	> {
+	) -> Result<(RuntimeRotationState<T>, Option<AuctionOutcomeWithDelegators<T>>), RotationError>
+	{
 		rotation_state.ban(offenders.clone());
 		let mut delegation_snapshots: BTreeMap<
 			T::AccountId,
@@ -1932,13 +1926,7 @@ impl<T: Config> Pallet<T> {
 	fn re_resolve_auction_after_ban(
 		banned: &BTreeSet<ValidatorIdOf<T>>,
 		delegation_snapshots: BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
-	) -> Result<
-		(
-			AuctionOutcome<T::AccountId, T::Amount>,
-			BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
-		),
-		AuctionError,
-	> {
+	) -> Result<AuctionOutcomeWithDelegators<T>, AuctionError> {
 		// Get all validators that are in snapshots (as validators, not delegators)
 		let managed_validators: BTreeSet<_> = delegation_snapshots
 			.values()
@@ -1996,16 +1984,16 @@ impl<T: Config> Pallet<T> {
 				Self::current_authority_count(),
 		);
 
-		if (candidates.len() as u32) < min_size {
-			return Err(RotationError::NotEnoughCandidates {
-				candidates: candidates.len() as u32,
-				min_size,
-			})
-		} else {
+		if (candidates.len() as u32) >= min_size {
 			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 			Ok(())
+		} else {
+			Err(RotationError::NotEnoughCandidates {
+				candidates: candidates.len() as u32,
+				min_size,
+			})
 		}
 	}
 
