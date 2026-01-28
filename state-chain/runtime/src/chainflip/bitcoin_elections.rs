@@ -29,7 +29,7 @@ use pallet_cf_elections::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
-			BlockHeightWitnesserSettings, ChainProgress, ChainTypes, ReorgHook,
+			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -162,11 +162,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 		.deposit_channel_witnessing_enabled
 	}
 
-	fn election_properties(
-		height: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<
-			Self::Chain,
-		>,
-	) -> Self::ElectionProperties {
+	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		BitcoinIngressEgress::active_deposit_channels_at(
 			// we advance by SAFETY_BUFFER before checking opened_at
 			height.saturating_forward(BITCOIN_MAINNET_SAFETY_BUFFER as usize),
@@ -178,11 +174,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 		.collect()
 	}
 
-	fn processed_up_to(
-		up_to: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<
-			Self::Chain,
-		>,
-	) {
+	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
 		// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks
 		// have been additionally processed.
 		ProcessedUpTo::<Runtime, BitcoinInstance>::set(
@@ -246,86 +238,47 @@ pub type BitcoinDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct BitcoinVaultDepositWitnessing;
 
-type ElectionPropertiesVaultDeposit = Vec<(DepositAddress, AccountId, ChannelId)>;
-pub(crate) type BlockDataVaultDeposit = Vec<VaultDepositWitness<Runtime, BitcoinInstance>>;
+impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
+	const BWNAME: &'static str = "VaultDeposit";
+	type Runtime = Runtime;
+	type Chain = BitcoinChain;
+	type BlockEntry = VaultDepositWitness<Runtime, BitcoinInstance>;
+	type ElectionProperties = Vec<(DepositAddress, AccountId, ChannelId)>;
+	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
+	type RulesHook = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
-impls! {
-	for TypesFor<BitcoinVaultDepositWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = BitcoinChain;
-
-		type BlockData = BlockDataVaultDeposit;
-
-		type Event = BtcEvent<VaultDepositWitness<Runtime, BitcoinInstance>>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "VaultDeposit";
+	fn election_properties(_height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
+		// WARNING: If a private broker channel is closed by the broker while safe mode is
+		// activated, we will miss vault deposits to that channel that happened during safe mode.
+		pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::iter()
+			.flat_map(|(broker_id, channel_id)| {
+				derive_current_and_previous_epoch_private_btc_vaults(channel_id)
+					.map_err(|err| {
+						log_or_panic!("Error while deriving private BTC addresses: {err:#?}")
+					})
+					.ok()
+					.into_iter()
+					.flatten()
+					.map(move |address| (address, broker_id.clone(), channel_id))
+			})
+			.collect::<Vec<_>>()
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ElectionPropertiesVaultDeposit;
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
+		>>::get()
+		.vault_deposit_witnessing_enabled
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<btc::Hash>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
-				pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.vault_deposit_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// implementation of reading vault hook
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: BlockNumber) -> ElectionPropertiesVaultDeposit {
-			pallet_cf_swapping::BrokerPrivateBtcChannels::<Runtime>::iter()
-				.flat_map(|(broker_id, channel_id)| {
-					derive_current_and_previous_epoch_private_btc_vaults(channel_id)
-						.map_err(|err| {
-							log_or_panic!("Error while deriving private BTC addresses: {err:#?}")
-						})
-						.ok()
-						.into_iter()
-						.flatten()
-						.map(move |address| (address, broker_id.clone(), channel_id))
-				})
-				.collect::<Vec<_>>()
-		}
+	fn processed_up_to(_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type BitcoinVaultDepositWitnessingES =
-	StatemachineElectoralSystem<TypesFor<BitcoinVaultDepositWitnessing>>;
+	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>>>;
 
 // ------------------------ egress witnessing ---------------------------
 /// The electoral system for egress witnessing
@@ -600,8 +553,8 @@ pub struct BitcoinElectoralSystemConfiguration;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
-	DepositChannels(Vec<DepositChannel<Bitcoin>>),
-	Vaults(ElectionPropertiesVaultDeposit),
+	DepositChannels(<DerivedBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
+	Vaults(<DerivedBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),
 	Egresses(ElectionPropertiesEgressWitnessing),
 }
 

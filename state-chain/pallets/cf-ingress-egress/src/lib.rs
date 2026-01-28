@@ -3662,3 +3662,25 @@ impl<T: Config<I>, I: 'static>
 		}
 	}
 }
+
+impl<T: Config<I>, I: 'static>
+	Hook<((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ())>
+	for PalletHooks<T, I>
+{
+	fn run(&mut self, (event, block_height): <((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Input) -> <((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Output{
+		match event {
+			BlockWitnesserEvent::PreWitness(deposit) => {
+				Pallet::<T, I>::process_vault_swap_request_prewitness(
+					block_height,
+					deposit.clone(),
+				);
+			},
+			BlockWitnesserEvent::Witness(deposit) => {
+				Pallet::<T, I>::process_vault_swap_request_full_witness_inner(
+					block_height,
+					deposit.clone(),
+				);
+			},
+		}
+	}
+}
