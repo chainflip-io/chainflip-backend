@@ -127,3 +127,11 @@ macro_rules! impls {
     };
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
+
+#[macro_export]
+/// This macro prevents `cargo fmt` from messing up the formatting.
+macro_rules! cargo_fmt_ignore {
+	($($tokens:tt)*) => {
+		$($tokens)*
+	};
+}

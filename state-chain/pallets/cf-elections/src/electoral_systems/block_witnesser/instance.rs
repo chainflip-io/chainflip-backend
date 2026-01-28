@@ -139,51 +139,6 @@ impls! {
 		type ElectoralSettings = ();
 	}
 
-	// --------------------- Interaction with deposit channels --------------------- //
-
-	// We apply the SAFETY_BUFFER before we fetch the election_properties,
-	// this makes sure that if txs that have been submitted post channel creation,
-	// but due to reorg ended up in an external chain block that's below the channels `opened_at`,
-	// are still witnessed. (See PRO-2306).
-	//
-	// We also apply SAFETY_BUFFER before expiring a deposit channel, in case there are reorgs
-	// which reorder transactions such they move back by a few blocks and are now within the valid
-	// range of a deposit channel.
-	//
-	// Thus, we have the following setup:
-	//
-	//                                   /- All deposits that happen in the SAFETY_BUFFER and are reorged
-	//                                   |  to *before* the expiry of the previous channel are going to be
-	//                                   |  witnessed for it.
-	//                                   |
-	//                                   |  All deposits that get into blocks after expire_at, inside the SAFETY_BUFFER,
-	//                                   |  are not going to be witnessed for any channel.
-	//                                   |
-	//                                   |                 /- Deposits that are made into the new channel could be reorged
-	//                                   |                 |  to blocks that are before opened_at. We apply the SAFETY_BUFFER
-	//                                   |                 |  and witness txs for a deposit channel even if they occur in blocks
-	//                                   |                 |  before opened_at.
-	//                                   |                 |
-	//                                   |  |<------------------------------------...->
-	//                                   v  |<-- SAFETY -->|
-	// |---- previous channel ----|--------------|---------|---- new channel -----...->
-	//                            |<-- SAFETY -->|         ^ opened_at
-	//                            ^ expire_at
-	//
-	// Critical case: we want to ensure that no deposits are double-witnessed. Let's say a boosted deposit for the previous
-	// channel is witnessed before expire_at of that channel. The deposit is ingressed. We now have a reorg which moves the
-	// deposit behind expire_at. In the meantime, the chain progresses SAFETY_BUFFER blocks, the channel is recycled and reused.
-	// Witnessing for the new channel begins SAFETY_BUFFER before opened_at, and thus includes the previously (reorged) deposit.
-	// Now let's say we have another reorg, which makes us rewitness the block with the deposit. This election is going to have
-	// the new deposit channel in its election properties and thus will witness the tx again. We won't emit a PreWitness event
-	// though, since the tx was already prewitnessed and reorged, and the blockprocessor filters out the already emitted events.
-	// **BUT**: If there wasn't emitted a Witness event previously for this tx, then we will now emit a Witness event into the new
-	// channel!
-	//
-	// CONCLUSION: There has to be at least 2*SAFETY_BUFFER distance between `expire_at` of the previous channel and `opened_at` of the recycled
-	// channel.
-	//
-
 	impl Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
 		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) -> I::ElectionProperties {
 			I::election_properties(input)
@@ -204,7 +159,8 @@ impls! {
 //
 // The (1.) method is used by Arbitrum and Ethereum, and (2.) is used by Bitcoin witnessing.
 //
-// Here both rulesets are defined generically, such that BW instantiations have to reference either of
+// Here both rulesets are defined generically, such that BW instantiations just have to
+// reference either of:
 // - JustWitnessAtSafetyMargin
 // - PrewitnessImmediatelyAndWitnessAtSafetyMargin
 
