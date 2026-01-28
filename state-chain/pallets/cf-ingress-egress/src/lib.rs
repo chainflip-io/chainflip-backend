@@ -1170,22 +1170,29 @@ pub mod pallet {
 			// In some instances, like Solana, the channel lifetime is managed by the electoral
 			// system.
 			if T::MANAGE_CHANNEL_LIFETIME {
-				let addresses_to_recycle =
-					DepositChannelRecycleBlocks::<T, I>::mutate(|recycle_queue| {
+				let addresses_to_recycle = DepositChannelRecycleBlocks::<T, I>::mutate(
+					|recycle_queue| {
 						if recycle_queue.is_empty() {
 							vec![]
 						} else {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								if T::TargetChain::NAME == "Bitcoin" {
-									ProcessedUpTo::<T, I>::get()
-								} else {
-									T::ChainTracking::get_block_height()
+								match <T as Config<I>>::TargetChain::get() {
+									ForeignChain::Arbitrum |
+									ForeignChain::Bitcoin |
+									ForeignChain::Ethereum => ProcessedUpTo::<T, I>::get(),
+									ForeignChain::Assethub | ForeignChain::Polkadot =>
+										T::ChainTracking::get_block_height(),
+									ForeignChain::Solana => {
+										log_or_panic!("MANAGE_CHANNEL_LIFETIME = false for solana, this branch should be unreachable");
+										Default::default()
+									},
 								},
 							)
 						}
-					});
+					},
+				);
 
 				// Add weight for the DepositChannelRecycleBlocks read/write plus the
 				// DepositChannelLookup read/writes in the for loop below
