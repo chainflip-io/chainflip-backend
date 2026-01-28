@@ -132,6 +132,13 @@ impl<Account: Ord + Clone + FullCodec + 'static, Bid: FullCodec + 'static>
 		}
 		DelegationSnapshots::<T>::insert(epoch_index, operator, self);
 	}
+
+	pub fn clear_epoch_registrations<T: Config<AccountId = Account, Amount = Bid>>(
+		epoch_index: EpochIndex,
+	) {
+		DelegationSnapshots::<T>::clear_prefix(epoch_index, u32::MAX, None);
+		ValidatorToOperator::<T>::clear_prefix(epoch_index, u32::MAX, None);
+	}
 }
 
 impl<Account, Bid> DelegationSnapshot<Account, Bid>
