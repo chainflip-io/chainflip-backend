@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_traits::{Hook, HookType, Validate};
 use core::ops::RangeInclusive;
 use enum_iterator::{all, Sequence};
 use itertools::Either;
@@ -501,18 +502,17 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 #[cfg(test)]
 pub mod tests {
+	use crate::electoral_systems::state_machine::core::TypesFor;
 	use proptest::prelude::{any, Just, Strategy};
 
 	use super::*;
-	use crate::electoral_systems::{
-		oracle_price::{
-			chainlink::{
-				get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
-			},
-			price::Fraction,
+	use crate::electoral_systems::oracle_price::{
+		chainlink::{
+			get_all_latest_prices_with_statechain_encoding, ChainlinkAssetpair, ChainlinkPrice,
 		},
-		state_machine::core::hook_test_utils::MockHook,
+		price::Fraction,
 	};
+	use cf_traits::hook_test_utils::MockHook;
 
 	pub struct Mock;
 	pub(crate) type MockTypes = TypesFor<Mock>;

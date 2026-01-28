@@ -58,15 +58,16 @@ use cf_traits::{
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
-	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
-	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, INITIAL_FLIP_FUNDING,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, Hook,
+	IngressEgressFeeApi, IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider,
+	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
+	SwapRequestHandler, SwapRequestType, Validate, INITIAL_FLIP_FUNDING,
 };
+use cf_utilities::define_empty_struct;
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
-	transactional, OrdNoBound, PartialOrdNoBound,
+	transactional, DefaultNoBound, OrdNoBound, PartialOrdNoBound,
 };
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -3628,6 +3629,37 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				fee.into(),
 			);
+		}
+	}
+}
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BlockWitnesserEvent<T> {
+	PreWitness(T),
+	Witness(T),
+}
+
+define_empty_struct! {
+	pub struct PalletHooks<T: Config<I>, I: 'static>;
+}
+
+impl<T: Config<I>, I: 'static>
+	Hook<((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ())>
+	for PalletHooks<T, I>
+{
+	fn run(&mut self, (event, block_height): <((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Input) -> <((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Output{
+		match event {
+			BlockWitnesserEvent::PreWitness(deposit_witness) => {
+				let _ = Pallet::<T, I>::process_channel_deposit_prewitness(
+					deposit_witness,
+					block_height,
+				);
+			},
+			BlockWitnesserEvent::Witness(deposit_witness) => {
+				Pallet::<T, I>::process_channel_deposit_full_witness(deposit_witness, block_height);
+			},
 		}
 	}
 }

@@ -53,7 +53,7 @@ sp-runtime = { workspace = true }
 cf-test-utilities = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, features = ["test"] }
 cf-chains = { workspace = true, features = ["test", "mocks"] }
-cf-traits = { workspace = true, features = ["mocks"] }
+cf-traits = { workspace = true, features = ["test", "mocks"] }
 rand = { workspace = true, features = ["std"] }
 proptest = { workspace = true}
 proptest-derive = { workspace = true }

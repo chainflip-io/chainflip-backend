@@ -6,9 +6,9 @@ use core::{
 use crate::electoral_systems::{
 	block_height_witnesser::{ChainBlockNumberOf, ChainTypes},
 	block_witnesser::state_machine::BWProcessorTypes,
-	state_machine::core::{Hook, Validate},
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, Validate};
 use cf_utilities::macros::*;
 use codec::{Decode, Encode};
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
@@ -278,10 +278,11 @@ pub(crate) mod tests {
 					RulesHook,
 				},
 			},
-			state_machine::core::{hook_test_utils::MockHook, Hook, TypesFor, Validate},
+			state_machine::core::TypesFor,
 		},
 		*,
 	};
+	use cf_traits::{hook_test_utils::MockHook, Hook};
 	use core::ops::Range;
 	use frame_support::{Deserialize, Serialize};
 	use proptest_derive::Arbitrary;
@@ -309,16 +310,14 @@ pub(crate) mod tests {
 		Witness(E),
 	}
 
-	impl<
-			Types: Validate + BWProcessorTypes<Event = MockBtcEvent<E>, BlockData = Vec<E>>,
-			E: Clone,
-		> Hook<HookTypeFor<Types, RulesHook>> for Types
+	impl<N: ChainBlockNumberTrait, H: ChainBlockHashTrait, D: BlockDataTrait>
+		Hook<HookTypeFor<TypesFor<(N, H, Vec<D>)>, RulesHook>> for TypesFor<(N, H, Vec<D>)>
 	{
 		fn run(
 			&mut self,
-			(age, block_data, safety_margin): (Range<u32>, Vec<E>, u32),
-		) -> Vec<MockBtcEvent<E>> {
-			let mut results: Vec<MockBtcEvent<E>> = vec![];
+			(age, block_data, safety_margin): (Range<u32>, Vec<D>, u32),
+		) -> Vec<MockBtcEvent<D>> {
+			let mut results: Vec<MockBtcEvent<D>> = vec![];
 			if age.contains(&0u32) {
 				results.extend(
 					block_data

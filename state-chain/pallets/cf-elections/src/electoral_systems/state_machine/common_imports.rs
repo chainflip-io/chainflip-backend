@@ -22,6 +22,5 @@ pub use proptest_derive::Arbitrary;
 // local
 pub use super::{
 	consensus::*,
-	core::*,
 	state_machine::{AbstractApi, Statemachine},
 };

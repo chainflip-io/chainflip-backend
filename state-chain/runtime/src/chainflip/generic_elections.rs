@@ -40,7 +40,7 @@ use pallet_cf_elections::{
 };
 
 use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
-use cf_traits::{impl_pallet_safe_mode, Chainflip, OraclePrice};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_systems::{
@@ -50,9 +50,8 @@ use pallet_cf_elections::{
 			CompositeRunner,
 		},
 		oracle_price::{consensus::OraclePriceConsensus, primitives::*, state_machine::*},
-		state_machine::{
-			core::Hook,
-			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
+		state_machine::state_machine_es::{
+			StatemachineElectoralSystem, StatemachineElectoralSystemTypes,
 		},
 	},
 	vote_storage, CorruptStorageError, ElectionIdentifierOf, InitialState, InitialStateOf,

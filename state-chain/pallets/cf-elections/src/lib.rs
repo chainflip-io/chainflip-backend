@@ -171,10 +171,7 @@ pub mod pallet {
 	use crate::electoral_system::ConsensusStatus;
 	pub use access_impls::RunnerStorageAccess;
 
-	use crate::{
-		electoral_system_runner::RunnerStorageAccessTrait,
-		electoral_systems::block_height_witnesser::CommonTraits,
-	};
+	use crate::electoral_system_runner::RunnerStorageAccessTrait;
 	use bitmap_components::ElectionBitmapComponents;
 	pub use electoral_system::{
 		AuthorityVoteOf, ConsensusVote, ConsensusVotes, ElectionIdentifierOf, ElectoralSystemTypes,

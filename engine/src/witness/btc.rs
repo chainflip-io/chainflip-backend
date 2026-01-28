@@ -23,14 +23,14 @@ use crate::{
 	btc::rpc::{BtcRpcApi, VerboseTransaction},
 	witness::{
 		btc::fees::predict_fees,
-		common::block_height::{witness_headers, HeaderClient},
+		common::block_height_witnesser::{witness_headers, HeaderClient},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
 use cf_chains::btc::{
 	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
 };
-use cf_primitives::{chains::Bitcoin, EpochIndex};
+use cf_primitives::EpochIndex;
 use futures_core::Future;
 
 use cf_utilities::task_scope::{self, Scope};
@@ -77,7 +77,7 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<BitcoinChain, Bitcoin> for BtcCachingClient {
+impl HeaderClient<BitcoinChain> for BtcCachingClient {
 	async fn best_block_header(&self) -> anyhow::Result<Header<BitcoinChain>> {
 		let best_hash = self.best_block_hash().await?;
 		let best_header = self.block_header(best_hash).await?;
@@ -128,7 +128,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 		_settings: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <BitcoinBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BitcoinBlockHeightWitnesserES>>, anyhow::Error> {
-		witness_headers::<BitcoinBlockHeightWitnesserES, _, BitcoinChain, Bitcoin>(
+		witness_headers::<BitcoinBlockHeightWitnesserES, _, BitcoinChain>(
 			&self.client,
 			properties,
 			BITCOIN_MAINNET_SAFETY_BUFFER,

@@ -17,7 +17,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::Chainflip;
+use cf_traits::{hook_test_utils::EmptyHook, Chainflip, Hook};
 use cf_utilities::derive_common_traits;
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -44,9 +44,8 @@ use pallet_cf_elections::{
 			CompositeRunner,
 		},
 		liveness::Liveness,
-		state_machine::{
-			core::{hook_test_utils::EmptyHook, Hook},
-			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
+		state_machine::state_machine_es::{
+			StatemachineElectoralSystem, StatemachineElectoralSystemTypes,
 		},
 		unsafe_median::{UnsafeMedian, UpdateFeeHook},
 	},
@@ -170,6 +169,7 @@ impls! {
 		type SafeModeEnabledHook = Self;
 		type ProcessedUpToHook = Self;
 		type ElectionTrackerDebugEventHook = EmptyHook;
+
 	}
 
 	/// Associating the state machine and consensus mechanism to the struct

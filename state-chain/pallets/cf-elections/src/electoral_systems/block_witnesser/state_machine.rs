@@ -1,5 +1,5 @@
 use super::{
-	super::state_machine::core::*,
+	super::state_machine::core::defx,
 	block_processor::BlockProcessorEvent,
 	primitives::{ElectionTracker, ElectionTrackerEvent, SafeModeStatus},
 };
@@ -7,19 +7,14 @@ use super::{
 use crate::electoral_systems::state_machine::state_machine::InputOf;
 use crate::{
 	electoral_systems::{
-		block_height_witnesser::{
-			ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes, CommonTraits,
-			MaybeArbitrary, TestTraits,
-		},
+		block_height_witnesser::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
 		block_witnesser::block_processor::BlockProcessor,
-		state_machine::{
-			core::Validate,
-			state_machine::{AbstractApi, Statemachine},
-		},
+		state_machine::state_machine::{AbstractApi, Statemachine},
 	},
 	generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, HookType, Validate};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
@@ -110,7 +105,7 @@ impl<T: BWProcessorTypes> HookType for HookTypeFor<T, DebugEventHook> {
 	type Output = ();
 }
 
-pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static;
+pub trait BlockDataTrait = CommonTraits + TestTraits + MaybeArbitrary + Ord + 'static + Send + Sync;
 pub trait BWProcessorTypes: Sized + 'static + Debug + Clone + Eq {
 	type Chain: ChainTypes;
 	type BlockData: BlockDataTrait;
@@ -493,10 +488,11 @@ pub mod tests {
 		electoral_systems::{
 			block_height_witnesser::{ChainBlockHashTrait, ChainBlockNumberTrait},
 			block_witnesser::primitives::STATIC_SAFETY_BUFFER_FOR_TESTS,
+			state_machine::core::TypesFor,
 		},
 		prop_do,
 	};
-	use hook_test_utils::*;
+	use cf_traits::hook_test_utils::*;
 
 	fn generate_state<
 		T: BWTypes<SafeModeEnabledHook = MockHook<HookTypeFor<T, SafeModeEnabledHook>>>,
