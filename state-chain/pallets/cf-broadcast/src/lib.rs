@@ -645,7 +645,16 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			Self::egress_success(origin, tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref)
+			Self::egress_success(
+				origin,
+				TransactionConfirmation {
+					tx_out_id,
+					signer_id,
+					tx_fee,
+					tx_metadata,
+					transaction_ref,
+				},
+			)
 		}
 
 		#[pallet::weight(T::WeightInfo::stress_test(*how_many))]
@@ -791,11 +800,13 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn egress_success(
 		origin: OriginFor<T>,
-		tx_out_id: TransactionOutIdFor<T, I>,
-		signer_id: SignerIdFor<T, I>,
-		tx_fee: TransactionFeeFor<T, I>,
-		tx_metadata: TransactionMetadataFor<T, I>,
-		transaction_ref: TransactionRefFor<T, I>,
+		TransactionConfirmation {
+			tx_out_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			transaction_ref,
+		}: TransactionConfirmation<T, I>,
 	) -> DispatchResult {
 		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 			.ok_or(Error::<T, I>::InvalidPayload)?;

@@ -65,14 +65,9 @@ impl Hook<HookTypeFor<TypesEgressWitnessing, ExecuteHook>> for TypesEgressWitnes
 			match event {
 				BtcEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress*/ },
 				BtcEvent::Witness(egress) => {
-					#[expect(clippy::unit_arg)]
 					if let Err(err) = BitcoinBroadcaster::egress_success(
 						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-						egress.tx_out_id,
-						egress.signer_id.clone(),
-						egress.tx_fee,
-						egress.tx_metadata,
-						egress.transaction_ref,
+						egress.clone(),
 					) {
 						log::error!(
 							"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",

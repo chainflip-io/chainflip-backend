@@ -16,6 +16,7 @@ use cf_traits::{FundAccount, FundingSource, Hook};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
 	ExecuteHook, HookTypeFor, RulesHook,
 };
@@ -142,11 +143,13 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						} => {
 							if let Err(err) = EthereumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-								tx_out_id,
-								signer_id,
-								tx_fee,
-								tx_metadata,
-								transaction_ref,
+								TransactionConfirmation {
+									tx_out_id,
+									signer_id,
+									tx_fee,
+									tx_metadata,
+									transaction_ref,
+								},
 							) {
 								log::error!(
 									"Failed to execute Ethereum egress success: TxOutId: {:?}, Error: {:?}",
