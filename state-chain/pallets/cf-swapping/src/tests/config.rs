@@ -181,32 +181,8 @@ fn max_swap_amount_can_be_removed() {
 		assert_eq!(
 			ScheduledSwaps::<Test>::get(),
 			BTreeMap::from([
-				(
-					1.into(),
-					Swap::new(
-						1.into(),
-						1.into(),
-						from,
-						to,
-						max_swap,
-						None,
-						vec![ZERO_NETWORK_FEES],
-						execute_at
-					),
-				),
-				(
-					2.into(),
-					Swap::new(
-						2.into(),
-						2.into(),
-						from,
-						to,
-						amount,
-						None,
-						vec![ZERO_NETWORK_FEES],
-						execute_at
-					),
-				),
+				(1.into(), Swap::new(1.into(), 1.into(), from, to, max_swap, None, execute_at),),
+				(2.into(), Swap::new(2.into(), 2.into(), from, to, amount, None, execute_at),),
 			])
 		);
 		// No no funds are confiscated.
@@ -283,7 +259,6 @@ fn can_swap_below_max_amount() {
 					to,
 					amount,
 					None,
-					vec![ZERO_NETWORK_FEES],
 					System::block_number() + SWAP_DELAY_BLOCKS as u64
 				)
 			)])

@@ -1005,7 +1005,6 @@ mod oracle_swaps {
 							max_oracle_price_slippage,
 						},
 					}),
-					vec![],
 					Default::default(),
 				),
 

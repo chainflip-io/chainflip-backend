@@ -1121,3 +1121,149 @@ fn dca_with_one_block_interval_fok() {
 			assert_eq!(Swapping::inspect_swap_request(SWAP_REQUEST_ID), None);
 		});
 }
+
+#[test]
+fn dca_with_one_block_interval_with_network_fee_minimum() {
+	const ONE_BLOCK_CHUNK_INTERVAL: u32 = 1;
+	const NUMBER_OF_CHUNKS: u32 = 4;
+	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
+
+	const NETWORK_FEE: Permill = Permill::from_percent(1);
+	const NETWORK_FEE_MINIMUM: AssetAmount = 200;
+
+	const CHUNK_BROKER_FEE: AssetAmount = 10;
+	const CHUNK_1_OUTPUT: AssetAmount =
+		(CHUNK_AMOUNT - CHUNK_BROKER_FEE - NETWORK_FEE_MINIMUM) * DEFAULT_SWAP_RATE;
+	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + ONE_BLOCK_CHUNK_INTERVAL as u64;
+	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + ONE_BLOCK_CHUNK_INTERVAL as u64;
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: NETWORK_FEE_MINIMUM,
+			});
+
+			insert_swaps(&[TestSwapParams::new(
+				Some(DcaParameters {
+					number_of_chunks: NUMBER_OF_CHUNKS,
+					chunk_interval: ONE_BLOCK_CHUNK_INTERVAL,
+				}),
+				Some(TestRefundParams {
+					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
+					min_output: CHUNK_1_OUTPUT,
+				}),
+				false, // no ccm
+			)]);
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					swap_request_id: SWAP_REQUEST_ID,
+					input_amount: INPUT_AMOUNT,
+					dca_parameters: Some(DcaParameters {
+						number_of_chunks: NUMBER_OF_CHUNKS,
+						chunk_interval: ONE_BLOCK_CHUNK_INTERVAL
+					}),
+					..
+				})
+			);
+
+			// Both chunks should be scheduled at the same time with a 1 block interval
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(1),
+					input_amount: CHUNK_AMOUNT,
+					execute_at: CHUNK_1_BLOCK,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(2),
+					input_amount: CHUNK_AMOUNT,
+					execute_at: CHUNK_2_BLOCK,
+					..
+				})
+			);
+
+			assert_eq!(
+				Swapping::inspect_swap_request(SWAP_REQUEST_ID).unwrap(),
+				SwapExecutionProgress {
+					remaining_input_amount: INPUT_AMOUNT,
+					accumulated_output_amount: 0
+				}
+			);
+		})
+		.then_process_blocks_until_block(CHUNK_1_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(1),
+					network_fee: NETWORK_FEE_MINIMUM,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapScheduled {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(3),
+					input_amount: CHUNK_AMOUNT,
+					execute_at: CHUNK_3_BLOCK,
+					..
+				})
+			);
+
+			assert_eq!(
+				Swapping::inspect_swap_request(SWAP_REQUEST_ID).unwrap(),
+				SwapExecutionProgress {
+					remaining_input_amount: INPUT_AMOUNT - CHUNK_AMOUNT,
+					accumulated_output_amount: CHUNK_1_OUTPUT
+				}
+			);
+
+			// Check that the minimum network fee was collected
+			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
+		})
+		.then_process_blocks_until_block(CHUNK_2_BLOCK)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					swap_id: SwapId(2),
+					// The second chunk should not collect any additional network fee
+					network_fee: 0,
+					..
+				})
+			);
+
+			// Confirm no additional network fee was collected
+			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
+		})
+		.then_process_blocks_until_block(CHUNK_3_BLOCK)
+		.then_execute_with(|_| {
+			// The third chunk should collect network fee based on the rate again
+			let expected_fee = NETWORK_FEE * CHUNK_AMOUNT;
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					swap_request_id: SWAP_REQUEST_ID,
+					network_fee,
+					..
+				}) if *network_fee == expected_fee
+			);
+
+			// Confirm the additional network fee was collected
+			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM + expected_fee);
+		});
+}

@@ -120,7 +120,6 @@ fn test_buy_back_flip() {
 				Asset::Flip,
 				NETWORK_FEE_AMOUNT,
 				None,
-				[],
 				System::block_number() + SWAP_DELAY_BLOCKS as u64
 			)
 		);
@@ -1380,5 +1379,76 @@ fn test_swap_with_custom_network_fee_for_asset() {
 					..
 				}) if *network_fee == expected_fee && *output_amount == INPUT_AMOUNT - expected_fee
 			);
+		});
+}
+
+#[test]
+fn test_network_fee_tracking_when_rescheduled() {
+	const INPUT_ASSET: Asset = Asset::Flip;
+	const OUTPUT_ASSET: Asset = Asset::Usdc;
+	const INPUT_AMOUNT: AssetAmount = 1_000;
+	const RETRY_BLOCK: u64 =
+		INIT_BLOCK + (SWAP_DELAY_BLOCKS + DEFAULT_SWAP_RETRY_DELAY_BLOCKS) as u64;
+	const NETWORK_FEE: Permill = Permill::from_percent(1);
+	// Set a minimum network fee that will be enforced
+	const NETWORK_FEE_MINIMUM: AssetAmount = 100;
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE,
+				minimum: NETWORK_FEE_MINIMUM,
+			});
+
+			Swapping::init_swap_request(
+				INPUT_ASSET,
+				INPUT_AMOUNT,
+				OUTPUT_ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::Egress {
+						ccm_deposit_metadata: None,
+						output_address: ForeignChainAddress::Eth(Default::default()),
+					},
+				},
+				vec![Beneficiary { account: BROKER, bps: 10 }].try_into().unwrap(),
+				Some(PriceLimitsAndExpiry {
+					expiry_behaviour: ExpiryBehaviour::NoExpiry,
+					// Setting an min price that will trigger a reschedule
+					min_price: Price::from_usd_fine_amount(DEFAULT_SWAP_RATE * 2),
+					max_oracle_price_slippage: None,
+				}),
+				None,
+				SwapOrigin::Internal,
+			);
+
+			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+		})
+		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_execute_with(|_| {
+			// Check that the swap was rescheduled due to price limits
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRescheduled { execute_at: RETRY_BLOCK, .. }),
+			);
+
+			// Check that no network fee was taken yet
+			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+
+			// Change the swap rate so that the swap can proceed next try
+			SwapRate::set((DEFAULT_SWAP_RATE * 4) as f64);
+		})
+		.then_process_blocks_until_block(RETRY_BLOCK)
+		.then_execute_with(|_| {
+			// Check that the network fee was still applied correctly after rescheduling
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapExecuted {
+					input_amount: INPUT_AMOUNT,
+					network_fee,
+					..
+				}) if *network_fee == NETWORK_FEE_MINIMUM
+			);
+
+			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
 		});
 }
