@@ -80,7 +80,7 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -206,7 +206,7 @@ impl<T: Config> SwapState<T> {
 	}
 }
 
-#[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub enum FeeType<T: Config> {
 	NetworkFee(NetworkFeeTracker),
@@ -221,7 +221,7 @@ pub struct FeeRateAndMinimum {
 	pub minimum: AssetAmount,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct NetworkFeeTracker {
 	network_fee: FeeRateAndMinimum,
 	// Total amount of stable asset that has been processed so far (before fees)
@@ -268,7 +268,6 @@ pub struct Swap<T: Config> {
 	pub from: Asset,
 	pub to: Asset,
 	input_amount: AssetAmount,
-	fees: Vec<FeeType<T>>,
 	refund_params: Option<SwapRefundParameters>,
 	execute_at: BlockNumberFor<T>,
 }
@@ -302,19 +301,9 @@ impl<T: Config> Swap<T> {
 		to: Asset,
 		input_amount: AssetAmount,
 		refund_params: Option<SwapRefundParameters>,
-		fees: impl IntoIterator<Item = FeeType<T>>,
 		execute_at: BlockNumberFor<T>,
 	) -> Self {
-		Self {
-			swap_id,
-			swap_request_id,
-			from,
-			to,
-			input_amount,
-			fees: fees.into_iter().collect(),
-			refund_params,
-			execute_at,
-		}
+		Self { swap_id, swap_request_id, from, to, input_amount, refund_params, execute_at }
 	}
 }
 
@@ -444,19 +433,20 @@ impl DcaState {
 }
 
 #[expect(clippy::large_enum_variant)]
-#[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 enum SwapRequestState<T: Config> {
 	UserSwap {
 		price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
+		fees: Vec<FeeType<T>>,
 	},
 	NetworkFee,
 	IngressEgressFee,
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 struct SwapRequest<T: Config> {
 	id: SwapRequestId,
@@ -1850,30 +1840,53 @@ pub mod pallet {
 					"All swaps should have Stable amount set here"
 				);
 
-				for fee_type in swap.swap.fees.iter_mut() {
-					let remaining_amount = match fee_type {
-						FeeType::NetworkFee(fee_tracker) => {
-							let FeeTaken { remaining_amount, fee } =
-								fee_tracker.take_fee(swap.stable_amount.unwrap_or_default());
-							swap.network_fee_taken = Some(fee);
-							total_network_fee_taken.saturating_accrue(fee);
-							remaining_amount
-						},
-						FeeType::BrokerFee(beneficiaries) => {
-							let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
-								swap.stable_amount.unwrap_or_default(),
-								beneficiaries,
-							);
-							swap.broker_fee_taken = Some(fee);
-							remaining_amount
-						},
+				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
+					let fees = if let Some(swap_request) = swap_request {
+						match &mut swap_request.state {
+							SwapRequestState::UserSwap { fees, .. } => fees,
+							SwapRequestState::IngressEgressFee =>
+							// Disposable fee tracker with no minimum
+								&mut vec![FeeType::NetworkFee(
+									NetworkFeeTracker::new_without_minimum(
+										Pallet::<T>::get_network_fee_for_swap(
+											swap.input_asset(),
+											swap.output_asset(),
+											false,
+										),
+									),
+								)],
+							_ => &mut vec![],
+						}
+					} else {
+						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
+						&mut vec![]
 					};
-					swap.stable_amount = Some(remaining_amount);
-				}
 
-				if swap.output_asset() == STABLE_ASSET {
-					swap.final_output = swap.stable_amount;
-				}
+					for fee_type in fees.iter_mut() {
+						let remaining_amount = match fee_type {
+							FeeType::NetworkFee(fee_tracker) => {
+								let FeeTaken { remaining_amount, fee } =
+									fee_tracker.take_fee(swap.stable_amount.unwrap_or_default());
+								swap.network_fee_taken = Some(fee);
+								total_network_fee_taken.saturating_accrue(fee);
+								remaining_amount
+							},
+							FeeType::BrokerFee(beneficiaries) => {
+								let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
+									swap.stable_amount.unwrap_or_default(),
+									beneficiaries,
+								);
+								swap.broker_fee_taken = Some(fee);
+								remaining_amount
+							},
+						};
+						swap.stable_amount = Some(remaining_amount);
+					}
+
+					if swap.output_asset() == STABLE_ASSET {
+						swap.final_output = swap.stable_amount;
+					}
+				});
 			}
 
 			if !total_network_fee_taken.is_zero() {
@@ -2028,11 +2041,52 @@ pub mod pallet {
 			}
 		}
 
-		pub fn simulate_swaps(
-			swaps: Vec<Swap<T>>,
+		pub fn simulate_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			amount: AssetAmount,
+			fees: Vec<FeeType<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			with_transaction_unchecked(|| {
-				TransactionOutcome::Rollback(Self::try_execute_without_violations(swaps))
+				TransactionOutcome::Rollback({
+					const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(0);
+					let swap_id: SwapId = SwapId::from(0);
+
+					// Create a dummy swap request to hold the fee information
+					let swap_request = SwapRequest {
+						id: SWAP_REQUEST_ID,
+						input_asset,
+						output_asset,
+						state: SwapRequestState::UserSwap {
+							price_limits_and_expiry: None,
+							output_action: SwapOutputAction::Egress {
+								ccm_deposit_metadata: None,
+								output_address: ForeignChainAddress::Eth([0; 20].into()),
+							},
+							dca_state: DcaState {
+								scheduled_chunks: BTreeSet::from([(swap_id)]),
+								remaining_input_amount: 0,
+								remaining_chunks: 0,
+								chunk_interval: SWAP_DELAY_BLOCKS,
+								accumulated_output_amount: 0,
+							},
+							fees,
+						},
+					};
+					SwapRequests::<T>::insert(SWAP_REQUEST_ID, swap_request);
+
+					// Create the swap and try to execute it
+					let swap = Swap::new(
+						swap_id,
+						SWAP_REQUEST_ID,
+						input_asset,
+						output_asset,
+						amount,
+						None,               // Refund params
+						Default::default(), // Execution block
+					);
+					Self::try_execute_without_violations(vec![swap])
+				})
 			})
 		}
 
@@ -2115,6 +2169,7 @@ pub mod pallet {
 					output_action,
 					price_limits_and_expiry,
 					dca_state,
+					..
 				} => {
 					let Some(ExpiryBehaviour::RefundIfExpires {
 						refund_address,
@@ -2308,7 +2363,6 @@ pub mod pallet {
 							chunk_input_amount,
 							price_limits_and_expiry.as_ref(),
 							SwapType::Swap,
-							swap.swap.fees.clone(),
 							request.id,
 							// Schedule the next chunk to be after any currently scheduled chunks
 							(dca_state.scheduled_chunks.len() as u32)
@@ -2543,7 +2597,6 @@ pub mod pallet {
 			input_amount: AssetAmount,
 			price_limits_and_expiry: Option<&PriceLimitsAndExpiry<T::AccountId>>,
 			swap_type: SwapType,
-			fees: Vec<FeeType<T>>,
 			swap_request_id: SwapRequestId,
 			delay_blocks: BlockNumberFor<T>,
 		) -> SwapId {
@@ -2585,7 +2638,6 @@ pub mod pallet {
 						output_asset,
 						input_amount,
 						refund_params,
-						fees,
 						execute_at,
 					),
 				)
@@ -2902,8 +2954,6 @@ pub mod pallet {
 						// No refund parameters for network fee swaps
 						None,
 						SwapType::NetworkFee,
-						// No fees for network fee swaps
-						Default::default(),
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
 					);
@@ -2919,11 +2969,6 @@ pub mod pallet {
 					);
 				},
 				SwapRequestType::IngressEgressFee => {
-					// No minimum network fee for ingress/egress fee swaps
-					let fees = vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
-						Pallet::<T>::get_network_fee_for_swap(input_asset, output_asset, false),
-					))];
-
 					Self::schedule_swap(
 						input_asset,
 						output_asset,
@@ -2931,7 +2976,6 @@ pub mod pallet {
 						// No refund parameters for ingress/egress fee swaps
 						None,
 						SwapType::IngressEgressFee,
-						fees,
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
 					);
@@ -2978,7 +3022,6 @@ pub mod pallet {
 						chunk_input_amount,
 						price_limits_and_expiry.as_ref(),
 						SwapType::Swap,
-						fees.clone(),
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
 					);
@@ -3000,7 +3043,6 @@ pub mod pallet {
 									chunk_input_amount,
 									price_limits_and_expiry.as_ref(),
 									SwapType::Swap,
-									fees,
 									request_id,
 									SWAP_DELAY_BLOCKS.saturating_add(chunk_interval).into(),
 								);
@@ -3019,6 +3061,7 @@ pub mod pallet {
 								output_action: output_action.clone(),
 								price_limits_and_expiry,
 								dca_state,
+								fees,
 							},
 						},
 					);

@@ -33,7 +33,7 @@ use cf_primitives::{
 };
 use cf_traits::{AssetConverter, OrderId};
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker, Swap};
+use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
 use sp_runtime::{
 	traits::{Saturating, UniqueSaturatedInto},
 	DispatchError,
@@ -130,18 +130,14 @@ pub fn simulate_swap(
 			(min_network_fee_input_asset, network_fee.minimum)
 		} else {
 			let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
-			let swap_output = &Swapping::simulate_swaps(vec![Swap::new(
-				Default::default(), // Swap id
-				Default::default(), // Swap request id
+			let swap_output = &Swapping::simulate_swap(
 				input_asset,
 				output_asset,
 				amount_per_chunk,
-				None, // Refund params
 				vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
 					network_fee.clone(),
 				))],
-				Default::default(), // Execution block
-			)])
+			)
 			.map_err(|_| DispatchError::Other("Failed to calculate network fee"))?;
 
 			(
@@ -157,13 +153,10 @@ pub fn simulate_swap(
 
 	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
 
-	let swap_output = &Swapping::simulate_swaps(vec![Swap::new(
-		Default::default(), // Swap id
-		Default::default(), // Swap request id
+	let swap_output = &Swapping::simulate_swap(
 		input_asset,
 		output_asset,
 		amount_per_chunk,
-		None, // Refund params
 		if broker_commission > 0 {
 			vec![FeeType::BrokerFee(
 				vec![Beneficiary { account: AccountId::new([0xbb; 32]), bps: broker_commission }]
@@ -173,8 +166,7 @@ pub fn simulate_swap(
 		} else {
 			vec![]
 		},
-		Default::default(), // Execution block
-	)])
+	)
 	.map_err(|e| match e {
 		BatchExecutionError::SwapLegFailed { .. } => DispatchError::Other("Swap leg failed."),
 		BatchExecutionError::PriceViolation { .. } => DispatchError::Other(
