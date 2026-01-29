@@ -2304,15 +2304,15 @@ impl<T: Config> Pallet<T> {
 			T::LpBalance::try_credit_account(lp, bought_asset, bought_amount)?;
 
 			// LpStats amounts are always in USD
-			if bought_asset == STABLE_ASSET {
-				T::LpStats::on_limit_order_filled(lp, &bought_asset, bought_amount);
-			} else {
-				T::LpStats::on_limit_order_filled(
-					lp,
-					&bought_asset,
-					collected.sold_amount.try_into()?,
-				);
-			}
+			T::LpStats::on_limit_order_filled(
+				lp,
+				&bought_asset,
+				if bought_asset == STABLE_ASSET {
+					bought_amount
+				} else {
+					collected.sold_amount.try_into()?
+				},
+			);
 		}
 
 		let limit_orders = &mut pool.limit_orders_cache[order.to_sold_pair()];
