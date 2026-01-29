@@ -16,8 +16,8 @@
 
 use crate::{
 	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
-	Pallet, PalletSafeMode, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS, ALPHA_HALF_LIFE_7_DAYS,
-	STATS_UPDATE_INTERVAL_IN_BLOCKS,
+	Pallet, PalletSafeMode, WindowedEma, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS,
+	ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
 };
 use std::collections::BTreeMap;
 
@@ -674,6 +674,53 @@ fn update_agg_stats_updates_correctly() {
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
 		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
+	});
+}
+
+#[test]
+fn update_agg_stats_prunes_below_threshold() {
+	new_test_ext().execute_with(|| {
+		use sp_runtime::FixedU128;
+
+		let below_threshold = AggStats {
+			avg_limit_usd_volume: WindowedEma {
+				one_day: FixedU128::from_inner(5_000_000),
+				seven_days: FixedU128::from_inner(5_000_000),
+				thirty_days: FixedU128::from_inner(5_000_000),
+			},
+		};
+		let above_threshold = AggStats {
+			avg_limit_usd_volume: WindowedEma {
+				one_day: FixedU128::from_inner(20_000_000),
+				seven_days: FixedU128::from_inner(20_000_000),
+				thirty_days: FixedU128::from_inner(20_000_000),
+			},
+		};
+
+		LpAggStats::<Test>::mutate(|agg_stats_map| {
+			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
+			lp_stats.insert(Asset::Eth, below_threshold);
+			let lp_stats = agg_stats_map.entry(LP_ACCOUNT_2).or_default();
+			lp_stats.insert(Asset::Flip, above_threshold);
+		});
+
+		LiquidityProvider::update_agg_stats();
+
+		let agg_stats_map = LpAggStats::<Test>::get();
+		assert!(agg_stats_map
+			.get(&LP_ACCOUNT)
+			.and_then(|stats| stats.get(&Asset::Eth))
+			.is_none());
+		assert!(agg_stats_map
+			.get(&LP_ACCOUNT_2)
+			.and_then(|stats| stats.get(&Asset::Flip))
+			.is_some());
+
+		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		assert!(
+			lp2_stats.avg_limit_usd_volume.weighted_score() >=
+				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
+		);
 	});
 }
 

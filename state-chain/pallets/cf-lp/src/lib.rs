@@ -66,7 +66,18 @@ pub const ALPHA_HALF_LIFE_7_DAYS: FixedU128 =
 pub const ALPHA_HALF_LIFE_30_DAYS: FixedU128 =
 	FixedU128::from_perbill(Perbill::from_parts(22_840_031));
 
-pub const MAX_NUM_ACOUNTS_TO_PURGE: u32 = 100;
+/// Weighted EMA score below this will be pruned from storage.
+pub const EMA_PRUNE_THRESHOLD_USD: AssetAmount = 10_000_000; // 10$
+
+/// Weights for the weighted EMA pruning score.
+pub const EMA_PRUNE_WEIGHT_1_DAY: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(600_000_000)); // 0.6
+pub const EMA_PRUNE_WEIGHT_7_DAYS: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(300_000_000)); // 0.3
+pub const EMA_PRUNE_WEIGHT_30_DAYS: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(100_000_000)); // 0.1
+
+pub const MAX_NUM_ACCOUNTS_TO_PURGE: u32 = 100;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -133,6 +144,13 @@ pub mod pallet {
 			Self { one_day: initial_val, seven_days: initial_val, thirty_days: initial_val }
 		}
 
+		pub fn weighted_score(&self) -> FixedU128 {
+			self.one_day
+				.saturating_mul(EMA_PRUNE_WEIGHT_1_DAY)
+				.saturating_add(self.seven_days.saturating_mul(EMA_PRUNE_WEIGHT_7_DAYS))
+				.saturating_add(self.thirty_days.saturating_mul(EMA_PRUNE_WEIGHT_30_DAYS))
+		}
+
 		/// Updates the ema values using the new sample.
 		pub fn update(&mut self, sample: &FixedU128) {
 			self.one_day = Self::calculate_ema(&self.one_day, sample, ALPHA_HALF_LIFE_1_DAY);
@@ -180,6 +198,10 @@ pub mod pallet {
 
 		pub fn update(&mut self, delta: &DeltaStats) {
 			self.avg_limit_usd_volume.update(&delta.limit_orders_swap_usd_volume);
+		}
+
+		pub fn is_below_threshold(&self, threshold: FixedU128) -> bool {
+			self.avg_limit_usd_volume.weighted_score() < threshold
 		}
 	}
 
@@ -662,11 +684,19 @@ impl<T: Config> Pallet<T> {
 
 	fn update_agg_stats() -> Weight {
 		LpAggStats::<T>::mutate(|agg_stats_map| {
+			use sp_std::vec::Vec;
+			let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
+			let mut empty_lps: Vec<T::AccountId> = Vec::new();
+
 			// For every existing Lp, update their Aggregate stats from accumulated delta stats
 			let existing_lps_count = agg_stats_map.len() as u32;
 			for (lp, lp_stats) in agg_stats_map.iter_mut() {
 				for (asset, agg_stats) in lp_stats.iter_mut() {
 					agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
+				}
+				lp_stats.retain(|_, agg_stats| !agg_stats.is_below_threshold(prune_threshold));
+				if lp_stats.is_empty() {
+					empty_lps.push(lp.clone());
 				}
 			}
 
@@ -675,6 +705,10 @@ impl<T: Config> Pallet<T> {
 			for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
 				agg_stats_map.entry(lp.clone()).or_default().insert(asset, AggStats::new(delta));
 				extra_lps_count += 1;
+			}
+
+			for lp in empty_lps {
+				agg_stats_map.remove(&lp);
 			}
 
 			T::WeightInfo::update_agg_stats_existing(existing_lps_count)
