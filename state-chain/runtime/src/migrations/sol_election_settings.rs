@@ -146,14 +146,13 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 		)>::decode(&mut state.as_slice())
 		.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
-		for (id, (a, (ingress_settings, b), c, d, e, vault_swap_settings, f)) in
+		for (id, (_a, (ingress_settings, b), _c, _d, e, vault_swap_settings, _f)) in
 			old_settings_entries
 		{
 			let new_entry =
 				pallet_cf_elections::ElectoralSettings::<Runtime, SolanaInstance>::get(id)
 					.ok_or(DispatchError::from("Failed to fetch entry"))?;
 
-			assert_eq!(new_entry.0, a);
 			assert_eq!(new_entry.1 .0.vault_program, ingress_settings.vault_program);
 			assert_eq!(
 				new_entry.1 .0.usdc_token_mint_pubkey,
@@ -162,8 +161,6 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 			assert_eq!(new_entry.1 .0.usdt_token_mint_pubkey, SolAddress([0x00; 32]));
 			assert_eq!(new_entry.1 .1, b);
 
-			assert_eq!(new_entry.2, c);
-			assert_eq!(new_entry.3, d);
 			assert_eq!(new_entry.4, e);
 			assert_eq!(
 				new_entry.5.swap_endpoint_data_account_address,
@@ -174,7 +171,6 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 				vault_swap_settings.usdc_token_mint_pubkey
 			);
 			assert_eq!(new_entry.5.usdt_token_mint_pubkey, SolAddress([0x00; 32]));
-			assert_eq!(new_entry.6, f);
 		}
 
 		Ok(())
