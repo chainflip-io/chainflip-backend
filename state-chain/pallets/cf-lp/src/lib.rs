@@ -551,11 +551,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Purges LP asset balances to their refund addresss via egress
+		/// Purges LP asset balances to their refund addresses via egress
 		/// Requires Governance
 		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::schedule_swap())]
-		//#[pallet::weight(T::WeightInfo::purge_balances(accounts.len() as u32))]
+		#[pallet::weight(T::WeightInfo::purge_balances(accounts.len() as u32))]
 		pub fn purge_balances(
 			origin: OriginFor<T>,
 			accounts: BoundedVec<
@@ -664,36 +663,27 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn update_agg_stats() -> Weight {
-		let mut execution_weight = Weight::zero();
-
 		LpAggStats::<T>::mutate(|agg_stats_map| {
 			// For every existing Lp, update their Aggregate stats from accumulated delta stats
+			let existing_lps_count = agg_stats_map.len() as u32;
 			for (lp, lp_stats) in agg_stats_map.iter_mut() {
 				for (asset, agg_stats) in lp_stats.iter_mut() {
-					let lp_delta = match LpDeltaStats::<T>::get(lp, asset) {
-						Some(delta) => {
-							execution_weight.saturating_accrue(T::DbWeight::get().writes(1));
-							LpDeltaStats::<T>::remove(lp, asset);
-							delta
-						},
-						None => Default::default(),
-					};
-					// TODO add weight for update function
-					agg_stats.update(&lp_delta);
+					agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
 				}
 			}
 
 			// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
-			for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
-				let lp_stats = agg_stats_map.entry(lp.clone()).or_default();
-				lp_stats.insert(asset, AggStats::new(delta));
-
-				LpDeltaStats::<T>::remove(&lp, asset);
-				execution_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 2));
+			let mut extra_lps_count = 0;
+			for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
+				agg_stats_map.entry(lp.clone()).or_default().insert(asset, AggStats::new(delta));
+				extra_lps_count += 1;
 			}
-		});
 
-		execution_weight
+			T::WeightInfo::update_agg_stats_existing(existing_lps_count)
+				.saturating_add(T::WeightInfo::update_agg_stats_new(extra_lps_count))
+				// Subtract the overhead that is measured twice in the benchmarking
+				.saturating_sub(T::WeightInfo::update_agg_stats_new(0))
+		})
 	}
 
 	fn purge_account_balance(
