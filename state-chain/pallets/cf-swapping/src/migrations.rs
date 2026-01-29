@@ -17,5 +17,17 @@
 use crate::Pallet;
 
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<13, Pallet<T>>,);
+mod reschedule_stuck_swaps;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		13,
+		14,
+		reschedule_stuck_swaps::RescheduleStuckSwaps<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<14, Pallet<T>>,
+);
