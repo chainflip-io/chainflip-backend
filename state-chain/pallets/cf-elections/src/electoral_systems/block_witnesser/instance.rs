@@ -46,9 +46,11 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 		+ Default
 		+ CommonTraits;
 
-	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties;
 	fn is_enabled() -> bool;
-	fn processed_up_to(height: ChainBlockNumberOf<Self::Chain>);
+	fn election_properties(
+		block_height: ChainBlockNumberOf<Self::Chain>,
+	) -> Self::ElectionProperties;
+	fn processed_up_to(block_height: ChainBlockNumberOf<Self::Chain>);
 }
 
 defx! {
@@ -70,24 +72,7 @@ impls! {
 
 	impl Hook<HookTypeFor<Self, ExecuteHook>> {
 		fn run(&mut self, all_events: Vec<(ChainBlockNumberOf<I::Chain>, BlockWitnesserEvent<I::BlockEntry>)>) {
-
-			// ------ deduplicate events -------
-			let mut chosen_events: BTreeMap<I::BlockEntry, _> = BTreeMap::new();
-
-			for (block_height, event) in all_events {
-				let witness = event.inner_witness().clone();
-
-				// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
-				if !chosen_events.contains_key(&witness) ||
-					(matches!(chosen_events.get(&witness), Some((_, BlockWitnesserEvent::PreWitness(_)))) &&
-						matches!(event, BlockWitnesserEvent::Witness(_)))
-				{
-					chosen_events.insert(witness, (block_height, event));
-				}
-			}
-
-			// ------ execute events -------
-			for (block_height, event) in chosen_events.into_values() {
+			for (block_height, event) in dedup_events(all_events) {
 				self.execute.run((event, block_height));
 			}
 		}
@@ -207,5 +192,56 @@ impl<BlockEntry: Clone>
 			)
 		}
 		results
+	}
+}
+
+// ------------------ helper implementations -----------------
+
+fn dedup_events<BlockNumber, T: Ord + Clone>(
+	events: Vec<(BlockNumber, BlockWitnesserEvent<T>)>,
+) -> Vec<(BlockNumber, BlockWitnesserEvent<T>)> {
+	let mut chosen: BTreeMap<T, (BlockNumber, BlockWitnesserEvent<T>)> = BTreeMap::new();
+
+	for (block, event) in events {
+		let witness = event.inner_witness().clone();
+
+		// Only insert if no event exists yet, or if we're upgrading from PreWitness to Witness
+		if !chosen.contains_key(&witness) ||
+			(matches!(chosen.get(&witness), Some((_, BlockWitnesserEvent::PreWitness(_)))) &&
+				matches!(event, BlockWitnesserEvent::Witness(_)))
+		{
+			chosen.insert(witness, (block, event));
+		}
+	}
+
+	chosen.into_values().collect()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::dedup_events;
+	use cf_primitives::BlockWitnesserEvent;
+
+	#[test]
+	fn dedup_events_test() {
+		let events = vec![
+			(10, BlockWitnesserEvent::<u8>::Witness(9)),
+			(8, BlockWitnesserEvent::<u8>::PreWitness(9)),
+			(10, BlockWitnesserEvent::<u8>::Witness(10)),
+			(10, BlockWitnesserEvent::<u8>::Witness(11)),
+			(8, BlockWitnesserEvent::<u8>::PreWitness(11)),
+			(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
+		];
+		let deduped_events = dedup_events(events);
+
+		assert_eq!(
+			deduped_events,
+			vec![
+				(10, BlockWitnesserEvent::<u8>::Witness(9)),
+				(10, BlockWitnesserEvent::<u8>::Witness(10)),
+				(10, BlockWitnesserEvent::<u8>::Witness(11)),
+				(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
+			]
+		)
 	}
 }

@@ -20,9 +20,11 @@ workspace = true
 cf-chains = { workspace = true }
 cf-primitives = { workspace = true }
 cf-traits = { workspace = true }
+cf-utilities = { workspace = true }
 cfe-events = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
+pallet-cf-witnesser = { workspace = true }
 
 derive-where = "1.2.7"
 
@@ -47,18 +49,6 @@ cf-traits = { workspace = true, features = ["mocks"] }
 [features]
 default = ["std"]
 std = [
-	"cf-chains/std",
-	"cfe-events/std",
-	"cf-primitives/std",
-	"cf-traits/std",
-	"codec/std",
-	"frame-benchmarking?/std",
-	"frame-support/std",
-	"frame-system/std",
-	"log/std",
-	"scale-info/std",
-	"sp-std/std",
-	"serde/std",
 	"cf-chains/std",
 	"cfe-events/std",
 	"cf-primitives/std",

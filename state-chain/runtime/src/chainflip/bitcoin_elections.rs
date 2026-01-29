@@ -17,7 +17,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
-use cf_traits::{hook_test_utils::EmptyHook, Chainflip, Hook};
+use cf_traits::{Chainflip, Hook};
 use cf_utilities::{cargo_fmt_ignore, derive_common_traits};
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -32,16 +32,11 @@ use pallet_cf_elections::{
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
-			consensus::BWConsensus,
 			instance::{
-				BlockWitnesserInstance, DerivedBlockWitnesser,
+				BlockWitnesserInstance, DerivedBlockWitnesser, JustWitnessAtSafetyMargin,
 				PrewitnessImmediatelyAndWitnessAtSafetyMargin,
 			},
-			primitives::SafeModeStatus,
-			state_machine::{
-				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
-				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
-			},
+			state_machine::{BWElectionType, BWTypes, BlockWitnesserSettings, HookTypeFor},
 		},
 		composite::{
 			tuple_6_impls::{DerivedElectoralAccess, Hooks},
@@ -63,7 +58,7 @@ use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
-use super::{bitcoin_block_processor::BtcEvent, elections::TypesFor};
+use super::elections::TypesFor;
 
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(
@@ -136,7 +131,6 @@ impls! {
 			);
 		}
 	}
-
 }
 
 /// Generating the state machine-based electoral system
@@ -284,77 +278,40 @@ pub type BitcoinVaultDepositWitnessingES =
 /// The electoral system for egress witnessing
 pub struct BitcoinEgressWitnessing;
 
-type ElectionPropertiesEgressWitnessing = Vec<Hash>;
+impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
+	const BWNAME: &'static str = "Egress";
+	type Runtime = Runtime;
+	type Chain = BitcoinChain;
+	type BlockEntry = TransactionConfirmation<Runtime, BitcoinInstance>;
+	type ElectionProperties = Vec<Hash>;
+	type ExecuteHook = pallet_cf_broadcast::PalletHooks<Runtime, BitcoinInstance>;
+	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub(crate) type EgressBlockData = Vec<TransactionConfirmation<Runtime, BitcoinInstance>>;
-
-impls! {
-	for TypesFor<BitcoinEgressWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = BitcoinChain;
-		type BlockData = EgressBlockData;
-
-		type Event = BtcEvent<TransactionConfirmation<Runtime, BitcoinInstance>>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "Egress";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_broadcast::Config<BitcoinInstance>>::SafeMode as Get<
+			pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
+		>>::get()
+		.egress_witnessing_enabled
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ElectionPropertiesEgressWitnessing;
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(
+		_block_height: ChainBlockNumberOf<Self::Chain>,
+	) -> Self::ElectionProperties {
+		TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::iter()
+			.map(|(tx_id, _)| tx_id)
+			.collect::<Vec<_>>()
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(EgressBlockData, Option<btc::Hash>)>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_broadcast::Config<BitcoinInstance>>::SafeMode as Get<
-				pallet_cf_broadcast::PalletSafeMode<BitcoinInstance>,
-			>>::get()
-			.egress_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// implementation of reading vault hook
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: BlockNumber) -> Vec<Hash> {
-			TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::iter()
-				.map(|(tx_id, _)| tx_id)
-				.collect::<Vec<_>>()
-		}
-	}
-
 }
 
 /// Generating the state machine-based electoral system
-pub type BitcoinEgressWitnessingES = StatemachineElectoralSystem<TypesFor<BitcoinEgressWitnessing>>;
+pub type BitcoinEgressWitnessingES =
+	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<BitcoinEgressWitnessing>>>;
+
+// ------------------------ liveness ---------------------------
 pub type BitcoinLiveness = Liveness<
 	BlockNumber,
 	Hash,
@@ -363,6 +320,7 @@ pub type BitcoinLiveness = Liveness<
 	BlockNumberFor<Runtime>,
 >;
 
+// ------------------------ fee tracking ---------------------------
 pub struct BitcoinFeeUpdateHook;
 impl UpdateFeeHook<BtcAmount> for BitcoinFeeUpdateHook {
 	fn update_fee(fee: BtcAmount) {
@@ -388,6 +346,7 @@ pub type BitcoinFeeTracking = UnsafeMedian<
 	BlockNumberFor<Runtime>,
 >;
 
+// ------------------------ composite electoral system ---------------------------
 pub struct BitcoinElectionHooks;
 
 impl
@@ -555,7 +514,7 @@ pub struct BitcoinElectoralSystemConfiguration;
 pub enum ElectionTypes {
 	DepositChannels(<DerivedBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
 	Vaults(<DerivedBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),
-	Egresses(ElectionPropertiesEgressWitnessing),
+	Egresses(<DerivedBlockWitnesser<TypesFor<BitcoinEgressWitnessing>> as BWTypes>::ElectionProperties),
 }
 
 impl pallet_cf_elections::ElectoralSystemConfiguration for BitcoinElectoralSystemConfiguration {
