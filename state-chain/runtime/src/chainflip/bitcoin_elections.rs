@@ -33,7 +33,7 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			instance::{
-				BlockWitnesserInstance, DerivedBlockWitnesser, JustWitnessAtSafetyMargin,
+				BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin,
 				PrewitnessImmediatelyAndWitnessAtSafetyMargin,
 			},
 			state_machine::{BWElectionType, BWTypes, BlockWitnesserSettings, HookTypeFor},
@@ -146,8 +146,8 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = DepositWitness<Bitcoin>;
 	type ElectionProperties = Vec<DepositChannel<Bitcoin>>;
-	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
-	type RulesHook = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
+	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
+	type WitnessRules = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {
 		<<Runtime as pallet_cf_ingress_egress::Config<BitcoinInstance>>::SafeMode as Get<
@@ -226,7 +226,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
-	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
 /// The electoral system for vault deposit witnessing
@@ -238,8 +238,8 @@ impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = VaultDepositWitness<Runtime, BitcoinInstance>;
 	type ElectionProperties = Vec<(DepositAddress, AccountId, ChannelId)>;
-	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
-	type RulesHook = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
+	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
+	type WitnessRules = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn election_properties(_height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		// WARNING: If a private broker channel is closed by the broker while safe mode is
@@ -272,7 +272,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinVaultDepositWitnessingES =
-	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>>>;
 
 // ------------------------ egress witnessing ---------------------------
 /// The electoral system for egress witnessing
@@ -284,8 +284,8 @@ impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = TransactionConfirmation<Runtime, BitcoinInstance>;
 	type ElectionProperties = Vec<Hash>;
-	type ExecuteHook = pallet_cf_broadcast::PalletHooks<Runtime, BitcoinInstance>;
-	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
+	type ExecutionTarget = pallet_cf_broadcast::PalletHooks<Runtime, BitcoinInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {
 		<<Runtime as pallet_cf_broadcast::Config<BitcoinInstance>>::SafeMode as Get<
@@ -309,7 +309,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinEgressWitnessingES =
-	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<BitcoinEgressWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinEgressWitnessing>>>;
 
 // ------------------------ liveness ---------------------------
 pub type BitcoinLiveness = Liveness<
@@ -512,9 +512,9 @@ pub struct BitcoinElectoralSystemConfiguration;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
-	DepositChannels(<DerivedBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
-	Vaults(<DerivedBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),
-	Egresses(<DerivedBlockWitnesser<TypesFor<BitcoinEgressWitnessing>> as BWTypes>::ElectionProperties),
+	DepositChannels(<GenericBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
+	Vaults(<GenericBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),
+	Egresses(<GenericBlockWitnesser<TypesFor<BitcoinEgressWitnessing>> as BWTypes>::ElectionProperties),
 }
 
 impl pallet_cf_elections::ElectoralSystemConfiguration for BitcoinElectoralSystemConfiguration {
