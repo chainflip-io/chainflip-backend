@@ -867,7 +867,23 @@ pub mod pallet {
 				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 			}
 
-			ManagedValidators::<T>::remove(&account_id);
+			if let Some(operator) = OperatorChoice::<T>::take(&account_id) {
+				ManagedValidators::<T>::mutate(&operator, |validators| {
+					validators.remove(&account_id);
+				});
+			} else {
+				// we should not land in this else condition, but if we do, we should still cleanup
+				// the ManagedValidators
+				for op in ManagedValidators::<T>::iter_keys() {
+					if ManagedValidators::<T>::get(&op).contains(&account_id) {
+						ManagedValidators::<T>::mutate(&op, |validators| {
+							validators.remove(&account_id);
+						});
+						break;
+					}
+				}
+			}
+
 			ClaimedValidators::<T>::remove(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
