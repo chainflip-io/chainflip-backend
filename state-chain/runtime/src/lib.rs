@@ -377,6 +377,7 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,
+	migrations::sol_election_settings::Migration,
 	migrations::ethereum_elections::Migration,
 	migrations::arbitrum_elections::Migration,
 );
