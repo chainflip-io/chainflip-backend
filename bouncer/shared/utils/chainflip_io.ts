@@ -126,8 +126,8 @@ export class ChainflipIO<Requirements> {
     { extrinsic: ExtrinsicFromApi }
   >(this.impl_submitExtrinsic);
 
-  private async impl_submitExtrinsic<Data extends Requirements & WithAccount<AccountType>>(
-    this: ChainflipIO<Data>,
+  private async impl_submitExtrinsic<SubmissionRequirements extends WithAccount<AccountType>>(
+    this: ChainflipIO<SubmissionRequirements>,
     arg: { extrinsic: ExtrinsicFromApi },
   ): Promise<EventFilter> {
     return this.runExclusively('submitExtrinsic', async () => {
