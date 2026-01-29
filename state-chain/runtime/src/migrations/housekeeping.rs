@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{chainflip::EvmEnvironment, Runtime};
+use crate::{
+	chainflip::{BtcEnvironment, EvmEnvironment},
+	Runtime,
+};
 use cf_chains::{assets, AllBatch, ForeignChain, TransferAssetParams};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -70,6 +73,35 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					return Weight::zero();
 				};
 				crate::EthereumBroadcaster::threshold_sign_and_broadcast(api_call, None, |_| None);
+
+				log::info!("🧹 BTC housekeeping for Berghain...");
+				// Amount: 253,583 sats
+				// Destination: bc1qz8p3w089t3tq3uvqmzhgdh5vuzm7gxr45xjppj
+				let Ok(mut res) =
+					<cf_chains::btc::api::BitcoinApi<BtcEnvironment> as AllBatch<_>>::new_unsigned(
+						Default::default(),
+						(0..) // Dummy egress_ids: these aren't used.
+							.zip([TransferAssetParams {
+								asset: assets::btc::Asset::Btc,
+								amount: 253_583,
+								to: cf_chains::btc::ScriptPubkey::try_from_address(
+									"bc1qz8p3w089t3tq3uvqmzhgdh5vuzm7gxr45xjppj",
+									&cf_chains::btc::BitcoinNetwork::Mainnet,
+								)
+								.expect("valid address; qed"),
+							}])
+							.map(|(a, b)| (b, (ForeignChain::Bitcoin, a)))
+							.collect(),
+					)
+				else {
+					log::error!("Failed to construct Bitcoin batch for Berghain housekeeping.");
+					return Weight::zero();
+				};
+				let Some((api_call, _)) = res.pop() else {
+					log::info!("Unexpected error.");
+					return Weight::zero();
+				};
+				crate::BitcoinBroadcaster::threshold_sign_and_broadcast(api_call, None, |_| None);
 
 				// Without doing this the events are cleared on_initialise and so
 				// the engine will never see them.
