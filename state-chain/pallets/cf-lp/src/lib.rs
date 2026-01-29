@@ -59,9 +59,12 @@ pub const STATS_UPDATE_INTERVAL_IN_BLOCKS: u64 = 24 * 3600 / SECONDS_PER_BLOCK; 
 // Alpha = 1 - e^(-ln 2 * sampling_interval / half_life_period)
 // using a sampling interval defined in `STATS_UPDATE_INTERVAL_IN_BLOCKS`. Make sure to update
 // these half-life values if `STATS_UPDATE_INTERVAL_IN_BLOCKS` is changed.
-pub const ALPHA_HALF_LIFE_1_DAY: Perbill = Perbill::from_parts(500_000_000);
-pub const ALPHA_HALF_LIFE_7_DAYS: Perbill = Perbill::from_parts(94_276_335);
-pub const ALPHA_HALF_LIFE_30_DAYS: Perbill = Perbill::from_parts(22_840_031);
+pub const ALPHA_HALF_LIFE_1_DAY: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(500_000_000));
+pub const ALPHA_HALF_LIFE_7_DAYS: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(94_276_335));
+pub const ALPHA_HALF_LIFE_30_DAYS: FixedU128 =
+	FixedU128::from_perbill(Perbill::from_parts(22_840_031));
 
 pub const MAX_NUM_ACOUNTS_TO_PURGE: u32 = 100;
 
@@ -100,9 +103,8 @@ pub mod pallet {
 			self.limit_orders_swap_usd_volume = FixedU128::zero();
 		}
 
-		pub fn on_limit_order(&mut self, usd_amount: FixedU128) {
-			self.limit_orders_swap_usd_volume =
-				self.limit_orders_swap_usd_volume.saturating_add(usd_amount);
+		pub fn accrue_usd(&mut self, usd_amount: FixedU128) {
+			self.limit_orders_swap_usd_volume.saturating_accrue(usd_amount);
 		}
 	}
 
@@ -144,9 +146,8 @@ pub mod pallet {
 		fn calculate_ema(
 			current_val: &FixedU128,
 			new_val: &FixedU128,
-			alpha_perbill: Perbill,
+			alpha: FixedU128,
 		) -> FixedU128 {
-			let alpha = FixedU128::from(alpha_perbill);
 			let one_minus_alpha = FixedU128::from_u32(1).saturating_sub(alpha);
 			new_val
 				.saturating_mul(alpha)
@@ -343,9 +344,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type LpAggStats<T: Config> =
 		StorageValue<_, BTreeMap<T::AccountId, BTreeMap<Asset, AggStats>>, ValueQuery>;
-
-	//pub type LpAggStats<T: Config> = StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat,
-	// Asset, AggStats>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -753,12 +751,12 @@ impl<T: Config> LpRegistration for Pallet<T> {
 impl<T: Config> LpStatsApi for Pallet<T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_amount: AssetAmount) {
-		if usd_amount != AssetAmount::zero() {
+	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_value: AssetAmount) {
+		if usd_value != AssetAmount::zero() {
 			LpDeltaStats::<T>::mutate(who, asset, |maybe_stats| {
 				let delta_stats = maybe_stats.get_or_insert_default();
 
-				delta_stats.on_limit_order(FixedU128::from_inner(usd_amount));
+				delta_stats.accrue_usd(FixedU128::from_inner(usd_value));
 			});
 		}
 	}

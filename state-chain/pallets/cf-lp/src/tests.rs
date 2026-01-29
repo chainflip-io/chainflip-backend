@@ -552,17 +552,18 @@ fn safe_mode_prevents_internal_swaps() {
 
 /// Alpha half-life factor for exponential moving averages.
 /// Calculated as: alpha = 1 - e^(-ln2 * sampling_interval / half_life_period)
-fn expected_alpha_half_life(days: u32) -> f64 {
+fn expected_alpha_half_life(days: u32) -> FixedU128 {
+	use frame_support::sp_runtime::Perbill;
 	let decay_factor: f64 = (STATS_UPDATE_INTERVAL_IN_BLOCKS as f64) * (SECONDS_PER_BLOCK as f64) /
 		((days as f64) * 24.0 * 3600.0);
 	let exp_part: f64 = -std::f64::consts::LN_2 * decay_factor;
-	1.0f64 - exp_part.exp()
+	FixedU128::from_perbill(Perbill::from_float(1.0f64 - exp_part.exp()))
 }
 
 /// Computes expected EMA using f64
 /// EMA_t = alpha * new_sample + (1 - alpha) * EMA_(t-1)
 fn expected_ema(prev: f64, delta: f64, half_life_days: u32) -> f64 {
-	let alpha = expected_alpha_half_life(half_life_days);
+	let alpha = expected_alpha_half_life(half_life_days).to_float();
 	alpha * delta + (1.0f64 - alpha) * prev
 }
 
@@ -577,22 +578,13 @@ fn is_within_tiny_error(actual: f64, expected: f64) -> bool {
 #[test]
 fn check_ema_alpha_constants_are_correct() {
 	let expected_1day = expected_alpha_half_life(1);
-	assert!(is_within_tiny_error(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_1_DAY).to_float(),
-		expected_1day
-	));
+	assert_eq!(ALPHA_HALF_LIFE_1_DAY, expected_1day);
 
 	let expected_7days = expected_alpha_half_life(7);
-	assert!(is_within_tiny_error(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_7_DAYS).to_float(),
-		expected_7days
-	));
+	assert_eq!(ALPHA_HALF_LIFE_7_DAYS, expected_7days);
 
 	let expected_30days = expected_alpha_half_life(30);
-	assert!(is_within_tiny_error(
-		FixedU128::from_perbill(ALPHA_HALF_LIFE_30_DAYS).to_float(),
-		expected_30days
-	));
+	assert_eq!(ALPHA_HALF_LIFE_30_DAYS, expected_30days);
 }
 
 #[test]
