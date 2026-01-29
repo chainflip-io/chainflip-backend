@@ -153,6 +153,13 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+		>>::get()
+		.deposit_channel_witnessing_enabled
+	}
+
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		EthereumIngressEgress::active_deposit_channels_at(
 			// we advance by SAFETY_BUFFER before checking opened_at
@@ -163,13 +170,6 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 		.into_iter()
 		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
 		.collect()
-	}
-
-	fn is_enabled() -> bool {
-		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
-			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
-		>>::get()
-		.deposit_channel_witnessing_enabled
 	}
 
 	fn processed_up_to(
