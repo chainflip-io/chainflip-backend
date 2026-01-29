@@ -26,8 +26,6 @@ use cf_traits::{
 	DepositApi, EgressApi, LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails,
 	SwapRequestHandler,
 };
-use serde::{Deserialize, Serialize};
-
 use frame_support::{
 	fail,
 	pallet_prelude::*,
@@ -35,6 +33,8 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use serde::{Deserialize, Serialize};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 mod benchmarking;
 
@@ -84,7 +84,6 @@ pub mod pallet {
 	use cf_primitives::{BlockNumber, ChannelId, EgressId};
 	use cf_traits::MinimumDeposit;
 	use frame_support::sp_runtime::{traits::Zero, FixedU128, SaturatedConversion, Saturating};
-	use sp_std::collections::btree_map::BTreeMap;
 
 	use super::*;
 
@@ -679,7 +678,6 @@ impl<T: Config> Pallet<T> {
 
 	fn update_agg_stats() -> Weight {
 		LpAggStats::<T>::mutate(|agg_stats_map| {
-			use sp_std::vec::Vec;
 			let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
 			let mut empty_lps: Vec<T::AccountId> = Vec::new();
 
