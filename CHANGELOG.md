@@ -2,7 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.0.7] - 2026-01-13
+## [2.0.7] - 2026-01-
+
+### Fixes
+
+- EIP712 Ledger compatibility fix ([#6375](https://github.com/chainflip-io/chainflip-backend/issues/6375))
+- Correctly reschedule fee swaps ([#6363](https://github.com/chainflip-io/chainflip-backend/issues/6363))
 
 ## [2.0.6] - 2026-01-05
 
