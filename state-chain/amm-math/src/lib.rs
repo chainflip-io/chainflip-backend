@@ -487,7 +487,6 @@ impl Price {
 	}
 
 	/// Get a price from a USD fine amount. The quote asset will be USD.
-	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd_fine_amount(price_usd: cf_primitives::AssetAmount) -> Self {
 		Self(U256::from(price_usd) << Self::FRACTIONAL_BITS)
 	}
@@ -506,7 +505,6 @@ impl Price {
 
 	/// Get the price of an asset given its dollar amount. The price is automatically scaled to the
 	/// asset's decimals. The quote asset will be USD.
-	#[cfg(any(feature = "runtime-benchmarks", feature = "test", test))]
 	pub fn from_usd(asset: Asset, dollar_amount: u32) -> Self {
 		Self::from_usd_cents(asset, dollar_amount * 100)
 	}

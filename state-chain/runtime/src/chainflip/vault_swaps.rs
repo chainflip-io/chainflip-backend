@@ -48,6 +48,7 @@ use cf_traits::{AffiliateRegistry, SwapParameterValidation};
 use codec::Decode;
 
 use frame_support::pallet_prelude::DispatchError;
+use sol_prim::consts::SOL_USD_DECIMAL;
 use sp_core::U256;
 use sp_std::{vec, vec::Vec};
 
@@ -199,17 +200,17 @@ pub fn evm_vault_swap<A>(
 				)
 				.abi_encoded_payload())
 			},
-		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::ArbUsdc => {
+		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc | Asset::ArbUsdt => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
-					Asset::Flip | Asset::Usdc | Asset::Usdt =>
+					Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc =>
 						<EvmEnvironment as EvmEnvironmentProvider<Ethereum>>::token_address(
 							source_asset.try_into().expect("Only Ethereum asset is processed here"),
 						),
-					Asset::ArbUsdc =>
+					Asset::ArbUsdc | Asset::ArbUsdt =>
 						<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
-							cf_chains::assets::arb::Asset::ArbUsdc,
+							source_asset.try_into().expect("Only Arbitrum asset is processed here"),
 						),
 					_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
 				}
@@ -335,11 +336,23 @@ pub fn solana_vault_swap<A>(
 				cf_parameters,
 				channel_metadata,
 			),
-			Asset::SolUsdc => {
+			Asset::SolUsdc | Asset::SolUsdt => {
+				let (token_mint_pubkey, token_vault_ata) = match source_asset {
+					Asset::SolUsdc => (
+						api_environment.usdc_token_mint_pubkey,
+						api_environment.usdc_token_vault_ata,
+					),
+					Asset::SolUsdt => (
+						api_environment.usdt_token_mint_pubkey,
+						api_environment.usdt_token_vault_ata,
+					),
+					_ => unreachable!("outer match restricts this arm to SolUsdc/SolUsdt"),
+				};
+
 				let token_supported_account =
 						cf_chains::sol::sol_tx_core::address_derivation::derive_token_supported_account(
 							api_environment.vault_program,
-							api_environment.usdc_token_mint_pubkey,
+							token_mint_pubkey,
 						)
 						.map_err(|_| "Failed to derive supported token account")?;
 
@@ -347,16 +360,16 @@ pub fn solana_vault_swap<A>(
 					Some(token_account) => SolPubkey::try_from(token_account)
 						.map_err(|_| "Failed to decode the source token account")?,
 					// Defaulting to the user's associated token account
-					None => derive_associated_token_account(
-						from.into(),
-						api_environment.usdc_token_mint_pubkey,
-					)
-					.map_err(|_| "Failed to derive the associated token account")?
-					.address
-					.into(),
+					None => derive_associated_token_account(from.into(), token_mint_pubkey)
+						.map_err(|_| "Failed to derive the associated token account")?
+						.address
+						.into(),
 				};
 
-				SolanaInstructionBuilder::x_swap_usdc(
+				SolanaInstructionBuilder::x_swap_token(
+					token_vault_ata,
+					token_mint_pubkey,
+					SOL_USD_DECIMAL,
 					api_environment,
 					destination_asset,
 					destination_address,
@@ -420,6 +433,9 @@ pub fn decode_bitcoin_vault_swap(
 pub fn decode_solana_vault_swap(
 	instruction: SolInstruction,
 ) -> Result<VaultSwapInputEncoded, DispatchErrorWithMessage> {
+	let api_environment =
+		SolEnvironment::api_environment().map_err(|_| "Failed to load Solana API environment")?;
+
 	let DecodedXSwapParams {
 		amount,
 		src_asset,
@@ -435,7 +451,7 @@ pub fn decode_solana_vault_swap(
 		affiliate_fees,
 		ccm,
 		seed,
-	} = cf_chains::sol::decode_sol_instruction_data(&instruction)?;
+	} = cf_chains::sol::decode_sol_instruction_data(&instruction, &api_environment)?;
 
 	Ok(VaultSwapInputEncoded {
 		source_asset: src_asset,

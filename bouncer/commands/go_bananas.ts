@@ -214,7 +214,7 @@ async function launchTornado<A = []>(cf: ChainflipIO<A>) {
     ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
-  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc', 'ArbUsdt'];
   for (let i = 0; i < 10; i++) {
     const index1 = Math.floor(Math.random() * assets.length);
     const index2 = Math.floor(Math.random() * assets.length);
@@ -236,13 +236,25 @@ const swapAmount = new Map<Asset, string>([
   ['Btc', '0.006'],
   ['Usdc', '30'],
   ['Usdt', '12'],
+  ['Wbtc', '0.006'],
   ['Flip', '3'],
   ['ArbEth', '0.03'],
   ['ArbUsdc', '30'],
+  ['ArbUsdt', '12'],
 ]);
 
 async function playSwapper<A = []>(cf: ChainflipIO<A>) {
-  const assets: Asset[] = ['Eth', 'Btc', 'Usdc', 'Flip', 'Usdt', 'ArbEth', 'ArbUsdc'];
+  const assets: Asset[] = [
+    'Eth',
+    'Btc',
+    'Usdc',
+    'Flip',
+    'Usdt',
+    'Wbtc',
+    'ArbEth',
+    'ArbUsdc',
+    'ArbUsdt',
+  ];
   for (;;) {
     const src = assets.at(Math.floor(Math.random() * assets.length))!;
     const dest = assets
@@ -259,9 +271,11 @@ const price = new Map<Asset, number>([
   ['Btc', 10000],
   ['Usdc', 1],
   ['Usdt', 1],
+  ['Wbtc', 10000],
   ['Flip', 10],
   ['ArbEth', 1000],
   ['ArbUsdc', 1],
+  ['ArbUsdt', 1],
 ]);
 
 async function bananas() {
@@ -275,8 +289,10 @@ async function bananas() {
     createLpPool(cf.logger, 'Btc', price.get('Btc')!),
     createLpPool(cf.logger, 'Flip', price.get('Flip')!),
     createLpPool(cf.logger, 'Usdt', price.get('Usdt')!),
+    createLpPool(cf.logger, 'Wbtc', price.get('Wbtc')!),
     createLpPool(cf.logger, 'ArbEth', price.get('ArbEth')!),
     createLpPool(cf.logger, 'ArbUsdc', price.get('ArbUsdc')!),
+    createLpPool(cf.logger, 'ArbUsdt', price.get('ArbUsdc')!),
   ]);
 
   await cf.all([
@@ -285,8 +301,10 @@ async function bananas() {
     (subcf) => depositLiquidity(subcf, 'Btc', (2 * liquidityUsdc) / price.get('Btc')!),
     (subcf) => depositLiquidity(subcf, 'Flip', (2 * liquidityUsdc) / price.get('Flip')!),
     (subcf) => depositLiquidity(subcf, 'Usdt', (2 * liquidityUsdc) / price.get('Usdt')!),
+    (subcf) => depositLiquidity(subcf, 'Wbtc', (2 * liquidityUsdc) / price.get('Wbtc')!),
     (subcf) => depositLiquidity(subcf, 'ArbEth', (2 * liquidityUsdc) / price.get('ArbEth')!),
     (subcf) => depositLiquidity(subcf, 'ArbUsdc', (2 * liquidityUsdc) / price.get('ArbUsdc')!),
+    (subcf) => depositLiquidity(subcf, 'ArbUsdt', (2 * liquidityUsdc) / price.get('ArbUsdt')!),
   ]);
 
   await cf.all([
@@ -321,6 +339,13 @@ async function bananas() {
     (subcf) =>
       playLp(
         subcf,
+        'Wbtc',
+        price.get('Wbtc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('Wbtc')),
+        liquidityUsdc,
+      ),
+    (subcf) =>
+      playLp(
+        subcf,
         'ArbEth',
         price.get('ArbEth')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbEth')),
         liquidityUsdc,
@@ -330,6 +355,13 @@ async function bananas() {
         subcf,
         'ArbUsdc',
         price.get('ArbUsdc')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdc')),
+        liquidityUsdc,
+      ),
+    (subcf) =>
+      playLp(
+        subcf,
+        'ArbUsdt',
+        price.get('ArbUsdt')! * 10 ** (assetDecimals('Usdc') - assetDecimals('ArbUsdt')),
         liquidityUsdc,
       ),
     (subcf) => playSwapper(subcf),

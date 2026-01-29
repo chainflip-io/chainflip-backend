@@ -142,6 +142,8 @@ impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment 
 			token_vault_pda_account: SolAddress([0x00; 32]),
 			usdc_token_mint_pubkey: SolAddress([0x00; 32]),
 			usdc_token_vault_ata: SolAddress([0x00; 32]),
+			usdt_token_mint_pubkey: SolAddress([0x00; 32]),
+			usdt_token_vault_ata: SolAddress([0x00; 32]),
 			swap_endpoint_program: SolAddress([0x00; 32]),
 			swap_endpoint_program_data_account: SolAddress([0x00; 32]),
 			alt_manager_program: SolAddress([0x00; 32]),
@@ -306,10 +308,11 @@ pub const ETH_CHAIN_ID: u64 = 1;
 pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([4u8; 20]);
 pub const ARB_VAULT_ADDRESS: eth::Address = H160([5u8; 20]);
 pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
-pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([7u8; 20]);
+pub const ARB_USDT_TOKEN_ADDRESS: eth::Address = H160([7u8; 20]);
+pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([8u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
 
-pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([8u8; 20]);
+pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([9u8; 20]);
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
@@ -326,10 +329,12 @@ cf_test_utilities::impl_test_helpers! {
 			arb_vault_address: ARB_VAULT_ADDRESS,
 			arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
 			arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
+			arb_usdt_address: ARB_USDT_TOKEN_ADDRESS,
 			arbitrum_chain_id: ARB_CHAIN_ID,
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
 			eth_usdt_address: [0x2; 20].into(),
+			eth_wbtc_address: [0x2; 20].into(),
 			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			assethub_genesis_hash: H256([0u8; 32]),
@@ -417,6 +422,7 @@ pub mod benchmarks_mock {
 				arb_vault_address: ARB_VAULT_ADDRESS,
 				arb_address_checker_address: ARB_ADDRESS_CHECKER_ADDRESS,
 				arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
+				arb_usdt_address: ARB_USDT_TOKEN_ADDRESS,
 				arbitrum_chain_id: ARB_CHAIN_ID,
 				flip_token_address: [0u8; 20].into(),
 				eth_usdc_address: [0x2; 20].into(),

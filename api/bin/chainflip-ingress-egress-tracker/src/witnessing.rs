@@ -48,6 +48,7 @@ pub(super) struct EnvironmentParameters {
 	eth_flip_contract_address: H160,
 	eth_usdc_contract_address: H160,
 	eth_usdt_contract_address: H160,
+	eth_wbtc_contract_address: H160,
 	eth_supported_erc20_tokens: HashMap<H160, Asset>,
 
 	arb_chain_id: u64,
@@ -55,6 +56,7 @@ pub(super) struct EnvironmentParameters {
 	arb_address_checker_address: H160,
 	arb_key_manager_address: H160,
 	arb_usdc_contract_address: H160,
+	arb_usdt_contract_address: H160,
 	arb_supported_erc20_tokens: HashMap<H160, Asset>,
 
 	dot_genesis_hash: PolkadotHash,
@@ -110,6 +112,9 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	let eth_usdt_contract_address =
 		*eth_supported_erc20_tokens.get(&EthAsset::Usdt).expect("USDT not supported");
 
+	let eth_wbtc_contract_address =
+		*eth_supported_erc20_tokens.get(&EthAsset::Wbtc).expect("WBTC not supported");
+
 	let eth_supported_erc20_tokens: HashMap<H160, Asset> = eth_supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -155,6 +160,9 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 	let arb_usdc_contract_address =
 		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdc).expect("USDC not supported");
 
+	let arb_usdt_contract_address =
+		*arb_supported_erc20_tokens.get(&ArbAsset::ArbUsdt).expect("USDT not supported");
+
 	let arb_supported_erc20_tokens: HashMap<H160, Asset> = arb_supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -186,6 +194,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		eth_flip_contract_address,
 		eth_usdc_contract_address,
 		eth_usdt_contract_address,
+		eth_wbtc_contract_address,
 		eth_address_checker_address,
 		eth_supported_erc20_tokens,
 
@@ -194,6 +203,7 @@ async fn get_env_parameters(state_chain_client: &StateChainClient<()>) -> Enviro
 		arb_key_manager_address,
 		arb_address_checker_address,
 		arb_usdc_contract_address,
+		arb_usdt_contract_address,
 		arb_supported_erc20_tokens,
 
 		dot_genesis_hash,

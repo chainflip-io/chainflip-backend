@@ -53,6 +53,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
 	eth_usdc_address: hex_literal::hex!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
 	eth_usdt_address: hex_literal::hex!("dAC17F958D2ee523a2206206994597C13D831ec7"),
+	eth_wbtc_address: hex_literal::hex!("2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599"),
 	state_chain_gateway_address: hex_literal::hex!("6995Ab7c4D7F4B03f467Cf4c8E920427d9621DBd"),
 	eth_key_manager_address: hex_literal::hex!("cd351d3626Dc244730796A3168D315168eBf08Be"),
 	eth_vault_address: hex_literal::hex!("F5e10380213880111522dd0efD3dbb45b9f62Bcc"),
@@ -61,6 +62,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_key_manager_address: hex_literal::hex!("BFe612c77C2807Ac5a6A41F84436287578000275"),
 	arb_vault_address: hex_literal::hex!("79001a5e762f3bEFC8e5871b42F6734e00498920"),
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
+	arb_usdt_token_address: hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 	arb_address_checker_address: hex_literal::hex!("69C700A0DEBAb9e349dd1f52ED62eb253a3c9892"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
@@ -95,6 +97,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
 		"8KNqCBB1LKWbtjNxY9v2g1fSBKm2ZRgNNv7rmx2bE6Ce",
 	)),
+	sol_usdt_token_mint_pubkey: SolAddress(bs58_array(
+		"Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+	)),
+	sol_usdt_token_vault_ata: SolAddress(bs58_array("R4Z9JGY8iMmG4UJf6aBtzobAo4rmGMdfLgXrbXSWc4y")),
 	sol_durable_nonces_and_accounts: [
 		(
 			const_address("BDKywh4jrvMEFRUkX1bzK8JoyXBY7cmjaZh7bRFpMX4o"),

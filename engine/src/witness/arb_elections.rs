@@ -132,6 +132,7 @@ pub struct ArbitrumDepositChannelWitnesserVoter {
 	address_checker_address: H160,
 	vault_address: H160,
 	usdc_contract_address: H160,
+	usdt_contract_address: H160,
 }
 
 #[async_trait::async_trait]
@@ -158,7 +159,8 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 		block_hash: sp_core::H256,
 	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
 		use crate::witness::evm::{
-			contract_common::events_at_block, erc20_deposits::usdc::UsdcEvents,
+			contract_common::events_at_block,
+			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents},
 		};
 
 		let events = match asset {
@@ -168,6 +170,22 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 					block_height,
 					block_hash,
 					self.usdc_contract_address,
+					&self.client,
+				)
+				.await?
+				.into_iter()
+				.map(|event| crate::witness::evm::contract_common::Event {
+					event_parameters: event.event_parameters.into(),
+					tx_hash: event.tx_hash,
+					log_index: event.log_index,
+				})
+				.collect::<Vec<_>>(),
+			ArbAsset::ArbUsdt =>
+				events_at_block::<cf_chains::Arbitrum, UsdtEvents, ArbitrumChain, _>(
+					bloom,
+					block_height,
+					block_hash,
+					self.usdt_contract_address,
 					&self.client,
 				)
 				.await?
@@ -389,6 +407,9 @@ where
 	let usdc_contract_address =
 		*supported_erc20_tokens.get(&ArbAsset::ArbUsdc).context("USDC not supported")?;
 
+	let usdt_contract_address =
+		*supported_erc20_tokens.get(&ArbAsset::ArbUsdt).context("USDT not supported")?;
+
 	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
 		.into_iter()
 		.map(|(asset, address)| (address, asset.into()))
@@ -406,6 +427,7 @@ where
 							address_checker_address,
 							vault_address,
 							usdc_contract_address,
+							usdt_contract_address,
 						},
 						ArbitrumVaultDepositWitnesserVoter {
 							client: client.clone(),

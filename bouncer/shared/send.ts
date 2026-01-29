@@ -16,6 +16,7 @@ import { approveErc20 } from 'shared/approve_erc20';
 import { getCFTesterAbi } from 'shared/contract_interfaces';
 import { sendSol } from 'shared/send_sol';
 import { sendSolUsdc } from 'shared/send_solusdc';
+import { sendSolUsdt } from 'shared/send_solusdt';
 import { sendHubAsset } from 'shared/send_hubasset';
 import { Logger } from 'shared/utils/logger';
 
@@ -41,16 +42,20 @@ export async function send(
       return sendSol(logger, address, amount);
     case 'Usdc':
     case 'Usdt':
+    case 'Wbtc':
     case 'Flip': {
       const contractAddress = getContractAddress('Ethereum', asset);
       return sendErc20(logger, 'Ethereum', address, contractAddress, amount);
     }
-    case 'ArbUsdc': {
+    case 'ArbUsdc':
+    case 'ArbUsdt': {
       const contractAddress = getContractAddress('Arbitrum', asset);
       return sendErc20(logger, 'Arbitrum', address, contractAddress, amount);
     }
     case 'SolUsdc':
       return sendSolUsdc(logger, address, amount);
+    case 'SolUsdt':
+      return sendSolUsdt(logger, address, amount);
     case 'HubDot':
     case 'HubUsdc':
     case 'HubUsdt':

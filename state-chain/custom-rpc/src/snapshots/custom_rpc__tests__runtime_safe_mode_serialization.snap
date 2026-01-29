@@ -90,6 +90,18 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "add_lender_funds": [
@@ -144,6 +156,18 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "withdraw_lender_funds": [
@@ -198,6 +222,18 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "add_collateral": [
@@ -252,6 +288,18 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "remove_collateral": [
@@ -306,6 +354,18 @@ expression: val
       {
         "chain": "Assethub",
         "asset": "USDC"
+      },
+      {
+        "chain": "Ethereum",
+        "asset": "WBTC"
+      },
+      {
+        "chain": "Arbitrum",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Solana",
+        "asset": "USDT"
       }
     ],
     "liquidations_enabled": true

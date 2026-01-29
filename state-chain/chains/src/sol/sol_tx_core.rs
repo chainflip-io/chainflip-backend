@@ -180,7 +180,11 @@ pub mod sol_test_values {
 	// This can be derived from the TOKEN_VAULT_PDA_ACCOUNT and the mintPubKey but we can have it
 	// stored There will be a different one per each supported spl-token
 	pub const USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
-		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
+		const_address("9CGLwcPknpYs3atgwtjMX7RhgvBgaqK8wwCvXnmjEoL9");
+	pub const USDT_TOKEN_MINT_PUB_KEY: SolAddress =
+		const_address("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF");
+	pub const USDT_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT: SolAddress =
+		const_address("FjAhVXJj9N7nqVK6y5fzgVcAxtRYFnHCZgy9FEMMDww3");
 	pub const SWAP_ENDPOINT_DATA_ACCOUNT_ADDRESS: SolAddress =
 		const_address("GgqCE4bTwMy4QWVaTRTKJqETAgim49zNrH1dL6zXaTpd");
 	pub const NONCE_ACCOUNTS: [SolAddress; 10] = [
@@ -283,6 +287,8 @@ pub mod sol_test_values {
 			token_vault_pda_account: TOKEN_VAULT_PDA_ACCOUNT,
 			usdc_token_mint_pubkey: USDC_TOKEN_MINT_PUB_KEY,
 			usdc_token_vault_ata: USDC_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
+			usdt_token_mint_pubkey: USDT_TOKEN_MINT_PUB_KEY,
+			usdt_token_vault_ata: USDT_TOKEN_VAULT_ASSOCIATED_TOKEN_ACCOUNT,
 			swap_endpoint_program: SWAP_ENDPOINT_PROGRAM,
 			swap_endpoint_program_data_account: SWAP_ENDPOINT_PROGRAM_DATA_ACCOUNT,
 			alt_manager_program: ALT_MANAGER_PROGRAM,
@@ -368,7 +374,7 @@ pub mod sol_test_values {
 	}
 
 	pub fn chainflip_alt() -> SolAddressLookupTableAccount {
-		let token_vault_ata =
+		let usdc_token_vault_ata =
 			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
 				TOKEN_VAULT_PDA_ACCOUNT,
 				USDC_TOKEN_MINT_PUB_KEY,
@@ -394,7 +400,7 @@ pub mod sol_test_values {
 					sol_prim::consts::ASSOCIATED_TOKEN_PROGRAM_ID,
 					sol_prim::consts::SYSTEM_PROGRAM_ID,
 					sol_prim::consts::SYS_VAR_RECENT_BLOCKHASHES,
-					token_vault_ata,
+					usdc_token_vault_ata,
 				],
 				NONCE_ACCOUNTS.to_vec(),
 			]

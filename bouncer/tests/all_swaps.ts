@@ -80,14 +80,14 @@ export function testAllSwaps(timeoutPerSwap: number) {
 
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
-
   const AssetsWithoutAssethubAndDot = Object.values(Assets).filter(
     (id) => !id.startsWith('Hub') && id !== 'Dot',
   );
 
-  AssetsWithoutAssethubAndDot.forEach((sourceAsset) => {
-    AssetsWithoutAssethubAndDot.filter((destAsset) => sourceAsset !== destAsset).forEach(
-      (destAsset) => {
+  AssetsWithoutAssethubAndDot.sort().forEach((sourceAsset) => {
+    AssetsWithoutAssethubAndDot.sort()
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
         // Regular swaps
         appendSwap(sourceAsset, destAsset, testSwap);
 
@@ -108,15 +108,14 @@ export function testAllSwaps(timeoutPerSwap: number) {
           // CCM swaps
           appendSwap(sourceAsset, destAsset, testSwap, true);
         }
-      },
-    );
+      });
   });
 
   // Swaps from assethub paired with random chains.
   // NOTE: we don't test swaps *to* assethub here, those tests are run sequentially in
   // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
-  assethubAssets.forEach((hubAsset) => {
+  assethubAssets.sort().forEach((hubAsset) => {
     appendSwap(hubAsset, randomElement(AssetsWithoutAssethubAndDot), testSwap);
   });
 

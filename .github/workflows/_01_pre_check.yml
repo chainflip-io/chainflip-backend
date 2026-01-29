@@ -63,7 +63,9 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Install pnpm 💿
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Configure NodeJS 🛠️
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903

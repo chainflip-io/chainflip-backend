@@ -10,7 +10,8 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "ETH": "0x29a2241af62c0000",
       "FLIP": "0x0",
       "USDC": "0x2625a0",
-      "USDT": "0x16e360"
+      "USDT": "0x16e360",
+      "WBTC": "0x47868c0"
     },
     "Polkadot": {
       "DOT": "0x5d21dba00"
@@ -20,11 +21,13 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
     },
     "Arbitrum": {
       "ETH": "0x6f05b59d3b20000",
-      "USDC": "0xf4240"
+      "USDC": "0xf4240",
+      "USDT": "0x16e360"
     },
     "Solana": {
       "SOL": "0x12a05f200",
-      "USDC": "0xb71b0"
+      "USDC": "0xb71b0",
+      "USDT": "0x16e360"
     },
     "Assethub": {
       "DOT": "0x2540be400",
