@@ -259,9 +259,7 @@ mod benchmarks {
 				T::BalanceApi::credit_account(&account_id, asset, 1_000_000_000);
 				(account_id, asset, 500_000_000)
 			})
-			.collect::<Vec<_>>()
-			.try_into()
-			.unwrap();
+			.collect::<Vec<_>>();
 
 		#[block]
 		{

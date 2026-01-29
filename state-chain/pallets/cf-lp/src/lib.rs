@@ -77,8 +77,6 @@ pub const EMA_PRUNE_WEIGHT_7_DAYS: FixedU128 =
 pub const EMA_PRUNE_WEIGHT_30_DAYS: FixedU128 =
 	FixedU128::from_perbill(Perbill::from_parts(100_000_000)); // 0.1
 
-pub const MAX_NUM_ACCOUNTS_TO_PURGE: u32 = 100;
-
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm_math::PriceLimits;
@@ -577,10 +575,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::purge_balances(accounts.len() as u32))]
 		pub fn purge_balances(
 			origin: OriginFor<T>,
-			accounts: BoundedVec<
-				(T::AccountId, Asset, AssetAmount),
-				ConstU32<MAX_NUM_ACOUNTS_TO_PURGE>,
-			>,
+			accounts: Vec<(T::AccountId, Asset, AssetAmount)>,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -739,12 +734,15 @@ impl<T: Config> Pallet<T> {
 		);
 		let destination_address = T::AddressConverter::to_encoded_address(refund_address.clone());
 
-		// Sweep earned fees and Debit the asset from the account.
+		// Sweep earned fees and debit the asset from the account.
 		T::PoolApi::sweep(&account_id)?;
-		T::BalanceApi::try_debit_account(&account_id, asset, amount)?;
+		let available = T::BalanceApi::get_balance(&account_id, asset);
+		let amount_to_purge = amount.min(available);
+		ensure!(amount_to_purge > 0, Error::<T>::InsufficientBalance);
+		T::BalanceApi::try_debit_account(&account_id, asset, amount_to_purge)?;
 
 		let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-			T::EgressHandler::schedule_egress(asset, amount, refund_address, None)
+			T::EgressHandler::schedule_egress(asset, amount_to_purge, refund_address, None)
 				.map_err(Into::into)?;
 
 		Self::deposit_event(Event::<T>::AssetBalancePurged {

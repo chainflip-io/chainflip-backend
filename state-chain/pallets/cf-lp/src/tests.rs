@@ -730,7 +730,7 @@ fn test_purge_balances() {
 		const AMOUNT: AssetAmount = 1_000_000;
 
 		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, AMOUNT);
-		MockBalanceApi::credit_account(&LP_ACCOUNT_2, Asset::Btc, AMOUNT);
+		MockBalanceApi::credit_account(&LP_ACCOUNT_2, Asset::Flip, AMOUNT);
 
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
 			OriginTrait::signed(LP_ACCOUNT),
@@ -747,9 +747,7 @@ fn test_purge_balances() {
 			(LP_ACCOUNT, Asset::Eth, AMOUNT),
 			(LP_ACCOUNT_2, Asset::Flip, AMOUNT),
 			(NON_LP_ACCOUNT, Asset::Usdc, AMOUNT),
-		]
-		.try_into()
-		.unwrap();
+		];
 		assert_ok!(Pallet::<Test>::purge_balances(RuntimeOrigin::root(), accounts));
 
 		assert_events_match!(Test,
