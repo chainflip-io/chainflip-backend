@@ -67,9 +67,10 @@ export async function requestNewSwap<A = []>(
     fillOrKillParams,
     dcaParams,
   );
-  const addressReady = await cf.expectEvent(
-    'Swapping.SwapDepositAddressReady',
-    swappingSwapDepositAddressReady.refine((event) => {
+
+  const addressReady = await cf.expectEvent({
+    name: 'Swapping.SwapDepositAddressReady',
+    schema: swappingSwapDepositAddressReady.refine((event) => {
       const eventMatches =
         event.destinationAddress.address.toLowerCase() === destAddress.toLowerCase() &&
         event.destinationAsset === destAsset &&
@@ -84,7 +85,7 @@ export async function requestNewSwap<A = []>(
 
       return eventMatches && ccmMetadataMatches;
     }),
-  );
+  });
 
   const depositAddress = addressReady.depositAddress.address;
   const channelDestAddress = addressReady.destinationAddress.address;
