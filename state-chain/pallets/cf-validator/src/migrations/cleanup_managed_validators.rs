@@ -1,12 +1,11 @@
 use crate::{Config, ManagedValidators, OperatorChoice};
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
-use frame_support::{
-	sp_runtime::DispatchError, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
-};
+use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
+use sp_std::vec::Vec;
 
 #[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
+use frame_support::sp_runtime::DispatchError;
 
 pub struct CleanupManagedValidators<T: Config>(sp_std::marker::PhantomData<T>);
 
