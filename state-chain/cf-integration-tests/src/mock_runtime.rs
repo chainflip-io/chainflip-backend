@@ -37,8 +37,10 @@ use sp_core::H160;
 use sp_runtime::{Percent, Permill};
 use state_chain_runtime::{
 	chainflip::{
-		generic_elections::{initial_state, ChainlinkOraclePriceSettings},
-		solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings},
+		witnessing::{
+			generic_elections::{initial_state, ChainlinkOraclePriceSettings},
+			solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings},
+		},
 		Offence,
 	},
 	constants::common::*,

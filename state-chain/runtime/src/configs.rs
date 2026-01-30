@@ -2,7 +2,7 @@ use crate::{
 	chainflip::{
 		epoch_transition::ChainflipEpochTransitions,
 		multi_vault_activator::MultiVaultActivator,
-		solana_elections::{
+		witnessing::solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
 			SolanaNonceTrackingTrigger,
 		},
@@ -1002,47 +1002,55 @@ impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Solana as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystemRunner = chainflip::solana_elections::SolanaElectoralSystemRunner;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type ElectoralSystemConfiguration =
-		chainflip::solana_elections::SolanaElectoralSystemConfiguration;
+		chainflip::witnessing::solana_elections::SolanaElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Bitcoin as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystemRunner = chainflip::bitcoin_elections::BitcoinElectoralSystemRunner;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type ElectoralSystemConfiguration =
-		chainflip::bitcoin_elections::BitcoinElectoralSystemConfiguration;
+		chainflip::witnessing::bitcoin_elections::BitcoinElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystemRunner = chainflip::generic_elections::GenericElectoralSystemRunner;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::generic_elections::GenericElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type ElectoralSystemConfiguration = chainflip::generic_elections::GenericElectionHooks;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::generic_elections::GenericElectionHooks;
 	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance1> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystemRunner = chainflip::ethereum_elections::EthereumElectoralSystemRunner;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::ethereum_elections::EthereumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type ElectoralSystemConfiguration = chainflip::ethereum_elections::ElectoralSystemConfiguration;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::ethereum_elections::ElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 
 impl pallet_cf_elections::Config<Instance4> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Arbitrum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type RuntimeEvent = RuntimeEvent;
-	type ElectoralSystemRunner = chainflip::arbitrum_elections::ArbitrumElectoralSystemRunner;
+	type ElectoralSystemRunner =
+		chainflip::witnessing::arbitrum_elections::ArbitrumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
-	type ElectoralSystemConfiguration = chainflip::arbitrum_elections::ElectoralSystemConfiguration;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::arbitrum_elections::ElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 

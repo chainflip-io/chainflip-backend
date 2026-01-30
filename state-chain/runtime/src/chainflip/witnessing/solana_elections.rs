@@ -70,7 +70,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 use cf_chains::benchmarking_value::BenchmarkValue;
 use electoral_systems::liveness::Liveness;
 
-use super::SolEnvironment;
+use crate::chainflip::SolEnvironment;
 
 type Instance = <Solana as ChainInstanceAlias>::Instance;
 

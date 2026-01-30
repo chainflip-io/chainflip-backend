@@ -1,7 +1,7 @@
 use crate::*;
 use frame_support::{pallet_prelude::Weight, traits::OnRuntimeUpgrade};
 
-use crate::chainflip::arbitrum_elections;
+use crate::chainflip::witnessing::arbitrum_elections;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
@@ -26,7 +26,7 @@ impl OnRuntimeUpgrade for Migration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		use crate::chainflip::arbitrum_elections::ARBITRUM_MAINNET_SAFETY_BUFFER;
+		use crate::chainflip::witnessing::arbitrum_elections::ARBITRUM_MAINNET_SAFETY_BUFFER;
 		use pallet_cf_elections::{
 			electoral_systems::{
 				block_height_witnesser::BlockHeightWitnesserSettings,

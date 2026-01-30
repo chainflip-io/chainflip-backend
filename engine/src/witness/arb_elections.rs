@@ -48,7 +48,7 @@ use pallet_cf_elections::{
 };
 use sp_core::H160;
 use state_chain_runtime::{
-	chainflip::arbitrum_elections::{
+	chainflip::witnessing::arbitrum_elections::{
 		ArbitrumBlockHeightWitnesserES, ArbitrumChain, ArbitrumDepositChannelWitnessingES,
 		ArbitrumElectoralSystemRunner, ArbitrumFeeTracking, ArbitrumKeyManagerWitnessingES,
 		ArbitrumLiveness, ArbitrumVaultDepositWitnessingES, ARBITRUM_MAINNET_SAFETY_BUFFER,
@@ -191,7 +191,7 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 		_settings: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<ArbitrumDepositChannelWitnessingES>>, anyhow::Error> {
-		use state_chain_runtime::chainflip::arbitrum_elections::ArbitrumChain;
+		use state_chain_runtime::chainflip::witnessing::arbitrum_elections::ArbitrumChain;
 
 		let BWElectionProperties {
 			block_height, properties: deposit_addresses, election_type, ..

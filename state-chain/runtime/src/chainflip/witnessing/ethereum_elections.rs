@@ -2,7 +2,8 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		elections::TypesFor, ethereum_block_processor::EthEvent, ReportFailedLivenessCheck,
+		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent},
+		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
 	AccountId, EthereumChainTracking, EthereumIngressEgress, Runtime,

@@ -43,9 +43,12 @@ use sp_core::{
 };
 use state_chain_runtime::{
 	chainflip::{
-		arbitrum_elections, bitcoin_elections, ethereum_elections,
-		generic_elections::{self, ChainlinkOraclePriceSettings},
-		solana_elections, Offence,
+		witnessing::{
+			arbitrum_elections, bitcoin_elections, ethereum_elections,
+			generic_elections::{self, ChainlinkOraclePriceSettings},
+			solana_elections,
+		},
+		Offence,
 	},
 	constants::common::{
 		BLOCKS_PER_MINUTE_ARBITRUM, BLOCKS_PER_MINUTE_ASSETHUB, BLOCKS_PER_MINUTE_ETHEREUM,

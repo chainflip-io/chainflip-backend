@@ -37,7 +37,7 @@ use sol_prim::program_instructions::{
 	swap_endpoints::types::{SwapEndpointDataAccount, SwapEvent},
 	ANCHOR_PROGRAM_DISCRIMINATOR_LENGTH,
 };
-use state_chain_runtime::chainflip::solana_elections::SolanaVaultSwapDetails;
+use state_chain_runtime::chainflip::witnessing::solana_elections::SolanaVaultSwapDetails;
 use std::collections::{BTreeSet, HashSet};
 use tracing::warn;
 

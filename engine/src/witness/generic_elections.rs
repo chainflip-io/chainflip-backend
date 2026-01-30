@@ -34,7 +34,7 @@ use pallet_cf_elections::{
 	VoteOf,
 };
 use sp_core::U256;
-use state_chain_runtime::chainflip::generic_elections::*;
+use state_chain_runtime::chainflip::witnessing::generic_elections::*;
 
 use anyhow::{anyhow, Result};
 use engine_sc_client::{

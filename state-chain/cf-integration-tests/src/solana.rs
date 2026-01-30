@@ -69,7 +69,7 @@ use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation,
-		solana_elections::{
+		witnessing::solana_elections::{
 			SolanaAltWitnessingElectoralAccess, SolanaAltWitnessingIdentifier,
 			TransactionSuccessDetails,
 		},

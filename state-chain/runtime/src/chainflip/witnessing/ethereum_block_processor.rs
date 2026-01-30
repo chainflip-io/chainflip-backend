@@ -1,5 +1,5 @@
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		elections::TypesFor,
 		ethereum_elections::{
 			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,

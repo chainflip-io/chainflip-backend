@@ -17,7 +17,7 @@
 use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		arbitrum_elections::ArbitrumElectionsSafeMode,
 		ethereum_elections::EthereumElectionsSafeMode,
 	},
@@ -69,7 +69,8 @@ mod old {
 		pub ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
 		pub ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance>,
 		pub ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<AssethubInstance>,
-		pub elections_generic: crate::chainflip::generic_elections::GenericElectionsSafeMode,
+		pub elections_generic:
+			crate::chainflip::witnessing::generic_elections::GenericElectionsSafeMode,
 	}
 }
 

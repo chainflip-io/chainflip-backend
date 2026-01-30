@@ -39,7 +39,7 @@ use pallet_cf_elections::{
 	generic_tools::*,
 };
 
-use crate::{chainflip::elections::TypesFor, Runtime, Timestamp};
+use crate::{chainflip::witnessing::elections::TypesFor, Runtime, Timestamp};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
