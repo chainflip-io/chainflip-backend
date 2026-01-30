@@ -718,7 +718,7 @@ fn update_agg_stats_prunes_below_threshold() {
 
 		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
 		assert!(
-			lp2_stats.avg_limit_usd_volume.weighted_score() >=
+			lp2_stats.avg_limit_usd_volume.pruning_weighted_score() >=
 				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
 		);
 	});

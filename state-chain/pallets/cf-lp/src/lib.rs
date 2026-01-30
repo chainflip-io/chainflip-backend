@@ -141,7 +141,7 @@ pub mod pallet {
 			Self { one_day: initial_val, seven_days: initial_val, thirty_days: initial_val }
 		}
 
-		pub fn weighted_score(&self) -> FixedU128 {
+		pub fn pruning_weighted_score(&self) -> FixedU128 {
 			self.one_day
 				.saturating_mul(EMA_PRUNE_WEIGHT_1_DAY)
 				.saturating_add(self.seven_days.saturating_mul(EMA_PRUNE_WEIGHT_7_DAYS))
@@ -197,8 +197,8 @@ pub mod pallet {
 			self.avg_limit_usd_volume.update(&delta.limit_orders_swap_usd_volume);
 		}
 
-		pub fn is_below_threshold(&self, threshold: FixedU128) -> bool {
-			self.avg_limit_usd_volume.weighted_score() < threshold
+		pub fn is_below_pruning_threshold(&self, threshold: FixedU128) -> bool {
+			self.avg_limit_usd_volume.pruning_weighted_score() < threshold
 		}
 	}
 
@@ -687,7 +687,8 @@ impl<T: Config> Pallet<T> {
 				for (asset, agg_stats) in lp_stats.iter_mut() {
 					agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
 				}
-				lp_stats.retain(|_, agg_stats| !agg_stats.is_below_threshold(prune_threshold));
+				lp_stats
+					.retain(|_, agg_stats| !agg_stats.is_below_pruning_threshold(prune_threshold));
 				if lp_stats.is_empty() {
 					empty_lps.push(lp.clone());
 				}
