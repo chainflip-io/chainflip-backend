@@ -3647,8 +3647,7 @@ define_empty_struct! {
 impls! {
 	for PalletHooks<T, I> where (T: Config<I>, I: 'static):
 
-	fn (&mut self, event_and_block_height: (BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>)) -> () {
-		let (event, block_height) = event_and_block_height;
+	fn (&mut self, (event, block_height): (BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>)) -> () {
 		match event {
 			BlockWitnesserEvent::PreWitness(deposit_witness) => {
 				let _ = Pallet::<T, I>::process_channel_deposit_prewitness(
@@ -3662,8 +3661,7 @@ impls! {
 		}
 	}
 
-	fn (&mut self, event_and_block_height: (BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
-		let (event, block_height) = event_and_block_height;
+	fn (&mut self, (event, block_height): (BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
 		match event {
 			BlockWitnesserEvent::PreWitness(deposit) => {
 				Pallet::<T, I>::process_vault_swap_request_prewitness(

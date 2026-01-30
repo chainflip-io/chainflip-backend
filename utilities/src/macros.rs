@@ -115,7 +115,7 @@ pub use define_empty_struct;
 macro_rules! impls {
 	// hook implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? fn(&mut self, $args:ident: $input_ty:ty) -> $output_ty:ty
+	$(#[doc = $doc_text:tt])? fn(&mut self, $args:tt: $input_ty:ty) -> $output_ty:ty
 	$(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
