@@ -22,8 +22,7 @@ use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
-	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex,
-	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
+	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex, EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -42,17 +41,17 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
-pub type PayloadFor<T, I = ()> = <<T as Config<I>>::TargetChain as ChainCrypto>::Payload;
+pub type PayloadFor<T, I = ()> = <<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;
 
 pub type AggKeyFor<T, I = ()> =
-	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
-pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
+pub type ChainBlockNumberFor<T, I = ()> = <<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainBlockNumber;
 pub type TransactionInIdFor<T, I = ()> =
-	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 pub type TransactionOutIdFor<T, I = ()> =
-	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 pub type ThresholdSignatureFor<T, I = ()> =
-	<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
@@ -71,7 +70,9 @@ pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use super::*;
+	use cf_traits::ChainflipWithTargetChain;
+
+use super::*;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
@@ -80,17 +81,14 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>: ChainflipWithTargetChain<I> {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The chain that is managed by this vault must implement the api types.
-		type TargetChain: Chain;
-
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
-			<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto,
+			<Self::TargetChain as Chain>::ChainCrypto,
 		>;
 
 		/// A broadcaster for the target chain.
