@@ -47,7 +47,8 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, DepositApi, DummyIngressSource, NetworkEnvironmentProvider, OnDeposit,
+	AccountRoleRegistry, ChainflipWithTargetChain, DepositApi, DummyIngressSource,
+	NetworkEnvironmentProvider, OnDeposit, TargetChainOf,
 };
 use frame_support::{
 	assert_ok, derive_impl,
@@ -115,13 +116,16 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	}
 }
 
+impl ChainflipWithTargetChain<Instance1> for Test {
+	type TargetChain = Ethereum;
+}
+
 impl Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Self>>;
-	type TargetChain = Ethereum;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
@@ -147,13 +151,16 @@ impl Config<Instance1> for Test {
 	type LpRegistrationApi = MockLpRegistration;
 }
 
+impl ChainflipWithTargetChain<Instance2> for Test {
+	type TargetChain = Bitcoin;
+}
+
 impl Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
-	type TargetChain = Bitcoin;
 	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
@@ -212,9 +219,9 @@ pub const BROKER: <Test as frame_system::Config>::AccountId = 456u64;
 pub const WHITELISTED_BROKER: <Test as frame_system::Config>::AccountId = BROKER + 1;
 pub const SCREENING_ID: <Test as frame_system::Config>::AccountId = 0xcf;
 
-type TestChainAccount<I> = <<Test as Config<I>>::TargetChain as Chain>::ChainAccount;
-type TestChainAmount<I> = <<Test as Config<I>>::TargetChain as Chain>::ChainAmount;
-type TestChainAsset<I> = <<Test as Config<I>>::TargetChain as Chain>::ChainAsset;
+type TestChainAccount<I> = <TargetChainOf<Test, I> as Chain>::ChainAccount;
+type TestChainAmount<I> = <TargetChainOf<Test, I> as Chain>::ChainAmount;
+type TestChainAsset<I> = <TargetChainOf<Test, I> as Chain>::ChainAsset;
 
 impl_test_helpers! {
 	Test,
@@ -258,7 +265,7 @@ pub trait RequestAddressAndDeposit {
 	) -> TestExternalities<Test, Vec<(DepositRequest<I>, ChannelId, TestChainAccount<I>)>>
 	where
 		Test: Config<I>,
-		<<Test as Config<I>>::TargetChain as Chain>::DepositDetails: Default;
+		<TargetChainOf<Test, I> as Chain>::DepositDetails: Default;
 }
 
 impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
@@ -270,7 +277,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 	) -> TestExternalities<Test, Vec<(DepositRequest<I>, ChannelId, TestChainAccount<I>)>>
 	where
 		Test: Config<I>,
-		<<Test as Config<I>>::TargetChain as Chain>::DepositDetails: Default,
+		<TargetChainOf<Test, I> as Chain>::DepositDetails: Default,
 	{
 		let (requests, amounts): (Vec<_>, Vec<_>) = requests.iter().cloned().unzip();
 
@@ -385,7 +392,7 @@ impl<Ctx: Clone> RequestAddress for TestExternalities<Test, Ctx> {
 						BROKER,
 						None,
 						10,
-						ChannelRefundParametersForChain::<<Test as Config<I>>::TargetChain> {
+						ChannelRefundParametersForChain::<TargetChainOf<Test, I>> {
 							retry_duration: 5,
 							refund_address: refund_address.clone(),
 							min_price: Default::default(),

@@ -132,6 +132,11 @@ pub trait Chainflip: frame_system::Config {
 		+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>;
 }
 
+pub trait ChainflipWithTargetChain<I: 'static>: Chainflip {
+	type TargetChain: Chain + Get<ForeignChain>;
+}
+pub type TargetChainOf<T, I> = <T as ChainflipWithTargetChain<I>>::TargetChain;
+
 pub trait EpochInfo {
 	/// The id type used for the validators.
 	type ValidatorId;

@@ -33,7 +33,7 @@ use cf_traits::{
 		liability_tracker::MockLiabilityTracker, signer_nomination::MockNominator,
 		threshold_signer::MockThresholdSigner,
 	},
-	AccountRoleRegistry, DummyEgressSuccessWitnesser, OnBroadcastReady,
+	AccountRoleRegistry, ChainflipWithTargetChain, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
@@ -114,11 +114,14 @@ impl RetryPolicy for MockRetryPolicy {
 
 impl_mock_runtime_safe_mode! { broadcast: PalletSafeMode<Instance1> }
 
+impl ChainflipWithTargetChain<Instance1> for Test {
+	type TargetChain = MockEthereum;
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
-	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereumChainCrypto, RuntimeCall>;

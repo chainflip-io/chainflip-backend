@@ -32,8 +32,8 @@ use cf_chains::{
 use cf_primitives::{BlockWitnesserEvent, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight, Hook,
-	RotationBroadcastsPending, ThresholdSigner,
+	CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain, ElectionEgressWitnesser, EpochInfo,
+	GetBlockHeight, Hook, RotationBroadcastsPending, ThresholdSigner,
 };
 use cf_utilities::define_empty_struct;
 use cfe_events::TxBroadcastRequest;
@@ -57,7 +57,7 @@ use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 type AggKey<T, I> =
-	<<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -85,45 +85,45 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
 	use cf_runtime_utilities::log_or_panic;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
+	use cf_traits::{
+		AccountRoleRegistry, BroadcastNomination, ChainflipWithTargetChain, LiabilityTracker,
+		OnBroadcastReady, TargetChainOf,
+	};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
 		traits::EnsureOrigin,
 	};
 
 	/// Type alias for the instance's configured Transaction.
-	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
+	pub type TransactionFor<T, I> = <TargetChainOf<T, I> as Chain>::Transaction;
 
 	/// Type alias for the instance's configured SignerId.
-	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
+	pub type SignerIdFor<T, I> = <TargetChainOf<T, I> as Chain>::ChainAccount;
 
 	/// Type alias for the threshold signature
 	pub type ThresholdSignatureFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 	pub type TransactionOutIdFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 
-	pub type TransactionRefFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::TransactionRef;
+	pub type TransactionRefFor<T, I> = <TargetChainOf<T, I> as Chain>::TransactionRef;
 
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::Payload;
 
 	/// Type alias for the instance's configured transaction Metadata.
-	pub type TransactionMetadataFor<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::TransactionMetadata;
+	pub type TransactionMetadataFor<T, I> = <TargetChainOf<T, I> as Chain>::TransactionMetadata;
 
 	pub type ChainBlockNumberFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainBlockNumber;
+		<TargetChainOf<T, I> as cf_chains::Chain>::ChainBlockNumber;
 
 	/// Type alias for the Amount type of a particular chain.
-	pub type ChainAmountFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
+	pub type ChainAmountFor<T, I> = <TargetChainOf<T, I> as cf_chains::Chain>::ChainAmount;
 
 	/// Type alias for the Amount type of a particular chain.
-	pub type TransactionFeeFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::TransactionFee;
+	pub type TransactionFeeFor<T, I> = <TargetChainOf<T, I> as cf_chains::Chain>::TransactionFee;
 
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
@@ -170,7 +170,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>:
+		ChainflipWithTargetChain<I, TargetChain: PalletInstanceAlias>
+	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -191,11 +193,8 @@ pub mod pallet {
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
 
-		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain + PalletInstanceAlias;
-
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>
+		type ApiCall: ApiCall<<<Self as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto>
 			+ BenchmarkValue
 			+ Send
 			+ Sync;
@@ -1243,7 +1242,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 			.first()
 			.defensive_proof("Broadcast ID was just inserted, so at least this one must exist.")
 		{
-			for barrier in <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id) {
+			for barrier in <<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id) {
 					if barrier >= *earliest_pending_broadcast_id {
 						BroadcastBarriers::<T, I>::append(barrier);
 					}

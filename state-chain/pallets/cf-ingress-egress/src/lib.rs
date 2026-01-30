@@ -61,7 +61,7 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
 	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
 	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, INITIAL_FLIP_FUNDING,
+	SwapRequestType, TargetChainOf, INITIAL_FLIP_FUNDING,
 };
 use cf_utilities::{define_empty_struct, impls};
 use frame_support::{
@@ -402,7 +402,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{OnDeposit, SwapParameterValidation};
+	use cf_traits::{ChainflipWithTargetChain, OnDeposit, SwapParameterValidation, TargetChainOf};
 	use cf_utilities::bounded_vec::map_bounded_vec;
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
@@ -416,14 +416,13 @@ pub mod pallet {
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
 
-	pub type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
-	pub type TargetChainAccount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
-	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
-	pub(crate) type TargetChainBlockNumber<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
+	pub type TargetChainAsset<T, I> = <TargetChainOf<T, I> as Chain>::ChainAsset;
+	pub type TargetChainAccount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAccount;
+	pub(crate) type TargetChainAmount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAmount;
+	pub(crate) type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
 
 	pub type TransactionInIdFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 	#[derive(
 		Clone,
@@ -680,7 +679,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>: ChainflipWithTargetChain<I> {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -699,9 +698,6 @@ pub mod pallet {
 			Chain = Self::TargetChain,
 			StateChainBlockNumber = BlockNumberFor<Self>,
 		>;
-
-		/// Marks which chain this pallet is interacting with.
-		type TargetChain: Chain + Get<ForeignChain>;
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -1178,7 +1174,7 @@ pub mod pallet {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								match <T as Config<I>>::TargetChain::get() {
+								match TargetChainOf::<T, I>::get() {
 									ForeignChain::Arbitrum |
 									ForeignChain::Bitcoin |
 									ForeignChain::Ethereum => ProcessedUpTo::<T, I>::get(),
@@ -1990,7 +1986,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(())
 		}
 
-		let mut fetch_params: Vec<FetchAssetParams<<T as Config<I>>::TargetChain>> = vec![];
+		let mut fetch_params: Vec<FetchAssetParams<TargetChainOf<T, I>>> = vec![];
 		let mut transfer_params = vec![];
 		let mut addresses = vec![];
 
@@ -2975,7 +2971,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
-		if refund_address == <<T as Config<I>>::TargetChain as Chain>::BURN_ADDRESS {
+		if refund_address == <TargetChainOf<T, I> as Chain>::BURN_ADDRESS {
 			return ChannelAction::Unrefundable;
 		}
 
@@ -3449,7 +3445,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
-			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
+			let egress_id = (TargetChainOf::<T, I>::get(), *id_counter);
 
 			match maybe_ccm_deposit_metadata {
 				Some(CcmDepositMetadata {
