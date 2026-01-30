@@ -52,8 +52,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
-		MockBalanceApi::insert_balance(NON_LP_ACCOUNT, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+		MockBalanceApi::insert_balance(NON_LP_ACCOUNT, Asset::Eth, 1_000);
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
@@ -90,7 +90,7 @@ fn liquidity_providers_can_move_assets_internally() {
 		const BALANCE_LP_1: AssetAmount = 1_000;
 		const TRANSFER_AMOUNT: AssetAmount = 100;
 
-		MockBalanceApi::insert_balance(LP_ACCOUNT, BALANCE_LP_1);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, BALANCE_LP_1);
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
@@ -148,7 +148,7 @@ fn liquidity_providers_can_move_assets_internally() {
 #[test]
 fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
 			RuntimeOrigin::signed(LP_ACCOUNT),
 			EncodedAddress::Eth(Default::default()),
