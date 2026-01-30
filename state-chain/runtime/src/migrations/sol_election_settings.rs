@@ -134,7 +134,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let settings_entries: Vec<_> =
-			old::ElectoralSettings::<Runtime, SolanaInstance>::drain().collect();
+			old::ElectoralSettings::<Runtime, SolanaInstance>::iter().collect();
 
 		Ok(settings_entries.encode())
 	}
