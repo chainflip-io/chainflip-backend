@@ -2,6 +2,7 @@ use crate::*;
 
 use crate::chainflip::solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings};
 use cf_chains::sol::SolAddress;
+use cf_runtime_utilities::NoopRuntimeUpgrade;
 use frame_support::{
 	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
 };
@@ -12,14 +13,14 @@ pub type Migration = (
 	VersionedMigration<
 		7,
 		8,
-		NoopMigration,
+		NoopRuntimeUpgrade,
 		pallet_cf_elections::Pallet<Runtime, ()>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,
 	VersionedMigration<
 		7,
 		8,
-		NoopMigration,
+		NoopRuntimeUpgrade,
 		pallet_cf_elections::Pallet<Runtime, BitcoinInstance>,
 		<Runtime as frame_system::Config>::DbWeight,
 	>,

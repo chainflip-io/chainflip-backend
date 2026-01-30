@@ -374,10 +374,10 @@ type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFEs EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
+	migrations::sol_election_settings::Migration,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,
-	migrations::sol_election_settings::Migration,
 	migrations::ethereum_elections::Migration,
 	migrations::arbitrum_elections::Migration,
 );
