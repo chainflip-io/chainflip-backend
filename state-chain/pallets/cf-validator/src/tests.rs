@@ -1349,6 +1349,44 @@ fn validator_deregistration_after_expired_epoch() {
 }
 
 #[test]
+fn validator_registration_operator_binding_and_deregistration() {
+	new_test_ext().execute_with(|| {
+		const OPERATOR: u64 = 1001;
+		const VALIDATOR: u64 = 2001;
+
+		// Step 1: Register as operator
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OPERATOR),
+			OPERATOR_SETTINGS,
+			vanity()
+		));
+
+		// Step 2: Register as validator
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(VALIDATOR),));
+
+		// Step 3: Operator claims the validator
+		assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OPERATOR), VALIDATOR));
+
+		// Step 4: Validator accepts the operator
+		assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(VALIDATOR), OPERATOR));
+		assert_eq!(OperatorChoice::<Test>::get(VALIDATOR), Some(OPERATOR));
+		assert!(ManagedValidators::<Test>::get(OPERATOR).contains(&VALIDATOR));
+
+		// Step 5: Verify the binding
+		cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+			Event::OperatorAcceptedByValidator { validator: VALIDATOR, operator: OPERATOR },
+		));
+
+		// Step 7: Deregister as validator
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(VALIDATOR),));
+
+		// Operator binding should be cleared
+		assert_eq!(OperatorChoice::<Test>::get(VALIDATOR), None);
+		assert!(!ManagedValidators::<Test>::get(OPERATOR).contains(&VALIDATOR));
+	});
+}
+
+#[test]
 fn test_start_and_stop_bidding() {
 	new_test_ext().execute_with(|| {
 		MockEpochInfo::add_authorities(ALICE);
