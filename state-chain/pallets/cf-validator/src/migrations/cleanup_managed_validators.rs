@@ -51,7 +51,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for CleanupManagedValidators<T> {
 					);
 					return Err("ManagedValidators contains validator without Validator role".into());
 				}
-				assert_eq!(OperatorChoice::<T>::get(validator), Some(operator));
+				assert_eq!(OperatorChoice::<T>::get(validator), Some(operator.clone()));
 			}
 		}
 
