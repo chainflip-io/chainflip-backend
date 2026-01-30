@@ -110,7 +110,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -871,17 +871,6 @@ pub mod pallet {
 				ManagedValidators::<T>::mutate(&operator, |validators| {
 					validators.remove(&account_id);
 				});
-			} else {
-				// we should not land in this else condition, but if we do, we should still cleanup
-				// the ManagedValidators
-				for op in ManagedValidators::<T>::iter_keys() {
-					if ManagedValidators::<T>::get(&op).contains(&account_id) {
-						ManagedValidators::<T>::mutate(&op, |validators| {
-							validators.remove(&account_id);
-						});
-						break;
-					}
-				}
 			}
 
 			ClaimedValidators::<T>::remove(&account_id);
