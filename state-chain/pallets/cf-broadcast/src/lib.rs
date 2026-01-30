@@ -29,12 +29,13 @@ use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BlockWitnesserEvent, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight,
+	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight, Hook,
 	RotationBroadcastsPending, ThresholdSigner,
 };
+use cf_utilities::define_empty_struct;
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use derive_where::derive_where;
@@ -645,7 +646,16 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
-			Self::egress_success(origin, tx_out_id, signer_id, tx_fee, tx_metadata, transaction_ref)
+			Self::egress_success(
+				origin,
+				TransactionConfirmation {
+					tx_out_id,
+					signer_id,
+					tx_fee,
+					tx_metadata,
+					transaction_ref,
+				},
+			)
 		}
 
 		#[pallet::weight(T::WeightInfo::stress_test(*how_many))]
@@ -791,11 +801,13 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn egress_success(
 		origin: OriginFor<T>,
-		tx_out_id: TransactionOutIdFor<T, I>,
-		signer_id: SignerIdFor<T, I>,
-		tx_fee: TransactionFeeFor<T, I>,
-		tx_metadata: TransactionMetadataFor<T, I>,
-		transaction_ref: TransactionRefFor<T, I>,
+		TransactionConfirmation {
+			tx_out_id,
+			signer_id,
+			tx_fee,
+			tx_metadata,
+			transaction_ref,
+		}: TransactionConfirmation<T, I>,
 	) -> DispatchResult {
 		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
@@ -1247,5 +1259,46 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> RotationBroadcastsPending for Pallet<T, I> {
 	fn rotation_broadcasts_pending() -> bool {
 		IncomingKeyAndBroadcastId::<T, I>::exists()
+	}
+}
+
+define_empty_struct! {
+	pub struct PalletHooks<T: Config<I>, I: 'static>;
+}
+
+impl<T: Config<I>, I: 'static>
+	Hook<(
+		(
+			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
+			<T::TargetChain as Chain>::ChainBlockNumber,
+		),
+		(),
+	)> for PalletHooks<T, I>
+where
+	<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
+{
+	fn run(
+		&mut self,
+		(event, _block_height): (
+			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
+			<T::TargetChain as Chain>::ChainBlockNumber,
+		),
+	) {
+		match event {
+			BlockWitnesserEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress */
+			},
+			BlockWitnesserEvent::Witness(egress) => {
+				if let Err(err) = Pallet::<T, I>::egress_success(
+					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+					egress.clone(),
+				) {
+					log::error!(
+						"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",
+						egress.tx_out_id,
+						err
+					)
+				}
+			},
+		}
 	}
 }

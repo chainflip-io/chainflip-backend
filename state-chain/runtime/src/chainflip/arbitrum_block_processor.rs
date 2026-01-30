@@ -14,6 +14,7 @@ use cf_traits::Hook;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes,
 	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
@@ -106,11 +107,13 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						} => {
 							if let Err(err) = ArbitrumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-								tx_out_id,
-								signer_id,
-								tx_fee,
-								tx_metadata,
-								transaction_ref,
+								TransactionConfirmation {
+									tx_out_id,
+									signer_id,
+									tx_fee,
+									tx_metadata,
+									transaction_ref,
+								},
 							) {
 								log::error!(
 									"Failed to execute Arbitrum egress success: TxOutId: {:?}, Error: {:?}",

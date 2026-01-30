@@ -45,6 +45,7 @@ use cf_traits::{
 };
 use codec::{Decode, Encode};
 use frame_system::pallet_prelude::BlockNumberFor;
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_system::{ElectoralReadAccess, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
@@ -287,12 +288,16 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 
 		if let Err(err) = SolanaBroadcaster::egress_success(
 			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-			signature,
-			// Assign any owed fees to the current key.
-			SolanaThresholdSigner::active_epoch_key().map(|e| e.key).unwrap_or_default(),
-			tx_fee,
-			(),
-			signature,
+			TransactionConfirmation {
+				tx_out_id: signature,
+				// Assign any owed fees to the current key.
+				signer_id: SolanaThresholdSigner::active_epoch_key()
+					.map(|e| e.key)
+					.unwrap_or_default(),
+				tx_fee,
+				tx_metadata: (),
+				transaction_ref: signature,
+			},
 		) {
 			log::error!(
 				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",

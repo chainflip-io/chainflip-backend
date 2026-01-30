@@ -63,7 +63,7 @@ macro_rules! define_empty_struct {
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::derive_common_traits!{
-			#[derive(TypeInfo, DefaultNoBound)]
+			#[derive(TypeInfo, frame_support::DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
 			$vis struct $struct_name<$($names_and_bounds)*>
 			(
@@ -73,7 +73,7 @@ macro_rules! define_empty_struct {
 				>
 			);
 
-			impl<$($names_and_bounds)*> Validate for $struct_name<$($names)*> {
+			impl<$($names_and_bounds)*> cf_traits::Validate for $struct_name<$($names)*> {
 				type Error = ();
 
 				fn is_valid(&self) -> Result<(), Self::Error> {
