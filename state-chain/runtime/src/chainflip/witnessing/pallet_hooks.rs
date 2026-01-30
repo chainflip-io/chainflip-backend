@@ -51,7 +51,7 @@ hook_impls! {
 	}
 
 	// --- egress witnessing dispatch ---
-	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<TransactionConfirmation<T, I>>, TargetChainBlockNumber<T, I>)) -> ()
+	fn(&mut self, (event, block_height): (BlockWitnesserEvent<TransactionConfirmation<T, I>>, TargetChainBlockNumber<T, I>)) -> ()
 	where (
 		<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
 	)
@@ -63,6 +63,7 @@ hook_impls! {
 				if let Err(err) = pallet_cf_broadcast::Pallet::<T, I>::egress_success(
 					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 					egress.clone(),
+					block_height,
 				) {
 					log::error!(
 						"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",

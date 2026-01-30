@@ -102,14 +102,16 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							.collect::<Vec<_>>();
 
 						let ingresses = eth_ingresses_at_block(
-							address_states(
-								&eth_rpc,
-								address_checker_address,
-								parent_hash,
-								header.hash,
-								addresses,
-							)
-							.await?,
+							Some(
+								address_states(
+									&eth_rpc,
+									address_checker_address,
+									parent_hash,
+									header.hash,
+									addresses,
+								)
+								.await?,
+							),
 							events_at_block_deprecated::<Inner::Chain, VaultEvents, _>(
 								Header {
 									index: header.index,
@@ -214,7 +216,7 @@ where
 pub fn eth_ingresses_at_block<
 	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
 >(
-	addresses: Addresses,
+	addresses: Option<Addresses>,
 	native_events: Vec<(FetchedNativeFilter, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
 	let fetched_native_totals: BTreeMap<_, _> = native_events
@@ -236,28 +238,38 @@ pub fn eth_ingresses_at_block<
 		})
 		.collect();
 
-	addresses
-		.into_iter()
-		.map(|(address, (previous_address_state, address_state))| {
-			let (ingress_amount, tx_hashes) = if !address_state.has_contract {
-				ensure!(!previous_address_state.has_contract);
-				ensure!(!fetched_native_totals.contains_key(&address));
+	match addresses {
+		Some(addresses) => addresses
+			.into_iter()
+			.map(|(address, (previous_address_state, address_state))| {
+				let (ingress_amount, tx_hashes) = if !address_state.has_contract {
+					ensure!(!previous_address_state.has_contract);
+					ensure!(!fetched_native_totals.contains_key(&address));
 
-				(address_state.balance.saturating_sub(previous_address_state.balance), None)
-			} else {
-				let fetched_native_total =
-					fetched_native_totals.get(&address).cloned().unwrap_or_default();
-
-				if !previous_address_state.has_contract {
-					(fetched_native_total.0.saturating_sub(previous_address_state.balance), None)
+					(address_state.balance.saturating_sub(previous_address_state.balance), None)
 				} else {
-					(fetched_native_total.0, Some(fetched_native_total.1))
-				}
-			};
-			Ok((address, ingress_amount, tx_hashes))
-		})
-		.filter_ok(|(_address, ingress_amount, _tx_hashes)| !ingress_amount.is_zero())
-		.collect::<Result<Vec<_>, _>>()
+					let fetched_native_total =
+						fetched_native_totals.get(&address).cloned().unwrap_or_default();
+
+					if !previous_address_state.has_contract {
+						(
+							fetched_native_total.0.saturating_sub(previous_address_state.balance),
+							None,
+						)
+					} else {
+						(fetched_native_total.0, Some(fetched_native_total.1))
+					}
+				};
+				Ok((address, ingress_amount, tx_hashes))
+			})
+			.filter_ok(|(_address, ingress_amount, _tx_hashes)| !ingress_amount.is_zero())
+			.collect::<Result<Vec<_>, _>>(),
+		None => Ok(fetched_native_totals
+			.into_iter()
+			.map(|(address, (amount, tx_hashes))| (address, amount, Some(tx_hashes)))
+			.filter(|(_address, amount, _tx_hashes)| !amount.is_zero())
+			.collect()),
+	}
 }
 
 #[cfg(test)]
@@ -281,10 +293,9 @@ mod tests {
 
 	#[test]
 	fn block_empty_lists() {
-		let addresses = [];
 		let native_events = Default::default();
 
-		let ingresses = eth_ingresses_at_block(addresses, native_events).unwrap();
+		let ingresses = eth_ingresses_at_block::<Vec<_>>(None, native_events).unwrap();
 
 		assert!(ingresses.is_empty());
 	}
@@ -306,7 +317,7 @@ mod tests {
 			H256::random(),
 		)];
 
-		let ingresses = eth_ingresses_at_block(addresses, native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(Some(addresses), native_events).unwrap();
 
 		assert!(ingresses.eq(&[(address, U256::from(100), None)]));
 	}
@@ -353,7 +364,7 @@ mod tests {
 			),
 		];
 
-		let ingresses = eth_ingresses_at_block(addresses.clone(), native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(Some(addresses.clone()), native_events).unwrap();
 
 		// For both addresses, in the previous block there was no contract, therefore we expect that
 		// any FetchedNative events are from the deployment of the contract, and therefore not a
@@ -394,7 +405,7 @@ mod tests {
 			(FetchedNativeFilter { sender: H160::random(), amount: U256::from(420) }, tx_hashes[3]),
 		];
 
-		let ingresses = eth_ingresses_at_block(addresses.clone(), native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(Some(addresses.clone()), native_events).unwrap();
 
 		assert!(ingresses.eq(&[
 			// NB: Here the amounts are the sum of the FetchedNative events, since the contract was
@@ -466,7 +477,7 @@ mod tests {
 					.collect();
 
 				let increases =
-					eth_ingresses_at_block(address_states, fetched_native_events).unwrap();
+					eth_ingresses_at_block(Some(address_states), fetched_native_events).unwrap();
 
 				for (address, increase, tx_hashes) in increases {
 					println!("{}: {}. Txs: {:?}", address, increase, tx_hashes);

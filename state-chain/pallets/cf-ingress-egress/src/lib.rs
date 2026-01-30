@@ -333,7 +333,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(29);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(30);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -956,6 +956,10 @@ pub mod pallet {
 	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
+	#[pallet::storage]
+	pub type WitnessedBlock<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
+
 	/// Stores configuration param for maximum number of pre-allocated channels per account role.
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_preallocated_channels)]
@@ -1436,11 +1440,17 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
+			//We should always have a value here, but if we don't then we should use the max to
+			// be sure to not end up in the edge case
+			let block_number: u64 = WitnessedBlock::<T, I>::take()
+				.map(|bn| bn.unique_saturated_into())
+				.unwrap_or(u64::MAX);
+
 			for deposit_address in addresses {
-				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
-					deposit_channel_details
-						.as_mut()
-						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				DepositChannelLookup::<T, I>::mutate(&deposit_address, |deposit_channel_details| {
+					deposit_channel_details.as_mut().map(|details| {
+						details.deposit_channel.state.on_fetch_completed(block_number)
+					});
 				});
 			}
 			Ok(())

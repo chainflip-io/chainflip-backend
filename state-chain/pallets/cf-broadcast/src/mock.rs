@@ -140,6 +140,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RetryPolicy = MockRetryPolicy;
 	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;
+	type OnBroadcastSuccess = ();
 }
 
 impl_mock_chainflip!(Test);

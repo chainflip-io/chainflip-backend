@@ -604,7 +604,9 @@ pub enum DeploymentStatus {
 	#[default]
 	Undeployed,
 	Pending,
-	Deployed,
+	/// The channel is deployed. The block number is the external chain block at which the
+	/// deployment was confirmed (i.e. when the fetch transaction was witnessed as successful).
+	Deployed(u64),
 }
 
 impl ChannelLifecycleHooks for DeploymentStatus {
@@ -626,19 +628,19 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 	/// A completed fetch should be in either the pending or deployed state. Confirmation of a fetch
 	/// implies that the address is now deployed.
-	fn on_fetch_completed(&mut self) -> bool {
+	fn on_fetch_completed(&mut self, block_number: u64) -> bool {
 		match self {
 			Self::Pending => {
-				*self = Self::Deployed;
+				*self = Self::Deployed(block_number);
 				true
 			},
-			Self::Deployed => false,
+			Self::Deployed(_) => false,
 			Self::Undeployed =>
 				if cfg!(debug_assertions) {
 					panic!("Cannot finalize fetch to an undeployed address")
 				} else {
 					log::error!("Cannot finalize fetch to an undeployed address");
-					*self = Self::Deployed;
+					*self = Self::Deployed(block_number);
 					false
 				},
 		}
@@ -647,10 +649,13 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 	/// Undeployed Addresses should not be recycled.
 	/// Other address types *can* be recycled.
 	fn maybe_recycle(self) -> Option<Self> {
-		if self == Self::Undeployed {
-			None
-		} else {
-			Some(Self::Deployed)
+		match self {
+			Self::Undeployed => None,
+			// When recycling, preserve the deployment block number
+			Self::Deployed(block_number) => Some(Self::Deployed(block_number)),
+			// Pending channels shouldn't normally be recycled, but if they are,
+			// use 0 as a sentinel value for the deployment block
+			Self::Pending => Some(Self::Deployed(0)),
 		}
 	}
 }

@@ -19,7 +19,7 @@ use crate::evm::{
 	retry_rpc::EvmRetryRpcApi,
 	rpc::{address_checker::AddressState, EvmRpcSigningClient},
 };
-use cf_chains::{witness_period::SaturatingStep, DepositChannel};
+use cf_chains::{evm::DeploymentStatus, witness_period::SaturatingStep, DepositChannel};
 use ethers::{
 	abi::{ethereum_types::BloomInput, RawLog},
 	types::{Bloom, Log},
@@ -276,6 +276,7 @@ pub async fn witness_deposit_channels_generic<
 		ChainAccount = H160,
 		ChainAsset: std::hash::Hash,
 		DepositDetails = cf_chains::evm::DepositDetails,
+		DepositChannelState = DeploymentStatus,
 	>,
 	CT: ChainTypes<ChainBlockHash = H256>,
 	Config: DepositChannelWitnesserConfig<Chain, CT>,
@@ -307,38 +308,71 @@ where
 				let asset = deposit_channel.asset;
 				let address = deposit_channel.address;
 				if asset == Chain::GAS_ASSET {
-					eth.push(address);
+					eth.push((address, deposit_channel.state));
 				} else {
 					erc20.entry(asset).or_insert_with(Vec::new).push(address);
 				}
 				(eth, erc20)
 			},
 		);
-	let (address_states, events) = futures::try_join!(
-		address_states(
-			client,
-			address_checker_address,
-			block.parent_hash,
-			block.hash,
-			eth_deposit_channels.clone(),
-		),
-		async {
-			Ok(events_at_block::<Chain, VaultEvents, CT, _>(
-				block.bloom,
-				block_height,
-				block.hash,
-				vault_address,
-				client,
+	let (address_states, events) = {
+		if eth_deposit_channels.iter().all(|deposit_channel| match deposit_channel.1 {
+			DeploymentStatus::Deployed(height) =>
+				*block_height.into_range_inclusive().start() > height,
+			_ => false,
+		}) {
+			(
+				None,
+				events_at_block::<Chain, VaultEvents, CT, _>(
+					block.bloom,
+					block_height,
+					block.hash,
+					vault_address,
+					client,
+				)
+				.await?
+				.into_iter()
+				.filter_map(|event| match event.event_parameters {
+					VaultEvents::FetchedNativeFilter(inner_event) =>
+						Some((inner_event, event.tx_hash)),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
 			)
-			.await?
-			.into_iter()
-			.filter_map(|event| match event.event_parameters {
-				VaultEvents::FetchedNativeFilter(inner_event) => Some((inner_event, event.tx_hash)),
-				_ => None,
-			})
-			.collect::<Vec<_>>())
+		} else {
+			futures::try_join!(
+				async {
+					Ok::<_, anyhow::Error>(Some(
+						address_states(
+							client,
+							address_checker_address,
+							block.parent_hash,
+							block.hash,
+							eth_deposit_channels.iter().map(|a| a.0).collect(),
+						)
+						.await?,
+					))
+				},
+				async {
+					Ok(events_at_block::<Chain, VaultEvents, CT, _>(
+						block.bloom,
+						block_height,
+						block.hash,
+						vault_address,
+						client,
+					)
+					.await?
+					.into_iter()
+					.filter_map(|event| match event.event_parameters {
+						VaultEvents::FetchedNativeFilter(inner_event) =>
+							Some((inner_event, event.tx_hash)),
+						_ => None,
+					})
+					.collect::<Vec<_>>())
+				}
+			)?
 		}
-	)?;
+	};
 	let eth_ingresses = eth_ingresses_at_block(address_states, events)?;
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
