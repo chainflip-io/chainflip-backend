@@ -218,7 +218,7 @@ impl pallet_cf_swapping::Config for Runtime {
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Ethereum;
+	type TargetChain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -229,7 +229,7 @@ impl pallet_cf_vaults::Config<Instance1> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Polkadot;
+	type TargetChain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -240,7 +240,7 @@ impl pallet_cf_vaults::Config<Instance2> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Bitcoin;
+	type TargetChain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -251,7 +251,7 @@ impl pallet_cf_vaults::Config<Instance3> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Arbitrum;
+	type TargetChain = Arbitrum;
 	type SetAggKeyWithAggKey = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -262,7 +262,7 @@ impl pallet_cf_vaults::Config<Instance4> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Solana;
+	type TargetChain = Solana;
 	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -273,7 +273,7 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance6> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Assethub;
+	type TargetChain = Assethub;
 	type SetAggKeyWithAggKey = hub::api::AssethubApi<HubEnvironment>;
 	type Broadcaster = AssethubBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;

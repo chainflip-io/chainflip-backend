@@ -72,7 +72,7 @@ pub type BoxActiveAndFuture<'a, T> =
 	ActiveAndFuture<Box<dyn Iterator<Item = T> + Send + 'a>, BoxStream<'a, T>>;
 
 pub trait RuntimeHasChain<TChain: ExternalChain>:
-	pallet_cf_vaults::Config<ChainInstanceFor<TChain>, Chain = TChain>
+	pallet_cf_vaults::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 	+ pallet_cf_threshold_signature::Config<
 		CryptoInstanceFor<TChain>,
 		TargetChainCrypto = TChain::ChainCrypto,
@@ -82,7 +82,7 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
-	Self: pallet_cf_vaults::Config<ChainInstanceFor<TChain>, Chain = TChain>
+	Self: pallet_cf_vaults::Config<ChainInstanceFor<TChain>, TargetChain = TChain>
 		+ pallet_cf_threshold_signature::Config<
 			CryptoInstanceFor<TChain>,
 			TargetChainCrypto = TChain::ChainCrypto,

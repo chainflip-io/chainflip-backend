@@ -163,7 +163,7 @@ impl Get<MockRuntimeSafeMode> for MockRuntimeSafeMode {
 
 impl pallet_cf_vaults::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = MockEthereum;
+	type TargetChain = MockEthereum;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster<(MockSetAggKeyWithAggKey, RuntimeCall)>;
