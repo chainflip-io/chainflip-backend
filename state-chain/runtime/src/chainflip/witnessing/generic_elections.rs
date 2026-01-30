@@ -17,7 +17,7 @@
 use cf_amm::math::Price;
 use cf_primitives::chains::assets::any;
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::macros::*;
+use cf_utilities::{impls, macros::*};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};

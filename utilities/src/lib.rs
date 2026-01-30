@@ -19,6 +19,7 @@
 #![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
 #![feature(async_fn_track_caller)]
 #![feature(iterator_try_collect)]
+#![feature(decl_macro)]
 
 #[cfg(feature = "std")]
 mod with_std;
@@ -33,6 +34,7 @@ pub mod testing;
 
 #[macro_use]
 pub mod macros;
+pub use macros::impls;
 
 pub type Port = u16;
 

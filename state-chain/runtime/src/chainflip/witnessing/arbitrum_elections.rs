@@ -19,6 +19,7 @@ use cf_chains::{
 	Arbitrum, Chain, DepositChannel,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
+use cf_utilities::impls;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
@@ -99,7 +100,7 @@ pub struct ArbitrumBlockHeightWitnesser;
 impls! {
 	for TypesFor<ArbitrumBlockHeightWitnesser>:
 
-	/// Associating the SM related types to the struct
+	// Associating the SM related types to the struct
 	BHWTypes {
 		type BlockHeightChangeHook = Self;
 		type Chain = ArbitrumChain;

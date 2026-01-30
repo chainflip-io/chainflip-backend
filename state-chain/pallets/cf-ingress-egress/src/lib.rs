@@ -58,10 +58,10 @@ use cf_traits::{
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, Hook,
-	IngressEgressFeeApi, IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider,
-	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, INITIAL_FLIP_FUNDING,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use cf_utilities::{define_empty_struct, impls};
 use frame_support::{

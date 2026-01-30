@@ -15,6 +15,7 @@ use cf_chains::{
 	Chain, DepositChannel, Ethereum,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
+use cf_utilities::impls;
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{

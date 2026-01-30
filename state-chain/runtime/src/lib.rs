@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#![feature(trait_alias)]
 #![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]

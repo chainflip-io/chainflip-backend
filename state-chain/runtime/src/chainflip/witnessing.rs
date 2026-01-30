@@ -6,4 +6,5 @@ pub mod bitcoin_elections;
 pub mod ethereum_block_processor;
 pub mod ethereum_elections;
 pub mod generic_elections;
+pub mod pallet_hooks;
 pub mod solana_elections;

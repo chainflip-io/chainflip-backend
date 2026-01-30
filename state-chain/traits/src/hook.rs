@@ -70,7 +70,7 @@ pub mod hook_test_utils {
 			WrappedHook: Hook<T>
 		):
 
-		impl {
+		{
 			pub fn new(b: WrappedHook) -> Self {
 				Self { state: b, call_history: Vec::new(), _phantom: Default::default() }
 			}
@@ -80,7 +80,7 @@ pub mod hook_test_utils {
 			}
 		}
 
-		impl Validate {
+		Validate {
 			type Error = ();
 
 			fn is_valid(&self) -> Result<(), ()> {
@@ -88,15 +88,13 @@ pub mod hook_test_utils {
 			}
 		}
 
-		impl Default where (WrappedHook: Default)
-		{
+		Default where (WrappedHook: Default) {
 			fn default() -> Self {
 				Self::new(Default::default())
 			}
 		}
 
-		impl Hook<T> where (T::Input: Clone + Debug)
-		{
+		Hook<T> where (T::Input: Clone + Debug) {
 			fn run(&mut self, input: T::Input) -> T::Output {
 				#[cfg(feature = "test")]
 				if !NAME.is_empty() {
@@ -143,13 +141,13 @@ pub mod hook_test_utils {
 			T: HookType,
 		):
 
-		impl {
+		{
 			pub fn new(b: T::Output) -> Self {
 				Self { state: b, _phantom: Default::default() }
 			}
 		}
 
-		impl Validate {
+		Validate {
 			type Error = ();
 
 			fn is_valid(&self) -> Result<(), ()> {
@@ -157,14 +155,14 @@ pub mod hook_test_utils {
 			}
 		}
 
-		impl Default where (T::Output: Default)
+		Default where (T::Output: Default)
 		{
 			fn default() -> Self {
 				Self::new(Default::default())
 			}
 		}
 
-		impl Hook<T> where (T::Input: Debug, T::Output: Clone)
+		Hook<T> where (T::Input: Debug, T::Output: Clone)
 		{
 			fn run(&mut self, _input: T::Input) -> T::Output {
 				self.state.clone()

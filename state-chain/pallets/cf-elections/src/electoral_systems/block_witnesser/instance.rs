@@ -70,7 +70,7 @@ defx! {
 impls! {
 	for GenericBlockWitnesser<I> where (I: BlockWitnesserInstance):
 
-	impl Hook<HookTypeFor<Self, ExecuteHook>> {
+	Hook<HookTypeFor<Self, ExecuteHook>> {
 		fn run(&mut self, all_events: Vec<(ChainBlockNumberOf<I::Chain>, BlockWitnesserEvent<I::BlockEntry>)>) {
 			for (block_height, event) in dedup_events(all_events) {
 				self.execute.run((event, block_height));
@@ -78,13 +78,13 @@ impls! {
 		}
 	}
 
-	impl Hook<HookTypeFor<Self, RulesHook>> {
+	Hook<HookTypeFor<Self, RulesHook>> {
 		fn run(&mut self, input: (Range<u32>, Vec<I::BlockEntry>, u32)) -> Vec<BlockWitnesserEvent<I::BlockEntry>> {
 			self.rules.run(input)
 		}
 	}
 
-	impl Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
+	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
 		fn run(&mut self, _input: ()) -> SafeModeStatus {
 			if I::is_enabled() {
 				SafeModeStatus::Disabled
@@ -94,7 +94,7 @@ impls! {
 		}
 	}
 
-	impl BWProcessorTypes {
+	BWProcessorTypes {
 		type Chain = I::Chain;
 		type BlockData = Vec<I::BlockEntry>;
 		type Event = BlockWitnesserEvent<I::BlockEntry>;
@@ -105,7 +105,7 @@ impls! {
 		const BWNAME: &'static str = I::BWNAME;
 	}
 
-	impl BWTypes {
+	BWTypes {
 		type ElectionProperties = I::ElectionProperties;
 		type ElectionPropertiesHook = Self;
 		type SafeModeEnabledHook = Self;
@@ -113,7 +113,7 @@ impls! {
 		type ElectionTrackerDebugEventHook = EmptyHook;
 	}
 
-	impl StatemachineElectoralSystemTypes {
+	StatemachineElectoralSystemTypes {
 		type ValidatorId = <I::Runtime as Chainflip>::ValidatorId;
 		type StateChainBlockNumber = BlockNumberFor<I::Runtime>;
 		type OnFinalizeReturnItem = ();
@@ -124,13 +124,13 @@ impls! {
 		type ElectoralSettings = ();
 	}
 
-	impl Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
+	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
 		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) -> I::ElectionProperties {
 			I::election_properties(input)
 		}
 	}
 
-	impl Hook<HookTypeFor<Self, ProcessedUpToHook>> {
+	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
 		fn run(&mut self, input: ChainBlockNumberOf<I::Chain>) {
 			I::processed_up_to(input);
 		}
