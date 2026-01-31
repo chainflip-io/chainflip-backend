@@ -176,7 +176,7 @@ jobs:
           touch ./localnet/.setup_complete
           # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana and EVM images. Remove after 2.1 is released.
           sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
-          sed -i "s/v1\.3\.2/$EVM_CONTRACTS_VERSION/g" localnet/docker-compose.yml
+          sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1${{ env.EVM_CONTRACTS_VERSION }}-${NODE_COUNT}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
           git reset --hard
 
