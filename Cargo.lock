@@ -8572,6 +8572,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "derive-where",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

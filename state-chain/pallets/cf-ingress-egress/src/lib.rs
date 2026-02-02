@@ -402,7 +402,7 @@ pub mod pallet {
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
 	use cf_traits::{ChainflipWithTargetChain, OnDeposit, SwapParameterValidation, TargetChainOf};
-	use cf_utilities::bounded_vec::map_bounded_vec;
+	use cf_utilities::{bounded_vec::map_bounded_vec, derive_common_traits_no_bounds};
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
@@ -525,6 +525,17 @@ pub mod pallet {
 				channel_id,
 				deposit_address,
 			}
+		}
+	}
+
+	derive_common_traits_no_bounds! {
+		#[derive_where(PartialOrd, Ord; )]
+		#[derive(GenericTypeInfo)]
+		#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+		pub struct TransferFailedWitness<T: Config<I>, I: 'static> {
+			pub asset: TargetChainAsset<T, I>,
+			pub amount: TargetChainAmount<T, I>,
+			pub destination_address: TargetChainAccount<T, I>,
 		}
 	}
 
@@ -1518,7 +1529,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			Self::vault_transfer_failed_inner(asset, amount, destination_address);
+			Self::vault_transfer_failed_inner(TransferFailedWitness {
+				asset,
+				amount,
+				destination_address,
+			});
 
 			Ok(())
 		}
@@ -2439,9 +2454,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn vault_transfer_failed_inner(
-		asset: TargetChainAsset<T, I>,
-		amount: TargetChainAmount<T, I>,
-		destination_address: TargetChainAccount<T, I>,
+		TransferFailedWitness { asset, amount, destination_address }: TransferFailedWitness<T, I>,
 	) {
 		let current_epoch = T::EpochInfo::epoch_index();
 		match <T::ChainApiCall as TransferFallback<T::TargetChain>>::new_unsigned(

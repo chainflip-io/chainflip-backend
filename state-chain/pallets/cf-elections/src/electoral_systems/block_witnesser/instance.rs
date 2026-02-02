@@ -1,3 +1,4 @@
+use cf_chains::{witness_period::BlockWitnessRange, ChainWitnessConfig};
 use cf_primitives::BlockWitnesserEvent;
 use cf_traits::Chainflip;
 use cf_utilities::impls;
@@ -35,12 +36,17 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 
 	type Runtime: Chainflip;
 
-	type Chain: ChainTypes;
+	type Chain: ChainTypes<ChainBlockNumber: HasWitnessRoot>;
 	type BlockEntry: BlockDataTrait;
 	type ElectionProperties: MaybeArbitrary + CommonTraits;
 
-	type ExecutionTarget: Hook<((BlockWitnesserEvent<Self::BlockEntry>, ChainBlockNumberOf<Self::Chain>), ())>
-		+ Default
+	type ExecutionTarget: Hook<(
+			(
+				BlockWitnesserEvent<Self::BlockEntry>,
+				<ChainBlockNumberOf<Self::Chain> as HasWitnessRoot>::Root,
+			),
+			(),
+		)> + Default
 		+ CommonTraits;
 	type WitnessRules: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<BlockWitnesserEvent<Self::BlockEntry>>)>
 		+ Default
@@ -73,7 +79,7 @@ impls! {
 	Hook<HookTypeFor<Self, ExecuteHook>> {
 		fn run(&mut self, all_events: Vec<(ChainBlockNumberOf<I::Chain>, BlockWitnesserEvent<I::BlockEntry>)>) {
 			for (block_height, event) in dedup_events(all_events) {
-				self.execute.run((event, block_height));
+				self.execute.run((event, block_height.get_root()));
 			}
 		}
 	}
@@ -243,5 +249,34 @@ mod tests {
 				(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
 			]
 		)
+	}
+}
+
+/// This trait is only temporary. It's required because currently in the `Chain` trait
+/// implementation the ChainBlockNumber type is u64, but in the ethereum elections the block number
+/// type is BlockWitnessRange<>. As long as the old witnessing code exists, it is difficult to
+/// change the ChainBlockNumber type of the Chain trait, because code relies on the fact that it's a
+/// number.
+///
+/// When assethub is removed, the ChainBlockNumber type of Arbitrum should be changed to
+/// BlockWitnessRange and this trait can then be removed.
+pub trait HasWitnessRoot {
+	type Root;
+	fn get_root(&self) -> Self::Root;
+}
+
+impl<C: ChainWitnessConfig> HasWitnessRoot for BlockWitnessRange<C> {
+	type Root = C::ChainBlockNumber;
+
+	fn get_root(&self) -> Self::Root {
+		*self.root()
+	}
+}
+
+impl HasWitnessRoot for u64 {
+	type Root = u64;
+
+	fn get_root(&self) -> Self::Root {
+		*self
 	}
 }

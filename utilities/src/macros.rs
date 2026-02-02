@@ -13,6 +13,24 @@ macro_rules! derive_common_traits {
 }
 pub use derive_common_traits;
 
+/// Adds #[derive] statements for commonly used traits, *without* adding bounds on eventual type
+/// parameters. The implemented traits are: Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize,
+/// Deserialize.
+#[macro_export]
+macro_rules! derive_common_traits_no_bounds {
+	($($Definition:tt)*) => {
+		#[derive_where::derive_where(
+			Debug, Clone, PartialEq, Eq;
+		)]
+		#[derive(Encode, Decode)]
+		#[codec(encode_bound())]
+		#[derive(Deserialize, Serialize)]
+		#[serde(bound(deserialize = "", serialize = ""))]
+		$($Definition)*
+	};
+}
+pub use derive_common_traits_no_bounds;
+
 /// Adds #[derive] statements for commonly used traits, including `Validate`. Automatically
 /// generates the body of the struct, containing just a PhantomData with all type variables.
 /// Use like:
@@ -149,7 +167,7 @@ pub macro impls {
 pub macro hook_impls {
 	// hook implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? fn(&mut self, $args:tt: $input_ty:ty) -> $output_ty:ty
+	$(#[doc = $doc_text:tt])? fn(&mut $self:ident, $args:tt: $input_ty:ty) -> $output_ty:ty
 	$(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
@@ -157,7 +175,7 @@ pub macro hook_impls {
         impl$(<$($bounds)*>)? cf_traits::Hook<($input_ty, $output_ty)> for $name
 		$(where $($trait_bounds)*)?
 		{
-			fn run(&mut self, $args: $input_ty) -> $output_ty {
+			fn run(&mut $self, $args: $input_ty) -> $output_ty {
             	$($trait_impl)*
 			}
         }

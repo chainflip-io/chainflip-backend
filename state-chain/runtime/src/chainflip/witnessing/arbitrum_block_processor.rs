@@ -2,8 +2,7 @@ use crate::{
 	chainflip::witnessing::{
 		arbitrum_elections::{
 			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerEvent,
-			ArbitrumKeyManagerWitnessing, ArbitrumVaultDepositWitnessing, ArbitrumVaultEvent,
-			BlockDataDepositChannel, BlockDataKeyManager, BlockDataVaultDeposit,
+			ArbitrumKeyManagerWitnessing, BlockDataDepositChannel, BlockDataKeyManager,
 		},
 		elections::TypesFor,
 	},
@@ -30,7 +29,6 @@ pub enum ArbEvent<T> {
 }
 
 type TypesDepositChannelWitnessing = TypesFor<ArbitrumDepositChannelWitnessing>;
-type TypesVaultDepositWitnessing = TypesFor<ArbitrumVaultDepositWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<ArbitrumKeyManagerWitnessing>;
 type BlockNumber = <ArbitrumChain as ChainTypes>::ChainBlockNumber;
 
@@ -45,41 +43,6 @@ impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
 						deposit,
 						*block.root(),
 					);
-				},
-			}
-		}
-	}
-}
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumVaultEvent>)>) {
-		for (block, event) in events {
-			match event {
-				ArbEvent::Witness(call) => match call {
-					ArbitrumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
-					ArbitrumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
-					ArbitrumVaultEvent::XcallNativeFilter(vault_deposit_witness) |
-					ArbitrumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
-						ArbitrumIngressEgress::process_vault_swap_request_full_witness(
-							*block.root(),
-							vault_deposit_witness,
-						);
-					},
-					ArbitrumVaultEvent::TransferNativeFailedFilter {
-						asset,
-						amount,
-						destination_address,
-					} |
-					ArbitrumVaultEvent::TransferTokenFailedFilter {
-						asset,
-						amount,
-						destination_address,
-					} => {
-						ArbitrumIngressEgress::vault_transfer_failed_inner(
-							asset,
-							amount,
-							destination_address,
-						);
-					},
 				},
 			}
 		}
@@ -152,5 +115,4 @@ impl_rules_hook!(
 	BlockDataDepositChannel,
 	ArbEvent<DepositWitness<Arbitrum>>
 );
-impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, ArbEvent<ArbitrumVaultEvent>);
 impl_rules_hook!(TypesKeyManagerWitnessing, BlockDataKeyManager, ArbEvent<ArbitrumKeyManagerEvent>);
