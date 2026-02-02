@@ -359,7 +359,7 @@ where
 	let eth_ingresses = if undeployed_addresses.is_empty() {
 		eth_ingresses_at_block(None::<std::iter::Empty<_>>, events_fut.await?)?
 	} else {
-		let (states, events) = futures::try_join!(
+		let (undeployed_addr_states, events) = futures::try_join!(
 			address_states(
 				client,
 				address_checker_address,
@@ -370,12 +370,14 @@ where
 			events_fut,
 		)?;
 
-		let (deployed_events, undeployed_events): (Vec<_>, Vec<_>) = events
+		let (deployed_addr_events, undeployed_addr_events): (Vec<_>, Vec<_>) = events
 			.into_iter()
 			.partition(|(event, _)| deployed_addresses.contains(&event.sender));
 
-		let mut ingresses = eth_ingresses_at_block(Some(states), undeployed_events)?;
-		ingresses.extend(eth_ingresses_at_block(None::<std::iter::Empty<_>>, deployed_events)?);
+		let mut ingresses =
+			eth_ingresses_at_block(Some(undeployed_addr_states), undeployed_addr_events)?;
+		ingresses
+			.extend(eth_ingresses_at_block(None::<std::iter::Empty<_>>, deployed_addr_events)?);
 		ingresses
 	};
 
