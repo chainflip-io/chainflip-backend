@@ -320,9 +320,20 @@ where
 		);
 	let eth_addresses: HashSet<H160> =
 		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
-	let all_deployed = eth_deposit_channels.iter().all(|(_, deployment_status)| {
-		deployment_status.deployed_before(block_height.into_range_inclusive().start())
-	});
+
+	let block_start = *block_height.into_range_inclusive().start();
+	let (deployed_addresses, undeployed_addresses): (HashSet<H160>, Vec<H160>) =
+		eth_deposit_channels.iter().fold(
+			(HashSet::new(), Vec::new()),
+			|(mut deployed, mut undeployed), (address, deployment_status)| {
+				if deployment_status.deployed_before(&block_start) {
+					deployed.insert(*address);
+				} else {
+					undeployed.push(*address);
+				}
+				(deployed, undeployed)
+			},
+		);
 
 	let events_fut = async {
 		Ok::<_, anyhow::Error>(
@@ -345,8 +356,8 @@ where
 		)
 	};
 
-	let (address_states, events) = if all_deployed {
-		(None, events_fut.await?)
+	let eth_ingresses = if undeployed_addresses.is_empty() {
+		eth_ingresses_at_block(None::<std::iter::Empty<_>>, events_fut.await?)?
 	} else {
 		let (states, events) = futures::try_join!(
 			address_states(
@@ -354,13 +365,19 @@ where
 				address_checker_address,
 				block.parent_hash,
 				block.hash,
-				eth_deposit_channels.iter().map(|a| a.0).collect(),
+				undeployed_addresses,
 			),
 			events_fut,
 		)?;
-		(Some(states), events)
+
+		let (deployed_events, undeployed_events): (Vec<_>, Vec<_>) = events
+			.into_iter()
+			.partition(|(event, _)| deployed_addresses.contains(&event.sender));
+
+		let mut ingresses = eth_ingresses_at_block(Some(states), undeployed_events)?;
+		ingresses.extend(eth_ingresses_at_block(None::<std::iter::Empty<_>>, deployed_events)?);
+		ingresses
 	};
-	let eth_ingresses = eth_ingresses_at_block(address_states, events)?;
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
 
