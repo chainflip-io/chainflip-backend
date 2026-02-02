@@ -63,7 +63,7 @@ use cf_traits::{
 	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
 	SwapRequestHandler, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
-use cf_utilities::define_empty_struct;
+use cf_utilities::{define_empty_struct, impls};
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
@@ -3644,11 +3644,10 @@ define_empty_struct! {
 	pub struct PalletHooks<T: Config<I>, I: 'static>;
 }
 
-impl<T: Config<I>, I: 'static>
-	Hook<((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ())>
-	for PalletHooks<T, I>
-{
-	fn run(&mut self, (event, block_height): <((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Input) -> <((BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Output{
+impls! {
+	for PalletHooks<T, I> where (T: Config<I>, I: 'static):
+
+	fn (&mut self, (event, block_height): (BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>)) -> () {
 		match event {
 			BlockWitnesserEvent::PreWitness(deposit_witness) => {
 				let _ = Pallet::<T, I>::process_channel_deposit_prewitness(
@@ -3661,13 +3660,8 @@ impl<T: Config<I>, I: 'static>
 			},
 		}
 	}
-}
 
-impl<T: Config<I>, I: 'static>
-	Hook<((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ())>
-	for PalletHooks<T, I>
-{
-	fn run(&mut self, (event, block_height): <((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Input) -> <((BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>), ()) as cf_traits::HookType>::Output{
+	fn (&mut self, (event, block_height): (BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
 		match event {
 			BlockWitnesserEvent::PreWitness(deposit) => {
 				Pallet::<T, I>::process_vault_swap_request_prewitness(

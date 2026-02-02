@@ -39,10 +39,10 @@ pub trait BlockWitnesserInstance: CommonTraits + Validate + Member {
 	type BlockEntry: BlockDataTrait;
 	type ElectionProperties: MaybeArbitrary + CommonTraits;
 
-	type ExecuteHook: Hook<((BlockWitnesserEvent<Self::BlockEntry>, ChainBlockNumberOf<Self::Chain>), ())>
+	type ExecutionTarget: Hook<((BlockWitnesserEvent<Self::BlockEntry>, ChainBlockNumberOf<Self::Chain>), ())>
 		+ Default
 		+ CommonTraits;
-	type RulesHook: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<BlockWitnesserEvent<Self::BlockEntry>>)>
+	type WitnessRules: Hook<((Range<u32>, Vec<Self::BlockEntry>, u32), Vec<BlockWitnesserEvent<Self::BlockEntry>>)>
 		+ Default
 		+ CommonTraits;
 
@@ -57,18 +57,18 @@ defx! {
 	/// Struct that carries all the data associated to a block witnesser. All implementation details
 	/// are derived from the given BlockWitnesser instance.
 	#[derive(TypeInfo, DefaultNoBound)]
-	pub struct DerivedBlockWitnesser[Instance: BlockWitnesserInstance] {
-		pub rules: Instance::RulesHook,
-		pub execute: Instance::ExecuteHook,
+	pub struct GenericBlockWitnesser[Instance: BlockWitnesserInstance] {
+		pub rules: Instance::WitnessRules,
+		pub execute: Instance::ExecutionTarget,
 		pub _phantom: sp_std::marker::PhantomData<Instance>,
 	}
 
-	validate _this (else DerivedBlockWitnesserError) {}
+	validate _this (else GenericBlockWitnesserError) {}
 }
 
 // All the implementations, derived from `I: BlockWitnesserInstance`.
 impls! {
-	for DerivedBlockWitnesser<I> where (I: BlockWitnesserInstance):
+	for GenericBlockWitnesser<I> where (I: BlockWitnesserInstance):
 
 	impl Hook<HookTypeFor<Self, ExecuteHook>> {
 		fn run(&mut self, all_events: Vec<(ChainBlockNumberOf<I::Chain>, BlockWitnesserEvent<I::BlockEntry>)>) {

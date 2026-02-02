@@ -113,6 +113,23 @@ pub use define_empty_struct;
 /// }
 #[macro_export]
 macro_rules! impls {
+	// hook implementation
+    (for $name:ty $(where ($($bounds:tt)*))? :
+	$(#[doc = $doc_text:tt])? fn(&mut self, $args:tt: $input_ty:ty) -> $output_ty:ty
+	$(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
+	$($rest:tt)*
+	) => {
+        $(#[doc = $doc_text])?
+        impl$(<$($bounds)*>)? Hook<($input_ty, $output_ty)> for $name
+		$(where $($trait_bounds)*)?
+		{
+			fn run(&mut self, $args: $input_ty) -> $output_ty {
+            	$($trait_impl)*
+			}
+        }
+        impls!{for $name $(where ($($bounds)*))? : $($rest)*}
+    };
+	// trait implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
 	$(#[doc = $doc_text:tt])? impl $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
@@ -125,6 +142,7 @@ macro_rules! impls {
         }
         impls!{for $name $(where ($($bounds)*))? : $($rest)*}
     };
+	// end of implementations
     (for $name:ty $(where ($($bounds:tt)*))? :) => {}
 }
 

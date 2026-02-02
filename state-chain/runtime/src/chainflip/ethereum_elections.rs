@@ -30,7 +30,7 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
-			instance::{BlockWitnesserInstance, DerivedBlockWitnesser, JustWitnessAtSafetyMargin},
+			instance::{BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin},
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
@@ -150,8 +150,15 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	type Chain = EthereumChain;
 	type BlockEntry = DepositWitness<Ethereum>;
 	type ElectionProperties = Vec<DepositChannel<Ethereum>>;
-	type ExecuteHook = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
-	type RulesHook = JustWitnessAtSafetyMargin<Self::BlockEntry>;
+	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
+
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+		>>::get()
+		.deposit_channel_witnessing_enabled
+	}
 
 	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
 		EthereumIngressEgress::active_deposit_channels_at(
@@ -163,13 +170,6 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 		.into_iter()
 		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
 		.collect()
-	}
-
-	fn is_enabled() -> bool {
-		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
-			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
-		>>::get()
-		.deposit_channel_witnessing_enabled
 	}
 
 	fn processed_up_to(
@@ -190,7 +190,7 @@ pub struct EthereumDepositChannelWitnessing;
 
 /// Generating the state machine-based electoral system
 pub type EthereumDepositChannelWitnessingES =
-	StatemachineElectoralSystem<DerivedBlockWitnesser<TypesFor<EthereumDepositChannelWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumDepositChannelWitnessing>>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
 /// The electoral system for vault deposit witnessing
