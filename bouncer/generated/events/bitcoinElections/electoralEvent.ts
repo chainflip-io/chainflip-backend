@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { stateChainRuntimeChainflipBitcoinElectionsBitcoinElectoralEvents } from '../common';
+import { stateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents } from '../common';
 
 export const bitcoinElectionsElectoralEvent =
-  stateChainRuntimeChainflipBitcoinElectionsBitcoinElectoralEvents;
+  stateChainRuntimeChainflipWitnessingBitcoinElectionsBitcoinElectoralEvents;

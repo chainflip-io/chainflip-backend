@@ -44,7 +44,7 @@ use pallet_cf_elections::{
 	VoteOf,
 };
 use state_chain_runtime::{
-	chainflip::bitcoin_elections::{
+	chainflip::witnessing::bitcoin_elections::{
 		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
 		BitcoinElectoralSystemRunner, BitcoinLiveness, BITCOIN_MAINNET_SAFETY_BUFFER,
 	},
@@ -61,7 +61,7 @@ use engine_sc_client::{
 	storage_api::StorageApi,
 };
 
-use state_chain_runtime::chainflip::bitcoin_elections::{
+use state_chain_runtime::chainflip::witnessing::bitcoin_elections::{
 	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
 };
 use std::sync::Arc;

@@ -62,7 +62,7 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 use sp_core::H160;
 use state_chain_runtime::{
-	chainflip::ethereum_elections::{
+	chainflip::witnessing::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumDepositChannelWitnessingES,
 		EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
 		EthereumLiveness, EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
@@ -219,7 +219,7 @@ impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitn
 		_settings: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
 		properties: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<EthereumDepositChannelWitnessingES>>, anyhow::Error> {
-		use state_chain_runtime::chainflip::ethereum_elections::EthereumChain;
+		use state_chain_runtime::chainflip::witnessing::ethereum_elections::EthereumChain;
 
 		let BWElectionProperties {
 			block_height, properties: deposit_addresses, election_type, ..

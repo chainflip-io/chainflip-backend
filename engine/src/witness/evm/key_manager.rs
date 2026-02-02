@@ -69,7 +69,7 @@ use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
 };
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
-use state_chain_runtime::{chainflip::ethereum_elections::KeyManagerEvent, Runtime};
+use state_chain_runtime::{chainflip::witnessing::ethereum_elections::KeyManagerEvent, Runtime};
 
 use super::contract_common::Event as ContractEvent;
 

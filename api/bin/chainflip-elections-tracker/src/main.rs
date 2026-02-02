@@ -44,7 +44,7 @@ use pallet_cf_elections::{
 };
 use state_chain_runtime::{
 	BitcoinInstance, Runtime, SolanaInstance,
-	chainflip::{
+	chainflip::witnessing::{
 		bitcoin_elections::BitcoinElectoralSystemRunner,
 		solana_elections::SolanaElectoralSystemRunner,
 	},

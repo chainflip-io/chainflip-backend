@@ -1,5 +1,5 @@
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		arbitrum_elections::{
 			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerEvent,
 			ArbitrumKeyManagerWitnessing, ArbitrumVaultDepositWitnessing, ArbitrumVaultEvent,

@@ -2,9 +2,11 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		arbitrum_block_processor::ArbEvent,
-		elections::TypesFor,
-		ethereum_elections::{KeyManagerEvent, VaultEvents},
+		witnessing::{
+			arbitrum_block_processor::ArbEvent,
+			elections::TypesFor,
+			ethereum_elections::{KeyManagerEvent, VaultEvents},
+		},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,

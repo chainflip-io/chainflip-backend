@@ -36,7 +36,7 @@ use sc_service::ChainType;
 use sp_core::{H160, H256};
 
 use sol_prim::consts::{const_address, const_hash};
-use state_chain_runtime::chainflip::generic_elections::ChainlinkOraclePriceSettings;
+use state_chain_runtime::chainflip::witnessing::generic_elections::ChainlinkOraclePriceSettings;
 
 pub struct Config;
 
