@@ -2,7 +2,7 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent},
+		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent, pallet_hooks},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
@@ -152,7 +152,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	type Chain = EthereumChain;
 	type BlockEntry = DepositWitness<Ethereum>;
 	type ElectionProperties = Vec<DepositChannel<Ethereum>>;
-	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {

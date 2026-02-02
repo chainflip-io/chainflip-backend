@@ -47,9 +47,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
-	BlockWitnesserEvent, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter,
-	EgressId, EpochIndex, ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -63,7 +63,6 @@ use cf_traits::{
 	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
 	SwapRequestType, TargetChainOf, INITIAL_FLIP_FUNDING,
 };
-use cf_utilities::{define_empty_struct, impls};
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
@@ -418,8 +417,8 @@ pub mod pallet {
 
 	pub type TargetChainAsset<T, I> = <TargetChainOf<T, I> as Chain>::ChainAsset;
 	pub type TargetChainAccount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAccount;
-	pub(crate) type TargetChainAmount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAmount;
-	pub(crate) type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
+	pub type TargetChainAmount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAmount;
+	pub type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
 
 	pub type TransactionInIdFor<T, I> =
 		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
@@ -3632,45 +3631,6 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				<T::TargetChain as Chain>::GAS_ASSET.into(),
 				fee.into(),
 			);
-		}
-	}
-}
-
-define_empty_struct! {
-	pub struct PalletHooks<T: Config<I>, I: 'static>;
-}
-
-impls! {
-	for PalletHooks<T, I> where (T: Config<I>, I: 'static):
-
-	fn (&mut self, (event, block_height): (BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>)) -> () {
-		match event {
-			BlockWitnesserEvent::PreWitness(deposit_witness) => {
-				let _ = Pallet::<T, I>::process_channel_deposit_prewitness(
-					deposit_witness,
-					block_height,
-				);
-			},
-			BlockWitnesserEvent::Witness(deposit_witness) => {
-				Pallet::<T, I>::process_channel_deposit_full_witness(deposit_witness, block_height);
-			},
-		}
-	}
-
-	fn (&mut self, (event, block_height): (BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
-		match event {
-			BlockWitnesserEvent::PreWitness(deposit) => {
-				Pallet::<T, I>::process_vault_swap_request_prewitness(
-					block_height,
-					deposit.clone(),
-				);
-			},
-			BlockWitnesserEvent::Witness(deposit) => {
-				Pallet::<T, I>::process_vault_swap_request_full_witness_inner(
-					block_height,
-					deposit.clone(),
-				);
-			},
 		}
 	}
 }

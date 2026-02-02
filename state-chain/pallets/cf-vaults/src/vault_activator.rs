@@ -18,7 +18,9 @@ use super::*;
 use cf_runtime_utilities::StorageDecodeVariant;
 use cf_traits::{GetBlockHeight, StartKeyActivationResult, VaultActivator};
 
-impl<T: Config<I>, I: 'static> VaultActivator<<T::TargetChain as Chain>::ChainCrypto> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> VaultActivator<<T::TargetChain as Chain>::ChainCrypto>
+	for Pallet<T, I>
+{
 	type ValidatorId = T::ValidatorId;
 
 	/// Get the status of the current key generation

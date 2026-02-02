@@ -22,7 +22,8 @@ use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
-	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex, EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler
+	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex,
+	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -41,11 +42,13 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
-pub type PayloadFor<T, I = ()> = <<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;
+pub type PayloadFor<T, I = ()> =
+	<<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;
 
 pub type AggKeyFor<T, I = ()> =
 	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
-pub type ChainBlockNumberFor<T, I = ()> = <<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainBlockNumber;
+pub type ChainBlockNumberFor<T, I = ()> =
+	<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainBlockNumber;
 pub type TransactionInIdFor<T, I = ()> =
 	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 pub type TransactionOutIdFor<T, I = ()> =
@@ -72,7 +75,7 @@ pub mod pallet {
 
 	use cf_traits::ChainflipWithTargetChain;
 
-use super::*;
+	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::storage_version(PALLET_VERSION)]
@@ -87,9 +90,7 @@ use super::*;
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The supported api calls for the chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
-			<Self::TargetChain as Chain>::ChainCrypto,
-		>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// A broadcaster for the target chain.
 		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::SetAggKeyWithAggKey>;

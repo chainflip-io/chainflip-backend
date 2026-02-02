@@ -29,13 +29,12 @@ use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
-use cf_primitives::{BlockWitnesserEvent, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
 	CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain, ElectionEgressWitnesser, EpochInfo,
-	GetBlockHeight, Hook, RotationBroadcastsPending, ThresholdSigner,
+	GetBlockHeight, RotationBroadcastsPending, ThresholdSigner,
 };
-use cf_utilities::define_empty_struct;
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use derive_where::derive_where;
@@ -1258,46 +1257,5 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> RotationBroadcastsPending for Pallet<T, I> {
 	fn rotation_broadcasts_pending() -> bool {
 		IncomingKeyAndBroadcastId::<T, I>::exists()
-	}
-}
-
-define_empty_struct! {
-	pub struct PalletHooks<T: Config<I>, I: 'static>;
-}
-
-impl<T: Config<I>, I: 'static>
-	Hook<(
-		(
-			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
-			<T::TargetChain as Chain>::ChainBlockNumber,
-		),
-		(),
-	)> for PalletHooks<T, I>
-where
-	<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
-{
-	fn run(
-		&mut self,
-		(event, _block_height): (
-			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
-			<T::TargetChain as Chain>::ChainBlockNumber,
-		),
-	) {
-		match event {
-			BlockWitnesserEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress */
-			},
-			BlockWitnesserEvent::Witness(egress) => {
-				if let Err(err) = Pallet::<T, I>::egress_success(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-					egress.clone(),
-				) {
-					log::error!(
-						"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",
-						egress.tx_out_id,
-						err
-					)
-				}
-			},
-		}
 	}
 }
