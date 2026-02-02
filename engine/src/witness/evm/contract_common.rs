@@ -320,9 +320,8 @@ where
 		);
 	let eth_addresses: HashSet<H160> =
 		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
-	let all_deployed = eth_deposit_channels.iter().all(|deposit_channel| match deposit_channel.1 {
-		DeploymentStatus::Deployed(height) => *block_height.into_range_inclusive().start() > height,
-		_ => false,
+	let all_deployed = eth_deposit_channels.iter().all(|(_, deployment_status)| {
+		deployment_status.deployed_before(block_height.into_range_inclusive().start())
 	});
 
 	let events_fut = async {

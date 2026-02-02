@@ -956,6 +956,9 @@ pub mod pallet {
 	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
+	/// IMPORTANT!! Storage used to save short-living values, currently used as a workaround for
+	/// callbacks not accepting extra arguments at dispatch time if you use it be sure that it gets
+	/// set and killed atomically to avoid other operations changing its value.
 	#[pallet::storage]
 	pub type WitnessedBlock<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
@@ -3642,5 +3645,16 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 				fee.into(),
 			);
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> cf_traits::OnBroadcastSuccess<T::TargetChain> for Pallet<T, I> {
+	fn with_witness_block(
+		witness_block: <T::TargetChain as Chain>::ChainBlockNumber,
+		f: impl FnOnce(),
+	) {
+		WitnessedBlock::<T, I>::set(Some(witness_block));
+		f();
+		WitnessedBlock::<T, I>::kill();
 	}
 }

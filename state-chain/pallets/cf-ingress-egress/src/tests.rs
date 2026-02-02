@@ -915,7 +915,7 @@ fn multi_use_deposit_same_block() {
 					.unwrap()
 					.deposit_channel
 					.state,
-				cf_chains::evm::DeploymentStatus::Deployed(_)
+				cf_chains::evm::DeploymentStatus::Deployed { at_block_height: _ }
 			));
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
@@ -1604,7 +1604,7 @@ fn preallocated_channels_from_global_pool() {
 					)
 					.unwrap(),
 				asset: EthAsset::Eth,
-				state: cf_chains::evm::DeploymentStatus::Deployed(0),
+				state: cf_chains::evm::DeploymentStatus::Deployed { at_block_height: 0 },
 			};
 			DepositChannelPool::<Test, Instance1>::insert(i, deposit_channel);
 		}

@@ -27,8 +27,7 @@ pub mod old {
 			match self {
 				Self::Undeployed => DeploymentStatus::Undeployed,
 				Self::Pending => DeploymentStatus::Pending,
-				// We don't know the block number, use 0 as a sentinel.
-				Self::Deployed => DeploymentStatus::Deployed(0),
+				Self::Deployed => DeploymentStatus::Deployed { at_block_height: 0 },
 			}
 		}
 	}

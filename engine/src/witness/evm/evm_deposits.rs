@@ -214,9 +214,9 @@ where
 /// contract is deployed. These transaction hashes are not important for witnessing, but are used
 /// for tracing the end to end flow of the funds.
 pub fn eth_ingresses_at_block<
-	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
+	AddressStates: IntoIterator<Item = (H160, (AddressState, AddressState))>,
 >(
-	addresses: Option<Addresses>,
+	address_states: Option<AddressStates>,
 	native_events: Vec<(FetchedNativeFilter, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
 	let fetched_native_totals: BTreeMap<_, _> = native_events
@@ -238,7 +238,7 @@ pub fn eth_ingresses_at_block<
 		})
 		.collect();
 
-	match addresses {
+	match address_states {
 		Some(addresses) => addresses
 			.into_iter()
 			.map(|(address, (previous_address_state, address_state))| {

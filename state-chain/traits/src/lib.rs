@@ -1019,7 +1019,7 @@ pub trait OnBroadcastReady<C: Chain> {
 pub trait OnBroadcastSuccess<C: Chain> {
 	/// Called when a broadcast is successfully witnessed.
 	/// - `witnessed_at_block`: The external chain block number where the broadcast was witnessed
-	fn with_witness_block(_witness_block: C::ChainBlockNumber, _f: impl FnOnce()) {}
+	fn with_witness_block(witness_block: C::ChainBlockNumber, _f: impl FnOnce());
 }
 
 impl<C: Chain> OnBroadcastSuccess<C> for () {
