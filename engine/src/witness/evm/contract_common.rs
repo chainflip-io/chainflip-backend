@@ -28,7 +28,10 @@ use futures::try_join;
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes, block_witnesser::state_machine::EngineElectionType,
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+	collections::{HashMap, HashSet},
+	fmt::Debug,
+};
 
 use super::{super::common::chain_source::Header, vault::VaultEvents};
 use anyhow::{anyhow, ensure, Result};
@@ -315,63 +318,48 @@ where
 				(eth, erc20)
 			},
 		);
-	let (address_states, events) = {
-		if eth_deposit_channels.iter().all(|deposit_channel| match deposit_channel.1 {
-			DeploymentStatus::Deployed(height) =>
-				*block_height.into_range_inclusive().start() > height,
-			_ => false,
-		}) {
-			(
-				None,
-				events_at_block::<Chain, VaultEvents, CT, _>(
-					block.bloom,
-					block_height,
-					block.hash,
-					vault_address,
-					client,
-				)
-				.await?
-				.into_iter()
-				.filter_map(|event| match event.event_parameters {
-					VaultEvents::FetchedNativeFilter(inner_event) =>
-						Some((inner_event, event.tx_hash)),
-					_ => None,
-				})
-				.collect::<Vec<_>>(),
+	let eth_addresses: HashSet<H160> =
+		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
+	let all_deployed = eth_deposit_channels.iter().all(|deposit_channel| match deposit_channel.1 {
+		DeploymentStatus::Deployed(height) => *block_height.into_range_inclusive().start() > height,
+		_ => false,
+	});
+
+	let events_fut = async {
+		Ok::<_, anyhow::Error>(
+			events_at_block::<Chain, VaultEvents, CT, _>(
+				block.bloom,
+				block_height,
+				block.hash,
+				vault_address,
+				client,
 			)
-		} else {
-			futures::try_join!(
-				async {
-					Ok::<_, anyhow::Error>(Some(
-						address_states(
-							client,
-							address_checker_address,
-							block.parent_hash,
-							block.hash,
-							eth_deposit_channels.iter().map(|a| a.0).collect(),
-						)
-						.await?,
-					))
-				},
-				async {
-					Ok(events_at_block::<Chain, VaultEvents, CT, _>(
-						block.bloom,
-						block_height,
-						block.hash,
-						vault_address,
-						client,
-					)
-					.await?
-					.into_iter()
-					.filter_map(|event| match event.event_parameters {
-						VaultEvents::FetchedNativeFilter(inner_event) =>
-							Some((inner_event, event.tx_hash)),
-						_ => None,
-					})
-					.collect::<Vec<_>>())
-				}
-			)?
-		}
+			.await?
+			.into_iter()
+			.filter_map(|event| match event.event_parameters {
+				VaultEvents::FetchedNativeFilter(inner_event)
+					if eth_addresses.contains(&inner_event.sender) =>
+					Some((inner_event, event.tx_hash)),
+				_ => None,
+			})
+			.collect::<Vec<_>>(),
+		)
+	};
+
+	let (address_states, events) = if all_deployed {
+		(None, events_fut.await?)
+	} else {
+		let (states, events) = futures::try_join!(
+			address_states(
+				client,
+				address_checker_address,
+				block.parent_hash,
+				block.hash,
+				eth_deposit_channels.iter().map(|a| a.0).collect(),
+			),
+			events_fut,
+		)?;
+		(Some(states), events)
 	};
 	let eth_ingresses = eth_ingresses_at_block(address_states, events)?;
 
