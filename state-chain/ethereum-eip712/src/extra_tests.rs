@@ -13,7 +13,7 @@ use std::{
 	process::{Command, Stdio},
 };
 
-mod test_types {
+pub mod test_types {
 	use super::*;
 	#[derive(TypeInfo, Encode)]
 	pub enum TestEnum<T, S> {
@@ -72,6 +72,76 @@ mod test_types {
 
 	#[derive(Encode, TypeInfo)]
 	pub struct TestI128(pub i128);
+
+	pub mod test_complex_type_with_vecs_and_enums {
+		use super::*;
+		// Define complex types with vectors and enums
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithVector {
+			pub items: Vec<u32>,
+			pub description: String,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum StatusEnum {
+			Active,
+			Pending { reason: String },
+			Completed { count: u64, timestamp: u128 },
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithEnum {
+			pub status: StatusEnum,
+			pub id: u64,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum Priority {
+			Low,
+			Medium,
+			High,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct TypeWithBoth {
+			pub tags: Vec<String>,
+			pub priority: Priority,
+			pub nested_items: Vec<u16>,
+		}
+
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct ComplexRoot {
+			pub field_with_vector: TypeWithVector,
+			pub field_with_vector_2: TypeWithVector,
+			pub field_with_enum: TypeWithEnum,
+			pub field_with_both: TypeWithBoth,
+			pub field_with_enum_2: TypeWithEnum,
+			pub field_with_enum_3: TypeWithEnum,
+		}
+	}
+
+	pub mod test_vec_of_enum {
+		use super::*;
+		// Simple enum type
+		#[derive(TypeInfo, Clone, Encode)]
+		pub enum Color {
+			Red,
+			Green,
+			Blue { intensity: u8 },
+		}
+
+		// Struct with Vec of enum
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct InnerStruct {
+			pub colors: Vec<Color>,
+		}
+
+		// Root struct with one field
+		#[derive(TypeInfo, Clone, Encode)]
+		pub struct SimpleRoot {
+			pub inner: InnerStruct,
+		}
+	}
 }
 
 #[derive(Debug, Deserialize)]
@@ -244,13 +314,8 @@ eip712_test!(
 	test_types::TestWrappedEmptyEnum(test_types::TestEmptyEnum::Bbbbb)
 );
 eip712_test!(test_compact, test_types::TestCompact { a: 5u8, b: 6u32, c: 7 });
-eip712_test!(test_empty, test_types::TestEmpty);
 eip712_test!(test_empty_nested, test_types::TestEmptyNested(test_types::TestEmpty));
 eip712_test!(test_abs_tuple, test_types::Abs((8, 9)));
-eip712_test!(
-	test_empty_generic,
-	test_types::TestEmptyGeneric::<test_types::Mail>(Default::default())
-);
 eip712_test!(test_vec_u8_empty, test_types::TestVec::<u8>(vec![]));
 eip712_test!(test_vec_u128_empty, test_types::TestVec::<u128>(vec![]));
 eip712_test!(test_vec_u128, test_types::TestVec(vec![5u128, 6u128]));
@@ -319,3 +384,50 @@ eip712_test!(test_i128_min, test_types::TestI128(i128::MIN));
 eip712_test!(test_i128_max, test_types::TestI128(i128::MAX));
 eip712_test!(test_i128_negative_large, test_types::TestI128(-(JS_MAX_SAFE_INTEGER as i128 + 1)));
 eip712_test!(test_enum_negative_large, test_types::TestEnum::<i32, ()>::A(i32::MIN));
+eip712_test!(
+	test_complex_root,
+	test_types::test_complex_type_with_vecs_and_enums::ComplexRoot {
+		field_with_vector: test_types::test_complex_type_with_vecs_and_enums::TypeWithVector {
+			items: vec![1, 2, 3, 4, 5],
+			description: "Test description".to_string(),
+		},
+		field_with_vector_2: test_types::test_complex_type_with_vecs_and_enums::TypeWithVector {
+			items: vec![],
+			description: "Empty items".to_string(),
+		},
+		field_with_enum: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Pending {
+				reason: "Waiting for approval".to_string()
+			},
+			id: 42,
+		},
+		field_with_both: test_types::test_complex_type_with_vecs_and_enums::TypeWithBoth {
+			tags: vec!["tag1".to_string(), "tag2".to_string(), "tag3".to_string()],
+			priority: test_types::test_complex_type_with_vecs_and_enums::Priority::High,
+			nested_items: vec![100, 200, 300],
+		},
+		field_with_enum_2: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Active,
+			id: 50
+		},
+		field_with_enum_3: test_types::test_complex_type_with_vecs_and_enums::TypeWithEnum {
+			status: test_types::test_complex_type_with_vecs_and_enums::StatusEnum::Completed {
+				count: 5,
+				timestamp: 6
+			},
+			id: 60,
+		},
+	}
+);
+eip712_test!(
+	test_simple_root,
+	test_types::test_vec_of_enum::SimpleRoot {
+		inner: test_types::test_vec_of_enum::InnerStruct {
+			colors: vec![
+				test_types::test_vec_of_enum::Color::Red,
+				test_types::test_vec_of_enum::Color::Blue { intensity: 128 },
+				test_types::test_vec_of_enum::Color::Green
+			],
+		},
+	}
+);

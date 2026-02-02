@@ -1,5 +1,5 @@
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		arbitrum_elections::{
 			ArbitrumChain, ArbitrumDepositChannelWitnessing, ArbitrumKeyManagerEvent,
 			ArbitrumKeyManagerWitnessing, ArbitrumVaultDepositWitnessing, ArbitrumVaultEvent,
@@ -10,13 +10,14 @@ use crate::{
 	impl_rules_hook, ArbitrumBroadcaster, ArbitrumIngressEgress, Runtime,
 };
 use cf_chains::{instances::ArbitrumInstance, Arbitrum};
+use cf_traits::Hook;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes,
 	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
-	state_machine::core::Hook,
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_std::{vec, vec::Vec};
@@ -106,11 +107,13 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						} => {
 							if let Err(err) = ArbitrumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-								tx_out_id,
-								signer_id,
-								tx_fee,
-								tx_metadata,
-								transaction_ref,
+								TransactionConfirmation {
+									tx_out_id,
+									signer_id,
+									tx_fee,
+									tx_metadata,
+									transaction_ref,
+								},
 							) {
 								log::error!(
 									"Failed to execute Arbitrum egress success: TxOutId: {:?}, Error: {:?}",

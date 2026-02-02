@@ -52,9 +52,9 @@ impl_runtime_safe_mode! {
 	ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<Instance4>,
 	ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<Instance5>,
 	ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<Instance6>,
-	elections_generic: crate::chainflip::generic_elections::GenericElectionsSafeMode,
-	ethereum_elections: crate::chainflip::ethereum_elections::EthereumElectionsSafeMode,
-	arbitrum_elections: crate::chainflip::arbitrum_elections::ArbitrumElectionsSafeMode,
+	elections_generic: crate::chainflip::witnessing::generic_elections::GenericElectionsSafeMode,
+	ethereum_elections: crate::chainflip::witnessing::ethereum_elections::EthereumElectionsSafeMode,
+	arbitrum_elections: crate::chainflip::witnessing::arbitrum_elections::ArbitrumElectionsSafeMode,
 }
 
 /// Contains permissions for different Runtime calls.

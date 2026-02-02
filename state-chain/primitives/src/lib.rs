@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(int_roundings)]
 
 //! Chainflip Primitives
 //!
@@ -34,6 +35,7 @@ use sp_std::{
 	vec::Vec,
 };
 
+pub mod basis_points;
 pub mod chains;
 
 #[macro_export]
@@ -599,4 +601,21 @@ pub enum IngressOrEgress {
 	IngressVaultSwap,
 	Egress,
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
+}
+
+// ------ election based witnessing ------
+
+#[derive(
+	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+)]
+pub enum BlockWitnesserEvent<T> {
+	PreWitness(T),
+	Witness(T),
+}
+impl<T> BlockWitnesserEvent<T> {
+	pub fn inner_witness(&self) -> &T {
+		match self {
+			BlockWitnesserEvent::PreWitness(w) | BlockWitnesserEvent::Witness(w) => w,
+		}
+	}
 }

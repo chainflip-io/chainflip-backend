@@ -419,7 +419,7 @@ fn lost_funds_are_acknowledged_by_boost_pool() {
 		// from the deposit is cleared:
 		{
 			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+			set_eth_processed_up_to(recycle_block);
 			EthereumIngressEgress::on_idle(recycle_block, Weight::MAX);
 
 			assert_not_boosted(deposit_address);

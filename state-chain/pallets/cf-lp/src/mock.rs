@@ -45,7 +45,8 @@ frame_support::construct_runtime!(
 );
 
 thread_local! {
-	pub static BALANCE_MAP: RefCell<BTreeMap<AccountId, AssetAmount>> = RefCell::new(BTreeMap::new());
+	pub static BALANCE_MAP: RefCell<BTreeMap<(AccountId, Asset), AssetAmount>> =
+		RefCell::new(BTreeMap::new());
 }
 
 pub const MINIMUM_DEPOSIT: u128 = 100;
@@ -64,7 +65,7 @@ impl BalanceApi for MockBalanceApi {
 	fn credit_account(who: &Self::AccountId, _asset: Asset, amount: AssetAmount) {
 		BALANCE_MAP.with(|balance_map| {
 			let mut balance_map = balance_map.borrow_mut();
-			*balance_map.entry(*who).or_default() += amount;
+			*balance_map.entry((*who, _asset)).or_default() += amount;
 		});
 	}
 
@@ -79,12 +80,12 @@ impl BalanceApi for MockBalanceApi {
 
 	fn try_debit_account(
 		who: &Self::AccountId,
-		_asset: cf_primitives::Asset,
+		asset: cf_primitives::Asset,
 		amount: cf_primitives::AssetAmount,
 	) -> frame_support::dispatch::DispatchResult {
 		BALANCE_MAP.with(|balance_map| {
 			let mut balance_map = balance_map.borrow_mut();
-			let balance = balance_map.entry(who.to_owned()).or_default();
+			let balance = balance_map.entry((who.to_owned(), asset)).or_default();
 			*balance = balance.checked_sub(amount).ok_or("Insufficient balance")?;
 			Ok(())
 		})
@@ -92,28 +93,28 @@ impl BalanceApi for MockBalanceApi {
 
 	fn free_balances(who: &Self::AccountId) -> assets::any::AssetMap<cf_primitives::AssetAmount> {
 		BALANCE_MAP.with(|balance_map| {
-			assets::any::AssetMap::from_iter_or_default(
-				Asset::all().map(|asset| {
-					(asset, balance_map.borrow().get(who).cloned().unwrap_or_default())
-				}),
-			)
+			assets::any::AssetMap::from_iter_or_default(Asset::all().map(|asset| {
+				(asset, balance_map.borrow().get(&(*who, asset)).cloned().unwrap_or_default())
+			}))
 		})
 	}
 
-	fn get_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
-		todo!()
+	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+		BALANCE_MAP
+			.with(|balance_map| balance_map.borrow().get(&(who.to_owned(), asset)).cloned())
+			.unwrap_or_default()
 	}
 }
 
 impl MockBalanceApi {
-	pub fn insert_balance(account: AccountId, amount: AssetAmount) {
+	pub fn insert_balance(account: AccountId, asset: Asset, amount: AssetAmount) {
 		BALANCE_MAP.with(|balance_map| {
-			balance_map.borrow_mut().insert(account, amount);
+			balance_map.borrow_mut().insert((account, asset), amount);
 		});
 	}
 
-	pub fn get_balance(account: &AccountId) -> Option<AssetAmount> {
-		BALANCE_MAP.with(|balance_map| balance_map.borrow().get(account).cloned())
+	pub fn get_balance(account: &AccountId, asset: Asset) -> Option<AssetAmount> {
+		BALANCE_MAP.with(|balance_map| balance_map.borrow().get(&(*account, asset)).cloned())
 	}
 }
 

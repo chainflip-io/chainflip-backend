@@ -1,26 +1,25 @@
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		elections::TypesFor,
 		ethereum_elections::{
-			BlockDataDepositChannel, BlockDataKeyManager, BlockDataScUtils,
-			BlockDataStateChainGateway, BlockDataVaultDeposit, EthereumDepositChannelWitnessing,
-			EthereumKeyManagerEvent, EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
-			EthereumStateChainGatewayWitnessing, EthereumVaultDepositWitnessing,
-			EthereumVaultEvent, ScUtilsCall, StateChainGatewayEvent,
+			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,
+			BlockDataVaultDeposit, EthereumKeyManagerEvent, EthereumKeyManagerWitnessing,
+			EthereumScUtilsWitnessing, EthereumStateChainGatewayWitnessing,
+			EthereumVaultDepositWitnessing, EthereumVaultEvent, ScUtilsCall,
+			StateChainGatewayEvent,
 		},
 	},
 	EthereumBroadcaster, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
-use cf_traits::{FundAccount, FundingSource};
+use cf_traits::{FundAccount, FundingSource, Hook};
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use pallet_cf_elections::electoral_systems::{
-	block_witnesser::state_machine::{ExecuteHook, HookTypeFor, RulesHook},
-	state_machine::core::Hook,
+use pallet_cf_broadcast::TransactionConfirmation;
+use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
+	ExecuteHook, HookTypeFor, RulesHook,
 };
-use pallet_cf_ingress_egress::DepositWitness;
 use sp_std::{vec, vec::Vec};
 
 #[derive(
@@ -30,26 +29,12 @@ pub enum EthEvent<T> {
 	Witness(T),
 }
 
-type TypesDepositChannelWitnessing = TypesFor<EthereumDepositChannelWitnessing>;
 type TypesVaultDepositWitnessing = TypesFor<EthereumVaultDepositWitnessing>;
 type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-impl Hook<HookTypeFor<TypesDepositChannelWitnessing, ExecuteHook>>
-	for TypesDepositChannelWitnessing
-{
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<DepositWitness<Ethereum>>)>) {
-		for (block, event) in events {
-			match event {
-				EthEvent::Witness(deposit) => {
-					EthereumIngressEgress::process_channel_deposit_full_witness(deposit, block);
-				},
-			}
-		}
-	}
-}
 impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
 		for (block, event) in events {
@@ -158,11 +143,13 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 						} => {
 							if let Err(err) = EthereumBroadcaster::egress_success(
 								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-								tx_out_id,
-								signer_id,
-								tx_fee,
-								tx_metadata,
-								transaction_ref,
+								TransactionConfirmation {
+									tx_out_id,
+									signer_id,
+									tx_fee,
+									tx_metadata,
+									transaction_ref,
+								},
 							) {
 								log::error!(
 									"Failed to execute Ethereum egress success: TxOutId: {:?}, Error: {:?}",
@@ -236,11 +223,6 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-impl_rules_hook!(
-	TypesDepositChannelWitnessing,
-	BlockDataDepositChannel,
-	EthEvent<DepositWitness<Ethereum>>
-);
 impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, EthEvent<EthereumVaultEvent>);
 impl_rules_hook!(
 	TypesStateChainGatewayWitnessing,

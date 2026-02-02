@@ -14,21 +14,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::{
+	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
+	Pallet, PalletSafeMode, WindowedEma, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS,
+	ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
+};
 use std::collections::BTreeMap;
 
-use crate::{mock::*, Error, Event, LiquidityRefundAddress, PalletSafeMode};
-
 use cf_chains::{address::EncodedAddress, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId, SECONDS_PER_BLOCK};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	AccountRoleRegistry, BalanceApi, Chainflip,
 	ExpiryBehaviour::RefundIfExpires,
-	PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
+	LpStatsApi, PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
 };
 use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use sp_runtime::FixedU128;
 
 #[test]
 fn egress_chain_and_asset_must_match() {
@@ -48,8 +52,8 @@ fn egress_chain_and_asset_must_match() {
 #[test]
 fn liquidity_providers_can_withdraw_asset() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
-		MockBalanceApi::insert_balance(NON_LP_ACCOUNT, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
+		MockBalanceApi::insert_balance(NON_LP_ACCOUNT, Asset::Eth, 1_000);
 
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
@@ -86,7 +90,7 @@ fn liquidity_providers_can_move_assets_internally() {
 		const BALANCE_LP_1: AssetAmount = 1_000;
 		const TRANSFER_AMOUNT: AssetAmount = 100;
 
-		MockBalanceApi::insert_balance(LP_ACCOUNT, BALANCE_LP_1);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, BALANCE_LP_1);
 
 		// Cannot move assets to a non-LP account.
 		assert_noop!(
@@ -144,7 +148,7 @@ fn liquidity_providers_can_move_assets_internally() {
 #[test]
 fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
-		MockBalanceApi::insert_balance(LP_ACCOUNT, 1_000);
+		MockBalanceApi::insert_balance(LP_ACCOUNT, Asset::Eth, 1_000);
 		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
 			RuntimeOrigin::signed(LP_ACCOUNT),
 			EncodedAddress::Eth(Default::default()),
@@ -543,5 +547,236 @@ fn safe_mode_prevents_internal_swaps() {
 		});
 
 		assert_ok!(schedule_swap());
+	});
+}
+
+/// Alpha half-life factor for exponential moving averages.
+/// Calculated as: alpha = 1 - e^(-ln2 * sampling_interval / half_life_period)
+fn expected_alpha_half_life(days: u32) -> FixedU128 {
+	use frame_support::sp_runtime::Perbill;
+	let decay_factor: f64 = (STATS_UPDATE_INTERVAL_IN_BLOCKS as f64) * (SECONDS_PER_BLOCK as f64) /
+		((days as f64) * 24.0 * 3600.0);
+	let exp_part: f64 = -std::f64::consts::LN_2 * decay_factor;
+	FixedU128::from_perbill(Perbill::from_float(1.0f64 - exp_part.exp()))
+}
+
+/// Computes expected EMA using f64
+/// EMA_t = alpha * new_sample + (1 - alpha) * EMA_(t-1)
+fn expected_ema(prev: f64, delta: f64, half_life_days: u32) -> f64 {
+	let alpha = expected_alpha_half_life(half_life_days).to_float();
+	alpha * delta + (1.0f64 - alpha) * prev
+}
+
+/// Convert FixedU128 to float, NB we use 6 decimal places for USD throughout the tests
+fn fixed_u128_to_f64(val: FixedU128) -> f64 {
+	FixedU128::from_rational(val.into_inner(), 1_000_000u128).to_float()
+}
+fn is_within_tiny_error(actual: f64, expected: f64) -> bool {
+	(expected - actual).abs() < 0.00001f64
+}
+
+#[test]
+fn check_ema_alpha_constants_are_correct() {
+	let expected_1day = expected_alpha_half_life(1);
+	assert_eq!(ALPHA_HALF_LIFE_1_DAY, expected_1day);
+
+	let expected_7days = expected_alpha_half_life(7);
+	assert_eq!(ALPHA_HALF_LIFE_7_DAYS, expected_7days);
+
+	let expected_30days = expected_alpha_half_life(30);
+	assert_eq!(ALPHA_HALF_LIFE_30_DAYS, expected_30days);
+}
+
+#[test]
+fn on_limit_order_filled_updates_delta_stats() {
+	new_test_ext().execute_with(|| {
+		use sp_runtime::FixedU128;
+
+		const USD_AMOUNT: AssetAmount = 1_500_000;
+
+		// round 1
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).is_none());
+		for _ in 0..3 {
+			LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, USD_AMOUNT);
+		}
+
+		let deltas_1 = LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth).unwrap();
+		assert_eq!(deltas_1.limit_orders_swap_usd_volume, FixedU128::from_inner(USD_AMOUNT * 3));
+
+		// round2
+		assert!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Eth).is_none());
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Eth, USD_AMOUNT);
+
+		let deltas_2 = LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Eth).unwrap();
+
+		assert_eq!(deltas_2.limit_orders_swap_usd_volume, FixedU128::from_inner(USD_AMOUNT));
+	});
+}
+// rust
+#[test]
+fn update_agg_stats_updates_correctly() {
+	new_test_ext().execute_with(|| {
+		use sp_runtime::FixedU128;
+
+		let pre_existing_eth_stats = AggStats::new(DeltaStats {
+			limit_orders_swap_usd_volume: FixedU128::from_inner(1_000_000_000u128),
+		}); // Avg: 1000 USD
+
+		LpAggStats::<Test>::mutate(|agg_stats_map| {
+			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
+			lp_stats.insert(Asset::Eth, pre_existing_eth_stats);
+		});
+
+		// on_limit_order_filled for LP_ACCOUNT with pre-existing AggStats
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128); // 700 usd
+
+		// on_limit_order_filled for LP_ACCOUNT_2 (no pre-existing AggStats; should create new EMA
+		// equal to delta)
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128); // 500 usd
+
+		// Call the update function and verify that delta stats are deleted after the update
+		LiquidityProvider::update_agg_stats();
+		// After calling update_agg_stats(), all Delta stats should be deleted
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
+		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
+
+		let agg_stats_map = LpAggStats::<Test>::get();
+		let lp1_agg_stats = agg_stats_map.get(&LP_ACCOUNT).unwrap().get(&Asset::Eth).unwrap();
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp1_agg_stats.avg_limit_usd_volume.one_day),
+			expected_ema(
+				fixed_u128_to_f64(pre_existing_eth_stats.avg_limit_usd_volume.one_day),
+				1400f64,
+				1u32
+			)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp1_agg_stats.avg_limit_usd_volume.seven_days),
+			expected_ema(
+				fixed_u128_to_f64(pre_existing_eth_stats.avg_limit_usd_volume.seven_days),
+				1400f64,
+				7u32
+			)
+		));
+		assert!(is_within_tiny_error(
+			fixed_u128_to_f64(lp1_agg_stats.avg_limit_usd_volume.thirty_days),
+			expected_ema(
+				fixed_u128_to_f64(pre_existing_eth_stats.avg_limit_usd_volume.thirty_days),
+				1400f64,
+				30u32
+			)
+		));
+
+		// Verify new EMA was created for LP_ACCOUNT_2 and is initialized correctly
+		let agg_stats_map = LpAggStats::<Test>::get();
+		let lp2_agg_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.one_day), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.seven_days), 500f64);
+		assert_eq!(fixed_u128_to_f64(lp2_agg_stats.avg_limit_usd_volume.thirty_days), 500f64);
+	});
+}
+
+#[test]
+fn update_agg_stats_prunes_below_threshold() {
+	new_test_ext().execute_with(|| {
+		use sp_runtime::FixedU128;
+
+		let below_threshold = AggStats {
+			avg_limit_usd_volume: WindowedEma {
+				one_day: FixedU128::from_inner(5_000_000),
+				seven_days: FixedU128::from_inner(5_000_000),
+				thirty_days: FixedU128::from_inner(5_000_000),
+			},
+		};
+		let above_threshold = AggStats {
+			avg_limit_usd_volume: WindowedEma {
+				one_day: FixedU128::from_inner(20_000_000),
+				seven_days: FixedU128::from_inner(20_000_000),
+				thirty_days: FixedU128::from_inner(20_000_000),
+			},
+		};
+
+		LpAggStats::<Test>::mutate(|agg_stats_map| {
+			let lp_stats = agg_stats_map.entry(LP_ACCOUNT).or_default();
+			lp_stats.insert(Asset::Eth, below_threshold);
+			let lp_stats = agg_stats_map.entry(LP_ACCOUNT_2).or_default();
+			lp_stats.insert(Asset::Flip, above_threshold);
+		});
+
+		LiquidityProvider::update_agg_stats();
+
+		let agg_stats_map = LpAggStats::<Test>::get();
+		assert!(agg_stats_map
+			.get(&LP_ACCOUNT)
+			.and_then(|stats| stats.get(&Asset::Eth))
+			.is_none());
+		assert!(agg_stats_map
+			.get(&LP_ACCOUNT_2)
+			.and_then(|stats| stats.get(&Asset::Flip))
+			.is_some());
+
+		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
+		assert!(
+			lp2_stats.avg_limit_usd_volume.pruning_weighted_score() >=
+				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
+		);
+	});
+}
+
+#[test]
+fn test_purge_balances() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: AssetAmount = 1_000_000;
+
+		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, AMOUNT);
+		MockBalanceApi::credit_account(&LP_ACCOUNT_2, Asset::Flip, AMOUNT);
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		assert_ok!(LiquidityProvider::register_liquidity_refund_address(
+			OriginTrait::signed(LP_ACCOUNT_2),
+			EncodedAddress::Eth([0x02; 20])
+		));
+
+		// Purge balances
+		let accounts = vec![
+			(LP_ACCOUNT, Asset::Eth, AMOUNT),
+			(LP_ACCOUNT_2, Asset::Flip, AMOUNT),
+			(NON_LP_ACCOUNT, Asset::Usdc, AMOUNT),
+		];
+		assert_ok!(Pallet::<Test>::purge_balances(RuntimeOrigin::root(), accounts));
+
+		assert_events_match!(Test,
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurged {
+			account_id: LP_ACCOUNT,
+			asset: Asset::Eth,
+			amount: AMOUNT,
+			..
+		}) => (),
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurged {
+			account_id: LP_ACCOUNT_2,
+			asset: Asset::Flip,
+			amount: AMOUNT,
+			..
+		}) => (),
+			RuntimeEvent::LiquidityProvider(Event::AssetBalancePurgeFailed {
+			account_id: NON_LP_ACCOUNT,
+			asset: Asset::Usdc,
+			amount: AMOUNT,
+			..
+		}) => ()
+		);
+
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
+			.iter()
+			.all(|(_, amount)| *amount == 0));
+
+		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_2)
+			.iter()
+			.all(|(_, amount)| *amount == 0));
 	});
 }

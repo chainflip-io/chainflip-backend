@@ -71,12 +71,6 @@ const BROKER_FEE_BPS: u16 = 10;
 const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
 
-const ZERO_NETWORK_FEES: FeeType<Test> = FeeType::NetworkFee(NetworkFeeTracker {
-	network_fee: FeeRateAndMinimum { minimum: 0, rate: Permill::zero() },
-	accumulated_stable_amount: 0,
-	accumulated_fee: 0,
-});
-
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
 
@@ -169,11 +163,12 @@ fn create_test_swap(
 					output_address: ForeignChainAddress::Eth(H160::zero()),
 				},
 				dca_state,
+				fees: Default::default(),
 			},
 		},
 	);
 
-	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, vec![], execute_at)
+	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, execute_at)
 }
 
 // Returns some test data
@@ -548,7 +543,6 @@ fn swap_by_deposit_happy_path() {
 						OUTPUT_ASSET,
 						AMOUNT,
 						None,
-						vec![ZERO_NETWORK_FEES],
 						SWAP_BLOCK
 					)
 				)])
@@ -581,9 +575,6 @@ fn process_all_into_stable_swaps_first() {
 		const NETWORK_FEE: FeeRateAndMinimum =
 			FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 };
 		NetworkFee::<Test>::set(NETWORK_FEE);
-
-		const NETWORK_FEE_DETAILS: FeeType<Test> =
-			FeeType::NetworkFee(NetworkFeeTracker::new(NETWORK_FEE));
 
 		[Asset::Flip, Asset::Btc, Asset::Dot, Asset::Usdc]
 			.into_iter()
@@ -620,7 +611,6 @@ fn process_all_into_stable_swaps_first() {
 						Asset::Eth,
 						AMOUNT,
 						None,
-						vec![NETWORK_FEE_DETAILS],
 						SWAP_EXECUTION_BLOCK
 					),
 				),
@@ -633,7 +623,6 @@ fn process_all_into_stable_swaps_first() {
 						Asset::Eth,
 						AMOUNT,
 						None,
-						vec![NETWORK_FEE_DETAILS],
 						SWAP_EXECUTION_BLOCK
 					)
 				),
@@ -646,7 +635,6 @@ fn process_all_into_stable_swaps_first() {
 						Asset::Eth,
 						AMOUNT,
 						None,
-						vec![NETWORK_FEE_DETAILS],
 						SWAP_EXECUTION_BLOCK
 					),
 				),
@@ -659,7 +647,6 @@ fn process_all_into_stable_swaps_first() {
 						Asset::Eth,
 						AMOUNT,
 						None,
-						vec![NETWORK_FEE_DETAILS],
 						SWAP_EXECUTION_BLOCK
 					)
 				)
@@ -879,7 +866,6 @@ fn swap_excess_are_confiscated() {
 					to,
 					MAX_SWAP,
 					None,
-					vec![ZERO_NETWORK_FEES],
 					System::block_number() + SWAP_DELAY_BLOCKS as u64
 				)
 			)])
@@ -1617,7 +1603,7 @@ mod swap_batching {
 
 	#[test]
 	fn single_swap() {
-		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, [], 1);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, 1);
 		let mut swaps = vec![swap1.clone()];
 
 		let swap_states = vec![swap1.to_state(None)];
@@ -1635,9 +1621,9 @@ mod swap_batching {
 
 	#[test]
 	fn swaps_fail_into_stable() {
-		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 500, None, [], 1);
-		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, [], 1);
-		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, [], 1);
+		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 500, None, 1);
+		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, 1);
+		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, 1);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 
@@ -1659,9 +1645,9 @@ mod swap_batching {
 	fn swaps_fail_from_stable() {
 		// BTC swap should be removed because it would result in a larger amount
 		// of USDC and thus will have higher impact on the Eth pool
-		let swap1 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1, None, [], 1);
-		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, [], 1);
-		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, [], 1);
+		let swap1 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1, None, 1);
+		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, 1);
+		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, 1);
 
 		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
 

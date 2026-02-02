@@ -42,7 +42,7 @@ use pallet_cf_elections::{
 	VoteOf,
 };
 use state_chain_runtime::{
-	chainflip::solana_elections::{
+	chainflip::witnessing::solana_elections::{
 		SolanaAltWitnessing, SolanaBlockHeightTracking, SolanaEgressWitnessing,
 		SolanaElectoralSystemRunner, SolanaIngressTracking, SolanaLiveness, SolanaNonceTracking,
 		SolanaVaultSwapTracking, TransactionSuccessDetails,

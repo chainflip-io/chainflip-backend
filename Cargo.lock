@@ -1412,6 +1412,7 @@ dependencies = [
  "rand",
  "scale-info",
  "serde",
+ "sp-arithmetic 26.0.0",
  "sp-core 34.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B9)",
 ]
@@ -1692,17 +1693,24 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cfe-events",
+ "derive-where",
+ "duplicate",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "itertools 0.13.0",
  "log",
  "parity-scale-codec",
+ "proptest",
+ "proptest-derive",
  "scale-info",
  "serde",
+ "sp-core 34.0.0",
  "sp-io 38.0.0",
  "sp-runtime 39.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B9)",
  "strum 0.26.3",
+ "utilities",
 ]
 
 [[package]]
@@ -8355,6 +8363,7 @@ dependencies = [
  "frame-system",
  "generic-typeinfo-derive",
  "log",
+ "pallet-cf-witnesser",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -8362,6 +8371,7 @@ dependencies = [
  "sp-io 38.0.0",
  "sp-runtime 39.0.0",
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?tag=chainflip-substrate-1.15.2%2B9)",
+ "utilities",
 ]
 
 [[package]]

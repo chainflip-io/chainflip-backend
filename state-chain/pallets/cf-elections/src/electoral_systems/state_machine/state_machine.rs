@@ -1,4 +1,4 @@
-use super::core::Validate;
+use cf_traits::Validate;
 use derive_where::derive_where;
 use itertools::Either;
 use sp_std::{fmt::Debug, vec::Vec};

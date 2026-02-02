@@ -25,8 +25,8 @@ use crate::{
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
 	FetchOrTransfer, MaximumPreallocatedChannels, MinimumDeposit, Pallet, PalletConfigUpdate,
 	PalletSafeMode, PendingPrewitnessedDeposit, PreallocatedChannels, PrewitnessedDepositIdCounter,
-	RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, VaultDepositWitness,
-	WitnessSafetyMargin,
+	ProcessedUpTo, RefundReason, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	VaultDepositWitness, WitnessSafetyMargin,
 };
 use cf_amm_math::Price;
 use cf_chains::{
@@ -119,6 +119,11 @@ fn expect_size_of_address_pool(size: usize) {
 		size,
 		"Address pool size is incorrect!"
 	);
+}
+
+fn set_eth_processed_up_to(height: <Ethereum as Chain>::ChainBlockNumber) {
+	ProcessedUpTo::<Test, Instance1>::set(height);
+	BlockHeightProvider::<MockEthereum>::set_block_height(height);
 }
 
 #[test]
@@ -497,7 +502,7 @@ fn addresses_are_getting_reused() {
 		})
 		.then_execute_at_next_block(|channels| {
 			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+			set_eth_processed_up_to(recycle_block);
 
 			channels[0].clone()
 		})
@@ -539,7 +544,7 @@ fn proof_address_pool_integrity() {
 			));
 		}
 		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+		set_eth_processed_up_to(recycle_block);
 
 		EthereumIngressEgress::on_idle(1, Weight::MAX);
 
@@ -565,7 +570,7 @@ fn create_new_address_while_pool_is_empty() {
 			));
 		}
 		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-		BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+		set_eth_processed_up_to(recycle_block);
 		EthereumIngressEgress::on_idle(1, Weight::MAX);
 
 		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
@@ -684,7 +689,7 @@ fn multi_deposit_includes_deposit_beyond_recycle_height() {
 			(address, recycles_at)
 		})
 		.then_execute_at_next_block(|(address, recycles_at)| {
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycles_at);
+			set_eth_processed_up_to(recycles_at);
 			address
 		})
 		.then_execute_at_next_block(|address| {
@@ -784,7 +789,7 @@ fn multi_use_deposit_address_different_blocks() {
 				"LP account hasn't earned fees!"
 			);
 			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+			set_eth_processed_up_to(recycle_block);
 
 			deposit_address
 		})
@@ -1204,7 +1209,7 @@ fn channel_reuse_with_different_assets() {
 		})
 		.then_execute_at_next_block(|(_, channel_id, _)| {
 			let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
-			BlockHeightProvider::<MockEthereum>::set_block_height(recycle_block);
+			set_eth_processed_up_to(recycle_block);
 			channel_id
 		})
 		.then_execute_with_keep_context(|channel_id| {

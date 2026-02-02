@@ -34,14 +34,15 @@ use crate::{
 		mocks::{ElectoralSystemState, TestSetup},
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
-			core::{
-				hook_test_utils::{ConstantHook, MockHook},
-				Hook, HookType, TypesFor,
-			},
+			core::TypesFor,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
 	vote_storage,
+};
+use cf_traits::{
+	hook_test_utils::{ConstantHook, MockHook},
+	Hook, HookType,
 };
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;

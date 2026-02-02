@@ -16,5 +16,17 @@
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<8, Pallet<T>>,);
+pub mod cleanup_managed_validators;
+
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		8,
+		9,
+		cleanup_managed_validators::CleanupManagedValidators<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<9, Pallet<T>>,
+);

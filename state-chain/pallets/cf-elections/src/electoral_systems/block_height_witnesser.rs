@@ -1,17 +1,13 @@
 use core::{iter::Step, ops::RangeInclusive};
 
-use super::{
-	block_witnesser::state_machine::HookTypeFor,
-	state_machine::core::{defx, Hook, HookType, Validate},
-};
+use super::{block_witnesser::state_machine::HookTypeFor, state_machine::core::defx};
 use crate::{
 	electoral_systems::block_height_witnesser::primitives::ContinuousHeaders, generic_tools::*,
 };
 use cf_chains::witness_period::SaturatingStep;
+use cf_traits::{Hook, HookType, Validate};
 use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
-#[cfg(test)]
-use proptest::prelude::Arbitrary;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 use scale_info::TypeInfo;
@@ -21,19 +17,6 @@ use sp_std::fmt::Debug;
 pub mod consensus;
 pub mod primitives;
 pub mod state_machine;
-
-#[cfg(test)]
-pub trait TestTraits = Send + Sync;
-#[cfg(not(test))]
-pub trait TestTraits = core::any::Any;
-
-#[cfg(test)]
-pub trait MaybeArbitrary = proptest::prelude::Arbitrary + Send + Sync
-where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
-#[cfg(not(test))]
-pub trait MaybeArbitrary = core::any::Any;
-
-pub trait CommonTraits = Debug + Clone + Encode + Decode + Serde + Eq + TypeInfo;
 
 pub trait ChainBlockNumberTrait = CommonTraits
 	+ SaturatingStep

@@ -1,6 +1,6 @@
+use cf_traits::Validate;
 use codec::{Decode, Encode};
 use derive_where::derive_where;
-use pallet_cf_elections::electoral_systems::state_machine::core::Validate;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 

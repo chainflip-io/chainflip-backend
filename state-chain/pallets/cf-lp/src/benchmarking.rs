@@ -29,6 +29,8 @@ use frame_system::RawOrigin;
 )]
 mod benchmarks {
 	use super::*;
+	use frame_support::sp_runtime::FixedU128;
+	use sp_std::vec::Vec;
 
 	#[benchmark]
 	fn request_liquidity_deposit_address() {
@@ -138,6 +140,131 @@ mod benchmarks {
 			Default::default(),
 			None,
 		);
+	}
+
+	#[benchmark]
+	fn update_agg_stats_existing(m: Linear<0, 100>) {
+		use sp_std::collections::btree_map::BTreeMap;
+
+		// Generate m LPs with existing aggregate stats
+		let existing_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			m,
+		)
+		.unwrap();
+
+		// Populate LpAggStats with existing LPs
+		let mut agg_stats_map: BTreeMap<T::AccountId, BTreeMap<Asset, pallet::AggStats>> =
+			BTreeMap::new();
+		for lp in &existing_lps {
+			let mut lp_stats: BTreeMap<Asset, pallet::AggStats> = BTreeMap::new();
+			lp_stats.insert(
+				Asset::Eth,
+				pallet::AggStats::new(pallet::DeltaStats {
+					limit_orders_swap_usd_volume: FixedU128::from_u32(100),
+				}),
+			);
+			agg_stats_map.insert(lp.clone(), lp_stats);
+		}
+		pallet::LpAggStats::<T>::put(agg_stats_map);
+
+		// Populate LpDeltaStats for existing LPs (they will be updated)
+		for lp in &existing_lps {
+			pallet::LpDeltaStats::<T>::insert(
+				lp,
+				Asset::Eth,
+				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(50) },
+			);
+		}
+
+		#[block]
+		{
+			Pallet::<T>::update_agg_stats();
+		}
+
+		// Verify existing LPs had their stats updated
+		let updated_agg_stats = pallet::LpAggStats::<T>::get();
+		for lp in &existing_lps {
+			assert!(updated_agg_stats.contains_key(lp));
+		}
+		// Verify delta stats were drained
+		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
+	}
+
+	#[benchmark]
+	fn update_agg_stats_new(n: Linear<0, 100>) {
+		use sp_std::collections::btree_map::BTreeMap;
+
+		// Generate n LPs that only have delta stats (new LPs)
+		let new_lps = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			n,
+		)
+		.unwrap();
+
+		// Ensure LpAggStats is empty
+		pallet::LpAggStats::<T>::put(
+			BTreeMap::<T::AccountId, BTreeMap<Asset, pallet::AggStats>>::new(),
+		);
+
+		// Populate LpDeltaStats for new LPs (they will be inserted as new agg entries)
+		for lp in &new_lps {
+			pallet::LpDeltaStats::<T>::insert(
+				lp,
+				Asset::Eth,
+				pallet::DeltaStats { limit_orders_swap_usd_volume: FixedU128::from_u32(25) },
+			);
+		}
+
+		#[block]
+		{
+			Pallet::<T>::update_agg_stats();
+		}
+
+		// Verify new LPs were added to agg stats
+		let updated_agg_stats = pallet::LpAggStats::<T>::get();
+		for lp in &new_lps {
+			assert!(updated_agg_stats.contains_key(lp));
+		}
+		// Verify delta stats were drained
+		assert_eq!(pallet::LpDeltaStats::<T>::iter().count(), 0);
+	}
+
+	#[benchmark]
+	fn purge_balances(n: Linear<1, 100>) {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+
+		let account_ids = T::AccountRoleRegistry::generate_whitelisted_callers_with_role(
+			AccountRole::LiquidityProvider,
+			n as u32,
+		)
+		.unwrap();
+
+		for account_id in &account_ids {
+			assert_ok!(Pallet::<T>::register_liquidity_refund_address(
+				RawOrigin::Signed(account_id.clone()).into(),
+				EncodedAddress::Eth(Default::default()),
+			));
+		}
+
+		let accounts_to_purge = account_ids
+			.into_iter()
+			.enumerate()
+			.map(|(i, account_id)| {
+				let asset = match i % 3 {
+					0 => Asset::Eth,
+					1 => Asset::Flip,
+					_ => Asset::Usdc,
+				};
+				T::BalanceApi::credit_account(&account_id, asset, 1_000_000_000);
+				(account_id, asset, 500_000_000)
+			})
+			.collect::<Vec<_>>();
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::purge_balances(origin, accounts_to_purge));
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

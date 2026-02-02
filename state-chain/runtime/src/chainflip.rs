@@ -26,22 +26,14 @@ pub mod pending_rotation_broadcasts;
 mod signer_nomination;
 
 // Election pallet implementations
-pub mod bitcoin_block_processor;
 #[macro_use]
-pub mod elections;
-pub mod arbitrum_block_processor;
-pub mod arbitrum_elections;
-pub mod bitcoin_elections;
-pub mod ethereum_block_processor;
-pub mod ethereum_elections;
+pub mod witnessing;
 pub mod ethereum_sc_calls;
-pub mod generic_elections;
 pub mod simulate_swap;
-pub mod solana_elections;
 pub mod vault_swaps;
 
 use crate::{
-	chainflip::{
+	chainflip::witnessing::{
 		elections::TypesFor,
 		generic_elections::{decode_and_get_latest_oracle_price, Chainlink},
 		solana_elections::SolanaChainTrackingProvider,
@@ -130,6 +122,7 @@ pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
 use sp_runtime::Permill;
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
+use witnessing::*;
 
 impl Chainflip for Runtime {
 	type RuntimeCall = RuntimeCall;

@@ -25,8 +25,10 @@ use proptest_derive::Arbitrary;
 
 use crate::electoral_systems::{
 	block_height_witnesser::{ChainBlockHashOf, ChainBlockNumberOf, ChainProgress, ChainTypes},
-	state_machine::core::{defx, Hook, Validate},
+	state_machine::core::defx,
 };
+
+use cf_traits::{Hook, Validate};
 
 use super::state_machine::{BWElectionType, BWTypes, EngineElectionType};
 

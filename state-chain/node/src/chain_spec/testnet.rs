@@ -26,7 +26,7 @@ use pallet_cf_elections::generic_tools::Array;
 use sc_service::ChainType;
 use sol_prim::consts::{const_address, const_hash};
 use sp_core::{sr25519, H160, H256};
-use state_chain_runtime::chainflip::generic_elections::ChainlinkOraclePriceSettings;
+use state_chain_runtime::chainflip::witnessing::generic_elections::ChainlinkOraclePriceSettings;
 
 pub struct Config;
 

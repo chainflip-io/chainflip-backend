@@ -9,7 +9,8 @@ use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::defx;
 
-use super::{super::state_machine::core::Validate, ChainTypes};
+use super::ChainTypes;
+use cf_traits::Validate;
 
 //------------------------ inputs ---------------------------
 

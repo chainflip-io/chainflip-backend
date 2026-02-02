@@ -110,7 +110,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(8);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
@@ -867,7 +867,12 @@ pub mod pallet {
 				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 			}
 
-			ManagedValidators::<T>::remove(&account_id);
+			if let Some(operator) = OperatorChoice::<T>::take(&account_id) {
+				ManagedValidators::<T>::mutate(&operator, |validators| {
+					validators.remove(&account_id);
+				});
+			}
+
 			ClaimedValidators::<T>::remove(&account_id);
 
 			T::AccountRoleRegistry::deregister_as_validator(&account_id)?;
