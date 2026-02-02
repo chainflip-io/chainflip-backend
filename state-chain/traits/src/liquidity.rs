@@ -106,6 +106,14 @@ pub trait LpRegistration {
 	}
 }
 
+pub trait LpStatsApi {
+	type AccountId;
+
+	/// Notifies the lp-pallet that an order has been filled, so it can update the stats
+	/// accordingly.
+	fn on_limit_order_filled(who: &Self::AccountId, asset: &Asset, usd_value: AssetAmount);
+}
+
 pub trait PoolApi {
 	type AccountId;
 

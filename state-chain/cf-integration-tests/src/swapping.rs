@@ -47,14 +47,15 @@ use cf_primitives::{
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, PoolPairsMap,
-	SwapType,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, PoolApi,
+	PoolPairsMap, SwapType,
 };
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
 	traits::{OnFinalize, OnIdle, Time},
 };
+use pallet_cf_asset_balances::FreeBalances;
 use pallet_cf_broadcast::{
 	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
 	RequestSuccessCallbacks,
@@ -63,7 +64,6 @@ use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepo
 use pallet_cf_pools::RangeOrderSize;
 use pallet_cf_swapping::{FeeRateAndMinimum, SwapRequestIdCounter, SwapRetryDelay};
 use sp_core::{H160, U256};
-
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, simulate_swap::simulate_swap, ChainAddressConverter,
@@ -420,6 +420,9 @@ fn basic_pool_setup_provision_and_swap() {
 			credit_account(&DORIS, Asset::Flip, 10_000_000 * DECIMALS);
 			credit_account(&DORIS, Asset::Usdc, 10_000_000 * DECIMALS);
 
+			let lp_old_balances =
+				[Asset::Eth, Asset::Flip].map(|asset| FreeBalances::<Runtime>::get(&DORIS, asset));
+
 			set_limit_order(&DORIS, Asset::Eth, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
 			set_limit_order(&DORIS, Asset::Usdc, Asset::Eth, 0, Some(0), 1_000_000 * DECIMALS);
 			set_limit_order(&DORIS, Asset::Flip, Asset::Usdc, 0, Some(0), 1_000_000 * DECIMALS);
@@ -441,6 +444,15 @@ fn basic_pool_setup_provision_and_swap() {
 					},
 				) if egress_ids.contains(&egress_id) => ()
 			);
+
+			// Close all limit orders to update free balances
+			assert_ok!(LiquidityPools::cancel_all_limit_orders(&DORIS));
+
+			let lp_new_balances =
+				[Asset::Eth, Asset::Flip].map(|asset| FreeBalances::<Runtime>::get(&DORIS, asset));
+
+			assert!(lp_new_balances[0] > lp_old_balances[0]); // Lp bought ETH
+			assert!(lp_new_balances[1] < lp_old_balances[1]); // Lp sold FLIP
 		});
 }
 

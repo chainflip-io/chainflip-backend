@@ -458,6 +458,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = AssetBalances;
+	type LpStats = LiquidityProvider;
 	type LpRegistrationApi = LiquidityProvider;
 	type SwapRequestHandler = Swapping;
 	type SafeMode = RuntimeSafeMode;
