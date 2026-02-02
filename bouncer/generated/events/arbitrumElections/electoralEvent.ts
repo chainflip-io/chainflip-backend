@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { stateChainRuntimeChainflipArbitrumElectionsArbitrumElectoralEvents } from '../common';
+import { stateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectoralEvents } from '../common';
 
 export const arbitrumElectionsElectoralEvent =
-  stateChainRuntimeChainflipArbitrumElectionsArbitrumElectoralEvents;
+  stateChainRuntimeChainflipWitnessingArbitrumElectionsArbitrumElectoralEvents;
