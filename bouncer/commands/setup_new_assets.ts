@@ -66,6 +66,5 @@ export async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> 
   cf.info('Swaps Setup completed for new assets: WBTC, ArbUsdt, SolUsdt');
 }
 
-
 const cf = await newChainflipIO(globalLogger, []);
 await runWithTimeoutAndExit(setupNewAssets(cf), 240);

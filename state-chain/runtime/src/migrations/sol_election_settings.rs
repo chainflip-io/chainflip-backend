@@ -1,6 +1,6 @@
 use crate::*;
 
-use crate::chainflip::solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings};
+use crate::chainflip::witnessing::solana_elections::{SolanaIngressSettings, SolanaVaultSwapsSettings};
 use cf_chains::sol::SolAddress;
 use cf_runtime_utilities::NoopRuntimeUpgrade;
 use frame_support::{
