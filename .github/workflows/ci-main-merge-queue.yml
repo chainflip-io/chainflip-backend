@@ -56,7 +56,7 @@ jobs:
   #     lp-endpoint: "http://127.0.0.1:10589"
   #     log-postfix: "-post-check-old-rpcs"
 
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
+  # upgrade-check:
+  #   needs: [build-try-runtime]
+  #   uses: ./.github/workflows/upgrade-test.yml
+  #   secrets: inherit

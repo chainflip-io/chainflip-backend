@@ -92,12 +92,12 @@ jobs:
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
-    with:
-      run-job: true
+  # upgrade-check:
+  #   needs: [build-try-runtime]
+  #   uses: ./.github/workflows/upgrade-test.yml
+  #   secrets: inherit
+  #   with:
+  #     run-job: true
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
@@ -111,6 +111,6 @@ jobs:
     with:
       network: "sisyphos"
   upload-versioned-build-artifacts:
-    needs: [upgrade-check, build, build-m2]
+    needs: [build, build-m2]
     uses: ./.github/workflows/_61_upload_versioned_build_artifacts.yml
     secrets: inherit

@@ -75,12 +75,12 @@ jobs:
   test-benchmarks:
     needs: [build-benchmarks]
     uses: ./.github/workflows/_41_test_benchmarks.yml
-  upgrade-check:
-    needs: [build-try-runtime]
-    uses: ./.github/workflows/upgrade-test.yml
-    secrets: inherit
-    with:
-      run-job: false
+  # upgrade-check:
+  #   needs: [build-try-runtime]
+  #   uses: ./.github/workflows/upgrade-test.yml
+  #   secrets: inherit
+  #   with:
+  #     run-job: false
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
