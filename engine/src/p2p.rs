@@ -16,6 +16,8 @@
 
 pub mod multisig_adapter;
 mod peer_info_submitter;
+#[cfg(test)]
+mod tests;
 
 use std::{
 	net::{IpAddr, Ipv4Addr},
