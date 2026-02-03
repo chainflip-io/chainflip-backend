@@ -2,7 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.0.7] - 2026-01-
+## [2.0.8] - 2026-02-03
+
+### Fixes
+
+- Update Assethub Metadata
+
+## [2.0.7] - 2026-01-29
 
 ### Fixes
 
