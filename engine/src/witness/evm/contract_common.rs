@@ -203,6 +203,9 @@ pub async fn address_states<EvmCachingClient>(
 where
 	EvmCachingClient: AddressCheckerRetryRpcApiWithResult + Send + Sync + Clone,
 {
+	if addresses.is_empty() {
+		return Ok(Default::default());
+	}
 	let (previous_address_states, address_states) = try_join!(
 		eth_rpc.address_states(parent_hash, address_checker_address, addresses.clone()),
 		eth_rpc.address_states(hash, address_checker_address, addresses.clone())
@@ -334,43 +337,37 @@ where
 		})
 		.collect();
 
-	let events_fut = async {
-		Ok::<_, anyhow::Error>(
-			events_at_block::<Chain, VaultEvents, CT, _>(
-				block.bloom,
-				block_height,
-				block.hash,
-				vault_address,
-				client,
+	let (undeployed_addr_states, events) = futures::try_join!(
+		address_states(
+			client,
+			address_checker_address,
+			block.parent_hash,
+			block.hash,
+			undeployed_addresses,
+		),
+		async {
+			Ok::<_, anyhow::Error>(
+				events_at_block::<Chain, VaultEvents, CT, _>(
+					block.bloom,
+					block_height,
+					block.hash,
+					vault_address,
+					client,
+				)
+				.await?
+				.into_iter()
+				.filter_map(|event| match event.event_parameters {
+					VaultEvents::FetchedNativeFilter(inner_event)
+						if eth_addresses.contains(&inner_event.sender) =>
+						Some((inner_event, event.tx_hash)),
+					_ => None,
+				})
+				.collect::<Vec<_>>(),
 			)
-			.await?
-			.into_iter()
-			.filter_map(|event| match event.event_parameters {
-				VaultEvents::FetchedNativeFilter(inner_event)
-					if eth_addresses.contains(&inner_event.sender) =>
-					Some((inner_event, event.tx_hash)),
-				_ => None,
-			})
-			.collect::<Vec<_>>(),
-		)
-	};
+		},
+	)?;
 
-	let eth_ingresses = if undeployed_addresses.is_empty() {
-		eth_ingresses_at_block(Default::default(), events_fut.await?)?
-	} else {
-		let (undeployed_addr_states, events) = futures::try_join!(
-			address_states(
-				client,
-				address_checker_address,
-				block.parent_hash,
-				block.hash,
-				undeployed_addresses,
-			),
-			events_fut,
-		)?;
-
-		eth_ingresses_at_block(undeployed_addr_states, events)?
-	};
+	let eth_ingresses = eth_ingresses_at_block(undeployed_addr_states, events)?;
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
 
