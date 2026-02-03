@@ -7,11 +7,11 @@ import { getContractAddress, runWithTimeoutAndExit, decodeSolAddress } from 'sha
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 import { PublicKey } from '@solana/web3.js';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { deposits, price } from 'shared/setup_swaps';
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
-import { deposits, price } from 'shared/setup_swaps';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up swaps for new assets: WBTC, ArbUsdt, SolUsdt');
