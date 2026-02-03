@@ -193,9 +193,12 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 		);
 		let mut xt_bytes = xt.0.as_slice();
 
-		match AssethubUncheckedExtrinsic::decode(&mut xt_bytes) {
+		match <AssethubUncheckedExtrinsic as codec::Decode>::decode(&mut xt_bytes) {
 			Ok(unchecked) =>
-				if let Some(signature) = unchecked.signature() {
+				if let Some(signature) = match unchecked.signature() {
+					Some(sp_runtime::MultiSignature::Sr25519(sig)) => Some(PolkadotSignature(sig)),
+					_ => None,
+				} {
 					if monitored_egress_ids.contains(&signature) {
 						tracing::info!(
 							"Witnessing Assethub transaction succeeded. signature: {signature:?}"
