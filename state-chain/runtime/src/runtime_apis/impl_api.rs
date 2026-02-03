@@ -49,8 +49,8 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochKey, GetBlockHeight, KeyProvider,
-	SwapLimits, SwapParameterValidation,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
+	GetBlockHeight, KeyProvider, SwapLimits, SwapParameterValidation,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -505,7 +505,7 @@ impl_runtime_apis! {
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			fn open_channels<BlockHeight, I: 'static>() -> u32
-				where BlockHeight: GetBlockHeight<<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain>, Runtime: pallet_cf_ingress_egress::Config<I>
+				where BlockHeight: GetBlockHeight<<Runtime as ChainflipWithTargetChain<I>>::TargetChain>, Runtime: pallet_cf_ingress_egress::Config<I>
 			{
 				pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::iter().filter(|(_key, elem)| elem.expires_at > BlockHeight::get_block_height()).collect::<Vec<_>>().len() as u32
 			}

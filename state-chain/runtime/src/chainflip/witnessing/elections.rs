@@ -23,32 +23,3 @@ impl<Tag> Validate for TypesFor<Tag> {
 		Ok(())
 	}
 }
-
-/// Syntax sugar for implementing multiple traits for a single type.
-///
-/// Example use:
-/// ```ignore
-/// impls! {
-///     for u8:
-///     Clone {
-///         ...
-///     }
-///     Copy {
-///         ...
-///     }
-///     Default {
-///         ...
-///     }
-/// }
-/// ```
-macro_rules! impls {
-    (for $name:ty: $(#[doc = $doc_text:tt])? $trait:ty {$($trait_impl:tt)*} $($rest:tt)*) => {
-        $(#[doc = $doc_text])?
-        impl $trait for $name {
-            $($trait_impl)*
-        }
-        crate::chainflip::elections::impls!{for $name: $($rest)*}
-    };
-    (for $name:ty:) => {}
-}
-pub(crate) use impls;

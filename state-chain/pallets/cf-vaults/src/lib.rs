@@ -22,7 +22,7 @@ use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
-	AsyncResult, Broadcaster, CfeMultisigRequest, Chainflip, CurrentEpochIndex,
+	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex,
 	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -42,17 +42,19 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
-pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
+pub type PayloadFor<T, I = ()> =
+	<<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;
 
 pub type AggKeyFor<T, I = ()> =
-	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
-pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
+pub type ChainBlockNumberFor<T, I = ()> =
+	<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainBlockNumber;
 pub type TransactionInIdFor<T, I = ()> =
-	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 pub type TransactionOutIdFor<T, I = ()> =
-	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 pub type ThresholdSignatureFor<T, I = ()> =
-	<<<T as Config<I>>::Chain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
@@ -71,6 +73,8 @@ pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {
 #[frame_support::pallet]
 pub mod pallet {
 
+	use cf_traits::ChainflipWithTargetChain;
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -80,28 +84,23 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>: ChainflipWithTargetChain<I> {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The chain that is managed by this vault must implement the api types.
-		type Chain: Chain;
-
 		/// The supported api calls for the chain.
-		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<
-			<<Self as pallet::Config<I>>::Chain as Chain>::ChainCrypto,
-		>;
+		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<<Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// A broadcaster for the target chain.
-		type Broadcaster: Broadcaster<Self::Chain, ApiCall = Self::SetAggKeyWithAggKey>;
+		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::SetAggKeyWithAggKey>;
 
 		/// For activating Safe mode: CODE RED for the chain.
 		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
 
-		type ChainTracking: GetBlockHeight<Self::Chain>;
+		type ChainTracking: GetBlockHeight<Self::TargetChain>;
 
-		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::Chain as Chain>::ChainCrypto>;
+		type CfeMultisigRequest: CfeMultisigRequest<Self, <Self::TargetChain as Chain>::ChainCrypto>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -134,14 +133,14 @@ pub mod pallet {
 		/// The vault for the request has rotated
 		VaultActivationCompleted,
 		/// The vault's key has been rotated externally \[new_public_key\]
-		VaultRotatedExternally(<<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey),
+		VaultRotatedExternally(<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey),
 		/// The new key has been generated, we must activate the new key on the external
 		/// chain via governance.
 		AwaitingGovernanceActivation {
-			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			new_public_key: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		ActivationTxFailedAwaitingGovernance {
-			new_public_key: <<T::Chain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
+			new_public_key: <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 		},
 		ChainInitialized,
 	}
@@ -210,7 +209,7 @@ pub mod pallet {
 			if let Some(deployment_block) = self.deployment_block {
 				VaultStartBlockNumbers::<T, I>::insert(
 					cf_primitives::GENESIS_EPOCH,
-					<T::Chain as Chain>::block_witness_root(deployment_block),
+					<T::TargetChain as Chain>::block_witness_root(deployment_block),
 				);
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
@@ -225,7 +224,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
 		VaultStartBlockNumbers::<T, I>::insert(
 			CurrentEpochIndex::<T>::get().saturating_add(1),
-			<T::Chain as Chain>::saturating_block_witness_next(block_number),
+			<T::TargetChain as Chain>::saturating_block_witness_next(block_number),
 		);
 		Self::deposit_event(Event::VaultActivationCompleted);
 	}
@@ -240,7 +239,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::TargetChain> for Pallet<T, I> {
 	fn on_first_key_activated(block_number: ChainBlockNumberFor<T, I>) -> DispatchResult {
 		let rotation =
 			PendingVaultActivation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;

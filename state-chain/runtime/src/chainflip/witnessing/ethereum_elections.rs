@@ -2,7 +2,7 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent},
+		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent, pallet_hooks},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
@@ -15,6 +15,7 @@ use cf_chains::{
 	Chain, DepositChannel, Ethereum,
 };
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
+use cf_utilities::impls;
 use frame_system::pallet_prelude::BlockNumberFor;
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
@@ -151,7 +152,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	type Chain = EthereumChain;
 	type BlockEntry = DepositWitness<Ethereum>;
 	type ElectionProperties = Vec<DepositChannel<Ethereum>>;
-	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, EthereumInstance>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {

@@ -1,7 +1,7 @@
 use crate::{
 	chainflip::{
 		address_derivation::btc::derive_current_and_previous_epoch_private_btc_vaults,
-		ReportFailedLivenessCheck,
+		witnessing::pallet_hooks, ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
 	BitcoinChainTracking, BitcoinIngressEgress, Runtime,
@@ -18,7 +18,7 @@ use cf_chains::{
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{Chainflip, Hook};
-use cf_utilities::{cargo_fmt_ignore, derive_common_traits};
+use cf_utilities::{cargo_fmt_ignore, derive_common_traits, impls};
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
@@ -146,7 +146,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = DepositWitness<Bitcoin>;
 	type ElectionProperties = Vec<DepositChannel<Bitcoin>>;
-	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, BitcoinInstance>;
 	type WitnessRules = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {
@@ -238,7 +238,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = VaultDepositWitness<Runtime, BitcoinInstance>;
 	type ElectionProperties = Vec<(DepositAddress, AccountId, ChannelId)>;
-	type ExecutionTarget = pallet_cf_ingress_egress::PalletHooks<Runtime, BitcoinInstance>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, BitcoinInstance>;
 	type WitnessRules = PrewitnessImmediatelyAndWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn election_properties(_height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
@@ -284,7 +284,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
 	type Chain = BitcoinChain;
 	type BlockEntry = TransactionConfirmation<Runtime, BitcoinInstance>;
 	type ElectionProperties = Vec<Hash>;
-	type ExecutionTarget = pallet_cf_broadcast::PalletHooks<Runtime, BitcoinInstance>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, BitcoinInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
 	fn is_enabled() -> bool {

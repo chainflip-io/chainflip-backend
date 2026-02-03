@@ -36,7 +36,9 @@ pub use cf_traits::{
 	AccountInfo, BoostBalancesApi, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode,
 	SessionKeysRegistered, SwappingApi,
 };
-use cf_traits::{DummyEgressSuccessWitnesser, DummyIngressSource, NoLimit};
+use cf_traits::{
+	ChainflipWithTargetChain, DummyEgressSuccessWitnesser, DummyIngressSource, NoLimit,
+};
 pub use frame_support::{
 	debug, parameter_types,
 	traits::{
@@ -144,6 +146,25 @@ impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetT
 	}
 }
 
+impl ChainflipWithTargetChain<Instance1> for Runtime {
+	type TargetChain = Ethereum;
+}
+impl ChainflipWithTargetChain<Instance2> for Runtime {
+	type TargetChain = Polkadot;
+}
+impl ChainflipWithTargetChain<Instance3> for Runtime {
+	type TargetChain = Bitcoin;
+}
+impl ChainflipWithTargetChain<Instance4> for Runtime {
+	type TargetChain = Arbitrum;
+}
+impl ChainflipWithTargetChain<Instance5> for Runtime {
+	type TargetChain = Solana;
+}
+impl ChainflipWithTargetChain<Instance6> for Runtime {
+	type TargetChain = Assethub;
+}
+
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -197,7 +218,6 @@ impl pallet_cf_swapping::Config for Runtime {
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Ethereum;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -208,7 +228,6 @@ impl pallet_cf_vaults::Config<Instance1> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Polkadot;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -219,7 +238,6 @@ impl pallet_cf_vaults::Config<Instance2> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance3> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Bitcoin;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -230,7 +248,6 @@ impl pallet_cf_vaults::Config<Instance3> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance4> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Arbitrum;
 	type SetAggKeyWithAggKey = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -241,7 +258,6 @@ impl pallet_cf_vaults::Config<Instance4> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance5> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Solana;
 	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -252,7 +268,6 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance6> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Assethub;
 	type SetAggKeyWithAggKey = hub::api::AssethubApi<HubEnvironment>;
 	type Broadcaster = AssethubBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -269,7 +284,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
-	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -301,7 +315,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
-	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -333,7 +346,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
-	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -365,7 +377,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
-	type TargetChain = Arbitrum;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -397,7 +408,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = SolanaIngress;
-	type TargetChain = Solana;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -429,7 +439,6 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
-	type TargetChain = Assethub;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -805,7 +814,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Ethereum;
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::EthTransactionBuilder;
@@ -831,7 +839,6 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Polkadot;
 	type ApiCall = dot::api::PolkadotApi<DotEnvironment>;
 	type ThresholdSigner = PolkadotThresholdSigner;
 	type TransactionBuilder = chainflip::DotTransactionBuilder;
@@ -857,7 +864,6 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Bitcoin;
 	type ApiCall = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type ThresholdSigner = BitcoinThresholdSigner;
 	type TransactionBuilder = chainflip::BtcTransactionBuilder;
@@ -883,7 +889,6 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Arbitrum;
 	type ApiCall = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::ArbTransactionBuilder;
@@ -909,7 +914,6 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Solana;
 	type ApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type ThresholdSigner = SolanaThresholdSigner;
 	type TransactionBuilder = chainflip::SolanaTransactionBuilder;
@@ -935,7 +939,6 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Assethub;
 	type ApiCall = hub::api::AssethubApi<HubEnvironment>;
 	type ThresholdSigner = PolkadotThresholdSigner;
 	type TransactionBuilder = chainflip::DotTransactionBuilder;

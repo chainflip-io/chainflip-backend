@@ -18,7 +18,9 @@ use super::*;
 use cf_runtime_utilities::StorageDecodeVariant;
 use cf_traits::{GetBlockHeight, StartKeyActivationResult, VaultActivator};
 
-impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> VaultActivator<<T::TargetChain as Chain>::ChainCrypto>
+	for Pallet<T, I>
+{
 	type ValidatorId = T::ValidatorId;
 
 	/// Get the status of the current key generation
@@ -81,7 +83,7 @@ impl<T: Config<I>, I: 'static> VaultActivator<<T::Chain as Chain>::ChainCrypto> 
 				Err(err) => {
 					log::error!(
 						"Unexpected failure during {} vault activation. Error: {:?}",
-						<T::Chain as cf_chains::Chain>::NAME,
+						<T::TargetChain as cf_chains::Chain>::NAME,
 						err,
 					);
 					PendingVaultActivation::<T, I>::put(
