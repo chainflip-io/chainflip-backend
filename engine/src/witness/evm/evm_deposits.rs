@@ -207,7 +207,7 @@ where
 /// Transaction hashes are returned for deposits after contract deployment, used for tracing the
 /// end-to-end flow of funds (not for witnessing).
 pub fn eth_ingresses_at_block(
-	address_states: Option<HashMap<H160, (AddressState, AddressState)>>,
+	undeployed_address_states: HashMap<H160, (AddressState, AddressState)>,
 	native_events: Vec<(FetchedNativeFilter, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
 	let fetched_native_totals: BTreeMap<_, _> = native_events
@@ -229,51 +229,39 @@ pub fn eth_ingresses_at_block(
 		})
 		.collect();
 
-	match address_states {
-		Some(states) => {
-			let mut results = Vec::new();
+	let mut results = Vec::new();
 
-			// Process addresses from address_states (may or may not have events)
-			for (address, (previous_address_state, address_state)) in &states {
-				let (ingress_amount, tx_hashes) = if !address_state.has_contract {
-					ensure!(!previous_address_state.has_contract);
-					ensure!(!fetched_native_totals.contains_key(address));
+	// Process addresses from address_states (may or may not have events)
+	for (address, (previous_address_state, address_state)) in &undeployed_address_states {
+		let (ingress_amount, tx_hashes) = if !address_state.has_contract {
+			ensure!(!previous_address_state.has_contract);
+			ensure!(!fetched_native_totals.contains_key(address));
 
-					(address_state.balance.saturating_sub(previous_address_state.balance), None)
-				} else {
-					let fetched_native_total =
-						fetched_native_totals.get(address).cloned().unwrap_or_default();
+			(address_state.balance.saturating_sub(previous_address_state.balance), None)
+		} else {
+			let fetched_native_total =
+				fetched_native_totals.get(address).cloned().unwrap_or_default();
 
-					if !previous_address_state.has_contract {
-						(
-							fetched_native_total.0.saturating_sub(previous_address_state.balance),
-							None,
-						)
-					} else {
-						(fetched_native_total.0, Some(fetched_native_total.1))
-					}
-				};
-
-				if !ingress_amount.is_zero() {
-					results.push((*address, ingress_amount, tx_hashes));
-				}
+			if !previous_address_state.has_contract {
+				(fetched_native_total.0.saturating_sub(previous_address_state.balance), None)
+			} else {
+				(fetched_native_total.0, Some(fetched_native_total.1))
 			}
+		};
 
-			// Process events for addresses NOT in address_states
-			for (address, (amount, tx_hashes)) in fetched_native_totals {
-				if !states.contains_key(&address) && !amount.is_zero() {
-					results.push((address, amount, Some(tx_hashes)));
-				}
-			}
-
-			Ok(results)
-		},
-		None => Ok(fetched_native_totals
-			.into_iter()
-			.map(|(address, (amount, tx_hashes))| (address, amount, Some(tx_hashes)))
-			.filter(|(_address, amount, _tx_hashes)| !amount.is_zero())
-			.collect()),
+		if !ingress_amount.is_zero() {
+			results.push((*address, ingress_amount, tx_hashes));
+		}
 	}
+
+	// Process events for addresses NOT in address_states
+	for (address, (amount, tx_hashes)) in fetched_native_totals {
+		if !undeployed_address_states.contains_key(&address) && !amount.is_zero() {
+			results.push((address, amount, Some(tx_hashes)));
+		}
+	}
+
+	Ok(results)
 }
 
 /// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
@@ -365,7 +353,7 @@ mod tests {
 	fn block_empty_lists() {
 		let native_events = Default::default();
 
-		let ingresses = eth_ingresses_at_block(None, native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(Default::default(), native_events).unwrap();
 
 		assert!(ingresses.is_empty());
 	}
@@ -390,7 +378,7 @@ mod tests {
 			H256::random(),
 		)];
 
-		let ingresses = eth_ingresses_at_block(Some(addresses), native_events.clone()).unwrap();
+		let ingresses = eth_ingresses_at_block(addresses, native_events.clone()).unwrap();
 
 		assert!(ingresses.contains(&(address, U256::from(100), None)));
 		assert!(ingresses.contains(&(
@@ -438,8 +426,7 @@ mod tests {
 		];
 
 		let ingresses =
-			eth_ingresses_at_block(Some(addresses.clone().into_iter().collect()), native_events)
-				.unwrap();
+			eth_ingresses_at_block(addresses.clone().into_iter().collect(), native_events).unwrap();
 
 		// For both addresses, in the previous block there was no contract, therefore we expect that
 		// any FetchedNative events are from the deployment of the contract, and therefore not a
@@ -479,8 +466,7 @@ mod tests {
 		];
 
 		let ingresses =
-			eth_ingresses_at_block(Some(addresses.clone().into_iter().collect()), native_events)
-				.unwrap();
+			eth_ingresses_at_block(addresses.clone().into_iter().collect(), native_events).unwrap();
 
 		assert!(
 			ingresses.contains(&(

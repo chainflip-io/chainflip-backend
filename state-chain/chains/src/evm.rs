@@ -613,9 +613,9 @@ pub enum DeploymentStatus {
 }
 
 impl DeploymentStatus {
-	pub fn deployed_before(&self, height: &u64) -> bool {
+	pub fn is_already_deployed_at(&self, height: &u64) -> bool {
 		match self {
-			DeploymentStatus::Deployed { at_block_height } => height > at_block_height,
+			DeploymentStatus::Deployed { at_block_height } => at_block_height < height,
 			_ => false,
 		}
 	}

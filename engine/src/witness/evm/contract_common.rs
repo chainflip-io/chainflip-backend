@@ -326,10 +326,11 @@ where
 	let undeployed_addresses: Vec<H160> = eth_deposit_channels
 		.into_iter()
 		.filter_map(|(address, deployment_status)| {
-			if deployment_status.deployed_before(&block_start) {
-				return Some(address);
+			if deployment_status.is_already_deployed_at(&block_start) {
+				None
+			} else {
+				Some(address)
 			}
-			None
 		})
 		.collect();
 
@@ -355,7 +356,7 @@ where
 	};
 
 	let eth_ingresses = if undeployed_addresses.is_empty() {
-		eth_ingresses_at_block(None, events_fut.await?)?
+		eth_ingresses_at_block(Default::default(), events_fut.await?)?
 	} else {
 		let (undeployed_addr_states, events) = futures::try_join!(
 			address_states(
@@ -368,7 +369,7 @@ where
 			events_fut,
 		)?;
 
-		eth_ingresses_at_block(Some(undeployed_addr_states), events)?
+		eth_ingresses_at_block(undeployed_addr_states, events)?
 	};
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
