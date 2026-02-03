@@ -24,7 +24,7 @@ use cf_chains::{
 	evm::{SchnorrVerificationComponents, H256},
 	instances::ChainInstanceFor,
 	sol::VaultSwapOrDepositChannelId,
-	AnyChain, Arbitrum, Assethub, Bitcoin, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
+	AnyChain, Arbitrum, Assethub, Bitcoin, Bsc, CcmDepositMetadataUnchecked, Chain, ChainCrypto,
 	ChannelRefundParametersUnchecked, Ethereum, ForeignChainAddress,
 	IntoTransactionInIdForAnyChain, Polkadot, TransactionInIdForAnyChain,
 };
@@ -72,6 +72,7 @@ enum TransactionRef {
 	Polkadot { transaction_id: PolkadotTransactionId },
 	Arbitrum { hash: H256 },
 	Assethub { transaction_id: PolkadotTransactionId },
+	Bsc { hash: H256 },
 }
 
 #[derive(Serialize)]
@@ -82,6 +83,7 @@ enum TransactionId {
 	Polkadot { signature: DotSignature },
 	Arbitrum { signature: SchnorrVerificationComponents },
 	Assethub { signature: DotSignature },
+	Bsc { signature: SchnorrVerificationComponents },
 }
 
 #[derive(Serialize)]
@@ -166,6 +168,7 @@ impl WitnessInformation {
 				TransactionId::Polkadot { .. } => ForeignChain::Polkadot,
 				TransactionId::Arbitrum { .. } => ForeignChain::Arbitrum,
 				TransactionId::Assethub { .. } => ForeignChain::Assethub,
+				TransactionId::Bsc { .. } => ForeignChain::Bsc,
 			},
 			Self::VaultDeposit { input_asset: asset, .. } => (*asset).into(),
 		}
@@ -380,6 +383,16 @@ impl BroadcastIntoWitnessInformation for BroadcastDetails<Assethub> {
 	}
 }
 
+impl BroadcastIntoWitnessInformation for BroadcastDetails<Bsc> {
+	fn into_witness_information(self) -> anyhow::Result<WitnessInformation> {
+		Ok(WitnessInformation::Broadcast {
+			broadcast_id: self.broadcast_id,
+			tx_out_id: TransactionId::Bsc { signature: self.tx_out_id },
+			tx_ref: TransactionRef::Bsc { hash: self.tx_ref },
+		})
+	}
+}
+
 async fn save_deposit_witnesses<S, C>(
 	store: &mut S,
 	deposit_witnesses: Vec<DepositWitness<C>>,
@@ -538,6 +551,10 @@ where
 			deposit_witnesses,
 			block_height,
 		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
+		BscIngressEgress(IngressEgressCall::process_deposits {
+			deposit_witnesses,
+			block_height,
+		}) => save_deposit_witnesses(store, deposit_witnesses, block_height, chainflip_network).await,
 		EthereumIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
 			save_vault_deposit_witness(
 				store,
@@ -584,6 +601,15 @@ where
 			)
 			.await?,
 		AssethubIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
+			save_vault_deposit_witness(
+				store,
+				*deposit,
+				block_height,
+				state_chain_client,
+				chainflip_network,
+			)
+			.await?,
+		BscIngressEgress(IngressEgressCall::vault_swap_request { block_height, deposit }) =>
 			save_vault_deposit_witness(
 				store,
 				*deposit,
@@ -671,6 +697,19 @@ where
 					.await?;
 			}
 		},
+		BscBroadcaster(BroadcastCall::transaction_succeeded {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
+			save_broadcast_witness::<_, _, Bsc>(
+				store,
+				tx_out_id,
+				transaction_ref,
+				state_chain_client,
+			)
+			.await?;
+		},
 
 		EthereumIngressEgress(_) |
 		BitcoinIngressEgress(_) |
@@ -678,6 +717,7 @@ where
 		ArbitrumIngressEgress(_) |
 		SolanaIngressEgress(_) |
 		AssethubIngressEgress(_) |
+		BscIngressEgress(_) |
 		System(_) |
 		Timestamp(_) |
 		Environment(_) |
@@ -698,12 +738,14 @@ where
 		ArbitrumChainTracking(_) |
 		SolanaChainTracking(_) |
 		AssethubChainTracking(_) |
+		BscChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |
 		ArbitrumVault(_) |
 		SolanaVault(_) |
 		AssethubVault(_) |
+		BscVault(_) |
 		EvmThresholdSigner(_) |
 		PolkadotThresholdSigner(_) |
 		BitcoinThresholdSigner(_) |
@@ -714,6 +756,7 @@ where
 		ArbitrumBroadcaster(_) |
 		SolanaBroadcaster(_) |
 		AssethubBroadcaster(_) |
+		BscBroadcaster(_) |
 		Swapping(_) |
 		LiquidityProvider(_) |
 		LiquidityPools(_) |

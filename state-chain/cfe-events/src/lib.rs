@@ -21,7 +21,7 @@ mod tests;
 
 use cf_chains::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, Arbitrum, Assethub,
-	Bitcoin, Chain, ChainCrypto, Ethereum, Polkadot, Solana,
+	Bitcoin, Bsc, Chain, ChainCrypto, Ethereum, Polkadot, Solana,
 };
 use cf_primitives::{BroadcastId, CeremonyId, Ed25519PublicKey, EpochIndex, Ipv6Addr, Port};
 
@@ -81,6 +81,7 @@ pub enum CfeEvent<ValidatorId> {
 	DotTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Polkadot>),
 	BtcTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bitcoin>),
 	ArbTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Arbitrum>),
+	BscTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bsc>),
 	PeerIdRegistered { account_id: ValidatorId, pubkey: Ed25519PublicKey, port: Port, ip: Ipv6Addr },
 	PeerIdDeregistered { account_id: ValidatorId, pubkey: Ed25519PublicKey },
 	SolThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, SolanaCrypto>),

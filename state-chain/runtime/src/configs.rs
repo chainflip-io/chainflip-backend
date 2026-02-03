@@ -14,11 +14,12 @@ use crate::{
 	*,
 };
 pub use cf_chains::instances::{
-	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, EvmInstance,
-	PolkadotCryptoInstance, PolkadotInstance, SolanaInstance,
+	ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaInstance,
 };
 use cf_chains::{
 	arb::api::ArbitrumApi,
+	bsc::api::BscApi,
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Ethereum},
@@ -26,7 +27,7 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::SolanaCrypto,
-	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, Polkadot, Solana,
+	Arbitrum, Assethub, Bitcoin, Bsc, DefaultRetryPolicy, Polkadot, Solana,
 };
 pub use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
@@ -93,7 +94,8 @@ impl pallet_cf_validator::Config for Runtime {
 		BitcoinBroadcaster,
 		ArbitrumBroadcaster,
 		SolanaBroadcaster,
-		AssethubBroadcaster
+		AssethubBroadcaster,
+		BscBroadcaster
 	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
@@ -281,6 +283,17 @@ impl pallet_cf_vaults::Config<Instance6> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
+impl pallet_cf_vaults::Config<Instance7> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Chain = Bsc;
+	type SetAggKeyWithAggKey = BscApi<EvmEnvironment>;
+	type Broadcaster = BscBroadcaster;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = BscChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type CfeMultisigRequest = CfeInterface;
+}
+
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
@@ -457,6 +470,38 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	type SwapParameterValidation = Swapping;
 	type AffiliateRegistry = Swapping;
 	type AllowTransactionReports = ConstBool<false>;
+	type ScreeningBrokerId = ScreeningBrokerId;
+	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
+}
+
+impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
+	type IngressSource = DummyIngressSource<Bsc, BlockNumberFor<Runtime>>;
+	type TargetChain = Bsc;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type Balance = AssetBalances;
+	type ChainApiCall = BscApi<EvmEnvironment>;
+	type Broadcaster = BscBroadcaster;
+	type DepositHandler = chainflip::DepositHandler;
+	type ChainTracking = BscChainTracking;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = Swapping;
+	type FeePayment = Flip;
+	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
+	type AssetWithholding = AssetBalances;
+	type FetchesTransfersLimitProvider = EvmLimit;
+	type SafeMode = RuntimeSafeMode;
+	type SwapParameterValidation = Swapping;
+	type AffiliateRegistry = Swapping;
+	type AllowTransactionReports = ConstBool<true>;
 	type ScreeningBrokerId = ScreeningBrokerId;
 	type BoostApi = LendingPools;
 	type FundAccount = Funding;
@@ -740,7 +785,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
-	type VaultActivator = MultiVaultActivator<EthereumVault, ArbitrumVault>;
+	type VaultActivator = MultiVaultActivator<EthereumVault, MultiVaultActivator<ArbitrumVault, BscVault>>;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
@@ -938,6 +983,32 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
 }
 
+impl pallet_cf_broadcast::Config<Instance7> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type TargetChain = Bsc;
+	type ApiCall = BscApi<EvmEnvironment>;
+	type ThresholdSigner = EvmThresholdSigner;
+	type TransactionBuilder = chainflip::BscTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_BSC>;
+	type ChainTracking = BscChainTracking;
+	type RetryPolicy = DefaultRetryPolicy;
+	type LiabilityTracker = AssetBalances;
+	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
+}
+
 impl pallet_cf_asset_balances::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
@@ -972,6 +1043,12 @@ impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 
 impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
 	type TargetChain = Assethub;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<Instance7> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Bsc;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 

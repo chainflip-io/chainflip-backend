@@ -18,7 +18,7 @@
 use cf_amm_math::Price;
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
-	chains::assets::{any::AssetMap, arb, btc, dot, eth, hub, sol},
+	chains::assets::{any::AssetMap, arb, bsc, btc, dot, eth, hub, sol},
 	Asset,
 };
 #[cfg(feature = "runtime-benchmarks")]
@@ -242,6 +242,13 @@ impl<T: BenchmarkValue> BenchmarkValue for dot::AssetMap<T> {
 
 #[cfg(feature = "runtime-benchmarks")]
 impl<T: BenchmarkValue> BenchmarkValue for arb::AssetMap<T> {
+	fn benchmark_value() -> Self {
+		Self::from_fn(|_| T::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl<T: BenchmarkValue> BenchmarkValue for bsc::AssetMap<T> {
 	fn benchmark_value() -> Self {
 		Self::from_fn(|_| T::benchmark_value())
 	}

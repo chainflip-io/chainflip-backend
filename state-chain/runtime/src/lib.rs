@@ -251,6 +251,19 @@ mod runtime {
 	pub type EthereumElections = pallet_cf_elections<Instance1>;
 	#[runtime::pallet_index(57)]
 	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
+
+	#[runtime::pallet_index(58)]
+	pub type BscChainTracking = pallet_cf_chain_tracking<Instance7>;
+	#[runtime::pallet_index(59)]
+	pub type BscVault = pallet_cf_vaults<Instance7>;
+	#[runtime::pallet_index(60)]
+	pub type BscBroadcaster = pallet_cf_broadcast<Instance7>;
+	#[runtime::pallet_index(61)]
+	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance7>;
+	// TODO: BscElections needs pallet_cf_elections::Config<Instance7> implementation
+	// which requires a BSC electoral system runner. Uncomment when ready.
+	// #[runtime::pallet_index(62)]
+	// pub type BscElections = pallet_cf_elections<Instance7>;
 }
 
 /// The address format for describing accounts.
@@ -340,12 +353,14 @@ pub type PalletExecutionOrder = (
 	ArbitrumChainTracking,
 	SolanaChainTracking,
 	AssethubChainTracking,
+	BscChainTracking,
 	// Elections
 	GenericElections,
 	SolanaElections,
 	BitcoinElections,
 	EthereumElections,
 	ArbitrumElections,
+	// TODO: Add BscElections when elections config is implemented
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -353,6 +368,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumVault,
 	SolanaVault,
 	AssethubVault,
+	BscVault,
 	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
@@ -365,6 +381,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumBroadcaster,
 	SolanaBroadcaster,
 	AssethubBroadcaster,
+	BscBroadcaster,
 	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
@@ -375,6 +392,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumIngressEgress,
 	SolanaIngressEgress,
 	AssethubIngressEgress,
+	BscIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
 	// Miscellaneous
