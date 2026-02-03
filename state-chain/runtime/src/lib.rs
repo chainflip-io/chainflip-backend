@@ -378,8 +378,6 @@ type AllMigrations = (
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,
-	migrations::ethereum_elections::Migration,
-	migrations::arbitrum_elections::Migration,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -475,7 +473,11 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_1 = ();
+type MigrationsForV2_1 = (
+	migrations::ethereum_elections::Migration,
+	migrations::arbitrum_elections::Migration,
+	migrations::safe_mode::SafeModeMigration,
+);
 
 #[cfg(test)]
 mod test {
