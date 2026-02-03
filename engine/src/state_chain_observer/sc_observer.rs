@@ -533,6 +533,10 @@ where
                                             })
                                         }
                                     }
+                                    CfeEvent::BscTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, .. }) => {
+                                        // TODO: BSC broadcast handling not yet implemented - requires BSC RPC client
+                                        warn!("BSC TransactionBroadcastRequest {broadcast_id:?} received but BSC broadcasting is not yet implemented");
+                                    }
                                     CfeEvent::PeerIdRegistered { .. } |
                                     CfeEvent::PeerIdDeregistered { .. } => {
                                         // p2p registration is handled in the p2p module.

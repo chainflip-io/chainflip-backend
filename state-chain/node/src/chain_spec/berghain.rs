@@ -48,6 +48,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const BSC_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3; //todo: revisit
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
