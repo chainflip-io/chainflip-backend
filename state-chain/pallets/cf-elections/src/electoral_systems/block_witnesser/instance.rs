@@ -223,33 +223,28 @@ fn dedup_events<BlockNumber, T: Ord + Clone>(
 	chosen.into_values().collect()
 }
 
-#[cfg(test)]
-mod tests {
-	use super::dedup_events;
+#[test]
+fn dedup_events_test() {
 	use cf_primitives::BlockWitnesserEvent;
+	let events = vec![
+		(10, BlockWitnesserEvent::<u8>::Witness(9)),
+		(8, BlockWitnesserEvent::<u8>::PreWitness(9)),
+		(10, BlockWitnesserEvent::<u8>::Witness(10)),
+		(10, BlockWitnesserEvent::<u8>::Witness(11)),
+		(8, BlockWitnesserEvent::<u8>::PreWitness(11)),
+		(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
+	];
+	let deduped_events = dedup_events(events);
 
-	#[test]
-	fn dedup_events_test() {
-		let events = vec![
+	assert_eq!(
+		deduped_events,
+		vec![
 			(10, BlockWitnesserEvent::<u8>::Witness(9)),
-			(8, BlockWitnesserEvent::<u8>::PreWitness(9)),
 			(10, BlockWitnesserEvent::<u8>::Witness(10)),
 			(10, BlockWitnesserEvent::<u8>::Witness(11)),
-			(8, BlockWitnesserEvent::<u8>::PreWitness(11)),
 			(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
-		];
-		let deduped_events = dedup_events(events);
-
-		assert_eq!(
-			deduped_events,
-			vec![
-				(10, BlockWitnesserEvent::<u8>::Witness(9)),
-				(10, BlockWitnesserEvent::<u8>::Witness(10)),
-				(10, BlockWitnesserEvent::<u8>::Witness(11)),
-				(10, BlockWitnesserEvent::<u8>::PreWitness(12)),
-			]
-		)
-	}
+		]
+	)
 }
 
 /// This trait is only temporary. It's required because currently in the `Chain` trait
