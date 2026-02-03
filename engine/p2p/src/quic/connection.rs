@@ -286,3 +286,104 @@ pub async fn receive_message(recv_stream: &mut quinn::RecvStream) -> anyhow::Res
 
 	Ok(payload)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	const ACCOUNT_1: AccountId = AccountId::new([1; 32]);
+	const ACCOUNT_2: AccountId = AccountId::new([2; 32]);
+
+	#[test]
+	fn reconnect_context_starts_with_initial_interval() {
+		let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		let delay = ctx.get_delay_for(&ACCOUNT_1);
+		assert_eq!(delay, RECONNECT_INTERVAL);
+	}
+
+	#[test]
+	fn reconnect_context_doubles_delay_on_each_call() {
+		let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		let delay1 = ctx.get_delay_for(&ACCOUNT_1);
+		let delay2 = ctx.get_delay_for(&ACCOUNT_1);
+		let delay3 = ctx.get_delay_for(&ACCOUNT_1);
+
+		assert_eq!(delay1, Duration::from_millis(250));
+		assert_eq!(delay2, Duration::from_millis(500));
+		assert_eq!(delay3, Duration::from_millis(1000));
+	}
+
+	#[test]
+	fn reconnect_context_caps_at_max_interval() {
+		let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		// Call enough times to exceed the max (250ms -> 500ms -> 1s -> 2s -> 4s -> 8s -> 16s ->
+		// 32s)
+		for _ in 0..10 {
+			ctx.get_delay_for(&ACCOUNT_1);
+		}
+
+		let delay = ctx.get_delay_for(&ACCOUNT_1);
+		assert_eq!(delay, RECONNECT_INTERVAL_MAX);
+	}
+
+	#[test]
+	fn reconnect_context_reset_clears_delay() {
+		let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		// Build up delay
+		ctx.get_delay_for(&ACCOUNT_1);
+		ctx.get_delay_for(&ACCOUNT_1);
+		ctx.get_delay_for(&ACCOUNT_1);
+
+		// Reset
+		ctx.reset(&ACCOUNT_1);
+
+		// Should start fresh
+		let delay = ctx.get_delay_for(&ACCOUNT_1);
+		assert_eq!(delay, RECONNECT_INTERVAL);
+	}
+
+	#[test]
+	fn reconnect_context_tracks_peers_independently() {
+		let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		// Build up delay for ACCOUNT_1
+		ctx.get_delay_for(&ACCOUNT_1);
+		ctx.get_delay_for(&ACCOUNT_1);
+		ctx.get_delay_for(&ACCOUNT_1);
+
+		// ACCOUNT_2 should still start fresh
+		let delay2 = ctx.get_delay_for(&ACCOUNT_2);
+		assert_eq!(delay2, RECONNECT_INTERVAL);
+
+		// ACCOUNT_1 should continue from where it left off
+		let delay1 = ctx.get_delay_for(&ACCOUNT_1);
+		assert_eq!(delay1, Duration::from_millis(2000));
+	}
+
+	#[tokio::test]
+	async fn schedule_reconnect_sends_account_id_after_delay() {
+		let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+		let mut ctx = ReconnectContext::new(sender);
+
+		let start = tokio::time::Instant::now();
+		ctx.schedule_reconnect(ACCOUNT_1.clone());
+
+		// Should receive the account ID after the initial delay
+		let received = tokio::time::timeout(Duration::from_secs(1), receiver.recv())
+			.await
+			.expect("timeout waiting for reconnect")
+			.expect("channel closed");
+
+		assert_eq!(received, ACCOUNT_1);
+		assert!(start.elapsed() >= RECONNECT_INTERVAL);
+	}
+}
