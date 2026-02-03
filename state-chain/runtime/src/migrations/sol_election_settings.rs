@@ -4,7 +4,9 @@ use crate::chainflip::witnessing::solana_elections::{
 	SolanaIngressSettings, SolanaVaultSwapsSettings,
 };
 use cf_chains::sol::SolAddress;
+use cf_primitives::NetworkEnvironment;
 use cf_runtime_utilities::NoopRuntimeUpgrade;
+use cf_utilities::bs58_array;
 use frame_support::{
 	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
 };
@@ -96,6 +98,16 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🍩 Migration for Solana ElectoralSettings started");
 
+		let solusdt_pubkey =
+			match pallet_cf_environment::ChainflipNetworkEnvironment::<Runtime>::get() {
+				NetworkEnvironment::Mainnet =>
+					SolAddress(bs58_array("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB")),
+				NetworkEnvironment::Testnet =>
+					SolAddress(bs58_array("FvuqJYh8YeEmarW5qkSrYeEgzaTKktgL3vhgBy2Csy4o")),
+				NetworkEnvironment::Development =>
+					SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+			};
+
 		let old_settings_entries: Vec<_> =
 			old::ElectoralSettings::<Runtime, SolanaInstance>::drain().collect();
 
@@ -110,7 +122,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 						SolanaIngressSettings {
 							vault_program: ingress_settings.vault_program,
 							usdc_token_mint_pubkey: ingress_settings.usdc_token_mint_pubkey,
-							usdt_token_mint_pubkey: SolAddress([0x00; 32]),
+							usdt_token_mint_pubkey: solusdt_pubkey,
 						},
 						b,
 					),
@@ -121,7 +133,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 						swap_endpoint_data_account_address: vault_swap_settings
 							.swap_endpoint_data_account_address,
 						usdc_token_mint_pubkey: vault_swap_settings.usdc_token_mint_pubkey,
-						usdt_token_mint_pubkey: SolAddress([0x00; 32]),
+						usdt_token_mint_pubkey: solusdt_pubkey,
 					},
 					f,
 				),
@@ -149,6 +161,16 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 		)>::decode(&mut state.as_slice())
 		.map_err(|_| DispatchError::from("Failed to decode state"))?;
 
+		let solusdt_pubkey =
+			match pallet_cf_environment::ChainflipNetworkEnvironment::<Runtime>::get() {
+				NetworkEnvironment::Mainnet =>
+					SolAddress(bs58_array("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB")),
+				NetworkEnvironment::Testnet =>
+					SolAddress(bs58_array("FvuqJYh8YeEmarW5qkSrYeEgzaTKktgL3vhgBy2Csy4o")),
+				NetworkEnvironment::Development =>
+					SolAddress(bs58_array("8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF")),
+			};
+
 		for (id, (_a, (ingress_settings, b), _c, _d, e, vault_swap_settings, _f)) in
 			old_settings_entries
 		{
@@ -161,7 +183,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 				new_entry.1 .0.usdc_token_mint_pubkey,
 				ingress_settings.usdc_token_mint_pubkey
 			);
-			assert_eq!(new_entry.1 .0.usdt_token_mint_pubkey, SolAddress([0x00; 32]));
+			assert_eq!(new_entry.1 .0.usdt_token_mint_pubkey, solusdt_pubkey);
 			assert_eq!(new_entry.1 .1, b);
 
 			assert_eq!(new_entry.4, e);
@@ -173,7 +195,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 				new_entry.5.usdc_token_mint_pubkey,
 				vault_swap_settings.usdc_token_mint_pubkey
 			);
-			assert_eq!(new_entry.5.usdt_token_mint_pubkey, SolAddress([0x00; 32]));
+			assert_eq!(new_entry.5.usdt_token_mint_pubkey, solusdt_pubkey);
 		}
 
 		Ok(())
