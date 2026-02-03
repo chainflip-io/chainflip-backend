@@ -18,7 +18,6 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient,
-	dot::retry_rpc::mocks::MockDotRpcClient,
 	evm::retry_rpc::mocks::MockEvmRetryRpcClient,
 	sol::retry_rpc::mocks::MockSolRetryRpcClient,
 	state_chain_observer::{
