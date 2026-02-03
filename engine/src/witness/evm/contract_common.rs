@@ -199,7 +199,7 @@ pub async fn address_states<EvmCachingClient>(
 	parent_hash: H256,
 	hash: H256,
 	addresses: Vec<H160>,
-) -> Result<impl Iterator<Item = (H160, (AddressState, AddressState))>, anyhow::Error>
+) -> Result<HashMap<H160, (AddressState, AddressState)>, anyhow::Error>
 where
 	EvmCachingClient: AddressCheckerRetryRpcApiWithResult + Send + Sync + Clone,
 {
@@ -215,7 +215,7 @@ where
 
 	Ok(addresses
 		.into_iter()
-		.zip(previous_address_states.into_iter().zip(address_states)))
+		.zip(previous_address_states.into_iter().zip(address_states)).collect::<HashMap<H160, _>>())
 }
 
 pub async fn events_at_block<Chain, EventParameters, CT: ChainTypes, EvmCachingClient>(
@@ -322,18 +322,13 @@ where
 		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
 
 	let block_start = *block_height.into_range_inclusive().start();
-	let (deployed_addresses, undeployed_addresses): (HashSet<H160>, Vec<H160>) =
-		eth_deposit_channels.iter().fold(
-			(HashSet::new(), Vec::new()),
-			|(mut deployed, mut undeployed), (address, deployment_status)| {
-				if deployment_status.deployed_before(&block_start) {
-					deployed.insert(*address);
-				} else {
-					undeployed.push(*address);
-				}
-				(deployed, undeployed)
-			},
-		);
+	let undeployed_addresses: Vec<H160> =
+		eth_deposit_channels.into_iter().filter_map(|(address, deployment_status)|{
+			if deployment_status.deployed_before(&block_start) {
+				return Some(address);
+			}
+			None
+		}).collect();
 
 	let events_fut = async {
 		Ok::<_, anyhow::Error>(
@@ -357,7 +352,7 @@ where
 	};
 
 	let eth_ingresses = if undeployed_addresses.is_empty() {
-		eth_ingresses_at_block(None::<std::iter::Empty<_>>, events_fut.await?)?
+		eth_ingresses_at_block(None, events_fut.await?)?
 	} else {
 		let (undeployed_addr_states, events) = futures::try_join!(
 			address_states(
@@ -370,15 +365,7 @@ where
 			events_fut,
 		)?;
 
-		let (deployed_addr_events, undeployed_addr_events): (Vec<_>, Vec<_>) = events
-			.into_iter()
-			.partition(|(event, _)| deployed_addresses.contains(&event.sender));
-
-		let mut ingresses =
-			eth_ingresses_at_block(Some(undeployed_addr_states), undeployed_addr_events)?;
-		ingresses
-			.extend(eth_ingresses_at_block(None::<std::iter::Empty<_>>, deployed_addr_events)?);
-		ingresses
+		eth_ingresses_at_block(Some(undeployed_addr_states), events)?
 	};
 
 	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
