@@ -177,20 +177,6 @@ jobs:
           # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana and EVM images. Remove after 2.1 is released.
           sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1${{ env.EVM_CONTRACTS_VERSION }}-${NODE_COUNT}|g' localnet/docker-compose.yml
-          # Override initialize_new_chains with newer version
-          curl -L https://raw.githubusercontent.com/chainflip-io/chainflip-backend/refs/heads/feature/pro-2627/add-wbtc-asset/bouncer/shared/initialize_new_chains.ts -o bouncer/shared/initialize_new_chains.ts 
-          sed -i "/return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';/r /dev/stdin" bouncer/shared/utils.ts <<'EOF'
-                case 'SolUsdt':
-                  return process.env.SOL_USDT_ADDRESS ?? '8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF';
-                case 'SolUsdtTokenSupport':
-                  return PublicKey.findProgramAddressSync(
-                  [
-                  Buffer.from('supported_token'),
-                  new PublicKey(getContractAddress('Solana', 'SolUsdt')).toBuffer(),
-                  ],
-                  new PublicKey(getContractAddress('Solana', 'VAULT')),
-                  )[0].toBase58();
-          EOF
           ./localnet/manage.sh
           git reset --hard
 
