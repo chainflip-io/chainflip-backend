@@ -19,7 +19,7 @@ impl OnRuntimeUpgrade for Migration {
 				arbitrum_elections::initial_state(),
 			);
 		if result.is_err() {
-			log::error!("Failed to initialize Arbitrum election pallet");
+			log::info!("✅ Arbitrum election pallet already initialized.");
 		}
 		Weight::zero()
 	}

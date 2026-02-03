@@ -19,7 +19,7 @@ impl OnRuntimeUpgrade for Migration {
 				ethereum_elections::initial_state(),
 			);
 		if result.is_err() {
-			log::error!("Failed to initialize Ethereum election pallet");
+			log::info!("✅ Ethereum election pallet already initialized.");
 		}
 		Weight::zero()
 	}
