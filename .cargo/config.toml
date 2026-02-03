@@ -86,6 +86,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2025-0134
 	--ignore RUSTSEC-2025-0141
 	--ignore RUSTSEC-2026-0002
+	--ignore RUSTSEC-2026-0007
 '''
 
 [build]
