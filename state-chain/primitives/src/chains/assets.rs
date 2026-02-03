@@ -863,6 +863,34 @@ assets!(
 			},
 		],
 	},
+	Chain {
+		variant: Bsc,
+		member_and_module: bsc,
+		string: "Bsc" (aliases: ["BSC", "bsc"]),
+		json: "Bsc",
+		assets: [
+			Asset {
+				variant: BscBnb,
+				member: bnb,
+				string: "BNB" (aliases: ["Bnb", "bnb"]),
+				json: "BNB",
+				gas: true,
+				index: 14,
+				usd_stablecoin: false,
+				decimals: 18,
+			},
+			Asset {
+				variant: BscUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 15,
+				usd_stablecoin: true,
+				decimals: 18,
+			},
+		],
+	},
 );
 
 #[cfg(test)]

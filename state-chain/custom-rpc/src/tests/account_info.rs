@@ -20,6 +20,7 @@ fn test_no_account_serialization() {
 				arb: arb::AssetMap { eth: 0u128.into(), usdc: 0u128.into() },
 				sol: sol::AssetMap { sol: 0u128.into(), usdc: 0u128.into() },
 				hub: hub::AssetMap { dot: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
+				bsc: bsc::AssetMap { bnb: 0u128.into(), usdt: 0u128.into() },
 			},
 			bond: 0u32.into(),
 			estimated_redeemable_balance: 0u32.into(),
@@ -64,6 +65,11 @@ fn test_broker_serialization() {
 			dot: 2000000000u128.into(), // 0.2 DOT
 			usdc: 100000u128.into(),    // 0.1 USDC
 			usdt: 50000u128.into(),     // 0.05 USDT
+		},
+		bsc: bsc::AssetMap {
+			//todo: revisit this
+			bnb: 300000000000000000u128.into(),  // 0.3 BNB
+			usdt: 400000000000000000u128.into(), // 0.4 USDT
 		},
 	};
 
@@ -151,6 +157,7 @@ fn test_lp_serialization() {
 			usdc: 1000000u128.into(),
 			usdt: 500000u128.into(),
 		},
+		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
 
 	let boost_balances = any::AssetMap {
@@ -191,6 +198,7 @@ fn test_lp_serialization() {
 			usdc: 3000000u128.into(),
 			usdt: 2000000u128.into(),
 		},
+		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
 
 	let collateral_balances =
@@ -247,6 +255,7 @@ fn test_validator_serialization() {
 					usdc: 500000u128.into(),
 					usdt: 250000u128.into(),
 				},
+				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			bond: (FLIPPERINOS_PER_FLIP * 100).into(), // 100 FLIP
 			estimated_redeemable_balance: (FLIPPERINOS_PER_FLIP * 25).into(), // 25 FLIP

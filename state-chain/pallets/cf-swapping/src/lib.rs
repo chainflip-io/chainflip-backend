@@ -3318,12 +3318,14 @@ pub mod utilities {
 			Asset::ArbUsdc |
 			Asset::SolUsdc |
 			Asset::HubUsdc |
-			Asset::HubUsdt => 100, // $1
+			Asset::HubUsdt |
+			Asset::BscUsdt => 100, // $1
 			Asset::Flip => 40,                     // ~$0.40
 			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
 			Asset::Dot | Asset::HubDot => 200,     // ~$2
 			Asset::Btc => 8_650_000,               // ~$86,500
 			Asset::Sol => 12_700,                  // ~$127
+			Asset::BscBnb => 60_000,               // ~$600
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)

@@ -78,6 +78,7 @@ fn test_lp_serialization() {
 				arb: arb::AssetMap { eth: 1u32.into(), usdc: 2u32.into() },
 				sol: sol::AssetMap { sol: 2u32.into(), usdc: 4u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				bsc: bsc::AssetMap { bnb: 10u32.into(), usdt: 40u32.into() },
 			},
 			boost_balances: any::AssetMap {
 				btc: btc::AssetMap {

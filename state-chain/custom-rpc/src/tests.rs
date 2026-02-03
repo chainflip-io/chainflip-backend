@@ -37,7 +37,7 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets::{any, arb, btc, dot, eth, hub},
+	chains::assets::{any, arb, bsc, btc, dot, eth, hub},
 	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
 };
 
@@ -70,6 +70,7 @@ fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 		btc: btc::AssetMap { btc: v.clone() },
 		dot: dot::AssetMap { dot: v.clone() },
 		arb: arb::AssetMap { eth: v.clone(), usdc: v.clone() },
+		bsc: bsc::AssetMap { bnb: v.clone(), usdt: v.clone() },
 		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone() },
 		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v },
 	}
@@ -137,6 +138,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(0u32.into()) },
 				dot: dot::AssetMap { dot: None },
 				arb: arb::AssetMap { eth: None, usdc: Some(0u32.into()) },
+				bsc: bsc::AssetMap { bnb: None, usdt: None },
 				sol: sol::AssetMap { sol: None, usdc: None },
 				hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
 			},
@@ -156,6 +158,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: 101112_u32.into() },
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			network_fees: NetworkFees {
 				regular_network_fee: NetworkFeeDetails {
@@ -184,6 +187,10 @@ fn test_environment_serialization() {
 							dot: Permill::from_perthousand(1),
 							usdc: Permill::from_perthousand(1),
 							usdt: Permill::from_perthousand(1),
+						},
+						bsc: bsc::AssetMap {
+							bnb: Permill::from_perthousand(5),
+							usdt: Permill::from_perthousand(6),
 						},
 					},
 				},
@@ -214,6 +221,10 @@ fn test_environment_serialization() {
 							usdc: Permill::from_perthousand(789),
 							usdt: Permill::from_perthousand(101),
 						},
+						bsc: bsc::AssetMap {
+							bnb: Permill::from_perthousand(30),
+							usdt: Permill::from_perthousand(40),
+						},
 					},
 				},
 			},
@@ -231,6 +242,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			ingress_fees: any::AssetMap {
 				eth: eth::AssetMap {
@@ -244,6 +256,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 				sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+				bsc: bsc::AssetMap { bnb: Some(10u32.into()), usdt: None },
 			},
 			egress_fees: any::AssetMap {
 				eth: eth::AssetMap {
@@ -257,6 +270,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None },
 				sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+				bsc: bsc::AssetMap { bnb: Some(10u32.into()), usdt: None },
 			},
 			witness_safety_margins: HashMap::from([
 				(ForeignChain::Bitcoin, Some(3u64)),
@@ -278,6 +292,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into() },
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				bsc: bsc::AssetMap { bnb: 10u32.into(), usdt: 40u32.into() },
 			},
 			channel_opening_fees: HashMap::from([
 				(ForeignChain::Bitcoin, 0u32.into()),
