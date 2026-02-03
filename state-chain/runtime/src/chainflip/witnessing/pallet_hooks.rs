@@ -1,5 +1,5 @@
 use cf_primitives::BlockWitnesserEvent;
-use cf_utilities::{define_empty_struct, impls};
+use cf_utilities::{define_empty_struct, hook_impls};
 use codec::{Decode, Encode};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_ingress_egress::{DepositWitness, TargetChainBlockNumber, VaultDepositWitness};
@@ -14,7 +14,7 @@ define_empty_struct! {
 	pub struct PalletHooks<T: Config<I>, I: 'static>;
 }
 
-impls! {
+hook_impls! {
 	for PalletHooks<T, I> where (T: Config<I>, I: 'static):
 
 	// --- deposit channel witnessing dispatch ---

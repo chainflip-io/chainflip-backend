@@ -34,7 +34,7 @@ pub mod testing;
 
 #[macro_use]
 pub mod macros;
-pub use macros::impls;
+pub use macros::*;
 
 pub type Port = u16;
 
