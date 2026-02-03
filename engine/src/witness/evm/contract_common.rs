@@ -215,7 +215,8 @@ where
 
 	Ok(addresses
 		.into_iter()
-		.zip(previous_address_states.into_iter().zip(address_states)).collect::<HashMap<H160, _>>())
+		.zip(previous_address_states.into_iter().zip(address_states))
+		.collect::<HashMap<H160, _>>())
 }
 
 pub async fn events_at_block<Chain, EventParameters, CT: ChainTypes, EvmCachingClient>(
@@ -322,13 +323,15 @@ where
 		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
 
 	let block_start = *block_height.into_range_inclusive().start();
-	let undeployed_addresses: Vec<H160> =
-		eth_deposit_channels.into_iter().filter_map(|(address, deployment_status)|{
+	let undeployed_addresses: Vec<H160> = eth_deposit_channels
+		.into_iter()
+		.filter_map(|(address, deployment_status)| {
 			if deployment_status.deployed_before(&block_start) {
 				return Some(address);
 			}
 			None
-		}).collect();
+		})
+		.collect();
 
 	let events_fut = async {
 		Ok::<_, anyhow::Error>(
