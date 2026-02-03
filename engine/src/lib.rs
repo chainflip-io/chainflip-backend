@@ -49,7 +49,7 @@ use state_chain_observer::client::{
 use self::{
 	btc::retry_rpc::BtcRetryRpcClient,
 	db::{KeyStore, PersistentKeyDB},
-	dot::{retry_rpc::DotRetryRpcClient, PolkadotHash},
+	dot::PolkadotHash,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
@@ -322,18 +322,18 @@ async fn run_main(
 				.await?
 			};
 
-			let hub_client = {
-				let expected_hub_genesis_hash = PolkadotHash::from_slice(
-					state_chain_client
-						.storage_value::<pallet_cf_environment::AssethubGenesisHash<state_chain_runtime::Runtime>>(
-							state_chain_client.latest_finalized_block().hash,
-						)
-						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.as_bytes(),
-				);
-				DotRetryRpcClient::new(scope, settings.hub.nodes, expected_hub_genesis_hash)?
-			};
+			// let hub_client = {
+			// 	let expected_hub_genesis_hash = PolkadotHash::from_slice(
+			// 		state_chain_client
+			// 			.storage_value::<pallet_cf_environment::AssethubGenesisHash<state_chain_runtime::Runtime>>(
+			// 				state_chain_client.latest_finalized_block().hash,
+			// 			)
+			// 			.await
+			// 			.expect(STATE_CHAIN_CONNECTION)
+			// 			.as_bytes(),
+			// 	);
+			// 	DotRetryRpcClient::new(scope, settings.hub.nodes, expected_hub_genesis_hash)?
+			// };
 
 			witness::start::start(
 				scope,
@@ -341,7 +341,7 @@ async fn run_main(
 				arb_client.clone(),
 				btc_client.clone(),
 				sol_client.clone(),
-				hub_client.clone(),
+				// hub_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				unfinalised_state_chain_stream.clone(),
@@ -356,7 +356,7 @@ async fn run_main(
 				arb_client,
 				btc_client,
 				sol_client,
-				hub_client,
+				// hub_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,

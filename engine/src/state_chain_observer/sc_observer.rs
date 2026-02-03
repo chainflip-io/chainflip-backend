@@ -46,7 +46,6 @@ use tracing::{debug, error, info, info_span, warn, Instrument};
 use super::client::chain_api::ChainApi;
 use crate::{
 	btc::rpc::BtcRpcApi,
-	dot::retry_rpc::DotRetryRpcApi,
 	evm::retry_rpc::EvmRetrySigningRpcApi,
 	sol::retry_rpc::SolRetryRpcApi,
 	state_chain_observer::client::{
@@ -237,7 +236,7 @@ pub async fn start<
 	StateChainClient,
 	BlockStream,
 	EvmRpc,
-	DotRpc,
+	// DotRpc,
 	BtcRpc,
 	SolRpc,
 	EthMultisigClient,
@@ -251,7 +250,7 @@ pub async fn start<
 	arb_rpc: EvmRpc,
 	btc_rpc: BtcRpc,
 	sol_rpc: SolRpc,
-	hub_rpc: DotRpc,
+	// hub_rpc: DotRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
@@ -260,7 +259,7 @@ pub async fn start<
 where
 	BlockStream: StreamApi<FINALIZED>,
 	EvmRpc: EvmRetrySigningRpcApi + Send + Sync + 'static,
-	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
+	// DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
@@ -588,28 +587,29 @@ where
                                             });
                                         }
                                     }
-                                    CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
-                                        if nominee == account_id {
-                                            let hub_rpc = hub_rpc.clone();
-                                            let state_chain_client = state_chain_client.clone();
-                                            scope.spawn(async move {
-                                                match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
-                                                    Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                    Err(error) => {
-                                                        error!("Error on Assethub TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
-                                                        state_chain_client.finalize_signed_extrinsic(
-                                                            RuntimeCall::AssethubBroadcaster(
-                                                                pallet_cf_broadcast::Call::transaction_failed {
-                                                                    broadcast_id,
-                                                                },
-                                                            ),
-                                                        )
-                                                        .await;
-                                                    }
-                                                }
-                                                Ok(())
-                                            });
-                                        }
+                                    CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee: _, payload: _ }) => {
+                                        debug!("Assethub is currently disabled (when trying to broadcast with id {broadcast_id})");
+                                        // if nominee == account_id {
+                                        //     let hub_rpc = hub_rpc.clone();
+                                        //     let state_chain_client = state_chain_client.clone();
+                                        //     scope.spawn(async move {
+                                        //         match hub_rpc.submit_raw_encoded_extrinsic(payload.encoded_extrinsic).await {
+                                        //             Ok(tx_hash) => info!("Assethub TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                        //             Err(error) => {
+                                        //                 error!("Error on Assethub TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                        //                 state_chain_client.finalize_signed_extrinsic(
+                                        //                     RuntimeCall::AssethubBroadcaster(
+                                        //                         pallet_cf_broadcast::Call::transaction_failed {
+                                        //                             broadcast_id,
+                                        //                         },
+                                        //                     ),
+                                        //                 )
+                                        //                 .await;
+                                        //             }
+                                        //         }
+                                        //         Ok(())
+                                        //     });
+                                        // }
                                     }
                                 }
                             }}

@@ -19,7 +19,6 @@ use std::sync::Arc;
 use crate::{
 	btc::cached_rpc::BtcCachingClient,
 	db::PersistentKeyDB,
-	dot::retry_rpc::DotRetryRpcClient,
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
 	state_chain_observer::client::{
@@ -49,7 +48,7 @@ pub async fn start<StateChainClient>(
 	arb_client: EvmRetryRpcClient<EvmRpcSigningClient>,
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
-	hub_client: DotRetryRpcClient,
+	// hub_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	_unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
@@ -131,20 +130,26 @@ where
 
 	let start_btc = super::btc::start(scope, btc_client, state_chain_client.clone());
 
-	let start_hub = super::hub::start(
-		scope,
-		hub_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream,
-		epoch_source,
-		db,
-	);
+	// let start_hub = super::hub::start(
+	// 	scope,
+	// 	hub_client,
+	// 	witness_call.clone(),
+	// 	state_chain_client.clone(),
+	// 	state_chain_stream,
+	// 	epoch_source,
+	// 	db,
+	// );
 
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(start_eth, start_arb, start_sol, start_btc, start_hub, start_generic_elections)?;
+	try_join!(
+		start_eth,
+		start_arb,
+		start_sol,
+		start_btc,
+		/* start_hub, */ start_generic_elections
+	)?;
 
 	Ok(())
 }
