@@ -92,6 +92,7 @@ impl VoterApi<SolanaIngressTracking> for SolanaIngressTrackingVoter {
 			&self.client,
 			settings.0.vault_program,
 			settings.0.usdc_token_mint_pubkey,
+			settings.0.usdt_token_mint_pubkey,
 			properties.0,
 		)
 		.await
@@ -207,6 +208,7 @@ impl VoterApi<SolanaVaultSwapTracking> for SolanaVaultSwapsVoter {
 				.collect::<HashSet<_>>(),
 			properties.closure_initiated_accounts,
 			settings.usdc_token_mint_pubkey,
+			settings.usdt_token_mint_pubkey,
 		)
 		.await
 		.map(|(new_accounts, confirm_closed_accounts)| SolanaVaultSwapsVote {

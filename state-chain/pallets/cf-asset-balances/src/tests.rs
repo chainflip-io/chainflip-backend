@@ -378,7 +378,7 @@ pub mod balance_api {
 			);
 			assert_eq!(
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,
-				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0 }
+				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0, wbtc: 0 }
 			);
 		});
 	}

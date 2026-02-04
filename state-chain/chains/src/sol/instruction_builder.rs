@@ -25,7 +25,7 @@ use crate::{
 	address::EncodedAddress,
 	sol::{
 		sol_tx_core::{
-			consts::{SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
+			consts::{SYSTEM_PROGRAM_ID, TOKEN_PROGRAM_ID},
 			program_instructions::swap_endpoints::{
 				SwapEndpointProgram, SwapNativeParams, SwapTokenParams,
 			},
@@ -79,7 +79,10 @@ impl SolanaInstructionBuilder {
 		)
 	}
 
-	pub fn x_swap_usdc(
+	pub fn x_swap_token(
+		sol_token_vault_ata: SolAddress,
+		sol_token_mint_pubkey: SolAddress,
+		sol_token_decimals: u8,
 		api_environment: SolApiEnvironment,
 		destination_asset: Asset,
 		destination_address: EncodedAddress,
@@ -100,18 +103,18 @@ impl SolanaInstructionBuilder {
 				dst_token: destination_asset as u32,
 				ccm_parameters: ccm.map(|metadata| metadata.into()),
 				cf_parameters,
-				decimals: SOL_USDC_DECIMAL,
+				decimals: sol_token_decimals,
 			},
 			seed.into(),
 			api_environment.vault_program_data_account,
-			api_environment.usdc_token_vault_ata,
+			sol_token_vault_ata,
 			from,
 			from_token_account,
 			event_data_account,
 			api_environment.swap_endpoint_program_data_account,
 			token_supported_account,
 			token_program_id(),
-			api_environment.usdc_token_mint_pubkey,
+			sol_token_mint_pubkey,
 			system_program_id(),
 		)
 	}
@@ -138,6 +141,7 @@ mod test {
 		chains::Solana, AccountId, AffiliateAndFee, AffiliateShortId, BasisPoints, DcaParameters,
 		MAX_AFFILIATES,
 	};
+	use sol_prim::consts::SOL_USD_DECIMAL;
 	use sp_core::ConstU32;
 	use sp_runtime::BoundedVec;
 
@@ -331,7 +335,10 @@ mod test {
 			.into();
 
 		let transaction = into_transaction(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Eth,
 				DESTINATION_ADDRESS_ETH,
@@ -372,7 +379,10 @@ mod test {
 			.into();
 
 		let transaction = into_transaction(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Sol,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
@@ -422,7 +432,10 @@ mod test {
 		);
 
 		assert_eq!(
-			SolanaInstructionBuilder::x_swap_usdc(
+			SolanaInstructionBuilder::x_swap_token(
+				api_env().usdc_token_vault_ata,
+				api_env().usdc_token_mint_pubkey,
+				SOL_USD_DECIMAL,
 				api_env(),
 				Asset::Sol,
 				EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),
@@ -467,7 +480,10 @@ mod test {
 			vault_swap_account(VAULT_SWAP_SEED)
 		);
 
-		let token_instruction_acc = SolanaInstructionBuilder::x_swap_usdc(
+		let token_instruction_acc = SolanaInstructionBuilder::x_swap_token(
+			api_env().usdc_token_vault_ata,
+			api_env().usdc_token_mint_pubkey,
+			SOL_USD_DECIMAL,
 			api_env(),
 			Asset::Sol,
 			EncodedAddress::Sol(DESTINATION_ADDRESS_SOL.0),

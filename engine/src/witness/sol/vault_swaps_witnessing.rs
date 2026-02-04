@@ -61,6 +61,7 @@ pub async fn get_vault_swaps(
 	sc_open_accounts: HashSet<SolAddress>,
 	sc_closure_initiated_accounts: BTreeSet<VaultSwapAccountAndSender>,
 	usdc_token_mint_pubkey: SolAddress,
+	usdt_token_mint_pubkey: SolAddress,
 ) -> Result<
 	(
 		Vec<(VaultSwapAccountAndSender, Option<SolanaVaultSwapDetails>)>,
@@ -118,6 +119,8 @@ pub async fn get_vault_swaps(
 							if let Some(token) = src_token {
 								if token == usdc_token_mint_pubkey.into() {
 									SolAsset::SolUsdc
+								} else if token == usdt_token_mint_pubkey.into() {
+									SolAsset::SolUsdt
 								} else {
 									bail!("Unsupported input token for the witnessed solana vault swap.");
 								}

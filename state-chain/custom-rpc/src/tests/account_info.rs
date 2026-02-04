@@ -14,11 +14,12 @@ fn test_no_account_serialization() {
 					flip: 0u128.into(),
 					usdc: 1000000u128.into(), // 1 USDC
 					usdt: 0u128.into(),
+					wbtc: 100000000u128.into(),
 				},
 				btc: btc::AssetMap { btc: 100000000u128.into() }, // 1 BTC
 				dot: dot::AssetMap { dot: 10000000000u128.into() }, // 1 DOT
-				arb: arb::AssetMap { eth: 0u128.into(), usdc: 0u128.into() },
-				sol: sol::AssetMap { sol: 0u128.into(), usdc: 0u128.into() },
+				arb: arb::AssetMap { eth: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
+				sol: sol::AssetMap { sol: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 				hub: hub::AssetMap { dot: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 			},
 			bond: 0u32.into(),
@@ -49,16 +50,19 @@ fn test_broker_serialization() {
 			flip: 1000000000000000000u128.into(), // 1 FLIP
 			usdc: 500000u128.into(),              // 0.5 USDC
 			usdt: 300000u128.into(),              // 0.3 USDT
+			wbtc: 5000000u128.into(),             // 0.05 BTC
 		},
 		btc: btc::AssetMap { btc: 5000000u128.into() }, // 0.05 BTC
 		dot: dot::AssetMap { dot: 5000000000u128.into() }, // 0.5 DOT
 		arb: arb::AssetMap {
 			eth: 100000000000000000u128.into(), // 0.1 ETH
 			usdc: 200000u128.into(),            // 0.2 USDC
+			usdt: 500000u128.into(),            // 0.5 USDT
 		},
 		sol: sol::AssetMap {
 			sol: 1000000000u128.into(), // 1 SOL
 			usdc: 150000u128.into(),    // 0.15 USDC
+			usdt: 50000u128.into(),     // 0.05 USDT
 		},
 		hub: hub::AssetMap {
 			dot: 2000000000u128.into(), // 0.2 DOT
@@ -140,12 +144,13 @@ fn test_lp_serialization() {
 			eth: 1000000000000000000u128.into(), // 1 ETH
 			flip: u64::MAX.into(),
 			usdc: (u64::MAX / 2 - 1).into(),
-			usdt: 250000u128.into(), // 0.25 USDT
+			usdt: 250000u128.into(),   // 0.25 USDT
+			wbtc: 25000000u128.into(), // 0.25 BTC
 		},
 		btc: btc::AssetMap { btc: 25000000u128.into() }, // 0.25 BTC
 		dot: dot::AssetMap { dot: 15000000000u128.into() }, // 1.5 DOT
-		arb: arb::AssetMap { eth: 1u128.into(), usdc: 2u128.into() },
-		sol: sol::AssetMap { sol: 2u128.into(), usdc: 4u128.into() },
+		arb: arb::AssetMap { eth: 1u128.into(), usdc: 2u128.into(), usdt: 3u128.into() },
+		sol: sol::AssetMap { sol: 2u128.into(), usdc: 4u128.into(), usdt: 6u128.into() },
 		hub: hub::AssetMap {
 			dot: 5000000000u128.into(),
 			usdc: 1000000u128.into(),
@@ -179,13 +184,14 @@ fn test_lp_serialization() {
 		eth: eth::AssetMap {
 			eth: u128::MAX.into(),
 			flip: (u128::MAX / 2).into(),
-			usdc: 10000000u128.into(), // 10 USDC
-			usdt: 5000000u128.into(),  // 5 USDT
+			usdc: 10000000u128.into(),  // 10 USDC
+			usdt: 5000000u128.into(),   // 5 USDT
+			wbtc: 500000000u128.into(), // 5 BTC
 		},
 		btc: btc::AssetMap { btc: 500000000u128.into() }, // 5 BTC
 		dot: dot::AssetMap { dot: 100000000000u128.into() }, // 10 DOT
-		arb: arb::AssetMap { eth: 1u128.into(), usdc: 2u128.into() },
-		sol: sol::AssetMap { sol: 3u128.into(), usdc: 4u128.into() },
+		arb: arb::AssetMap { eth: 1u128.into(), usdc: 2u128.into(), usdt: 3u128.into() },
+		sol: sol::AssetMap { sol: 3u128.into(), usdc: 4u128.into(), usdt: 4u128.into() },
 		hub: hub::AssetMap {
 			dot: 50000000000u128.into(),
 			usdc: 3000000u128.into(),
@@ -235,13 +241,22 @@ fn test_validator_serialization() {
 				eth: eth::AssetMap {
 					eth: 3000000000000000000u128.into(), // 3 ETH
 					flip: 0u128.into(),
-					usdc: 2500000u128.into(), // 2.5 USDC
-					usdt: 1500000u128.into(), // 1.5 USDT
+					usdc: 2500000u128.into(),  // 2.5 USDC
+					usdt: 1500000u128.into(),  // 1.5 USDT
+					wbtc: 75000000u128.into(), // 0.75 BTC
 				},
 				btc: btc::AssetMap { btc: 75000000u128.into() }, // 0.75 BTC
 				dot: dot::AssetMap { dot: 25000000000u128.into() }, // 2.5 DOT
-				arb: arb::AssetMap { eth: 500000000000000000u128.into(), usdc: 1000000u128.into() },
-				sol: sol::AssetMap { sol: 5000000000u128.into(), usdc: 750000u128.into() },
+				arb: arb::AssetMap {
+					eth: 500000000000000000u128.into(),
+					usdc: 1000000u128.into(),
+					usdt: 1500000u128.into(),
+				},
+				sol: sol::AssetMap {
+					sol: 5000000000u128.into(),
+					usdc: 750000u128.into(),
+					usdt: 1500000u128.into(),
+				},
 				hub: hub::AssetMap {
 					dot: 10000000000u128.into(),
 					usdc: 500000u128.into(),

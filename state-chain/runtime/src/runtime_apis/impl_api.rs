@@ -1761,8 +1761,10 @@ impl_runtime_apis! {
 				sol_vault_program: solana_api_environment.vault_program.into(),
 				sol_swap_endpoint_program_data_account: solana_api_environment.swap_endpoint_program_data_account.into(),
 				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
+				usdt_token_mint_pubkey: Environment::solana_api_environment().usdt_token_mint_pubkey.into(),
 				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
 				solana_usdc_token_vault_ata: solana_api_environment.usdc_token_vault_ata.into(),
+				solana_usdt_token_vault_ata: solana_api_environment.usdt_token_vault_ata.into(),
 				solana_vault_swap_account: sol_prim::address_derivation::derive_swap_endpoint_native_vault_account(
 					solana_api_environment.swap_endpoint_program
 				).ok().map(|account| account.address.into()),
