@@ -29,7 +29,7 @@ use subxt::{
 	backend::legacy::rpc_methods::Bytes,
 	config::PolkadotConfig,
 	events::{EventDetails, Phase, StaticEvent},
-	utils::AccountId32,
+	utils::{AccountId32, MultiAddress, MultiSignature},
 };
 
 use tracing::error;
@@ -168,9 +168,16 @@ fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignatu
 
 	match (version, xt_type) {
 		(LEGACY_EXTRINSIC_FORMAT_VERSION, SIGNED_EXTRINSIC) => {
-			let _address = PolkadotAccountId::decode(&mut input).ok()?;
-			let signature = PolkadotSignature::decode(&mut input).ok()?;
-			Some(signature)
+			let _address = MultiAddress::<AccountId32, u32>::decode(&mut input).ok()?;
+			let signature = MultiSignature::decode(&mut input).ok()?;
+
+			// we only use the Sr25519 for threshold signatures, so we only look out for them
+			match signature {
+				MultiSignature::Ed25519(_) => None,
+				MultiSignature::Sr25519(polkadot_signature) =>
+					Some(PolkadotSignature::from_aliased(polkadot_signature)),
+				MultiSignature::Ecdsa(_) => None,
+			}
 		},
 		_ => None,
 	}
