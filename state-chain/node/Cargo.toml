@@ -89,7 +89,7 @@ frame-benchmarking-cli = { workspace = true, default-features = true }
 
 # This is a transitive dependency of of frame-benchmarking-cli. We need to specify it here
 # so that we can correctly activate the "try-runtime" feature for it.
-pallet-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-1.18.1-dev+2", default-features = false, optional = true }
+pallet-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509", default-features = false, optional = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
