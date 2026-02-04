@@ -2018,7 +2018,7 @@ impl_runtime_apis! {
 			Ok((encoded_data, transaction_metadata))
 		}
 
-		fn cf_ingress_egress(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}
 	}

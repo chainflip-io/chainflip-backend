@@ -353,8 +353,8 @@ decl_runtime_apis!(
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.
 		#[changed_in(16)]
-		fn cf_ingress_egress();
-		fn cf_ingress_egress(
+		fn cf_ingress_egress_events();
+		fn cf_ingress_egress_events(
 			chain: ForeignChain,
 		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
 	}

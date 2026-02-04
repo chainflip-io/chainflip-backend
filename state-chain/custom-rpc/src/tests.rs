@@ -20,7 +20,7 @@ use pallet_cf_pools::{
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, str::FromStr};
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -28,6 +28,7 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo, UtxoId},
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
+	evm::EvmCrypto,
 	refund_parameters::ChannelRefundParametersUnchecked,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
@@ -787,6 +788,7 @@ fn runtime_safe_mode_serialization() {
 
 #[test]
 fn witnessed_events_serialization() {
+	use crate::ingress_egress_tracker::{convert_deposit_witness, IntoRpcDepositDetails};
 	use cf_chains::instances::EthereumInstance;
 	use cf_primitives::NetworkEnvironment;
 	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
@@ -799,11 +801,8 @@ fn witnessed_events_serialization() {
 		deposit_details: cf_chains::evm::DepositDetails { tx_hashes: Some(vec![H256([0x22; 32])]) },
 	};
 
-	let converted_deposit = crate::convert_deposit_witness::<Ethereum>(
-		&deposit_witness,
-		1,
-		NetworkEnvironment::Mainnet,
-	);
+	let converted_deposit =
+		convert_deposit_witness::<Ethereum>(&deposit_witness, 1, NetworkEnvironment::Mainnet);
 
 	// Create the raw VaultDepositWitness and convert it to test the serialization
 	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
@@ -835,11 +834,29 @@ fn witnessed_events_serialization() {
 			boost_fee: 5,
 		};
 
-	let converted_vault_deposit = crate::convert_vault_deposit_witness::<Runtime, EthereumInstance>(
-		&vault_deposit_witness,
-		3,
-		NetworkEnvironment::Mainnet,
-	);
+	let refund_params = Some(vault_deposit_witness.refund_params.clone().map_address(|address| {
+		AddressString::from_encoded_address(EncodedAddress::from_chain_account::<Ethereum>(
+			address,
+			NetworkEnvironment::Mainnet,
+		))
+	}));
+	let converted_vault_deposit = RpcVaultDepositWitnessInfo {
+		tx_id: <sp_core::H256 as cf_chains::IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(H256([0x10; 32])).to_string(),
+		deposit_chain_block_height: 3,
+		input_asset: vault_deposit_witness.input_asset.into(),
+		output_asset: vault_deposit_witness.output_asset,
+		amount: <<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::TargetChain as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit_amount).into(),
+		destination_address: AddressString::from_encoded_address(
+			vault_deposit_witness.destination_address.clone(),
+		),
+		ccm_deposit_metadata: vault_deposit_witness.deposit_metadata.clone(),
+		deposit_details: vault_deposit_witness.deposit_details.clone().into_rpc_deposit_details(),
+		broker_fee: vault_deposit_witness.broker_fee.clone(),
+		affiliate_fees: vec![],
+		refund_params,
+		dca_params: vault_deposit_witness.dca_params.clone(),
+		max_boost_fee: vault_deposit_witness.boost_fee,
+	};
 
 	// Note: BroadcastWitnessInfo is constructed directly because the conversion functions
 	// (convert_bitcoin_broadcast, convert_evm_broadcast) depend on runtime storage lookups
@@ -850,19 +867,15 @@ fn witnessed_events_serialization() {
 			broadcast_chain_block_height: 2,
 			broadcast_id: 7,
 			tx_out_id: RpcTransactionId::Bitcoin {
-				hash: bitcoin::Txid::from_slice(&[
-					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
-					0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
-					0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-				])
+				hash: bitcoin::Txid::from_str(
+					"1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100",
+				)
 				.expect("valid tx hash"),
 			},
 			tx_ref: RpcTransactionRef::Bitcoin {
-				hash: bitcoin::Txid::from_slice(&[
-					0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c,
-					0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-					0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
-				])
+				hash: bitcoin::Txid::from_str(
+					"3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120",
+				)
 				.expect("valid tx hash"),
 			},
 		}],
