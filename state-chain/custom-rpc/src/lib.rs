@@ -1383,7 +1383,7 @@ pub trait CustomApi {
 	) -> RpcResult<ControlledVaultAddresses>;
 	/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 	/// from the block witnesser election's unsynchronized state.
-	#[method(name = "ingress_egress")]
+	#[method(name = "ingress_egress_events")]
 	fn cf_ingress_egress_events(
 		&self,
 		chain: ForeignChain,
