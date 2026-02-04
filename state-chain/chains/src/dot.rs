@@ -335,7 +335,18 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Serialize,
+	Deserialize,
 )]
 pub struct PolkadotTransactionId {
 	pub block_number: PolkadotBlockNumber,

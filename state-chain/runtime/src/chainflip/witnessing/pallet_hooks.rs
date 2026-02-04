@@ -5,9 +5,11 @@ use cf_utilities::{define_empty_struct, derive_common_traits_no_bounds, hook_imp
 use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::TransactionConfirmation;
+use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{
 	DepositWitness, TargetChainBlockNumber, TransferFailedWitness, VaultDepositWitness,
 };
+use pallet_cf_vaults::VaultKeyRotatedExternally;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::boxed::Box;
@@ -15,7 +17,7 @@ use sp_std::boxed::Box;
 // open up this enum since it's used in many matches
 use BlockWitnesserEvent::*;
 
-trait Config<I: 'static> = pallet_cf_ingress_egress::Config<I>
+pub trait Config<I: 'static> = pallet_cf_ingress_egress::Config<I>
 	+ pallet_cf_vaults::Config<I>
 	+ pallet_cf_broadcast::Config<I>;
 
@@ -110,6 +112,50 @@ hook_impls! {
 			Witness(TransferFailed(witness)) => <Self as Hook<(VaultTransferFailedInput<T, I>, ())>>::run(self, (Witness(witness), block_height)),
 		}
 	}
+
+	// --- evm key manager events ---
+	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<EvmKeyManagerEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> ()
+	where (
+		<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
+		T: pallet_cf_governance::Config
+	) {
+		match event {
+			PreWitness(_) => { /* We don't care about pre-witnessing for evm */ },
+			Witness(event) => match event {
+				EvmKeyManagerEvent::SignatureAccepted(transaction_confirmation) => {
+					let tx_out_id = transaction_confirmation.tx_out_id.clone();
+					if let Err(err) = pallet_cf_broadcast::Pallet::<T,I>::egress_success(
+						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+						transaction_confirmation,
+					) {
+						log::error!(
+							"Failed to execute {} egress success: TxOutId: {:?}, Error: {:?}",
+							T::TargetChain::TYPE_INFO_SUFFIX,
+							tx_out_id,
+							err
+						)
+					}
+				},
+				EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash) => {
+					if let Err(err) =
+						pallet_cf_governance::Pallet::<T>::set_whitelisted_call_hash(
+							pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
+								.into(),
+							call_hash,
+						) {
+						log::error!(
+							"Failed to whitelist Arbitrum governance call hash: {:?}, Error: {:?}",
+							call_hash,
+							err
+						);
+					}
+				},
+				EvmKeyManagerEvent::AggKeySetByGovKey(new_vault_key) => {
+					pallet_cf_vaults::Pallet::<T, I>::inner_vault_key_rotated_externally(new_vault_key);
+				},
+			},
+		}
+	}
 }
 
 derive_common_traits_no_bounds! {
@@ -119,5 +165,16 @@ derive_common_traits_no_bounds! {
 	pub enum VaultContractEvent<T: pallet_cf_ingress_egress::Config<I>, I: 'static> {
 		VaultDeposit(Box<VaultDepositWitness<T, I>>),
 		TransferFailed(TransferFailedWitness<T, I>)
+	}
+}
+
+derive_common_traits_no_bounds! {
+	#[derive_where(PartialOrd, Ord; )]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+	pub enum EvmKeyManagerEvent<T: Config<I>, I: 'static> {
+		SignatureAccepted(TransactionConfirmation<T, I>),
+		AggKeySetByGovKey(VaultKeyRotatedExternally<T, I>),
+		SetWhitelistedCallHash(GovCallHash)
 	}
 }

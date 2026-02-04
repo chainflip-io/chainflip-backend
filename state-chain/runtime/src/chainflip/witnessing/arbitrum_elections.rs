@@ -5,8 +5,7 @@ use crate::{
 		witnessing::{
 			arbitrum_block_processor::ArbEvent,
 			elections::TypesFor,
-			ethereum_elections::KeyManagerEvent,
-			pallet_hooks::{self, VaultContractEvent},
+			pallet_hooks::{self, EvmKeyManagerEvent, VaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -22,9 +21,6 @@ use cf_chains::{
 use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
 use cf_utilities::impls;
 use frame_system::pallet_prelude::BlockNumberFor;
-use pallet_cf_broadcast::{
-	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
-};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_system_runner::RunnerStorageAccessTrait,
@@ -32,7 +28,7 @@ use pallet_cf_elections::{
 		block_height_witnesser::{
 			consensus::BlockHeightWitnesserConsensus, primitives::NonemptyContinuousHeaders,
 			state_machine::BlockHeightWitnesser, BHWTypes, BlockHeightChangeHook,
-			BlockHeightWitnesserSettings, ChainProgress, ChainTypes, ReorgHook,
+			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
@@ -57,7 +53,6 @@ use pallet_cf_elections::{
 	InitialStateOf, RunnerStorageAccess,
 };
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
-use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
@@ -278,81 +273,34 @@ pub type ArbitrumVaultDepositWitnessingES =
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct ArbitrumKeyManagerWitnessing;
 
-pub type ArbitrumKeyManagerEvent = KeyManagerEvent<
-	AggKeyFor<Runtime, ArbitrumInstance>,
-	ChainBlockNumberFor<Runtime, ArbitrumInstance>,
-	TransactionInIdFor<Runtime, ArbitrumInstance>,
-	TransactionOutIdFor<Runtime, ArbitrumInstance>,
-	SignerIdFor<Runtime, ArbitrumInstance>,
-	TransactionFeeFor<Runtime, ArbitrumInstance>,
-	TransactionMetadataFor<Runtime, ArbitrumInstance>,
-	TransactionRefFor<Runtime, ArbitrumInstance>,
->;
+impl BlockWitnesserInstance for TypesFor<ArbitrumKeyManagerWitnessing> {
+	const BWNAME: &'static str = "KeyManager";
+	type Runtime = Runtime;
+	type Chain = ArbitrumChain;
+	type BlockEntry = EvmKeyManagerEvent<Runtime, ArbitrumInstance>;
+	type ElectionProperties = ();
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, ArbitrumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub(crate) type BlockDataKeyManager = Vec<ArbitrumKeyManagerEvent>;
-
-impls! {
-	for TypesFor<ArbitrumKeyManagerWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = ArbitrumChain;
-
-		type BlockData = BlockDataKeyManager;
-
-		type Event = ArbEvent<ArbitrumKeyManagerEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "KeyManager";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<ArbitrumInstance>>::SafeMode as Get<
+			ArbitrumElectionsSafeMode,
+		>>::get()
+		.key_manager_witnessing
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// KeyManager address doesn't change, it is read by the engine on startup
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<arb::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<ArbitrumInstance>>::SafeMode as Get<ArbitrumElectionsSafeMode>>::get()
-			.key_manager_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// KeyManager address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <ArbitrumChain as ChainTypes>::ChainBlockNumber) { }
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type ArbitrumKeyManagerWitnessingES =
-	StatemachineElectoralSystem<TypesFor<ArbitrumKeyManagerWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumKeyManagerWitnessing>>>;
 
 // ------------------------ liveness ---------------------------
 pub type ArbitrumLiveness = Liveness<

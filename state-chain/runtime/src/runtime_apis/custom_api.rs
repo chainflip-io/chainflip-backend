@@ -35,7 +35,7 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
-use core::{ops::Range, str};
+use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{OraclePrice, OraclePriceLegacy},

@@ -1,19 +1,15 @@
 use crate::{
 	chainflip::witnessing::{
 		elections::TypesFor,
-		ethereum_elections::{
-			BlockDataKeyManager, BlockDataScUtils, EthereumKeyManagerEvent,
-			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing, ScUtilsCall,
-		},
+		ethereum_elections::{BlockDataScUtils, EthereumScUtilsWitnessing, ScUtilsCall},
 	},
-	EthereumBroadcaster, Runtime,
+	Runtime,
 };
-use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
+use cf_chains::{Chain, Ethereum};
 use cf_traits::Hook;
 use codec::{Decode, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
-use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::electoral_systems::block_witnesser::state_machine::{
 	ExecuteHook, HookTypeFor, RulesHook,
 };
@@ -26,68 +22,8 @@ pub enum EthEvent<T> {
 	Witness(T),
 }
 
-type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
-
-impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumKeyManagerEvent>)>) {
-		for (block_number, event) in events {
-			match event {
-				EthEvent::Witness(call) => {
-					match call {
-						EthereumKeyManagerEvent::AggKeySetByGovKey {
-							new_public_key,
-							block_number,
-							tx_id: _,
-						} => {
-							pallet_cf_vaults::Pallet::<Runtime, EthereumInstance>::inner_vault_key_rotated_externally(new_public_key, block_number);
-						},
-						EthereumKeyManagerEvent::SignatureAccepted {
-							tx_out_id,
-							signer_id,
-							tx_fee,
-							tx_metadata,
-							transaction_ref,
-						} => {
-							if let Err(err) = EthereumBroadcaster::egress_success(
-								pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-								TransactionConfirmation {
-									tx_out_id,
-									signer_id,
-									tx_fee,
-									tx_metadata,
-									transaction_ref,
-								},
-								block_number,
-							) {
-								log::error!(
-									"Failed to execute Ethereum egress success: TxOutId: {:?}, Error: {:?}",
-									tx_out_id,
-									err
-								)
-							}
-						},
-						EthereumKeyManagerEvent::GovernanceAction { call_hash } => {
-							if let Err(err) =
-								pallet_cf_governance::Pallet::<Runtime>::set_whitelisted_call_hash(
-									pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
-										.into(),
-									call_hash,
-								) {
-								log::error!(
-									"Failed to whitelist Ethereum governance call hash: {:?}, Error: {:?}",
-									call_hash,
-									err
-								);
-							}
-						},
-					};
-				},
-			};
-		}
-	}
-}
 
 impl Hook<HookTypeFor<TypesScUtilsWitnessing, ExecuteHook>> for TypesScUtilsWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<ScUtilsCall>)>) {
@@ -133,5 +69,4 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-impl_rules_hook!(TypesKeyManagerWitnessing, BlockDataKeyManager, EthEvent<EthereumKeyManagerEvent>);
 impl_rules_hook!(TypesScUtilsWitnessing, BlockDataScUtils, EthEvent<ScUtilsCall>);
