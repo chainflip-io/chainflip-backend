@@ -1,6 +1,5 @@
 use cf_primitives::BlockWitnesserEvent;
 use cf_utilities::{define_empty_struct, hook_impls};
-use codec::{Decode, Encode};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_ingress_egress::{DepositWitness, TargetChainBlockNumber, VaultDepositWitness};
 use scale_info::TypeInfo;

@@ -632,7 +632,18 @@ pub enum IngressOrEgress {
 // ------ election based witnessing ------
 
 #[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Deserialize,
+	Serialize,
+	Ord,
+	PartialOrd,
 )]
 pub enum BlockWitnesserEvent<T> {
 	PreWitness(T),
