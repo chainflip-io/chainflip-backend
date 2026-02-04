@@ -69,6 +69,19 @@ http_endpoint = "http://localhost:8899"
 # [sol.backup_rpc]
 # http_endpoint = "http://localhost:8899"
 
+
+# No need for ws (TRON doesn't support it anyway). Separating
+# endpoints as sme rpc providers may offer only one or the other
+# plus the ones that offer both have different endpoints for each.
+[tron.rpc]
+http_endpoint = "http://localhost:8090" # For `getBlockBalance`. Needs archival node.
+json_rpc_endpoint = "http://localhost:8091" # For `eth_getLogs`
+
+# optional
+#[tron.backup_rpc]
+#ws_endpoint = "ws://localhost:8548"
+#http_endpoint = "http://localhost:XXXX"
+
 # optional
 [health_check]
 hostname = "0.0.0.0"
