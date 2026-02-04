@@ -329,7 +329,7 @@ where
 	let undeployed_addresses: Vec<H160> = eth_deposit_channels
 		.into_iter()
 		.filter_map(|(address, deployment_status)| {
-			if deployment_status.is_already_deployed_at(&block_start) {
+			if deployment_status.is_deployed_before(&block_start) {
 				None
 			} else {
 				Some(address)
