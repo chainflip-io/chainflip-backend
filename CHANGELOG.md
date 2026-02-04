@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.9] - 2026-02-04
+
+### Fixes
+
+- Fix Assethub signature extraction during egress witnessing.
+
 ## [2.0.8] - 2026-02-03
 
 ### Fixes
