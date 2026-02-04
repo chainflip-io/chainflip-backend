@@ -82,12 +82,8 @@ impl Chain for Assethub {
 /// The payload being signed in transactions.
 pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, AssethubSignedExtra>;
 
-/// Supports decoding V4 and V5 extrinsics.
-pub type AssethubUncheckedExtrinsic =
-	polkadot_sdk_types::GenericUncheckedExtrinsic<AssethubRuntimeCall, AssethubSignedExtra>;
-
 /// Use this for authoring V4 extrinsics.
-pub type AssethubUncheckedExtrinsicLegacy =
+pub type AssethubUncheckedExtrinsic =
 	GenericUncheckedExtrinsic<AssethubRuntimeCall, AssethubSignedExtra>;
 
 pub type OutputAccountId = u64;
@@ -281,9 +277,9 @@ impl AssethubExtrinsicBuilder {
 		self.signer_and_signature.replace((signer, signature));
 	}
 
-	pub fn get_signed_unchecked_extrinsic(&self) -> Option<AssethubUncheckedExtrinsicLegacy> {
+	pub fn get_signed_unchecked_extrinsic(&self) -> Option<AssethubUncheckedExtrinsic> {
 		self.signer_and_signature.as_ref().map(|(signer, signature)| {
-			AssethubUncheckedExtrinsicLegacy::new_signed(
+			AssethubUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
 				*signer,
 				signature.clone(),

@@ -1010,7 +1010,6 @@ pub struct PolkadotCheckMortality(pub Era);
 /// TODO: import it from polkadot-sdk once we update to a more recent version.
 pub mod polkadot_sdk_types {
 	use super::*;
-	use codec::Input;
 
 	/// The mode of [`CheckMetadataHash`].
 	#[derive(
