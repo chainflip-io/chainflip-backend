@@ -13,6 +13,9 @@ impl SignedBasisPoints {
 	pub fn negative_slippage(bps: BasisPoints) -> Self {
 		SignedBasisPoints(-(bps as i32))
 	}
+	pub fn neg(&self) -> Self {
+		SignedBasisPoints(-(self.0))
+	}
 }
 
 impl SignedHundredthBasisPoints {

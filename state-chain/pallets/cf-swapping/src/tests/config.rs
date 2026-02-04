@@ -32,6 +32,7 @@ fn can_update_all_config_items() {
 			FeeRateAndMinimum { rate: Permill::from_percent(10), minimum: 50 };
 		const NEW_NETWORK_FEE_FOR_ASSET: Permill = Permill::from_percent(3);
 		const NEW_INTERNAL_SWAP_NETWORK_FEE_FOR_ASSET: Permill = Permill::from_percent(7);
+		const NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION: u16 = 500;
 
 		// Check that the default values are different from the new ones
 		assert!(MaximumSwapAmount::<Test>::get(Asset::Btc).is_none());
@@ -47,6 +48,12 @@ fn can_update_all_config_items() {
 		assert_ne!(
 			InternalSwapNetworkFeeForAsset::<Test>::get(Asset::Usdc),
 			Some(NEW_INTERNAL_SWAP_NETWORK_FEE_FOR_ASSET)
+		);
+		assert_ne!(
+			DefaultOraclePriceSlippageProtection::<Test>::get(
+				AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()
+			),
+			Some(NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION)
 		);
 
 		// Define the updates in a reusable vec
@@ -83,6 +90,11 @@ fn can_update_all_config_items() {
 				asset: Asset::Usdc,
 				rate: Some(NEW_INTERNAL_SWAP_NETWORK_FEE_FOR_ASSET),
 			},
+			PalletConfigUpdate::SetDefaultOraclePriceSlippageProtectionForAsset {
+				base_asset: Asset::Eth,
+				quote_asset: STABLE_ASSET,
+				bps: Some(NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION),
+			},
 		];
 
 		// Update all config items at the same time
@@ -105,6 +117,12 @@ fn can_update_all_config_items() {
 		assert_eq!(
 			InternalSwapNetworkFeeForAsset::<Test>::get(Asset::Usdc),
 			Some(NEW_INTERNAL_SWAP_NETWORK_FEE_FOR_ASSET)
+		);
+		assert_eq!(
+			DefaultOraclePriceSlippageProtection::<Test>::get(
+				AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()
+			),
+			Some(NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION)
 		);
 
 		// Check that the PalletConfigUpdate event was emitted for each update

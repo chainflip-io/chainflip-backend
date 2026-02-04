@@ -1145,11 +1145,13 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 				minimum: NETWORK_FEE_MINIMUM,
 			});
 
+			const DCA_PARAMS: Option<DcaParameters> = Some(DcaParameters {
+				number_of_chunks: NUMBER_OF_CHUNKS,
+				chunk_interval: ONE_BLOCK_CHUNK_INTERVAL,
+			});
+
 			insert_swaps(&[TestSwapParams::new(
-				Some(DcaParameters {
-					number_of_chunks: NUMBER_OF_CHUNKS,
-					chunk_interval: ONE_BLOCK_CHUNK_INTERVAL,
-				}),
+				DCA_PARAMS,
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					min_output: CHUNK_1_OUTPUT,
@@ -1162,10 +1164,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 				RuntimeEvent::Swapping(Event::SwapRequested {
 					swap_request_id: SWAP_REQUEST_ID,
 					input_amount: INPUT_AMOUNT,
-					dca_parameters: Some(DcaParameters {
-						number_of_chunks: NUMBER_OF_CHUNKS,
-						chunk_interval: ONE_BLOCK_CHUNK_INTERVAL
-					}),
+					dca_parameters: DCA_PARAMS,
 					..
 				})
 			);

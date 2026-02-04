@@ -317,7 +317,7 @@ fn swap_with_custom_broker_fee(
 }
 
 #[track_caller]
-fn get_scheduled_swap_block(swap_id: SwapId) -> Option<BlockNumberFor<Test>> {
+fn get_scheduled_swap_block(swap_id: SwapId) -> Option<u64> {
 	ScheduledSwaps::<Test>::get().get(&swap_id).map(|swap| swap.execute_at)
 }
 
@@ -769,6 +769,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 					output_amount: ZERO_AMOUNT,
 					intermediate_amount: None,
 					oracle_delta: None,
+					oracle_slippage: None,
 				}),
 			);
 		})
@@ -1597,6 +1598,7 @@ mod swap_batching {
 				stable_amount,
 				final_output: None,
 				oracle_delta: None,
+				oracle_slippage: None,
 			}
 		}
 	}
@@ -2618,7 +2620,7 @@ mod bound_broker_withdrawal {
 					Asset::Usdc,
 					EncodedAddress::Eth(other_addr.into()),
 				),
-				Error::<Test>::BrokerBoundWithdrwalAddressRestrictionViolated
+				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
 			);
 			assert_noop!(
 				Swapping::withdraw(
@@ -2626,7 +2628,7 @@ mod bound_broker_withdrawal {
 					Asset::Eth,
 					EncodedAddress::Eth(other_addr.into()),
 				),
-				Error::<Test>::BrokerBoundWithdrwalAddressRestrictionViolated
+				Error::<Test>::BrokerBoundWithdrawalAddressRestrictionViolated
 			);
 
 			// Withdraw to bound address succeeds

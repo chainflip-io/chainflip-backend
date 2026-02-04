@@ -670,7 +670,7 @@ mod oracle_swaps {
 							refund_address: AccountOrAddress::InternalAccount(LP_ACCOUNT),
 							refund_ccm_metadata: None,
 						},
-						// Make sure we turn of the old min price check
+						// Make sure we turn off the old min price check
 						min_price: Price::zero(),
 						// Set the maximum oracle price slippage to any value
 						max_oracle_price_slippage: Some(ORACLE_PRICE_SLIPPAGE),
@@ -1013,6 +1013,7 @@ mod oracle_swaps {
 				stable_amount: Some(STABLE_AMOUNT),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
+				oracle_slippage: None,
 			}
 		}
 
@@ -1050,14 +1051,18 @@ mod oracle_swaps {
 			// Total slippage = 12.1 + 17.13 = 29.23 bps
 			// => So a slippage limit of 30 bps should pass, while 29 bps should fail
 			const EXPECTED_FAILING_SLIPPAGE_LIMIT: BasisPoints = 29;
+			const EXPECTED_ORACLE_SLIPPAGE_BPS: SignedBasisPoints = SignedBasisPoints(30);
 
 			new_test_ext().execute_with(|| {
 				set_prices();
 
 				// Oracle slippage that is below or equal to the slippage limit will pass
-				assert_ok!(Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
-					EXPECTED_FAILING_SLIPPAGE_LIMIT + 1
-				))));
+				assert_eq!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
+						EXPECTED_FAILING_SLIPPAGE_LIMIT + 1
+					))),
+					Ok(Some(EXPECTED_ORACLE_SLIPPAGE_BPS))
+				);
 
 				// Oracle delta that is above the slippage limit will fail
 				assert_err!(
@@ -1068,5 +1073,79 @@ mod oracle_swaps {
 				);
 			});
 		}
+	}
+
+	#[test]
+	fn will_use_default_oracle_price_protection() {
+		const INPUT_ASSET: Asset = Asset::Eth;
+		const OUTPUT_ASSET: Asset = Asset::Btc;
+		const INPUT_PROTECTION_BPS: BasisPoints = 100;
+		const OUTPUT_PROTECTION_BPS: BasisPoints = 200;
+		// We want a non-zero network fee and broker fee to ensure they don't affect the
+		// price protection calculation.
+		const NETWORK_FEE_BPS: BasisPoints = 50;
+		const BROKER1_FEE_BPS: BasisPoints = 15;
+
+		const EXPECTED_PRICE_PROTECTION_BPS: BasisPoints =
+			INPUT_PROTECTION_BPS + OUTPUT_PROTECTION_BPS;
+
+		new_test_ext().execute_with(|| {
+			// Set the price, default oracle protections and network fee.
+			MockPriceFeedApi::set_price_usd(INPUT_ASSET, 10_000_000);
+			MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 40_000_000);
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
+				Some(INPUT_PROTECTION_BPS),
+			);
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
+				Some(OUTPUT_PROTECTION_BPS),
+			);
+			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: Permill::from_parts(NETWORK_FEE_BPS as u32 * 100),
+				minimum: 0,
+			});
+
+			// Init a swap request that has no oracle price protection set. Triggering the
+			// default to be calculated and used.
+			let _ = Swapping::init_swap_request(
+				INPUT_ASSET,
+				INPUT_AMOUNT,
+				OUTPUT_ASSET,
+				SwapRequestType::Regular {
+					output_action: SwapOutputAction::CreditOnChain { account_id: 1 },
+				},
+				vec![Beneficiary { account: BROKER, bps: BROKER1_FEE_BPS }].try_into().unwrap(),
+				Some(PriceLimitsAndExpiry {
+					expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+						retry_duration: SWAP_DELAY_BLOCKS,
+						refund_address: AccountOrAddress::InternalAccount(1),
+						refund_ccm_metadata: None,
+					},
+					min_price: Price::zero(),
+					// No max oracle slippage is set
+					max_oracle_price_slippage: None,
+				}),
+				None,
+				SwapOrigin::OnChainAccount(0),
+			);
+
+			// Check the event for the adjusted price protection
+			assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapRequested {
+				price_limits_and_expiry,
+				..
+			}) if *price_limits_and_expiry == Some(PriceLimitsAndExpiry {
+				expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+					retry_duration: SWAP_DELAY_BLOCKS,
+					refund_address: AccountOrAddress::InternalAccount(1),
+					refund_ccm_metadata: None,
+				},
+				min_price: Price::zero(),
+				// Just the max oracle slippage has been changed
+				max_oracle_price_slippage: Some(EXPECTED_PRICE_PROTECTION_BPS),
+			}));
+		});
 	}
 }
