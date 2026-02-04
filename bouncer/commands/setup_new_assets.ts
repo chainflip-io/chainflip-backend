@@ -3,26 +3,17 @@
 //
 // This command for setting up new assets
 
-import { Asset, runWithTimeoutAndExit } from 'shared/utils';
+import { getContractAddress, runWithTimeoutAndExit, decodeSolAddress } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
+import { PublicKey } from '@solana/web3.js';
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { deposits, price } from 'shared/setup_swaps';
 import { createLpPool } from '../shared/create_lp_pool';
 import { depositLiquidity } from '../shared/deposit_liquidity';
 import { rangeOrder } from '../shared/range_order';
 
-export const deposits = new Map<Asset, number>([
-  ['ArbUsdt', 1000000],
-  ['Wbtc', 100],
-  ['SolUsdt', 100000],
-]);
-
-export const price = new Map<Asset, number>([
-  ['Wbtc', 10000],
-  ['ArbUsdt', 1],
-  ['SolUsdt', 1],
-]);
-
-export async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
+async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up swaps for new assets: WBTC, ArbUsdt, SolUsdt');
 
   await Promise.all([
@@ -66,5 +57,20 @@ export async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> 
   cf.info('Swaps Setup completed for new assets: WBTC, ArbUsdt, SolUsdt');
 }
 
+async function addSolUsdtTokenSupport<A = []>(cf: ChainflipIO<A>): Promise<void> {
+  cf.info('Adding token support for SolUsdt via governance');
+  const tokenMintPubkey = new PublicKey(getContractAddress('Solana', 'SolUsdt'));
+
+  await submitGovernanceExtrinsic(async (chainflip) =>
+    chainflip.tx.environment.dispatchSolanaGovCall({
+      SetTokenSwapParameters: {
+        minSwapAmount: 5000000,
+        tokenMintPubkey: decodeSolAddress(tokenMintPubkey.toString()),
+      },
+    }),
+  );
+  cf.info('Token support for SolUsdt added via governance');
+}
+
 const cf = await newChainflipIO(globalLogger, []);
-await runWithTimeoutAndExit(setupNewAssets(cf), 240);
+await runWithTimeoutAndExit(Promise.all([addSolUsdtTokenSupport(cf), setupNewAssets(cf)]), 240);
