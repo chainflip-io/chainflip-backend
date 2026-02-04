@@ -18,12 +18,9 @@ mod hub_chain_tracking;
 mod hub_deposits;
 mod hub_source;
 
-use cf_chains::{
-	dot::{
-		PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
-		PolkadotTransactionId,
-	},
-	hub::AssethubUncheckedExtrinsic,
+use cf_chains::dot::{
+	PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotSignature,
+	PolkadotTransactionId,
 };
 use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use futures_core::Future;
@@ -153,6 +150,32 @@ pub async fn proxy_added_witnessing(
 	(events, proxy_added_broadcasts)
 }
 
+fn extract_state_chain_signature(raw_extrinsic: &[u8]) -> Option<PolkadotSignature> {
+	const LEGACY_EXTRINSIC_FORMAT_VERSION: u8 = 4;
+	const VERSION_MASK: u8 = 0b0011_1111;
+	const TYPE_MASK: u8 = 0b1100_0000;
+	const SIGNED_EXTRINSIC: u8 = 0b1000_0000;
+
+	use codec::{Decode, Input};
+
+	let mut input = raw_extrinsic;
+
+	let _length = <codec::Compact<u32>>::decode(&mut input).ok()?;
+	let version_and_type = input.read_byte().ok()?;
+
+	let version = version_and_type & VERSION_MASK;
+	let xt_type = version_and_type & TYPE_MASK;
+
+	match (version, xt_type) {
+		(LEGACY_EXTRINSIC_FORMAT_VERSION, SIGNED_EXTRINSIC) => {
+			let _address = PolkadotAccountId::decode(&mut input).ok()?;
+			let signature = PolkadotSignature::decode(&mut input).ok()?;
+			Some(signature)
+		},
+		_ => None,
+	}
+}
+
 #[expect(clippy::type_complexity)]
 pub async fn process_egress<ProcessCall, ProcessingFut>(
 	epoch: Vault<cf_chains::Assethub, PolkadotAccountId, ()>,
@@ -191,40 +214,36 @@ pub async fn process_egress<ProcessCall, ProcessingFut>(
 			"We know this exists since we got
 	this index from the event, from the block we are querying.",
 		);
-		let mut xt_bytes = xt.0.as_slice();
 
-		match <AssethubUncheckedExtrinsic as codec::Decode>::decode(&mut xt_bytes) {
-			Ok(unchecked) =>
-				if let Some(signature) = match unchecked.signature() {
-					Some(sp_runtime::MultiSignature::Sr25519(sig)) => Some(PolkadotSignature(sig)),
-					_ => None,
-				} {
-					if monitored_egress_ids.contains(&signature) {
-						tracing::info!(
-							"Witnessing Assethub transaction succeeded. signature: {signature:?}"
-						);
-						process_call(
-							pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {
-								tx_out_id: signature,
-								signer_id: epoch.info.0,
-								tx_fee,
-								tx_metadata: (),
-								transaction_ref: PolkadotTransactionId {
-									block_number: header.index,
-									extrinsic_index
-								}
-							}
-							.into(),
-							epoch.index,
-						)
-						.await;
-					}
+		match extract_state_chain_signature(&xt.0[..]) {
+			Some(signature) =>
+				if monitored_egress_ids.contains(&signature) {
+					tracing::info!(
+						"Witnessing Assethub transaction succeeded. signature: {signature:?}"
+					);
+					process_call(
+						pallet_cf_broadcast::Call::<_, AssethubInstance>::transaction_succeeded {
+							tx_out_id: signature,
+							signer_id: epoch.info.0,
+							tx_fee,
+							tx_metadata: (),
+							transaction_ref: PolkadotTransactionId {
+								block_number: header.index,
+								extrinsic_index,
+							},
+						}
+						.into(),
+						epoch.index,
+					)
+					.await;
 				},
-			Err(error) => {
-				// We expect this to occur when attempting to decode
-				// a transaction that was not sent by us.
-				// We can safely ignore it, but we log it in case.
-				tracing::debug!("Failed to decode UncheckedExtrinsic {error}");
+			None => {
+				// We expect this to occur when attempting to decode v5 or bare extrinsics.
+				tracing::debug!(
+					"Unable to extract signature for extrinsic {}:{}.",
+					header.hash,
+					extrinsic_index,
+				);
 			},
 		}
 	}
