@@ -845,7 +845,7 @@ fn witnessed_events_serialization() {
 		deposit_chain_block_height: 3,
 		input_asset: vault_deposit_witness.input_asset.into(),
 		output_asset: vault_deposit_witness.output_asset,
-		amount: <<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::TargetChain as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit_amount).into(),
+		amount: <<Ethereum as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit_amount).into(),
 		destination_address: AddressString::from_encoded_address(
 			vault_deposit_witness.destination_address.clone(),
 		),

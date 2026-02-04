@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
+use crate::chainflip::witnessing::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{

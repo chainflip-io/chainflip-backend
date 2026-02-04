@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::CallApiAt;
 use sp_runtime::{traits::Block as BlockT, AccountId32};
 use state_chain_runtime::{
-	chainflip::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents},
+	chainflip::witnessing::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents},
 	Hash, Runtime,
 };
 
@@ -157,8 +157,13 @@ where
 		deposit_chain_block_height: height,
 		input_asset: witness.input_asset.into(),
 		output_asset: witness.output_asset,
-		amount: <<<T as pallet_cf_ingress_egress::Config<I>>::TargetChain as Chain>::ChainAmount as Into<u128>>::into(witness.deposit_amount).into(),
-		destination_address: AddressString::from_encoded_address(witness.destination_address.clone()),
+		amount: <<T::TargetChain as Chain>::ChainAmount as Into<u128>>::into(
+			witness.deposit_amount,
+		)
+		.into(),
+		destination_address: AddressString::from_encoded_address(
+			witness.destination_address.clone(),
+		),
 		ccm_deposit_metadata: witness.deposit_metadata.clone(),
 		deposit_details: witness.deposit_details.clone().into_rpc_deposit_details(),
 		broker_fee: witness.broker_fee.clone(),
