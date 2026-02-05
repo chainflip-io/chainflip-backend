@@ -225,7 +225,7 @@ impl From<&DepositChannel<Arbitrum>> for EvmFetchId {
 	fn from(channel: &DepositChannel<Arbitrum>) -> Self {
 		match channel.state {
 			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
-			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+			DeploymentStatus::Pending | DeploymentStatus::Deployed { .. } =>
 				if channel.asset == assets::arb::Asset::ArbEth {
 					EvmFetchId::NotRequired
 				} else {
