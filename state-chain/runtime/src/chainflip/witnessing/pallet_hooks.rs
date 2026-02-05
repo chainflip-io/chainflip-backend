@@ -82,7 +82,8 @@ hook_impls! {
 					block_height,
 				) {
 					log::error!(
-						"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",
+						"Failed to execute {} egress success: TxOutId: {:?}, Error: {:?}",
+						T::TargetChain::TYPE_INFO_SUFFIX,
 						egress.tx_out_id,
 						err
 					)
@@ -144,7 +145,8 @@ hook_impls! {
 							call_hash,
 						) {
 						log::error!(
-							"Failed to whitelist Arbitrum governance call hash: {:?}, Error: {:?}",
+							"Failed to whitelist {} governance call hash: {:?}, Error: {:?}",
+							T::TargetChain::TYPE_INFO_SUFFIX,
 							call_hash,
 							err
 						);
