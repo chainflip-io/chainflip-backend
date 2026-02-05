@@ -3032,7 +3032,8 @@ where
 			.with_runtime_api(Some(hash), |api, hash| api.cf_network_environment(hash))?;
 
 		let storage_query = StorageQueryApi::new(&self.rpc_backend.client);
-		convert_raw_witnessed_events(&storage_query, hash, raw, network)
+		storage_query
+			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
 	}
 }
 

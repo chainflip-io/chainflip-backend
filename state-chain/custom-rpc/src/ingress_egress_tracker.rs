@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::StorageQueryApi;
 use bitcoin::{hashes::Hash as BtcHash, Txid};
 use cf_chains::{
 	address::{AddressString, EncodedAddress},
@@ -22,16 +21,14 @@ use cf_chains::{
 	Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain,
 };
 use cf_primitives::{BasisPoints, DcaParameters, NetworkEnvironment};
-use cf_rpc_apis::RpcResult;
 use cf_utilities::rpc::NumberOrHex;
 use pallet_cf_broadcast::TransactionOutIdToBroadcastId;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use serde::{Deserialize, Serialize};
-use sp_api::CallApiAt;
-use sp_runtime::{traits::Block as BlockT, AccountId32};
+use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents},
-	Hash, Runtime,
+	Runtime,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,13 +113,11 @@ where
 	}
 }
 
-pub(crate) fn convert_vault_deposit_witness<T, I, C, B>(
-	storage_query: &StorageQueryApi<C, B>,
-	hash: Hash,
+pub(crate) fn convert_vault_deposit_witness<T, I>(
 	witness: &VaultDepositWitness<T, I>,
 	height: u64,
 	network: NetworkEnvironment,
-) -> RpcResult<RpcVaultDepositWitnessInfo>
+) -> RpcVaultDepositWitnessInfo
 where
 	T: pallet_cf_ingress_egress::Config<I, AccountId = state_chain_runtime::AccountId>,
 	I: 'static,
@@ -130,8 +125,6 @@ where
 	<T::TargetChain as Chain>::ChainAccount: Clone,
 	<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId:
 		IntoTransactionInIdForAnyChain<<T::TargetChain as Chain>::ChainCrypto>,
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + CallApiAt<B>,
 {
 	let tx_id = <<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id.clone())
 		.to_string();
@@ -139,9 +132,7 @@ where
 	let mut affiliate_fees = Vec::with_capacity(witness.affiliate_fees.len());
 	for affiliate in &witness.affiliate_fees {
 		let broker_id = witness.broker_fee.as_ref().map(|b| &b.account);
-		if let Some(account) =
-			resolve_affiliate_to_account(storage_query, hash, broker_id, affiliate.account)?
-		{
+		if let Some(account) = resolve_affiliate_to_account(broker_id, affiliate.account) {
 			affiliate_fees.push(cf_primitives::Beneficiary { account, bps: affiliate.bps });
 		}
 	}
@@ -152,7 +143,7 @@ where
 		))
 	}));
 
-	Ok(RpcVaultDepositWitnessInfo {
+	RpcVaultDepositWitnessInfo {
 		tx_id,
 		deposit_chain_block_height: height,
 		input_asset: witness.input_asset.into(),
@@ -171,45 +162,25 @@ where
 		refund_params,
 		dca_params: witness.dca_params.clone(),
 		max_boost_fee: witness.boost_fee,
-	})
+	}
 }
 
-fn resolve_affiliate_to_account<C, B>(
-	storage_query: &StorageQueryApi<C, B>,
-	hash: Hash,
+fn resolve_affiliate_to_account(
 	broker_id: Option<&state_chain_runtime::AccountId>,
 	short_id: cf_primitives::AffiliateShortId,
-) -> RpcResult<Option<state_chain_runtime::AccountId>>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + CallApiAt<B>,
-{
-	let Some(broker) = broker_id else { return Ok(None) };
-
-	storage_query.with_state_backend(hash, || {
-		pallet_cf_swapping::AffiliateIdMapping::<Runtime>::get(broker, short_id)
-	})
+) -> Option<state_chain_runtime::AccountId> {
+	let broker = broker_id?;
+	pallet_cf_swapping::AffiliateIdMapping::<Runtime>::get(broker, short_id)
 }
 
-fn convert_bitcoin_broadcast<C, B>(
-	storage_query: &StorageQueryApi<C, B>,
-	hash: Hash,
+fn convert_bitcoin_broadcast(
 	tx_confirmation: pallet_cf_broadcast::TransactionConfirmation<Runtime, BitcoinInstance>,
 	height: u64,
-) -> RpcResult<Option<BroadcastWitnessInfo>>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + CallApiAt<B>,
-{
-	let maybe_broadcast = storage_query.with_state_backend(hash, || {
-		TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::get(tx_confirmation.tx_out_id)
-	})?;
-	let (broadcast_id, _) = match maybe_broadcast {
-		Some(value) => value,
-		None => return Ok(None),
-	};
+) -> Option<BroadcastWitnessInfo> {
+	let (broadcast_id, _) =
+		TransactionOutIdToBroadcastId::<Runtime, BitcoinInstance>::get(tx_confirmation.tx_out_id)?;
 
-	Ok(Some(BroadcastWitnessInfo {
+	Some(BroadcastWitnessInfo {
 		broadcast_chain_block_height: height,
 		broadcast_id,
 		tx_out_id: RpcTransactionId::Bitcoin {
@@ -220,36 +191,25 @@ where
 			hash: Txid::from_slice(tx_confirmation.transaction_ref.as_bytes())
 				.expect("bitcoin txid hash"),
 		},
-	}))
+	})
 }
 
-fn convert_evm_broadcast<C, B>(
-	storage_query: &StorageQueryApi<C, B>,
-	hash: Hash,
+fn convert_evm_broadcast(
 	key_manager_event: &EthereumKeyManagerEvent,
 	height: u64,
-) -> RpcResult<Option<BroadcastWitnessInfo>>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + CallApiAt<B>,
-{
+) -> Option<BroadcastWitnessInfo> {
 	match key_manager_event {
 		EthereumKeyManagerEvent::SignatureAccepted { tx_out_id, transaction_ref, .. } => {
-			let maybe_broadcast = storage_query.with_state_backend(hash, || {
-				TransactionOutIdToBroadcastId::<Runtime, EthereumInstance>::get(tx_out_id)
-			})?;
-			let (broadcast_id, _) = match maybe_broadcast {
-				Some(value) => value,
-				None => return Ok(None),
-			};
-			Ok(Some(BroadcastWitnessInfo {
+			let (broadcast_id, _) =
+				TransactionOutIdToBroadcastId::<Runtime, EthereumInstance>::get(tx_out_id)?;
+			Some(BroadcastWitnessInfo {
 				broadcast_chain_block_height: height,
 				broadcast_id,
 				tx_out_id: RpcTransactionId::Evm { signature: *tx_out_id },
 				tx_ref: RpcTransactionRef::Evm { hash: *transaction_ref },
-			}))
+			})
 		},
-		_ => Ok(None),
+		_ => None,
 	}
 }
 
@@ -291,16 +251,10 @@ impl IntoRpcDepositDetails for cf_chains::evm::DepositDetails {
 	}
 }
 
-pub(crate) fn convert_raw_witnessed_events<C, B>(
-	storage_query: &StorageQueryApi<C, B>,
-	hash: Hash,
+pub(crate) fn convert_raw_witnessed_events(
 	raw: state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents,
 	network: NetworkEnvironment,
-) -> RpcResult<RpcWitnessedEventsResponse>
-where
-	B: BlockT<Hash = state_chain_runtime::Hash>,
-	C: Send + Sync + 'static + CallApiAt<B>,
-{
+) -> RpcWitnessedEventsResponse {
 	match raw {
 		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Bitcoin {
 			deposits,
@@ -314,30 +268,21 @@ where
 				})
 				.collect();
 
-			let mut converted_vault_deposits = Vec::with_capacity(vault_deposits.len());
-			for (height, witness) in vault_deposits {
-				converted_vault_deposits.push(convert_vault_deposit_witness(
-					storage_query,
-					hash,
-					&witness,
-					height,
-					network,
-				)?);
-			}
+			let converted_vault_deposits = vault_deposits
+				.into_iter()
+				.map(|(height, witness)| convert_vault_deposit_witness(&witness, height, network))
+				.collect();
 
-			let mut broadcasts_vec = Vec::with_capacity(broadcasts.len());
-			for (height, tx) in broadcasts {
-				if let Some(broadcast) = convert_bitcoin_broadcast(storage_query, hash, tx, height)?
-				{
-					broadcasts_vec.push(broadcast);
-				}
-			}
+			let broadcasts_vec = broadcasts
+				.into_iter()
+				.filter_map(|(height, tx)| convert_bitcoin_broadcast(tx, height))
+				.collect();
 
-			Ok(RpcWitnessedEventsResponse {
+			RpcWitnessedEventsResponse {
 				deposits,
 				broadcasts: broadcasts_vec,
 				vault_deposits: converted_vault_deposits,
-			})
+			}
 		},
 		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Ethereum {
 			deposits,
@@ -351,37 +296,28 @@ where
 				})
 				.collect();
 
-			let mut converted_vault_deposits = Vec::with_capacity(vault_deposits.len());
-			for (height, event) in vault_deposits {
-				if let Some(witness) = extract_vault_deposit_from_event::<
-					Runtime,
-					EthereumInstance,
-					cf_chains::Ethereum,
-				>(&event)
-				{
-					converted_vault_deposits.push(convert_vault_deposit_witness(
-						storage_query,
-						hash,
-						&witness,
-						height,
-						network,
-					)?);
-				}
-			}
+			let converted_vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event::<
+						Runtime,
+						EthereumInstance,
+						cf_chains::Ethereum,
+					>(&event)
+					.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+				})
+				.collect();
 
-			let mut broadcasts_vec = Vec::with_capacity(broadcasts.len());
-			for (height, event) in broadcasts {
-				if let Some(broadcast) = convert_evm_broadcast(storage_query, hash, &event, height)?
-				{
-					broadcasts_vec.push(broadcast);
-				}
-			}
+			let broadcasts_vec = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
 
-			Ok(RpcWitnessedEventsResponse {
+			RpcWitnessedEventsResponse {
 				deposits,
 				broadcasts: broadcasts_vec,
 				vault_deposits: converted_vault_deposits,
-			})
+			}
 		},
 		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Arbitrum {
 			deposits,
@@ -395,37 +331,28 @@ where
 				})
 				.collect();
 
-			let mut converted_vault_deposits = Vec::with_capacity(vault_deposits.len());
-			for (height, event) in vault_deposits {
-				if let Some(witness) = extract_vault_deposit_from_event::<
-					Runtime,
-					ArbitrumInstance,
-					cf_chains::Arbitrum,
-				>(&event)
-				{
-					converted_vault_deposits.push(convert_vault_deposit_witness(
-						storage_query,
-						hash,
-						&witness,
-						height,
-						network,
-					)?);
-				}
-			}
+			let converted_vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event::<
+						Runtime,
+						ArbitrumInstance,
+						cf_chains::Arbitrum,
+					>(&event)
+					.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+				})
+				.collect();
 
-			let mut broadcasts_vec = Vec::with_capacity(broadcasts.len());
-			for (height, event) in broadcasts {
-				if let Some(broadcast) = convert_evm_broadcast(storage_query, hash, &event, height)?
-				{
-					broadcasts_vec.push(broadcast);
-				}
-			}
+			let broadcasts_vec = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
 
-			Ok(RpcWitnessedEventsResponse {
+			RpcWitnessedEventsResponse {
 				deposits,
 				broadcasts: broadcasts_vec,
 				vault_deposits: converted_vault_deposits,
-			})
+			}
 		},
 	}
 }
