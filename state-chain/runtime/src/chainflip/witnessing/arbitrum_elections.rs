@@ -5,7 +5,7 @@ use crate::{
 		witnessing::{
 			arbitrum_block_processor::ArbEvent,
 			elections::TypesFor,
-			pallet_hooks::{self, EvmKeyManagerEvent, VaultContractEvent},
+			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -241,7 +241,7 @@ impl BlockWitnesserInstance for TypesFor<ArbitrumVaultDepositWitnessing> {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = ArbitrumChain;
-	type BlockEntry = VaultContractEvent<Runtime, ArbitrumInstance>;
+	type BlockEntry = EvmVaultContractEvent<Runtime, ArbitrumInstance>;
 	type ElectionProperties = ();
 	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, ArbitrumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;

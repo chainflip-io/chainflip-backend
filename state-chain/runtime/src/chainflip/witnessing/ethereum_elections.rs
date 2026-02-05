@@ -5,7 +5,7 @@ use crate::{
 		witnessing::{
 			elections::TypesFor,
 			ethereum_block_processor::EthEvent,
-			pallet_hooks::{self, EvmKeyManagerEvent, VaultContractEvent},
+			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -203,7 +203,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
-	type BlockEntry = VaultContractEvent<Runtime, EthereumInstance>;
+	type BlockEntry = EvmVaultContractEvent<Runtime, EthereumInstance>;
 	type ElectionProperties = ();
 	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;

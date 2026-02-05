@@ -101,8 +101,8 @@ hook_impls! {
 	}
 
 	// --- evm vault contract events (either vault swaps OR transfer failures)
-	fn(&mut self, (event, block_height): (BlockWitnesserEvent<VaultContractEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
-		use VaultContractEvent::*;
+	fn(&mut self, (event, block_height): (BlockWitnesserEvent<EvmVaultContractEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
+		use EvmVaultContractEvent::*;
 		match event {
 			// vault deposits
 			PreWitness(VaultDeposit(deposit)) => <Self as Hook<(VaultDepositInput<T, I>, ())>>::run(self, (PreWitness(*deposit), block_height)),
@@ -164,7 +164,7 @@ derive_common_traits_no_bounds! {
 	#[derive_where(PartialOrd, Ord; )]
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
-	pub enum VaultContractEvent<T: pallet_cf_ingress_egress::Config<I>, I: 'static> {
+	pub enum EvmVaultContractEvent<T: pallet_cf_ingress_egress::Config<I>, I: 'static> {
 		VaultDeposit(Box<VaultDepositWitness<T, I>>),
 		TransferFailed(TransferFailedWitness<T, I>)
 	}
