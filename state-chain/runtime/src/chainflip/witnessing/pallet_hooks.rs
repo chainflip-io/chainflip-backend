@@ -92,7 +92,7 @@ hook_impls! {
 		}
 	}
 
-	// -- transfer failed dispatch --
+	// --- transfer failed dispatch ---
 	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<TransferFailedWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
 		match event {
 			PreWitness(_) => { /* We don't care about pre-witnessing a failure */ },
@@ -100,7 +100,7 @@ hook_impls! {
 		}
 	}
 
-	// --- evm vault contract events (either vault swaps OR transfer failures)
+	// --- evm vault contract events ---
 	fn(&mut self, (event, block_height): (BlockWitnesserEvent<EvmVaultContractEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
 		use EvmVaultContractEvent::*;
 		match event {
