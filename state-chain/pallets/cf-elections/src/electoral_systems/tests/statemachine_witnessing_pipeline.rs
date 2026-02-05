@@ -179,25 +179,20 @@ where
 fn run_simulation_generic<T>(blocks: ForkedFilledChain)
 where
 	T: BWTypes<Chain = <T as BHWTypes>::Chain, BlockData = Vec<Event>, Event = MockBtcEvent<Event>>
-		+ BHWTypes
-		+ Default,
-	<T as BHWTypes>::Chain: ChainTypes<ChainBlockHash = BlockId>,
-	<T as BWProcessorTypes>::Chain: ChainTypes<ChainBlockHash = BlockId>,
-	ChainBlockNumberOf<<T as BHWTypes>::Chain>: Default + Ord + Clone + Debug + SaturatingStep,
+		+ BHWTypes,
 	<T as BHWTypes>::BlockHeightChangeHook: Default,
 	<T as BHWTypes>::ReorgHook: Default,
 	<T as BWTypes>::ElectionPropertiesHook: Default + Send,
 	<T as BWTypes>::SafeModeEnabledHook: Default + Send,
 	<T as BWTypes>::ProcessedUpToHook: Default + Send,
 	<T as BWTypes>::ElectionTrackerDebugEventHook:
-		Default + Send + HistoryHook<HookTypeFor<T, ElectionTrackerDebugEventHook>>,
+		HistoryHook<HookTypeFor<T, ElectionTrackerDebugEventHook>>,
 	<T as BWProcessorTypes>::Rules: Send,
 	<T as BWProcessorTypes>::Execute: Send + HistoryHook<HookTypeFor<T, ExecuteHook>>,
 	<T as BWProcessorTypes>::DebugEventHook: Send + HistoryHook<HookTypeFor<T, DebugEventHook>>,
 	FlatChainProgression<Event>: AbstractVoter<BlockHeightWitnesser<T>>,
 	FlatChainProgression<String>: AbstractVoter<BWStatemachine<T>>,
 	BlockProcessor<T>: Default,
-	BlockWitnesserState<T>: Default,
 {
 	use crate::electoral_systems::block_height_witnesser::BlockHeightWitnesserSettings;
 	use std::fmt::Write;
