@@ -23,8 +23,6 @@ pub trait Config<I: 'static> = pallet_cf_ingress_egress::Config<I>
 
 type VaultDepositInput<T, I> =
 	(BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>);
-type VaultTransferFailedInput<T, I> =
-	(BlockWitnesserEvent<TransferFailedWitness<T, I>>, TargetChainBlockNumber<T, I>);
 
 define_empty_struct! {
 	pub struct PalletHooks<T: Config<I>, I: 'static>;
@@ -92,25 +90,17 @@ hook_impls! {
 		}
 	}
 
-	// --- transfer failed dispatch ---
-	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<TransferFailedWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
-		match event {
-			PreWitness(_) => { /* We don't care about pre-witnessing a failure */ },
-			Witness(failure) => pallet_cf_ingress_egress::Pallet::<T, I>::vault_transfer_failed_inner(failure),
-		}
-	}
-
 	// --- evm vault contract events ---
 	fn(&mut self, (event, block_height): (BlockWitnesserEvent<EvmVaultContractEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
 		use EvmVaultContractEvent::*;
 		match event {
-			// vault deposits
+			// vault deposits are forwarded to the vault witness dispatch
 			PreWitness(VaultDeposit(deposit)) => <Self as Hook<(VaultDepositInput<T, I>, ())>>::run(self, (PreWitness(*deposit), block_height)),
 			Witness(VaultDeposit(deposit)) => <Self as Hook<(VaultDepositInput<T, I>, ())>>::run(self, (Witness(*deposit), block_height)),
 
-			// failures
-			PreWitness(TransferFailed(witness)) => <Self as Hook<(VaultTransferFailedInput<T, I>, ())>>::run(self, (PreWitness(witness), block_height)),
-			Witness(TransferFailed(witness)) => <Self as Hook<(VaultTransferFailedInput<T, I>, ())>>::run(self, (Witness(witness), block_height)),
+			// failures are handled here
+			PreWitness(TransferFailed(_)) => { /* We don't care about pre-witnessing a failure */ },
+			Witness(TransferFailed(failure)) => pallet_cf_ingress_egress::Pallet::<T, I>::vault_transfer_failed_inner(failure),
 		}
 	}
 
