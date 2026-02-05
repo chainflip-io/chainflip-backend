@@ -10,11 +10,101 @@ use core::{
 	ops::{Range, RangeInclusive},
 };
 
-use cf_chains::witness_period::SaturatingStep;
+use cf_chains::{
+	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange},
+	ChainWitnessConfig,
+};
 use proptest::{collection::*, prelude::*};
+use scale_info::TypeInfo;
 
-type BlockId = u32;
+pub type BlockId = u32;
 type Event = String;
+
+/// Ranged block witnessing configuration (WITNESS_PERIOD = 24, like Arbitrum)
+#[derive(TypeInfo, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+pub struct RangedWitnessConfig;
+impl ChainWitnessConfig for RangedWitnessConfig {
+	type ChainBlockNumber = u64;
+	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
+}
+
+/// Maps between raw (per-block) heights and the chain block number used by the state machines.
+pub trait MockChainBlockNumber: Copy + Ord + Default {
+	fn from_raw_height(raw: u64) -> Self;
+	fn range_start(self) -> u64;
+	fn range_end(self) -> u64;
+	fn raw_height_from_offset_steps(offset_steps: usize) -> u64;
+}
+
+impl MockChainBlockNumber for u8 {
+	fn from_raw_height(raw: u64) -> Self {
+		if raw > u8::MAX as u64 {
+			u8::MAX
+		} else {
+			raw as u8
+		}
+	}
+	fn range_start(self) -> u64 {
+		self as u64
+	}
+	fn range_end(self) -> u64 {
+		self as u64
+	}
+	fn raw_height_from_offset_steps(offset_steps: usize) -> u64 {
+		offset_steps as u64
+	}
+}
+
+impl MockChainBlockNumber for u32 {
+	fn from_raw_height(raw: u64) -> Self {
+		if raw > u32::MAX as u64 {
+			u32::MAX
+		} else {
+			raw as u32
+		}
+	}
+	fn range_start(self) -> u64 {
+		self as u64
+	}
+	fn range_end(self) -> u64 {
+		self as u64
+	}
+	fn raw_height_from_offset_steps(offset_steps: usize) -> u64 {
+		offset_steps as u64
+	}
+}
+
+impl MockChainBlockNumber for u64 {
+	fn from_raw_height(raw: u64) -> Self {
+		raw
+	}
+	fn range_start(self) -> u64 {
+		self
+	}
+	fn range_end(self) -> u64 {
+		self
+	}
+	fn raw_height_from_offset_steps(offset_steps: usize) -> u64 {
+		offset_steps as u64
+	}
+}
+
+impl MockChainBlockNumber for BlockWitnessRange<RangedWitnessConfig> {
+	fn from_raw_height(raw: u64) -> Self {
+		let root = block_witness_root(RangedWitnessConfig::WITNESS_PERIOD, raw);
+		BlockWitnessRange::<RangedWitnessConfig>::try_new(root)
+			.expect("block witness root is always valid")
+	}
+	fn range_start(self) -> u64 {
+		*self.root()
+	}
+	fn range_end(self) -> u64 {
+		*block_witness_range(RangedWitnessConfig::WITNESS_PERIOD, *self.root()).end()
+	}
+	fn raw_height_from_offset_steps(offset_steps: usize) -> u64 {
+		(offset_steps as u64) * RangedWitnessConfig::WITNESS_PERIOD
+	}
+}
 
 /// The basic data structure involved is an ordered tree which:
 ///  - a leaf represents a single block
@@ -250,9 +340,11 @@ pub fn make_events() -> Vec<String> {
 		.collect()
 }
 
-pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
+fn generate_blocks_with_tail_with_extra_tail(
+	extra_tail_blocks: usize,
+) -> impl Strategy<Value = ForkedFilledChain> {
 	let p = ConsumerChainParameters {
-		max_mainchain_length: 10,
+		max_mainchain_length: 100,
 		max_fork_count: 4,
 		max_block_count: 200,
 		max_fork_length: 4,
@@ -287,8 +379,9 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 
 			// generate a large number of empty blocks, so all processors can run until completion
 			// since witnessing of blocks is delayed by at most `max_resolution_delay`, we use it as
-			// base value.
-			blocks.extend((0..=(p.item_parameters.max_resolution_delay + 3)).map(|_| {
+			// base value, and add extra tail blocks if requested (e.g. for ranged chains).
+			let tail_len = p.item_parameters.max_resolution_delay + 3 + extra_tail_blocks;
+			blocks.extend((0..=tail_len).map(|_| {
 				ForkedBlock::Block(Consumer {
 					ignore: 0,
 					drop: 0,
@@ -303,6 +396,16 @@ pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
 
 			ForkedFilledChain { blocks: filled_chain }
 		})
+}
+
+pub fn generate_blocks_with_tail() -> impl Strategy<Value = ForkedFilledChain> {
+	generate_blocks_with_tail_with_extra_tail(0)
+}
+
+/// Extra tail blocks for ranged witnessing to allow enough full ranges to pass safety margins.
+pub fn generate_blocks_with_tail_ranged() -> impl Strategy<Value = ForkedFilledChain> {
+	let extra_tail_blocks = (RangedWitnessConfig::WITNESS_PERIOD as usize) * 8;
+	generate_blocks_with_tail_with_extra_tail(extra_tail_blocks)
 }
 
 pub struct ForkedFilledChain {
@@ -355,77 +458,90 @@ pub fn blocks_into_chain_progression<E: Clone>(
 }
 
 pub struct MockChain<E, T: ChainTypes<ChainBlockHash = BlockId>> {
-	// heights and blocks
-	pub chain: Vec<(T::ChainBlockNumber, FlatBlock<E>)>,
+	// raw heights and blocks
+	pub chain: Vec<(u64, FlatBlock<E>)>,
 	pub _phantom: std::marker::PhantomData<T>,
 }
 
 use crate::electoral_systems::block_height_witnesser::{primitives::Header, ChainTypes};
 
-impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T> {
+impl<E: Clone + PartialEq + Debug, T: ChainTypes<ChainBlockHash = BlockId>> MockChain<E, T>
+where
+	T::ChainBlockNumber: MockChainBlockNumber,
+{
+	fn best_raw_height(&self) -> u64 {
+		self.chain.iter().map(|(height, _)| *height).max().unwrap_or(0)
+	}
+
 	pub fn new_with_offset(offset: usize, blocks: Vec<FlatBlock<E>>) -> MockChain<E, T> {
+		let base_raw_height = T::ChainBlockNumber::raw_height_from_offset_steps(offset);
 		Self {
 			chain: blocks
 				.into_iter()
 				.enumerate()
-				.map(|(height, block)| {
-					(T::ChainBlockNumber::default().saturating_forward(offset + height), block)
-				})
+				.map(|(height, block)| (base_raw_height + height as u64, block))
 				.collect(),
 			_phantom: Default::default(),
 		}
 	}
 
 	pub fn get_hash_by_height(&self, height: T::ChainBlockNumber) -> Option<BlockId> {
+		let raw_height = height.range_end();
 		self.chain
 			.iter()
-			.find(|(h, _block)| *h == height)
+			.find(|(h, _block)| *h == raw_height)
 			.map(|(_, block)| block.block_id)
 	}
 
 	pub fn get_best_block_height(&self) -> T::ChainBlockNumber {
-		self.chain
-			.iter()
-			.map(|(height, _)| *height)
-			.max()
-			.unwrap_or(T::ChainBlockNumber::default())
+		let best_raw_height = self.best_raw_height();
+		let mut height = T::ChainBlockNumber::from_raw_height(best_raw_height);
+		if height.range_end() > best_raw_height {
+			let prev_raw_height = height.range_start().saturating_sub(1);
+			height = T::ChainBlockNumber::from_raw_height(prev_raw_height);
+		}
+		height
 	}
 
 	pub fn get_block_header(&self, height: T::ChainBlockNumber) -> Option<Header<T>> {
 		let hash = self.get_hash_by_height(height)?;
-		let parent_hash = self.get_hash_by_height(height.saturating_backward(1)).unwrap_or(1234);
+		let parent_raw_height = height.range_start().saturating_sub(1);
+		let parent_height = T::ChainBlockNumber::from_raw_height(parent_raw_height);
+		let parent_hash = self.get_hash_by_height(parent_height).unwrap_or(1234);
 
 		Some(Header { block_height: height, hash, parent_hash })
 	}
 	pub fn get_block_by_hash(&self, hash: T::ChainBlockHash) -> Option<Vec<E>> {
-		self.chain
-			.iter()
-			.find(|(_height, block)| block.block_id == hash)
-			// Return `None` if the resolution_delay of the block hasn't passed yet.
-			// This simulates blocks where the rpc call fails for some reason and thus the
-			// election never resolves.
-			.filter(|(height, block)| {
-				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
-			})
-			.map(|(_height, block)| block.events.clone())
+		let (raw_height, _) = self.chain.iter().find(|(_h, block)| block.block_id == hash)?;
+		let height = T::ChainBlockNumber::from_raw_height(*raw_height);
+		self.get_block_by_height(height)
 	}
 	pub fn get_block_by_height(&self, number: T::ChainBlockNumber) -> Option<Vec<E>> {
-		self.chain
-			.iter()
-			.find(|(height, _block)| *height == number)
-			// Return `None` if the resolution_delay of the block hasn't passed yet.
+		let range_start = number.range_start();
+		let range_end = number.range_end();
+		let best_raw_height = self.best_raw_height();
+		if range_end > best_raw_height {
+			return None
+		}
+		let mut events = Vec::new();
+		let mut any = false;
+		for (raw_height, block) in
+			self.chain.iter().filter(|(h, _)| *h >= range_start && *h <= range_end)
+		{
+			any = true;
+			// Return `None` if the resolution_delay of any block hasn't passed yet.
 			// This simulates blocks where the rpc call fails for some reason and thus the
 			// election never resolves.
-			.filter(|(height, block)| {
-				height.saturating_forward(block.resolution_delay) <= self.get_best_block_height()
-			})
-			.map(|(_height, block)| block.events.clone())
-	}
-	pub fn get_best_block_header(&self) -> Header<T> {
-		let best_height = self.get_best_block_height();
-		self.get_block_header(best_height).unwrap_or_else(|| {
-			panic!("getting block for height {best_height:?} failed for chain {:?}", self.chain)
-		})
+			if raw_height.saturating_add(block.resolution_delay as u64) > best_raw_height {
+				return None
+			}
+			events.extend(block.events.clone());
+		}
+		if any {
+			Some(events)
+		} else {
+			None
+		}
 	}
 }
 

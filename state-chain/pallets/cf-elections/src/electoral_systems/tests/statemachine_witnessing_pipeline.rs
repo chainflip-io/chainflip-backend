@@ -3,6 +3,8 @@
 
 pub mod chainstate_simulation;
 
+use cf_chains::witness_period::{BlockWitnessRange, SaturatingStep};
+use chainstate_simulation::*;
 use itertools::Either;
 use proptest::test_runner::{Config, FileFailurePersistence, TestRunner};
 use sp_std::{fmt::Debug, vec::Vec};
@@ -12,23 +14,23 @@ use crate::electoral_systems::{
 	block_height_witnesser::{
 		primitives::NonemptyContinuousHeaders,
 		state_machine::{BHWPhase, BlockHeightWitnesser},
-		BHWTypes, ChainBlockNumberOf,
+		BHWTypes, ChainBlockNumberOf, ChainTypes,
 	},
 	block_witnesser::{
 		block_processor::{tests::MockBtcEvent, BlockProcessor, BlockProcessorEvent},
-		primitives::{ElectionTrackerEvent, SafeModeStatus},
+		primitives::ElectionTrackerEvent,
 		state_machine::{
-			BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
-			EngineElectionType,
+			BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings, BlockWitnesserState,
+			DebugEventHook, ElectionTrackerDebugEventHook, EngineElectionType, ExecuteHook,
+			HookTypeFor,
 		},
 	},
 	state_machine::{
-		core::{hook_test_utils::MockHook, TypesFor, Validate},
+		core::{hook_test_utils::MockHook, Hook, HookType, TypesFor, Validate},
 		state_machine::{AbstractApi, InputOf, Statemachine},
 		test_utils::BTreeMultiSet,
 	},
 };
-use chainstate_simulation::*;
 
 macro_rules! try_get {
     ($($tt:tt)+) => {
@@ -44,40 +46,85 @@ pub trait AbstractVoter<M: Statemachine> {
 	) -> Option<Vec<Either<M::Context, (M::Query, M::Response)>>>;
 }
 
+trait HistoryHook<T: HookType> {
+	fn take_history(&mut self) -> Vec<T::Input>;
+}
+
+impl<T: HookType, const NAME: &'static str, WrappedHook: Hook<T>> HistoryHook<T>
+	for MockHook<T, NAME, WrappedHook>
+{
+	fn take_history(&mut self) -> Vec<T::Input> {
+		MockHook::take_history(self)
+	}
+}
+
 type Event = String;
+
+// ============================================================================
+// Type aliases for regular block numbers (WITNESS_RANGE = 1, like Ethereum)
+// ============================================================================
 type Types = TypesFor<(u8, u32, Vec<Event>)>;
 
-type BW = BWStatemachine<Types>;
-#[expect(clippy::upper_case_acronyms)]
-type BHW = BlockHeightWitnesser<Types>;
+// ============================================================================
+// Type aliases for BlockWitnessRange (WITNESS_RANGE = 24, like Arbitrum)
+// ============================================================================
+type RangedTypes = TypesFor<(BlockWitnessRange<RangedWitnessConfig>, BlockId, Vec<Event>)>;
 
 const OFFSET: usize = 20;
 
-impl AbstractVoter<BHW> for FlatChainProgression<Event> {
-	fn vote(&mut self, indices: Vec<<BHW as AbstractApi>::Query>) -> Option<Vec<InputOf<BHW>>> {
-		let chain = MockChain::new_with_offset(OFFSET, self.get_next_chain()?);
+// ============================================================================
+// AbstractVoter implementations - generic over the chain types
+// ============================================================================
+
+/// Generic AbstractVoter implementation for BlockHeightWitnesser
+impl<T> AbstractVoter<BlockHeightWitnesser<T>> for FlatChainProgression<Event>
+where
+	T: BHWTypes,
+	T::Chain: ChainTypes<ChainBlockHash = BlockId>,
+	ChainBlockNumberOf<T::Chain>: Default + Ord + Clone + MockChainBlockNumber,
+{
+	fn vote(
+		&mut self,
+		indices: Vec<<BlockHeightWitnesser<T> as AbstractApi>::Query>,
+	) -> Option<Vec<InputOf<BlockHeightWitnesser<T>>>> {
+		let chain = MockChain::<Event, T::Chain>::new_with_offset(OFFSET, self.get_next_chain()?);
 
 		let mut result = Vec::new();
 
 		for index in indices {
-			let best_block = chain.get_best_block_header();
+			let best_block_height = chain.get_best_block_height();
+			let Some(best_block) = chain.get_block_header(best_block_height) else {
+				continue;
+			};
 			if best_block.block_height < index.witness_from_index {
 				continue;
 			}
 
-			let bhw_input = if index.witness_from_index == 0 {
+			let bhw_input = if index.witness_from_index == Default::default() {
 				NonemptyContinuousHeaders::try_new(VecDeque::from([best_block])).unwrap()
 			} else {
-				let headers = (index.witness_from_index..=chain.get_best_block_height())
-					.map(|height| chain.get_block_header(height));
-				if headers.len() == 0 {
+				// Check if range is empty by comparing start and end
+				if index.witness_from_index > best_block_height {
 					continue;
 				}
-				if let Some(headers) = headers.into_iter().collect::<Option<Vec<_>>>() {
-					NonemptyContinuousHeaders::try_new(VecDeque::from_iter(headers)).unwrap()
-				} else {
-					continue
+				let mut headers = Vec::new();
+				let mut missing_header = false;
+				for height in index.witness_from_index..=best_block_height {
+					match chain.get_block_header(height) {
+						Some(header) => headers.push(header),
+						None => {
+							missing_header = true;
+							break;
+						},
+					}
 				}
+				if missing_header {
+					continue;
+				}
+				if headers.is_empty() {
+					continue;
+				}
+				NonemptyContinuousHeaders::try_new(VecDeque::from_iter(headers)).unwrap()
 			};
 
 			result.push(Either::Right((index, bhw_input)));
@@ -87,11 +134,21 @@ impl AbstractVoter<BHW> for FlatChainProgression<Event> {
 	}
 }
 
-impl AbstractVoter<BW> for FlatChainProgression<String> {
-	fn vote(&mut self, indices: Vec<<BW as AbstractApi>::Query>) -> Option<Vec<InputOf<BW>>> {
+/// Generic AbstractVoter implementation for BlockWitnesser
+impl<T> AbstractVoter<BWStatemachine<T>> for FlatChainProgression<String>
+where
+	T: BWTypes<BlockData = Vec<Event>>,
+	T::Chain: ChainTypes<ChainBlockHash = BlockId>,
+	ChainBlockNumberOf<T::Chain>: Default + Ord + Clone + MockChainBlockNumber,
+{
+	fn vote(
+		&mut self,
+		indices: Vec<<BWStatemachine<T> as AbstractApi>::Query>,
+	) -> Option<Vec<InputOf<BWStatemachine<T>>>> {
 		let mut inputs = Vec::new();
 		for index in indices {
-			let chain = MockChain::<String, Types>::new_with_offset(OFFSET, self.get_next_chain()?);
+			let chain =
+				MockChain::<String, T::Chain>::new_with_offset(OFFSET, self.get_next_chain()?);
 
 			match index.election_type {
 				EngineElectionType::BlockHeight { submit_hash } => {
@@ -99,17 +156,13 @@ impl AbstractVoter<BW> for FlatChainProgression<String> {
 						let header = chain.get_block_header(index.block_height).unwrap();
 						inputs.push(Either::Right((
 							index,
-							(
-								block_data.into_iter().collect(),
-								if submit_hash { Some(header.hash) } else { None },
-							),
+							(block_data, if submit_hash { Some(header.hash) } else { None }),
 						)));
 					}
 				},
 				EngineElectionType::ByHash(hash) => {
 					if let Some(block_data) = chain.get_block_by_hash(hash) {
-						inputs
-							.push(Either::Right((index, (block_data.into_iter().collect(), None))));
+						inputs.push(Either::Right((index, (block_data, None))));
 					}
 				},
 			}
@@ -118,8 +171,37 @@ impl AbstractVoter<BW> for FlatChainProgression<String> {
 	}
 }
 
+// ============================================================================
+// Generic simulation function
+// ============================================================================
+
 #[cfg(test)]
-fn run_simulation(blocks: ForkedFilledChain) {
+fn run_simulation_generic<T>(blocks: ForkedFilledChain)
+where
+	T: BWTypes<Chain = <T as BHWTypes>::Chain, BlockData = Vec<Event>, Event = MockBtcEvent<Event>>
+		+ BHWTypes
+		+ Default,
+	<T as BHWTypes>::Chain: ChainTypes<ChainBlockHash = BlockId>,
+	<T as BWProcessorTypes>::Chain: ChainTypes<ChainBlockHash = BlockId>,
+	ChainBlockNumberOf<<T as BHWTypes>::Chain>: Default + Ord + Clone + Debug + SaturatingStep,
+	<T as BHWTypes>::BlockHeightChangeHook: Default,
+	<T as BHWTypes>::ReorgHook: Default,
+	<T as BWTypes>::ElectionPropertiesHook: Default + Send,
+	<T as BWTypes>::SafeModeEnabledHook: Default + Send,
+	<T as BWTypes>::ProcessedUpToHook: Default + Send,
+	<T as BWTypes>::ElectionTrackerDebugEventHook:
+		Default + Send + HistoryHook<HookTypeFor<T, ElectionTrackerDebugEventHook>>,
+	<T as BWProcessorTypes>::Rules: Send,
+	<T as BWProcessorTypes>::Execute: Send + HistoryHook<HookTypeFor<T, ExecuteHook>>,
+	<T as BWProcessorTypes>::DebugEventHook: Send + HistoryHook<HookTypeFor<T, DebugEventHook>>,
+	FlatChainProgression<Event>: AbstractVoter<BlockHeightWitnesser<T>>,
+	FlatChainProgression<String>: AbstractVoter<BWStatemachine<T>>,
+	BlockProcessor<T>: Default,
+	BlockWitnesserState<T>: Default,
+{
+	use crate::electoral_systems::block_height_witnesser::BlockHeightWitnesserSettings;
+	use std::fmt::Write;
+
 	let mut chains = blocks_into_chain_progression(&blocks.blocks);
 
 	const SAFETY_MARGIN: u32 = 8;
@@ -132,24 +214,18 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		finalized_blocks.iter().flat_map(|block| block.events.iter()).collect();
 
 	// prepare the state machines
-	let mut bhw_state: BlockHeightWitnesser<Types> = BlockHeightWitnesser {
+	let mut bhw_state: BlockHeightWitnesser<T> = BlockHeightWitnesser {
 		phase: BHWPhase::Starting,
-		block_height_update: MockHook::default(),
-		on_reorg: MockHook::default(),
+		block_height_update: Default::default(),
+		on_reorg: Default::default(),
 	};
 	let bhw_settings: BlockHeightWitnesserSettings =
 		BlockHeightWitnesserSettings { safety_buffer: SAFETY_BUFFER };
-	let block_processor: BlockProcessor<Types> = BlockProcessor {
-		blocks_data: Default::default(),
-		processed_events: Default::default(),
-		rules: Default::default(),
-		execute: MockHook::default(),
-		debug_events: MockHook::default(),
-	};
-	let mut bw_state: BlockWitnesserState<Types> = BlockWitnesserState {
+	let block_processor: BlockProcessor<T> = BlockProcessor::default();
+	let mut bw_state: BlockWitnesserState<T> = BlockWitnesserState {
 		elections: Default::default(),
 		generate_election_properties_hook: Default::default(),
-		safemode_enabled: MockHook::new(ConstantHook::new(SafeModeStatus::Disabled)),
+		safemode_enabled: Default::default(),
 		processed_up_to: Default::default(),
 		block_processor,
 	};
@@ -161,19 +237,22 @@ fn run_simulation(blocks: ForkedFilledChain) {
 	};
 
 	#[derive(Clone, Debug)]
-	enum BWTrace<T: BWTypes, T0: BHWTypes> {
-		Input(InputOf<BWStatemachine<T>>),
-		InputBHW(InputOf<BlockHeightWitnesser<T0>>),
+	enum BWTrace<T0: BWTypes, T1: BHWTypes> {
+		Input(InputOf<BWStatemachine<T0>>),
+		InputBHW(InputOf<BlockHeightWitnesser<T1>>),
 		#[expect(dead_code)]
-		Output(Vec<(ChainBlockNumberOf<T::Chain>, T::Event)>),
-		Event(BlockProcessorEvent<T>),
-		ET(ElectionTrackerEvent<T>),
+		Output(Vec<(ChainBlockNumberOf<T0::Chain>, T0::Event)>),
+		Event(BlockProcessorEvent<T0>),
+		ET(ElectionTrackerEvent<T0>),
 	}
 
-	let mut history = Vec::new();
-	let mut total_outputs = Vec::new();
+	let mut history: Vec<BWTrace<T, T>> = Vec::new();
+	#[expect(clippy::type_complexity)]
+	let mut total_outputs: Vec<
+		Vec<(ChainBlockNumberOf<<T as BWProcessorTypes>::Chain>, T::Event)>,
+	> = Vec::new();
 
-	let print_bw_history = |bw_history: &Vec<BWTrace<Types, Types>>| {
+	let print_bw_history = |bw_history: &Vec<BWTrace<T, T>>| {
 		bw_history
 			.iter()
 			.map(|event| format!("{event:?}"))
@@ -183,19 +262,22 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 	while chains.has_chains() {
 		// run BHW
-		let bhw_outputs = if let Some(inputs) =
-			AbstractVoter::<BHW>::vote(&mut chains, BHW::get_queries(&mut bhw_state))
-		{
+		let bhw_outputs = if let Some(inputs) = AbstractVoter::<BlockHeightWitnesser<T>>::vote(
+			&mut chains,
+			BlockHeightWitnesser::<T>::get_queries(&mut bhw_state),
+		) {
 			let mut outputs = Vec::new();
 			for input in inputs {
 				// ensure that input is correct
-				BHW::validate_input(&mut bhw_state, &input).unwrap();
+				BlockHeightWitnesser::<T>::validate_input(&mut bhw_state, &input).unwrap();
 
 				history.push(BWTrace::InputBHW(input.clone()));
 
-				let output =
-					BHW::step(&mut bhw_state, input, &bhw_settings).unwrap_or_else(|err| {
-						panic!("{err:?}, BHW failed with history: {history:?} and state: {bhw_state:#?}")
+				let output = BlockHeightWitnesser::<T>::step(&mut bhw_state, input, &bhw_settings)
+					.unwrap_or_else(|err| {
+						panic!(
+							"{err:?}, BHW failed with history: {history:?} and state: {bhw_state:#?}"
+						)
 					});
 
 				outputs.push(output);
@@ -207,9 +289,10 @@ fn run_simulation(blocks: ForkedFilledChain) {
 
 		// ---- BW ----
 
-		let mut bw_outputs = if let Some(inputs) =
-			AbstractVoter::<BW>::vote(&mut chains, BW::get_queries(&mut bw_state))
-		{
+		let mut bw_outputs = if let Some(inputs) = AbstractVoter::<BWStatemachine<T>>::vote(
+			&mut chains,
+			BWStatemachine::<T>::get_queries(&mut bw_state),
+		) {
 			let mut outputs = Vec::new();
 
 			// run BW on BHW outputs (context)
@@ -223,8 +306,12 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step_and_validate(&mut bw_state, Either::Left(bhw_output), &bw_settings)
-					.unwrap();
+				BWStatemachine::<T>::step_and_validate(
+					&mut bw_state,
+					Either::Left(bhw_output),
+					&bw_settings,
+				)
+				.unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
@@ -256,7 +343,7 @@ fn run_simulation(blocks: ForkedFilledChain) {
 					)
 				});
 
-				BW::step_and_validate(&mut bw_state, input, &bw_settings).unwrap();
+				BWStatemachine::<T>::step_and_validate(&mut bw_state, input, &bw_settings).unwrap();
 
 				history.extend(
 					bw_state.elections.debug_events.take_history().into_iter().map(BWTrace::ET),
@@ -284,12 +371,6 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		total_outputs.append(&mut bw_outputs);
 	}
 
-	use std::fmt::Write;
-
-	use crate::electoral_systems::{
-		block_height_witnesser::BlockHeightWitnesserSettings,
-		state_machine::core::hook_test_utils::ConstantHook,
-	};
 	let mut printed: String = Default::default();
 	for output in total_outputs.clone() {
 		if output.len() == 0 {
@@ -300,20 +381,23 @@ fn run_simulation(blocks: ForkedFilledChain) {
 				MockBtcEvent::PreWitness(data) => format!("Pre {}", data),
 				MockBtcEvent::Witness(data) => format!("Wit {}", data),
 			};
-			write!(printed, "{height}: {}, ", event).unwrap();
+			write!(printed, "{:?}: {}, ", height.into_range_inclusive(), event).unwrap();
 		}
 		writeln!(printed).unwrap();
 	}
 
-	let counted_events: BTreeMultiSet<(u8, MockBtcEvent<Event>)> =
-		total_outputs.into_iter().flatten().collect();
+	let counted_events: BTreeMultiSet<(
+		ChainBlockNumberOf<<T as BWProcessorTypes>::Chain>,
+		MockBtcEvent<Event>,
+	)> = total_outputs.into_iter().flatten().collect();
 
 	// verify that each event was emitted only one time
 	for (event, count) in counted_events.0.clone() {
 		if count > 1 {
-			panic!("Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
-                print_bw_history(&history)
-            );
+			panic!(
+				"Got event {event:?} in total {count} times           events: {printed}              bw_input_history: {}",
+				print_bw_history(&history)
+			);
 		}
 	}
 
@@ -326,11 +410,17 @@ fn run_simulation(blocks: ForkedFilledChain) {
 		.cloned()
 		.collect();
 	let expected_witness_events: BTreeSet<_> = finalized_events.into_iter().cloned().collect();
-	assert_eq!(emitted_witness_events, expected_witness_events,
-            "got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
-            history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
-        );
+	assert_eq!(
+		emitted_witness_events,
+		expected_witness_events,
+		"got witness events: {emitted_witness_events:?}, expected_witness_events: {expected_witness_events:?}, bw_input_history: {}",
+		history.iter().map(|event| format!("{event:?}")).intersperse("\n".to_string()).collect::<String>()
+	);
 }
+
+// ============================================================================
+// Tests with regular block numbers (WITNESS_RANGE = 1, like Ethereum)
+// ============================================================================
 
 /// Generates random chain progressions and simulates running the witnessing electoral systems with
 /// this input.
@@ -349,7 +439,7 @@ pub fn test_all() {
 	});
 	runner
 		.run(&generate_blocks_with_tail(), |blocks| {
-			run_simulation(blocks);
+			run_simulation_generic::<Types>(blocks);
 			Ok(())
 		})
 		.unwrap();
@@ -390,7 +480,7 @@ fn test_delayed_election_result_after_reorg_is_handled() {
 		}));
 	}
 
-	run_simulation(ForkedFilledChain { blocks });
+	run_simulation_generic::<Types>(ForkedFilledChain { blocks });
 }
 
 /// A fork is reorged away and replaced by a shorter chain.
@@ -456,5 +546,30 @@ fn test_reorg_into_shorter_chain() {
 		}));
 	}
 
-	run_simulation(ForkedFilledChain { blocks });
+	run_simulation_generic::<Types>(ForkedFilledChain { blocks });
+}
+
+// ============================================================================
+// Tests with BlockWitnessRange (WITNESS_RANGE = 24, like Arbitrum)
+// ============================================================================
+
+/// Generates random chain progressions and simulates running the witnessing electoral systems with
+/// BlockWitnessRange as the ChainBlockNumber (like Arbitrum with WITNESS_PERIOD = 24).
+#[test]
+pub fn test_all_witness_ranges() {
+	let mut runner = TestRunner::new(Config {
+		source_file: Some(file!()),
+		// Same number of cases as the regular test
+		cases: 256 * 60,
+		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+			"proptest-regressions-full-pipeline-ranged",
+		))),
+		..Default::default()
+	});
+	runner
+		.run(&generate_blocks_with_tail_ranged(), |blocks| {
+			run_simulation_generic::<RangedTypes>(blocks);
+			Ok(())
+		})
+		.unwrap();
 }
