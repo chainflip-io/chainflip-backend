@@ -37,26 +37,16 @@ use crate::{
 };
 use anyhow::ensure;
 use cf_chains::{
-	evm::{Address as EvmAddress, DepositDetails, H256},
+	evm::{DepositDetails, H256},
 	instances::ChainInstanceFor,
 	Chain,
 };
 use cf_primitives::EpochIndex;
-use ethers::{prelude::*, types::Bloom};
+use ethers::{abi::Address as EvmAddress, prelude::*, types::Bloom};
 use futures_core::Future;
-use sp_core::H256;
 
-use crate::witness::{
-	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	evm::vault::VaultEvents,
-};
-
-use std::collections::{BTreeMap, HashMap};
-
-use cf_chains::evm::DepositDetails;
-use ethers::prelude::*;
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Ethereum deposits by checking the balance via our own deployed AddressChecker
@@ -151,7 +141,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										.into_iter()
 										.map(|(to_addr, value, tx_hashes)| {
 											pallet_cf_ingress_egress::DepositWitness {
-												deposit_address: EvmAddress(to_addr.0),
+												deposit_address: H160(to_addr.0),
 												asset: native_asset,
 												amount:
 													value
@@ -357,8 +347,6 @@ mod tests {
 	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
-
-	use super::super::vault::VaultEvents;
 
 	#[test]
 	fn block_empty_lists() {

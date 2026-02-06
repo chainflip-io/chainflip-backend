@@ -23,7 +23,7 @@ use cf_primitives::ChannelId;
 use cf_runtime_utilities::log_or_panic;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::ParamType;
-pub use ethabi::{encode, Address, Hash as TxHash, Token, Uint, Word};
+pub use ethabi::{encode, Address, Hash, Token, Uint, Word};
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
 	traits::{Hash as _, Keccak256},
