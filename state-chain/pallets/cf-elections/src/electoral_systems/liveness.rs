@@ -24,7 +24,7 @@ use crate::{
 	},
 	vote_storage, CorruptStorageError,
 };
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_utilities::success_threshold_from_share_count;
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -71,12 +71,12 @@ impl<
 	// The external chain block number that the engines will get the hash for.
 	type ElectionProperties = ChainBlockNumber;
 
-	// The SC block number that we started the election at.
-	type ElectionState = StateChainBlockNumber;
+	// The SC block number that we started the election at. The epoch for which is valid
+	type ElectionState = (StateChainBlockNumber, EpochIndex);
 	type VoteStorage = vote_storage::bitmap_numerical::BitmapNoHash<ChainBlockHash>;
 	type Consensus = BTreeSet<Self::ValidatorId>;
 	// The current SC block number, and the current chain tracking height.
-	type OnFinalizeContext = (StateChainBlockNumber, ChainBlockNumber);
+	type OnFinalizeContext = (StateChainBlockNumber, ChainBlockNumber, EpochIndex);
 	type OnFinalizeReturn = ();
 }
 
@@ -113,7 +113,7 @@ impl<
 
 	fn on_finalize<ElectoralAccess: ElectoralWriteAccess<ElectoralSystem = Self> + 'static>(
 		election_identifiers: Vec<ElectionIdentifierOf<Self>>,
-		(current_sc_block, current_chain_tracking_number): &Self::OnFinalizeContext,
+		(current_sc_block, current_chain_tracking_number, current_epoch_index): &Self::OnFinalizeContext,
 	) -> Result<Self::OnFinalizeReturn, CorruptStorageError> {
 		fn block_number_to_check<ChainBlockNumber: Into<u64> + From<u64>>(
 			current_sc_block: u32,
@@ -137,17 +137,9 @@ impl<
 			.map_err(|_| CorruptStorageError::new())?
 		{
 			let election_access = ElectoralAccess::election_mut(election_identifier);
+			let (state_block_number, state_epoch_index) = election_access.state()?;
 
-			// Is the block the election started at + the duration we want the check to stay open
-			// for less than or equal to the current SC block?
-			if election_access.state()?.saturating_add(election_access.settings()?) <=
-				*current_sc_block
-			{
-				if let Some(bad_validators) = election_access.check_consensus()?.has_consensus() {
-					if !bad_validators.is_empty() {
-						Hook::on_check_complete(bad_validators);
-					}
-				}
+			let delete_and_start_new_election = |election_access: <ElectoralAccess as ElectoralWriteAccess>::ElectionWriteAccess| -> Result<(), CorruptStorageError> {
 				election_access.delete();
 				ElectoralAccess::new_election(
 					(),
@@ -155,14 +147,32 @@ impl<
 						(*current_sc_block).into(),
 						*current_chain_tracking_number,
 					),
-					*current_sc_block,
+					(*current_sc_block, *current_epoch_index),
 				)?;
+				Ok(())
+			};
+
+			// We want to delete the ongoing election if the epoch changes, this is to avoid
+			// resolving it and punish new joiners
+			if state_epoch_index != *current_epoch_index {
+				return delete_and_start_new_election(election_access)
+			}
+
+			// Is the block the election started at + the duration we want the check to stay open
+			// for less than or equal to the current SC block?
+			if state_block_number.saturating_add(election_access.settings()?) <= *current_sc_block {
+				if let Some(bad_validators) = election_access.check_consensus()?.has_consensus() {
+					if !bad_validators.is_empty() {
+						Hook::on_check_complete(bad_validators);
+					}
+				}
+				return delete_and_start_new_election(election_access)
 			}
 		} else {
 			ElectoralAccess::new_election(
 				(),
 				block_number_to_check((*current_sc_block).into(), *current_chain_tracking_number),
-				*current_sc_block,
+				(*current_sc_block, *current_epoch_index),
 			)?;
 		}
 
