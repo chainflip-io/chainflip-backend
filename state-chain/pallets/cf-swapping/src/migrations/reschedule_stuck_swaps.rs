@@ -33,7 +33,6 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for RescheduleStuckSwaps<T> {
 				from,
 				to,
 				input_amount,
-				fees: Default::default(),
 				refund_params: None,
 				execute_at,
 			}
