@@ -6,7 +6,7 @@ pub struct Migration<T>(PhantomData<T>);
 
 // This migration sets default oracle price slippage protection all pools that support oracle price.
 const STABLE_COIN_SLIPPAGE: BasisPoints = 25;
-const NON_STABLE_SLIPPAGE: BasisPoints = 55;
+const NON_STABLE_SLIPPAGE: BasisPoints = 50;
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
