@@ -276,10 +276,12 @@ derive_common_traits! {
 		RedemptionExecuted {
 			account_id: AccountId,
 			redeemed_amount: FlipBalance<Runtime>,
+			tx_hash: EthTransactionHash,
 		},
 		RedemptionExpired {
 			account_id: AccountId,
 			block_number: u64,
+			tx_hash: EthTransactionHash,
 		},
 	}
 }
@@ -300,10 +302,11 @@ hook_impls! {
 							amount,
 							FundingSource::EthTransaction { tx_hash, funder },
 						),
-					StateChainGatewayEvent::RedemptionExecuted { account_id, redeemed_amount } =>
+					StateChainGatewayEvent::RedemptionExecuted { account_id, redeemed_amount, tx_hash } =>
 						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redeemed(
 							account_id.clone(),
 							redeemed_amount,
+							tx_hash
 						) {
 							log::error!(
 									"Failed to execute Ethereum redemption: AccountId: {:?}, Amount: {:?}, Error: {:?}",
@@ -312,9 +315,10 @@ hook_impls! {
 									err
 								);
 						},
-					StateChainGatewayEvent::RedemptionExpired { account_id, block_number: _ } =>
+					StateChainGatewayEvent::RedemptionExpired { account_id, block_number: _, tx_hash } =>
 						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
 							account_id.clone(),
+							tx_hash
 						) {
 							log::error!(
 									"Failed to execute Ethereum redemption expiry: AccountId: {:?}, Error: {:?}",
