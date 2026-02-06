@@ -23,5 +23,5 @@ mod vote_storage_migration;
 pub type PalletMigration<T, I> = (
 	// NOTE: Keep this migration. It clears out old votes that may be invalid after the upgrade.
 	vote_storage_migration::VoteStorageMigration<T, I>,
-	PlaceholderMigration<7, Pallet<T, I>>,
+	PlaceholderMigration<8, Pallet<T, I>>,
 );

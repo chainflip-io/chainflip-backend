@@ -41,7 +41,7 @@ use crate::{
 			},
 			compute_budget::ComputeBudgetInstruction,
 			consts::{
-				BPF_LOADER_UPGRADEABLE_ID, MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL,
+				BPF_LOADER_UPGRADEABLE_ID, MAX_TRANSACTION_LENGTH, SOL_USD_DECIMAL,
 				SYSTEM_PROGRAM_ID, SYS_VAR_CLOCK, SYS_VAR_INSTRUCTIONS, SYS_VAR_RENT,
 				TOKEN_PROGRAM_ID,
 			},
@@ -158,10 +158,22 @@ impl SolanaTransactionBuilder {
 
 				Ok((instruction, compute_units))
 			},
-			SolAsset::SolUsdc => {
+			SolAsset::SolUsdc | SolAsset::SolUsdt => {
+				let (token_mint_pubkey, token_vault_ata) = match param.asset {
+					SolAsset::SolUsdc => (
+						sol_api_environment.usdc_token_mint_pubkey,
+						sol_api_environment.usdc_token_vault_ata,
+					),
+					SolAsset::SolUsdt => (
+						sol_api_environment.usdt_token_mint_pubkey,
+						sol_api_environment.usdt_token_vault_ata,
+					),
+					_ => unreachable!("outer match restricts this arm to SolUsdc/SolUsdt"),
+				};
+
 				let ata = derive_associated_token_account(
 					param.deposit_fetch_id.address,
-					sol_api_environment.usdc_token_mint_pubkey,
+					token_mint_pubkey,
 				)
 				.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
 
@@ -176,13 +188,13 @@ impl SolanaTransactionBuilder {
 					.fetch_tokens(
 						param.deposit_fetch_id.channel_id.to_le_bytes().to_vec(),
 						param.deposit_fetch_id.bump,
-						SOL_USDC_DECIMAL,
+						SOL_USD_DECIMAL,
 						sol_api_environment.vault_program_data_account,
 						agg_key,
 						param.deposit_fetch_id.address,
 						ata.address,
-						sol_api_environment.usdc_token_vault_ata,
-						sol_api_environment.usdc_token_mint_pubkey,
+						token_vault_ata,
+						token_mint_pubkey,
 						token_program_id(),
 						fetch_pda_and_bump.address,
 						system_program_id(),
@@ -295,27 +307,26 @@ impl SolanaTransactionBuilder {
 
 	/// Create an instruction to `transfer` token.
 	pub fn transfer_token(
-		ata: SolAddress,
 		amount: SolAmount,
-		address: SolAddress,
-		vault_program: SolAddress,
-		vault_program_data_account: SolAddress,
-		token_vault_pda_account: SolAddress,
-		token_vault_ata: SolAddress,
-		token_mint_pubkey: SolAddress,
+		to_address: SolAddress,
 		agg_key: SolAddress,
 		durable_nonce: DurableNonceAndAccount,
 		compute_price: SolAmount,
+		token_vault_ata: SolAddress,
+		token_mint_pubkey: SolAddress,
 		token_decimals: u8,
-		address_lookup_tables: Vec<SolAddressLookupTableAccount>,
+		sol_api_environment: &SolApiEnvironment,
 	) -> Result<SolVersionedTransaction, SolanaTransactionBuildingError> {
+		let to_ata = derive_associated_token_account(to_address, token_mint_pubkey)
+			.map_err(SolanaTransactionBuildingError::FailedToDeriveAddress)?;
+
 		let instructions = Self::create_transfer_token_instructions(
-			ata,
+			to_ata.address,
 			amount,
-			address,
-			vault_program,
-			vault_program_data_account,
-			token_vault_pda_account,
+			to_address,
+			sol_api_environment.vault_program,
+			sol_api_environment.vault_program_data_account,
+			sol_api_environment.token_vault_pda_account,
 			token_vault_ata,
 			token_mint_pubkey,
 			agg_key,
@@ -328,7 +339,7 @@ impl SolanaTransactionBuilder {
 			agg_key.into(),
 			compute_price,
 			compute_limit_with_buffer(BASE_COMPUTE_UNITS_PER_TX + COMPUTE_UNITS_PER_TRANSFER_TOKEN),
-			address_lookup_tables,
+			vec![sol_api_environment.address_lookup_table_account.clone()],
 		)
 	}
 
@@ -772,7 +783,7 @@ pub mod test {
 	use crate::{
 		sol::{
 			sol_tx_core::{
-				address_derivation::derive_deposit_address, consts::SOL_USDC_DECIMAL,
+				address_derivation::derive_deposit_address, consts::SOL_USD_DECIMAL,
 				sol_test_values::*, PdaAndBump,
 			},
 			SolanaDepositFetchId, MAX_BATCH_SIZE_OF_VAULT_SWAP_ACCOUNT_CLOSURES,
@@ -848,7 +859,7 @@ pub mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_fetch_tokens` test
-		let expected_serialized_tx = hex_literal::hex!("013f38d2f1a1669aabbc375de98a7030310f36e4482732ad92adc2fff31c1e63cf5713c92dd41f56b11fe2edf0679f3e095d88a5bb96055c1c84d5bfe0779e3606800100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19242ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910ae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fe91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000405030107000404000000060009038096980000000000060005024f0a01000b090c000a02040908030516494710642cb0c646080000000000000000000000ff0600").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("01457e11aafedb71af4453f26eccca8f58a7aacaf1970d89624ef0109c24bfd0c53065f0339584da31710b17dbc2cc5db2a7c63c40e8cafba6ce6a29e4694d8409800100080df79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d19242ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d91079c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036ae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21f00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293ca1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000405030107000404000000060009038096980000000000060005024f0a01000b090c000a02030908040516494710642cb0c646080000000000000000000000ff0600").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -869,7 +880,7 @@ pub mod test {
 		.unwrap();
 
 		// Serialized tx built in `create_batch_fetch` test
-		let expected_serialized_tx = hex_literal::hex!("01815a9e25f301f6877feb533c18b7ecaec40b2164ccffada07a0a228a7d67beb339b77a0146c5c44f18030ddadcce4ab6c18e9033d1b89ac7dcd0814d9ba7d6078001000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921ad0968d57ee79348476716f9b2cd44ec4284b8f52c36648d560949e41589a5540de1c0451cccb6edd1fda9b4a48c282b279350b55a7a9716800cc0132b6f0b042ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d910a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fb4baefcd4965beb1c71311a2ffe76419d4b8f8d35fbc4cf514b1bd02da2df2e3e91372b3d301c202a633da0a92365a736e462131aecfad1fac47322cf8863ada00000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090380969800000000000a000502e7bb02000f0911000e04080d0c060916494710642cb0c646080000000000000000000000ff060f0911001002080d0c030916494710642cb0c646080000000100000000000000ff060f051100050709158e24658f6c59298c080000000200000000000000ff00").to_vec();
+		let expected_serialized_tx = hex_literal::hex!("017ce2f57249f5a6c59c301c42bdf7ec5511331df41c9c0e51358655a3041e4267e599aef4957ea2155834ddc60c5f62cf483cef06fd2e49e3569f8fd7e97cde048001000912f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1921ad0968d57ee79348476716f9b2cd44ec4284b8f52c36648d560949e41589a5540de1c0451cccb6edd1fda9b4a48c282b279350b55a7a9716800cc0132b6f0b042ff6863b52c3f8faf95739e6541bda5d0ac593f00c6c07d9ab37096bf26d91079c03bceb9ddea819e956b2b332e87fbbf49fc8968df78488e88cfaa366f3036a140fd3d05766f0087d57bf99df05731e894392ffcc8e8d7e960ba73c09824aaae85f2fb6289c70bfe37df150dddb17dd84f403fd0b1aa1bfee85795159de21fb4baefcd4965beb1c71311a2ffe76419d4b8f8d35fbc4cf514b1bd02da2df2e300000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a90fb9ba52b1f09445f1e3a7508d59f0797923acf744fbe2da303fb06da859ee8746cd507258c10454d484e64ba59d3e7570658001c5f854b6b3ebb57be90e7a7072b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8d9871ed5fb2ee05765af23b7cabcc0d6b08ed370bb9f616a0d4dea40a25f870a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bc27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060903010b0004040000000a00090380969800000000000a000502e7bb02000f0911000e04050d0c070916494710642cb0c646080000000000000000000000ff060f0911001002050d0c030916494710642cb0c646080000000100000000000000ff060f051100060809158e24658f6c59298c080000000200000000000000ff00").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -893,34 +904,49 @@ pub mod test {
 
 	#[test]
 	fn can_create_transfer_usdc_token_transaction() {
-		let env = api_env();
+		let mut env = api_env();
+		env.address_lookup_table_account = chainflip_alt();
 		let to_pubkey = TRANSFER_TO_ACCOUNT;
-		let to_pubkey_ata =
-			crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
-				to_pubkey,
-				env.usdc_token_mint_pubkey,
-			)
-			.unwrap();
 
 		let transaction = SolanaTransactionBuilder::transfer_token(
-			to_pubkey_ata.address,
 			TRANSFER_AMOUNT,
 			to_pubkey,
-			env.vault_program,
-			env.vault_program_data_account,
-			env.token_vault_pda_account,
-			env.usdc_token_vault_ata,
-			env.usdc_token_mint_pubkey,
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
-			SOL_USDC_DECIMAL,
-			vec![chainflip_alt()],
+			env.usdc_token_vault_ata,
+			env.usdc_token_mint_pubkey,
+			SOL_USD_DECIMAL,
+			&env,
 		)
 		.unwrap();
 
 		// Serialized tx built in `create_transfer_token` test
 		let expected_serialized_tx = hex_literal::hex!("01abc6484a0ab9ccaddff295edfae87effabae1313748b63c517fb9b5143ef88d703f6c02deecb0461eeabec0514bbca5061f950d50a2a564555e0dd3e31eb7b068001000508f79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec461600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000031e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000503030109000404000000040009038096980000000000040005029b27010007060002050b030a010106070c000d08020b0a1136b4eeaf4a557ebc00ca9a3b0000000006013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10105050d09030204").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_transfer_usdt_token_transaction() {
+		let env = api_env();
+		let to_pubkey = TRANSFER_TO_ACCOUNT;
+
+		let transaction = SolanaTransactionBuilder::transfer_token(
+			TRANSFER_AMOUNT,
+			to_pubkey,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+			env.usdt_token_vault_ata,
+			env.usdt_token_mint_pubkey,
+			SOL_USD_DECIMAL,
+			&env,
+		)
+		.unwrap();
+
+		// Serialized tx built in `create_transfer_token` test
+		let expected_serialized_tx = hex_literal::hex!("01713bb61813a8bb1b23bbf0d5f646449b01ce243361e60eec9ee1381d04d98b41cb284723baaf57942587b2e8657004cd01c03dc758e77467c221553adc02d90b8001000a0ef79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d192d773abc32ab6cfab6e0ee9c42f85eb56090ec1e10d8b0d9eb89a4ae6b3720694dad0fa06b8d244bffdd03c040a2c6cc35b4cb77eada8522113f82adcae8b29b600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000006a7d517192c568ee08a845f73d29788cf035c3145b21ab344d8062ea940000006ddf6e1d765a193d9cbe146ceeb79ac1cb485ed5f5b37913a8cf5857eff00a931e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd46b198d3efdbc9673d29f3a2bcb3e70e699164df8cad366563693aa7ba0e7d28a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a1e031c8bc9bec3b610cf7b36eb3bf3aa40237c9e5be2c7893878578439eb00bab1d2a644046552e73f4d05b5a6ef53848973a9ee9febba42ddefb034b5f5130c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e489000504030106000404000000050009038096980000000000050005029b2701000b0600020809040701010a070c000d030209071136b4eeaf4a557ebc00ca9a3b000000000600").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -1060,7 +1086,7 @@ pub mod test {
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
-			SOL_USDC_DECIMAL,
+			SOL_USD_DECIMAL,
 			TEST_COMPUTE_LIMIT,
 			vec![chainflip_alt()],
 		)
@@ -1068,6 +1094,45 @@ pub mod test {
 
 		// Serialized tx built in `create_ccm_token_transfer` test
 		let expected_serialized_tx = hex_literal::hex!("01bcc5eb1da05587d0316622460d3076fa74a84f30bd1920ebcdb0105c1ebf6b27f22dcc82b0b5e702caf7be0d7c1c6150140b38573229d2f1d7ad16c11fef4c0d800100060af79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1925ec7baaea7200eb2a66ccd361ee73bc87a7e5222ecedcbc946e97afb59ec46167417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed4800000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000031e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd472b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060403010c00040400000005000903809698000000000005000502e093040008060002060e040d010107070f00100a020e0d1136b4eeaf4a557ebc00ca9a3b000000000607080f0002030d0e0b09346cb8a27b9fdeaa230100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a10105060a0d09030204").to_vec();
+
+		test_constructed_transaction(transaction, expected_serialized_tx);
+	}
+
+	#[test]
+	fn can_create_ccm_usdt_token_transaction() {
+		let env = api_env();
+		let ccm_param = ccm_parameter_v0();
+		let to = TRANSFER_TO_ACCOUNT;
+		let to_ata = crate::sol::sol_tx_core::address_derivation::derive_associated_token_account(
+			to,
+			env.usdt_token_mint_pubkey,
+		)
+		.unwrap();
+
+		let transaction = SolanaTransactionBuilder::ccm_transfer_token(
+			to_ata.address,
+			TRANSFER_AMOUNT,
+			to,
+			ccm_param.source_chain,
+			ccm_param.source_address,
+			ccm_param.channel_metadata.message.to_vec(),
+			ccm_accounts(),
+			env.vault_program,
+			env.vault_program_data_account,
+			env.token_vault_pda_account,
+			env.usdt_token_vault_ata,
+			env.usdt_token_mint_pubkey,
+			agg_key(),
+			durable_nonce(),
+			compute_price(),
+			SOL_USD_DECIMAL,
+			TEST_COMPUTE_LIMIT,
+			vec![chainflip_alt()],
+		)
+		.unwrap();
+
+		// Serialized tx built in `create_ccm_token_transfer` test
+		let expected_serialized_tx = hex_literal::hex!("01db23da1c3387bdbc1b3013590ab08e517be1db321bef35bf31e038a30dd04b5ccac177f83f603dc53aed2bbb8df579ce72a847c2106b8c73e3ed5fb3588fe70d800100070cf79d5e026f12edc6443a534b2cdd5072233989b415d7596573e743f3e5b386fb17eb2b10d3377bda2bc7bea65bec6b8372f4fc3463ec2cd6f9fde4b2c633d1927417da8b99d7748127a76b03d61fee69c80dfef73ad2d5503737beedc5a9ed48d773abc32ab6cfab6e0ee9c42f85eb56090ec1e10d8b0d9eb89a4ae6b3720694dad0fa06b8d244bffdd03c040a2c6cc35b4cb77eada8522113f82adcae8b29b600000000000000000000000000000000000000000000000000000000000000000306466fe5211732ffecadba72c39be7bc8ce5bbc5f7126b2c439b3a4000000031e9528aae784fecbbd0bee129d9539c57be0e90061af6b6f4a5e274654e5bd46b198d3efdbc9673d29f3a2bcb3e70e699164df8cad366563693aa7ba0e7d28a72b5d2051d300b10b74314b7e25ace9998ca66eb2c7fbc10ef130dd67028293c8c97258f4e2489f1bb3d1029148e0d830b5a1399daff1084048e7bd8dbe9f859a73bdf31e341218a693b8772c43ecfcecd4cf35fada09a87ea0f860d028168e5c27e9074fac5e8d36cf04f94a0606fdd8ddbb420e99a489c7915ce5699e48900060503010d00040400000006000903809698000000000006000502e09304000a0600030708050e010109070f00100403080e1136b4eeaf4a557ebc00ca9a3b000000000609080f0003020e080c0b346cb8a27b9fdeaa230100000014000000ffffffffffffffffffffffffffffffffffffffff040000007c1d0f0700ca9a3b00000000013001afd71da9456a977233960b08eba77d2e3690b8c7259637c8fb8f82cf58a100050a0d090204").to_vec();
 
 		test_constructed_transaction(transaction, expected_serialized_tx);
 	}
@@ -1135,7 +1200,7 @@ pub mod test {
 			agg_key(),
 			durable_nonce(),
 			compute_price(),
-			SOL_USDC_DECIMAL,
+			SOL_USD_DECIMAL,
 			TEST_COMPUTE_LIMIT,
 			vec![chainflip_alt()],
 		)

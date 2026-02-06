@@ -76,9 +76,9 @@ export const accountId = z
   ])
   .transform((value) => ss58.encode({ data: value, ss58Format: 2112 }) as `cF${string}`);
 
-export const cfPrimitivesChainsAssetsEthAsset = simpleEnum(['Eth', 'Flip', 'Usdc', 'Usdt']);
+export const cfPrimitivesChainsAssetsEthAsset = simpleEnum(['Eth', 'Flip', 'Usdc', 'Usdt', 'Wbtc']);
 
-export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc']);
+export const cfPrimitivesChainsAssetsArbAsset = simpleEnum(['ArbEth', 'ArbUsdc', 'ArbUsdt']);
 
 export const palletCfEmissionsPalletSafeMode = z.object({ emissionsSyncEnabled: z.boolean() });
 
@@ -128,6 +128,9 @@ export const cfPrimitivesChainsAssetsAnyAsset = simpleEnum([
   'HubDot',
   'HubUsdt',
   'HubUsdc',
+  'Wbtc',
+  'ArbUsdt',
+  'SolUsdt',
 ]);
 
 export const cfTraitsSafeModeSafeModeSet = z.discriminatedUnion('__kind', [
@@ -1458,7 +1461,7 @@ export const cfChainsSolSolanaTransactionData = z.object({
   skipPreflight: z.boolean(),
 });
 
-export const cfPrimitivesChainsAssetsSolAsset = simpleEnum(['Sol', 'SolUsdc']);
+export const cfPrimitivesChainsAssetsSolAsset = simpleEnum(['Sol', 'SolUsdc', 'SolUsdt']);
 
 export const cfChainsSolVaultSwapOrDepositChannelId = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Channel'), value: hexString }),

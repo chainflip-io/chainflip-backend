@@ -112,6 +112,7 @@ pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
 	eth_usdt_address: [u8; 20],
+	eth_wbtc_address: [u8; 20],
 	state_chain_gateway_address: [u8; 20],
 	eth_key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
@@ -123,6 +124,7 @@ pub struct StateChainEnvironment {
 	arb_key_manager_address: [u8; 20],
 	arb_vault_address: [u8; 20],
 	arb_usdc_token_address: [u8; 20],
+	arb_usdt_token_address: [u8; 20],
 	arb_address_checker_address: [u8; 20],
 	arbitrum_chain_id: u64,
 	ethereum_deployment_block: u64,
@@ -142,6 +144,8 @@ pub struct StateChainEnvironment {
 	sol_usdc_token_mint_pubkey: SolAddress,
 	sol_token_vault_pda_account: SolAddress,
 	sol_usdc_token_vault_ata: SolAddress,
+	sol_usdt_token_mint_pubkey: SolAddress,
+	sol_usdt_token_vault_ata: SolAddress,
 	// We injected 10 nonce accounts at genesis and 40 more on an upgrade
 	sol_durable_nonces_and_accounts: [DurableNonceAndAccount; 50],
 	sol_swap_endpoint_program: SolAddress,
@@ -172,12 +176,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_hex_address, ETH_USDC_ADDRESS, eth_usdc_address);
 	from_env_var!(clean_hex_address, ETH_USDT_ADDRESS, eth_usdt_address);
+	from_env_var!(clean_hex_address, ETH_WBTC_ADDRESS, eth_wbtc_address);
 	from_env_var!(clean_hex_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_hex_address, KEY_MANAGER_ADDRESS, eth_key_manager_address);
 	from_env_var!(clean_hex_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_hex_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
 	from_env_var!(clean_hex_address, ARB_VAULT_ADDRESS, arb_vault_address);
 	from_env_var!(clean_hex_address, ARB_USDC_TOKEN_ADDRESS, arb_usdc_token_address);
+	from_env_var!(clean_hex_address, ARB_USDT_TOKEN_ADDRESS, arb_usdt_token_address);
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
@@ -196,6 +202,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, SOL_TOKEN_VAULT_PDA_ACCOUNT, sol_token_vault_pda_account);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_MINT_PUBKEY, sol_usdc_token_mint_pubkey);
 	from_env_var!(FromStr::from_str, SOL_USDC_TOKEN_VAULT_ATA, sol_usdc_token_vault_ata);
+	from_env_var!(FromStr::from_str, SOL_USDT_TOKEN_MINT_PUBKEY, sol_usdt_token_mint_pubkey);
+	from_env_var!(FromStr::from_str, SOL_USDT_TOKEN_VAULT_ATA, sol_usdt_token_vault_ata);
 	from_env_var!(FromStr::from_str, SOL_SWAP_ENDPOINT_PROGRAM, sol_swap_endpoint_program);
 	from_env_var!(
 		FromStr::from_str,
@@ -272,12 +280,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
 		arb_usdc_token_address,
+		arb_usdt_token_address,
 		eth_address_checker_address,
 		eth_sc_utils_address,
 		arb_address_checker_address,
@@ -306,6 +316,8 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		sol_usdc_token_mint_pubkey,
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
+		sol_usdt_token_mint_pubkey,
+		sol_usdt_token_vault_ata,
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
@@ -355,12 +367,14 @@ pub fn inner_cf_development_config(
 		flip_token_address,
 		eth_usdc_address,
 		eth_usdt_address,
+		eth_wbtc_address,
 		state_chain_gateway_address,
 		eth_key_manager_address,
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
 		arb_usdc_token_address,
+		arb_usdt_token_address,
 		eth_address_checker_address,
 		eth_sc_utils_address,
 		arb_address_checker_address,
@@ -383,6 +397,8 @@ pub fn inner_cf_development_config(
 		sol_usdc_token_mint_pubkey,
 		sol_token_vault_pda_account,
 		sol_usdc_token_vault_ata,
+		sol_usdt_token_mint_pubkey,
+		sol_usdt_token_vault_ata,
 		sol_durable_nonces_and_accounts,
 		sol_swap_endpoint_program,
 		sol_swap_endpoint_program_data_account,
@@ -407,6 +423,7 @@ pub fn inner_cf_development_config(
 				flip_token_address: flip_token_address.into(),
 				eth_usdc_address: eth_usdc_address.into(),
 				eth_usdt_address: eth_usdt_address.into(),
+				eth_wbtc_address: eth_wbtc_address.into(),
 				state_chain_gateway_address: state_chain_gateway_address.into(),
 				eth_key_manager_address: eth_key_manager_address.into(),
 				eth_vault_address: eth_vault_address.into(),
@@ -416,6 +433,7 @@ pub fn inner_cf_development_config(
 				arb_vault_address: arb_vault_address.into(),
 				arb_address_checker_address: arb_address_checker_address.into(),
 				arb_usdc_address: arb_usdc_token_address.into(),
+				arb_usdt_address: arb_usdt_token_address.into(),
 				ethereum_chain_id,
 				arbitrum_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
@@ -429,6 +447,8 @@ pub fn inner_cf_development_config(
 					usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 					token_vault_pda_account: sol_token_vault_pda_account,
 					usdc_token_vault_ata: sol_usdc_token_vault_ata,
+					usdt_token_mint_pubkey: sol_usdt_token_mint_pubkey,
+					usdt_token_vault_ata: sol_usdt_token_vault_ata,
 					swap_endpoint_program: sol_swap_endpoint_program,
 					swap_endpoint_program_data_account: sol_swap_endpoint_program_data_account,
 					alt_manager_program: sol_alt_manager_program,
@@ -481,6 +501,7 @@ pub fn inner_cf_development_config(
 				option_initial_state: Some(solana_elections::initial_state(
 					sol_vault_program,
 					sol_usdc_token_mint_pubkey,
+					sol_usdt_token_mint_pubkey,
 					sol_swap_endpoint_program_data_account,
 					SHARED_DATA_REFERENCE_LIFETIME,
 				)),
@@ -522,12 +543,14 @@ macro_rules! network_spec {
 					flip_token_address,
 					eth_usdc_address,
 					eth_usdt_address,
+					eth_wbtc_address,
 					state_chain_gateway_address,
 					eth_key_manager_address,
 					eth_vault_address,
 					arb_key_manager_address,
 					arb_vault_address,
 					arb_usdc_token_address,
+					arb_usdt_token_address,
 					eth_address_checker_address,
 					eth_sc_utils_address,
 					arb_address_checker_address,
@@ -550,6 +573,8 @@ macro_rules! network_spec {
 					sol_usdc_token_mint_pubkey,
 					sol_token_vault_pda_account,
 					sol_usdc_token_vault_ata,
+					sol_usdt_token_mint_pubkey,
+					sol_usdt_token_vault_ata,
 					sol_durable_nonces_and_accounts,
 					sol_swap_endpoint_program,
 					sol_swap_endpoint_program_data_account,
@@ -604,6 +629,7 @@ macro_rules! network_spec {
 							flip_token_address: flip_token_address.into(),
 							eth_usdc_address: eth_usdc_address.into(),
 							eth_usdt_address: eth_usdt_address.into(),
+							eth_wbtc_address: eth_wbtc_address.into(),
 							state_chain_gateway_address: state_chain_gateway_address.into(),
 							eth_key_manager_address: eth_key_manager_address.into(),
 							eth_vault_address: eth_vault_address.into(),
@@ -613,6 +639,7 @@ macro_rules! network_spec {
 							arb_vault_address: arb_vault_address.into(),
 							arb_address_checker_address: arb_address_checker_address.into(),
 							arb_usdc_address: arb_usdc_token_address.into(),
+							arb_usdt_address: arb_usdt_token_address.into(),
 							ethereum_chain_id,
 							arbitrum_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
@@ -628,6 +655,8 @@ macro_rules! network_spec {
 								usdc_token_mint_pubkey: sol_usdc_token_mint_pubkey,
 								token_vault_pda_account: sol_token_vault_pda_account,
 								usdc_token_vault_ata: sol_usdc_token_vault_ata,
+								usdt_token_mint_pubkey: sol_usdt_token_mint_pubkey,
+								usdt_token_vault_ata: sol_usdt_token_vault_ata,
 								swap_endpoint_program: sol_swap_endpoint_program,
 								swap_endpoint_program_data_account:
 									sol_swap_endpoint_program_data_account,
@@ -679,6 +708,7 @@ macro_rules! network_spec {
 							option_initial_state: Some(solana_elections::initial_state(
 								sol_vault_program,
 								sol_usdc_token_mint_pubkey,
+								sol_usdt_token_mint_pubkey,
 								sol_swap_endpoint_program_data_account,
 								SHARED_DATA_REFERENCE_LIFETIME,
 							)),

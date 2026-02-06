@@ -289,6 +289,8 @@ decl_runtime_apis!(
 			broker: AccountId32,
 			affiliate: Option<AccountId32>,
 		) -> Vec<(AccountId32, AffiliateDetails)>;
+		#[changed_in(16)]
+		fn cf_vault_addresses() -> before_version_16::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(

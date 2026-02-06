@@ -125,6 +125,7 @@ cf-utilities = { workspace = true, default-features = true, features = [
 	"test-utils",
 ] }
 serde_path_to_error = { workspace = true }
+engine-sc-client = { workspace = true, features = ["client-mocks"] }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

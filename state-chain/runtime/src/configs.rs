@@ -822,6 +822,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = pallet_cf_ingress_egress::Pallet<Runtime, EthereumInstance>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -847,6 +848,7 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotCryptoInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = ();
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -872,6 +874,7 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = ();
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -897,6 +900,7 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = pallet_cf_ingress_egress::Pallet<Runtime, ArbitrumInstance>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -922,6 +926,7 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, SolanaInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = ();
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -947,6 +952,7 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotCryptoInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = ();
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;

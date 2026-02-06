@@ -1014,6 +1014,20 @@ pub trait OnBroadcastReady<C: Chain> {
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
 }
 
+/// Hook called when a broadcast tx has been successfully witnessed on the external chain.
+/// This allows pallets to react to broadcast success with the external chain block number.
+pub trait OnBroadcastSuccess<C: Chain> {
+	/// Called when a broadcast is successfully witnessed.
+	/// - `witnessed_at_block`: The external chain block number where the broadcast was witnessed
+	fn with_witness_block(witness_block: C::ChainBlockNumber, _f: impl FnOnce());
+}
+
+impl<C: Chain> OnBroadcastSuccess<C> for () {
+	fn with_witness_block(_witness_block: <C as Chain>::ChainBlockNumber, _f: impl FnOnce()) {
+		_f()
+	}
+}
+
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }

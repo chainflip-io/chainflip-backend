@@ -246,7 +246,7 @@ services:
       start_period: 10s
 
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-c69fce4e982bcf127c3a6b44122236a5d897d093}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-7f2557281a3a1b1dd5410a4e3df980fea71adc93}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -317,12 +317,14 @@ services:
       - CFDM_ETH_FLIP_ADDRESS=0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26
       - CFDM_ETH_USDC_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
       - CFDM_ETH_USDT_ADDRESS=0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82
+      - CFDM_ETH_WBTC_ADDRESS=0x67d269191c92Caf3cD7723F116c85e6E9bf55933
 
       - CFDM_ARB_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_ARB_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
       - CFDM_ARB_RPC_WS_ENDPOINT=ws://sequencer:8548
       - CFDM_ARB_RPC_HTTP_ENDPOINT=http://sequencer:8547
-      - CFDM_ARB_USDC_ADDRESS=0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9
+      - CFDM_ARB_USDC_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+      - CFDM_ARB_USDT_ADDRESS=0x9A676e781A523b5d0C0e43731313A708CB607508
 
       - CFDM_SOL_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_SOL_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300

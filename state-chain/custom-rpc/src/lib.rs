@@ -1634,7 +1634,6 @@ where
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
-		cf_vault_addresses() -> VaultAddresses,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
 		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_lending_config() -> RpcLendingConfig,
@@ -2849,6 +2848,19 @@ where
 			.into_group_map())
 	}
 
+	fn cf_vault_addresses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<VaultAddresses> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 16 {
+				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else {
+				api.cf_vault_addresses(hash)
+			}
+		})
+	}
+
 	fn cf_controlled_vault_addresses(
 		&self,
 		chain: Option<cf_primitives::ForeignChain>,
@@ -2864,9 +2876,11 @@ where
 			sol_vault_program: _,
 			sol_swap_endpoint_program_data_account: _,
 			usdc_token_mint_pubkey: _,
+			usdt_token_mint_pubkey: _,
 			bitcoin_vault,
 			solana_sol_vault,
 			solana_usdc_token_vault_ata,
+			solana_usdt_token_vault_ata,
 			solana_vault_swap_account,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
@@ -2917,6 +2931,16 @@ where
 				address: AddressString::from_encoded_address(solana_usdc_token_vault_ata),
 				explanation: none_if_compact(
 					"Holds USDC on Solana. Directly receives user funds for USDC vault swaps."
+						.into(),
+				),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			});
+			solana_addresses.push(AddressAndExplanation {
+				name: "solana_usdt_vault".into(),
+				address: AddressString::from_encoded_address(solana_usdt_token_vault_ata),
+				explanation: none_if_compact(
+					"Holds USDT on Solana. Directly receives user funds for USDT vault swaps."
 						.into(),
 				),
 				rotation_policy: rotates_never.clone(),

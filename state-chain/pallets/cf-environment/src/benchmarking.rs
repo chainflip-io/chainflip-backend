@@ -224,6 +224,8 @@ mod benchmarks {
 			token_vault_pda_account: SolAddress(Default::default()),
 			usdc_token_mint_pubkey: SolAddress(Default::default()),
 			usdc_token_vault_ata: SolAddress(Default::default()),
+			usdt_token_mint_pubkey: SolAddress(Default::default()),
+			usdt_token_vault_ata: SolAddress(Default::default()),
 			swap_endpoint_program: SolAddress(Default::default()),
 			swap_endpoint_program_data_account: SolAddress(Default::default()),
 			alt_manager_program: SolAddress(Default::default()),

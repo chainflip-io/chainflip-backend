@@ -123,7 +123,7 @@ impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumKeyManagerEvent>)>) {
-		for (_, event) in events {
+		for (block_number, event) in events {
 			match event {
 				EthEvent::Witness(call) => {
 					match call {
@@ -150,6 +150,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 									tx_metadata,
 									transaction_ref,
 								},
+								block_number,
 							) {
 								log::error!(
 									"Failed to execute Ethereum egress success: TxOutId: {:?}, Error: {:?}",

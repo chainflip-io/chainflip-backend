@@ -1,4 +1,4 @@
-pnpm-lock.yaml
 .idea
 tmp
 /generated/prisma
+node_modules

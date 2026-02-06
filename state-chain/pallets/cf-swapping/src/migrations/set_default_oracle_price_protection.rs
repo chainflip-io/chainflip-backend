@@ -22,10 +22,16 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		};
 
 		Asset::all().for_each(|asset| match asset {
-			Asset::Usdt | Asset::ArbUsdc | Asset::HubUsdc | Asset::HubUsdt | Asset::SolUsdc => {
+			Asset::Usdt |
+			Asset::ArbUsdc |
+			Asset::ArbUsdt |
+			Asset::HubUsdc |
+			Asset::HubUsdt |
+			Asset::SolUsdc |
+			Asset::SolUsdt => {
 				set_default_protection(asset, STABLE_COIN_SLIPPAGE);
 			},
-			Asset::ArbEth | Asset::Eth | Asset::Btc | Asset::Sol => {
+			Asset::ArbEth | Asset::Eth | Asset::Btc | Asset::Sol | Asset::Wbtc => {
 				set_default_protection(asset, NON_STABLE_SLIPPAGE);
 			},
 			Asset::Flip | Asset::HubDot | Asset::Dot => {

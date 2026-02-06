@@ -375,6 +375,7 @@ type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFEs EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
+	migrations::sol_election_settings::Migration,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,
@@ -438,12 +439,13 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 	}
 }
 
+use frame_support::migrations::VersionedMigration;
 #[allow(clippy::allow_attributes)]
 #[allow(unused_macros)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
-		migration: $migration:ty,
+		migration: $migration:ident,
 		from: $from:literal,
 		to: $to:literal,
 		include_instances: [$( $include:ident ),+ $(,)?],
@@ -454,7 +456,7 @@ macro_rules! instanced_migrations {
 				VersionedMigration<
 					$from,
 					$to,
-					$migration,
+					$migration<Runtime, $include>,
 					$module::Pallet<Runtime, $include>,
 					DbWeight,
 				>,
@@ -473,10 +475,19 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
+use pallet_cf_ingress_egress::migrations::channel_status_migration::Migration as ChannelStatusMigration;
 type MigrationsForV2_1 = (
 	migrations::ethereum_elections::Migration,
 	migrations::arbitrum_elections::Migration,
 	migrations::safe_mode::SafeModeMigration,
+	instanced_migrations! {
+		module: pallet_cf_ingress_egress,
+		migration: ChannelStatusMigration,
+		from: 29,
+		to: 30,
+		include_instances: [EthereumInstance, ArbitrumInstance],
+		exclude_instances: [PolkadotInstance, BitcoinInstance, SolanaInstance, AssethubInstance],
+	},
 );
 
 #[cfg(test)]
