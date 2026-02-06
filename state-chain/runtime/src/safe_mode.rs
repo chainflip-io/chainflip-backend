@@ -57,6 +57,7 @@ impl_runtime_safe_mode! {
 	elections_generic: crate::chainflip::witnessing::generic_elections::GenericElectionsSafeMode,
 	ethereum_elections: crate::chainflip::witnessing::ethereum_elections::EthereumElectionsSafeMode,
 	arbitrum_elections: crate::chainflip::witnessing::arbitrum_elections::ArbitrumElectionsSafeMode,
+	bsc_elections: crate::chainflip::witnessing::bsc_elections::BscElectionsSafeMode,
 }
 
 /// Contains permissions for different Runtime calls.
