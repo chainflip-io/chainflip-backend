@@ -304,8 +304,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn supported_bsc_assets)]
 	/// Map of supported assets for BSC
-	pub type BscSupportedAssets<T: Config> =
-		StorageMap<_, Blake2_128Concat, BscAsset, EvmAddress>;
+	pub type BscSupportedAssets<T: Config> = StorageMap<_, Blake2_128Concat, BscAsset, EvmAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn bsc_key_manager_address)]

@@ -18,7 +18,7 @@ use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
 
 use crate::{
 	chainflip::witnessing::{
-		arbitrum_elections::ArbitrumElectionsSafeMode,
+		arbitrum_elections::ArbitrumElectionsSafeMode, bsc_elections::BscElectionsSafeMode,
 		ethereum_elections::EthereumElectionsSafeMode,
 	},
 	Runtime,
@@ -120,6 +120,7 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
 					elections_generic: old.elections_generic,
                     ethereum_elections: EthereumElectionsSafeMode::code_green(),
 					arbitrum_elections: ArbitrumElectionsSafeMode::code_green(),
+					bsc_elections: BscElectionsSafeMode::code_green(),
 				})
 			},
 		).map_err(|_| {

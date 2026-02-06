@@ -787,7 +787,8 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
-	type VaultActivator = MultiVaultActivator<EthereumVault, MultiVaultActivator<ArbitrumVault, BscVault>>;
+	type VaultActivator =
+		MultiVaultActivator<EthereumVault, MultiVaultActivator<ArbitrumVault, BscVault>>;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
@@ -1128,6 +1129,16 @@ impl pallet_cf_elections::Config<Instance4> for Runtime {
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type ElectoralSystemConfiguration =
 		chainflip::witnessing::arbitrum_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config<Instance7> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Bsc as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type RuntimeEvent = RuntimeEvent;
+	type ElectoralSystemRunner = chainflip::witnessing::bsc_elections::BscElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::bsc_elections::ElectoralSystemConfiguration;
 	type SafeMode = RuntimeSafeMode;
 }
 

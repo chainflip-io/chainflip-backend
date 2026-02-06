@@ -45,7 +45,7 @@ use sp_core::{
 use state_chain_runtime::{
 	chainflip::{
 		witnessing::{
-			arbitrum_elections, bitcoin_elections, ethereum_elections,
+			arbitrum_elections, bitcoin_elections, bsc_elections, ethereum_elections,
 			generic_elections::{self, ChainlinkOraclePriceSettings},
 			solana_elections,
 		},
@@ -56,7 +56,7 @@ use state_chain_runtime::{
 		BLOCKS_PER_MINUTE_ETHEREUM, BLOCKS_PER_MINUTE_POLKADOT, BLOCKS_PER_MINUTE_SOLANA,
 	},
 	opaque::SessionKeys,
-	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber,
+	AccountId, ArbitrumElectionsConfig, BitcoinElectionsConfig, BlockNumber, BscElectionsConfig,
 	EthereumElectionsConfig, FlipBalance, GenericElectionsConfig, SetSizeParameters, Signature,
 	SolanaElectionsConfig, WASM_BINARY,
 };
@@ -501,6 +501,7 @@ pub fn inner_cf_development_config(
 			ArbitrumElectionsConfig {
 				option_initial_state: Some(arbitrum_elections::initial_state()),
 			},
+			BscElectionsConfig { option_initial_state: Some(bsc_elections::initial_state()) },
 		))
 		.build())
 }
@@ -700,6 +701,9 @@ macro_rules! network_spec {
 						ArbitrumElectionsConfig {
 							option_initial_state: Some(arbitrum_elections::initial_state()),
 						},
+						BscElectionsConfig {
+							option_initial_state: Some(bsc_elections::initial_state()),
+						},
 					))
 					.build())
 			}
@@ -758,7 +762,7 @@ fn testnet_genesis(
 	generic_elections: state_chain_runtime::GenericElectionsConfig,
 	ethereum_elections: state_chain_runtime::EthereumElectionsConfig,
 	arbitrum_elections: state_chain_runtime::ArbitrumElectionsConfig,
-	//bsc_elections: state_chain_runtime::BscElectionsConfig,
+	bsc_elections: state_chain_runtime::BscElectionsConfig,
 ) -> serde_json::Value {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -1049,7 +1053,7 @@ fn testnet_genesis(
 		ethereum_elections,
 
 		arbitrum_elections,
-		//bsc_elections,
+		bsc_elections,
 		// We can't use ..Default::default() here because chain tracking panics on default (by
 		// design). And the way ..Default::default() syntax works is that it generates the default
 		// value for the whole struct, not just the fields that are missing.

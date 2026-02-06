@@ -90,10 +90,11 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
-	AnyChain, ApiCall, Arbitrum, Assethub, Bsc, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
-	ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder,
+	AnyChain, ApiCall, Arbitrum, Assethub, Bsc, CcmChannelMetadataChecked,
+	CcmDepositMetadataChecked, Chain, ChainCrypto, ChainEnvironment, ChainState,
+	ChannelRefundParametersForChain, ForeignChain, ReplayProtectionProvider,
+	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
@@ -1108,8 +1109,7 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 			ForeignChainAndAsset::Arbitrum(asset) =>
 				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
-			ForeignChainAndAsset::Bsc(asset) =>
-				MinimumDeposit::<Runtime, BscInstance>::get(asset),
+			ForeignChainAndAsset::Bsc(asset) => MinimumDeposit::<Runtime, BscInstance>::get(asset),
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			ForeignChainAndAsset::Assethub(asset) =>

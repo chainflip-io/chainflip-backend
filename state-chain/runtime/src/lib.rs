@@ -259,10 +259,8 @@ mod runtime {
 	pub type BscBroadcaster = pallet_cf_broadcast<Instance7>;
 	#[runtime::pallet_index(61)]
 	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance7>;
-	// TODO: BscElections needs pallet_cf_elections::Config<Instance7> implementation
-	// which requires a BSC electoral system runner. Uncomment when ready.
-	// #[runtime::pallet_index(62)]
-	// pub type BscElections = pallet_cf_elections<Instance7>;
+	#[runtime::pallet_index(62)]
+	pub type BscElections = pallet_cf_elections<Instance7>;
 }
 
 /// The address format for describing accounts.

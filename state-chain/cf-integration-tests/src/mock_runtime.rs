@@ -49,11 +49,11 @@ use state_chain_runtime::{
 	test_runner::*,
 	AccountId, AccountRolesConfig, ArbitrumChainTrackingConfig, ArbitrumElectionsConfig,
 	AssethubChainTrackingConfig, BitcoinChainTrackingConfig, BitcoinElectionsConfig,
-	BscChainTrackingConfig, EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig,
-	EthereumElectionsConfig, EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig,
-	FundingConfig, GenericElectionsConfig, GovernanceConfig, PolkadotChainTrackingConfig,
-	ReputationConfig, SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig,
-	ValidatorConfig,
+	BscChainTrackingConfig, BscElectionsConfig, EmissionsConfig, EnvironmentConfig,
+	EthereumChainTrackingConfig, EthereumElectionsConfig, EthereumVaultConfig,
+	EvmThresholdSignerConfig, FlipConfig, FundingConfig, GenericElectionsConfig, GovernanceConfig,
+	PolkadotChainTrackingConfig, ReputationConfig, SessionConfig, SolanaChainTrackingConfig,
+	SolanaElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -391,6 +391,7 @@ impl ExtBuilder {
 			},
 			ethereum_elections: EthereumElectionsConfig { option_initial_state: None },
 			arbitrum_elections: ArbitrumElectionsConfig { option_initial_state: None },
+			bsc_elections: BscElectionsConfig { option_initial_state: None },
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},
