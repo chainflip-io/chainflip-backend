@@ -50,5 +50,9 @@ decl_runtime_apis!(
 		fn cf_arbitrum_electoral_data(account_id: AccountId) -> Vec<u8>;
 
 		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
+
+		fn cf_bsc_electoral_data(account_id: AccountId) -> Vec<u8>;
+
+		fn cf_bsc_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
 	}
 );

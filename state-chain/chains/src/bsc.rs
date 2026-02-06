@@ -103,10 +103,7 @@ impl Default for BscTrackedData {
 }
 
 impl BscTrackedData {
-	pub fn max_fee_per_gas(
-		&self,
-		base_fee_multiplier: FixedU64,
-	) -> <Bsc as Chain>::ChainAmount {
+	pub fn max_fee_per_gas(&self, base_fee_multiplier: FixedU64) -> <Bsc as Chain>::ChainAmount {
 		base_fee_multiplier.saturating_mul_int(self.base_fee)
 	}
 

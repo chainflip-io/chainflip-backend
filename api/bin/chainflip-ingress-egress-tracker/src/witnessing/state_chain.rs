@@ -698,9 +698,7 @@ where
 			}
 		},
 		BscBroadcaster(BroadcastCall::transaction_succeeded {
-			tx_out_id,
-			transaction_ref,
-			..
+			tx_out_id, transaction_ref, ..
 		}) => {
 			save_broadcast_witness::<_, _, Bsc>(
 				store,
@@ -765,6 +763,7 @@ where
 		GenericElections(_) |
 		EthereumElections(_) |
 		ArbitrumElections(_) |
+		BscElections(_) |
 		TradingStrategy(_) => {},
 		LendingPools(_) => {},
 	};

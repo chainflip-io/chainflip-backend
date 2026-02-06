@@ -16,6 +16,7 @@
 
 pub mod arb;
 pub mod arb_elections;
+pub mod bsc_elections;
 pub mod btc;
 pub mod common;
 pub mod dot;
