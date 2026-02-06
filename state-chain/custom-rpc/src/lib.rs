@@ -658,6 +658,7 @@ pub struct SwappingEnvironment {
 	max_swap_request_duration_blocks: u32,
 	minimum_chunk_size: any::AssetMap<NumberOrHex>,
 	network_fees: NetworkFees,
+	default_oracle_price_protection: any::AssetMap<Option<BasisPoints>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -2228,6 +2229,7 @@ where
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
 				network_fees: api.cf_network_fees(hash)?,
+				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
 			})
 		})
 	}

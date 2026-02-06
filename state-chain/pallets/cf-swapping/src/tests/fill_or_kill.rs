@@ -869,6 +869,8 @@ mod oracle_swaps {
 
 		// The expected delta is 0.99^3-1 = -0.029701 = -297.01 bps, rounded away from zero to -298
 		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-298));
+		const EXPECTED_DELTA_EX_FEES: Option<SignedBasisPoints> =
+			Some(SignedBasisPoints(-(SWAP_RATE_BPS as i32 + 1))); // Small rounding error
 
 		new_test_ext()
 			.execute_with(|| {
@@ -880,9 +882,10 @@ mod oracle_swaps {
 					minimum: 0,
 				});
 				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
-				// We use a price of 1 for both assets to make the math easier
+				// We use a price of 1 for all assets to make the math easier
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
 				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, 1);
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, 1);
 
 				Swapping::init_swap_request(
 					INPUT_ASSET,
@@ -895,8 +898,8 @@ mod oracle_swaps {
 						},
 					},
 					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
-					// No oracle price slippage protection, but we should still get an oracle delta
-					// in the event
+					// No oracle price slippage protection, but we should still get both oracle
+					// delta's in the event
 					None,
 					None,
 					SwapOrigin::OnChainAccount(0_u64),
@@ -908,6 +911,7 @@ mod oracle_swaps {
 					Test,
 					RuntimeEvent::Swapping(Event::SwapExecuted {
 						oracle_delta: EXPECTED_DELTA,
+						oracle_delta_ex_fees: EXPECTED_DELTA_EX_FEES,
 						..
 					})
 				);
@@ -1013,7 +1017,7 @@ mod oracle_swaps {
 				stable_amount: Some(STABLE_AMOUNT),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
-				oracle_slippage: None,
+				oracle_delta_ex_fees: None,
 			}
 		}
 
@@ -1051,7 +1055,7 @@ mod oracle_swaps {
 			// Total slippage = 12.1 + 17.13 = 29.23 bps
 			// => So a slippage limit of 30 bps should pass, while 29 bps should fail
 			const EXPECTED_FAILING_SLIPPAGE_LIMIT: BasisPoints = 29;
-			const EXPECTED_ORACLE_SLIPPAGE_BPS: SignedBasisPoints = SignedBasisPoints(30);
+			const EXPECTED_ORACLE_DELTA_EX_FEES: SignedBasisPoints = SignedBasisPoints(-30);
 
 			new_test_ext().execute_with(|| {
 				set_prices();
@@ -1061,7 +1065,7 @@ mod oracle_swaps {
 					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(
 						EXPECTED_FAILING_SLIPPAGE_LIMIT + 1
 					))),
-					Ok(Some(EXPECTED_ORACLE_SLIPPAGE_BPS))
+					Ok(Some(EXPECTED_ORACLE_DELTA_EX_FEES))
 				);
 
 				// Oracle delta that is above the slippage limit will fail
@@ -1147,5 +1151,83 @@ mod oracle_swaps {
 				max_oracle_price_slippage: Some(EXPECTED_PRICE_PROTECTION_BPS),
 			}));
 		});
+	}
+
+	/// A single-sided oracle swap is where one of the assets supports oracle price but the other
+	/// does not. In this case, we should still be able to use oracle price protection for the
+	/// supported asset.
+	#[test]
+	fn single_sided_oracle_swap() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64; // TODO JAMIE: can we factor this out? .then_process_blocks(
+
+		const INPUT_ASSET: Asset = Asset::Eth;
+		const OUTPUT_ASSET: Asset = Asset::Flip;
+		const INPUT_PROTECTION_BPS: BasisPoints = 100;
+
+		new_test_ext()
+			.execute_with(|| {
+				// Set the price and default oracle protection for just one asset
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 10_000_000);
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
+					Some(INPUT_PROTECTION_BPS),
+				);
+				// USDC needs to also have a price set for the oracle price protection to work.
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, 10_000_000 * DEFAULT_SWAP_RATE);
+
+				// Init a swap request that has no oracle price protection set. Triggering the
+				// default to be calculated and used.
+				let _ = Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: 1 },
+					},
+					vec![].try_into().unwrap(),
+					Some(PriceLimitsAndExpiry {
+						expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+							retry_duration: 0,
+							refund_address: AccountOrAddress::InternalAccount(1),
+							refund_ccm_metadata: None,
+						},
+						min_price: Price::zero(),
+						// No max oracle slippage is set
+						max_oracle_price_slippage: None,
+					}),
+					None,
+					SwapOrigin::OnChainAccount(0),
+				);
+
+				// Check the event for the adjusted price protection
+				assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::SwapRequested {
+					price_limits_and_expiry,
+					..
+				}) if *price_limits_and_expiry == Some(PriceLimitsAndExpiry {
+					expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+						retry_duration: 0,
+						refund_address: AccountOrAddress::InternalAccount(1),
+						refund_ccm_metadata: None,
+					},
+					min_price: Price::zero(),
+					// Just the max oracle slippage has been changed
+					max_oracle_price_slippage: Some(INPUT_PROTECTION_BPS),
+				}));
+
+				// Set the swap rate so the swap will fail
+				SwapRate::set(0.1);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						reason: SwapFailureReason::OraclePriceSlippageExceeded,
+						..
+					})
+				);
+			});
 	}
 }

@@ -217,6 +217,14 @@ fn test_environment_serialization() {
 					},
 				},
 			},
+			default_oracle_price_protection: any::AssetMap {
+				eth: eth::AssetMap { eth: Some(55), flip: None, usdc: None, usdt: Some(25) },
+				btc: btc::AssetMap { btc: Some(55) },
+				dot: dot::AssetMap { dot: None },
+				arb: arb::AssetMap { eth: Some(55), usdc: Some(25) },
+				sol: sol::AssetMap { sol: Some(55), usdc: Some(25) },
+				hub: hub::AssetMap { dot: None, usdc: Some(25), usdt: Some(25) },
+			},
 		},
 		ingress_egress: IngressEgressEnvironment {
 			minimum_deposit_amounts: any::AssetMap {

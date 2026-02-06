@@ -127,7 +127,7 @@ pub struct SwapState<T: Config> {
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
 	pub oracle_delta: Option<SignedBasisPoints>,
-	pub oracle_slippage: Option<SignedBasisPoints>,
+	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -139,7 +139,7 @@ impl<T: Config> SwapState<T> {
 			broker_fee_taken: None,
 			swap,
 			oracle_delta: None,
-			oracle_slippage: None,
+			oracle_delta_ex_fees: None,
 		}
 	}
 
@@ -817,9 +817,10 @@ pub mod pallet {
 			// Total difference between final swap output price and oracle price (including fees).
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
-			// Sum of slippage from oracle price of each swap leg (excluding fees). Positive means
-			// worse price than oracle.
-			oracle_slippage: Option<SignedBasisPoints>,
+			// Sum of delta from each leg of the swap excluding fees. Negative means worse price
+			// than oracle. Will be `Some` if only one leg has an oracle price and the other leg
+			// doesn't.
+			oracle_delta_ex_fees: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -1985,52 +1986,57 @@ pub mod pallet {
 				if final_output < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
+			}
 
-				// Oracle price protection, aka Live price protection (LPP)
-				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
-					if let Some(stable_amount_after_fees) = swap.stable_amount {
-						// Calculate the slippage from oracle prices for both legs of the swap.
-						// If any price is unavailable (None), skip the oracle check for that leg.
-						let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
-							Some(Default::default())
-						} else {
-							Self::get_delta_from_oracle_price(
-								swap.swap.input_amount,
-								stable_amount_after_fees + swap.fees_amount(),
-								swap.input_asset(),
-								STABLE_ASSET,
-							)?
-						};
-						let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
-							Some(Default::default())
-						} else {
-							Self::get_delta_from_oracle_price(
-								stable_amount_after_fees,
-								final_output,
-								STABLE_ASSET,
-								swap.output_asset(),
-							)?
-						};
+			// Calculate oracle delta without fees
+			if let Some(stable_amount_after_fees) = swap.stable_amount {
+				// Calculate the slippage from oracle prices for both legs of the swap.
+				let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
+					Some(Default::default())
+				} else {
+					Self::get_delta_from_oracle_price(
+						swap.swap.input_amount,
+						stable_amount_after_fees + swap.fees_amount(),
+						swap.input_asset(),
+						STABLE_ASSET,
+					)?
+				};
+				let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
+					Some(Default::default())
+				} else {
+					Self::get_delta_from_oracle_price(
+						stable_amount_after_fees,
+						final_output,
+						STABLE_ASSET,
+						swap.output_asset(),
+					)?
+				};
 
-						// Only check slippage if both legs have oracle prices available
-						if let (Some(to_stable), Some(from_stable)) =
-							(to_stable_delta, from_stable_delta)
-						{
-							let total_delta = to_stable.saturating_add(&from_stable);
+				// Sum the deltas or just use a single leg delta if the other leg doesn't have
+				// an oracle price.
+				let total_delta = match (to_stable_delta, from_stable_delta) {
+					(Some(to_stable), Some(from_stable)) =>
+						Some(to_stable.saturating_add(&from_stable)),
+					(Some(delta), None) | (None, Some(delta)) => Some(delta),
+					(None, None) => None,
+				};
+
+				if let Some(total_delta) = total_delta {
+					// Oracle price protection, aka Live price protection (LPP)
+					if let Some(params) = swap.refund_params() {
+						if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
+							// The swapper expresses the limit as a worst acceptable *sell*
+							// price, so slippage needs to be measured in the negative
+							// direction (lower sell price is worse).
 							if total_delta
-								// The swapper expresses the limit as a worst acceptable *sell*
-								// price, so slippage needs to be measured in the negative
-								// direction (lower sell price is worse).
 								.breaches_limit(SignedBasisPoints::negative_slippage(max_slippage))
 							{
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
-
-							// Return the slippage. positive means worse than oracle price,
-							// therefore we must negative it.
-							return Ok(Some(total_delta.pessimistic_rounded_into().neg()));
 						}
 					}
+
+					return Ok(Some(total_delta.pessimistic_rounded_into()));
 				}
 			}
 
@@ -2054,8 +2060,8 @@ pub mod pallet {
 			swaps
 				.into_iter()
 				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
-					Ok(oracle_slippage) => {
-						swap.oracle_slippage = oracle_slippage;
+					Ok(oracle_delta_ex_fees) => {
+						swap.oracle_delta_ex_fees = oracle_delta_ex_fees;
 						swap.oracle_delta = Self::get_delta_from_oracle_price(
 							swap.input_amount(),
 							swap.final_output.unwrap_or(0),
@@ -2392,7 +2398,7 @@ pub mod pallet {
 				output_amount,
 				intermediate_amount: swap.intermediate_amount(),
 				oracle_delta: swap.oracle_delta,
-				oracle_slippage: swap.oracle_slippage,
+				oracle_delta_ex_fees: swap.oracle_delta_ex_fees,
 			});
 
 			let request_completed = match &mut request.state {
@@ -2988,36 +2994,43 @@ pub mod pallet {
 							return limits;
 						}
 
-						// Check if we have oracle prices and default slippage settings the assets
+						// Check if we have oracle prices and default slippage settings for the
+						// assets
 						let get_default_slippage = |asset: Asset| {
 							if asset == STABLE_ASSET {
-								Some(Zero::zero())
+								// Single leg swap, no slippage on one side.
+								Some(0)
+							} else if T::PriceFeedApi::get_price(asset).is_some() {
+								DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
+									asset,
+									STABLE_ASSET,
+								)?)
 							} else {
-								T::PriceFeedApi::get_price(asset).and_then(|_| {
-									DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
-										asset,
-										STABLE_ASSET,
-									)?)
-								})
+								// For our slippage calculation, we treat assets without oracle
+								// as 0 slippage so we can still enforce oracle slippage
+								// protection on the other side of the swap.
+								Some(0)
 							}
 						};
 
 						// Calculate the default price protection slippage and apply it
-						match (
-							get_default_slippage(input_asset),
-							get_default_slippage(output_asset),
-						) {
-							(Some(input_default_slippage), Some(output_default_slippage)) => {
-								let minimum_oracle_protection =
-									input_default_slippage.saturating_add(output_default_slippage);
+						if let (Some(input_default_slippage), Some(output_default_slippage)) =
+							(get_default_slippage(input_asset), get_default_slippage(output_asset))
+						{
+							let default_oracle_protection =
+								input_default_slippage.saturating_add(output_default_slippage);
 
+							if default_oracle_protection > 0 {
 								PriceLimitsAndExpiry {
 									expiry_behaviour: limits.expiry_behaviour,
 									min_price: limits.min_price,
-									max_oracle_price_slippage: Some(minimum_oracle_protection),
+									max_oracle_price_slippage: Some(default_oracle_protection),
 								}
-							},
-							_ => limits,
+							} else {
+								limits
+							}
+						} else {
+							limits
 						}
 					})
 				},
