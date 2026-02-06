@@ -310,6 +310,8 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 				tx_metadata: (),
 				transaction_ref: signature,
 			},
+			// Solana doesn't use this block number; it's primarily for EVM chains.
+			Default::default(),
 		) {
 			log::error!(
 				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",

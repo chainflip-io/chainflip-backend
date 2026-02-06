@@ -232,7 +232,7 @@ impl From<&DepositChannel<Ethereum>> for EvmFetchId {
 	fn from(channel: &DepositChannel<Ethereum>) -> Self {
 		match channel.state {
 			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
-			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+			DeploymentStatus::Pending | DeploymentStatus::Deployed { .. } =>
 				if channel.asset == assets::eth::Asset::Eth {
 					EvmFetchId::NotRequired
 				} else {
@@ -286,6 +286,8 @@ mod lifecycle_tests {
 	}
 	#[test]
 	fn eth_deposit_address_lifecycle() {
+		const TEST_BLOCK_NUMBER: u64 = 42;
+
 		// Initial state is undeployed.
 		let mut state = DeploymentStatus::default();
 		assert_eq!(state, DeploymentStatus::Undeployed);
@@ -304,8 +306,8 @@ mod lifecycle_tests {
 		assert!(!state.can_fetch());
 
 		// On completion, the pending channel is now deployed and be fetched from again.
-		assert!(state.on_fetch_completed());
-		assert_eq!(state, DeploymentStatus::Deployed);
+		assert!(state.on_fetch_completed(TEST_BLOCK_NUMBER));
+		assert_eq!(state, DeploymentStatus::Deployed { at_block_height: TEST_BLOCK_NUMBER });
 		assert!(state.can_fetch());
 		expect_deposit_state!(state, ETH, EvmFetchId::NotRequired);
 		expect_deposit_state!(state, USDC, EvmFetchId::Fetch(..));
@@ -313,12 +315,12 @@ mod lifecycle_tests {
 		// Channel is now in its final deployed state and be fetched from at any time.
 		assert!(!state.on_fetch_scheduled());
 		assert!(state.can_fetch());
-		assert!(!state.on_fetch_completed());
+		assert!(!state.on_fetch_completed(TEST_BLOCK_NUMBER + 1));
 		assert!(state.can_fetch());
 		expect_deposit_state!(state, ETH, EvmFetchId::NotRequired);
 		expect_deposit_state!(state, USDC, EvmFetchId::Fetch(..));
 
-		assert_eq!(state, DeploymentStatus::Deployed);
+		assert_eq!(state, DeploymentStatus::Deployed { at_block_height: TEST_BLOCK_NUMBER });
 		assert!(!state.on_fetch_scheduled());
 	}
 }

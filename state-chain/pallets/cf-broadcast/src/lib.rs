@@ -33,7 +33,7 @@ use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
 	CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain, ElectionEgressWitnesser, EpochInfo,
-	GetBlockHeight, RotationBroadcastsPending, ThresholdSigner,
+	GetBlockHeight, OnBroadcastSuccess, RotationBroadcastsPending, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
@@ -99,7 +99,7 @@ pub mod pallet {
 	use cf_runtime_utilities::log_or_panic;
 	use cf_traits::{
 		AccountRoleRegistry, BroadcastNomination, ChainflipWithTargetChain, LiabilityTracker,
-		OnBroadcastReady, TargetChainOf,
+		OnBroadcastReady, OnBroadcastSuccess, TargetChainOf,
 	};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
@@ -241,6 +241,9 @@ pub mod pallet {
 		type EnsureThresholdSigned: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
+
+		/// Hook called when a broadcast is successfully witnessed on the external chain.
+		type OnBroadcastSuccess: OnBroadcastSuccess<Self::TargetChain>;
 
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
@@ -683,6 +686,7 @@ pub mod pallet {
 					tx_metadata,
 					transaction_ref,
 				},
+				Default::default(),
 			)
 		}
 
@@ -836,6 +840,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			tx_metadata,
 			transaction_ref,
 		}: TransactionConfirmation<T, I>,
+		witnessed_at_block: ChainBlockNumberFor<T, I>,
 	) -> DispatchResult {
 		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
@@ -898,12 +903,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
 			RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-				broadcast_id,
-				result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(|e| {
-					log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
-					e.error
-				}),
+
+			T::OnBroadcastSuccess::with_witness_block(witnessed_at_block, || {
+				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+					broadcast_id,
+					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
+						|e| {
+							log::warn!(
+								"Callback execution has failed for broadcast {}.",
+								broadcast_id
+							);
+							e.error
+						},
+					),
+				})
 			});
 		}
 

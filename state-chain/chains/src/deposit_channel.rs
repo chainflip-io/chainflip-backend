@@ -57,7 +57,8 @@ pub trait ChannelLifecycleHooks: Sized {
 	}
 
 	/// Called when a fetch is completed. Should return true if self was mutated.
-	fn on_fetch_completed(&mut self) -> bool {
+	/// The `block_number` is the external chain block at which the fetch was confirmed.
+	fn on_fetch_completed(&mut self, _block_number: u64) -> bool {
 		false
 	}
 
