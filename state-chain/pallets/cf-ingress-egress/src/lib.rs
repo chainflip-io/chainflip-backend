@@ -47,9 +47,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, BasisPoints, Beneficiaries, Beneficiary,
-	BlockWitnesserEvent, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter,
-	EgressId, EpochIndex, ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId,
-	SwapRequestId, ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
+	BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, GasAmount, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -58,12 +58,11 @@ use cf_traits::{
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
-	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, Hook,
-	IngressEgressFeeApi, IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider,
-	OnDeposit, ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation,
-	SwapRequestHandler, SwapRequestType, INITIAL_FLIP_FUNDING,
+	FetchesTransfersLimitProvider, FundAccount, FundingSource, GetBlockHeight, IngressEgressFeeApi,
+	IngressSink, IngressSource, LpRegistration, NetworkEnvironmentProvider, OnDeposit,
+	ScheduledEgressDetails, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, TargetChainOf, INITIAL_FLIP_FUNDING,
 };
-use cf_utilities::{define_empty_struct, impls};
 use frame_support::{
 	pallet_prelude::{OptionQuery, *},
 	sp_runtime::{traits::Zero, DispatchError, Saturating},
@@ -334,7 +333,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(29);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(30);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -402,7 +401,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{address::EncodedAddress, ExecutexSwapAndCall, TransferFallback};
 	use cf_primitives::{BroadcastId, EpochIndex};
-	use cf_traits::{OnDeposit, SwapParameterValidation};
+	use cf_traits::{ChainflipWithTargetChain, OnDeposit, SwapParameterValidation, TargetChainOf};
 	use cf_utilities::bounded_vec::map_bounded_vec;
 	use core::marker::PhantomData;
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
@@ -416,14 +415,13 @@ pub mod pallet {
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
 
-	pub type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
-	pub type TargetChainAccount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
-	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
-	pub(crate) type TargetChainBlockNumber<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
+	pub type TargetChainAsset<T, I> = <TargetChainOf<T, I> as Chain>::ChainAsset;
+	pub type TargetChainAccount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAccount;
+	pub type TargetChainAmount<T, I> = <TargetChainOf<T, I> as Chain>::ChainAmount;
+	pub type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
 
 	pub type TransactionInIdFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 	#[derive(
 		Clone,
@@ -680,7 +678,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>: ChainflipWithTargetChain<I> {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -699,9 +697,6 @@ pub mod pallet {
 			Chain = Self::TargetChain,
 			StateChainBlockNumber = BlockNumberFor<Self>,
 		>;
-
-		/// Marks which chain this pallet is interacting with.
-		type TargetChain: Chain + Get<ForeignChain>;
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
@@ -961,6 +956,13 @@ pub mod pallet {
 	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
+	/// IMPORTANT!! Storage used to save short-living values, currently used as a workaround for
+	/// callbacks not accepting extra arguments at dispatch time if you use it be sure that it gets
+	/// set and killed atomically to avoid other operations changing its value.
+	#[pallet::storage]
+	pub type WitnessedBlock<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
+
 	/// Stores configuration param for maximum number of pre-allocated channels per account role.
 	#[pallet::storage]
 	#[pallet::getter(fn maximum_preallocated_channels)]
@@ -1178,7 +1180,7 @@ pub mod pallet {
 							Self::take_recyclable_addresses(
 								recycle_queue,
 								maximum_addresses_to_recycle,
-								match <T as Config<I>>::TargetChain::get() {
+								match TargetChainOf::<T, I>::get() {
 									ForeignChain::Arbitrum |
 									ForeignChain::Bitcoin |
 									ForeignChain::Ethereum |
@@ -1442,11 +1444,17 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
+			//We should always have a value here, but if we don't then we should use the max to
+			// be sure to not end up in the edge case
+			let block_number: u64 = WitnessedBlock::<T, I>::take()
+				.map(|bn| bn.unique_saturated_into())
+				.unwrap_or(u64::MAX);
+
 			for deposit_address in addresses {
-				DepositChannelLookup::<T, I>::mutate(deposit_address, |deposit_channel_details| {
-					deposit_channel_details
-						.as_mut()
-						.map(|details| details.deposit_channel.state.on_fetch_completed());
+				DepositChannelLookup::<T, I>::mutate(&deposit_address, |deposit_channel_details| {
+					deposit_channel_details.as_mut().map(|details| {
+						details.deposit_channel.state.on_fetch_completed(block_number)
+					});
 				});
 			}
 			Ok(())
@@ -1991,7 +1999,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(())
 		}
 
-		let mut fetch_params: Vec<FetchAssetParams<<T as Config<I>>::TargetChain>> = vec![];
+		let mut fetch_params: Vec<FetchAssetParams<TargetChainOf<T, I>>> = vec![];
 		let mut transfer_params = vec![];
 		let mut addresses = vec![];
 
@@ -2976,7 +2984,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// ------ refund parameters -----
 
 		let refund_address = refund_params.refund_address.clone();
-		if refund_address == <<T as Config<I>>::TargetChain as Chain>::BURN_ADDRESS {
+		if refund_address == <TargetChainOf<T, I> as Chain>::BURN_ADDRESS {
 			return ChannelAction::Unrefundable;
 		}
 
@@ -3450,7 +3458,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	) -> Result<ScheduledEgressDetails<T::TargetChain>, Error<T, I>> {
 		EgressIdCounter::<T, I>::try_mutate(|id_counter| {
 			*id_counter = id_counter.saturating_add(1);
-			let egress_id = (<T as Config<I>>::TargetChain::get(), *id_counter);
+			let egress_id = (TargetChainOf::<T, I>::get(), *id_counter);
 
 			match maybe_ccm_deposit_metadata {
 				Some(CcmDepositMetadata {
@@ -3641,41 +3649,13 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 	}
 }
 
-define_empty_struct! {
-	pub struct PalletHooks<T: Config<I>, I: 'static>;
-}
-
-impls! {
-	for PalletHooks<T, I> where (T: Config<I>, I: 'static):
-
-	fn (&mut self, (event, block_height): (BlockWitnesserEvent<DepositWitness<T::TargetChain>>, TargetChainBlockNumber<T, I>)) -> () {
-		match event {
-			BlockWitnesserEvent::PreWitness(deposit_witness) => {
-				let _ = Pallet::<T, I>::process_channel_deposit_prewitness(
-					deposit_witness,
-					block_height,
-				);
-			},
-			BlockWitnesserEvent::Witness(deposit_witness) => {
-				Pallet::<T, I>::process_channel_deposit_full_witness(deposit_witness, block_height);
-			},
-		}
-	}
-
-	fn (&mut self, (event, block_height): (BlockWitnesserEvent<VaultDepositWitness<T, I>>, TargetChainBlockNumber<T, I>)) -> () {
-		match event {
-			BlockWitnesserEvent::PreWitness(deposit) => {
-				Pallet::<T, I>::process_vault_swap_request_prewitness(
-					block_height,
-					deposit.clone(),
-				);
-			},
-			BlockWitnesserEvent::Witness(deposit) => {
-				Pallet::<T, I>::process_vault_swap_request_full_witness_inner(
-					block_height,
-					deposit.clone(),
-				);
-			},
-		}
+impl<T: Config<I>, I: 'static> cf_traits::OnBroadcastSuccess<T::TargetChain> for Pallet<T, I> {
+	fn with_witness_block(
+		witness_block: <T::TargetChain as Chain>::ChainBlockNumber,
+		f: impl FnOnce(),
+	) {
+		WitnessedBlock::<T, I>::set(Some(witness_block));
+		f();
+		WitnessedBlock::<T, I>::kill();
 	}
 }

@@ -28,6 +28,12 @@ use sp_std::marker::PhantomData;
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
+impl Get<ForeignChain> for MockEthereum {
+	fn get() -> ForeignChain {
+		ForeignChain::Ethereum
+	}
+}
+
 pub type MockEthereumChannelId = u128;
 
 #[derive(Clone, Debug, Encode, Decode)]

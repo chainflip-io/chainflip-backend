@@ -395,4 +395,4 @@ codegen-units = 1
 # the features 'production' and 'turbo' are mutually exclusive.
 #
 # DO NOT CHANGE OR REMOVE THIS LINE.
-rustflags = ["--cfg 'feature=\"production\"'"]
+rustflags = ["--cfg", "feature=\"production\""]

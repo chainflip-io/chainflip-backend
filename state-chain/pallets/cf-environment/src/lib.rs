@@ -71,7 +71,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(21);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -843,6 +843,7 @@ pub mod pallet {
 		pub flip_token_address: EvmAddress,
 		pub eth_usdc_address: EvmAddress,
 		pub eth_usdt_address: EvmAddress,
+		pub eth_wbtc_address: EvmAddress,
 		pub state_chain_gateway_address: EvmAddress,
 		pub eth_key_manager_address: EvmAddress,
 		pub eth_vault_address: EvmAddress,
@@ -852,6 +853,7 @@ pub mod pallet {
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub arb_usdc_address: EvmAddress,
+		pub arb_usdt_address: EvmAddress,
 		pub arb_key_manager_address: EvmAddress,
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
@@ -880,6 +882,7 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdt, self.eth_usdt_address);
+			EthereumSupportedAssets::<T>::insert(EthAsset::Wbtc, self.eth_wbtc_address);
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);
@@ -892,6 +895,7 @@ pub mod pallet {
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);

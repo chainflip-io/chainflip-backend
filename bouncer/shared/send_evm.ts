@@ -34,7 +34,7 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
       const web3 = new Web3(getEvmEndpoint(chain));
       const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
       const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
-      const txCount = await web3.eth.getTransactionCount(address);
+      const txCount = await web3.eth.getTransactionCount(address, 'pending');
       nextEvmNonce[chain] = txCount;
     }
     logger.trace(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);

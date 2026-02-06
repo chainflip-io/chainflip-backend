@@ -24,7 +24,6 @@ cf-utilities = { workspace = true }
 cfe-events = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
-pallet-cf-witnesser = { workspace = true }
 
 derive-where = "1.2.7"
 

@@ -87,7 +87,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, ArbEvent<ArbitrumKeyManagerEvent>)>) {
-		for (_, event) in events {
+		for (block_number, event) in events {
 			match event {
 				ArbEvent::Witness(call) => {
 					match call {
@@ -114,6 +114,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 									tx_metadata,
 									transaction_ref,
 								},
+								*block_number.root(),
 							) {
 								log::error!(
 									"Failed to execute Arbitrum egress success: TxOutId: {:?}, Error: {:?}",

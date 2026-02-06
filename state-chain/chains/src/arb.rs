@@ -193,6 +193,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 					match asset {
 						assets::arb::Asset::ArbEth => Zero::zero(),
 						assets::arb::Asset::ArbUsdc => GAS_COST_PER_FETCH,
+						assets::arb::Asset::ArbUsdt => GAS_COST_PER_FETCH,
 					};
 
 				self.calculate_transaction_fee(gas_cost_per_fetch)
@@ -203,6 +204,7 @@ impl FeeEstimationApi<Arbitrum> for ArbitrumTrackedData {
 					match asset {
 						assets::arb::Asset::ArbEth => GAS_COST_PER_TRANSFER_NATIVE,
 						assets::arb::Asset::ArbUsdc => GAS_COST_PER_TRANSFER_TOKEN,
+						assets::arb::Asset::ArbUsdt => GAS_COST_PER_TRANSFER_TOKEN,
 					};
 
 				self.calculate_transaction_fee(gas_cost_per_transfer)
@@ -223,7 +225,7 @@ impl From<&DepositChannel<Arbitrum>> for EvmFetchId {
 	fn from(channel: &DepositChannel<Arbitrum>) -> Self {
 		match channel.state {
 			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
-			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+			DeploymentStatus::Pending | DeploymentStatus::Deployed { .. } =>
 				if channel.asset == assets::arb::Asset::ArbEth {
 					EvmFetchId::NotRequired
 				} else {

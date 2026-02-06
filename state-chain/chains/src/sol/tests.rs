@@ -26,7 +26,7 @@ use crate::{
 			},
 			compute_budget::ComputeBudgetInstruction,
 			consts::{
-				MAX_TRANSACTION_LENGTH, SOL_USDC_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
+				MAX_TRANSACTION_LENGTH, SOL_USD_DECIMAL, SYSTEM_PROGRAM_ID, SYS_VAR_INSTRUCTIONS,
 				TOKEN_PROGRAM_ID,
 			},
 			program_instructions::{InstructionExt, SystemProgramInstruction, VaultProgram},
@@ -465,7 +465,7 @@ fn create_transfer_tokens() {
 		),
 		VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 			TRANSFER_AMOUNT,
-			SOL_USDC_DECIMAL,
+			SOL_USD_DECIMAL,
 			VAULT_PROGRAM_DATA_ACCOUNT,
 			agg_key_pubkey,
 			TOKEN_VAULT_PDA_ACCOUNT,
@@ -603,7 +603,7 @@ fn create_ccm_token_transfer() {
 		),
 		VaultProgram::with_id(VAULT_PROGRAM).transfer_tokens(
 			amount,
-			SOL_USDC_DECIMAL,
+			SOL_USD_DECIMAL,
 			VAULT_PROGRAM_DATA_ACCOUNT,
 			agg_key_pubkey,
 			TOKEN_VAULT_PDA_ACCOUNT,

@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::{traits::UncheckedOnRuntimeUpgrade, weights::Weight};
+use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
 use crate::{
 	chainflip::witnessing::{
@@ -74,7 +74,7 @@ mod old {
 	}
 }
 
-impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
+impl OnRuntimeUpgrade for SafeModeMigration {
 	fn on_runtime_upgrade() -> Weight {
 		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<old::RuntimeSafeMode>| {
@@ -86,16 +86,7 @@ impl UncheckedOnRuntimeUpgrade for SafeModeMigration {
                     validator: old.validator,
                     pools: old.pools,
                     trading_strategies: old.trading_strategies,
-                    lending_pools: pallet_cf_lending_pools::PalletSafeMode {
-                        add_boost_funds_enabled: old.lending_pools.add_boost_funds_enabled,
-                        stop_boosting_enabled: old.lending_pools.stop_boosting_enabled,
-                        borrowing: old.lending_pools.borrowing,
-                        add_lender_funds: old.lending_pools.add_lender_funds,
-                        withdraw_lender_funds: old.lending_pools.withdraw_lender_funds,
-                        add_collateral: old.lending_pools.add_collateral,
-                        remove_collateral: old.lending_pools.remove_collateral,
-                        liquidations_enabled: old.lending_pools.liquidations_enabled,
-                    },
+                    lending_pools: old.lending_pools,
                     reputation: old.reputation,
                     asset_balances: old.asset_balances,
                     threshold_signature_evm: old.threshold_signature_evm,

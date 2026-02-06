@@ -20,11 +20,10 @@ use core::cmp::max;
 
 use crate::{
 	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
-	BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor, Config,
-	DelayedBroadcastRetryQueue, Error, Event as BroadcastEvent, Event, FailedBroadcasters,
-	Instance1, PalletConfigUpdate, PalletOffence, PendingApiCalls, PendingBroadcasts,
-	RequestFailureCallbacks, RequestSuccessCallbacks, Timeouts, TransactionMetadata,
-	TransactionOutIdToBroadcastId,
+	BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor, DelayedBroadcastRetryQueue,
+	Error, Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
+	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
+	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	mocks::{
@@ -44,7 +43,7 @@ use cf_traits::{
 		threshold_signer::MockThresholdSigner,
 	},
 	AsyncResult, Broadcaster as BroadcasterTrait, Chainflip, EpochInfo, GetBlockHeight,
-	SetSafeMode, ThresholdSigner,
+	SetSafeMode, TargetChainOf, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
 use frame_support::{
@@ -938,10 +937,10 @@ fn initiate_and_sign_broadcast(
 ) -> BroadcastId {
 	let (broadcast_id, _) = match tx_type {
 		TxType::Normal => <Broadcaster as BroadcasterTrait<
-			<Test as Config<Instance1>>::TargetChain,
+			TargetChainOf<Test, Instance1>
 		>>::threshold_sign_and_broadcast((*api_call).clone()),
 		TxType::Rotation { new_key } => <Broadcaster as BroadcasterTrait<
-			<Test as Config<Instance1>>::TargetChain,
+			TargetChainOf<Test, Instance1>
 		>>::threshold_sign_and_broadcast_rotation_tx(
 			(*api_call).clone(), new_key
 		),

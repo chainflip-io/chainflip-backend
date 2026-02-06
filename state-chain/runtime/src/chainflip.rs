@@ -490,6 +490,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 		match asset {
 			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS),
 			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset),
+			assets::arb::Asset::ArbUsdt => Environment::supported_arb_assets(asset),
 		}
 	}
 

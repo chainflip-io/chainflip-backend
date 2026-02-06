@@ -94,6 +94,7 @@ pub type SolanaElectoralSystemRunner = CompositeRunner<
 pub fn initial_state(
 	vault_program: SolAddress,
 	usdc_token_mint_pubkey: SolAddress,
+	usdt_token_mint_pubkey: SolAddress,
 	swap_endpoint_data_account_address: SolAddress,
 	shared_data_reference_lifetime: BlockNumberFor<Runtime>,
 ) -> InitialStateOf<Runtime, Instance> {
@@ -113,13 +114,21 @@ pub fn initial_state(
 		settings: (
 			(),
 			(
-				SolanaIngressSettings { vault_program, usdc_token_mint_pubkey },
+				SolanaIngressSettings {
+					vault_program,
+					usdc_token_mint_pubkey,
+					usdt_token_mint_pubkey,
+				},
 				BackoffSettings { backoff_after_blocks: 600, backoff_frequency: 100 },
 			),
 			(),
 			(),
 			LIVENESS_CHECK_DURATION,
-			SolanaVaultSwapsSettings { swap_endpoint_data_account_address, usdc_token_mint_pubkey },
+			SolanaVaultSwapsSettings {
+				swap_endpoint_data_account_address,
+				usdc_token_mint_pubkey,
+				usdt_token_mint_pubkey,
+			},
 			(),
 		),
 		shared_data_reference_lifetime,
@@ -298,6 +307,8 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 				tx_metadata: (),
 				transaction_ref: signature,
 			},
+			// Solana doesn't use this block number; it's primarily for EVM chains.
+			Default::default(),
 		) {
 			log::error!(
 				"Failed to execute egress success: TxOutId: {:?}, Error: {:?}",
@@ -447,6 +458,7 @@ impl
 pub struct SolanaIngressSettings {
 	pub vault_program: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
+	pub usdt_token_mint_pubkey: SolAddress,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -455,6 +467,7 @@ impl BenchmarkValue for SolanaIngressSettings {
 		Self {
 			vault_program: SolAddress([0xf0; 32]),
 			usdc_token_mint_pubkey: SolAddress([0xf1; 32]),
+			usdt_token_mint_pubkey: SolAddress([0xf2; 32]),
 		}
 	}
 }
@@ -674,6 +687,7 @@ impl
 pub struct SolanaVaultSwapsSettings {
 	pub swap_endpoint_data_account_address: SolAddress,
 	pub usdc_token_mint_pubkey: SolAddress,
+	pub usdt_token_mint_pubkey: SolAddress,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -682,6 +696,7 @@ impl BenchmarkValue for SolanaVaultSwapsSettings {
 		Self {
 			swap_endpoint_data_account_address: BenchmarkValue::benchmark_value(),
 			usdc_token_mint_pubkey: BenchmarkValue::benchmark_value(),
+			usdt_token_mint_pubkey: BenchmarkValue::benchmark_value(),
 		}
 	}
 }

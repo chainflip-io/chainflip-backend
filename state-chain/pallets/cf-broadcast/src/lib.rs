@@ -29,13 +29,12 @@ use cf_chains::{
 	address::IntoForeignChainAddress, ApiCall, Chain, ChainCrypto, FeeRefundCalculator,
 	RequiresSignatureRefresh, RetryPolicy, TransactionBuilder, TransactionMetadata as _,
 };
-use cf_primitives::{BlockWitnesserEvent, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, ElectionEgressWitnesser, EpochInfo, GetBlockHeight, Hook,
-	RotationBroadcastsPending, ThresholdSigner,
+	CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain, ElectionEgressWitnesser, EpochInfo,
+	GetBlockHeight, OnBroadcastSuccess, RotationBroadcastsPending, ThresholdSigner,
 };
-use cf_utilities::define_empty_struct;
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, Encode, MaxEncodedLen};
 use derive_where::derive_where;
@@ -57,7 +56,7 @@ use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
 type AggKey<T, I> =
-	<<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
+	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::AggKey;
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -85,45 +84,45 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
 	use cf_runtime_utilities::log_or_panic;
-	use cf_traits::{AccountRoleRegistry, BroadcastNomination, LiabilityTracker, OnBroadcastReady};
+	use cf_traits::{
+		AccountRoleRegistry, BroadcastNomination, ChainflipWithTargetChain, LiabilityTracker,
+		OnBroadcastReady, OnBroadcastSuccess, TargetChainOf,
+	};
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
 		traits::EnsureOrigin,
 	};
 
 	/// Type alias for the instance's configured Transaction.
-	pub type TransactionFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::Transaction;
+	pub type TransactionFor<T, I> = <TargetChainOf<T, I> as Chain>::Transaction;
 
 	/// Type alias for the instance's configured SignerId.
-	pub type SignerIdFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAccount;
+	pub type SignerIdFor<T, I> = <TargetChainOf<T, I> as Chain>::ChainAccount;
 
 	/// Type alias for the threshold signature
 	pub type ThresholdSignatureFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 	pub type TransactionOutIdFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::TransactionOutId;
 
-	pub type TransactionRefFor<T, I> = <<T as Config<I>>::TargetChain as Chain>::TransactionRef;
+	pub type TransactionRefFor<T, I> = <TargetChainOf<T, I> as Chain>::TransactionRef;
 
 	/// Type alias for the instance's configured Payload.
 	pub type PayloadFor<T, I> =
-		<<<T as Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::Payload;
+		<<TargetChainOf<T, I> as Chain>::ChainCrypto as ChainCrypto>::Payload;
 
 	/// Type alias for the instance's configured transaction Metadata.
-	pub type TransactionMetadataFor<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::TransactionMetadata;
+	pub type TransactionMetadataFor<T, I> = <TargetChainOf<T, I> as Chain>::TransactionMetadata;
 
 	pub type ChainBlockNumberFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainBlockNumber;
+		<TargetChainOf<T, I> as cf_chains::Chain>::ChainBlockNumber;
 
 	/// Type alias for the Amount type of a particular chain.
-	pub type ChainAmountFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::ChainAmount;
+	pub type ChainAmountFor<T, I> = <TargetChainOf<T, I> as cf_chains::Chain>::ChainAmount;
 
 	/// Type alias for the Amount type of a particular chain.
-	pub type TransactionFeeFor<T, I> =
-		<<T as Config<I>>::TargetChain as cf_chains::Chain>::TransactionFee;
+	pub type TransactionFeeFor<T, I> = <TargetChainOf<T, I> as cf_chains::Chain>::TransactionFee;
 
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
@@ -170,7 +169,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config<I: 'static = ()>: Chainflip {
+	pub trait Config<I: 'static = ()>:
+		ChainflipWithTargetChain<I, TargetChain: PalletInstanceAlias>
+	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -191,11 +192,8 @@ pub mod pallet {
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
 
-		/// A marker trait identifying the chain that we are broadcasting to.
-		type TargetChain: Chain + PalletInstanceAlias;
-
 		/// The api calls supported by this broadcaster.
-		type ApiCall: ApiCall<<<Self as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto>
+		type ApiCall: ApiCall<<<Self as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto>
 			+ BenchmarkValue
 			+ Send
 			+ Sync;
@@ -224,6 +222,9 @@ pub mod pallet {
 		type EnsureThresholdSigned: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
 		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
+
+		/// Hook called when a broadcast is successfully witnessed on the external chain.
+		type OnBroadcastSuccess: OnBroadcastSuccess<Self::TargetChain>;
 
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
@@ -655,6 +656,7 @@ pub mod pallet {
 					tx_metadata,
 					transaction_ref,
 				},
+				Default::default(),
 			)
 		}
 
@@ -808,6 +810,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			tx_metadata,
 			transaction_ref,
 		}: TransactionConfirmation<T, I>,
+		witnessed_at_block: ChainBlockNumberFor<T, I>,
 	) -> DispatchResult {
 		let (broadcast_id, _initiated_at) = TransactionOutIdToBroadcastId::<T, I>::take(&tx_out_id)
 			.ok_or(Error::<T, I>::InvalidPayload)?;
@@ -870,12 +873,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
 			RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-				broadcast_id,
-				result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(|e| {
-					log::warn!("Callback execution has failed for broadcast {}.", broadcast_id);
-					e.error
-				}),
+
+			T::OnBroadcastSuccess::with_witness_block(witnessed_at_block, || {
+				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
+					broadcast_id,
+					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
+						|e| {
+							log::warn!(
+								"Callback execution has failed for broadcast {}.",
+								broadcast_id
+							);
+							e.error
+						},
+					),
+				})
 			});
 		}
 
@@ -1243,7 +1254,7 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 			.first()
 			.defensive_proof("Broadcast ID was just inserted, so at least this one must exist.")
 		{
-			for barrier in <<<T as pallet::Config<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id) {
+			for barrier in <<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::maybe_broadcast_barriers_on_rotation(broadcast_id) {
 					if barrier >= *earliest_pending_broadcast_id {
 						BroadcastBarriers::<T, I>::append(barrier);
 					}
@@ -1259,46 +1270,5 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> RotationBroadcastsPending for Pallet<T, I> {
 	fn rotation_broadcasts_pending() -> bool {
 		IncomingKeyAndBroadcastId::<T, I>::exists()
-	}
-}
-
-define_empty_struct! {
-	pub struct PalletHooks<T: Config<I>, I: 'static>;
-}
-
-impl<T: Config<I>, I: 'static>
-	Hook<(
-		(
-			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
-			<T::TargetChain as Chain>::ChainBlockNumber,
-		),
-		(),
-	)> for PalletHooks<T, I>
-where
-	<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
-{
-	fn run(
-		&mut self,
-		(event, _block_height): (
-			BlockWitnesserEvent<TransactionConfirmation<T, I>>,
-			<T::TargetChain as Chain>::ChainBlockNumber,
-		),
-	) {
-		match event {
-			BlockWitnesserEvent::PreWitness(_) => { /* We don't care about pre-witnessing an egress */
-			},
-			BlockWitnesserEvent::Witness(egress) => {
-				if let Err(err) = Pallet::<T, I>::egress_success(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
-					egress.clone(),
-				) {
-					log::error!(
-						"Failed to execute Bitcoin egress success: TxOutId: {:?}, Error: {:?}",
-						egress.tx_out_id,
-						err
-					)
-				}
-			},
-		}
 	}
 }

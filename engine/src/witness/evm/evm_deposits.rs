@@ -30,7 +30,7 @@ use crate::witness::{
 	evm::vault::VaultEvents,
 };
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use cf_chains::evm::DepositDetails;
 use ethers::prelude::*;
@@ -101,8 +101,8 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							.map(|deposit_channel| deposit_channel.deposit_channel.address)
 							.collect::<Vec<_>>();
 
-						let ingresses = eth_ingresses_at_block(
-							address_states(
+						let ingresses = eth_ingresses_at_block_deprecated(
+							address_states_deprecated(
 								&eth_rpc,
 								address_checker_address,
 								parent_hash,
@@ -167,7 +167,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	}
 }
 
-async fn address_states<EvmRetryRpcClient>(
+async fn address_states_deprecated<EvmRetryRpcClient>(
 	eth_rpc: &EvmRetryRpcClient,
 	address_checker_address: H160,
 	parent_hash: H256,
@@ -194,27 +194,20 @@ where
 		.zip(previous_address_states.into_iter().zip(address_states)))
 }
 
-/// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
-/// [eth_ingresses_at_block].
+/// Calculates native asset ingresses from a combination of address states and `FetchedNative`
+/// events.
 ///
-/// if !address.hasContract:
-///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
-///  else:
-///    swap = (sum of amounts in the FetchedNative events for the particular sender) -
-/// address.balanceAtPreviousBlock
+/// `address_states` is provided only for channels with undeployed contracts. For these addresses:
+/// - If no contract deployed: ingress = balance diff between current and previous block
+/// - If contract just deployed this block: ingress = fetched amount - previous balance
 ///
-/// We then do this on *every* block. This ensures we don't miss anything. See the tests below.
-/// The `FetchedNative` events are emitted by the Vault contract when native asset funds are fetched
-/// by the Deposit contract upon deployment or after it.
-/// Note that when we have a contract deployed already we substrate the balance at the previous
-/// block, since we will have already witnessed the deposits at the time the deposit was made.
-/// We also return the transactions hashes of the transactions that caused the ingress, after the
-/// contract is deployed. These transaction hashes are not important for witnessing, but are used
-/// for tracing the end to end flow of the funds.
-pub fn eth_ingresses_at_block<
-	Addresses: IntoIterator<Item = (H160, (AddressState, AddressState))>,
->(
-	addresses: Addresses,
+/// For addresses not in `address_states` (i.e., channels with already deployed contracts), we rely
+/// solely on `FetchedNative` events emitted by the Vault contract when funds are fetched.
+///
+/// Transaction hashes are returned for deposits after contract deployment, used for tracing the
+/// end-to-end flow of funds (not for witnessing).
+pub fn eth_ingresses_at_block(
+	undeployed_address_states: HashMap<H160, (AddressState, AddressState)>,
 	native_events: Vec<(FetchedNativeFilter, H256)>,
 ) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
 	let fetched_native_totals: BTreeMap<_, _> = native_events
@@ -236,7 +229,84 @@ pub fn eth_ingresses_at_block<
 		})
 		.collect();
 
-	addresses
+	let mut results = Vec::new();
+
+	// Process addresses from address_states (may or may not have events)
+	for (address, (previous_address_state, address_state)) in &undeployed_address_states {
+		let (ingress_amount, tx_hashes) = if !address_state.has_contract {
+			ensure!(!previous_address_state.has_contract);
+			ensure!(!fetched_native_totals.contains_key(address));
+
+			(address_state.balance.saturating_sub(previous_address_state.balance), None)
+		} else {
+			let fetched_native_total =
+				fetched_native_totals.get(address).cloned().unwrap_or_default();
+
+			if !previous_address_state.has_contract {
+				(fetched_native_total.0.saturating_sub(previous_address_state.balance), None)
+			} else {
+				(fetched_native_total.0, Some(fetched_native_total.1))
+			}
+		};
+
+		if !ingress_amount.is_zero() {
+			results.push((*address, ingress_amount, tx_hashes));
+		}
+	}
+
+	// Process events for addresses NOT in address_states
+	for (address, (amount, tx_hashes)) in fetched_native_totals {
+		if !undeployed_address_states.contains_key(&address) && !amount.is_zero() {
+			results.push((address, amount, Some(tx_hashes)));
+		}
+	}
+
+	Ok(results)
+}
+
+/// To ensure we don't double witness deposits, we use the following pseudo-code, implemented by
+/// [eth_ingresses_at_block].
+///
+/// if !address.hasContract:
+///    swap = address.balanceAtCurrentBlock - address.balanceAtPreviousBlock
+///  else:
+///    swap = (sum of amounts in the FetchedNative events for the particular sender) -
+/// address.balanceAtPreviousBlock
+///
+/// We then do this on *every* block. This ensures we don't miss anything. See the tests below.
+/// The `FetchedNative` events are emitted by the Vault contract when native asset funds are fetched
+/// by the Deposit contract upon deployment or after it.
+/// Note that when we have a contract deployed already we substrate the balance at the previous
+/// block, since we will have already witnessed the deposits at the time the deposit was made.
+/// We also return the transactions hashes of the transactions that caused the ingress, after the
+/// contract is deployed. These transaction hashes are not important for witnessing, but are used
+/// for tracing the end to end flow of the funds.
+pub fn eth_ingresses_at_block_deprecated<
+	AddressStates: IntoIterator<Item = (H160, (AddressState, AddressState))>,
+>(
+	address_states: AddressStates,
+	native_events: Vec<(FetchedNativeFilter, H256)>,
+) -> Result<Vec<(H160, U256, Option<Vec<H256>>)>, anyhow::Error> {
+	let fetched_native_totals: BTreeMap<_, _> = native_events
+		.into_iter()
+		.into_group_map_by(|(event, _tx_hash)| event.sender)
+		.into_iter()
+		.map(|(sender, events)| {
+			// collect the tx_hashes here too.
+			(
+				sender,
+				events.into_iter().fold(
+					(U256::from(0), Vec::new()),
+					|(total_fetched, mut tx_hashes), (event, tx_hash)| {
+						tx_hashes.push(tx_hash);
+						(total_fetched.saturating_add(event.amount), tx_hashes)
+					},
+				),
+			)
+		})
+		.collect();
+
+	address_states
 		.into_iter()
 		.map(|(address, (previous_address_state, address_state))| {
 			let (ingress_amount, tx_hashes) = if !address_state.has_contract {
@@ -281,10 +351,9 @@ mod tests {
 
 	#[test]
 	fn block_empty_lists() {
-		let addresses = [];
 		let native_events = Default::default();
 
-		let ingresses = eth_ingresses_at_block(addresses, native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(Default::default(), native_events).unwrap();
 
 		assert!(ingresses.is_empty());
 	}
@@ -298,24 +367,32 @@ mod tests {
 				AddressState { balance: U256::from(100), has_contract: false },
 				AddressState { balance: U256::from(200), has_contract: false },
 			),
-		)];
+		)]
+		.into();
 
-		// some random event should not be ignored
+		// some random event should not be ignored, with the new logic if we pass an event to
+		// eth_ingresses_at_block it will always be witnessed, we filter events against the
+		// provided deposit channel beofre calling eth_ingresses_at_block
 		let native_events = vec![(
 			FetchedNativeFilter { sender: H160::random(), amount: U256::from(300) },
 			H256::random(),
 		)];
 
-		let ingresses = eth_ingresses_at_block(addresses, native_events).unwrap();
+		let ingresses = eth_ingresses_at_block(addresses, native_events.clone()).unwrap();
 
-		assert!(ingresses.eq(&[(address, U256::from(100), None)]));
+		assert!(ingresses.contains(&(address, U256::from(100), None)));
+		assert!(ingresses.contains(&(
+			native_events[0].0.sender,
+			U256::from(300),
+			Some(vec![native_events[0].1])
+		)));
 	}
 
 	#[test]
 	fn test_eth_ingresses_at_block_when_contract_deployed() {
 		let before_contract_deployed = U256::from(200);
 
-		let addresses = vec![
+		let addresses = [
 			(
 				H160::random(),
 				(
@@ -346,22 +423,18 @@ mod tests {
 				FetchedNativeFilter { sender: addresses[1].0, amount: U256::from(212) },
 				H256::random(),
 			),
-			// Not in our list of monitored addresses, so we don't witness it.
-			(
-				FetchedNativeFilter { sender: H160::random(), amount: U256::from(420) },
-				H256::random(),
-			),
 		];
 
-		let ingresses = eth_ingresses_at_block(addresses.clone(), native_events).unwrap();
+		let ingresses =
+			eth_ingresses_at_block(addresses.clone().into_iter().collect(), native_events).unwrap();
 
 		// For both addresses, in the previous block there was no contract, therefore we expect that
 		// any FetchedNative events are from the deployment of the contract, and therefore not a
 		// tx_hash we care about.
-		assert!(ingresses.eq(&[
-			(addresses[0].0, U256::from(123), None),
-			(addresses[1].0, U256::from(212), None)
-		]));
+		assert!(
+			ingresses.contains(&(addresses[1].0, U256::from(212), None)) &&
+				ingresses.contains(&(addresses[0].0, U256::from(123), None))
+		);
 	}
 
 	#[test]
@@ -390,18 +463,18 @@ mod tests {
 			(FetchedNativeFilter { sender: addresses[0].0, amount: U256::from(200) }, tx_hashes[0]),
 			(FetchedNativeFilter { sender: addresses[0].0, amount: U256::from(123) }, tx_hashes[1]),
 			(FetchedNativeFilter { sender: addresses[1].0, amount: U256::from(212) }, tx_hashes[2]),
-			// Not in our list of monitored addresses, so we don't witness it.
-			(FetchedNativeFilter { sender: H160::random(), amount: U256::from(420) }, tx_hashes[3]),
 		];
 
-		let ingresses = eth_ingresses_at_block(addresses.clone(), native_events).unwrap();
+		let ingresses =
+			eth_ingresses_at_block(addresses.clone().into_iter().collect(), native_events).unwrap();
 
-		assert!(ingresses.eq(&[
-			// NB: Here the amounts are the sum of the FetchedNative events, since the contract was
-			// already deployed last block.
-			(addresses[0].0, U256::from(323), Some(vec![tx_hashes[0], tx_hashes[1]])),
-			(addresses[1].0, U256::from(212), Some(vec![tx_hashes[2]]))
-		]));
+		assert!(
+			ingresses.contains(&(
+				addresses[0].0,
+				U256::from(323),
+				Some(vec![tx_hashes[0], tx_hashes[1]])
+			)) && ingresses.contains(&(addresses[1].0, U256::from(212), Some(vec![tx_hashes[2]])))
+		);
 	}
 
 	#[ignore = "requires connection to a node"]
@@ -434,7 +507,7 @@ mod tests {
 				let block_number = 138;
 				let block = client.block(block_number.into()).await;
 
-				let address_states = address_states(
+				let address_states = address_states_deprecated(
 					&client,
 					address_checker_address,
 					block.parent_hash,
@@ -466,7 +539,8 @@ mod tests {
 					.collect();
 
 				let increases =
-					eth_ingresses_at_block(address_states, fetched_native_events).unwrap();
+					eth_ingresses_at_block_deprecated(address_states, fetched_native_events)
+						.unwrap();
 
 				for (address, increase, tx_hashes) in increases {
 					println!("{}: {}. Txs: {:?}", address, increase, tx_hashes);

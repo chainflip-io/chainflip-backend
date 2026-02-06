@@ -62,7 +62,8 @@ const MAXIMUM_CONCURRENT_RPCS: usize = 16;
 pub async fn get_channel_ingress_amounts<SolRetryRpcClient>(
 	sol_rpc: &SolRetryRpcClient,
 	vault_address: SolAddress,
-	token_pubkey: SolAddress,
+	usdc_mint_pubkey: SolAddress,
+	usdt_mint_pubkey: SolAddress,
 	deposit_channels: BTreeMap<
 		SolAddress,
 		(OpenChannelDetailsFor<SolanaIngressEgress>, ChannelTotalIngressedFor<SolanaIngressEgress>),
@@ -85,10 +86,17 @@ where
 					// pass a corresponding token_pubkey to this function.
 					Asset::SolUsdc => DepositChannelType::TokenDepositChannel(
 						address,
-						derive_associated_token_account(address, token_pubkey)
-							.expect("Failed to derive associated token account")
+						derive_associated_token_account(address, usdc_mint_pubkey)
+							.expect("Failed to derive usdc associated token account")
 							.address,
-						token_pubkey,
+						usdc_mint_pubkey,
+					),
+					Asset::SolUsdt => DepositChannelType::TokenDepositChannel(
+						address,
+						derive_associated_token_account(address, usdt_mint_pubkey)
+							.expect("Failed to derive usdt associated token account")
+							.address,
+						usdt_mint_pubkey,
 					),
 				}
 			}),

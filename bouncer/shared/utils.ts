@@ -144,7 +144,7 @@ export function getContractAddress(chain: Chain, contract: string): string {
     case 'Ethereum':
       switch (contract) {
         case 'VAULT':
-          return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
+          return '0xB7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968';
         case 'KEY_MANAGER':
           return '0xa16E02E87b7454126E5E10d957A927A7F5B5d2be';
         case 'Eth':
@@ -155,6 +155,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
         case 'Usdt':
           return process.env.ETH_USDT_ADDRESS ?? '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
+        case 'Wbtc':
+          return process.env.ETH_WBTC_ADDRESS ?? '0x67d269191c92Caf3cD7723F116c85e6E9bf55933';
         case 'CFTESTER':
           return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
         case 'GATEWAY':
@@ -184,6 +186,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'ArbUsdc':
           return process.env.ARB_USDC_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
+        case 'ArbUsdt':
+          return process.env.ARB_USDT_ADDRESS ?? '0x9A676e781A523b5d0C0e43731313A708CB607508';
         case 'CFTESTER':
           return '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82';
         case 'PRICE_FEED_BTC':
@@ -211,11 +215,21 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return 'BttvFNSRKrkHugwDP6SpnBejCKKskHowJif1HGgBtTfG';
         case 'SolUsdc':
           return process.env.SOL_USDC_ADDRESS ?? '24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p';
+        case 'SolUsdt':
+          return process.env.SOL_USDT_ADDRESS ?? '8D5DryH5hA6s7Wf5AHXX19pNBwaTmMmvj4UgQGW2S8dF';
         case 'SolUsdcTokenSupport':
           return PublicKey.findProgramAddressSync(
             [
               Buffer.from('supported_token'),
               new PublicKey(getContractAddress('Solana', 'SolUsdc')).toBuffer(),
+            ],
+            new PublicKey(getContractAddress('Solana', 'VAULT')),
+          )[0].toBase58();
+        case 'SolUsdtTokenSupport':
+          return PublicKey.findProgramAddressSync(
+            [
+              Buffer.from('supported_token'),
+              new PublicKey(getContractAddress('Solana', 'SolUsdt')).toBuffer(),
             ],
             new PublicKey(getContractAddress('Solana', 'VAULT')),
           )[0].toBase58();
@@ -245,14 +259,17 @@ export function shortChainFromAsset(asset: Asset) {
     case 'Flip':
     case 'Usdc':
     case 'Usdt':
+    case 'Wbtc':
       return 'Eth';
     case 'Btc':
       return 'Btc';
     case 'ArbUsdc':
+    case 'ArbUsdt':
     case 'ArbEth':
       return 'Arb';
     case 'Sol':
     case 'SolUsdc':
+    case 'SolUsdt':
       return 'Sol';
     case 'HubDot':
     case 'HubUsdc':
@@ -274,6 +291,7 @@ export function fineAmountToAmount(fineAmount: string, decimals: number | string
 export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
     case 'Btc':
+    case 'Wbtc':
       return '0.05';
     case 'Eth':
     case 'ArbEth':
@@ -284,8 +302,10 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'Usdc':
     case 'Usdt':
     case 'ArbUsdc':
+    case 'ArbUsdt':
     case 'Flip':
     case 'SolUsdc':
+    case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
       return '500';
@@ -665,8 +685,10 @@ export async function newAddress(
     case Assets.Eth:
     case Assets.Usdc:
     case Assets.Usdt:
+    case Assets.Wbtc:
     case Assets.ArbEth:
     case Assets.ArbUsdc:
+    case Assets.ArbUsdt:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.Dot:
@@ -680,6 +702,7 @@ export async function newAddress(
       break;
     case 'Sol':
     case 'SolUsdc':
+    case 'SolUsdt':
       rawAddress = newSolAddress(seed);
       break;
     default:
@@ -691,7 +714,6 @@ export async function newAddress(
 
 export function chainFromAsset(asset: Asset): Chain {
   if (isSDKAsset(asset)) return assetConstants[asset].chain;
-  if (asset === 'Sol' || asset === 'SolUsdc') return 'Solana';
   throw new Error(`Unsupported asset: ${asset}`);
 }
 

@@ -16,16 +16,24 @@ export async function sendErc20(
 ) {
   const web3 = new Web3(getEvmEndpoint(chain));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contract = new web3.eth.Contract(erc20abi as any, contractAddress);
-  const decimals = await contract.methods.decimals().call();
-  const symbol = await contract.methods.symbol().call();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contract = new web3.eth.Contract(erc20abi as any, contractAddress);
+    const decimals = await contract.methods.decimals().call();
+    const symbol = await contract.methods.symbol().call();
 
-  const fineAmount = amountToFineAmount(amount, decimals);
+    const fineAmount = amountToFineAmount(amount, decimals);
 
-  const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
+    const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
 
-  logger.debug(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
+    logger.debug(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
 
-  return signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
+    return await signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
+  } catch (error) {
+    // log the error and rethrow
+    logger.error(`sendErc20 failed: ${error instanceof Error ? error.message : String(error)}`, {
+      error,
+    });
+    throw error;
+  }
 }

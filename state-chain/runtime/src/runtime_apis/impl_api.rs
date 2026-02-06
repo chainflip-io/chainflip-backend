@@ -49,8 +49,8 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer, STABLE_ASSET,
 };
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochKey, GetBlockHeight, KeyProvider,
-	SwapLimits, SwapParameterValidation,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
+	GetBlockHeight, KeyProvider, SwapLimits, SwapParameterValidation,
 };
 use codec::{Decode, Encode};
 use core::ops::Range;
@@ -505,7 +505,7 @@ impl_runtime_apis! {
 		}
 		fn cf_open_deposit_channels_count() -> OpenDepositChannels {
 			fn open_channels<BlockHeight, I: 'static>() -> u32
-				where BlockHeight: GetBlockHeight<<Runtime as pallet_cf_ingress_egress::Config<I>>::TargetChain>, Runtime: pallet_cf_ingress_egress::Config<I>
+				where BlockHeight: GetBlockHeight<<Runtime as ChainflipWithTargetChain<I>>::TargetChain>, Runtime: pallet_cf_ingress_egress::Config<I>
 			{
 				pallet_cf_ingress_egress::DepositChannelLookup::<Runtime, I>::iter().filter(|(_key, elem)| elem.expires_at > BlockHeight::get_block_height()).collect::<Vec<_>>().len() as u32
 			}
@@ -1787,8 +1787,10 @@ impl_runtime_apis! {
 				sol_vault_program: solana_api_environment.vault_program.into(),
 				sol_swap_endpoint_program_data_account: solana_api_environment.swap_endpoint_program_data_account.into(),
 				usdc_token_mint_pubkey: Environment::solana_api_environment().usdc_token_mint_pubkey.into(),
+				usdt_token_mint_pubkey: Environment::solana_api_environment().usdt_token_mint_pubkey.into(),
 				solana_sol_vault: <SolEnvironment as ChainEnvironment<_, SolAddress>>::lookup(cf_chains::sol::api::CurrentAggKey).map(Into::into),
 				solana_usdc_token_vault_ata: solana_api_environment.usdc_token_vault_ata.into(),
+				solana_usdt_token_vault_ata: solana_api_environment.usdt_token_vault_ata.into(),
 				solana_vault_swap_account: sol_prim::address_derivation::derive_swap_endpoint_native_vault_account(
 					solana_api_environment.swap_endpoint_program
 				).ok().map(|account| account.address.into()),

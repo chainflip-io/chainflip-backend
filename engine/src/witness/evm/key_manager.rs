@@ -109,7 +109,7 @@ pub async fn handle_key_manager_events<Config>(
 ) -> Result<Vec<KeyManagerEventResult<Config::Instance>>>
 where
 	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, Chain = Config::Chain>
+	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
 		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
 {
 	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
@@ -134,7 +134,7 @@ async fn handle_key_manager_event<Config>(
 ) -> Result<Option<KeyManagerEventResult<Config::Instance>>>
 where
 	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, Chain = Config::Chain>
+	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
 		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
 {
 	Ok(Some(match event {

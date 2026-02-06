@@ -8,7 +8,8 @@ expression: val
       "ETH": 123456,
       "FLIP": 123456,
       "USDC": 123456,
-      "USDT": 123456
+      "USDT": 123456,
+      "WBTC": 123456
     },
     "Polkadot": {
       "DOT": 123456
@@ -18,11 +19,13 @@ expression: val
     },
     "Arbitrum": {
       "ETH": 123456,
-      "USDC": 123456
+      "USDC": 123456,
+      "USDT": 123456
     },
     "Solana": {
       "SOL": 123456,
-      "USDC": 123456
+      "USDC": 123456,
+      "USDT": 123456
     },
     "Assethub": {
       "DOT": 123456,
@@ -35,7 +38,8 @@ expression: val
       "ETH": 654321,
       "FLIP": 654321,
       "USDC": 654321,
-      "USDT": 654321
+      "USDT": 654321,
+      "WBTC": 654321
     },
     "Polkadot": {
       "DOT": 654321
@@ -45,11 +49,13 @@ expression: val
     },
     "Arbitrum": {
       "ETH": 654321,
-      "USDC": 654321
+      "USDC": 654321,
+      "USDT": 654321
     },
     "Solana": {
       "SOL": 654321,
-      "USDC": 654321
+      "USDC": 654321,
+      "USDT": 654321
     },
     "Assethub": {
       "DOT": 654321,

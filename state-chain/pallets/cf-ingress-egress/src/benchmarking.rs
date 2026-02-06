@@ -30,8 +30,7 @@ use frame_support::{
 	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
 };
 
-pub(crate) type TargetChainBlockNumber<T, I> =
-	<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
+pub(crate) type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
 
 #[instance_benchmarks]
 mod benchmarks {
@@ -42,7 +41,7 @@ mod benchmarks {
 	#[benchmark]
 	fn disable_asset_egress() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
-		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
+		let destination_asset: <TargetChainOf<T, I> as Chain>::ChainAsset =
 			BenchmarkValue::benchmark_value();
 
 		#[block]
@@ -57,11 +56,11 @@ mod benchmarks {
 	fn process_channel_deposit_full_witness() {
 		const CHANNEL_ID: u64 = 1;
 
-		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount =
+		let deposit_address: <TargetChainOf<T, I> as Chain>::ChainAccount =
 			BenchmarkValue::benchmark_value();
-		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
+		let source_asset: <TargetChainOf<T, I> as Chain>::ChainAsset =
 			BenchmarkValue::benchmark_value();
-		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =
+		let deposit_amount: <TargetChainOf<T, I> as Chain>::ChainAmount =
 			BenchmarkValue::benchmark_value();
 		let block_number: TargetChainBlockNumber<T, I> = BenchmarkValue::benchmark_value();
 		DepositChannelLookup::<T, I>::insert(
@@ -107,10 +106,8 @@ mod benchmarks {
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
 		for _ in 1..a {
 			let deposit_address =
-				<<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(
-					a as u8,
-				);
-			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset =
+				<TargetChainOf<T, I> as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
+			let source_asset: <TargetChainOf<T, I> as Chain>::ChainAsset =
 				BenchmarkValue::benchmark_value();
 			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
 			let mut channel = DepositChannelDetails::<T, I> {

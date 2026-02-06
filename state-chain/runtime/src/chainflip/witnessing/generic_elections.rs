@@ -17,7 +17,7 @@
 use cf_amm::math::Price;
 use cf_primitives::chains::assets::any;
 use cf_runtime_utilities::log_or_panic;
-use cf_utilities::macros::*;
+use cf_utilities::{impls, macros::*};
 use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{Get, RuntimeDebug, H160};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -76,12 +76,15 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 		any::Asset::Flip => None,
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
+		any::Asset::Wbtc => Some(BtcUsd),
 		any::Asset::Dot => None,
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
 		any::Asset::ArbUsdc => Some(UsdcUsd),
+		any::Asset::ArbUsdt => Some(UsdtUsd),
 		any::Asset::Sol => Some(SolUsd),
 		any::Asset::SolUsdc => Some(UsdcUsd),
+		any::Asset::SolUsdt => Some(UsdtUsd),
 		any::Asset::HubDot => None,
 		any::Asset::HubUsdt => Some(UsdtUsd),
 		any::Asset::HubUsdc => Some(UsdcUsd),

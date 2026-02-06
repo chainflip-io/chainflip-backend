@@ -8363,7 +8363,6 @@ dependencies = [
  "frame-system",
  "generic-typeinfo-derive",
  "log",
- "pallet-cf-witnesser",
  "parity-scale-codec",
  "scale-info",
  "serde",

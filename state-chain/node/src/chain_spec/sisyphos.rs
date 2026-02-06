@@ -52,6 +52,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("cD079EAB6B5443b545788Fd210C8800FEADd87fa"),
 	eth_usdc_address: hex_literal::hex!("1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),
 	eth_usdt_address: hex_literal::hex!("27cea6eb8a21aae05eb29c91c5ca10592892f584"),
+	eth_wbtc_address: hex_literal::hex!("aaf48bd21155efeff9ca3699659c96bc86539b49"),
 	state_chain_gateway_address: hex_literal::hex!("1F7fE41C798cc7b1D34BdC8de2dDDA4a4bE744D9"),
 	eth_key_manager_address: hex_literal::hex!("22f5562e6859924Db082b8B248ea0C974f148a17"),
 	eth_vault_address: hex_literal::hex!("a94d6b1853F3cb611Ed3cCb701b4fdA5a9DACe85"),
@@ -60,6 +61,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_key_manager_address: hex_literal::hex!("7EA74208E2954a7294097C731434caD29c5094D8"),
 	arb_vault_address: hex_literal::hex!("8155BdD48CD011e1118b51A1C82be020A3E5c2f2"),
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
+	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
@@ -93,6 +95,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	)),
 	sol_usdc_token_vault_ata: SolAddress(bs58_array(
 		"B2d8rCk5jXUfjgYMpVRARQqZ4xh49XNMf7GYUFtdZd6q",
+	)),
+	sol_usdt_token_mint_pubkey: SolAddress(bs58_array(
+		"FvuqJYh8YeEmarW5qkSrYeEgzaTKktgL3vhgBy2Csy4o",
+	)),
+	sol_usdt_token_vault_ata: SolAddress(bs58_array(
+		"2LyjbUW592tgVsLn4EczYdhMzHp5DkKhjcCfkRfXMyst",
 	)),
 	sol_durable_nonces_and_accounts: [
 		(
