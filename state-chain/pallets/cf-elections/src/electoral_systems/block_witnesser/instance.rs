@@ -248,35 +248,6 @@ fn dedup_events_test() {
 }
 
 /// This trait is only temporary. It's required because currently in the `Chain` trait
-/// implementation the ChainBlockNumber type is u64, but in the arbitrum elections the block number
-/// type is BlockWitnessRange<>. As long as the old witnessing code exists, it is difficult to
-/// change the ChainBlockNumber type of the Chain trait, because code relies on the fact that it's a
-/// number.
-///
-/// When assethub is removed, the ChainBlockNumber type of Arbitrum should be changed to
-/// BlockWitnessRange and this trait can then be removed.
-pub trait HasWitnessRoot {
-	type Root;
-	fn get_root(&self) -> Self::Root;
-}
-
-impl<C: ChainWitnessConfig> HasWitnessRoot for BlockWitnessRange<C> {
-	type Root = C::ChainBlockNumber;
-
-	fn get_root(&self) -> Self::Root {
-		*self.root()
-	}
-}
-
-impl HasWitnessRoot for u64 {
-	type Root = u64;
-
-	fn get_root(&self) -> Self::Root {
-		*self
-	}
-}
-
-/// This trait is only temporary. It's required because currently in the `Chain` trait
 /// implementation the ChainBlockNumber type is u64, but in the ethereum elections the block number
 /// type is BlockWitnessRange<>. As long as the old witnessing code exists, it is difficult to
 /// change the ChainBlockNumber type of the Chain trait, because code relies on the fact that it's a
