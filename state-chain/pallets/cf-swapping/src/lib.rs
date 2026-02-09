@@ -1992,7 +1992,7 @@ pub mod pallet {
 			if let Some(stable_amount_after_fees) = swap.stable_amount {
 				// Calculate the slippage from oracle prices for both legs of the swap.
 				let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
-					Some(Default::default())
+					Some(SignedHundredthBasisPoints(0))
 				} else {
 					Self::get_delta_from_oracle_price(
 						swap.swap.input_amount,
@@ -2002,7 +2002,7 @@ pub mod pallet {
 					)?
 				};
 				let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
-					Some(Default::default())
+					Some(SignedHundredthBasisPoints(0))
 				} else {
 					Self::get_delta_from_oracle_price(
 						stable_amount_after_fees,
@@ -2017,8 +2017,10 @@ pub mod pallet {
 				let total_delta = match (to_stable_delta, from_stable_delta) {
 					(Some(to_stable), Some(from_stable)) =>
 						Some(to_stable.saturating_add(&from_stable)),
-					(Some(delta), None) | (None, Some(delta)) => Some(delta),
-					(None, None) => None,
+					// Use the one sided slippage as long as that side is not USDC.
+					(Some(delta), None) if swap.input_asset() != STABLE_ASSET => Some(delta),
+					(None, Some(delta)) if swap.output_asset() != STABLE_ASSET => Some(delta),
+					_ => None,
 				};
 
 				if let Some(total_delta) = total_delta {
