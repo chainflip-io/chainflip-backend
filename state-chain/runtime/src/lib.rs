@@ -509,6 +509,10 @@ type MigrationsForV2_1 = (
 		include_instances: [EthereumInstance, ArbitrumInstance],
 		exclude_instances: [PolkadotInstance, BitcoinInstance, SolanaInstance, AssethubInstance],
 	},
+	pallet_session::migrations::v1::MigrateV0ToV1<
+		Runtime,
+		pallet_session::migrations::v1::InitOffenceSeverity<Runtime>,
+	>,
 );
 
 #[cfg(test)]
