@@ -71,7 +71,7 @@ impl<
 	// The external chain block number that the engines will get the hash for.
 	type ElectionProperties = ChainBlockNumber;
 
-	// The SC block number that we started the election at. The epoch for which is valid
+	// The SC block number at which the election started, and the epoch for which it is valid
 	type ElectionState = (StateChainBlockNumber, EpochIndex);
 	type VoteStorage = vote_storage::bitmap_numerical::BitmapNoHash<ChainBlockHash>;
 	type Consensus = BTreeSet<Self::ValidatorId>;
