@@ -189,7 +189,7 @@ impl From<&DepositChannel<Bsc>> for EvmFetchId {
 	fn from(channel: &DepositChannel<Bsc>) -> Self {
 		match channel.state {
 			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
-			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+			DeploymentStatus::Pending | DeploymentStatus::Deployed { .. } =>
 				if channel.asset == assets::bsc::Asset::BscBnb {
 					EvmFetchId::NotRequired
 				} else {

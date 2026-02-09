@@ -166,6 +166,9 @@ impl ChainflipWithTargetChain<Instance5> for Runtime {
 impl ChainflipWithTargetChain<Instance6> for Runtime {
 	type TargetChain = Assethub;
 }
+impl ChainflipWithTargetChain<Instance7> for Runtime {
+	type TargetChain = Bsc;
+}
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -280,7 +283,6 @@ impl pallet_cf_vaults::Config<Instance6> for Runtime {
 
 impl pallet_cf_vaults::Config<Instance7> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Chain = Bsc;
 	type SetAggKeyWithAggKey = BscApi<EvmEnvironment>;
 	type Broadcaster = BscBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -483,7 +485,6 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Bsc, BlockNumberFor<Runtime>>;
-	type TargetChain = Bsc;
 	type AddressDerivation = AddressDerivation;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
@@ -1016,7 +1017,6 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
-	type TargetChain = Bsc;
 	type ApiCall = BscApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
 	type TransactionBuilder = chainflip::BscTransactionBuilder;
@@ -1025,6 +1025,7 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type OnBroadcastSuccess = pallet_cf_ingress_egress::Pallet<Runtime, BscInstance>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
