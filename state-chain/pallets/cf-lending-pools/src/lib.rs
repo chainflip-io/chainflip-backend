@@ -863,47 +863,9 @@ pub mod pallet {
 				Error::<T>::RemoveLenderFundsDisabled
 			);
 
-			let config = LendingConfig::<T>::get();
-
-			if let Some(amount) = amount {
-				ensure!(
-					OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
-						config.minimum_supply_amount_usd,
-					Error::<T>::AmountBelowMinimum
-				);
-			}
-
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			let unlocked_amount = GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-
-				let WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount } =
-					pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;
-
-				// Either the user removes everything, or they have to leave at least
-				// the minimum required amount in the pool (to prevent dust amounts from
-				// accumulating):
-				ensure!(
-					remaining_amount == 0 ||
-						OraclePriceCache::<T>::default()
-							.usd_value_of(asset, remaining_amount)? >=
-							config.minimum_supply_amount_usd,
-					Error::<T>::RemainingAmountBelowMinimum
-				);
-
-				Ok::<_, DispatchError>(withdrawn_amount)
-			})?;
-
-			T::Balance::credit_account(&lender_id, asset, unlocked_amount);
-
-			Self::deposit_event(Event::<T>::LendingFundsRemoved {
-				lender_id,
-				asset,
-				unlocked_amount,
-			});
-
-			Ok(())
+			general_lending::remove_lender_funds::<T>(lender_id, asset, amount)
 		}
 
 		#[pallet::call_index(7)]
