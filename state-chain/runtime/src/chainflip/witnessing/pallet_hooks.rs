@@ -105,7 +105,7 @@ hook_impls! {
 	}
 
 	// --- evm key manager events ---
-	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<EvmKeyManagerEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> ()
+	fn(&mut self, (event, block_height): (BlockWitnesserEvent<EvmKeyManagerEvent<T, I>>, TargetChainBlockNumber<T, I>)) -> ()
 	where (
 		<T as frame_system::Config>::RuntimeOrigin: From<pallet_cf_witnesser::RawOrigin>,
 		T: pallet_cf_governance::Config
@@ -118,6 +118,7 @@ hook_impls! {
 					if let Err(err) = pallet_cf_broadcast::Pallet::<T,I>::egress_success(
 						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 						transaction_confirmation,
+						block_height
 					) {
 						log::error!(
 							"Failed to execute {} egress success: TxOutId: {:?}, Error: {:?}",
