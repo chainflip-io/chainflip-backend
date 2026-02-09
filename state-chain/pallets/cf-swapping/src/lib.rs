@@ -2030,8 +2030,8 @@ pub mod pallet {
 							// The swapper expresses the limit as a worst acceptable *sell*
 							// price, so slippage needs to be measured in the negative
 							// direction (lower sell price is worse).
-							if total_delta
-								.breaches_limit(SignedBasisPoints::negative_slippage(max_slippage))
+							if total_delta <
+								SignedBasisPoints::negative_slippage(max_slippage).into()
 							{
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
