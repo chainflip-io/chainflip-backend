@@ -500,14 +500,14 @@ fn can_send_solana_ccm_v1() {
 
 			// Wait until swap is complete and ALT election started
 			vote_for_alt_election(
-				29,
+				31,
 				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
 					key: sol_test_values::user_alt().key,
 					addresses: vec![Default::default()],
 				}]),
 			);
 			vote_for_alt_election(
-				30,
+				32,
 				AltWitnessingConsensusResult::Valid(vec![SolAddressLookupTableAccount {
 					key: sol_test_values::user_alt().key,
 					addresses: vec![Default::default()],
@@ -617,32 +617,6 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 
 			// Let election come into Consensus
 			vote_for_alt_election(
-				29,
-				AltWitnessingConsensusResult::Valid(vec![
-					SolAddressLookupTableAccount {
-						key: user_alts[0].into(),
-						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
-					},
-					SolAddressLookupTableAccount {
-						key: user_alts[1].into(),
-						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
-					},
-				]),
-			);
-			vote_for_alt_election(
-				30,
-				AltWitnessingConsensusResult::Valid(vec![
-					SolAddressLookupTableAccount {
-						key: user_alts[1].into(),
-						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
-					},
-					SolAddressLookupTableAccount {
-						key: user_alts[2].into(),
-						addresses: vec![SolPubkey([0xE4; 32]), SolPubkey([0xE5; 32])],
-					},
-				]),
-			);
-			vote_for_alt_election(
 				31,
 				AltWitnessingConsensusResult::Valid(vec![
 					SolAddressLookupTableAccount {
@@ -657,6 +631,32 @@ fn ccms_can_contain_overlapping_and_identical_alts() {
 			);
 			vote_for_alt_election(
 				32,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[2].into(),
+						addresses: vec![SolPubkey([0xE4; 32]), SolPubkey([0xE5; 32])],
+					},
+				]),
+			);
+			vote_for_alt_election(
+				33,
+				AltWitnessingConsensusResult::Valid(vec![
+					SolAddressLookupTableAccount {
+						key: user_alts[0].into(),
+						addresses: vec![SolPubkey([0xE0; 32]), SolPubkey([0xE1; 32])],
+					},
+					SolAddressLookupTableAccount {
+						key: user_alts[1].into(),
+						addresses: vec![SolPubkey([0xE2; 32]), SolPubkey([0xE3; 32])],
+					},
+				]),
+			);
+			vote_for_alt_election(
+				34,
 				AltWitnessingConsensusResult::Valid(vec![
 					SolAddressLookupTableAccount {
 						key: user_alts[0].into(),
@@ -1168,7 +1168,7 @@ fn invalid_alt_triggers_refund_transfer() {
 
 			testnet.move_forward_blocks(1);
 
-			vote_for_alt_election(13, AltWitnessingConsensusResult::Invalid);
+			vote_for_alt_election(14, AltWitnessingConsensusResult::Invalid);
 
 			// Let the election come to consensus.
 			testnet.move_forward_blocks(1);
