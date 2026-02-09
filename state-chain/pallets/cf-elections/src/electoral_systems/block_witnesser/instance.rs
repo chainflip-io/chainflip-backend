@@ -248,7 +248,7 @@ fn dedup_events_test() {
 }
 
 /// This trait is only temporary. It's required because currently in the `Chain` trait
-/// implementation the ChainBlockNumber type is u64, but in the arbitrum elections the block number
+/// implementation the ChainBlockNumber type is u64, but in the ethereum elections the block number
 /// type is BlockWitnessRange<>. As long as the old witnessing code exists, it is difficult to
 /// change the ChainBlockNumber type of the Chain trait, because code relies on the fact that it's a
 /// number.
