@@ -488,7 +488,7 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set a custom network fee for internal swaps for a specific asset. Set to None to remove the
 	/// custom network fee rate for that asset and fallback to the standard internal network fee.
 	SetInternalSwapNetworkFeeForAsset { asset: Asset, rate: Option<Permill> },
-	/// if no oracle protection is set by the user, a default will be
+	/// If no oracle protection is set by the user, a default will be
 	/// applied. The default will be the sum of both pools' values. Only
 	/// used for regular swaps (not fee swaps).
 	SetDefaultOraclePriceSlippageProtectionForAsset {
@@ -818,8 +818,8 @@ pub mod pallet {
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
 			// Sum of delta from each leg of the swap excluding fees. Negative means worse price
-			// than oracle. Will be `Some` if only one leg has an oracle price and the other leg
-			// doesn't.
+			// than oracle. Will also be `Some` if only one leg has an oracle price and the other
+			// leg doesn't.
 			oracle_delta_ex_fees: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
@@ -2924,6 +2924,43 @@ pub mod pallet {
 			};
 			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
 		}
+
+		fn get_default_oracle_price_protection(
+			input_asset: Asset,
+			output_asset: Asset,
+		) -> Option<BasisPoints> {
+			// Check if we have oracle prices and default slippage settings for the
+			// assets
+			let get_default_slippage = |asset: Asset| {
+				if asset == STABLE_ASSET {
+					// Single leg swap, no slippage on one side.
+					Some(0)
+				} else if T::PriceFeedApi::get_price(asset).is_some() {
+					DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
+						asset,
+						STABLE_ASSET,
+					)?)
+				} else {
+					// For our slippage calculation, we treat assets without oracle
+					// as 0 slippage so we can still enforce oracle slippage
+					// protection on the other side of the swap.
+					Some(0)
+				}
+			};
+
+			// Calculate the default price protection slippage and apply it
+			if let (Some(input_default_slippage), Some(output_default_slippage)) =
+				(get_default_slippage(input_asset), get_default_slippage(output_asset))
+			{
+				let default_oracle_protection =
+					input_default_slippage.saturating_add(output_default_slippage);
+
+				if default_oracle_protection > 0 {
+					return Some(default_oracle_protection);
+				}
+			}
+			None
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -2992,44 +3029,15 @@ pub mod pallet {
 				SwapRequestType::Regular { .. } | SwapRequestType::RegularNoNetworkFee { .. } => {
 					price_limits_and_expiry.map(|limits| {
 						// Only apply default oracle protection if no slippage is already set
-						if limits.max_oracle_price_slippage.is_some() {
-							return limits;
-						}
-
-						// Check if we have oracle prices and default slippage settings for the
-						// assets
-						let get_default_slippage = |asset: Asset| {
-							if asset == STABLE_ASSET {
-								// Single leg swap, no slippage on one side.
-								Some(0)
-							} else if T::PriceFeedApi::get_price(asset).is_some() {
-								DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
-									asset,
-									STABLE_ASSET,
-								)?)
-							} else {
-								// For our slippage calculation, we treat assets without oracle
-								// as 0 slippage so we can still enforce oracle slippage
-								// protection on the other side of the swap.
-								Some(0)
-							}
-						};
-
-						// Calculate the default price protection slippage and apply it
-						if let (Some(input_default_slippage), Some(output_default_slippage)) =
-							(get_default_slippage(input_asset), get_default_slippage(output_asset))
-						{
-							let default_oracle_protection =
-								input_default_slippage.saturating_add(output_default_slippage);
-
-							if default_oracle_protection > 0 {
-								PriceLimitsAndExpiry {
-									expiry_behaviour: limits.expiry_behaviour,
-									min_price: limits.min_price,
-									max_oracle_price_slippage: Some(default_oracle_protection),
-								}
-							} else {
-								limits
+						if limits.max_oracle_price_slippage.is_none() {
+							PriceLimitsAndExpiry {
+								expiry_behaviour: limits.expiry_behaviour,
+								min_price: limits.min_price,
+								max_oracle_price_slippage:
+									Self::get_default_oracle_price_protection(
+										input_asset,
+										output_asset,
+									),
 							}
 						} else {
 							limits

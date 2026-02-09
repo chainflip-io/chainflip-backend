@@ -899,7 +899,7 @@ mod oracle_swaps {
 					},
 					vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
 					// No oracle price slippage protection, but we should still get both oracle
-					// delta's in the event
+					// deltas in the event
 					None,
 					None,
 					SwapOrigin::OnChainAccount(0_u64),
