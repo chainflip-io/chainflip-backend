@@ -5,7 +5,8 @@ use crate::{
 		witnessing::{
 			arbitrum_block_processor::ArbEvent,
 			elections::TypesFor,
-			ethereum_elections::{KeyManagerEvent, VaultEvents},
+			ethereum_elections::KeyManagerEvent,
+			pallet_hooks::{self, VaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -35,6 +36,7 @@ use pallet_cf_elections::{
 		},
 		block_witnesser::{
 			consensus::BWConsensus,
+			instance::{BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin},
 			primitives::SafeModeStatus,
 			state_machine::{
 				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
@@ -54,7 +56,7 @@ use pallet_cf_elections::{
 	vote_storage, CorruptStorageError, ElectionIdentifier, ElectoralSystemTypes, InitialState,
 	InitialStateOf, RunnerStorageAccess,
 };
-use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use sp_core::{Decode, Encode, Get};
@@ -240,74 +242,38 @@ pub type ArbitrumDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct ArbitrumVaultDepositWitnessing;
 
-pub type ArbitrumVaultEvent = VaultEvents<VaultDepositWitness<Runtime, ArbitrumInstance>, Arbitrum>;
+impl BlockWitnesserInstance for TypesFor<ArbitrumVaultDepositWitnessing> {
+	const BWNAME: &'static str = "VaultDeposit";
+	type Runtime = Runtime;
+	type Chain = ArbitrumChain;
+	type BlockEntry = VaultContractEvent<Runtime, ArbitrumInstance>;
+	type ElectionProperties = ();
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, ArbitrumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub(crate) type BlockDataVaultDeposit = Vec<ArbitrumVaultEvent>;
-
-impls! {
-	for TypesFor<ArbitrumVaultDepositWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = ArbitrumChain;
-
-		type BlockData = BlockDataVaultDeposit;
-
-		type Event = ArbEvent<ArbitrumVaultEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "VaultDeposit";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<ArbitrumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
+		>>::get()
+		.vault_deposit_witnessing_enabled
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(
+		_block_height: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>,
+	) {
+		// Vault address doesn't change, it is read by the engine on startup
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<arb::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<ArbitrumInstance>>::SafeMode as Get<
-				pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
-			>>::get()
-			.vault_deposit_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// Vault address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <ArbitrumChain as ChainTypes>::ChainBlockNumber) {}
+	fn processed_up_to(
+		_block_height: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<Self::Chain>,
+	) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type ArbitrumVaultDepositWitnessingES =
-	StatemachineElectoralSystem<TypesFor<ArbitrumVaultDepositWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumVaultDepositWitnessing>>>;
 
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct ArbitrumKeyManagerWitnessing;
