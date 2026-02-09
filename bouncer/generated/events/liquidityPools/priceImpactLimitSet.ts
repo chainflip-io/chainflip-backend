@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { palletCfPoolsAssetPair } from '../common';
+import { cfAmmCommonAssetPair } from '../common';
 
 export const liquidityPoolsPriceImpactLimitSet = z.object({
-  assetPair: palletCfPoolsAssetPair,
+  assetPair: cfAmmCommonAssetPair,
   limit: z.number().nullish(),
 });
