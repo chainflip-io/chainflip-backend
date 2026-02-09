@@ -250,6 +250,7 @@ pub async fn start<
 	btc_rpc: BtcRpc,
 	sol_rpc: SolRpc,
 	hub_rpc: DotRpc,
+	bsc_rpc: EvmRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
@@ -521,6 +522,29 @@ where
                                                         error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             RuntimeCall::ArbitrumBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            })
+                                        }
+                                    }
+                                    CfeEvent::BscTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let bsc_rpc = bsc_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match bsc_rpc.broadcast_transaction(payload).await {
+                                                    Ok(tx_hash) => info!("BSC TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on BSC TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::BscBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_failed {
                                                                     broadcast_id,
                                                                 },

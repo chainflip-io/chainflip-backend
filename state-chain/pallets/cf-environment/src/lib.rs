@@ -43,7 +43,7 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	chains::assets::{arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset},
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
@@ -299,6 +299,35 @@ pub mod pallet {
 
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
+	// BSC CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn supported_bsc_assets)]
+	/// Map of supported assets for BSC
+	pub type BscSupportedAssets<T: Config> = StorageMap<_, Blake2_128Concat, BscAsset, EvmAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_key_manager_address)]
+	/// The address of the BSC key manager contract
+	pub type BscKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_vault_address)]
+	/// The address of the BSC vault contract
+	pub type BscVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_address_checker_address)]
+	/// The address of the Address Checker contract on BSC.
+	pub type BscAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_chain_id)]
+	/// The BSC chain id
+	pub type BscChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type BscSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -901,6 +930,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn next_arbitrum_signature_nonce() -> SignatureNonce {
 		ArbitrumSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+
+	pub fn next_bsc_signature_nonce() -> SignatureNonce {
+		BscSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})

@@ -654,6 +654,14 @@ impl_runtime_apis! {
 		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			ArbitrumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
+
+		fn cf_bsc_electoral_data(account_id: AccountId) -> Vec<u8> {
+			BscElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_bsc_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			BscElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
 	}
 
 	// -- Custom API --
@@ -1024,6 +1032,7 @@ impl_runtime_apis! {
 				any::ForeignChainAndAsset::Polkadot(asset) => EgressDustLimit::<Runtime, PolkadotInstance>::get(asset),
 				any::ForeignChainAndAsset::Bitcoin(asset) => EgressDustLimit::<Runtime, BitcoinInstance>::get(asset),
 				any::ForeignChainAndAsset::Arbitrum(asset) => EgressDustLimit::<Runtime, ArbitrumInstance>::get(asset),
+				any::ForeignChainAndAsset::Bsc(asset) => EgressDustLimit::<Runtime, BscInstance>::get(asset),
 				any::ForeignChainAndAsset::Solana(asset) => EgressDustLimit::<Runtime, SolanaInstance>::get(asset),
 				any::ForeignChainAndAsset::Assethub(asset) => EgressDustLimit::<Runtime, AssethubInstance>::get(asset),
 			}
@@ -1043,6 +1052,12 @@ impl_runtime_apis! {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Arbitrum>(
 						asset,
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
+					))
+				},
+				any::ForeignChainAndAsset::Bsc(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Bsc>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, BscInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
 				any::ForeignChainAndAsset::Solana(asset) => {
@@ -1076,6 +1091,12 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, ArbitrumInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
+				any::ForeignChainAndAsset::Bsc(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Bsc>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, BscInstance>::estimate_fee(asset, IngressOrEgress::Egress)
+					))
+				},
 				any::ForeignChainAndAsset::Solana(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Solana>(
 						asset,
@@ -1097,6 +1118,7 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => pallet_cf_ingress_egress::Pallet::<Runtime, EthereumInstance>::witness_safety_margin(),
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::witness_safety_margin(),
+				ForeignChain::Bsc => pallet_cf_ingress_egress::Pallet::<Runtime, BscInstance>::witness_safety_margin(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::witness_safety_margin(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::witness_safety_margin().map(Into::into),
 			}
@@ -1265,6 +1287,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::channel_opening_fee(),
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::Pallet::<Runtime, BitcoinInstance>::channel_opening_fee(),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
+				ForeignChain::Bsc => pallet_cf_ingress_egress::Pallet::<Runtime, BscInstance>::channel_opening_fee(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::channel_opening_fee(),
 			}
@@ -1276,6 +1299,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, PolkadotInstance>::get(),
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, BitcoinInstance>::get(),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Bsc => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, BscInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, AssethubInstance>::get(),
 			}
@@ -1287,6 +1311,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, PolkadotInstance>::get(),
 				ForeignChain::Bitcoin => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BitcoinInstance>::get(),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, ArbitrumInstance>::get(),
+				ForeignChain::Bsc => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BscInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
 			}
@@ -1601,6 +1626,7 @@ impl_runtime_apis! {
 				ForeignChain::Ethereum => preallocated_deposit_channels_for_chain::<Runtime, EthereumInstance>(&account_id),
 				ForeignChain::Polkadot => preallocated_deposit_channels_for_chain::<Runtime, PolkadotInstance>(&account_id),
 				ForeignChain::Arbitrum => preallocated_deposit_channels_for_chain::<Runtime, ArbitrumInstance>(&account_id),
+				ForeignChain::Bsc => preallocated_deposit_channels_for_chain::<Runtime, BscInstance>(&account_id),
 				ForeignChain::Solana => preallocated_deposit_channels_for_chain::<Runtime, SolanaInstance>(&account_id),
 				ForeignChain::Assethub => preallocated_deposit_channels_for_chain::<Runtime, AssethubInstance>(&account_id),
 			}

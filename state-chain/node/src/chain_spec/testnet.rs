@@ -43,6 +43,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 12;
+pub const BSC_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 3; //todo: revisit
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("a16E02E87b7454126E5E10d957A927A7F5B5d2be"),

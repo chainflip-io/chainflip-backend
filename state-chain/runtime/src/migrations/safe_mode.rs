@@ -18,7 +18,7 @@ use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 
 use crate::{
 	chainflip::witnessing::{
-		arbitrum_elections::ArbitrumElectionsSafeMode,
+		arbitrum_elections::ArbitrumElectionsSafeMode, bsc_elections::BscElectionsSafeMode,
 		ethereum_elections::EthereumElectionsSafeMode,
 	},
 	Runtime,
@@ -97,6 +97,7 @@ impl OnRuntimeUpgrade for SafeModeMigration {
                     broadcast_bitcoin: old.broadcast_bitcoin,
                     broadcast_polkadot: old.broadcast_polkadot,
                     broadcast_arbitrum: old.broadcast_arbitrum,
+                    broadcast_bsc: pallet_cf_broadcast::PalletSafeMode::code_green(),
                     broadcast_solana: old.broadcast_solana,
                     broadcast_assethub: old.broadcast_assethub,
                     witnesser: old.witnesser,
@@ -104,11 +105,13 @@ impl OnRuntimeUpgrade for SafeModeMigration {
                     ingress_egress_bitcoin: old.ingress_egress_bitcoin,
                     ingress_egress_polkadot: old.ingress_egress_polkadot,
                     ingress_egress_arbitrum: old.ingress_egress_arbitrum,
+                    ingress_egress_bsc: pallet_cf_ingress_egress::PalletSafeMode::code_green(),
                     ingress_egress_solana: old.ingress_egress_solana,
                     ingress_egress_assethub: old.ingress_egress_assethub,
 					elections_generic: old.elections_generic,
                     ethereum_elections: EthereumElectionsSafeMode::code_green(),
 					arbitrum_elections: ArbitrumElectionsSafeMode::code_green(),
+					bsc_elections: BscElectionsSafeMode::code_green(),
 				})
 			},
 		).map_err(|_| {

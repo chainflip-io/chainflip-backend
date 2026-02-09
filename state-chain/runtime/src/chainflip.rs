@@ -41,11 +41,11 @@ use crate::{
 	constants::common::YEAR,
 	impl_transaction_builder_for_evm_chain, AccountId, AccountRoles, ArbitrumChainTracking,
 	ArbitrumIngressEgress, AssethubBroadcaster, AssethubChainTracking, AssethubIngressEgress,
-	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber, Emissions,
-	Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress, Flip,
-	FlipBalance, Hash, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
-	PolkadotThresholdSigner, Runtime, RuntimeCall, SolanaBroadcaster, SolanaIngressEgress,
-	SolanaThresholdSigner, System, Validator,
+	BitcoinChainTracking, BitcoinIngressEgress, BitcoinThresholdSigner, BlockNumber,
+	BscChainTracking, BscIngressEgress, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
+	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
+	SolanaBroadcaster, SolanaIngressEgress, SolanaThresholdSigner, System, Validator,
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
@@ -56,6 +56,7 @@ use cf_chains::{
 	},
 	arb::api::ArbitrumApi,
 	assets::any::ForeignChainAndAsset,
+	bsc::api::BscApi,
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
 		Bitcoin, BitcoinCrypto, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, Utxo, UtxoId,
@@ -77,8 +78,8 @@ use cf_chains::{
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
-		ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
-		SolanaInstance,
+		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
+		PolkadotInstance, SolanaInstance,
 	},
 	sol::{
 		api::{
@@ -89,10 +90,11 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
-	AnyChain, ApiCall, Arbitrum, Assethub, CcmChannelMetadataChecked, CcmDepositMetadataChecked,
-	Chain, ChainCrypto, ChainEnvironment, ChainState, ChannelRefundParametersForChain,
-	ForeignChain, ReplayProtectionProvider, RequiresSignatureRefresh, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, SetGovKeyWithAggKeyError, Solana, TransactionBuilder,
+	AnyChain, ApiCall, Arbitrum, Assethub, Bsc, CcmChannelMetadataChecked,
+	CcmDepositMetadataChecked, Chain, ChainCrypto, ChainEnvironment, ChainState,
+	ChannelRefundParametersForChain, ForeignChain, ReplayProtectionProvider,
+	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError,
+	Solana, TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
@@ -157,6 +159,8 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+/// BSC has relatively stable fees, so we use 1.5x the base fee.
+const BSC_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -177,8 +181,16 @@ impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
 	}
 }
 
+impl EvmPriorityFee<Bsc> for BscTransactionBuilder {
+	// BSC doesn't use priority fees
+	fn get_priority_fee(_tracked_data: &<Bsc as Chain>::TrackedData) -> Option<U256> {
+		Some(U256::from(0))
+	}
+}
+
 pub struct EthTransactionBuilder;
 pub struct ArbTransactionBuilder;
+pub struct BscTransactionBuilder;
 impl_transaction_builder_for_evm_chain!(
 	Ethereum,
 	EthTransactionBuilder,
@@ -192,6 +204,13 @@ impl_transaction_builder_for_evm_chain!(
 	ArbitrumApi<EvmEnvironment>,
 	ArbitrumChainTracking,
 	ARBITRUM_BASE_FEE_MULTIPLIER
+);
+impl_transaction_builder_for_evm_chain!(
+	Bsc,
+	BscTransactionBuilder,
+	BscApi<EvmEnvironment>,
+	BscChainTracking,
+	BSC_BASE_FEE_MULTIPLIER
 );
 
 #[macro_export]
@@ -492,6 +511,31 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 	}
 }
 
+impl EvmEnvironmentProvider<Bsc> for EvmEnvironment {
+	fn token_address(asset: assets::bsc::Asset) -> Option<EvmAddress> {
+		match asset {
+			assets::bsc::Asset::BscBnb => Some(ETHEREUM_ETH_ADDRESS),
+			assets::bsc::Asset::BscUsdt => Environment::supported_bsc_assets(asset),
+		}
+	}
+
+	fn vault_address() -> EvmAddress {
+		Environment::bsc_vault_address()
+	}
+
+	fn key_manager_address() -> EvmAddress {
+		Environment::bsc_key_manager_address()
+	}
+
+	fn chain_id() -> EvmChainId {
+		Environment::bsc_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_bsc_signature_nonce()
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct DotEnvironment;
 
@@ -695,6 +739,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Bitcoin => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
 			ForeignChain::Arbitrum => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
+			ForeignChain::Bsc => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
 			ForeignChain::Solana =>
 				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Assethub =>
@@ -710,6 +755,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Polkadot as Chain>::ChainCrypto>(key),
 			ForeignChain::Bitcoin => false,
 			ForeignChain::Arbitrum => false,
+			ForeignChain::Bsc => false,
 			ForeignChain::Solana =>
 				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
 			ForeignChain::Assethub =>
@@ -825,6 +871,7 @@ impl_deposit_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress)
 );
@@ -835,6 +882,7 @@ impl_egress_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress)
 );
@@ -850,6 +898,7 @@ impl OnDeposit<Bitcoin> for DepositHandler {
 impl OnDeposit<Arbitrum> for DepositHandler {}
 impl OnDeposit<Solana> for DepositHandler {}
 impl OnDeposit<Assethub> for DepositHandler {}
+impl OnDeposit<Bsc> for DepositHandler {}
 
 pub struct ChainAddressConverter;
 
@@ -919,6 +968,9 @@ impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
 }
 impl OnBroadcastReady<Assethub> for BroadcastReadyProvider {
 	type ApiCall = AssethubApi<HubEnvironment>;
+}
+impl OnBroadcastReady<Bsc> for BroadcastReadyProvider {
+	type ApiCall = BscApi<EvmEnvironment>;
 }
 
 pub struct BitcoinFeeGetter;
@@ -996,6 +1048,7 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress),
 	(Arbitrum, ArbitrumIngressEgress),
+	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
 	(Assethub, AssethubIngressEgress)
 );
@@ -1057,6 +1110,7 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, BitcoinInstance>::get(asset).into(),
 			ForeignChainAndAsset::Arbitrum(asset) =>
 				MinimumDeposit::<Runtime, ArbitrumInstance>::get(asset),
+			ForeignChainAndAsset::Bsc(asset) => MinimumDeposit::<Runtime, BscInstance>::get(asset),
 			ForeignChainAndAsset::Solana(asset) =>
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			ForeignChainAndAsset::Assethub(asset) =>

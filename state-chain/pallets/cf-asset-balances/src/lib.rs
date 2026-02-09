@@ -218,7 +218,7 @@ impl<T: Config> Pallet<T> {
 	//
 	// The owed and available amount are mutated in place.
 	//
-	// For Ethereum and Arbitrum, we expect to pay out the validators via egress to their
+	// For Ethereum, Arbitrum and Bsc, we expect to pay out the validators via egress to their
 	// accounts. For Polkadot, we expect to pay out to the current AggKey account.
 	// For Bitcoin and Solana, the vault pays the fees directly so we don't need to egress
 	// anything.
@@ -232,7 +232,7 @@ impl<T: Config> Pallet<T> {
 		available: &mut AssetAmount,
 	) -> Result<(), DispatchError> {
 		let amount_reconciled = match chain {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc => match owner {
 				ExternalOwner::Account(address) =>
 					if *amount_owed > *available {
 						0
@@ -374,7 +374,8 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+				ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc =>
+					address.into(),
 				ForeignChain::Polkadot | ForeignChain::Assethub => ExternalOwner::AggKey,
 				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 			})
