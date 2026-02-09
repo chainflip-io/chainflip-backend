@@ -84,7 +84,7 @@ impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultD
 }
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, BscEvent<BscKeyManagerEvent>)>) {
-		for (_, event) in events {
+		for (block_number, event) in events {
 			match event {
 				BscEvent::Witness(call) => {
 					match call {
@@ -111,6 +111,7 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 									tx_metadata,
 									transaction_ref,
 								},
+							*block_number.root(),
 							) {
 								log::error!(
 									"Failed to execute BSC egress success: TxOutId: {:?}, Error: {:?}",
@@ -119,7 +120,11 @@ impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManag
 								)
 							}
 						},
-						BscKeyManagerEvent::GovernanceAction { call_hash } => {
+						BscKeyManagerEvent::GovernanceAction {
+							// TODO: Same as above, check that origin works and if not create inner
+							// function without origin
+							call_hash,
+						} => {
 							if let Err(err) =
 								pallet_cf_governance::Pallet::<Runtime>::set_whitelisted_call_hash(
 									pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold
