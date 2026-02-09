@@ -40,10 +40,9 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
-use pallet_cf_ingress_egress::VaultDepositWitness;
+use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
 use state_chain_runtime::{
-	chainflip::witnessing::ethereum_elections::VaultEvents as SCVaultEvents, EthereumInstance,
-	Runtime, RuntimeCall,
+	chainflip::witnessing::pallet_hooks::VaultContractEvent, EthereumInstance, Runtime, RuntimeCall,
 };
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
@@ -408,7 +407,7 @@ pub fn handle_vault_events<Config>(
 	config: &Config,
 	events: Vec<Event<VaultEvents>>,
 	block_height: u64,
-) -> Result<Vec<SCVaultEvents<VaultDepositWitness<Runtime, Config::Instance>, Config::Chain>>>
+) -> Result<Vec<VaultContractEvent<Runtime, Config::Instance>>>
 where
 	Config: VaultEventConfig,
 	H160: IntoForeignChainAddress<Config::Chain>,
@@ -437,7 +436,7 @@ fn handle_vault_event<Config>(
 	event: VaultEvents,
 	tx_hash: H256,
 	block_height: u64,
-) -> Result<Option<SCVaultEvents<VaultDepositWitness<Runtime, Config::Instance>, Config::Chain>>>
+) -> Result<Option<VaultContractEvent<Runtime, Config::Instance>>>
 where
 	Config: VaultEventConfig,
 	H160: IntoForeignChainAddress<Config::Chain>,
@@ -457,7 +456,7 @@ where
 			let (vault_swap_parameters, ()) =
 				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
-			SCVaultEvents::SwapNativeFilter(vault_deposit_witness!(
+			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<Config::Chain as Chain>::GAS_ASSET,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -465,7 +464,7 @@ where
 				None,
 				tx_hash,
 				vault_swap_parameters
-			))
+			)))
 		},
 		VaultEvents::SwapTokenFilter(SwapTokenFilter {
 			dst_chain,
@@ -484,7 +483,7 @@ where
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			SCVaultEvents::SwapTokenFilter(vault_deposit_witness!(
+			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				asset,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -492,7 +491,7 @@ where
 				None,
 				tx_hash,
 				vault_swap_parameters
-			))
+			)))
 		},
 		VaultEvents::XcallNativeFilter(XcallNativeFilter {
 			dst_chain,
@@ -507,7 +506,7 @@ where
 			let (vault_swap_parameters, ccm_additional_data) =
 				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
-			SCVaultEvents::XcallNativeFilter(vault_deposit_witness!(
+			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<Config::Chain as Chain>::GAS_ASSET,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -530,7 +529,7 @@ where
 				}),
 				tx_hash,
 				vault_swap_parameters
-			))
+			)))
 		},
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
@@ -551,7 +550,7 @@ where
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			SCVaultEvents::XcallTokenFilter(vault_deposit_witness!(
+			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				asset,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -574,16 +573,16 @@ where
 				}),
 				tx_hash,
 				vault_swap_parameters
-			))
+			)))
 		},
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
-		}) => SCVaultEvents::TransferNativeFailedFilter {
+		}) => VaultContractEvent::TransferFailed(TransferFailedWitness {
 			asset: <Config::Chain as Chain>::GAS_ASSET,
 			amount: try_into_primitive::<_, AssetAmount>(amount)?,
 			destination_address: recipient,
-		},
+		}),
 		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
 			recipient,
 			amount,
@@ -595,13 +594,13 @@ where
 				.get(&token)
 				.ok_or_else(|| anyhow!("Asset {token:?} not found"))?;
 
-			SCVaultEvents::TransferTokenFailedFilter {
+			VaultContractEvent::TransferFailed(TransferFailedWitness {
 				asset: asset
 					.try_into()
 					.expect("Asset translated from address must be supported by the chain."),
 				amount: try_into_primitive(amount)?,
 				destination_address: recipient,
-			}
+			})
 		},
 		_ => return Ok(None),
 	}))

@@ -3,13 +3,11 @@ use crate::{
 		elections::TypesFor,
 		ethereum_elections::{
 			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,
-			BlockDataVaultDeposit, EthereumKeyManagerEvent, EthereumKeyManagerWitnessing,
-			EthereumScUtilsWitnessing, EthereumStateChainGatewayWitnessing,
-			EthereumVaultDepositWitnessing, EthereumVaultEvent, ScUtilsCall,
-			StateChainGatewayEvent,
+			EthereumKeyManagerEvent, EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
+			EthereumStateChainGatewayWitnessing, ScUtilsCall, StateChainGatewayEvent,
 		},
 	},
-	EthereumBroadcaster, EthereumIngressEgress, Runtime,
+	EthereumBroadcaster, Runtime,
 };
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
 use cf_traits::{FundAccount, FundingSource, Hook};
@@ -29,47 +27,11 @@ pub enum EthEvent<T> {
 	Witness(T),
 }
 
-type TypesVaultDepositWitnessing = TypesFor<EthereumVaultDepositWitnessing>;
 type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-impl Hook<HookTypeFor<TypesVaultDepositWitnessing, ExecuteHook>> for TypesVaultDepositWitnessing {
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumVaultEvent>)>) {
-		for (block, event) in events {
-			match event {
-				EthEvent::Witness(call) => match call {
-					EthereumVaultEvent::SwapNativeFilter(vault_deposit_witness) |
-					EthereumVaultEvent::SwapTokenFilter(vault_deposit_witness) |
-					EthereumVaultEvent::XcallNativeFilter(vault_deposit_witness) |
-					EthereumVaultEvent::XcallTokenFilter(vault_deposit_witness) => {
-						EthereumIngressEgress::process_vault_swap_request_full_witness(
-							block,
-							vault_deposit_witness,
-						);
-					},
-					EthereumVaultEvent::TransferNativeFailedFilter {
-						asset,
-						amount,
-						destination_address,
-					} |
-					EthereumVaultEvent::TransferTokenFailedFilter {
-						asset,
-						amount,
-						destination_address,
-					} => {
-						EthereumIngressEgress::vault_transfer_failed_inner(
-							asset,
-							amount,
-							destination_address,
-						);
-					},
-				},
-			}
-		}
-	}
-}
 impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
 	for TypesStateChainGatewayWitnessing
 {
@@ -224,7 +186,6 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-impl_rules_hook!(TypesVaultDepositWitnessing, BlockDataVaultDeposit, EthEvent<EthereumVaultEvent>);
 impl_rules_hook!(
 	TypesStateChainGatewayWitnessing,
 	BlockDataStateChainGateway,
