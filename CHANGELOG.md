@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.10] - 2026-02-09
+
+### Fixes
+
+- Fix overflow bug in AMM.
+
 ## [2.0.9] - 2026-02-04
 
 ### Fixes
