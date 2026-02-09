@@ -1,32 +1,23 @@
 use cf_chains::witness_period::SaturatingStep;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
-		primitives::{Header, NonemptyContinuousHeaders},
-		ChainTypes, HeightWitnesserProperties,
+		primitives::NonemptyContinuousHeaders, ChainTypes, HeightWitnesserProperties,
 	},
 	ElectoralSystemTypes,
 };
 use sp_core::bounded::alloc::collections::VecDeque;
 
-#[async_trait::async_trait]
-pub trait HeaderClient<Chain: ChainTypes> {
-	async fn best_block_header(&self) -> anyhow::Result<Header<Chain>>;
-	async fn block_header_by_height(
-		&self,
-		height: <Chain as ChainTypes>::ChainBlockNumber,
-	) -> anyhow::Result<Header<Chain>>;
-	async fn best_block_number(&self) -> anyhow::Result<<Chain as ChainTypes>::ChainBlockNumber>;
-}
+use crate::witness::common::traits::WitnessClient;
 
-pub async fn witness_headers<ES, C, Chain>(
-	client: &C,
+pub async fn witness_headers<ES, Client, Chain>(
+	client: &Client,
 	properties: <ES as ElectoralSystemTypes>::ElectionProperties,
 	safety_buffer: u32,
 	tag: &'static str,
 ) -> anyhow::Result<Option<NonemptyContinuousHeaders<Chain>>>
 where
 	ES: ElectoralSystemTypes<ElectionProperties = HeightWitnesserProperties<Chain>>,
-	C: HeaderClient<Chain>,
+	Client: WitnessClient<Chain>,
 	Chain: ChainTypes,
 {
 	let HeightWitnesserProperties { witness_from_index } = properties;

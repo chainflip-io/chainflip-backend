@@ -17,6 +17,7 @@
 #![feature(ip)]
 #![feature(map_try_insert)]
 #![feature(step_trait)]
+#![feature(trait_alias)]
 
 mod caching_request;
 pub mod common;
