@@ -23,7 +23,7 @@ use crate::{
 	btc::rpc::{BtcRpcApi, VerboseTransaction},
 	witness::{
 		btc::fees::predict_fees,
-		common::block_height_witnesser::{witness_headers, HeaderClient},
+		common::{block_height_witnesser::witness_headers, traits::WitnessClient},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
@@ -77,8 +77,10 @@ pub struct BitcoinBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<BitcoinChain> for BtcCachingClient {
-	async fn best_block_header(&self) -> anyhow::Result<Header<BitcoinChain>> {
+impl WitnessClient<BitcoinChain> for BtcCachingClient {
+	type BlockQuery = BlockHash;
+
+	async fn best_block_header(&self) -> Result<Header<BitcoinChain>> {
 		let best_hash = self.best_block_hash().await?;
 		let best_header = self.block_header(best_hash).await?;
 		if best_hash != best_header.hash {
@@ -98,12 +100,17 @@ impl HeaderClient<BitcoinChain> for BtcCachingClient {
 		})
 	}
 
-	async fn block_header_by_height(
-		&self,
-		height: <BitcoinChain as ChainTypes>::ChainBlockNumber,
-	) -> anyhow::Result<Header<BitcoinChain>> {
+	async fn best_block_number(&self) -> Result<u64> {
+		let best_hash = self.best_block_hash().await?;
+		let best_header = self.block_header(best_hash).await?;
+		Ok(best_header.height)
+	}
+
+	async fn block_header_by_height(&self, height: u64) -> Result<Header<BitcoinChain>> {
 		let hash = self.block_hash(height).await?;
-		let header = self.block_header(hash).await?;
+		let header = self
+			.block_header(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap())
+			.await?;
 		Ok(Header {
 			block_height: header.height,
 			hash: header.hash.to_byte_array().into(),
@@ -114,10 +121,26 @@ impl HeaderClient<BitcoinChain> for BtcCachingClient {
 				.into(),
 		})
 	}
-	async fn best_block_number(&self) -> anyhow::Result<u64> {
-		let best_hash = self.best_block_hash().await?;
-		let best_header = self.block_header(best_hash).await?;
-		Ok(best_header.height)
+
+	async fn block_query_from_hash_and_height(
+		&self,
+		hash: ChainBlockHashOf<BitcoinChain>,
+		_height: u64,
+	) -> Result<Self::BlockQuery> {
+		Ok(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap())
+	}
+
+	async fn block_query_from_height(&self, height: u64) -> Result<Self::BlockQuery> {
+		self.block_hash(height).await
+	}
+
+	async fn block_query_and_hash_from_height(
+		&self,
+		height: u64,
+	) -> Result<(Self::BlockQuery, ChainBlockHashOf<BitcoinChain>)> {
+		let hash = self.block_hash(height).await?;
+		let bhw_hash = hash.to_byte_array().into();
+		Ok((hash, bhw_hash))
 	}
 }
 

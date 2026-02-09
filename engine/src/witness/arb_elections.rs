@@ -16,7 +16,7 @@
 use crate::{
 	evm::retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
 	witness::{
-		common::block_height_witnesser::{witness_headers, HeaderClient},
+		common::{block_height_witnesser::witness_headers, traits::WitnessClient},
 		evm::{
 			contract_common::{
 				evm_event_type, evm_events_at_block_range, query_election_block, EvmEventType,
@@ -44,12 +44,12 @@ use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
-		block_height_witnesser::primitives::Header,
+		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainBlockNumberOf},
 		block_witnesser::state_machine::BWElectionProperties,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
-use sp_core::H160;
+use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::arbitrum_elections::{
 		ArbitrumBlockHeightWitnesserES, ArbitrumChain, ArbitrumDepositChannelWitnessingES,
@@ -70,21 +70,31 @@ use crate::{
 
 use anyhow::{Context, Result};
 
+pub struct EvmBlockRangeQuery<C: ChainWitnessConfig> {
+	pub blocks_heights: BlockWitnessRange<C>,
+	pub parent_hash_of_first_block: H256,
+	pub hash_of_last_block: H256,
+}
+
 #[derive(Clone)]
 pub struct ArbitrumBlockHeightWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 }
 
 #[async_trait::async_trait]
-impl HeaderClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
-	async fn best_block_header(&self) -> anyhow::Result<Header<ArbitrumChain>> {
+impl WitnessClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
+	type BlockQuery = EvmBlockRangeQuery<Arbitrum>;
+
+	// --- BHW methods ---
+
+	async fn best_block_header(&self) -> Result<Header<ArbitrumChain>> {
 		self.block_header_by_height(self.best_block_number().await?).await
 	}
 
 	async fn block_header_by_height(
 		&self,
 		height: BlockWitnessRange<Arbitrum>,
-	) -> anyhow::Result<Header<ArbitrumChain>> {
+	) -> Result<Header<ArbitrumChain>> {
 		let range = height.into_range_inclusive();
 		let (block_start, block_end) = futures::try_join!(
 			self.client.block((*range.start()).into()),
@@ -96,7 +106,8 @@ impl HeaderClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
 			parent_hash: block_start.parent_hash,
 		})
 	}
-	async fn best_block_number(&self) -> anyhow::Result<BlockWitnessRange<Arbitrum>> {
+
+	async fn best_block_number(&self) -> Result<BlockWitnessRange<Arbitrum>> {
 		let best_block = self.client.get_block_number().await?.low_u64();
 		let range =
 			block_witness_range(<Arbitrum as ChainWitnessConfig>::WITNESS_PERIOD, best_block);
@@ -109,6 +120,55 @@ impl HeaderClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
 			return Ok(block_witness_range);
 		}
 		Ok(block_witness_range.saturating_backward(1))
+	}
+
+	// --- BW methods ---
+
+	async fn block_query_from_hash_and_height(
+		&self,
+		hash: ChainBlockHashOf<ArbitrumChain>,
+		height: ChainBlockNumberOf<ArbitrumChain>,
+	) -> Result<Self::BlockQuery> {
+		let header = self.block_header_by_height(height).await?;
+		if header.hash != hash {
+			return Err(anyhow::anyhow!(
+				"Block hash from RPC ({}) doesn't match election block hash: {}",
+				header.hash,
+				hash
+			));
+		}
+		Ok(EvmBlockRangeQuery {
+			blocks_heights: height,
+			hash_of_last_block: header.hash,
+			parent_hash_of_first_block: header.parent_hash,
+		})
+	}
+
+	async fn block_query_from_height(
+		&self,
+		height: <ArbitrumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
+	) -> Result<Self::BlockQuery> {
+		let header = self.block_header_by_height(height).await?;
+		Ok(EvmBlockRangeQuery {
+			blocks_heights: height,
+			hash_of_last_block: header.hash,
+			parent_hash_of_first_block: header.parent_hash,
+		})
+	}
+
+	async fn block_query_and_hash_from_height(
+		&self,
+		height: <ArbitrumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
+	) -> Result<(Self::BlockQuery, ChainBlockHashOf<ArbitrumChain>)> {
+		let header = self.block_header_by_height(height).await?;
+		Ok((
+			EvmBlockRangeQuery {
+				blocks_heights: height,
+				hash_of_last_block: header.hash,
+				parent_hash_of_first_block: header.parent_hash,
+			},
+			header.hash,
+		))
 	}
 }
 
