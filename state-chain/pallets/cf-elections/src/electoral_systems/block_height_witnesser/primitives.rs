@@ -3,7 +3,6 @@ use cf_utilities::macros::*;
 use core::iter;
 use generic_typeinfo_derive::GenericTypeInfo;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::collections::vec_deque::VecDeque;
 
 use crate::electoral_systems::state_machine::core::defx;

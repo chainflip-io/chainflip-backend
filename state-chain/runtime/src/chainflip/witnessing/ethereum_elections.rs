@@ -2,7 +2,11 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		witnessing::{elections::TypesFor, ethereum_block_processor::EthEvent, pallet_hooks},
+		witnessing::{
+			elections::TypesFor,
+			ethereum_block_processor::EthEvent,
+			pallet_hooks::{self, VaultContractEvent},
+		},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
@@ -16,7 +20,6 @@ use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Ho
 use cf_utilities::impls;
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
-use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::{
 	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
 };
@@ -53,7 +56,7 @@ use pallet_cf_elections::{
 };
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_governance::GovCallHash;
-use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo, VaultDepositWitness};
+use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -197,110 +200,34 @@ pub type EthereumDepositChannelWitnessingES =
 /// The electoral system for vault deposit witnessing
 pub struct EthereumVaultDepositWitnessing;
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	GenericTypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
-)]
-#[serde(bound(
-	serialize = "VaultWitness: Serialize, <C as Chain>::ChainAmount: Serialize, <C as Chain>::ChainAccount: Serialize, <C as Chain>::ChainAsset: Serialize",
-	deserialize = "VaultWitness: Deserialize<'de>, <C as Chain>::ChainAmount: Deserialize<'de>, <C as Chain>::ChainAccount: Deserialize<'de>, <C as Chain>::ChainAsset: Deserialize<'de>",
-))]
-#[expand_name_with(C::NAME)]
-pub enum VaultEvents<VaultWitness: 'static + TypeInfo, C: Chain> {
-	SwapNativeFilter(VaultWitness),
-	SwapTokenFilter(VaultWitness),
-	XcallNativeFilter(VaultWitness),
-	XcallTokenFilter(VaultWitness),
-	TransferNativeFailedFilter {
-		asset: <C as Chain>::ChainAsset,
-		amount: <C as Chain>::ChainAmount,
-		destination_address: <C as Chain>::ChainAccount,
-	},
-	TransferTokenFailedFilter {
-		asset: <C as Chain>::ChainAsset,
-		amount: <C as Chain>::ChainAmount,
-		destination_address: <C as Chain>::ChainAccount,
-	},
-}
+impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
+	const BWNAME: &'static str = "VaultDeposit";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = VaultContractEvent<Runtime, EthereumInstance>;
+	type ElectionProperties = ();
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub type EthereumVaultEvent = VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>;
-
-pub(crate) type BlockDataVaultDeposit = Vec<EthereumVaultEvent>;
-
-impls! {
-	for TypesFor<EthereumVaultDepositWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataVaultDeposit;
-
-		type Event = EthEvent<EthereumVaultEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "VaultDeposit";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
+		>>::get()
+		.vault_deposit_witnessing_enabled
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// Vault address doesn't change, it is read by the engine on startup
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataVaultDeposit, Option<evm::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<EthereumInstance>>::SafeMode as Get<
-				pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
-			>>::get()
-			.vault_deposit_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// Vault address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) {}
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type EthereumVaultDepositWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumVaultDepositWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumVaultDepositWitnessing>>>;
 
 // ------------------------ State Chain Gateway witnessing ---------------------------
 pub struct EthereumStateChainGatewayWitnessing;

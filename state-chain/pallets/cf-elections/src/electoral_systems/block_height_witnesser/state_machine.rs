@@ -12,7 +12,6 @@ use cf_traits::{Hook, Validate};
 use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
 defx! {

@@ -33,7 +33,7 @@ prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
 scopeguard = { workspace = true, optional = true }
-serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
+serde = { workspace = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true, optional = false }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
@@ -72,8 +72,7 @@ std = [
   "itertools/use_std",
   "dep:pin-project",
   "dep:prometheus",
-  "dep:serde",
-  "serde?/std",
+  "serde/std",
   "dep:scale-info",
   "dep:scale-json",
   "dep:thiserror",

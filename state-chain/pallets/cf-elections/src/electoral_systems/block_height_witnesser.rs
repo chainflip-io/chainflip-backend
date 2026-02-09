@@ -10,7 +10,6 @@ use generic_typeinfo_derive::GenericTypeInfo;
 #[cfg(test)]
 use proptest_derive::Arbitrary;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::fmt::Debug;
 
 pub mod consensus;
