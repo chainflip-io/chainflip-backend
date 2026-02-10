@@ -347,12 +347,14 @@ services:
     depends_on:
       - postgres
     restart: on-failure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command:
       [
         "-e",
-        "ws://${HOST_DOCKER_INTERNAL}:9944",
+        "ws://host.docker.internal:9944",
         "--out",
-        "postgres://postgres:postgres@${HOST_DOCKER_INTERNAL}:${INDEXER_DB_PORT:-5432}/squid_archive",
+        "postgres://postgres:postgres@postgres:${INDEXER_DB_PORT:-5432}/squid_archive",
         "--finalized-blocks",
         "false",
       ]
