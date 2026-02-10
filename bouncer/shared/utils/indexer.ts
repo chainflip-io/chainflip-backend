@@ -135,8 +135,11 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       },
     });
 
+    // using an OR query might return the same event multiple times
+    const uniqueEvents = new Map(matchingEvents.map((ev) => [ev.id, ev])).values().toArray();
+
     if (matchingEvents) {
-      foundEventsKeyAndData = matchingEvents.flatMap((event) => {
+      foundEventsKeyAndData = uniqueEvents.flatMap((event) => {
         const schemas = Object.entries(descriptions).flatMap(([key, d]) =>
           event.name.includes(d.name) ? [{ key, schema: d.schema }] : [],
         );
