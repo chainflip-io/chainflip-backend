@@ -50,7 +50,18 @@ parameter_types! {
 }
 
 #[derive(
-	Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Debug,
+	Clone,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct MockEthereumTransactionMetadata;
 
@@ -217,7 +228,19 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 }
 
 #[derive(
-	Copy, Clone, Debug, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Default,
+	Encode,
+	Decode,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct MockThresholdSignature<K, P> {
 	pub signing_key: K,
