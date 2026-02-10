@@ -24,6 +24,7 @@ jobs:
       profile: "production"
       binary-subdir: "production"
       ci-runner: "rust-builder-no-cache"
+      version: "${{ github.ref_name }}"
   build-m2:
     needs: [release-checks]
     uses: ./.github/workflows/_21_build_m2.yml
@@ -32,6 +33,7 @@ jobs:
       profile: "production"
       binary-subdir: "production"
       ci-runner: "rust-builder-m2-no-cache"
+      version: "${{ github.ref_name }}"
   check-blocktime:
     needs: [build]
     uses: ./.github/workflows/_22_check_blocktime.yml
