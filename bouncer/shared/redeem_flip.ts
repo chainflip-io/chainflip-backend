@@ -93,11 +93,11 @@ export async function redeemFlip(
   const nonce = await getNextEvmNonce(logger, 'Ethereum');
 
   const redemptionExecutedHandle = observeEvent(logger, 'funding:RedemptionSettled', {
-    test: (event) => event.data[0] === flipWallet.address,
+    test: (event) => event.data.accountId === flipWallet.address,
   }).event;
 
   await executeRedemption(accountIdHex, networkOptions, { nonce });
-  const redemptionExecutedAmount = (await redemptionExecutedHandle).data[1];
+  const redemptionExecutedAmount = (await redemptionExecutedHandle).data.amount;
   logger.debug('Observed RedemptionSettled event: ', redemptionExecutedAmount);
   assert.strictEqual(
     redemptionExecutedAmount,

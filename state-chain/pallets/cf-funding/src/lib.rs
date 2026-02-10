@@ -499,10 +499,14 @@ pub mod pallet {
 
 		/// A node has redeemed their FLIP on the Ethereum chain. \[account_id,
 		/// redeemed_amount\]
-		RedemptionSettled(AccountId<T>, FlipBalance<T>),
+		RedemptionSettled {
+			account_id: AccountId<T>,
+			amount: FlipBalance<T>,
+			tx_hash: EthTransactionHash,
+		},
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired { account_id: AccountId<T> },
+		RedemptionExpired { account_id: AccountId<T>, tx_hash: EthTransactionHash },
 
 		/// A new restricted address has been added
 		AddedRestrictedAddress { address: EthereumAddress },
@@ -1038,7 +1042,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn redemption_expired(account_id: AccountId<T>) -> DispatchResult {
+	pub fn redemption_expired(
+		account_id: AccountId<T>,
+		tx_hash: EthTransactionHash,
+	) -> DispatchResult {
 		let pending_redemption =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
@@ -1055,11 +1062,15 @@ impl<T: Config> Pallet<T> {
 			});
 		}
 
-		Self::deposit_event(Event::<T>::RedemptionExpired { account_id });
+		Self::deposit_event(Event::<T>::RedemptionExpired { account_id, tx_hash });
 		Ok(())
 	}
 
-	pub fn redeemed(account_id: AccountId<T>, redeemed_amount: FlipBalance<T>) -> DispatchResult {
+	pub fn redeemed(
+		account_id: AccountId<T>,
+		redeemed_amount: FlipBalance<T>,
+		tx_hash: EthTransactionHash,
+	) -> DispatchResult {
 		let _ =
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
@@ -1068,7 +1079,11 @@ impl<T: Config> Pallet<T> {
 
 		Self::kill_account_if_zero_balance(&account_id);
 
-		Self::deposit_event(Event::RedemptionSettled(account_id, redeemed_amount));
+		Self::deposit_event(Event::RedemptionSettled {
+			account_id,
+			amount: redeemed_amount,
+			tx_hash,
+		});
 		Ok(())
 	}
 }
