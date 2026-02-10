@@ -817,9 +817,10 @@ pub mod pallet {
 			// Total difference between final swap output price and oracle price (including fees).
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
-			// Sum of delta from each leg of the swap excluding fees. Negative means worse price
-			// than oracle. Will also be `Some` if only one leg has an oracle price and the other
-			// leg doesn't.
+			// Cumulative price delta across both swap legs (excluding fees).
+			// Negative values indicate worse execution price compared to oracle.
+			// `Some` if oracle price available for at least one leg; `None` if unavailable for
+			// both.
 			oracle_delta_ex_fees: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
@@ -3027,21 +3028,14 @@ pub mod pallet {
 			// Enforce the default oracle price protection for regular swaps
 			let processed_price_limits_and_expiry = match request_type {
 				SwapRequestType::Regular { .. } | SwapRequestType::RegularNoNetworkFee { .. } => {
-					price_limits_and_expiry.map(|limits| {
+					price_limits_and_expiry.map(|limits| PriceLimitsAndExpiry {
 						// Only apply default oracle protection if no slippage is already set
-						if limits.max_oracle_price_slippage.is_none() {
-							PriceLimitsAndExpiry {
-								expiry_behaviour: limits.expiry_behaviour,
-								min_price: limits.min_price,
-								max_oracle_price_slippage:
-									Self::get_default_oracle_price_protection(
-										input_asset,
-										output_asset,
-									),
-							}
+						max_oracle_price_slippage: if limits.max_oracle_price_slippage.is_none() {
+							Self::get_default_oracle_price_protection(input_asset, output_asset)
 						} else {
-							limits
-						}
+							limits.max_oracle_price_slippage
+						},
+						..limits
 					})
 				},
 				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee => None,

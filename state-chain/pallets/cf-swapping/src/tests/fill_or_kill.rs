@@ -649,6 +649,17 @@ mod oracle_swaps {
 					minimum: network_fee_minimum,
 				});
 
+				// Set the default oracle price slippage protection so we can check that the our
+				// custom slippage protection is not overridden by these defaults.
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
+					Some(ORACLE_PRICE_SLIPPAGE+100),
+				);
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
+					Some(ORACLE_PRICE_SLIPPAGE+100),
+				);
+
 				// Execution price is exactly the same as the oracle price,
 				// so the first chunk should go through
 				SwapRate::set(SWAP_RATE as f64);
@@ -677,6 +688,15 @@ mod oracle_swaps {
 					}),
 					Some(DcaParameters { number_of_chunks: 2, chunk_interval: 2 }),
 					SwapOrigin::OnChainAccount(LP_ACCOUNT),
+				);
+
+				// Make sure the oracle price slippage protection parameters were not changed by the defaults protections
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapRequested {
+						price_limits_and_expiry,
+						..
+					}) if price_limits_and_expiry.as_ref().map(|p| p.max_oracle_price_slippage) == Some(Some(ORACLE_PRICE_SLIPPAGE))
 				);
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
