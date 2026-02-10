@@ -37,7 +37,6 @@ use cf_traits::{
 };
 use cfe_events::TxBroadcastRequest;
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
-use derive_where::derive_where;
 use frame_support::{
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
@@ -51,7 +50,6 @@ use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
@@ -101,6 +99,7 @@ pub mod pallet {
 		AccountRoleRegistry, BroadcastNomination, ChainflipWithTargetChain, LiabilityTracker,
 		OnBroadcastReady, OnBroadcastSuccess, TargetChainOf,
 	};
+	use cf_utilities::derive_common_traits_no_bounds;
 	use frame_support::{
 		pallet_prelude::{OptionQuery, *},
 		traits::EnsureOrigin,
@@ -162,32 +161,17 @@ pub mod pallet {
 		pub nominee: Option<T::ValidatorId>,
 	}
 
-	#[derive(
-		RuntimeDebug,
-		PartialEqNoBound,
-		EqNoBound,
-		TypeInfo,
-		CloneNoBound,
-		Serialize,
-		Deserialize,
-		Encode,
-		Decode,
-		DecodeWithMemTracking,
-	)]
-	#[derive_where(PartialOrd, Ord;
-		TransactionOutIdFor<T, I> : PartialOrd + Ord,
-	TransactionFeeFor<T, I> : PartialOrd + Ord,
-	TransactionMetadataFor<T, I>: PartialOrd + Ord,
-	TransactionRefFor<T, I>: PartialOrd + Ord
-	)]
-	#[scale_info(skip_type_params(T, I))]
-	#[serde(bound(serialize = "", deserialize = ""))]
-	pub struct TransactionConfirmation<T: Config<I>, I: 'static> {
-		pub tx_out_id: TransactionOutIdFor<T, I>,
-		pub signer_id: SignerIdFor<T, I>,
-		pub tx_fee: TransactionFeeFor<T, I>,
-		pub tx_metadata: TransactionMetadataFor<T, I>,
-		pub transaction_ref: TransactionRefFor<T, I>,
+	derive_common_traits_no_bounds! {
+		#[derive_where(PartialOrd, Ord; )]
+		#[derive(GenericTypeInfo)]
+		#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+		pub struct TransactionConfirmation<T: Config<I>, I: 'static> {
+			pub tx_out_id: TransactionOutIdFor<T, I>,
+			pub signer_id: SignerIdFor<T, I>,
+			pub tx_fee: TransactionFeeFor<T, I>,
+			pub tx_metadata: TransactionMetadataFor<T, I>,
+			pub transaction_ref: TransactionRefFor<T, I>,
+		}
 	}
 
 	#[pallet::config]

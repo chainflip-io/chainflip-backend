@@ -40,7 +40,8 @@ use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
 use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
 use state_chain_runtime::{
-	chainflip::witnessing::pallet_hooks::VaultContractEvent, EthereumInstance, Runtime, RuntimeCall,
+	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, EthereumInstance, Runtime,
+	RuntimeCall,
 };
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
@@ -405,7 +406,7 @@ pub fn handle_vault_events<Config>(
 	config: &Config,
 	events: Vec<Event<VaultEvents>>,
 	block_height: u64,
-) -> Result<Vec<VaultContractEvent<Runtime, Config::Instance>>>
+) -> Result<Vec<EvmVaultContractEvent<Runtime, Config::Instance>>>
 where
 	Config: VaultEventConfig,
 	H160: IntoForeignChainAddress<Config::Chain>,
@@ -434,7 +435,7 @@ fn handle_vault_event<Config>(
 	event: VaultEvents,
 	tx_hash: H256,
 	block_height: u64,
-) -> Result<Option<VaultContractEvent<Runtime, Config::Instance>>>
+) -> Result<Option<EvmVaultContractEvent<Runtime, Config::Instance>>>
 where
 	Config: VaultEventConfig,
 	H160: IntoForeignChainAddress<Config::Chain>,
@@ -454,7 +455,7 @@ where
 			let (vault_swap_parameters, ()) =
 				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
-			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<Config::Chain as Chain>::GAS_ASSET,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -481,7 +482,7 @@ where
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				asset,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -504,7 +505,7 @@ where
 			let (vault_swap_parameters, ccm_additional_data) =
 				decode_cf_parameters(&cf_parameters[..], block_height)?;
 
-			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<Config::Chain as Chain>::GAS_ASSET,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -548,7 +549,7 @@ where
 				.get(&src_token)
 				.ok_or_else(|| anyhow!("Source token {src_token:?} not found"))?;
 
-			VaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
+			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				asset,
 				try_into_primitive(amount).map_err(|e| anyhow!("Failed to convert amount: {e}"))?,
 				try_into_primitive(dst_token)?,
@@ -576,7 +577,7 @@ where
 		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
 			recipient,
 			amount,
-		}) => VaultContractEvent::TransferFailed(TransferFailedWitness {
+		}) => EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
 			asset: <Config::Chain as Chain>::GAS_ASSET,
 			amount: try_into_primitive::<_, AssetAmount>(amount)?,
 			destination_address: recipient,
@@ -592,7 +593,7 @@ where
 				.get(&token)
 				.ok_or_else(|| anyhow!("Asset {token:?} not found"))?;
 
-			VaultContractEvent::TransferFailed(TransferFailedWitness {
+			EvmVaultContractEvent::TransferFailed(TransferFailedWitness {
 				asset: asset
 					.try_into()
 					.expect("Asset translated from address must be supported by the chain."),

@@ -5,7 +5,7 @@ use crate::{
 		witnessing::{
 			elections::TypesFor,
 			ethereum_block_processor::EthEvent,
-			pallet_hooks::{self, VaultContractEvent},
+			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -23,9 +23,6 @@ use cf_traits::{
 use cf_utilities::{derive_common_traits, hook_impls, impls};
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
-use pallet_cf_broadcast::{
-	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
-};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_system_runner::RunnerStorageAccessTrait,
@@ -58,9 +55,7 @@ use pallet_cf_elections::{
 	InitialStateOf, RunnerStorageAccess,
 };
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
-use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
-use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
@@ -207,7 +202,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
-	type BlockEntry = VaultContractEvent<Runtime, EthereumInstance>;
+	type BlockEntry = EvmVaultContractEvent<Runtime, EthereumInstance>;
 	type ElectionProperties = ();
 	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
@@ -339,123 +334,34 @@ pub type EthereumStateChainGatewayWitnessingES = StatemachineElectoralSystem<
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct EthereumKeyManagerWitnessing;
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
-)]
-#[scale_info(skip_type_params(
-	AggKey,
-	BlockNumber,
-	TxInId,
-	TxOutId,
-	SignerId,
-	TxFee,
-	TxMetadata,
-	TxRef
-))]
-pub enum KeyManagerEvent<AggKey, BlockNumber, TxInId, TxOutId, SignerId, TxFee, TxMetadata, TxRef> {
-	AggKeySetByGovKey {
-		new_public_key: AggKey,
-		block_number: BlockNumber,
-		tx_id: TxInId,
-	},
-	SignatureAccepted {
-		tx_out_id: TxOutId,
-		signer_id: SignerId,
-		tx_fee: TxFee,
-		tx_metadata: TxMetadata,
-		transaction_ref: TxRef,
-	},
-	GovernanceAction {
-		call_hash: GovCallHash,
-	},
-}
+impl BlockWitnesserInstance for TypesFor<EthereumKeyManagerWitnessing> {
+	const BWNAME: &'static str = "KeyManager";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = EvmKeyManagerEvent<Runtime, EthereumInstance>;
+	type ElectionProperties = ();
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub type EthereumKeyManagerEvent = KeyManagerEvent<
-	AggKeyFor<Runtime, EthereumInstance>,
-	ChainBlockNumberFor<Runtime, EthereumInstance>,
-	TransactionInIdFor<Runtime, EthereumInstance>,
-	TransactionOutIdFor<Runtime, EthereumInstance>,
-	SignerIdFor<Runtime, EthereumInstance>,
-	TransactionFeeFor<Runtime, EthereumInstance>,
-	TransactionMetadataFor<Runtime, EthereumInstance>,
-	TransactionRefFor<Runtime, EthereumInstance>,
->;
-
-pub(crate) type BlockDataKeyManager = Vec<EthereumKeyManagerEvent>;
-
-impls! {
-	for TypesFor<EthereumKeyManagerWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataKeyManager;
-
-		type Event = EthEvent<EthereumKeyManagerEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "KeyManager";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<
+			EthereumElectionsSafeMode,
+		>>::get()
+		.key_manager_witnessing
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// KeyManager address doesn't change, it is read by the engine on startup
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<evm::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<EthereumElectionsSafeMode>>::get()
-			.key_manager_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// KeyManager address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) { }
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type EthereumKeyManagerWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumKeyManagerWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumKeyManagerWitnessing>>>;
 
 // ------------------------ SC Utils witnessing ---------------------------
 pub struct EthereumScUtilsWitnessing;

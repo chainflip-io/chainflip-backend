@@ -371,6 +371,8 @@ impl FeeEstimationApi<Polkadot> for PolkadotTrackedData {
 	Default,
 	PartialEq,
 	Eq,
+	PartialOrd,
+	Ord,
 	Serialize,
 	Deserialize,
 )]
