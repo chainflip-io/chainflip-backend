@@ -2,15 +2,14 @@ use crate::{
 	chainflip::witnessing::{
 		elections::TypesFor,
 		ethereum_elections::{
-			BlockDataKeyManager, BlockDataScUtils, BlockDataStateChainGateway,
-			EthereumKeyManagerEvent, EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing,
-			EthereumStateChainGatewayWitnessing, ScUtilsCall, StateChainGatewayEvent,
+			BlockDataKeyManager, BlockDataScUtils, EthereumKeyManagerEvent,
+			EthereumKeyManagerWitnessing, EthereumScUtilsWitnessing, ScUtilsCall,
 		},
 	},
 	EthereumBroadcaster, Runtime,
 };
 use cf_chains::{instances::EthereumInstance, Chain, Ethereum};
-use cf_traits::{FundAccount, FundingSource, Hook};
+use cf_traits::Hook;
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::ops::Range;
 use frame_support::{pallet_prelude::TypeInfo, Deserialize, Serialize};
@@ -38,62 +37,10 @@ pub enum EthEvent<T> {
 	Witness(T),
 }
 
-type TypesStateChainGatewayWitnessing = TypesFor<EthereumStateChainGatewayWitnessing>;
 type TypesKeyManagerWitnessing = TypesFor<EthereumKeyManagerWitnessing>;
 type TypesScUtilsWitnessing = TypesFor<EthereumScUtilsWitnessing>;
 type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 
-impl Hook<HookTypeFor<TypesStateChainGatewayWitnessing, ExecuteHook>>
-	for TypesStateChainGatewayWitnessing
-{
-	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<StateChainGatewayEvent>)>) {
-		for (_, event) in events {
-			match event {
-				EthEvent::Witness(call) => {
-					match call {
-						StateChainGatewayEvent::Funded { account_id, amount, funder, tx_hash } =>
-							pallet_cf_funding::Pallet::<Runtime>::fund_account(
-								account_id,
-								amount,
-								FundingSource::EthTransaction { tx_hash, funder },
-							),
-						StateChainGatewayEvent::RedemptionExecuted {
-							account_id,
-							redeemed_amount,
-						} => {
-							if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redeemed(
-								account_id.clone(),
-								redeemed_amount,
-							) {
-								log::error!(
-									"Failed to execute Ethereum redemption: AccountId: {:?}, Amount: {:?}, Error: {:?}",
-									account_id,
-									redeemed_amount,
-									err
-								);
-							}
-						},
-						StateChainGatewayEvent::RedemptionExpired {
-							account_id,
-							block_number: _,
-						} => {
-							if let Err(err) =
-								pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
-									account_id.clone(),
-								) {
-								log::error!(
-									"Failed to execute Ethereum redemption expiry: AccountId: {:?}, Error: {:?}",
-									account_id,
-									err
-								);
-							}
-						},
-					};
-				},
-			};
-		}
-	}
-}
 impl Hook<HookTypeFor<TypesKeyManagerWitnessing, ExecuteHook>> for TypesKeyManagerWitnessing {
 	fn run(&mut self, events: Vec<(BlockNumber, EthEvent<EthereumKeyManagerEvent>)>) {
 		for (block_number, event) in events {
@@ -197,10 +144,5 @@ macro_rules! impl_rules_hook {
 	};
 }
 
-impl_rules_hook!(
-	TypesStateChainGatewayWitnessing,
-	BlockDataStateChainGateway,
-	EthEvent<StateChainGatewayEvent>
-);
 impl_rules_hook!(TypesKeyManagerWitnessing, BlockDataKeyManager, EthEvent<EthereumKeyManagerEvent>);
 impl_rules_hook!(TypesScUtilsWitnessing, BlockDataScUtils, EthEvent<ScUtilsCall>);

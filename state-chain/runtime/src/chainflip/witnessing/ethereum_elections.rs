@@ -16,8 +16,11 @@ use cf_chains::{
 	eth::EthereumTrackedData, evm, instances::EthereumInstance, witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
-use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
-use cf_utilities::impls;
+use cf_primitives::BlockWitnesserEvent;
+use cf_traits::{
+	hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook,
+};
+use cf_utilities::{derive_common_traits, hook_impls, impls};
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{
@@ -230,102 +233,108 @@ pub type EthereumVaultDepositWitnessingES =
 	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumVaultDepositWitnessing>>>;
 
 // ------------------------ State Chain Gateway witnessing ---------------------------
+
+/// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
+/// implemented here and not in `pallet_hooks.rs`.
 pub struct EthereumStateChainGatewayWitnessing;
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
-)]
-pub enum StateChainGatewayEvent {
-	Funded {
-		account_id: AccountId,
-		amount: FlipBalance<Runtime>,
-		funder: evm::Address,
-		tx_hash: EthTransactionHash,
-	},
-	RedemptionExecuted {
-		account_id: AccountId,
-		redeemed_amount: FlipBalance<Runtime>,
-	},
-	RedemptionExpired {
-		account_id: AccountId,
-		block_number: u64,
-	},
-}
-pub(crate) type BlockDataStateChainGateway = Vec<StateChainGatewayEvent>;
+impl BlockWitnesserInstance for TypesFor<EthereumStateChainGatewayWitnessing> {
+	const BWNAME: &'static str = "StateChainGateway";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = StateChainGatewayEvent;
+	type ElectionProperties = ();
+	type ExecutionTarget = Self;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-impls! {
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<
+			EthereumElectionsSafeMode,
+		>>::get()
+		.state_chain_gateway_witnessing
+	}
+
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// StateChainGateway address doesn't change, it is read by the engine on startup
+	}
+
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
+	}
+}
+
+derive_common_traits! {
+	#[derive(PartialOrd, Ord, TypeInfo)]
+	pub enum StateChainGatewayEvent {
+		Funded {
+			account_id: AccountId,
+			amount: FlipBalance<Runtime>,
+			funder: evm::Address,
+			tx_hash: EthTransactionHash,
+		},
+		RedemptionExecuted {
+			account_id: AccountId,
+			redeemed_amount: FlipBalance<Runtime>,
+			tx_hash: EthTransactionHash,
+		},
+		RedemptionExpired {
+			account_id: AccountId,
+			block_number: u64,
+			tx_hash: EthTransactionHash,
+		},
+	}
+}
+
+hook_impls! {
 	for TypesFor<EthereumStateChainGatewayWitnessing>:
 
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataStateChainGateway;
-
-		type Event = EthEvent<StateChainGatewayEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "StateChainGateway";
-	}
-
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
-	}
-
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataStateChainGateway, Option<evm::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<EthereumElectionsSafeMode>>::get()
-			.state_chain_gateway_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// StateChainGateway address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) {}
+	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<StateChainGatewayEvent>, ChainBlockNumberOf<EthereumChain>)) -> () {
+		match event {
+			BlockWitnesserEvent::PreWitness(_) => {
+				// we don't care about prewitnessing for SC gateway events
+			},
+			BlockWitnesserEvent::Witness(call) => {
+				match call {
+					StateChainGatewayEvent::Funded { account_id, amount, funder, tx_hash } =>
+						pallet_cf_funding::Pallet::<Runtime>::fund_account(
+							account_id,
+							amount,
+							FundingSource::EthTransaction { tx_hash, funder },
+						),
+					StateChainGatewayEvent::RedemptionExecuted { account_id, redeemed_amount, tx_hash } =>
+						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redeemed(
+							account_id.clone(),
+							redeemed_amount,
+							tx_hash
+						) {
+							log::error!(
+									"Failed to execute Ethereum redemption: AccountId: {:?}, Amount: {:?}, Error: {:?}",
+									account_id,
+									redeemed_amount,
+									err
+								);
+						},
+					StateChainGatewayEvent::RedemptionExpired { account_id, block_number: _, tx_hash } =>
+						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
+							account_id.clone(),
+							tx_hash
+						) {
+							log::error!(
+									"Failed to execute Ethereum redemption expiry: AccountId: {:?}, Error: {:?}",
+									account_id,
+									err
+								);
+						},
+				};
+			},
+		};
 	}
 }
 
 /// Generating the state machine-based electoral system
-pub type EthereumStateChainGatewayWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumStateChainGatewayWitnessing>>;
+pub type EthereumStateChainGatewayWitnessingES = StatemachineElectoralSystem<
+	GenericBlockWitnesser<TypesFor<EthereumStateChainGatewayWitnessing>>,
+>;
 
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct EthereumKeyManagerWitnessing;
