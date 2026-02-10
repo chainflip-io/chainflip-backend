@@ -975,7 +975,7 @@ pub mod pallet {
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
 	/// Maps broadcast IDs to the action to take when the broadcast completes.
-	/// Set when initiating a broadcast, consumed on success and on abort for actions that have
+	/// Set when initiating a broadcast, consumed on success or expiry for actions that have
 	/// explicit failure handling.
 	#[pallet::storage]
 	pub type BroadcastActions<T: Config<I>, I: 'static = ()> =
@@ -3666,13 +3666,10 @@ impl<T: Config<I>, I: 'static> cf_traits::BroadcastOutcomeHandler<T::TargetChain
 	}
 
 	fn on_broadcast_aborted(broadcast_id: BroadcastId) {
-		// Keep finalise-ingress actions so they can still be applied if the broadcast succeeds
-		// after being aborted.
 		if matches!(
 			BroadcastActions::<T, I>::get(broadcast_id),
 			Some(BroadcastAction::CcmBroadcast)
 		) {
-			BroadcastActions::<T, I>::remove(broadcast_id);
 			let current_epoch = T::EpochInfo::epoch_index();
 			FailedForeignChainCalls::<T, I>::append(
 				current_epoch,

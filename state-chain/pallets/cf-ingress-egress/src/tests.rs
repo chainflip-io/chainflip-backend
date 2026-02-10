@@ -1483,9 +1483,37 @@ fn failed_ccm_is_stored() {
 			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
+		assert_eq!(
+			BroadcastActions::<Test, Instance1>::get(broadcast_id),
+			Some(BroadcastAction::CcmBroadcast)
+		);
 		System::assert_last_event(RuntimeEvent::EthereumIngressEgress(Event::CcmBroadcastFailed {
 			broadcast_id,
 		}));
+	});
+}
+
+#[test]
+fn failed_ccm_is_recorded_on_repeated_aborts() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 9;
+		BroadcastActions::<Test, Instance1>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		assert_eq!(
+			BroadcastActions::<Test, Instance1>::get(broadcast_id),
+			Some(BroadcastAction::CcmBroadcast)
+		);
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id, original_epoch: epoch }
+			]
+		);
 	});
 }
 
