@@ -75,7 +75,6 @@ hook_impls! {
 			},
 			Witness(egress) => {
 				if let Err(err) = pallet_cf_broadcast::Pallet::<T, I>::egress_success(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 					egress.clone(),
 					block_height,
 				) {

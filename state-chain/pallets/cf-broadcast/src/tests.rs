@@ -19,11 +19,11 @@
 use core::cmp::max;
 
 use crate::{
-	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastData,
-	BroadcastId, BroadcastIdToTransactionOutIds, ChainBlockNumberFor, DelayedBroadcastRetryQueue,
-	Error, Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
-	PalletOffence, PendingApiCalls, PendingBroadcasts, RequestFailureCallbacks,
-	RequestSuccessCallbacks, Timeouts, TransactionMetadata, TransactionOutIdToBroadcastId,
+	mock::*, AbortedBroadcasts, AggKey, AwaitingBroadcast, BroadcastBarriers, BroadcastId,
+	BroadcastIdToTransactionOutIds, ChainBlockNumberFor, DelayedBroadcastRetryQueue, Error,
+	Event as BroadcastEvent, Event, FailedBroadcasters, Instance1, PalletConfigUpdate,
+	PalletOffence, PendingApiCalls, PendingBroadcasts, Timeouts, TransactionMetadata,
+	TransactionOutIdToBroadcastId,
 };
 use cf_chains::{
 	mocks::{
@@ -37,6 +37,7 @@ use cf_test_utilities::last_event;
 use cf_traits::{
 	mocks::{
 		block_height_provider::BlockHeightProvider,
+		broadcast_outcome_handler::{MockBroadcastOutcome, MockBroadcastOutcomeHandler},
 		cfe_interface_mock::{MockCfeEvent, MockCfeInterface},
 		liability_tracker::MockLiabilityTracker,
 		signer_nomination::MockNominator,
@@ -172,19 +173,6 @@ fn start_mock_broadcast(
 	initiate_and_sign_broadcast(&mock_api_call(), mock_sig, TxType::Normal)
 }
 
-fn new_mock_broadcast_attempt(
-	broadcast_id: BroadcastId,
-	nominee: u64,
-) -> BroadcastData<Test, Instance1> {
-	BroadcastData::<Test, Instance1> {
-		broadcast_id,
-		transaction_payload: Default::default(),
-		threshold_signature_payload: Default::default(),
-		transaction_out_id: Default::default(),
-		nominee: Some(nominee),
-	}
-}
-
 /// Since there might be multiple entries with the same timeout chainblock number,
 /// we collect all of their "values" into a single `BTreeSet`. This improves the
 /// readability of a few test cases. Since we don't care about the order of the timeouts,
@@ -242,6 +230,21 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 }
 
 #[test]
+fn broadcast_outcome_handler_is_called_on_success() {
+	new_test_ext().execute_with(|| {
+		let broadcast_id = start_mock_broadcast(SIG1);
+
+		assert!(MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes().is_empty());
+		witness_broadcast(SIG1);
+
+		assert_eq!(
+			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
+			vec![MockBroadcastOutcome::Success { broadcast_id, witness_block: Default::default() }]
+		);
+	});
+}
+
+#[test]
 fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		let broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
@@ -261,6 +264,33 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 		assert_eq!(
 			System::events().pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(Event::BroadcastAborted { broadcast_id })
+		);
+	});
+}
+
+#[test]
+fn broadcast_outcome_handler_is_called_on_abort_and_expire() {
+	new_test_ext().execute_with(|| {
+		let broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
+		let nominee = ready_to_abort_broadcast(broadcast_id);
+
+		assert_ok!(Broadcaster::transaction_failed(
+			RawOrigin::Signed(nominee).into(),
+			broadcast_id,
+		));
+
+		assert_eq!(
+			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
+			vec![MockBroadcastOutcome::Aborted { broadcast_id }]
+		);
+
+		<Broadcaster as BroadcasterTrait<TargetChainOf<Test, Instance1>>>::expire_broadcast(
+			broadcast_id,
+		);
+
+		assert_eq!(
+			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
+			vec![MockBroadcastOutcome::Expired { broadcast_id }]
 		);
 	});
 }
@@ -504,48 +534,6 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 }
 
 #[test]
-fn threshold_sign_and_broadcast_with_callback() {
-	new_test_ext().execute_with(|| {
-		let (broadcast_id, _) =
-			Broadcaster::threshold_sign_and_broadcast(mock_api_call(), Some(MockCallback), |_| {
-				None
-			});
-
-		MockThresholdSigner::<MockEthereumChainCrypto, RuntimeCall>::execute_signature_result_against_last_request(Ok(SIG1));
-
-		assert_eq!(
-			RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id),
-			Some(MockCallback)
-		);
-		assert_ok!(Broadcaster::transaction_succeeded(
-			RuntimeOrigin::root(),
-			SIG1,
-			Default::default(),
-			ETH_TX_FEE,
-			MOCK_TX_METADATA,
-			2
-		));
-		assert!(RequestSuccessCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
-		let mut events = System::events();
-		assert_eq!(
-			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(Event::BroadcastSuccess {
-				broadcast_id,
-				transaction_out_id: SIG1,
-				transaction_ref: 2,
-			})
-		);
-		assert_eq!(
-			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(Event::BroadcastCallbackExecuted {
-				broadcast_id,
-				result: Ok(())
-			})
-		);
-	});
-}
-
-#[test]
 fn ensure_safe_mode_is_moving_timeouts() {
 	new_test_ext()
 		.execute_with(|| {
@@ -616,39 +604,6 @@ fn transaction_succeeded_results_in_refund_refuse_for_signer() {
 				beneficiary: Default::default(),
 			})
 		);
-	});
-}
-
-#[test]
-fn callback_is_called_upon_broadcast_failure() {
-	new_test_ext().execute_with(|| {
-		let (broadcast_id, _) =
-			Broadcaster::threshold_sign_and_broadcast(mock_api_call(), None, |_| {
-				Some(MockCallback)
-			});
-
-		assert_eq!(
-			RequestFailureCallbacks::<Test, Instance1>::get(broadcast_id),
-			Some(MockCallback)
-		);
-		assert!(!MockCallback::was_called());
-
-		AwaitingBroadcast::<Test, Instance1>::insert(
-			broadcast_id,
-			new_mock_broadcast_attempt(broadcast_id, 0u64),
-		);
-		PendingApiCalls::<Test, Instance1>::insert(broadcast_id, mock_api_call());
-
-		// Broadcast fails when no broadcaster can be nominated.
-		let nominee = ready_to_abort_broadcast(broadcast_id);
-
-		assert_ok!(Broadcaster::transaction_failed(
-			RawOrigin::Signed(nominee).into(),
-			broadcast_id,
-		));
-
-		// This should trigger the failed callback
-		assert!(MockCallback::was_called());
 	});
 }
 

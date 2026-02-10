@@ -19,4 +19,4 @@ use cf_runtime_utilities::PlaceholderMigration;
 
 pub mod channel_status_migration;
 
-pub type PalletMigration<T, I> = (PlaceholderMigration<30, Pallet<T, I>>,);
+pub type PalletMigration<T, I> = (PlaceholderMigration<31, Pallet<T, I>>,);
