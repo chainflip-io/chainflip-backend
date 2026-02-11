@@ -3,7 +3,6 @@ use core::ops::RangeInclusive;
 use crate::{
 	chainflip::{
 		witnessing::{
-			arbitrum_block_processor::ArbEvent,
 			elections::TypesFor,
 			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
@@ -19,7 +18,7 @@ use cf_chains::{
 	witness_period::{BlockWitnessRange, SaturatingStep},
 	Arbitrum, Chain, DepositChannel,
 };
-use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook};
 use cf_utilities::impls;
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -33,13 +32,8 @@ use pallet_cf_elections::{
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
-			consensus::BWConsensus,
 			instance::{BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin},
-			primitives::SafeModeStatus,
-			state_machine::{
-				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
-				ElectionPropertiesHook, HookTypeFor, ProcessedUpToHook, SafeModeEnabledHook,
-			},
+			state_machine::{BWElectionType, BlockWitnesserSettings, HookTypeFor},
 		},
 		composite::{
 			tuple_6_impls::{DerivedElectoralAccess, Hooks},
@@ -146,94 +140,47 @@ pub type ArbitrumBlockHeightWitnesserES =
 /// The electoral system for deposit channel witnessing
 pub struct ArbitrumDepositChannelWitnessing;
 
-type ElectionPropertiesDepositChannel = Vec<DepositChannel<Arbitrum>>;
-pub(crate) type BlockDataDepositChannel = Vec<DepositWitness<Arbitrum>>;
+impl BlockWitnesserInstance for TypesFor<ArbitrumDepositChannelWitnessing> {
+	const BWNAME: &'static str = "DepositChannel";
+	type Runtime = Runtime;
+	type Chain = ArbitrumChain;
+	type BlockEntry = DepositWitness<Arbitrum>;
+	type ElectionProperties = Vec<DepositChannel<Arbitrum>>;
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, ArbitrumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-impls! {
-	for TypesFor<ArbitrumDepositChannelWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = ArbitrumChain;
-		type BlockData = BlockDataDepositChannel;
-
-		type Event = ArbEvent<DepositWitness<Arbitrum>>;
-		type Rules = Self;
-		type Execute = Self;
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "DepositChannel";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_ingress_egress::Config<ArbitrumInstance>>::SafeMode as Get<
+			pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
+		>>::get()
+		.deposit_channel_witnessing_enabled
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ElectionPropertiesDepositChannel;
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = Self;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(height: ChainBlockNumberOf<Self::Chain>) -> Self::ElectionProperties {
+		let height = height.root();
+		ArbitrumIngressEgress::active_deposit_channels_at(
+			// we advance by SAFETY_BUFFER before checking opened_at
+			height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
+			// we don't advance for expiry
+			*height,
+		)
+		.into_iter()
+		.map(|deposit_channel_details| deposit_channel_details.deposit_channel)
+		.collect()
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataDepositChannel, Option<evm::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_ingress_egress::Config<ArbitrumInstance>>::SafeMode as Get<
-				pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
-			>>::get()
-			.deposit_channel_witnessing_enabled
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// implementation of reading deposit channels hook
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(
-			&mut self,
-			height: <ArbitrumChain as ChainTypes>::ChainBlockNumber,
-		) -> Vec<DepositChannel<Arbitrum>> {
-			let height = height.root();
-			ArbitrumIngressEgress::active_deposit_channels_at(
-				// we advance by SAFETY_BUFFER before checking opened_at
-				height.saturating_forward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
-				// we don't advance for expiry
-				*height
-			).into_iter().map(|deposit_channel_details| {
-				deposit_channel_details.deposit_channel
-			}).collect()
-		}
-	}
-
-	/// implementation of processed_up_to hook, this enables expiration of deposit channels
-	Hook<HookTypeFor<Self, ProcessedUpToHook>> {
-		fn run(
-			&mut self,
-			up_to: <ArbitrumChain as ChainTypes>::ChainBlockNumber,
-		) {
-			// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks have been additionally processed.
-			ProcessedUpTo::<Runtime, ArbitrumInstance>::set(up_to.root().saturating_backward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize));
-		}
+	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
+		// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks
+		// have been additionally processed.
+		ProcessedUpTo::<Runtime, ArbitrumInstance>::set(
+			up_to.root().saturating_backward(ARBITRUM_MAINNET_SAFETY_BUFFER as usize),
+		);
 	}
 }
+
 /// Generating the state machine-based electoral system
 pub type ArbitrumDepositChannelWitnessingES =
-	StatemachineElectoralSystem<TypesFor<ArbitrumDepositChannelWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumDepositChannelWitnessing>>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
 /// The electoral system for vault deposit witnessing
@@ -435,6 +382,7 @@ impl
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
 					.saturating_sub(ARBITRUM_MAINNET_SAFETY_BUFFER.into()),
+				crate::Validator::current_epoch(),
 			),
 		)?;
 
@@ -495,7 +443,9 @@ impl_pallet_safe_mode! {
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
-	DepositChannels(ElectionPropertiesDepositChannel),
+	DepositChannels(
+		<TypesFor<ArbitrumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
+	),
 	Vaults(()),
 	KeyManager(()),
 }

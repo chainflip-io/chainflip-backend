@@ -417,7 +417,10 @@ impl
 		>(block_height_identifiers, &())?;
 		SolanaLiveness::on_finalize::<
 			DerivedElectoralAccess<_, SolanaLiveness, RunnerStorageAccess<Runtime, SolanaInstance>>,
-		>(liveness_identifiers, &(current_sc_block_number, block_height))?;
+		>(
+			liveness_identifiers,
+			&(current_sc_block_number, block_height, crate::Validator::current_epoch()),
+		)?;
 		SolanaNonceTracking::on_finalize::<
 			DerivedElectoralAccess<
 				_,

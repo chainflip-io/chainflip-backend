@@ -4,7 +4,6 @@ use crate::{
 	chainflip::{
 		witnessing::{
 			elections::TypesFor,
-			ethereum_block_processor::EthEvent,
 			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
@@ -17,9 +16,7 @@ use cf_chains::{
 	Chain, DepositChannel, Ethereum,
 };
 use cf_primitives::BlockWitnesserEvent;
-use cf_traits::{
-	hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook,
-};
+use cf_traits::{impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook};
 use cf_utilities::{derive_common_traits, hook_impls, impls};
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -33,13 +30,8 @@ use pallet_cf_elections::{
 			BlockHeightWitnesserSettings, ChainBlockNumberOf, ChainProgress, ChainTypes, ReorgHook,
 		},
 		block_witnesser::{
-			consensus::BWConsensus,
 			instance::{BlockWitnesserInstance, GenericBlockWitnesser, JustWitnessAtSafetyMargin},
-			primitives::SafeModeStatus,
-			state_machine::{
-				BWElectionType, BWProcessorTypes, BWStatemachine, BWTypes, BlockWitnesserSettings,
-				ElectionPropertiesHook, HookTypeFor, SafeModeEnabledHook,
-			},
+			state_machine::{BWElectionType, BlockWitnesserSettings, HookTypeFor},
 		},
 		composite::{
 			tuple_8_impls::{DerivedElectoralAccess, Hooks},
@@ -57,7 +49,6 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -174,11 +165,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 		.collect()
 	}
 
-	fn processed_up_to(
-		up_to: pallet_cf_elections::electoral_systems::block_height_witnesser::ChainBlockNumberOf<
-			Self::Chain,
-		>,
-	) {
+	fn processed_up_to(up_to: ChainBlockNumberOf<Self::Chain>) {
 		// we go back SAFETY_BUFFER, such that we only actually expire once this amount of blocks
 		// have been additionally processed.
 		ProcessedUpTo::<Runtime, EthereumInstance>::set(
@@ -364,94 +351,77 @@ pub type EthereumKeyManagerWitnessingES =
 	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumKeyManagerWitnessing>>>;
 
 // ------------------------ SC Utils witnessing ---------------------------
+/// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
+/// implemented here and not in `pallet_hooks.rs`.
 pub struct EthereumScUtilsWitnessing;
 
-#[derive(
-	Debug,
-	Clone,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Deserialize,
-	Serialize,
-	Ord,
-	PartialOrd,
-)]
-pub struct ScUtilsCall {
-	pub deposit_and_call: EthereumDepositAndSCCall,
-	pub caller: <Ethereum as Chain>::ChainAccount,
-	// use 0 padded ethereum address as account_id which the flip funds
-	// are associated with on SC
-	pub caller_account_id: AccountId,
-	pub eth_tx_hash: EthTransactionHash,
-}
-pub(crate) type BlockDataScUtils = Vec<ScUtilsCall>;
+impl BlockWitnesserInstance for TypesFor<EthereumScUtilsWitnessing> {
+	const BWNAME: &'static str = "ScUtils";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = ScUtilsCall;
+	type ElectionProperties = ();
+	type ExecutionTarget = Self;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-impls! {
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<
+			EthereumElectionsSafeMode,
+		>>::get()
+		.sc_utils_witnessing
+	}
+
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// ScUtils address doesn't change, it is read by the engine on startup
+	}
+
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
+	}
+}
+
+derive_common_traits! {
+	#[derive(PartialOrd, Ord, TypeInfo)]
+	pub struct ScUtilsCall {
+		pub deposit_and_call: EthereumDepositAndSCCall,
+		pub caller: <Ethereum as Chain>::ChainAccount,
+		// use 0 padded ethereum address as account_id which the flip funds
+		// are associated with on SC
+		pub caller_account_id: AccountId,
+		pub eth_tx_hash: EthTransactionHash,
+	}
+}
+
+hook_impls! {
 	for TypesFor<EthereumScUtilsWitnessing>:
 
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataScUtils;
-
-		type Event = EthEvent<ScUtilsCall>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "ScUtils";
-	}
-
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
-	}
-
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataScUtils, Option<evm::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<EthereumElectionsSafeMode>>::get()
-			.sc_utils_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
+	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<ScUtilsCall>, ChainBlockNumberOf<EthereumChain>)) -> () {
+		match event {
+			BlockWitnesserEvent::PreWitness(_) => { /* no prewitness events on ethereum */},
+			BlockWitnesserEvent::Witness(call) => {
+				if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::execute_sc_call(
+					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
+					call.deposit_and_call.clone(),
+					call.caller,
+					// use 0 padded ethereum address as account_id which the flip funds
+					// are associated with on SC
+					call.caller_account_id,
+					call.eth_tx_hash,
+				) {
+					log::error!(
+						"Failed to execute Ethereum sc call {:?}: Error: {:?}",
+						call.deposit_and_call.call,
+						err
+					)
+				}
+			},
 		}
-	}
-
-	/// ScUtils address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) { }
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type EthereumScUtilsWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumScUtilsWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumScUtilsWitnessing>>>;
 
 // ------------------------ liveness ---------------------------
 pub type EthereumLiveness = Liveness<
@@ -616,6 +586,7 @@ impl
 					// We subtract the safety buffer so we don't ask for liveness for blocks that
 					// could be reorged out.
 					.saturating_sub(ETHEREUM_MAINNET_SAFETY_BUFFER.into()),
+				crate::Validator::current_epoch(),
 			),
 		)?;
 
