@@ -4,18 +4,18 @@ import {
   Asset,
   assetDecimals,
   Assets,
-  cfMutex,
   chainFromAsset,
   Chains,
-  createStateChainKeypair,
   decodeDotAddressForContract,
   fineAmountToAmount,
   stateChainAssetFromAsset,
-  waitForExt,
 } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
-import { Logger } from 'shared/utils/logger';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
+import { swappingAffiliateRegistration } from 'generated/events/swapping/affiliateRegistration';
+import { swappingPrivateBrokerChannelOpened } from 'generated/events/swapping/privateBrokerChannelOpened';
+import { cfMutex } from 'shared/accounts';
 
 interface BtcVaultSwapDetails {
   chain: string;
@@ -29,50 +29,81 @@ interface BtcVaultSwapExtraParameters {
   retry_duration: number;
 }
 
-async function openPrivateBtcChannel(logger: Logger, brokerUri: string): Promise<number> {
-  const release = await cfMutex.acquire(brokerUri);
-  // Check if the channel is already open
-  const chainflip = await getChainflipApi();
-  const broker = createStateChainKeypair(brokerUri);
+async function getExistingPrivateBtcChannel(brokerAddress: string): Promise<number | undefined> {
+  await using chainflip = await getChainflipApi();
+
   const existingPrivateChannel = Number(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerPrivateBtcChannels(broker.address)) as any,
+    (await chainflip.query.swapping.brokerPrivateBtcChannels(brokerAddress)) as any,
   );
+
   if (existingPrivateChannel) {
-    release();
+    return existingPrivateChannel;
+  }
+  return undefined;
+}
+
+export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
+  fundAccountWithBrokerBond = false,
+): Promise<number> {
+  const broker = cf.requirements.account;
+  await using chainflip = await getChainflipApi();
+
+  // Acquire mutex and check if broker already has private channel
+  const release = await cfMutex.acquire(broker.uri);
+  const existingPrivateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
+  release();
+  if (existingPrivateChannel) {
     return existingPrivateChannel;
   }
 
-  // Fund the broker the required bond amount for opening a private channel
-  const fundAmount = fineAmountToAmount(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerBond()) as any as string,
-    assetDecimals('Flip'),
-  );
-  await fundFlip(logger, broker.address, fundAmount);
+  if (fundAccountWithBrokerBond) {
+    // Fund the broker the required bond amount for opening a private channel
+    const fundAmount = fineAmountToAmount(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (await chainflip.query.swapping.brokerBond()) as any as string,
+      assetDecimals('Flip'),
+    );
+    await fundFlip(cf, broker.keypair.address, fundAmount);
+  }
 
   // Open the private channel
-  logger.trace('Opening private BTC channel');
-  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock');
-  const nonce = (await chainflip.rpc.system.accountNextIndex(broker.address)) as unknown as number;
-  const unsub = await chainflip.tx.swapping
-    .openPrivateBtcChannel()
-    .signAndSend(broker, { nonce }, waiter);
-  const events = (await promise).events;
-  unsub();
-  release();
+  cf.trace('Opening private BTC channel');
 
-  const { channelId } = events
-    .find(
-      ({ event }) => event.section === 'swapping' && event.method === 'PrivateBrokerChannelOpened',
-    )!
-    .event.toHuman() as unknown as { channelId: string };
-  return Number(channelId);
+  try {
+    const privateBrokerChannelOpenedEvent = await cf.submitExtrinsic({
+      extrinsic: (api) => api.tx.swapping.openPrivateBtcChannel(),
+      expectedEvent: {
+        name: 'Swapping.PrivateBrokerChannelOpened',
+        schema: swappingPrivateBrokerChannelOpened.refine(
+          (event) => event.brokerId === broker.keypair.address,
+        ),
+      },
+      filteredError: 'swapping.PrivateChannelExistsForBroker',
+    });
+
+    cf.debug(
+      `Private BTC channel successfully opened for broker: ${privateBrokerChannelOpenedEvent.brokerId}`,
+    );
+    return Number(privateBrokerChannelOpenedEvent.channelId);
+  } catch (err) {
+    // Fetch the private channel instead, if the extrinsic fails
+    if (err instanceof Error && err.message.includes('swapping.PrivateChannelExistsForBroker')) {
+      const privateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
+      cf.warn(`got an error fetching private channel: ${privateChannel}`);
+
+      if (privateChannel) {
+        return privateChannel;
+      }
+      throw Error(`Unexpected error private Btc channel should exists for broker: ${broker.uri}`);
+    }
+    throw err;
+  }
 }
 
-export async function buildAndSendBtcVaultSwap(
-  logger: Logger,
-  brokerUri: string,
+export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   depositAmountBtc: number,
   destinationAsset: Asset,
   destinationAddress: string,
@@ -85,8 +116,8 @@ export async function buildAndSendBtcVaultSwap(
 ) {
   await using chainflip = await getChainflipApi();
 
-  await openPrivateBtcChannel(logger, brokerUri);
-  const broker = createStateChainKeypair(brokerUri);
+  await openPrivateBtcChannel(cf);
+  const broker = cf.requirements.account.keypair;
 
   const extraParameters: BtcVaultSwapExtraParameters = {
     chain: 'Bitcoin',
@@ -94,7 +125,7 @@ export async function buildAndSendBtcVaultSwap(
     retry_duration: 0,
   };
 
-  logger.trace('Requesting vault swap parameter encoding');
+  cf.trace('Requesting vault swap parameter encoding');
   const BtcVaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     broker.address,
@@ -113,7 +144,7 @@ export async function buildAndSendBtcVaultSwap(
 
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
-  logger.trace('Sending BTC vault swap transaction');
+  cf.trace('Sending BTC vault swap transaction');
   const txid = await sendVaultTransaction(
     BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
@@ -123,9 +154,8 @@ export async function buildAndSendBtcVaultSwap(
 
   return txid;
 }
-export async function buildAndSendInvalidBtcVaultSwap(
-  logger: Logger,
-  brokerUri: string,
+export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   depositAmountBtc: number,
   destinationAsset: Asset,
   destinationAddress: string,
@@ -138,8 +168,8 @@ export async function buildAndSendInvalidBtcVaultSwap(
 ) {
   await using chainflip = await getChainflipApi();
 
-  await openPrivateBtcChannel(logger, brokerUri);
-  const broker = createStateChainKeypair(brokerUri);
+  await openPrivateBtcChannel(cf);
+  const broker = cf.requirements.account.keypair;
 
   const extraParameters: BtcVaultSwapExtraParameters = {
     chain: 'Bitcoin',
@@ -176,29 +206,28 @@ export async function buildAndSendInvalidBtcVaultSwap(
   return txid;
 }
 
-export async function registerAffiliate(
-  logger: Logger,
-  brokerUri: string,
+export async function registerAffiliate<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   withdrawalAddress: string,
 ) {
-  const chainflip = await getChainflipApi();
-  const broker = createStateChainKeypair(brokerUri);
+  const brokerUri = cf.requirements.account.uri;
 
-  logger.trace('Registering affiliate');
-  const release = await cfMutex.acquire(brokerUri);
-  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
-  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-  const unsub = await chainflip.tx.swapping
-    .registerAffiliate(withdrawalAddress)
-    .signAndSend(broker, { nonce }, waiter);
+  cf.trace('Registering affiliate');
+  const affiliateRegistration = await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress),
+    expectedEvent: {
+      name: 'Swapping.AffiliateRegistration',
+      schema: swappingAffiliateRegistration.refine(
+        (event) =>
+          event.brokerId === cf.requirements.account.keypair.address &&
+          event.withdrawalAddress === withdrawalAddress.toLowerCase(),
+      ),
+    },
+  });
 
-  const events = (await promise).events;
-  unsub();
+  cf.debug(
+    `Affiliate with withdrawalAddress: ${withdrawalAddress} successfully registered for broker: ${brokerUri}`,
+  );
 
-  return events
-    .find(({ event }) => event.section === 'swapping' && event.method === 'AffiliateRegistration')!
-    .event.data.toHuman() as {
-    shortId: number;
-    affiliateId: string;
-  };
+  return affiliateRegistration;
 }

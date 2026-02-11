@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { cfMutex, waitForExt } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { limitOrder } from 'shared/limit_order';
 import { rangeOrder } from 'shared/range_order';
@@ -35,7 +34,6 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
   cf: ChainflipIO<A>,
   numberOfLimitOrders = 30,
 ) {
-  await using chainflip = await getChainflipApi();
   const lpUri = cf.requirements.account.uri;
   const lpAddress = cf.requirements.account.keypair.address;
 
@@ -58,32 +56,32 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
   cf.debug(`Liquidity successfully deposited to ${lpUri}`);
 
   // create a series of limit_order and save their info to delete them later on
-  const promises = [];
+  const promises: ((api: ChainflipIO<A>) => Promise<void>)[] = [];
   const ordersToDelete: {
     Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
     Range?: { base_asset: string; quote_asset: string; id: number };
   }[] = [];
 
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push(limitOrder(cf.logger, 'Btc', 0.00000001, i, i, lpUri));
+    promises.push((subcf) => limitOrder(subcf, 'Btc', 0.00000001, i, i));
     ordersToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
   }
   for (let i = 1; i <= numberOfLimitOrders; i++) {
-    promises.push(limitOrder(cf.logger, 'Eth', 0.000000000000000001, i, i, lpUri));
+    promises.push((subcf) => limitOrder(subcf, 'Eth', 0.000000000000000001, i, i));
     ordersToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
   }
 
-  promises.push(rangeOrder(cf.logger, 'Btc', 0.1, lpUri, 0));
+  promises.push((subcf) => rangeOrder(subcf, 'Btc', 0.1, 0));
   ordersToDelete.push({
     Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
   });
-  promises.push(rangeOrder(cf.logger, 'Eth', 0.01, lpUri, 0));
+  promises.push((subcf) => rangeOrder(subcf, 'Eth', 0.01, 0));
   ordersToDelete.push({
     Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
   });
 
   cf.debug('Submitting orders');
-  await Promise.all(promises);
+  await cf.all(promises);
   cf.debug('Orders successfully submitted');
 
   let openOrders = await countOpenOrders('BTC', 'USDC', lpAddress);
@@ -91,16 +89,9 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
   cf.debug(`Number of open orders: ${openOrders}`);
 
   cf.debug('Deleting opened orders...');
-
-  const release = await cfMutex.acquire(lpUri);
-  const { promise, waiter } = waitForExt(chainflip, cf.logger, 'InBlock', release);
-  const nonce = (await chainflip.rpc.system.accountNextIndex(lpAddress)) as unknown as number;
-  await chainflip.tx.liquidityPools
-    .cancelOrdersBatch(ordersToDelete)
-    .signAndSend(cf.requirements.account.keypair, { nonce }, waiter);
-
-  await promise;
-
+  await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.liquidityPools.cancelOrdersBatch(ordersToDelete),
+  });
   cf.debug('All orders successfully deleted');
 
   openOrders = await countOpenOrders('BTC', 'USDC', lpAddress);

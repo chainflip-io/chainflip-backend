@@ -12,7 +12,9 @@
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { fundFlip } from 'shared/fund_flip';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 const address = process.argv[2];
 const flipAmount = process.argv[3].trim();
-await runWithTimeoutAndExit(fundFlip(globalLogger, address, flipAmount), 120);
+const cf = await newChainflipIO(globalLogger, []);
+await runWithTimeoutAndExit(fundFlip(cf, address, flipAmount), 120);
