@@ -40,19 +40,6 @@ export const price = new Map<Asset, number>([
   ['HubUsdt', 1],
 ]);
 
-export async function setupSwaps2<A = []>(cf: ChainflipIO<A>): Promise<void> {
-  const lp1RefundAddresses = (parentCf: ChainflipIO<A>) =>
-    parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') }).all([
-      // (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Ethereum')),
-      // (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Bitcoin')),
-      //(subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Arbitrum')),
-      (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Solana')),
-      //(subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Assethub')),
-    ]);
-
-  await cf.all([lp1RefundAddresses]);
-}
-
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up for swaps');
 
