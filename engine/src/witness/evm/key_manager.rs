@@ -65,11 +65,12 @@ use crate::evm::{
 	cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 	rpc::EvmRpcSigningClient,
 };
-use pallet_cf_broadcast::{
-	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
+use pallet_cf_broadcast::TransactionConfirmation;
+use pallet_cf_vaults::VaultKeyRotatedExternally;
+use state_chain_runtime::{
+	chainflip::witnessing::pallet_hooks::{self, EvmKeyManagerEvent},
+	Runtime,
 };
-use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
-use state_chain_runtime::{chainflip::witnessing::ethereum_elections::KeyManagerEvent, Runtime};
 
 use super::contract_common::Event as ContractEvent;
 
@@ -91,26 +92,14 @@ pub trait KeyManagerEventConfig {
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
 }
 
-pub type KeyManagerEventResult<I> = KeyManagerEvent<
-	AggKeyFor<Runtime, I>,
-	ChainBlockNumberFor<Runtime, I>,
-	TransactionInIdFor<Runtime, I>,
-	TransactionOutIdFor<Runtime, I>,
-	SignerIdFor<Runtime, I>,
-	TransactionFeeFor<Runtime, I>,
-	TransactionMetadataFor<Runtime, I>,
-	TransactionRefFor<Runtime, I>,
->;
-
 pub async fn handle_key_manager_events<Config>(
 	config: &Config,
 	events: Vec<ContractEvent<KeyManagerEvents>>,
 	block_height: u64,
-) -> Result<Vec<KeyManagerEventResult<Config::Instance>>>
+) -> Result<Vec<EvmKeyManagerEvent<Runtime, Config::Instance>>>
 where
 	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
-		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
+	Runtime: pallet_hooks::Config<Config::Instance, TargetChain = Config::Chain>,
 {
 	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
 		handle_key_manager_event::<Config>(
@@ -131,20 +120,19 @@ async fn handle_key_manager_event<Config>(
 	event: KeyManagerEvents,
 	tx_hash: H256,
 	block_height: u64,
-) -> Result<Option<KeyManagerEventResult<Config::Instance>>>
+) -> Result<Option<EvmKeyManagerEvent<Runtime, Config::Instance>>>
 where
 	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
-		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
+	Runtime: pallet_hooks::Config<Config::Instance, TargetChain = Config::Chain>,
 {
 	Ok(Some(match event {
 		KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 			new_agg_key, ..
-		}) => KeyManagerEventResult::<Config::Instance>::AggKeySetByGovKey {
+		}) => EvmKeyManagerEvent::AggKeySetByGovKey(VaultKeyRotatedExternally {
 			new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(new_agg_key.serialize()),
 			block_number: block_height,
 			tx_id: tx_hash,
-		},
+		}),
 		KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter { sig_data, .. }) => {
 			let TransactionReceipt { gas_used, effective_gas_price, from, to, .. } =
 				config.client().transaction_receipt(tx_hash).await?;
@@ -173,7 +161,7 @@ where
 				gas_limit: Some(transaction.gas),
 			};
 
-			KeyManagerEventResult::<Config::Instance>::SignatureAccepted {
+			EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
 				tx_out_id: SchnorrVerificationComponents {
 					s: sig_data.sig.into(),
 					k_times_g_address: sig_data.k_times_g_address.into(),
@@ -182,10 +170,10 @@ where
 				tx_fee: TransactionFee { effective_gas_price, gas_used },
 				tx_metadata,
 				transaction_ref: transaction.hash,
-			}
+			})
 		},
-		KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message }) =>
-			KeyManagerEventResult::<Config::Instance>::GovernanceAction { call_hash: message },
+		KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message: call_hash }) =>
+			EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash),
 		_ => return Ok(None),
 	}))
 }

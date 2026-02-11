@@ -5,7 +5,7 @@ use crate::{
 		witnessing::{
 			elections::TypesFor,
 			ethereum_block_processor::EthEvent,
-			pallet_hooks::{self, VaultContractEvent},
+			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		},
 		ReportFailedLivenessCheck,
 	},
@@ -18,12 +18,12 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
-use cf_traits::{hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, Hook};
-use cf_utilities::impls;
-use frame_system::pallet_prelude::BlockNumberFor;
-use pallet_cf_broadcast::{
-	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
+use cf_primitives::BlockWitnesserEvent;
+use cf_traits::{
+	hook_test_utils::EmptyHook, impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook,
 };
+use cf_utilities::{derive_common_traits, hook_impls, impls};
+use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
 	electoral_system_runner::RunnerStorageAccessTrait,
@@ -56,9 +56,7 @@ use pallet_cf_elections::{
 	InitialStateOf, RunnerStorageAccess,
 };
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
-use pallet_cf_governance::GovCallHash;
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
-use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
@@ -205,7 +203,7 @@ impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
-	type BlockEntry = VaultContractEvent<Runtime, EthereumInstance>;
+	type BlockEntry = EvmVaultContractEvent<Runtime, EthereumInstance>;
 	type ElectionProperties = ();
 	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
 	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
@@ -231,201 +229,140 @@ pub type EthereumVaultDepositWitnessingES =
 	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumVaultDepositWitnessing>>>;
 
 // ------------------------ State Chain Gateway witnessing ---------------------------
+
+/// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
+/// implemented here and not in `pallet_hooks.rs`.
 pub struct EthereumStateChainGatewayWitnessing;
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-pub enum StateChainGatewayEvent {
-	Funded {
-		account_id: AccountId,
-		amount: FlipBalance<Runtime>,
-		funder: eth::Address,
-		tx_hash: EthTransactionHash,
-	},
-	RedemptionExecuted {
-		account_id: AccountId,
-		redeemed_amount: FlipBalance<Runtime>,
-	},
-	RedemptionExpired {
-		account_id: AccountId,
-		block_number: u64,
-	},
-}
-pub(crate) type BlockDataStateChainGateway = Vec<StateChainGatewayEvent>;
+impl BlockWitnesserInstance for TypesFor<EthereumStateChainGatewayWitnessing> {
+	const BWNAME: &'static str = "StateChainGateway";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = StateChainGatewayEvent;
+	type ElectionProperties = ();
+	type ExecutionTarget = Self;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-impls! {
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<
+			EthereumElectionsSafeMode,
+		>>::get()
+		.state_chain_gateway_witnessing
+	}
+
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// StateChainGateway address doesn't change, it is read by the engine on startup
+	}
+
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
+	}
+}
+
+derive_common_traits! {
+	#[derive(PartialOrd, Ord, TypeInfo)]
+	pub enum StateChainGatewayEvent {
+		Funded {
+			account_id: AccountId,
+			amount: FlipBalance<Runtime>,
+			funder: eth::Address,
+			tx_hash: EthTransactionHash,
+		},
+		RedemptionExecuted {
+			account_id: AccountId,
+			redeemed_amount: FlipBalance<Runtime>,
+			tx_hash: EthTransactionHash,
+		},
+		RedemptionExpired {
+			account_id: AccountId,
+			block_number: u64,
+			tx_hash: EthTransactionHash,
+		},
+	}
+}
+
+hook_impls! {
 	for TypesFor<EthereumStateChainGatewayWitnessing>:
 
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataStateChainGateway;
-
-		type Event = EthEvent<StateChainGatewayEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "StateChainGateway";
-	}
-
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
-	}
-
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataStateChainGateway, Option<eth::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<EthereumElectionsSafeMode>>::get()
-			.state_chain_gateway_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// StateChainGateway address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) {}
+	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<StateChainGatewayEvent>, ChainBlockNumberOf<EthereumChain>)) -> () {
+		match event {
+			BlockWitnesserEvent::PreWitness(_) => {
+				// we don't care about prewitnessing for SC gateway events
+			},
+			BlockWitnesserEvent::Witness(call) => {
+				match call {
+					StateChainGatewayEvent::Funded { account_id, amount, funder, tx_hash } =>
+						pallet_cf_funding::Pallet::<Runtime>::fund_account(
+							account_id,
+							amount,
+							FundingSource::EthTransaction { tx_hash, funder },
+						),
+					StateChainGatewayEvent::RedemptionExecuted { account_id, redeemed_amount, tx_hash } =>
+						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redeemed(
+							account_id.clone(),
+							redeemed_amount,
+							tx_hash
+						) {
+							log::error!(
+									"Failed to execute Ethereum redemption: AccountId: {:?}, Amount: {:?}, Error: {:?}",
+									account_id,
+									redeemed_amount,
+									err
+								);
+						},
+					StateChainGatewayEvent::RedemptionExpired { account_id, block_number: _, tx_hash } =>
+						if let Err(err) = pallet_cf_funding::Pallet::<Runtime>::redemption_expired(
+							account_id.clone(),
+							tx_hash
+						) {
+							log::error!(
+									"Failed to execute Ethereum redemption expiry: AccountId: {:?}, Error: {:?}",
+									account_id,
+									err
+								);
+						},
+				};
+			},
+		};
 	}
 }
 
 /// Generating the state machine-based electoral system
-pub type EthereumStateChainGatewayWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumStateChainGatewayWitnessing>>;
+pub type EthereumStateChainGatewayWitnessingES = StatemachineElectoralSystem<
+	GenericBlockWitnesser<TypesFor<EthereumStateChainGatewayWitnessing>>,
+>;
 
 // ------------------------ Key Manager witnessing ---------------------------
 pub struct EthereumKeyManagerWitnessing;
 
-#[derive(
-	Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Deserialize, Serialize, Ord, PartialOrd,
-)]
-#[scale_info(skip_type_params(
-	AggKey,
-	BlockNumber,
-	TxInId,
-	TxOutId,
-	SignerId,
-	TxFee,
-	TxMetadata,
-	TxRef
-))]
-pub enum KeyManagerEvent<AggKey, BlockNumber, TxInId, TxOutId, SignerId, TxFee, TxMetadata, TxRef> {
-	AggKeySetByGovKey {
-		new_public_key: AggKey,
-		block_number: BlockNumber,
-		tx_id: TxInId,
-	},
-	SignatureAccepted {
-		tx_out_id: TxOutId,
-		signer_id: SignerId,
-		tx_fee: TxFee,
-		tx_metadata: TxMetadata,
-		transaction_ref: TxRef,
-	},
-	GovernanceAction {
-		call_hash: GovCallHash,
-	},
-}
+impl BlockWitnesserInstance for TypesFor<EthereumKeyManagerWitnessing> {
+	const BWNAME: &'static str = "KeyManager";
+	type Runtime = Runtime;
+	type Chain = EthereumChain;
+	type BlockEntry = EvmKeyManagerEvent<Runtime, EthereumInstance>;
+	type ElectionProperties = ();
+	type ExecutionTarget = pallet_hooks::PalletHooks<Runtime, EthereumInstance>;
+	type WitnessRules = JustWitnessAtSafetyMargin<Self::BlockEntry>;
 
-pub type EthereumKeyManagerEvent = KeyManagerEvent<
-	AggKeyFor<Runtime, EthereumInstance>,
-	ChainBlockNumberFor<Runtime, EthereumInstance>,
-	TransactionInIdFor<Runtime, EthereumInstance>,
-	TransactionOutIdFor<Runtime, EthereumInstance>,
-	SignerIdFor<Runtime, EthereumInstance>,
-	TransactionFeeFor<Runtime, EthereumInstance>,
-	TransactionMetadataFor<Runtime, EthereumInstance>,
-	TransactionRefFor<Runtime, EthereumInstance>,
->;
-
-pub(crate) type BlockDataKeyManager = Vec<EthereumKeyManagerEvent>;
-
-impls! {
-	for TypesFor<EthereumKeyManagerWitnessing>:
-
-	/// Associating BW processor types
-	BWProcessorTypes {
-		type Chain = EthereumChain;
-
-		type BlockData = BlockDataKeyManager;
-
-		type Event = EthEvent<EthereumKeyManagerEvent>;
-		type Rules = Self;
-		type Execute = Self;
-
-		type DebugEventHook = EmptyHook;
-
-		const BWNAME: &'static str = "KeyManager";
+	fn is_enabled() -> bool {
+		<<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<
+			EthereumElectionsSafeMode,
+		>>::get()
+		.key_manager_witnessing
 	}
 
-	/// Associating BW types to the struct
-	BWTypes {
-		type ElectionProperties = ();
-		type ElectionPropertiesHook = Self;
-		type SafeModeEnabledHook = Self;
-		type ProcessedUpToHook = EmptyHook;
-		type ElectionTrackerDebugEventHook = EmptyHook;
+	fn election_properties(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// KeyManager address doesn't change, it is read by the engine on startup
 	}
 
-	/// Associating the state machine and consensus mechanism to the struct
-	StatemachineElectoralSystemTypes {
-		type ValidatorId = <Runtime as Chainflip>::ValidatorId;
-		type VoteStorage = vote_storage::bitmap::Bitmap<(BlockDataKeyManager, Option<eth::H256>)>;
-		type StateChainBlockNumber = BlockNumberFor<Runtime>;
-
-		type OnFinalizeReturnItem = ();
-
-		// the actual state machine and consensus mechanisms of this ES
-		type Statemachine = BWStatemachine<Self>;
-		type ConsensusMechanism = BWConsensus<Self>;
-	}
-
-	/// implementation of safe mode reading hook
-	Hook<HookTypeFor<Self, SafeModeEnabledHook>> {
-		fn run(&mut self, _input: ()) -> SafeModeStatus {
-			if <<Runtime as pallet_cf_elections::Config<EthereumInstance>>::SafeMode as Get<EthereumElectionsSafeMode>>::get()
-			.key_manager_witnessing
-			{
-				SafeModeStatus::Disabled
-			} else {
-				SafeModeStatus::Enabled
-			}
-		}
-	}
-
-	/// KeyManager address doesn't change, it is read by the engine on startup
-	Hook<HookTypeFor<Self, ElectionPropertiesHook>> {
-		fn run(&mut self, _block_witness_root: <Ethereum as Chain>::ChainBlockNumber) { }
+	fn processed_up_to(_block_height: ChainBlockNumberOf<Self::Chain>) {
+		// NO-OP (processed_up_to is required only for deposit channels)
 	}
 }
 
 /// Generating the state machine-based electoral system
 pub type EthereumKeyManagerWitnessingES =
-	StatemachineElectoralSystem<TypesFor<EthereumKeyManagerWitnessing>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumKeyManagerWitnessing>>>;
 
 // ------------------------ SC Utils witnessing ---------------------------
 pub struct EthereumScUtilsWitnessing;

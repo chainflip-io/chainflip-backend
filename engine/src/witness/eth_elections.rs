@@ -355,6 +355,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 						redeemed_amount: amount
 							.try_into()
 							.expect("Redemption amount should fit in u128"),
+						tx_hash: event.tx_hash.into(),
 					});
 				},
 				StateChainGatewayEvents::RedemptionExpiredFilter(RedemptionExpiredFilter {
@@ -364,6 +365,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 					result.push(SCStateChainGatewayEvent::RedemptionExpired {
 						account_id: account_id.into(),
 						block_number: block_height,
+						tx_hash: event.tx_hash.into(),
 					});
 				},
 				_ => {},
