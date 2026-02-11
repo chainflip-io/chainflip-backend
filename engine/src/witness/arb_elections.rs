@@ -21,16 +21,17 @@ use crate::{
 			contract_common::{events_at_block, query_election_block},
 			erc20_deposits::Erc20Events,
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
-			vault::{handle_vault_events, VaultEventConfig, VaultEvents},
+			vault::{handle_vault_events, VaultEvents},
 		},
 	},
 };
 use cf_chains::{
 	arb::ArbitrumTrackedData,
+	assets,
 	witness_period::{block_witness_range, block_witness_root, BlockWitnessRange, SaturatingStep},
-	Arbitrum, ChainWitnessConfig, ForeignChain,
+	Arbitrum, ChainWitnessConfig,
 };
-use cf_primitives::{chains::assets::arb::Asset as ArbAsset, Asset};
+use cf_primitives::chains::assets::arb::Asset as ArbAsset;
 use cf_utilities::task_scope::{self, Scope};
 use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
@@ -231,19 +232,9 @@ impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitn
 pub struct ArbitrumVaultDepositWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	vault_address: H160,
-	supported_assets: HashMap<H160, Asset>,
+	supported_assets: HashMap<H160, assets::arb::Asset>,
 }
 
-impl VaultEventConfig for ArbitrumVaultDepositWitnesserVoter {
-	type Chain = Arbitrum;
-	type Instance = ArbitrumInstance;
-
-	const FOREIGN_CHAIN: ForeignChain = ForeignChain::Arbitrum;
-
-	fn supported_assets(&self) -> &HashMap<H160, Asset> {
-		&self.supported_assets
-	}
-}
 #[async_trait::async_trait]
 impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesserVoter {
 	async fn vote(
@@ -265,7 +256,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 		)
 		.await?;
 
-		let result = handle_vault_events(self, events, *block_height.root())?;
+		let result = handle_vault_events(&self.supported_assets, events, *block_height.root())?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
@@ -410,9 +401,9 @@ where
 	let usdt_contract_address =
 		*supported_erc20_tokens.get(&ArbAsset::ArbUsdt).context("USDT not supported")?;
 
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
+	let supported_erc20_tokens: HashMap<H160, assets::arb::Asset> = supported_erc20_tokens
 		.into_iter()
-		.map(|(asset, address)| (address, asset.into()))
+		.map(|(asset, address)| (address, asset))
 		.collect();
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
