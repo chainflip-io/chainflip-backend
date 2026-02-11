@@ -158,7 +158,9 @@ fn build_rpc_lending_pool<T: Config>(
 
 	let utilisation = pool.get_utilisation();
 
-	let current_interest_rate = config.derive_interest_rate_per_year(asset, utilisation);
+	// Total interest/borrow rate is the sum of "base" rate plus "network" rate:
+	let current_interest_rate = config.derive_interest_rate_per_year(asset, utilisation) +
+		config.network_fee_contributions.extra_interest;
 
 	RpcLendingPool {
 		asset,
