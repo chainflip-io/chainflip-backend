@@ -72,10 +72,13 @@ where
 		// swap. We accumulate multiple deposits to the same channel in a single item. Same for
 		// Vault swaps - we've never really seen a single transaction initiating multiple Vault
 		// swaps.
+		// We skip fetch and transfer (allBatch) transactions. It could technically be possible
+		// that an allBatch transaction transfers to a a deposit channel but in reality that
+		// never happens. It just seems safer to just skip all our allBatch transactions.
 		for operation in tx_trace.operation {
 			if deposit_channels.iter().any(|ch| *ch == operation.address) {
 				// If any operation for a deposit channel has negative amount, skip this
-				// transaction. That means it's a fetch transaction.
+				// transaction. That means it's a fetch (allBatch) transaction.
 				if operation.amount < 0 {
 					continue 'transaction_loop;
 				}
