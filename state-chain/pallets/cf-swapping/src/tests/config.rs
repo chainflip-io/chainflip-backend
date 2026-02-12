@@ -53,7 +53,7 @@ fn can_update_all_config_items() {
 			DefaultOraclePriceSlippageProtection::<Test>::get(
 				AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()
 			),
-			Some(NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION)
+			NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION
 		);
 
 		// Define the updates in a reusable vec
@@ -122,7 +122,7 @@ fn can_update_all_config_items() {
 			DefaultOraclePriceSlippageProtection::<Test>::get(
 				AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap()
 			),
-			Some(NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION)
+			NEW_DEFAULT_ORACLE_PRICE_SLIPPAGE_PROTECTION
 		);
 
 		// Check that the PalletConfigUpdate event was emitted for each update

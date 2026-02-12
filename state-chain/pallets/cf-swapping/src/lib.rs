@@ -43,7 +43,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{Get, Saturating},
+		traits::{ConstU16, Get, Saturating},
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
@@ -85,6 +85,13 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(16);
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
+
+/// Default oracle price slippage protection when no specific value is configured.
+///
+/// Note this only applies to assets where we have oracle prices. If we don't have an oracle
+/// price we can't apply LPP at all and we treat the limit as zero because the slippage will
+/// always default to zero for those assets.
+pub const FALLBACK_DEFAULT_LPP_LIMIT: u16 = 100;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
@@ -490,7 +497,8 @@ pub enum PalletConfigUpdate<T: Config> {
 	SetInternalSwapNetworkFeeForAsset { asset: Asset, rate: Option<Permill> },
 	/// If no oracle protection is set by the user, a default will be
 	/// applied. The default will be the sum of both pools' values. Only
-	/// used for regular swaps (not fee swaps).
+	/// used for regular swaps (not fee swaps). Set to `None` to reset
+	/// to the permissive default (100%).
 	SetDefaultOraclePriceSlippageProtectionForAsset {
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -745,11 +753,15 @@ pub mod pallet {
 	pub type BoundBrokerWithdrawalAddress<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
 
-	/// Default oracle price slippage protection in basis points for each pool. Maximum amount of
-	/// slippage from oracle price allowed when swapping to/from USDC to given pool (single leg).
 	#[pallet::storage]
-	pub type DefaultOraclePriceSlippageProtection<T: Config> =
-		StorageMap<_, Twox64Concat, AssetPair, BasisPoints>;
+	pub type DefaultOraclePriceSlippageProtection<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		AssetPair,
+		BasisPoints,
+		ValueQuery,
+		ConstU16<FALLBACK_DEFAULT_LPP_LIMIT>,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -1018,7 +1030,7 @@ pub mod pallet {
 		/// to.
 		BrokerBoundWithdrawalAddressRestrictionViolated,
 		/// A zero default slippage protection will result in most swaps failing. Set to `None` to
-		/// disable the default.
+		/// reset to the permissive default (100%).
 		ZeroDefaultSlippageNotAllowed,
 		/// The specified pool does not exist.
 		PoolDoesNotExist,
@@ -2926,41 +2938,43 @@ pub mod pallet {
 			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
 		}
 
+		/// Returns the configured default oracle price slippage protection for a single pool leg.
+		/// Returns `None` if the asset has no oracle price feed or no valid pool pair.
+		pub fn default_oracle_lpp_for_asset(asset: Asset) -> Option<BasisPoints> {
+			T::PriceFeedApi::get_price(asset)?;
+			Some(DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
+				asset,
+				STABLE_ASSET,
+			)?))
+		}
+
+		/// Returns the default price protection to apply to a one or two-leg swap.
+		///
+		/// Returns `None` if no oracle price is available for any leg of the swap (no
+		/// meaningful protection can be applied). For two-leg swaps where only one leg
+		/// has an oracle, the other leg contributes zero to the total limit so that
+		/// the oracle-priced leg is still protected.
 		fn get_default_oracle_price_protection(
 			input_asset: Asset,
 			output_asset: Asset,
 		) -> Option<BasisPoints> {
-			// Check if we have oracle prices and default slippage settings for the
-			// assets
-			let get_default_slippage = |asset: Asset| {
-				if asset == STABLE_ASSET {
-					// Single leg swap, no slippage on one side.
-					Some(0)
-				} else if T::PriceFeedApi::get_price(asset).is_some() {
-					DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
-						asset,
-						STABLE_ASSET,
-					)?)
-				} else {
-					// For our slippage calculation, we treat assets without oracle
-					// as 0 slippage so we can still enforce oracle slippage
-					// protection on the other side of the swap.
-					Some(0)
-				}
-			};
-
-			// Calculate the default price protection slippage and apply it
-			if let (Some(input_default_slippage), Some(output_default_slippage)) =
-				(get_default_slippage(input_asset), get_default_slippage(output_asset))
-			{
-				let default_oracle_protection =
-					input_default_slippage.saturating_add(output_default_slippage);
-
-				if default_oracle_protection > 0 {
-					return Some(default_oracle_protection);
-				}
+			match (input_asset, output_asset) {
+				// Swaps to/from the stable asset use a single pool, so only one
+				// leg's slippage applies.
+				(STABLE_ASSET, asset) | (asset, STABLE_ASSET) =>
+					Self::default_oracle_lpp_for_asset(asset),
+				// Non-stable swaps go through two pools. At least one leg must have
+				// oracle data for the default to be meaningful.
+				(input_asset, output_asset) => match (
+					Self::default_oracle_lpp_for_asset(input_asset),
+					Self::default_oracle_lpp_for_asset(output_asset),
+				) {
+					(Some(input_lpp), Some(output_lpp)) =>
+						Some(input_lpp.saturating_add(output_lpp)),
+					(Some(lpp), None) | (None, Some(lpp)) => Some(lpp),
+					(None, None) => None,
+				},
 			}
-			None
 		}
 	}
 

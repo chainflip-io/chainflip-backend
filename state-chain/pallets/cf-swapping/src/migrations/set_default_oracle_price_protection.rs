@@ -52,14 +52,14 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				AssetPair::new(Asset::Eth, STABLE_ASSET)
 					.ok_or(DispatchError::from("Pool should exist"))?
 			),
-			Some(NON_STABLE_SLIPPAGE)
+			NON_STABLE_SLIPPAGE
 		);
 		assert_eq!(
 			DefaultOraclePriceSlippageProtection::<T>::get(
 				AssetPair::new(Asset::Usdt, STABLE_ASSET)
 					.ok_or(DispatchError::from("Pool should exist"))?
 			),
-			Some(STABLE_COIN_SLIPPAGE)
+			STABLE_COIN_SLIPPAGE
 		);
 
 		log::info!("Post-upgrade checks for SetDefaultOracleSlippageProtection passed");

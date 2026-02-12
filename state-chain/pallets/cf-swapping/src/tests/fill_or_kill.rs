@@ -653,11 +653,11 @@ mod oracle_swaps {
 				// custom slippage protection is not overridden by these defaults.
 				DefaultOraclePriceSlippageProtection::<Test>::set(
 					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
-					Some(ORACLE_PRICE_SLIPPAGE+100),
+					ORACLE_PRICE_SLIPPAGE + 100,
 				);
 				DefaultOraclePriceSlippageProtection::<Test>::set(
 					AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
-					Some(ORACLE_PRICE_SLIPPAGE+100),
+					ORACLE_PRICE_SLIPPAGE + 100,
 				);
 
 				// Execution price is exactly the same as the oracle price,
@@ -1119,11 +1119,11 @@ mod oracle_swaps {
 			MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 40_000_000);
 			DefaultOraclePriceSlippageProtection::<Test>::set(
 				AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
-				Some(INPUT_PROTECTION_BPS),
+				INPUT_PROTECTION_BPS,
 			);
 			DefaultOraclePriceSlippageProtection::<Test>::set(
 				AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
-				Some(OUTPUT_PROTECTION_BPS),
+				OUTPUT_PROTECTION_BPS,
 			);
 			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
 				rate: Permill::from_parts(NETWORK_FEE_BPS as u32 * 100),
@@ -1190,7 +1190,7 @@ mod oracle_swaps {
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 10_000_000);
 				DefaultOraclePriceSlippageProtection::<Test>::set(
 					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
-					Some(INPUT_PROTECTION_BPS),
+					INPUT_PROTECTION_BPS,
 				);
 				// USDC needs to also have a price set for the oracle price protection to work.
 				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, 10_000_000 * DEFAULT_SWAP_RATE);
