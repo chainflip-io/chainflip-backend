@@ -14,6 +14,7 @@ import { newStatechainAddress } from 'shared/new_statechain_address';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 import { TestContext } from 'shared/utils/test_context';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 // Submitting the `redeem` extrinsic will cost a small amount of gas. Any more than this and we should be suspicious.
 const gasErrorMargin = 0.1;
@@ -43,45 +44,45 @@ async function redeemAndObserve(
 // It then funds the SC address with Flip, and redeems the Flip to the Eth address
 // checking that the balance has increased the expected amount.
 // If no seed is provided, a random one is generated.
-async function main(logger: Logger, providedSeed?: string) {
+async function main<A = []>(cf: ChainflipIO<A>, providedSeed?: string) {
   await using chainflip = await getChainflipApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
     fineAmountToAmount(redemptionTax.toString(), assetDecimals('Flip')),
   );
-  logger.debug(`Redemption tax: ${redemptionTax} = ${redemptionTaxAmount} Flip`);
+  cf.debug(`Redemption tax: ${redemptionTax} = ${redemptionTaxAmount} Flip`);
 
   const seed = providedSeed ?? randomBytes(32).toString('hex');
   const fundAmount = 1000;
   const redeemSCAddress = await newStatechainAddress(seed);
   const redeemEthAddress = await newAssetAddress('Eth', seed);
-  logger.debug(`Flip Redeem address: ${redeemSCAddress}`);
-  logger.debug(`Eth  Redeem address: ${redeemEthAddress}`);
+  cf.debug(`Flip Redeem address: ${redeemSCAddress}`);
+  cf.debug(`Eth  Redeem address: ${redeemEthAddress}`);
 
   // Fund the SC address for the tests
-  await fundFlip(logger, redeemSCAddress, fundAmount.toString());
+  await fundFlip(cf, redeemSCAddress, fundAmount.toString());
 
   // Test redeeming an exact amount with a portion of the funded flip
   const exactAmount = fundAmount / 4;
   const exactRedeemAmount = { Exact: exactAmount.toString() };
-  logger.debug(`Testing redeem exact amount: ${exactRedeemAmount.Exact}`);
+  cf.debug(`Testing redeem exact amount: ${exactRedeemAmount.Exact}`);
   const redeemedExact = await redeemAndObserve(
-    logger,
+    cf.logger,
     seed,
     redeemEthAddress as HexString,
     exactRedeemAmount,
   );
-  logger.debug(`Expected balance increase amount: ${exactAmount}`);
+  cf.debug(`Expected balance increase amount: ${exactAmount}`);
   assert.strictEqual(
     redeemedExact.toFixed(5),
     exactAmount.toFixed(5),
     `Unexpected balance increase amount`,
   );
-  logger.debug('Redeem exact amount success!');
+  cf.debug('Redeem exact amount success!');
 
   // Test redeeming the rest of the flip with a 'Max' redeem amount
-  logger.debug(`Testing redeem all`);
-  const redeemedAll = await redeemAndObserve(logger, seed, redeemEthAddress as HexString, 'Max');
+  cf.debug(`Testing redeem all`);
+  const redeemedAll = await redeemAndObserve(cf.logger, seed, redeemEthAddress as HexString, 'Max');
   // We expect to redeem the entire amount minus the exact amount redeemed above + tax & gas for both redemptions
   const expectedRedeemAllAmount = fundAmount - redeemedExact - redemptionTaxAmount;
   assert(
@@ -94,5 +95,6 @@ async function main(logger: Logger, providedSeed?: string) {
 }
 
 export async function testFundRedeem(testContext: TestContext) {
-  await main(testContext.logger, 'redeem');
+  const cf = await newChainflipIO(testContext.logger, []);
+  await main(cf, 'redeem');
 }

@@ -21,18 +21,17 @@ import {
   defaultAssetAmounts,
   newAssetAddress,
   getContractAddress,
-  createStateChainKeypair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
-import { Logger, throwError } from 'shared/utils/logger';
+import { throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
-import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -249,9 +248,8 @@ export async function performAndTrackSwap<A = []>(
   cf.debug(`Broadcast executed successfully, swap is complete!`);
 }
 
-export async function executeVaultSwap(
-  logger: Logger,
-  brokerUri: string,
+export async function executeVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -272,18 +270,17 @@ export async function executeVaultSwap(
   const srcChain = chainFromAsset(sourceAsset);
 
   if (evmChains.includes(srcChain)) {
-    logger.trace('Executing EVM vault swap');
+    cf.trace('Executing EVM vault swap');
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(logger, sourceAsset);
+    const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
     sourceAddress = wallet.address.toLowerCase();
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
-      logger,
-      brokerUri,
+      cf,
       sourceAsset,
       destAsset,
       destAddress,
@@ -299,10 +296,9 @@ export async function executeVaultSwap(
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
     sourceAddress = wallet.address.toLowerCase();
   } else if (srcChain === 'Bitcoin') {
-    logger.trace('Executing BTC vault swap');
+    cf.trace('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
-      logger,
-      brokerUri,
+      cf,
       Number(amount ?? defaultAssetAmounts(sourceAsset)),
       destAsset,
       destAddress,
@@ -316,16 +312,13 @@ export async function executeVaultSwap(
     // Unused for now
     sourceAddress = '';
   } else {
-    logger.trace('Executing Solana vault swap');
+    cf.trace('Executing Solana vault swap');
     const { slot, accountAddress } = await executeSolVaultSwap(
-      logger,
+      cf,
       sourceAsset,
       destAsset,
       destAddress,
-      {
-        account: createStateChainKeypair(brokerUri).address,
-        commissionBps: brokerFee,
-      },
+      brokerFee,
       messageMetadata,
       undefined,
       boostFeeBps,
@@ -340,16 +333,15 @@ export async function executeVaultSwap(
     sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
   }
 
-  logger.debug(
+  cf.debug(
     `vault swap sent on ${srcChain} with transactionId ${JSON.stringify(transactionId)} and source address ${sourceAddress}`,
   );
 
   return { transactionId, sourceAddress };
 }
 
-export async function performVaultSwap<A = []>(
+export async function performVaultSwap<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
-  brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -374,8 +366,7 @@ export async function performVaultSwap<A = []>(
 
   try {
     const { transactionId, sourceAddress } = await executeVaultSwap(
-      cf.logger,
-      brokerUri,
+      cf,
       sourceAsset,
       destAsset,
       destAddress,

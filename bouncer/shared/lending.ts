@@ -1,18 +1,10 @@
-import {
-  amountToFineAmount,
-  Asset,
-  Assets,
-  assetDecimals,
-  ChainflipExtrinsicSubmitter,
-  createStateChainKeypair,
-  decodeModuleError,
-  cfMutex,
-} from 'shared/utils';
+import { amountToFineAmount, Asset, Assets, assetDecimals, decodeModuleError } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
-import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, WithLpAccount } from 'shared/utils/chainflip_io';
+import { lendingPoolsLendingFundsAdded } from 'generated/events/lendingPools/lendingFundsAdded';
 
 export type LendingPoolId = {
   asset: Asset;
@@ -69,35 +61,39 @@ export async function createLendingPools(logger: Logger, newPools: LendingPoolId
 }
 
 /// Adds existing funds to the lending pool of the given asset and returns the LendingFundsAdded event.
-export async function addLenderFunds(
-  logger: Logger,
+export async function addLenderFunds<A extends WithLpAccount>(
+  cf: ChainflipIO<A>,
   asset: Asset,
   amount: number,
-  lpUri = '//LP_LENDING',
 ) {
-  await using chainflip = await getChainflipApi();
-  const lp = createStateChainKeypair(lpUri);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
+  // Add funds to the lending pool
+  cf.debug(`Adding lender funds of ${amount} in ${asset} lending pool`);
 
-  const observeLendingFundsAdded = observeEvent(logger, `lendingPools:LendingFundsAdded`, {
-    test: (event) => event.data.lenderId === lp.address && event.data.asset === asset,
+  const lendingFundsAddedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.addLenderFunds(
+        asset,
+        amountToFineAmount(amount.toString(), assetDecimals(asset)),
+      ),
+    expectedEvent: {
+      name: 'LendingPools.LendingFundsAdded',
+      schema: lendingPoolsLendingFundsAdded.refine(
+        (event) =>
+          event.lenderId === cf.requirements.account.keypair.address && event.asset === asset,
+      ),
+    },
   });
 
-  // Add funds to the lending pool
-  logger.debug(`Adding lender funds of ${amount} in ${asset} lending pool`);
-  await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.addLenderFunds(
-      asset,
-      amountToFineAmount(amount.toString(), assetDecimals(asset)),
-    ),
+  cf.debug(
+    `Successfully added lender funds of ${lendingFundsAddedEvent.amount} in ${lendingFundsAddedEvent.asset} lending pool`,
   );
 
-  return observeLendingFundsAdded.event;
+  return lendingFundsAddedEvent;
 }
 
 /// Creates lending pools for multiple assets and funds the BTC one.
-export async function setupLendingPools<A = []>(parentcf: ChainflipIO<A>): Promise<void> {
-  const cf = parentcf.with({ account: fullAccountFromUri('//LP_BOOST', 'LP') });
+export async function setupLendingPools<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
+  const cf = parentCf.with({ account: fullAccountFromUri('//LP_BOOST', 'LP') });
 
   cf.info('Creating Lending Pools');
   const newPools: LendingPoolId[] = assets.map((asset) => ({ asset }));
@@ -110,7 +106,7 @@ export async function setupLendingPools<A = []>(parentcf: ChainflipIO<A>): Promi
   const btcFundingAmount = 50;
 
   await depositLiquidity(cf, Assets.Btc, btcFundingAmount + btcIngressFee);
-  await addLenderFunds(cf.logger, Assets.Btc, btcFundingAmount, '//LP_BOOST');
+  await addLenderFunds(cf, Assets.Btc, btcFundingAmount);
 
   cf.info('Lending Pools Setup completed');
 }

@@ -5,11 +5,8 @@ import {
   amountToFineAmount,
   amountToFineAmountBigInt,
   assetDecimals,
-  ChainflipExtrinsicSubmitter,
-  cfMutex,
   getFreeBalance,
   sleep,
-  submitExtrinsic,
   Asset,
   Assets,
 } from 'shared/utils';
@@ -19,6 +16,11 @@ import { randomBytes } from 'crypto';
 import { TestContext } from 'shared/utils/test_context';
 import { setupLendingPools } from 'shared/lending';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+
+import { lendingPoolsCollateralAdded } from 'generated/events/lendingPools/collateralAdded';
+import { lendingPoolsLoanCreated } from 'generated/events/lendingPools/loanCreated';
+import { lendingPoolsLoanSettled } from 'generated/events/lendingPools/loanSettled';
+import { lendingPoolsCollateralRemoved } from 'generated/events/lendingPools/collateralRemoved';
 
 export interface Loan {
   loan_id: number;
@@ -45,7 +47,7 @@ async function getLoan(address: string): Promise<Loan> {
 }
 
 async function lendingTestForAsset<A = []>(
-  parentcf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   collateralAsset: Asset,
   collateralAmount: number,
   loanAsset: Asset,
@@ -55,15 +57,13 @@ async function lendingTestForAsset<A = []>(
   const seed = randomBytes(4).toString('hex');
   const lpUri: `//${string}` = `//LP_LENDING_${collateralAsset}_${loanAsset}_${seed}`;
 
-  // setup cf with account and logger
-  const cf = parentcf
+  // setup LP account
+  const lp = await setupAccount(parentCf, lpUri, AccountRole.LiquidityProvider);
+
+  // Setup cf with account and logger
+  const cf = parentCf
     .with({ account: fullAccountFromUri(lpUri, 'LP') })
     .withChildLogger(`${JSON.stringify({ collateralAsset, loanAsset })}`);
-  await using chainflip = await getChainflipApi();
-
-  // setup LP account
-  const lp = await setupAccount(cf.logger, lpUri, AccountRole.LiquidityProvider);
-  const extrinsicSubmitter = new ChainflipExtrinsicSubmitter(lp, cfMutex.for(lpUri));
 
   // Credit the account with the collateral and a little of the loan asset to be able to settle the loan.
   // We also need a little extra of both assets to cover the ingress fee.
@@ -85,11 +85,20 @@ async function lendingTestForAsset<A = []>(
       amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset)),
     ],
   ];
-  await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.addCollateral(
-      collateralAsset,
-      new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
-    ),
+
+  const collateralAddedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.addCollateral(
+        collateralAsset,
+        new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
+      ),
+    expectedEvent: {
+      name: 'LendingPools.CollateralAdded',
+      schema: lendingPoolsCollateralAdded.refine((event) => event.borrowerId === lp.address),
+    },
+  });
+  cf.debug(
+    `Collateral ${collateralAddedEvent.collateral} successfully added for LP: ${collateralAddedEvent.borrowerId}`,
   );
 
   // Check that our collateral is gone
@@ -107,22 +116,21 @@ async function lendingTestForAsset<A = []>(
   cf.debug(`Requesting loan of ${loanAmount} ${loanAsset}`);
   const loanAssetFreeBalance1 = await getFreeBalance(lp.address, loanAsset);
 
-  const loanId = Number(
-    (
-      await submitExtrinsic(
-        lpUri,
-        chainflip,
-        chainflip.tx.lendingPools.requestLoan(
-          loanAsset,
-          amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
-          collateralAsset,
-          [], // No extra collateral needed
-        ),
-        'lendingPools:LoanCreated',
-        cf.logger,
-      )
-    ).data.loanId,
-  );
+  const loanCreatedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.requestLoan(
+        loanAsset,
+        amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
+        collateralAsset,
+        [], // No extra collateral needed
+      ),
+    expectedEvent: {
+      name: 'LendingPools.LoanCreated',
+      schema: lendingPoolsLoanCreated.refine((event) => event.borrowerId === lp.address),
+    },
+  });
+
+  const loanId = Number(loanCreatedEvent.loanId);
 
   cf.debug(`Created loan id: ${loanId}`);
 
@@ -157,11 +165,12 @@ async function lendingTestForAsset<A = []>(
   // Repay part of the loan
   cf.debug(`Repaying half the loan`);
   const partialRepaymentAmount = loanAmount / 2;
-  await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.makeRepayment(loanId, {
-      Exact: amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
-    }),
-  );
+  await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.makeRepayment(loanId, {
+        Exact: amountToFineAmount(partialRepaymentAmount.toString(), assetDecimals(loanAsset)),
+      }),
+  });
 
   // Check balances
   const collateralAssetFreeBalance3 = await getFreeBalance(lp.address, collateralAsset);
@@ -182,22 +191,32 @@ async function lendingTestForAsset<A = []>(
     'Not enough free balance to fully repay the loan',
   );
   cf.debug(`Repaying the rest of the loan`);
-  await submitExtrinsic(
-    lpUri,
-    chainflip,
-    chainflip.tx.lendingPools.makeRepayment(loanId, 'Full'),
-    'lendingPools:LoanSettled',
-    cf.logger,
-  );
+  const loanSettledEvent = await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.lendingPools.makeRepayment(loanId, 'Full'),
+    expectedEvent: {
+      name: 'LendingPools.LoanSettled',
+      schema: lendingPoolsLoanSettled.refine((event) => Number(event.loanId) === loanId),
+    },
+  });
+  cf.debug(`Loan successfully settled loanId: ${loanSettledEvent.loanId}`);
 
   // Recover the collateral
   const collateralAmountToRemove = (await getLoanAccount(lp.address)).collateral[0]
     .amount as string;
   const collateralToRemove: [Asset, string][] = [[collateralAsset, collateralAmountToRemove]];
-  await extrinsicSubmitter.submit(
-    chainflip.tx.lendingPools.removeCollateral(
-      new Map(collateralToRemove.map(([asset, amount]) => [{ [asset]: {} }, amount])),
-    ),
+
+  const collateralRemovedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.lendingPools.removeCollateral(
+        new Map(collateralToRemove.map(([asset, amount]) => [{ [asset]: {} }, amount])),
+      ),
+    expectedEvent: {
+      name: 'LendingPools.CollateralRemoved',
+      schema: lendingPoolsCollateralRemoved.refine((event) => event.borrowerId === lp.address),
+    },
+  });
+  cf.debug(
+    `Collateral ${collateralRemovedEvent.collateral} successfully removed for LP: ${collateralRemovedEvent.borrowerId}`,
   );
 
   // Check balances

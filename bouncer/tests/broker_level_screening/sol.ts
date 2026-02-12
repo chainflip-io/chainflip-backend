@@ -2,7 +2,6 @@ import { InternalAsset } from '@chainflip/cli';
 import {
   newAssetAddress,
   sleep,
-  createStateChainKeypair,
   chainFromAsset,
   ingressEgressPalletForChain,
   observeBalanceIncrease,
@@ -17,9 +16,7 @@ import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
-import { ChainflipIO } from 'shared/utils/chainflip_io';
-
-const brokerUri = '//BROKER_1';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export async function testSol<A = []>(
   cf: ChainflipIO<A>,
@@ -98,10 +95,12 @@ export async function testSol<A = []>(
 }
 
 export async function testSolVaultSwap<A = []>(
-  cf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
+  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+
   const chain = chainFromAsset(sourceAsset);
   if (chain !== Chains.Solana) {
     // This should always be Sol
@@ -119,14 +118,11 @@ export async function testSolVaultSwap<A = []>(
   cf.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
 
   const receipt = await executeSolVaultSwap(
-    cf.logger,
+    cf,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
-    {
-      account: createStateChainKeypair(brokerUri).address,
-      commissionBps: 0.0,
-    },
+    0.0,
     undefined,
     undefined,
     undefined,

@@ -20,8 +20,8 @@ import {
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { ChannelRefundParameters } from 'shared/sol_vault_swap';
-import { Logger } from 'shared/utils/logger';
 import { getErc20abi } from 'shared/contract_interfaces';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -38,9 +38,8 @@ interface EvmVaultSwapExtraParameters {
   refund_parameters: ChannelRefundParameters;
 }
 
-export async function executeEvmVaultSwap(
-  logger: Logger,
-  brokerUri: string,
+export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -68,7 +67,7 @@ export async function executeEvmVaultSwap(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(logger, sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset));
 
   if (erc20Assets.includes(sourceAsset)) {
     // Doing effectively infinite approvals to make sure it doesn't fail.
@@ -102,7 +101,9 @@ export async function executeEvmVaultSwap(
     refund_parameters: refundParams,
   };
 
-  logger.trace('Requesting vault swap parameter encoding');
+  const brokerUri = cf.requirements.account.uri;
+
+  cf.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     createStateChainKeypair(brokerUri).address,
@@ -137,7 +138,7 @@ export async function executeEvmVaultSwap(
     gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 
-  logger.trace('Signing and Sending EVM vault swap transaction');
+  cf.trace('Signing and Sending EVM vault swap transaction');
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 

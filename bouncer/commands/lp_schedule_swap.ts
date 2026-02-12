@@ -18,12 +18,12 @@ import {
   Assets,
   createStateChainKeypair,
   handleSubstrateError,
-  cfMutex,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { cfMutex } from 'shared/accounts';
 
 const args = process.argv.slice(2);
 if (args.length < 3) {

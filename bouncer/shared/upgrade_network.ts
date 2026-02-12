@@ -13,6 +13,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
 import { AccountRole, setupAccount } from 'shared/setup_account';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -174,7 +175,8 @@ async function incompatibleUpgradeNoBuild(
   // this account has to be registered + funded before the broker api can start.
   // But, since we need the broker api to run `setupAccount`, we do this *before* any
   // of the upgrade procedures, on the old network.
-  await setupAccount(logger, `//BROKER_API`, AccountRole.Broker, '200');
+  const cf = await newChainflipIO(logger, []);
+  await setupAccount(cf, `//BROKER_API`, AccountRole.Broker, '200');
   // ^ remove this when UPGRADE_FROM is 2.1
 
   // We need to kill the engine process before starting the new engine (engine-runner)

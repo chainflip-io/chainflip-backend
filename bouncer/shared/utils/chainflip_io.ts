@@ -1,7 +1,6 @@
 import {
   createStateChainKeypair,
   extractExtrinsicResult,
-  cfMutex,
   isValidHexHash,
   sleep,
   waitForExt,
@@ -26,6 +25,7 @@ import {
   highestBlock,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
+import { cfMutex } from 'shared/accounts';
 
 export class ChainflipIO<Requirements> {
   /**
@@ -120,13 +120,14 @@ export class ChainflipIO<Requirements> {
    * that was returned by the extrinsic.
    */
   async submitExtrinsic<
-    Data extends Requirements & { account: FullAccount<AccountType> },
+    Data extends Requirements & { account: PartialAccount },
     Schema extends z.ZodTypeAny,
   >(
     this: ChainflipIO<Data>,
     arg: {
       extrinsic: ExtrinsicFromApi;
       expectedEvent?: { name: EventName; schema?: Schema };
+      filteredError?: string;
     },
   ): Promise<z.infer<Schema>> {
     return this.runExclusively('submitExtrinsic', async () => {
@@ -142,7 +143,13 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
+      const { promise, waiter } = waitForExt(
+        chainflipApi,
+        this.logger,
+        'InBlock',
+        release,
+        arg.filteredError,
+      );
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
@@ -614,14 +621,18 @@ export type ExtrinsicFromApi = (
 
 export type AccountType = 'Broker' | 'LP';
 
-export type FullAccount<T extends AccountType> = {
+export type PartialAccount = {
   uri: `//${string}`;
   keypair: KeyringPair;
+};
+
+export type FullAccount<T extends AccountType> = PartialAccount & {
   type: T;
 };
 
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
 export type WithLpAccount = WithAccount<'LP'>;
+export type WithBrokerAccount = WithAccount<'Broker'>;
 
 export function fullAccountFromUri<A extends AccountType>(
   uri: `//${string}`,
@@ -631,6 +642,13 @@ export function fullAccountFromUri<A extends AccountType>(
     uri,
     keypair: createStateChainKeypair(uri),
     type,
+  };
+}
+
+export function partialAccountFromUri(uri: `//${string}`): PartialAccount {
+  return {
+    uri,
+    keypair: createStateChainKeypair(uri),
   };
 }
 

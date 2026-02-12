@@ -31,7 +31,8 @@ import { getSolanaSwapEndpointIdl } from 'shared/contract_interfaces';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, throwError } from 'shared/utils/logger';
+import { throwError } from 'shared/utils/logger';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
@@ -72,15 +73,12 @@ export type ChannelRefundParameters = {
   max_oracle_price_slippage: number | undefined;
 };
 
-export async function executeSolVaultSwap(
-  logger: Logger,
+export async function executeSolVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  brokerFees: {
-    account: string;
-    commissionBps: number;
-  },
+  brokerCommissionBps: number,
   messageMetadata?: CcmDepositMetadata,
   amount?: string,
   boostFeeBps?: number,
@@ -134,16 +132,16 @@ export async function executeSolVaultSwap(
     from_token_account: undefined,
   };
 
-  logger.trace('Requesting vault swap parameter encoding');
+  cf.trace('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
-    brokerFees.account,
+    cf.requirements.account.keypair.address,
     stateChainAssetFromAsset(srcAsset),
     stateChainAssetFromAsset(destAsset),
     chainFromAsset(destAsset) === Chains.Polkadot
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
-    brokerFees.commissionBps,
+    brokerCommissionBps,
     extraParameters,
     messageMetadata && {
       message: messageMetadata.message,
@@ -183,7 +181,7 @@ export async function executeSolVaultSwap(
 
   transaction.add(instruction);
 
-  logger.trace('Sending Solana vault swap transaction');
+  cf.trace('Sending Solana vault swap transaction');
   const txHash = await sendAndConfirmTransaction(connection, transaction, [whaleKeypair], {
     commitment: 'confirmed',
   });
@@ -193,7 +191,7 @@ export async function executeSolVaultSwap(
     maxSupportedTransactionVersion: 0,
   });
   if (transactionData === null) {
-    throwError(logger, new Error('Solana TransactionData is empty'));
+    throwError(cf.logger, new Error('Solana TransactionData is empty'));
   }
   return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountPublicKey };
 }

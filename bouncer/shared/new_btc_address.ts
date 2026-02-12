@@ -3,7 +3,8 @@ import Module from 'node:module';
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
-import { sha256, btcClientMutex } from 'shared/utils';
+import { sha256 } from 'shared/utils';
+import { btcClientMutex } from 'shared/accounts';
 
 const require = Module.createRequire(import.meta.url);
 

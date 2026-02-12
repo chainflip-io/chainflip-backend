@@ -78,7 +78,7 @@ if (!matchingTestName) {
   process.exit(1);
 } else {
   execSync(
-    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
+    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=200 --hideSkippedTests run -t "${matchingTestName}"`,
     { stdio: 'inherit' },
   );
 }

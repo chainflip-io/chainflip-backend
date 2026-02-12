@@ -22,6 +22,7 @@ import { send } from 'shared/send';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import z from 'zod';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { TestContext } from 'shared/utils/test_context';
 
 const evmCallDetails = z.object({
   calldata: z.string(),
@@ -75,37 +76,39 @@ type DelegationApi =
       };
     };
 
-export async function testDelegate(logger: Logger) {
+export async function testDelegate(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
+
   // The operator name has to be unique across bouncer runs,
   // since if the test is run the second time for an account
   // that's already registered, it won't emit the `funding:Funded`
   // event
-  const uri = `//Operator_0_${getIsoTime()}`;
-  logger.debug(`Uri for unique operator account is: "${uri}"`);
+  const uri: `//${string}` = `//Operator_0_${getIsoTime()}`;
+  cf.debug(`Uri for unique operator account is: "${uri}"`);
 
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
-  const wallet = await createEvmWalletAndFund(logger, 'Flip');
+  const wallet = await createEvmWalletAndFund(cf.logger, 'Flip');
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
 
-  logger.info('Registering operator ' + uri + '...');
-  const operator = await setupAccount(logger, uri, AccountRole.Operator);
+  cf.info('Registering operator ' + uri + '...');
+  const operator = await setupAccount(cf, uri, AccountRole.Operator);
 
   let operatorPubkey = decodeFlipAddressForContract(operator.address);
   if (operatorPubkey.substr(0, 2) !== '0x') {
     operatorPubkey = '0x' + operatorPubkey;
   }
 
-  logger.info('Approving Flip to SC Utils contract for delegation...');
-  await approveErc20(logger, 'Flip', scUtilsAddress, amount.toString(), wallet);
+  cf.info('Approving Flip to SC Utils contract for delegation...');
+  await approveErc20(cf.logger, 'Flip', scUtilsAddress, amount.toString(), wallet);
 
-  logger.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
-  const delegateTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
+  cf.info(`Delegating ${amount} Flip to operator ${operator.address}...`);
+  const delegateTxHash = await encodeAndSendDelegationApiCall(cf.logger, wallet, {
     Delegate: { operator: operator.address, increase: { Some: '0x' + amount.toString(16) } },
   });
-  logger.info('Delegate flip transaction sent ' + delegateTxHash);
+  cf.info('Delegate flip transaction sent ' + delegateTxHash);
 
-  const fundEvent = observeEvent(logger, 'funding:Funded', {
+  const fundEvent = observeEvent(cf.logger, 'funding:Funded', {
     test: (event) => {
       const txMatch = event.data.source?.EthTransaction?.txHash === delegateTxHash;
       const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
@@ -114,7 +117,7 @@ export async function testDelegate(logger: Logger) {
     },
     historicalCheckBlocks: 10,
   }).event;
-  let scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+  let scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
     test: (event) => {
       const txMatch = event.data.ethTxHash === delegateTxHash;
       const operatorMatch =
@@ -123,9 +126,9 @@ export async function testDelegate(logger: Logger) {
     },
     historicalCheckBlocks: 10,
   }).event;
-  const delegatedEvent = observeEvent(logger, 'validator:Delegated', {
+  const delegatedEvent = observeEvent(cf.logger, 'validator:Delegated', {
     test: (event) => {
-      logger.debug('Delegated event data: ' + JSON.stringify(event.data));
+      cf.debug('Delegated event data: ' + JSON.stringify(event.data));
       const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
       return delegatorMatch && operatorMatch;
@@ -134,16 +137,16 @@ export async function testDelegate(logger: Logger) {
   }).event;
   await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
 
-  logger.info('Undelegating Flip from operator ' + operator.address + '...');
-  const undelegateTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
+  cf.info('Undelegating Flip from operator ' + operator.address + '...');
+  const undelegateTxHash = await encodeAndSendDelegationApiCall(cf.logger, wallet, {
     Undelegate: { decrease: 'Max' },
   });
-  logger.info('Undelegate flip transaction sent ' + undelegateTxHash);
+  cf.info('Undelegate flip transaction sent ' + undelegateTxHash);
 
-  scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+  scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
     test: (event) => event.data.ethTxHash === undelegateTxHash,
   }).event;
-  const undelegatedEvent = observeEvent(logger, 'validator:Undelegated', {
+  const undelegatedEvent = observeEvent(cf.logger, 'validator:Undelegated', {
     test: (event) => {
       const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
       const operatorMatch = event.data.operator === operator.address;
@@ -160,20 +163,20 @@ export async function testDelegate(logger: Logger) {
   // Redeem only if there are no other redemptions to prevent queuing issues when
   // running this test multiple times.
   if (pendingRedemption.toString().length === 0) {
-    logger.info('Redeeming funds');
+    cf.info('Redeeming funds');
 
     const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
     const redeemAmount = amount / 2n; // Leave enough to pay fees
 
-    const redeemTxHash = await encodeAndSendDelegationApiCall(logger, wallet, {
+    const redeemTxHash = await encodeAndSendDelegationApiCall(cf.logger, wallet, {
       Redeem: { amount: { Exact: '0x' + redeemAmount.toString(16) }, address: redeemAddress },
     });
-    logger.info('Redeem request transaction sent ' + redeemTxHash);
+    cf.info('Redeem request transaction sent ' + redeemTxHash);
 
-    scCallExecutedEvent = observeEvent(logger, 'funding:SCCallExecuted', {
+    scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
       test: (event) => event.data.ethTxHash === redeemTxHash,
     }).event;
-    const redeemEvent = observeEvent(logger, 'funding:RedemptionRequested', {
+    const redeemEvent = observeEvent(cf.logger, 'funding:RedemptionRequested', {
       test: (event) => {
         const accountMatch = event.data.accountId === externalChainToScAccount(wallet.address);
         const amountMatch = event.data.amount.replace(/,/g, '') === redeemAmount.toString();
@@ -183,11 +186,11 @@ export async function testDelegate(logger: Logger) {
     await Promise.all([scCallExecutedEvent, redeemEvent]);
   }
 
-  logger.info('Delegation test completed successfully!');
+  cf.info('Delegation test completed successfully!');
 }
 
-export async function testCcmSwapFundAccount(logger: Logger) {
-  const cf = await newChainflipIO(logger, []);
+export async function testCcmSwapFundAccount(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
   const web3 = new Web3(getEvmEndpoint('Ethereum'));
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const scAddress = await newStatechainAddress(randomBytes(32).toString('hex'));
@@ -196,7 +199,7 @@ export async function testCcmSwapFundAccount(logger: Logger) {
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
-  const fundEvent = observeEvent(logger, 'funding:Funded', {
+  const fundEvent = observeEvent(cf.logger, 'funding:Funded', {
     test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
   }).event;
 
@@ -207,7 +210,7 @@ export async function testCcmSwapFundAccount(logger: Logger) {
 
   const swapParams = await requestNewSwap(cf, 'Btc', 'Flip', scUtilsAddress, ccmMetadata);
 
-  await send(logger, 'Btc', swapParams.depositAddress);
+  await send(cf.logger, 'Btc', swapParams.depositAddress);
   await fundEvent;
-  logger.info('Funding event witnessed succesfully!');
+  cf.info('Funding event witnessed succesfully!');
 }

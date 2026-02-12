@@ -48,9 +48,9 @@ import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
-import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
+  cfChainsAddressForeignChainAddress,
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
 } from 'generated/events/common';
@@ -58,14 +58,12 @@ import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Err, Ok, Result } from 'shared/utils/result';
+import { cfMutex } from 'shared/accounts';
+import { HexString } from '@polkadot/util/types';
+import bitcoin from 'bitcoinjs-lib';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
-
-export const cfMutex = new KeyedMutex();
-export const ethNonceMutex = new Mutex();
-export const arbNonceMutex = new Mutex();
-export const btcClientMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
@@ -246,6 +244,25 @@ export function getContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
+export function shortChainFromChain(chain: Chain) {
+  switch (chain) {
+    case 'Ethereum':
+      return 'Eth';
+    case 'Arbitrum':
+      return 'Arb';
+    case 'Bitcoin':
+      return 'Btc';
+    case 'Polkadot':
+      return 'Dot';
+    case 'Solana':
+      return 'Sol';
+    case 'Assethub':
+      return 'Hub';
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -671,6 +688,46 @@ export async function observeBroadcastSuccess(logger: Logger, broadcastId: Broad
   }).event;
 
   await observeBroadcastFailure.stop();
+}
+
+// Takes an address from index events and checks whether it matches an input chain address to
+// For Eth, Arb, Sol nad hub it expects a HexString
+export function doAddressesMatch(
+  eventAddress: z.infer<typeof cfChainsAddressForeignChainAddress>,
+  chain: Chain,
+  address: string,
+  btcAddressType?: BtcAddressType,
+): boolean {
+  const validateHexString = (addr: string): HexString => {
+    const addrLowerCase = addr.toLowerCase();
+    if (!/^0x[a-f0-9]+$/.test(addrLowerCase)) {
+      throw new Error(`Invalid hex address: ${addr}`);
+    }
+    return addrLowerCase as HexString;
+  };
+
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+    case 'Solana':
+    case 'Assethub': {
+      const hexAddress = validateHexString(address);
+      const shortChain = shortChainFromChain(chain);
+      return eventAddress.__kind === shortChain && eventAddress.value === hexAddress;
+    }
+    case 'Bitcoin': {
+      const btcAddrType = btcAddressType ?? 'P2PKH';
+      const decoded = bitcoin.address.fromBase58Check(address);
+      const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
+      return (
+        eventAddress.__kind === 'Btc' &&
+        eventAddress.value.__kind === btcAddrType &&
+        eventAddress.value.value === hashHex
+      );
+    }
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
 }
 
 export async function newAddress(
@@ -1141,6 +1198,7 @@ export function handleSubstrateError(api: ApiPromise, exit = true) {
  * @param logger - The logger instance.
  * @param waitForStatus - The status to wait for, either 'InBlock' or 'Finalized'.
  * @param mutexRelease - Optional function to release a mutex after the extrinsic is processed.
+ * @param filteredError - If extrinsic error matches filteredError it's not logged
  * @returns An object containing a promise that resolves with the events and a waiter function
  *          that should be passed during extrinsic submission.
  */
@@ -1149,6 +1207,7 @@ export function waitForExt(
   logger: Logger,
   waitForStatus: 'InBlock' | 'Finalized',
   mutexRelease?: () => void,
+  filteredError?: string,
 ): {
   promise: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
@@ -1166,13 +1225,15 @@ export function waitForExt(
       }
       logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
-        logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
+        // logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         try {
           dispatchErrorHandler({ dispatchError });
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
-          throwError(logger, err);
+          if (!(filteredError && err.message.includes(filteredError))) {
+            throwError(logger, err);
+          }
         }
         return;
       }

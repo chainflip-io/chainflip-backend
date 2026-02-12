@@ -20,7 +20,7 @@ import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
 /// Do a swap with unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund<A = []>(
@@ -31,16 +31,16 @@ async function testMinPriceRefund<A = []>(
   ccmRefund = false,
   oracleSwap = false,
 ) {
+  const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
+
   const vaultText = swapViaVault ? '_vault' : '';
   const ccmRefundText = ccmRefund ? '_ccmRefund' : '';
   const oracleSwapText = oracleSwap ? '_oracleSwap' : '';
   const cf = parentCf.withChildLogger(
-    `FoK_${sourceAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
+    `FoK_${sourceAsset}_${destAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
   );
-  const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
   const refundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
-
   const destAddress = await newAssetAddress(destAsset, randomBytes(32).toString('hex'));
   cf.debug(`Swap destination address: ${destAddress}`);
   cf.debug(`Refund address: ${refundAddress}`);
@@ -98,10 +98,12 @@ async function testMinPriceRefund<A = []>(
     await send(cf.logger, sourceAsset, depositAddress, amount.toString());
     cf.debug(`Sent ${amount} ${sourceAsset} to ${depositAddress}`);
   } else {
-    cf.debug(`Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`);
+    const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+    subcf.debug(
+      `Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`,
+    );
     const { transactionId } = await executeVaultSwap(
-      cf.logger,
-      '//BROKER_1',
+      subcf,
       sourceAsset,
       destAsset,
       destAddress,

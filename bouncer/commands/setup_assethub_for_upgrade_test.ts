@@ -108,11 +108,13 @@ async function main(): Promise<void> {
     ]);
 
   cf.info('creating orders for assethub assets');
-  await cf.all([
-    (subcf) => rangeOrder(subcf.logger, 'HubDot', 20000 * 0.9999),
-    (subcf) => rangeOrder(subcf.logger, 'HubUsdc', 250000 * 0.9999),
-    (subcf) => rangeOrder(subcf.logger, 'HubUsdt', 250000 * 0.9999),
-  ]);
+  await cf
+    .with({ account: fullAccountFromUri('//LP1', 'LP') })
+    .all([
+      (subcf) => rangeOrder(subcf, 'HubDot', 20000 * 0.9999),
+      (subcf) => rangeOrder(subcf, 'HubUsdc', 250000 * 0.9999),
+      (subcf) => rangeOrder(subcf, 'HubUsdt', 250000 * 0.9999),
+    ]);
 }
 
 await runWithTimeoutAndExit(main(), 6000);

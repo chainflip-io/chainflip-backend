@@ -1,35 +1,31 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
-import {
-  waitForExt,
-  amountToFineAmount,
-  cfMutex,
-  assetDecimals,
-  createStateChainKeypair,
-} from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
-import { Logger } from 'shared/utils/logger';
+import { amountToFineAmount, assetDecimals } from 'shared/utils';
+import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
-export async function limitOrder(
-  logger: Logger,
+export async function limitOrder<A extends WithLpAccount>(
+  cf: ChainflipIO<A>,
   ccy: Asset,
   amount: number,
   orderId: number,
   tick: number,
-  lpUri = process.env.LP_URI || '//LP_1',
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
-  await using chainflip = await getChainflipApi();
 
-  const lp = createStateChainKeypair(lpUri);
+  cf.info('Setting up ' + ccy + ' limit order');
 
-  logger.info('Setting up ' + ccy + ' limit order');
-  const release = await cfMutex.acquire(lpUri);
-  const { promise, waiter } = waitForExt(chainflip, logger, 'InBlock', release);
-  const nonce = (await chainflip.rpc.system.accountNextIndex(lp.address)) as unknown as number;
-  const unsub = await chainflip.tx.liquidityPools
-    .setLimitOrder(ccy.toLowerCase(), 'usdc', 'sell', orderId, tick, fineAmount, null, null)
-    .signAndSend(lp, { nonce }, waiter);
-  await promise;
-  unsub();
-  logger.info(`Limit order for ${ccy} with ID ${orderId} set successfully`);
+  await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.liquidityPools.setLimitOrder(
+        ccy.toLowerCase(),
+        'usdc',
+        'sell',
+        orderId,
+        tick,
+        fineAmount,
+        null,
+        null,
+      ),
+  });
+
+  cf.info(`Limit order for ${ccy} with ID ${orderId} set successfully`);
 }

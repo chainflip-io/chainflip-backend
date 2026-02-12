@@ -12,13 +12,13 @@ import {
   getEvmWhaleKeypair,
 } from 'shared/utils';
 import { approveErc20 } from 'shared/approve_erc20';
-import { observeEvent } from 'shared/utils/substrate';
-import { Logger } from 'shared/utils/logger';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { fundingFunded } from 'generated/events/funding/funded';
 
-export async function fundFlip(logger: Logger, scAddress: string, flipAmount: string) {
+export async function fundFlip<A = []>(cf: ChainflipIO<A>, scAddress: string, flipAmount: string) {
   // Doing effectively infinite approvals to prevent race conditions between tests
   await approveErc20(
-    logger,
+    cf.logger,
     'Flip',
     getContractAddress('Ethereum', 'GATEWAY'),
     '100000000000000000000000000',
@@ -31,7 +31,7 @@ export async function fundFlip(logger: Logger, scAddress: string, flipAmount: st
   const gatewayContractAddress = getContractAddress('Ethereum', 'GATEWAY');
 
   const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
-  logger.debug('Approving ' + flipAmount + ' Flip to State Chain Gateway');
+  cf.debug('Approving ' + flipAmount + ' Flip to State Chain Gateway');
 
   const wallet = new Wallet(whalePrivKey, ethers.getDefaultProvider(getEvmEndpoint('Ethereum')));
 
@@ -42,10 +42,10 @@ export async function fundFlip(logger: Logger, scAddress: string, flipAmount: st
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: await getNextEvmNonce(logger, 'Ethereum'),
+    nonce: await getNextEvmNonce(cf.logger, 'Ethereum'),
   } as const;
 
-  logger.debug('Funding ' + flipAmount + ' Flip to ' + scAddress);
+  cf.debug('Funding ' + flipAmount + ' Flip to ' + scAddress);
   let pubkey = decodeFlipAddressForContract(scAddress);
 
   if (pubkey.substr(0, 2) !== '0x') {
@@ -58,7 +58,7 @@ export async function fundFlip(logger: Logger, scAddress: string, flipAmount: st
     txOptions,
   );
 
-  logger.debug(
+  cf.debug(
     'Transaction complete, tx_hash: ' +
       receipt2.hash +
       ' blockNumber: ' +
@@ -66,7 +66,9 @@ export async function fundFlip(logger: Logger, scAddress: string, flipAmount: st
       ' blockHash: ' +
       receipt2.blockHash,
   );
-  await observeEvent(logger, 'funding:Funded', {
-    test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
-  }).event;
+
+  await cf.stepUntilEvent(
+    'Funding.Funded',
+    fundingFunded.refine((event) => event.accountId === hexPubkeyToFlipAddress(pubkey)),
+  );
 }

@@ -15,7 +15,7 @@ import { getBalance } from 'shared/get_balance';
 import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 
 async function testDCASwap<A = []>(
@@ -76,9 +76,9 @@ async function testDCASwap<A = []>(
     await send(cf.logger, inputAsset, swapRequest.depositAddress, amount.toString());
     cf.debug(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
+    const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
     const { transactionId } = await executeVaultSwap(
-      cf.logger,
-      '//BROKER_1',
+      subcf,
       inputAsset,
       destAsset,
       destAddress,

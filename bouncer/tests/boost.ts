@@ -35,19 +35,28 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  return cf.submitExtrinsic({
-    extrinsic: (api) =>
-      api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-    expectedEvent: {
-      name: 'LendingPools.StoppedBoosting',
-      schema: lendingPoolsStoppedBoosting.refine(
-        (event) =>
-          event.boosterId === cf.requirements.account.keypair.address &&
-          event.boostPool.asset === asset &&
-          event.boostPool.tier === boostTier,
-      ),
-    },
-  });
+  try {
+    return cf.submitExtrinsic({
+      extrinsic: (api) =>
+        api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
+      expectedEvent: {
+        name: 'LendingPools.StoppedBoosting',
+        schema: lendingPoolsStoppedBoosting.refine(
+          (event) =>
+            event.boosterId === cf.requirements.account.keypair.address &&
+            event.boostPool.asset === asset &&
+            event.boostPool.tier === boostTier,
+        ),
+      },
+      filteredError: 'lendingPools.AccountNotFoundInPool',
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('lendingPools.AccountNotFoundInPool')) {
+      cf.debug(`Already stopped boosting (${err})`);
+      return undefined;
+    }
+    throw err;
+  }
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
@@ -101,12 +110,7 @@ async function testBoostingForAsset(
   cf.debug(`Testing boosting`);
 
   cf.debug('Starting the test with a clean slate by stopping boosting');
-  let preTestStopBoostingEvent;
-  try {
-    preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
-  } catch (err) {
-    cf.info(`Already stopped boosting (${err})`);
-  }
+  const preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
   assert.strictEqual(
     preTestStopBoostingEvent?.pendingBoosts.length ?? 0,
     0,
@@ -171,7 +175,7 @@ async function testBoostingForAsset(
   if (firstEvent.key !== 'boosted') {
     throwError(
       cf.logger,
-      new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent.data)}`),
+      new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent)}`),
     );
   }
 

@@ -1,9 +1,10 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import Keyring from 'polkadot/keyring';
-import { cfMutex, waitForExt } from 'shared/utils';
+import { waitForExt } from 'shared/utils';
 import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
+import { cfMutex } from 'shared/accounts';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
