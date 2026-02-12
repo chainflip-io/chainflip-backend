@@ -96,7 +96,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
-	ChannelId, DcaParameters, MAX_BASIS_POINTS,
+	ChannelId, DcaParameters, ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
@@ -956,7 +956,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 			let apy = FixedU64::from_rational(validator_reward_pa, Flip::balance(account_id));
 
 			// Convert APY to Basis Point.
-			apy.checked_mul_int(MAX_BASIS_POINTS as u32).unwrap_or_default()
+			apy.checked_mul_int(ONE_AS_BASIS_POINTS as u32).unwrap_or_default()
 		})
 }
 
