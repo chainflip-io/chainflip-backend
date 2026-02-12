@@ -14,16 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod arb;
-pub mod arb_elections;
-pub mod btc;
-pub mod common;
-pub mod dot;
-pub mod eth;
-pub mod eth_elections;
-pub mod evm;
-pub mod generic_elections;
-pub mod hub;
-pub mod sol;
-pub mod start;
-pub mod tron;
+pub mod retry_rpc;
+pub mod rpc;
+pub mod rpc_client_api;

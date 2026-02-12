@@ -26,6 +26,7 @@ pub mod elections;
 pub mod multisig;
 pub mod p2p;
 pub mod retrier;
+pub mod rpc_utils;
 pub mod settings;
 pub mod state_chain_observer;
 pub mod witness;
@@ -35,6 +36,7 @@ pub mod btc;
 pub mod dot;
 pub mod evm;
 pub mod sol;
+pub mod tron;
 
 use crate::evm::cached_rpc::EvmCachingClient;
 use ::multisig::{
