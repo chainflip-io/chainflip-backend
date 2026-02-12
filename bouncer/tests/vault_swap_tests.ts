@@ -69,6 +69,10 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.info('Refund vault swap completed ✅.');
 }
 
+// Note: if the collected fees are low, this function will fail with e.g.
+// `ethereumIngressEgress.BelowEgressDustLimit: The amount is below the minimum egress amount.`
+// In order to make bouncer less flaky we currently don't test this.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
   affiliateAccountId: string,
@@ -216,13 +220,16 @@ export async function testVaultSwap(testContext: TestContext) {
     (subcf) => testFeeCollection(subcf, Assets.Sol, testContext),
   ]);
 
+  // NOTE: the following is currently disabled due to fee withdrawal being flaky.
+  //
   // Test the affiliate withdrawal functionality
-  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
-  await testWithdrawCollectedAffiliateFees(
-    cf.with({ account: broker }),
-    affiliateId,
-    refundAddress,
-  );
+  // const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
+  // await testWithdrawCollectedAffiliateFees(
+  //   cf.with({ account: broker }),
+  //   affiliateId,
+  //   refundAddress,
+  // );
+
   await testRefundVaultSwap(cf);
   await testInvalidBtcVaultSwap(cf);
 }
