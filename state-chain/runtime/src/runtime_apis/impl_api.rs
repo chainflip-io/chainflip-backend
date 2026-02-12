@@ -2020,7 +2020,7 @@ impl_runtime_apis! {
 
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>{
 			AssetMap::from_fn(|asset| {
-				pallet_cf_swapping::DefaultOraclePriceSlippageProtection::<Runtime>::get(cf_amm::common::AssetPair::new(asset,STABLE_ASSET)?)
+				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(asset)
 			})
 		}
 	}
