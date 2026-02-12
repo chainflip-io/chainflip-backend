@@ -689,7 +689,13 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 
 		// Make sure it can handle extreme edge cases
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output_or_default_to_zero(Asset::Btc, Asset::Eth, 0, true, false),
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
+				Asset::Btc,
+				Asset::Eth,
+				0,
+				true,
+				false
+			),
 			0
 		);
 		// Here we do not care about the actual value, just that it does not panic.
