@@ -2723,7 +2723,7 @@ pub mod pallet {
 					})
 					.ok()
 					.filter(|v| *v > 0)
-					// Return USD / Asset
+					// Return USDC / Asset
 					.map(|estimation_output| {
 						Price::from_amounts(ESTIMATION_AMOUNT_USDC.into(), estimation_output.into())
 					})
@@ -2744,7 +2744,7 @@ pub mod pallet {
 					})
 					.ok()
 					.filter(|v| *v > 0)
-					// Return USD / Asset
+					// Return USDC / Asset
 					.map(|estimation_output| {
 						Price::from_amounts(estimation_output.into(), estimated_input.into())
 					})

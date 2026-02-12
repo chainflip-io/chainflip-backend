@@ -1382,15 +1382,6 @@ pub trait PriceFeedApi {
 	///
 	/// In buy/sell terms, this is the USD-denominated sell price of the asset.
 	fn get_price(asset: Asset) -> Option<OraclePrice>;
-	fn get_fresh_price(asset: Asset) -> Option<Price> {
-		Self::get_price(asset).and_then(|oracle_price| {
-			if oracle_price.stale {
-				None
-			} else {
-				Some(oracle_price.price)
-			}
-		})
-	}
 	/// Get the relative price of asset1 in terms of asset2.
 	///
 	/// If assset1 price rises or asset2 price drops, the relative price increases.
