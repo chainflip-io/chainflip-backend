@@ -20,7 +20,7 @@ use pallet_cf_pools::{
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, str::FromStr};
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -28,6 +28,8 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, ScriptPubkey, Utxo, UtxoId},
 	ccm_checker::{DecodedCcmAdditionalData, VersionedSolanaCcmAdditionalData},
 	dot::PolkadotAccountId,
+	evm::EvmCrypto,
+	refund_parameters::ChannelRefundParametersUnchecked,
 	sol::{
 		SolAddress, SolAddressLookupTableAccount, SolApiEnvironment, SolCcmAccounts, SolCcmAddress,
 		SolPubkey, VaultSwapOrDepositChannelId,
@@ -38,7 +40,8 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets::{any, arb, btc, dot, eth, hub},
-	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP,
+	ApiWaitForResult, AssetAndAmount, Beneficiary, DcaParameters, PrewitnessedDepositId,
+	FLIPPERINOS_PER_FLIP,
 };
 
 use state_chain_runtime::{
@@ -781,6 +784,105 @@ fn runtime_safe_mode_serialization() {
 	let val = RuntimeSafeMode::default();
 
 	insta::assert_json_snapshot!(val);
+}
+
+#[test]
+fn witnessed_events_serialization() {
+	use crate::ingress_egress_tracker::{convert_deposit_witness, IntoRpcDepositDetails};
+	use cf_chains::instances::EthereumInstance;
+	use cf_primitives::NetworkEnvironment;
+	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+
+	// Create the raw DepositWitness and convert it to test the serialization
+	let deposit_witness: DepositWitness<Ethereum> = DepositWitness {
+		deposit_address: H160([0x11; 20]),
+		asset: cf_chains::assets::eth::Asset::Eth,
+		amount: 100u128,
+		deposit_details: cf_chains::evm::DepositDetails { tx_hashes: Some(vec![H256([0x22; 32])]) },
+	};
+
+	let converted_deposit =
+		convert_deposit_witness::<Ethereum>(&deposit_witness, 1, NetworkEnvironment::Mainnet);
+
+	// Create the raw VaultDepositWitness and convert it to test the serialization
+	let vault_deposit_witness: VaultDepositWitness<Runtime, EthereumInstance> =
+		VaultDepositWitness {
+			input_asset: cf_chains::assets::eth::Asset::Eth,
+			deposit_address: None,
+			channel_id: None,
+			deposit_amount: 500u128,
+			deposit_details: cf_chains::evm::DepositDetails {
+				tx_hashes: Some(vec![H256([0x22; 32])]),
+			},
+			output_asset: any::Asset::Flip,
+			destination_address: EncodedAddress::Eth([0x44; 20]),
+			deposit_metadata: None,
+			tx_id: H256([0x10; 32]),
+			broker_fee: Some(Beneficiary { account: AccountId32::new([0x11; 32]), bps: 2 }),
+			affiliate_fees: vec![].try_into().unwrap(),
+			refund_params: ChannelRefundParametersUnchecked {
+				retry_duration: 0,
+				refund_address: H160::from_slice(
+					&hex::decode("541f563237a309b3a61e33bdf07a8930bdba8d99")
+						.expect("valid hex refund address"),
+				),
+				min_price: Price::from_raw(0u128.into()),
+				refund_ccm_metadata: None,
+				max_oracle_price_slippage: None,
+			},
+			dca_params: Some(DcaParameters { number_of_chunks: 10, chunk_interval: 2 }),
+			boost_fee: 5,
+		};
+
+	let refund_params = Some(vault_deposit_witness.refund_params.clone().map_address(|address| {
+		AddressString::from_encoded_address(EncodedAddress::from_chain_account::<Ethereum>(
+			address,
+			NetworkEnvironment::Mainnet,
+		))
+	}));
+	let converted_vault_deposit = RpcVaultDepositWitnessInfo {
+		tx_id: <sp_core::H256 as cf_chains::IntoTransactionInIdForAnyChain<EvmCrypto>>::into_transaction_in_id_for_any_chain(H256([0x10; 32])).to_string(),
+		deposit_chain_block_height: 3,
+		input_asset: vault_deposit_witness.input_asset.into(),
+		output_asset: vault_deposit_witness.output_asset,
+		amount: <<Ethereum as Chain>::ChainAmount as Into<u128>>::into(vault_deposit_witness.deposit_amount).into(),
+		destination_address: AddressString::from_encoded_address(
+			vault_deposit_witness.destination_address.clone(),
+		),
+		ccm_deposit_metadata: vault_deposit_witness.deposit_metadata.clone(),
+		deposit_details: vault_deposit_witness.deposit_details.clone().into_rpc_deposit_details(),
+		broker_fee: vault_deposit_witness.broker_fee.clone(),
+		affiliate_fees: vec![],
+		refund_params,
+		dca_params: vault_deposit_witness.dca_params.clone(),
+		max_boost_fee: vault_deposit_witness.boost_fee,
+	};
+
+	// Note: BroadcastWitnessInfo is constructed directly because the conversion functions
+	// (convert_bitcoin_broadcast, convert_evm_broadcast) depend on runtime storage lookups
+	// for broadcast_id which cannot be easily mocked in unit tests.
+	let response = RpcWitnessedEventsResponse {
+		deposits: vec![converted_deposit],
+		broadcasts: vec![BroadcastWitnessInfo {
+			broadcast_chain_block_height: 2,
+			broadcast_id: 7,
+			tx_out_id: RpcTransactionId::Bitcoin {
+				hash: bitcoin::Txid::from_str(
+					"1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100",
+				)
+				.expect("valid tx hash"),
+			},
+			tx_ref: RpcTransactionRef::Bitcoin {
+				hash: bitcoin::Txid::from_str(
+					"3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120",
+				)
+				.expect("valid tx hash"),
+			},
+		}],
+		vault_deposits: vec![converted_vault_deposit],
+	};
+
+	insta::assert_json_snapshot!(response);
 }
 
 #[test]

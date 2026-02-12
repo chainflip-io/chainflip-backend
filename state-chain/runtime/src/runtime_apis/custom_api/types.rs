@@ -14,11 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::chainflip::witnessing::pallet_hooks::{EvmKeyManagerEvent, EvmVaultContractEvent};
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, evm::Address as EvmAddress,
-	sol::SolInstructionRpc, Chain, ChainCrypto, ForeignChainAddress,
+	self,
+	address::EncodedAddress,
+	assets::any::AssetMap,
+	evm::Address as EvmAddress,
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	sol::SolInstructionRpc,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
@@ -28,8 +34,10 @@ use ethereum_eip712::eip712::TypedData;
 pub use frame_support::BoundedVec;
 use frame_support::{sp_runtime::AccountId32, DefaultNoBound};
 use n_functor::derive_n_functor;
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
 	before_v12, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
 	RpcLendingPool, RpcLoanAccount,
@@ -43,7 +51,7 @@ use pallet_cf_trading_strategy::TradingStrategy;
 pub use pallet_cf_validator::DelegationSnapshot;
 use pallet_cf_validator::OperatorSettings;
 use scale_info::{prelude::string::String, TypeInfo};
-pub use serde::{Deserialize, Serialize};
+pub use serde::{Deserialize, Serialize, Serializer};
 use sp_core::U256;
 use sp_runtime::{DispatchError, Permill};
 pub use sp_std::{
@@ -615,6 +623,25 @@ mod serialize_vanity_name {
 			Err(_) => serializer.serialize_str("<Invalid UTF-8>"),
 		}
 	}
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub enum RawWitnessedEvents {
+	Bitcoin {
+		deposits: Vec<(u64, DepositWitness<Bitcoin>)>,
+		vault_deposits: Vec<(u64, VaultDepositWitness<Runtime, BitcoinInstance>)>,
+		broadcasts: Vec<(u64, TransactionConfirmation<Runtime, BitcoinInstance>)>,
+	},
+	Ethereum {
+		deposits: Vec<(u64, DepositWitness<Ethereum>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, EthereumInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, EthereumInstance>)>,
+	},
+	Arbitrum {
+		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, ArbitrumInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)>,
+	},
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
