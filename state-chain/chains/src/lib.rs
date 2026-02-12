@@ -18,6 +18,7 @@
 #![feature(step_trait)]
 #![feature(split_array)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(trait_alias)]
 use crate::{
 	assets::any::Asset as AnyChainAsset,
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
@@ -511,6 +512,16 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// Passed in to construct the replay protection.
 	type ReplayProtectionParams: Member + Parameter;
 	type ReplayProtection: Member + Parameter;
+
+	/// This function is necessary to circumvent a bug in rusts trait solver where
+	/// it doesn't see that an associated type implements a generic trait once
+	/// it has been substituted by a concrete type.
+	/// The case where this became appeearent is the following: given a `H160`, and a `Chain:
+	/// EvmChain`, rust isn't able to figure out that H160 implements IntoForeignChainAddress,
+	/// even though that is a requirement for H160 to be the `ChainAccount` type of `Chain`.
+	fn chain_account_to_foreign_chain_address(address: Self::ChainAccount) -> ForeignChainAddress {
+		IntoForeignChainAddress::<Self>::into_foreign_chain_address(address)
+	}
 }
 
 /// Common crypto-related types and operations for some external chain.
