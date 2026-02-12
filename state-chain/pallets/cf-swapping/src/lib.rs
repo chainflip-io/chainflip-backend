@@ -3168,7 +3168,7 @@ pub mod pallet {
 							// Ignore staleness because it will always be less stale
 							// than hard-coded prices.
 							.map(|price_data| price_data.price)
-							.unwrap_or_else(|| Price::one());
+							.unwrap_or_else(Price::one);
 						asset_price.multiply_by(usdc_price) // USD / Asset
 					} else {
 						// Using stale prices here is fine as its just for fees/gas
