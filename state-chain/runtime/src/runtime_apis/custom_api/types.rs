@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::chainflip::witnessing::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents};
+use crate::chainflip::witnessing::pallet_hooks::{EvmKeyManagerEvent, EvmVaultContractEvent};
 pub use crate::{chainflip::Offence, AccountId, Block, Runtime};
 use cf_amm::{common::Side, math::Tick};
 use cf_chains::{
@@ -624,11 +624,6 @@ mod serialize_vanity_name {
 	}
 }
 
-type EthereumVaultDeposits =
-	Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, EthereumInstance>, Ethereum>)>;
-type ArbitrumVaultDeposits =
-	Vec<(u64, VaultEvents<VaultDepositWitness<Runtime, ArbitrumInstance>, Arbitrum>)>;
-
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub enum RawWitnessedEvents {
 	Bitcoin {
@@ -638,13 +633,13 @@ pub enum RawWitnessedEvents {
 	},
 	Ethereum {
 		deposits: Vec<(u64, DepositWitness<Ethereum>)>,
-		vault_deposits: EthereumVaultDeposits,
-		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, EthereumInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, EthereumInstance>)>,
 	},
 	Arbitrum {
 		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
-		vault_deposits: ArbitrumVaultDeposits,
-		broadcasts: Vec<(u64, EthereumKeyManagerEvent)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, ArbitrumInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)>,
 	},
 }
 

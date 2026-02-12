@@ -17,17 +17,22 @@
 use bitcoin::{hashes::Hash as BtcHash, Txid};
 use cf_chains::{
 	address::{AddressString, EncodedAddress},
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	evm::SchnorrVerificationComponents,
+	instances::BitcoinInstance,
 	Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain,
 };
 use cf_primitives::{BasisPoints, DcaParameters, NetworkEnvironment};
+use cf_traits::ChainflipWithTargetChain;
 use cf_utilities::rpc::NumberOrHex;
-use pallet_cf_broadcast::TransactionOutIdToBroadcastId;
+use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use serde::{Deserialize, Serialize};
+use sp_core::H256;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
-	chainflip::witnessing::ethereum_elections::{EthereumKeyManagerEvent, VaultEvents},
+	chainflip::witnessing::pallet_hooks::{
+		Config as ConfigTrait, EvmKeyManagerEvent, EvmVaultContractEvent,
+	},
 	Runtime,
 };
 
@@ -194,14 +199,23 @@ fn convert_bitcoin_broadcast(
 	})
 }
 
-fn convert_evm_broadcast(
-	key_manager_event: &EthereumKeyManagerEvent,
+fn convert_evm_broadcast<I: 'static>(
+	key_manager_event: &EvmKeyManagerEvent<Runtime, I>,
 	height: u64,
-) -> Option<BroadcastWitnessInfo> {
+) -> Option<BroadcastWitnessInfo>
+where
+	Runtime: ConfigTrait<I>,
+	<<Runtime as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto:
+		ChainCrypto<TransactionOutId = SchnorrVerificationComponents>,
+	<Runtime as ChainflipWithTargetChain<I>>::TargetChain: Chain<TransactionRef = H256>,
+{
 	match key_manager_event {
-		EthereumKeyManagerEvent::SignatureAccepted { tx_out_id, transaction_ref, .. } => {
-			let (broadcast_id, _) =
-				TransactionOutIdToBroadcastId::<Runtime, EthereumInstance>::get(tx_out_id)?;
+		EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
+			tx_out_id,
+			transaction_ref,
+			..
+		}) => {
+			let (broadcast_id, _) = TransactionOutIdToBroadcastId::<Runtime, I>::get(tx_out_id)?;
 			Some(BroadcastWitnessInfo {
 				broadcast_chain_block_height: height,
 				broadcast_id,
@@ -213,21 +227,16 @@ fn convert_evm_broadcast(
 	}
 }
 
-fn extract_vault_deposit_from_event<T, I, C>(
-	event: &VaultEvents<VaultDepositWitness<T, I>, C>,
+fn extract_vault_deposit_from_event<T, I>(
+	event: &EvmVaultContractEvent<T, I>,
 ) -> Option<VaultDepositWitness<T, I>>
 where
 	T: pallet_cf_ingress_egress::Config<I>,
 	I: 'static,
-	C: Chain,
 	VaultDepositWitness<T, I>: Clone,
 {
 	match event {
-		VaultEvents::SwapNativeFilter(w) |
-		VaultEvents::SwapTokenFilter(w) |
-		VaultEvents::XcallNativeFilter(w) |
-		VaultEvents::XcallTokenFilter(w) => Some(w.clone()),
-		// TransferNativeFailedFilter and TransferTokenFailedFilter don't contain vault deposits
+		EvmVaultContractEvent::VaultDeposit(w) => Some(*w.clone()),
 		_ => None,
 	}
 }
@@ -299,12 +308,8 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event::<
-						Runtime,
-						EthereumInstance,
-						cf_chains::Ethereum,
-					>(&event)
-					.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event)
+						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
 				})
 				.collect();
 
@@ -334,12 +339,8 @@ pub(crate) fn convert_raw_witnessed_events(
 			let converted_vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
-					extract_vault_deposit_from_event::<
-						Runtime,
-						ArbitrumInstance,
-						cf_chains::Arbitrum,
-					>(&event)
-					.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+					extract_vault_deposit_from_event(&event)
+						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
 				})
 				.collect();
 
