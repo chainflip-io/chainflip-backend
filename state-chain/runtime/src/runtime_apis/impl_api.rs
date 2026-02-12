@@ -2023,5 +2023,108 @@ impl_runtime_apis! {
 				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(asset)
 			})
 		}
+    
+		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+			witnessed_events::extract_witnessed_events(chain)
+		}
+	}
+}
+
+mod witnessed_events {
+	use super::*;
+	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance};
+	use pallet_cf_elections::ElectoralUnsynchronisedState;
+
+	pub fn extract_witnessed_events(
+		chain: ForeignChain,
+	) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		match chain {
+			ForeignChain::Bitcoin => extract_bitcoin_witnessed_events(),
+			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
+			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
+			_ => Err(DispatchErrorWithMessage::RawMessage(
+				b"Chain not supported for witnessed events".to_vec(),
+			)),
+		}
+	}
+
+	macro_rules! extract_block_data {
+		($state:expr, $height_converter:expr) => {{
+			let mut result = Vec::new();
+			for (height, info) in $state.block_processor.blocks_data.iter() {
+				let block_height: u64 = $height_converter(height);
+				result.extend(info.block_data.iter().cloned().map(|item| (block_height, item)));
+			}
+			result
+		}};
+	}
+
+	macro_rules! extract_witnessed_events_for_state {
+		(
+			deposits: $deposits_state:expr,
+			vault_deposits: $vault_deposits_state:expr,
+			broadcasts: $broadcasts_state:expr,
+			height: $height_converter:expr $(,)?
+		) => {{
+			let deposits = extract_block_data!($deposits_state, |h| $height_converter(h));
+			let vault_deposits =
+				extract_block_data!($vault_deposits_state, |h| $height_converter(h));
+			let broadcasts = extract_block_data!($broadcasts_state, |h| $height_converter(h));
+			(deposits, vault_deposits, broadcasts)
+		}};
+	}
+
+	fn extract_bitcoin_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Bitcoin electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &u64| *h,
+		);
+
+		Ok(RawWitnessedEvents::Bitcoin { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_ethereum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, EthereumInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Ethereum electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.4,
+			height: |h: &u64| *h,
+		);
+
+		Ok(RawWitnessedEvents::Ethereum { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_arbitrum_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, ArbitrumInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Arbitrum electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root(),
+		);
+
+		Ok(RawWitnessedEvents::Arbitrum { deposits, vault_deposits, broadcasts })
 	}
 }

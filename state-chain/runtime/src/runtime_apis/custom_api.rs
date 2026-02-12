@@ -16,6 +16,8 @@
 
 pub mod types;
 
+pub use types::RawWitnessedEvents;
+
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -351,5 +353,12 @@ decl_runtime_apis!(
 		#[changed_in(16)]
 		fn cf_default_oracle_price_protection();
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
+		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(16)]
+		fn cf_ingress_egress_events();
+		fn cf_ingress_egress_events(
+			chain: ForeignChain,
+		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
 	}
 );

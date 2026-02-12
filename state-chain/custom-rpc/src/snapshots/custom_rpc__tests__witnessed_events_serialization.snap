@@ -1,0 +1,74 @@
+---
+source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 846
+expression: response
+---
+{
+  "deposits": [
+    {
+      "deposit_chain_block_height": 1,
+      "deposit_address": "0x1111111111111111111111111111111111111111",
+      "amount": "0x64",
+      "asset": {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      "deposit_details": {
+        "tx_hashes": [
+          "0x2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      }
+    }
+  ],
+  "broadcasts": [
+    {
+      "broadcast_chain_block_height": 2,
+      "broadcast_id": 7,
+      "tx_out_id": {
+        "hash": "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"
+      },
+      "tx_ref": {
+        "hash": "3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120"
+      }
+    }
+  ],
+  "vault_deposits": [
+    {
+      "tx_id": "0x1010101010101010101010101010101010101010101010101010101010101010",
+      "deposit_chain_block_height": 3,
+      "input_asset": {
+        "chain": "Ethereum",
+        "asset": "ETH"
+      },
+      "output_asset": {
+        "chain": "Ethereum",
+        "asset": "FLIP"
+      },
+      "amount": "0x1f4",
+      "destination_address": "0x4444444444444444444444444444444444444444",
+      "ccm_deposit_metadata": null,
+      "deposit_details": {
+        "tx_hashes": [
+          "0x2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "broker_fee": {
+        "account": "5CT5jwBEAhveEjgiSCQbkaKcKcUyF3VJ8qNXM9rXsuQyn3Kd",
+        "bps": 2
+      },
+      "affiliate_fees": [],
+      "refund_params": {
+        "retry_duration": 0,
+        "refund_address": "0x541f563237a309b3a61e33bdf07a8930bdba8d99",
+        "min_price": "0x0",
+        "refund_ccm_metadata": null,
+        "max_oracle_price_slippage": null
+      },
+      "dca_params": {
+        "number_of_chunks": 10,
+        "chunk_interval": 2
+      },
+      "max_boost_fee": 5
+    }
+  ]
+}

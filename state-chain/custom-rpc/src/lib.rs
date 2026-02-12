@@ -110,6 +110,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod ingress_egress_tracker;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -812,6 +813,12 @@ type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
+pub(crate) use ingress_egress_tracker::convert_raw_witnessed_events;
+pub use ingress_egress_tracker::{
+	BroadcastWitnessInfo, DepositDetails, RpcDepositWitnessInfo, RpcTransactionId,
+	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
+};
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -1375,6 +1382,14 @@ pub trait CustomApi {
 		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
+	/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+	/// from the block witnesser election's unsynchronized state.
+	#[method(name = "ingress_egress_events")]
+	fn cf_ingress_egress_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -3003,6 +3018,24 @@ where
 				api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from)?
 			})
 		})
+	}
+	fn cf_ingress_egress_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse> {
+		let hash = self.rpc_backend.unwrap_or_best(at);
+		let raw = self
+			.rpc_backend
+			.with_runtime_api(Some(hash), |api, hash| api.cf_ingress_egress_events(hash, chain))?
+			.map_err(CfApiError::from)?;
+		let network = self
+			.rpc_backend
+			.with_runtime_api(Some(hash), |api, hash| api.cf_network_environment(hash))?;
+
+		let storage_query = StorageQueryApi::new(&self.rpc_backend.client);
+		storage_query
+			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
 	}
 }
 
