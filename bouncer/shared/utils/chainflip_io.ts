@@ -622,6 +622,7 @@ export type FullAccount<T extends AccountType> = {
 
 export type WithAccount<T extends AccountType> = { account: FullAccount<T> };
 export type WithLpAccount = WithAccount<'LP'>;
+export type WithBrokerAccount = WithAccount<'Broker'>;
 
 export function fullAccountFromUri<A extends AccountType>(
   uri: `//${string}`,
