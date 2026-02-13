@@ -2097,7 +2097,7 @@ mod witnessed_events {
 		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
 			deposits: &state.1,
 			vault_deposits: &state.2,
-			broadcasts: &state.4,
+			broadcasts: &state.3,
 			height: |h: &u64| *h,
 		);
 
