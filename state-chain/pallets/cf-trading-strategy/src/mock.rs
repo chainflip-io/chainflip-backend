@@ -17,7 +17,9 @@
 use crate as pallet_cf_trading_strategy;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
-	mocks::{balance_api::MockLpRegistration, pool_api::MockPoolApi},
+	mocks::{
+		balance_api::MockLpRegistration, pool_api::MockPoolApi, price_feed_api::MockPriceFeedApi,
+	},
 	AccountRoleRegistry,
 };
 use frame_support::derive_impl;
@@ -46,6 +48,7 @@ impl pallet_cf_trading_strategy::Config for Test {
 	type LpOrdersWeights = MockPoolApi;
 	type LpRegistrationApi = MockLpRegistration;
 	type SafeMode = MockRuntimeSafeMode;
+	type PriceFeedApi = MockPriceFeedApi;
 }
 
 pub const LP: <Test as frame_system::Config>::AccountId = 123u64;

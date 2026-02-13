@@ -603,6 +603,8 @@ pub enum IngressOrEgress {
 	EgressCcm { gas_budget: GasAmount, message_length: usize },
 }
 
+pub type OrderId = u64;
+
 // ------ election based witnessing ------
 
 #[derive(

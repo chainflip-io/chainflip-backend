@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_amm_math::*;
+use cf_primitives::{Asset, AssetAmount, OrderId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,16 @@ use sp_core::{U256, U512};
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct LimitOrder<AccountId> {
+	pub base_asset: Asset,
+	pub account_id: AccountId,
+	pub side: Side,
+	pub order_id: OrderId,
+	pub tick: Tick,
+	pub amount: AssetAmount,
+}
 
 #[derive(Debug)]
 pub enum SetFeesError {

@@ -30,11 +30,12 @@ mod tests;
 #[macro_use]
 extern crate proptest;
 
-use cf_primitives::{Asset, AssetAmount, StablecoinDefaults, Tick, STABLE_ASSET};
+use cf_amm::common::LimitOrder;
+use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, OrderId, PoolApi, Side,
+	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, PoolApi, Side,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -42,7 +43,10 @@ use frame_support::{
 	traits::HandleLifetime,
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
-use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	vec::Vec,
+};
 use weights::WeightInfo;
 
 pub use pallet::*;
@@ -76,6 +80,11 @@ pub enum TradingStrategy {
 		max_sell_tick: Tick,
 		base_asset: Asset,
 	},
+	OracleTracking {
+		buy_offset_tick: Tick,
+		sell_offset_tick: Tick,
+		base_asset: Asset,
+	},
 }
 
 #[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -104,7 +113,8 @@ impl TradingStrategy {
 		match self {
 			TradingStrategy::TickZeroCentered { base_asset, .. } |
 			TradingStrategy::SimpleBuySell { base_asset, .. } |
-			TradingStrategy::InventoryBased { base_asset, .. } =>
+			TradingStrategy::InventoryBased { base_asset, .. } |
+			TradingStrategy::OracleTracking { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
 		}
 	}
@@ -116,7 +126,12 @@ impl TradingStrategy {
 				}
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 			},
-			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } => {
+			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } |
+			TradingStrategy::OracleTracking {
+				buy_offset_tick: buy_tick,
+				sell_offset_tick: sell_tick,
+				base_asset,
+			} => {
 				if buy_tick >= sell_tick ||
 					*buy_tick > cf_amm_math::MAX_TICK ||
 					*sell_tick > cf_amm_math::MAX_TICK ||
@@ -177,6 +192,8 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_traits::PriceFeedApi;
+
 	use super::*;
 
 	#[pallet::config]
@@ -191,6 +208,8 @@ pub mod pallet {
 		type LpRegistrationApi: LpRegistration<AccountId = Self::AccountId>;
 
 		type PoolApi: PoolApi<AccountId = Self::AccountId>;
+
+		type PriceFeedApi: PriceFeedApi;
 
 		/// Safe Mode access.
 		type SafeMode: Get<PalletSafeMode>;
@@ -269,6 +288,18 @@ pub mod pallet {
 
 			weight_used += T::DbWeight::get().reads(1);
 			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
+
+			// Cache of orders per asset to avoid redundant reads
+			let mut order_cache: BTreeMap<Asset, Vec<LimitOrder<T::AccountId>>> = BTreeMap::new();
+			let oracle_strategies = Strategies::<T>::iter()
+				.filter_map(|(_, strategy_id, strategy)| {
+					if let TradingStrategy::OracleTracking { .. } = strategy {
+						Some(strategy_id)
+					} else {
+						None
+					}
+				})
+				.collect::<BTreeSet<_>>();
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
@@ -405,6 +436,94 @@ pub mod pallet {
 										);
 									})
 								});
+						}
+					},
+					TradingStrategy::OracleTracking {
+						buy_offset_tick,
+						sell_offset_tick,
+						base_asset,
+					} => {
+						// Get the existing open orders for the strategy
+						let pool_orders = match order_cache.get(&base_asset) {
+							Some(orders) => orders,
+							None => {
+								weight_used += T::DbWeight::get().reads(1);
+								match T::PoolApi::limit_orders(
+									base_asset,
+									STABLE_ASSET,
+									&oracle_strategies,
+								) {
+									Ok(pool_orders) => {
+										order_cache.insert(base_asset, pool_orders);
+										order_cache.get(&base_asset).unwrap()
+									},
+									Err(e) => {
+										continue;
+									},
+								}
+							},
+						};
+						let existing_orders: Vec<_> = pool_orders
+							.iter()
+							.filter(|order| order.account_id == strategy_id)
+							.collect();
+
+						// Get the oracle price and see if we need to update the limit order
+						weight_used += T::DbWeight::get().reads(1);
+						if let Some(oracle_tick) =
+							T::PriceFeedApi::get_relative_price(base_asset, STABLE_ASSET)
+								.and_then(|oracle| oracle.price.into_tick())
+						{
+							// Calculate desired ticks
+							let buy_tick = oracle_tick + buy_offset_tick;
+							let sell_tick = oracle_tick + sell_offset_tick;
+
+							// Check if we need to update the orders
+							for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
+								let sell_asset =
+									if side == Side::Buy { STABLE_ASSET } else { base_asset };
+
+								weight_used += T::DbWeight::get().reads(1);
+								let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
+
+								// Minimum threshold of 1 to prevent updating with 0 amounts
+								let threshold = core::cmp::max(
+									order_update_thresholds
+										.get(&sell_asset)
+										.copied()
+										.unwrap_or(u128::MAX),
+									1,
+								);
+
+								// See if the tick needs to be updated compared to the existing
+								// order
+								let existing_order = existing_orders.iter().find(|order| {
+									side == order.side && order.order_id == STRATEGY_ORDER_ID_0
+								});
+								let (tick_needs_update, existing_order_amount) =
+									if let Some(order) = existing_order {
+										(order.tick != tick, order.amount)
+									} else {
+										(false, 0)
+									};
+
+								// Do the update if needed
+								if (balance >= threshold || tick_needs_update) &&
+									existing_order_amount.saturating_add(balance) > 0
+								{
+									weight_used += limit_order_update_weight;
+									// We expect this to fail if the pool does not exist
+									let _result = T::PoolApi::update_limit_order(
+										&strategy_id,
+										base_asset,
+										STABLE_ASSET,
+										side,
+										STRATEGY_ORDER_ID_0,
+										Some(tick),
+										IncreaseOrDecrease::Increase(balance),
+									);
+								}
+							}
 						}
 					},
 				}

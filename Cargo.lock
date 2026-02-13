@@ -8772,6 +8772,7 @@ dependencies = [
 name = "pallet-cf-trading-strategy"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-amm-math",
  "cf-chains",
  "cf-primitives",

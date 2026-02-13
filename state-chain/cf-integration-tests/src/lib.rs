@@ -39,7 +39,11 @@ mod witnessing;
 use cf_chains::eth::Address as EthereumAddress;
 use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
-use frame_support::{assert_noop, assert_ok, sp_runtime::AccountId32, traits::OnInitialize};
+use frame_support::{
+	assert_noop, assert_ok,
+	sp_runtime::AccountId32,
+	traits::{OnFinalize, OnIdle, OnInitialize, Time},
+};
 use pallet_cf_funding::EthTransactionHash;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -47,7 +51,7 @@ use sp_core::crypto::Pair;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, BitcoinVault, Emissions, EthereumVault,
 	Flip, Funding, PolkadotVault, Reputation, Runtime, RuntimeCall, RuntimeOrigin, SolanaVault,
-	System, Validator, Witnesser,
+	System, Timestamp, Validator, Weight, Witnesser,
 };
 
 type NodeId = AccountId32;
@@ -88,5 +92,17 @@ pub fn witness_call(call: RuntimeCall) {
 			boxed_call.clone(),
 			epoch,
 		));
+	}
+}
+
+pub fn advance_blocks(blocks: u32) {
+	for block in System::block_number()..System::block_number() + blocks {
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(block);
+		System::set_block_number(block + 1);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			block + 1,
+			Weight::from_parts(1_000_000_000_000, u64::MAX),
+		);
 	}
 }
