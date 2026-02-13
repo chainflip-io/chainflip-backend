@@ -19,7 +19,7 @@ use super::*;
 use crate::mocks::*;
 use boost::BoostPoolId;
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
-use cf_traits::{SafeMode, SetSafeMode};
+use cf_traits::{DeregistrationCheck, SafeMode, SetSafeMode};
 use frame_support::{
 	assert_noop, assert_ok,
 	sp_runtime::{self, bounded_vec},
@@ -852,13 +852,46 @@ fn boost_account_balance() {
 
 		let boost_fee = BOOSTED_AMOUNT * TIER_5_BPS as u128 / 10_000;
 
-		use cf_traits::BoostBalancesApi;
-
 		// Check that we collect funds from all pools and include funds from unfinalised boosts,
 		// ignoring other accounts and assets:
 		assert_eq!(
 			LendingPools::boost_pool_account_balance(&BOOSTER_1, Asset::Eth),
 			ETH_AMOUNT_1 + ETH_AMOUNT_2 + boost_fee
+		);
+	});
+}
+
+#[test]
+fn deregistration_check_requires_no_lending_storage_keys() {
+	new_test_ext().execute_with(|| {
+		let mut core_pool = CoreLendingPool::default();
+		core_pool.add_funds(LP, 1);
+		CorePools::<Test>::insert(Asset::Eth, CorePoolId(0), core_pool);
+
+		assert_noop!(
+			PoolsDeregistrationCheck::<Test>::check(&LP),
+			Error::<Test>::BoostedFundsRemaining
+		);
+
+		CorePools::<Test>::remove(Asset::Eth, CorePoolId(0));
+
+		let mut lending_pool = LendingPool::new();
+		lending_pool.add_funds(&LP, 1);
+		GeneralLendingPools::<Test>::insert(Asset::Eth, lending_pool);
+
+		assert_noop!(
+			PoolsDeregistrationCheck::<Test>::check(&LP),
+			Error::<Test>::LendingFundsRemaining
+		);
+
+		GeneralLendingPools::<Test>::remove(Asset::Eth);
+
+		// Borrower loan-account storage keyed by account.
+		LoanAccounts::<Test>::insert(LP, LoanAccount::<Test>::new(LP));
+
+		assert_noop!(
+			PoolsDeregistrationCheck::<Test>::check(&LP),
+			Error::<Test>::LendingFundsRemaining
 		);
 	});
 }

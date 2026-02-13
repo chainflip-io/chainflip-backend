@@ -161,9 +161,3 @@ pub trait SwappingApi {
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError>;
 }
-
-pub trait BoostBalancesApi {
-	type AccountId;
-
-	fn boost_pool_account_balance(lp: &Self::AccountId, asset: Asset) -> AssetAmount;
-}

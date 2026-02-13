@@ -42,11 +42,11 @@ use cf_primitives::{
 };
 
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AsyncResult,
-	AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip, EpochInfo,
-	EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch, KeyRotator,
-	MissedAuthorshipSlots, QualifyNode, RedemptionCheck, ReputationResetter, SetSafeMode,
-	VanityName,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AccountInfo, AccountRoleRegistry,
+	AsyncResult, AuthoritiesCfeVersions, Bid, Bonding, CfePeerRegistration, Chainflip,
+	DeregistrationCheck, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo,
+	HistoricalEpoch, KeyRotator, MissedAuthorshipSlots, QualifyNode, RedemptionCheck,
+	ReputationResetter, SetSafeMode, VanityName,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -870,13 +870,10 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_validator())]
 		pub fn deregister_as_validator(origin: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-			ensure!(!Self::is_bidding(&account_id), Error::<T>::StillBidding);
 
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
-
-			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 
 			// This can only error if the validator didn't register any keys, in which case we want
 			// to continue with the deregistration anyway.
@@ -1179,13 +1176,6 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::deregister_as_operator())]
 		pub fn deregister_as_operator(origin: OriginFor<T>) -> DispatchResult {
 			let operator = T::AccountRoleRegistry::ensure_operator(origin)?;
-
-			ensure!(
-				((Self::last_expired_epoch() + 1)..=Self::current_epoch()).all(|epoch_index| {
-					!DelegationSnapshots::<T>::contains_key(epoch_index, &operator)
-				}),
-				Error::<T>::OperatorStillActive,
-			);
 
 			for (validator, ()) in Self::get_all_associations_by_operator(
 				&operator,
@@ -2217,6 +2207,34 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 				!ActiveBidder::<T>::get()
 					.contains(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id)),
 				Error::<T>::StillBidding
+			);
+		}
+
+		Ok(())
+	}
+}
+
+pub struct ValidatorDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for ValidatorDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Validator) {
+			ensure!(!Pallet::<T>::is_bidding(account_id), Error::<T>::StillBidding);
+
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(account_id);
+
+			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
+		} else if T::AccountRoleRegistry::has_account_role(account_id, AccountRole::Operator) {
+			ensure!(
+				((Pallet::<T>::last_expired_epoch() + 1)..=Pallet::<T>::current_epoch()).all(
+					|epoch_index| !DelegationSnapshots::<T>::contains_key(epoch_index, account_id)
+				),
+				Error::<T>::OperatorStillActive,
 			);
 		}
 

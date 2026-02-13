@@ -22,9 +22,8 @@ use cf_primitives::{
 	AccountRole, Asset, AssetAmount, BasisPoints, DcaParameters, ForeignChain, SECONDS_PER_BLOCK,
 };
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, BoostBalancesApi, Chainflip,
-	DepositApi, EgressApi, LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails,
-	SwapRequestHandler,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DepositApi, EgressApi,
+	LpRegistration, LpStatsApi, PoolApi, ScheduledEgressDetails, SwapRequestHandler,
 };
 use frame_support::{
 	fail,
@@ -227,11 +226,6 @@ pub mod pallet {
 
 		/// The interface to managing balances.
 		type BalanceApi: BalanceApi<AccountId = <Self as frame_system::Config>::AccountId>;
-
-		/// The interface to access boosted balances
-		type BoostBalancesApi: BoostBalancesApi<
-			AccountId = <Self as frame_system::Config>::AccountId,
-		>;
 
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
@@ -482,24 +476,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::deregister_lp_account())]
 		pub fn deregister_lp_account(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(who)?;
-
-			ensure!(
-				T::PoolApi::pools().iter().all(|asset_pair| {
-					T::PoolApi::open_order_count(&account_id, asset_pair).unwrap_or_default() == 0
-				}),
-				Error::<T>::OpenOrdersRemaining
-			);
-			ensure!(
-				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
-				Error::<T>::FundsRemaining
-			);
-
-			for asset in Asset::all() {
-				ensure!(
-					T::BoostBalancesApi::boost_pool_account_balance(&account_id, asset) == 0,
-					Error::<T>::BoostedFundsRemaining
-				);
-			}
 
 			let _ = LiquidityRefundAddress::<T>::clear_prefix(&account_id, u32::MAX, None);
 

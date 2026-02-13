@@ -33,8 +33,8 @@ pub use cf_primitives::{
 	SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, BoostBalancesApi, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode,
-	SessionKeysRegistered, SwappingApi,
+	AccountInfo, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode, SessionKeysRegistered,
+	SwappingApi,
 };
 use cf_traits::{
 	ChainflipWithTargetChain, DummyEgressSuccessWitnesser, DummyIngressSource, NoLimit,
@@ -62,9 +62,7 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
-use pallet_cf_lending_pools::PoolsDeregistrationCheck;
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
-use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 pub use pallet_cf_validator::SetSizeParameters;
 use pallet_cf_validator::{DelegatedRewardsDistribution, DelegationSlasher};
 pub use pallet_grandpa::AuthorityId as GrandpaId;
@@ -481,7 +479,6 @@ impl pallet_cf_lp::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type BalanceApi = AssetBalances;
-	type BoostBalancesApi = LendingPools;
 	type SwapRequestHandler = Swapping;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
@@ -491,8 +488,7 @@ impl pallet_cf_lp::Config for Runtime {
 
 impl pallet_cf_account_roles::Config for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck =
-		(Bonder<Self>, TradingStrategyDeregistrationCheck<Self>, PoolsDeregistrationCheck<Self>);
+	type DeregistrationCheck = chainflip::RuntimeDeregistrationCheck;
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = Funding;
 	#[cfg(feature = "runtime-benchmarks")]
