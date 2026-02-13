@@ -126,9 +126,8 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		let success_callbacks = old::RequestSuccessCallbacks::<Runtime, I>::iter().count() as u64;
-		let failure_callbacks = old::RequestFailureCallbacks::<Runtime, I>::iter().count() as u64;
 
-		Ok((success_callbacks, failure_callbacks).encode())
+		Ok(success_callbacks.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -136,16 +135,11 @@ where
 		let (success_callbacks, failure_callbacks) = <(u64, u64)>::decode(&mut state.as_slice())
 			.map_err(|_| DispatchError::from("Failed to decode pre-migration state"))?;
 
-		let (post_finalise_fetch_actions, post_ccm_broadcast_actions) =
-			broadcast_action_counts::<I>();
+		let post_finalise_fetch_actions = broadcast_action_counts::<I>();
 
 		frame_support::ensure!(
 			post_finalise_fetch_actions == success_callbacks,
 			DispatchError::from("FinaliseFetch action count mismatch after migration"),
-		);
-		frame_support::ensure!(
-			post_ccm_broadcast_actions == failure_callbacks,
-			DispatchError::from("CcmBroadcast action count mismatch after migration"),
 		);
 
 		Ok(())
@@ -153,22 +147,21 @@ where
 }
 
 #[cfg(feature = "try-runtime")]
-fn broadcast_action_counts<I: 'static>() -> (u64, u64)
+fn broadcast_action_counts<I: 'static>() -> u64
 where
 	Runtime: pallet_cf_broadcast::Config<I> + pallet_cf_ingress_egress::Config<I>,
 {
 	let mut finalise_fetch_actions = 0u64;
-	let mut ccm_broadcast_actions = 0u64;
 
 	for (_, action) in pallet_cf_ingress_egress::BroadcastActions::<Runtime, I>::iter() {
 		match action {
 			pallet_cf_ingress_egress::BroadcastAction::FinaliseFetch(_) =>
 				finalise_fetch_actions += 1,
-			pallet_cf_ingress_egress::BroadcastAction::CcmBroadcast => ccm_broadcast_actions += 1,
+			_ => {},
 		}
 	}
 
-	(finalise_fetch_actions, ccm_broadcast_actions)
+	finalise_fetch_actions
 }
 
 fn migrate<I: 'static>()
@@ -176,7 +169,6 @@ where
 	Runtime: pallet_cf_broadcast::Config<I> + pallet_cf_ingress_egress::Config<I>,
 {
 	let mut success_count = 0u32;
-	let mut failure_count = 0u32;
 	let chain_name = core::any::type_name::<I>();
 
 	for (broadcast_id, callback) in old::RequestSuccessCallbacks::<Runtime, I>::drain() {
@@ -196,16 +188,10 @@ where
 		}
 	}
 
-	for (broadcast_id, _) in old::RequestFailureCallbacks::<Runtime, I>::drain() {
-		pallet_cf_ingress_egress::BroadcastActions::<Runtime, I>::insert(
-			broadcast_id,
-			pallet_cf_ingress_egress::BroadcastAction::CcmBroadcast,
-		);
-		failure_count += 1;
-	}
+	let failure_count = old::RequestFailureCallbacks::<Runtime, I>::clear(u32::MAX, None).unique;
 
 	log::info!(
-		"🔄 {chain_name}: Migrated {success_count} success callbacks and {failure_count} failure callbacks to BroadcastActions.",
+		"🔄 {chain_name}: Migrated {success_count} success callbacks to BroadcastActions, and removed {failure_count} failure callbacks.",
 	);
 }
 

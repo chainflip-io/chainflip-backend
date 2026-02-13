@@ -333,7 +333,7 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(31);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(30);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -1337,6 +1337,7 @@ pub mod pallet {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
 						T::Broadcaster::expire_broadcast(call.broadcast_id);
+						BroadcastActions::<T, I>::remove(call.broadcast_id);
 						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
 							broadcast_id: call.broadcast_id,
 						});
@@ -3677,9 +3678,5 @@ impl<T: Config<I>, I: 'static> cf_traits::BroadcastOutcomeHandler<T::TargetChain
 			);
 			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 		}
-	}
-
-	fn on_broadcast_expired(broadcast_id: BroadcastId) {
-		BroadcastActions::<T, I>::remove(broadcast_id);
 	}
 }

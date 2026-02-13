@@ -1011,15 +1011,11 @@ pub trait BroadcastOutcomeHandler<C: Chain> {
 
 	/// Called when a broadcast has been aborted (all validators failed to broadcast).
 	fn on_broadcast_aborted(broadcast_id: BroadcastId);
-
-	/// Called when a broadcast is explicitly expired and its storage is being cleaned up.
-	fn on_broadcast_expired(_broadcast_id: BroadcastId) {}
 }
 
 impl<C: Chain> BroadcastOutcomeHandler<C> for () {
 	fn on_broadcast_success(_broadcast_id: BroadcastId, _witness_block: C::ChainBlockNumber) {}
 	fn on_broadcast_aborted(_broadcast_id: BroadcastId) {}
-	fn on_broadcast_expired(_broadcast_id: BroadcastId) {}
 }
 
 pub trait GetBitcoinFeeInfo {

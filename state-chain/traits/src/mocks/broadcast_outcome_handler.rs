@@ -61,8 +61,4 @@ impl<C: Chain> BroadcastOutcomeHandler<C> for MockBroadcastOutcomeHandler<C> {
 	fn on_broadcast_aborted(broadcast_id: BroadcastId) {
 		Self::push_outcome(MockBroadcastOutcome::Aborted { broadcast_id });
 	}
-
-	fn on_broadcast_expired(broadcast_id: BroadcastId) {
-		Self::push_outcome(MockBroadcastOutcome::Expired { broadcast_id });
-	}
 }

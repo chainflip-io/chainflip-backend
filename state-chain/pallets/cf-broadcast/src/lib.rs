@@ -1150,7 +1150,6 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {
-		T::BroadcastOutcomeHandler::on_broadcast_expired(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 

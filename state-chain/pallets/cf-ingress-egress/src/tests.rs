@@ -1453,22 +1453,6 @@ fn finalise_fetch_action_is_preserved_on_abort() {
 }
 
 #[test]
-fn on_broadcast_expired_clears_pending_action() {
-	new_test_ext().execute_with(|| {
-		let broadcast_id = 7;
-		BroadcastActions::<Test, Instance1>::insert(
-			broadcast_id,
-			BroadcastAction::FinaliseFetch(vec![H160::from([42u8; 20])]),
-		);
-		assert!(BroadcastActions::<Test, Instance1>::get(broadcast_id).is_some());
-
-		EthereumIngressEgress::on_broadcast_expired(broadcast_id);
-
-		assert!(BroadcastActions::<Test, Instance1>::get(broadcast_id).is_none());
-	});
-}
-
-#[test]
 fn failed_ccm_is_stored() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();

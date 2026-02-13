@@ -269,7 +269,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 }
 
 #[test]
-fn broadcast_outcome_handler_is_called_on_abort_and_expire() {
+fn broadcast_outcome_handler_is_called_on_abort() {
 	new_test_ext().execute_with(|| {
 		let broadcast_id = initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
 		let nominee = ready_to_abort_broadcast(broadcast_id);
@@ -282,15 +282,6 @@ fn broadcast_outcome_handler_is_called_on_abort_and_expire() {
 		assert_eq!(
 			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
 			vec![MockBroadcastOutcome::Aborted { broadcast_id }]
-		);
-
-		<Broadcaster as BroadcasterTrait<TargetChainOf<Test, Instance1>>>::expire_broadcast(
-			broadcast_id,
-		);
-
-		assert_eq!(
-			MockBroadcastOutcomeHandler::<MockEthereum>::take_outcomes(),
-			vec![MockBroadcastOutcome::Expired { broadcast_id }]
 		);
 	});
 }
