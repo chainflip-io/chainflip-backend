@@ -39,6 +39,12 @@ pub trait WitnessClient<Chain: ChainTypes>: Sync + Send {
 }
 
 #[async_trait::async_trait]
-pub trait WitnessClientForBlockData<Chain: ChainTypes, BlockData>: WitnessClient<Chain> {
-	async fn block_data_from_query(&self, header: &Self::BlockQuery) -> Result<BlockData>;
+pub trait WitnessClientForBlockData<Chain: ChainTypes, ElectionProperties, BlockData>:
+	WitnessClient<Chain>
+{
+	async fn block_data_from_query(
+		&self,
+		election_properties: &ElectionProperties,
+		query: &Self::BlockQuery,
+	) -> Result<BlockData>;
 }

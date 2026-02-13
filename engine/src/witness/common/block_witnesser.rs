@@ -20,7 +20,7 @@ pub struct GenericBwVoter<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: 
 }
 
 pub trait BlockClientFor<I: BlockWitnesserInstance<Chain: ChainTypes>> =
-	WitnessClientForBlockData<I::Chain, Vec<I::BlockEntry>>;
+	WitnessClientForBlockData<I::Chain, I::ElectionProperties, Vec<I::BlockEntry>>;
 
 #[async_trait::async_trait]
 impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
@@ -38,12 +38,14 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 					.client
 					.block_query_from_hash_and_height(hash.clone(), properties.block_height)
 					.await?;
-				let data = self.client.block_data_from_query(&query).await?;
+				let data =
+					self.client.block_data_from_query(&properties.properties, &query).await?;
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: false } => {
 				let query = self.client.block_query_from_height(properties.block_height).await?;
-				let data = self.client.block_data_from_query(&query).await?;
+				let data =
+					self.client.block_data_from_query(&properties.properties, &query).await?;
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: true } => {
@@ -55,7 +57,8 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 				// query actual data
 				let (query, hash) =
 					self.client.block_query_and_hash_from_height(properties.block_height).await?;
-				let data = self.client.block_data_from_query(&query).await?;
+				let data =
+					self.client.block_data_from_query(&properties.properties, &query).await?;
 				Ok(Some((data, Some(hash))))
 			},
 		}

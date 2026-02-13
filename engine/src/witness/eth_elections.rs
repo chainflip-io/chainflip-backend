@@ -165,11 +165,16 @@ struct VaultDepositWitnessingConfig {
 }
 
 #[async_trait::async_trait]
-impl WitnessClientForBlockData<EthereumChain, Vec<EvmVaultContractEvent<Runtime, EthereumInstance>>>
-	for EvmSingleBlockHeaderVoter<VaultDepositWitnessingConfig>
+impl
+	WitnessClientForBlockData<
+		EthereumChain,
+		(),
+		Vec<EvmVaultContractEvent<Runtime, EthereumInstance>>,
+	> for EvmSingleBlockHeaderVoter<VaultDepositWitnessingConfig>
 {
 	async fn block_data_from_query(
 		&self,
+		_properties: &(),
 		header: &EvmSingleBlockQueryWithBloom,
 	) -> Result<Vec<EvmVaultContractEvent<Runtime, EthereumInstance>>> {
 		let events = events_at_block::<cf_chains::Ethereum, VaultEvents, EthereumChain, _>(

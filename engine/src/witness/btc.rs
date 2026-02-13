@@ -23,18 +23,23 @@ use crate::{
 	btc::rpc::{BtcRpcApi, VerboseTransaction},
 	witness::{
 		btc::fees::predict_fees,
-		common::{block_height_witnesser::witness_headers, traits::WitnessClient},
+		common::{
+			block_height_witnesser::witness_headers,
+			traits::{WitnessClient, WitnessClientForBlockData},
+		},
 	},
 };
 use bitcoin::{hashes::Hash, BlockHash};
-use cf_chains::btc::{
-	self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT,
+use cf_chains::{
+	btc::{self, deposit_address::DepositAddress, BlockNumber, Hash as H256, CHANGE_ADDRESS_SALT},
+	Bitcoin, DepositChannel,
 };
 use cf_primitives::EpochIndex;
 use futures_core::Future;
 
 use cf_utilities::task_scope::{self, Scope};
 use futures::FutureExt;
+use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
 	electoral_systems::{
@@ -43,12 +48,14 @@ use pallet_cf_elections::{
 	},
 	VoteOf,
 };
+use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
+use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::witnessing::bitcoin_elections::{
 		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
 		BitcoinElectoralSystemRunner, BitcoinLiveness, BITCOIN_MAINNET_SAFETY_BUFFER,
 	},
-	BitcoinInstance,
+	BitcoinInstance, Runtime,
 };
 
 use crate::{
@@ -158,6 +165,69 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 			"BTC BHW",
 		)
 		.await
+	}
+}
+
+// --- deposit channel witnessing ---
+#[async_trait::async_trait]
+impl
+	WitnessClientForBlockData<
+		BitcoinChain,
+		Vec<DepositChannel<Bitcoin>>,
+		Vec<DepositWitness<Bitcoin>>,
+	> for BtcCachingClient
+{
+	async fn block_data_from_query(
+		&self,
+		deposit_addresses: &Vec<DepositChannel<Bitcoin>>,
+		block_hash: &Self::BlockQuery,
+	) -> Result<Vec<DepositWitness<Bitcoin>>> {
+		let block = self.block(*block_hash).await?;
+		let deposit_addresses = map_script_addresses(deposit_addresses.clone());
+		let witnesses = deposit_witnesses(&block.txdata, &deposit_addresses);
+		Ok(witnesses)
+	}
+}
+
+// --- vault swap witnessing ---
+type PrivateBitcoinVaultChannel = (DepositAddress, AccountId32, u64);
+
+#[async_trait::async_trait]
+impl
+	WitnessClientForBlockData<
+		BitcoinChain,
+		Vec<PrivateBitcoinVaultChannel>,
+		Vec<VaultDepositWitness<Runtime, BitcoinInstance>>,
+	> for BtcCachingClient
+{
+	async fn block_data_from_query(
+		&self,
+		vault_channels: &Vec<PrivateBitcoinVaultChannel>,
+		block_hash: &Self::BlockQuery,
+	) -> Result<Vec<VaultDepositWitness<Runtime, BitcoinInstance>>> {
+		let block = self.block(*block_hash).await?;
+		let witnesses = vault_deposits(&block.txdata, vault_channels);
+		Ok(witnesses)
+	}
+}
+
+// --- egress witnessing ---
+#[async_trait::async_trait]
+impl
+	WitnessClientForBlockData<
+		BitcoinChain,
+		Vec<H256>,
+		Vec<TransactionConfirmation<Runtime, BitcoinInstance>>,
+	> for BtcCachingClient
+{
+	async fn block_data_from_query(
+		&self,
+		tx_hashes: &Vec<H256>,
+		block_hash: &Self::BlockQuery,
+	) -> Result<Vec<TransactionConfirmation<Runtime, BitcoinInstance>>> {
+		let block = self.block(*block_hash).await?;
+		let witnesses = egress_witnessing(&block.txdata, tx_hashes.clone());
+		Ok(witnesses)
 	}
 }
 
