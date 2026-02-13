@@ -146,27 +146,66 @@ mod tests {
 
 				// Example deposit channels (replace with actual addresses you want to track)
 				let deposit_channels = &[
-					"TSijkeUgustV4r2Sa7NvCVk4pj2Nb4kKZ2", // negative change example in tx0
-					"TRewWbeFgTShXQ82K3rboctVPzGrETiorK", // negative change tx1
-					"T9zkQ3sit9fcjFcAPUwTST75dqq8y3e9QW", // positive change tx1
-					"TJ7g4ARpZufzSQgTLKZnSHsnDFdek6uAU6", // positive change tx3
+					"TSijkeUgustV4r2Sa7NvCVk4pj2Nb4kKZ2", // negative change in tx0
+					"TRewWbeFgTShXQ82K3rboctVPzGrETiorK", // negative change in tx1
+					"T9zkQ3sit9fcjFcAPUwTST75dqq8y3e9QW", // positive change in tx1
+					"TJ7g4ARpZufzSQgTLKZnSHsnDFdek6uAU6", // positive change in tx3
 				];
 
-				// let vault_address = "TAQSXgp2iLRH2NsYjkPQPgEnPLrNB2zyT4"; // negative change
-				let vault_address = "TPyufmzHMcTZaFB6covBvMMWYVorKN6BoH"; // positive change
+				// Test with vault address that has positive change
+				let vault_address = "TPyufmzHMcTZaFB6covBvMMWYVorKN6BoH";
 
-				let result = ingress_amounts(
+				let (deposit_channel_changes, vault_changes) = ingress_amounts(
 					&retry_client,
 					deposit_channels,
 					vault_address,
 					block_num,
 					block_hash,
 				)
-				.await;
+				.await
+				.unwrap();
 
-				// Leave checks to the user
-				println!("Deposit channel changes: {:?}", result.as_ref().map(|(dc, _)| dc));
-				println!("Vault changes: {:?}", result.as_ref().map(|(_, v)| v));
+				assert_eq!(
+					deposit_channel_changes,
+					vec![(
+						"faaaba965bce89c1cb28cada1615d75d2e3c3a05970e8a3bbc296a1239d411e2"
+							.to_string(),
+						"TJ7g4ARpZufzSQgTLKZnSHsnDFdek6uAU6".to_string(),
+						3
+					)]
+				);
+				assert_eq!(
+					vault_changes,
+					vec![(
+						"011fc77de4dd7777d1ddaa5d5411b28c250000631f8aeda0c5808d0d5134e4ca"
+							.to_string(),
+						2
+					)]
+				);
+
+				// Test with vault address that has negative change (should be skipped)
+				let vault_address = "TAQSXgp2iLRH2NsYjkPQPgEnPLrNB2zyT4";
+
+				let (deposit_channel_changes, vault_changes) = ingress_amounts(
+					&retry_client,
+					deposit_channels,
+					vault_address,
+					block_num,
+					block_hash,
+				)
+				.await
+				.unwrap();
+
+				assert_eq!(
+					deposit_channel_changes,
+					vec![(
+						"faaaba965bce89c1cb28cada1615d75d2e3c3a05970e8a3bbc296a1239d411e2"
+							.to_string(),
+						"TJ7g4ARpZufzSQgTLKZnSHsnDFdek6uAU6".to_string(),
+						3
+					)]
+				);
+				assert_eq!(vault_changes, vec![]);
 
 				Ok(())
 			}

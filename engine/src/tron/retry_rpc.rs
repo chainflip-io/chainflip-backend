@@ -15,11 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+	evm::rpc::EvmRpcApi,
 	retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
 	settings::NodeContainer,
 };
 use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope::Scope};
 use core::time::Duration;
+use ethers::types::U256;
 
 use anyhow::Result;
 
@@ -85,14 +87,14 @@ impl TronRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait TronRetryRpcApi: Clone {
-	async fn chain_id(&self) -> u64;
+	async fn chain_id(&self) -> U256;
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> TransactionInfo;
 	async fn get_block_balances(&self, block_number: u64, hash: &str) -> BlockBalance;
 }
 
 #[async_trait::async_trait]
 impl TronRetryRpcApi for TronRetryRpcClient {
-	async fn chain_id(&self) -> u64 {
+	async fn chain_id(&self) -> U256 {
 		self.rpc_retry_client
 			.request(
 				RequestLog::new("eth_chainId".to_string(), None),

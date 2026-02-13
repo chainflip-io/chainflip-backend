@@ -15,14 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use ethers::types::{
+	Block, BlockNumber, Filter, Log, Transaction, TransactionReceipt, H256, U256, U64,
+};
 use futures_core::Future;
 use reqwest::Client;
 use serde_json::from_value;
 
-use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
+use cf_utilities::redact_endpoint_secret::SecretUrl;
 
 use super::rpc_client_api::{BlockBalance, TransactionInfo};
-use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, rpc_utils::Error};
+use crate::evm::rpc::{EvmRpcApi, EvmRpcClient};
 
 // It is nice to separate the http and the json_rpc because some providers
 // might not support both (e.g. TronGrid does not support JSON-RPC, only HTTP API
@@ -32,10 +35,9 @@ pub struct TronRpcClient {
 	// For the HTTP-API we need the historical balance query feature enabled for
 	// the getBlockBalance query
 	http_provider: Client,
-	json_rpc_provider: Client,
 	http_endpoint: SecretUrl,
-	json_rpc_endpoint: SecretUrl,
-	chain_name: &'static str,
+	// Reuse the EVM RPC client for JSON-RPC, it's EVM-compatible
+	evm_rpc_client: EvmRpcClient,
 }
 
 impl TronRpcClient {
@@ -46,54 +48,18 @@ impl TronRpcClient {
 		chain_name: &'static str,
 	) -> anyhow::Result<impl Future<Output = Self>> {
 		let http_provider = Client::builder().build()?;
-		let json_rpc_provider = Client::builder().build()?;
 
-		let client = TronRpcClient {
-			http_provider,
-			json_rpc_provider,
-			http_endpoint: http_endpoint.clone(),
-			json_rpc_endpoint,
-			chain_name,
-		};
-
+		// Create the EVM RPC client for JSON-RPC calls
+		let evm_rpc_client_fut =
+			EvmRpcClient::new(json_rpc_endpoint, expected_chain_id, chain_name)?;
+		// TODO: Should we do some check for the http api endpoint? We require the node to be have
+		// the historical balance query feature enabled. However, there doesn't seem to be a way
+		// to query that more than actually making a getBlockBalance query and checking if it works.
 		Ok(async move {
-			// We don't want to return an error here. Returning an error means that we'll exit the
-			// CFE. So on client creation we wait until we can be successfully connected to this
-			// Tron node. So the other chains are unaffected
-			let mut poll_interval = make_periodic_tick(RPC_RETRY_CONNECTION_INTERVAL, true);
-			loop {
-				poll_interval.tick().await;
-				match client.chain_id().await {
-					Ok(chain_id) if chain_id == expected_chain_id => break client,
-					Ok(chain_id) => {
-						tracing::error!(
-							"Connected to {chain_name} node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
-							Please check your CFE configuration file...",
-						);
-					},
-					Err(e) => tracing::error!(
-						"Cannot connect to a {chain_name:?} node at {http_endpoint} with error: {e}. \
-						Please check your CFE configuration file. Retrying in {:?}...",
-						poll_interval.period()
-					),
-				}
-			}
-		})
-	}
+			let evm_rpc_client = evm_rpc_client_fut.await;
 
-	/// Make a generic JSON-RPC call
-	pub async fn call_rpc(
-		&self,
-		method: &str,
-		params: Option<serde_json::Value>,
-	) -> Result<serde_json::Value, Error> {
-		crate::rpc_utils::call_rpc_raw(
-			&self.json_rpc_provider,
-			self.json_rpc_endpoint.as_ref(),
-			method,
-			params,
-		)
-		.await
+			Self { http_provider, http_endpoint, evm_rpc_client }
+		})
 	}
 
 	/// Make a generic HTTP API call (for Tron's REST API)
@@ -119,7 +85,7 @@ impl TronRpcClient {
 
 #[async_trait::async_trait]
 pub trait TronRpcApi: Send + Sync + Clone + 'static {
-	async fn chain_id(&self) -> anyhow::Result<u64>;
+	// HTTP API specific methods (Tron-specific, not available via JSON-RPC)
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo>;
 	async fn get_block_balances(
 		&self,
@@ -128,23 +94,62 @@ pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	) -> anyhow::Result<BlockBalance>;
 }
 
+// Implement EvmRpcApi for TronRpcClient to delegate JSON-RPC calls to the underlying EVM client
 #[async_trait::async_trait]
-impl TronRpcApi for TronRpcClient {
-	async fn chain_id(&self) -> anyhow::Result<u64> {
-		let result = self.call_rpc("eth_chainId", None).await?;
-
-		// The result is a hex string like "0x2b6653dc"
-		let chain_id_hex = result
-			.as_str()
-			.ok_or_else(|| anyhow::anyhow!("chain_id response was not a string"))?;
-
-		// Remove "0x" prefix if present and parse as hex
-		let chain_id_hex = chain_id_hex.strip_prefix("0x").unwrap_or(chain_id_hex);
-		let chain_id = u64::from_str_radix(chain_id_hex, 16)?;
-
-		Ok(chain_id)
+impl EvmRpcApi for TronRpcClient {
+	async fn estimate_gas(
+		&self,
+		req: &ethers::types::Eip1559TransactionRequest,
+	) -> anyhow::Result<U256> {
+		self.evm_rpc_client.estimate_gas(req).await
 	}
 
+	async fn get_logs(&self, filter: Filter) -> anyhow::Result<Vec<Log>> {
+		self.evm_rpc_client.get_logs(filter).await
+	}
+
+	async fn chain_id(&self) -> anyhow::Result<U256> {
+		self.evm_rpc_client.chain_id().await
+	}
+
+	async fn transaction_receipt(&self, tx_hash: H256) -> anyhow::Result<TransactionReceipt> {
+		self.evm_rpc_client.transaction_receipt(tx_hash).await
+	}
+
+	async fn block(&self, block_number: U64) -> anyhow::Result<Block<H256>> {
+		self.evm_rpc_client.block(block_number).await
+	}
+
+	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<Block<H256>> {
+		self.evm_rpc_client.block_by_hash(block_hash).await
+	}
+
+	async fn block_with_txs(&self, block_number: U64) -> anyhow::Result<Block<Transaction>> {
+		self.evm_rpc_client.block_with_txs(block_number).await
+	}
+
+	async fn fee_history(
+		&self,
+		block_count: U256,
+		newest_block: BlockNumber,
+		reward_percentiles: &[f64],
+	) -> anyhow::Result<ethers::types::FeeHistory> {
+		self.evm_rpc_client
+			.fee_history(block_count, newest_block, reward_percentiles)
+			.await
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<Transaction> {
+		self.evm_rpc_client.get_transaction(tx_hash).await
+	}
+
+	async fn get_block_number(&self) -> anyhow::Result<U64> {
+		self.evm_rpc_client.get_block_number().await
+	}
+}
+
+#[async_trait::async_trait]
+impl TronRpcApi for TronRpcClient {
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
 		let response = self
 			.call_http_api("/gettransactioninfobyid", Some(serde_json::json!({"value": tx_id})))
@@ -198,7 +203,7 @@ mod tests {
 		let chain_id = tron_rpc_client.chain_id().await.unwrap();
 		println!("Tron chain_id: {}", chain_id);
 		println!("Tron chain_id (hex): 0x{:x}", chain_id);
-		assert_eq!(chain_id, 3448148188);
+		assert_eq!(chain_id, U256::from(3448148188u64));
 	}
 
 	#[ignore = "requires access to external RPC"]
