@@ -264,9 +264,8 @@ impl<T: Config> BoostApi for Pallet<T> {
 	}
 }
 
-impl<T: Config> cf_traits::BoostBalancesApi for Pallet<T> {
-	type AccountId = T::AccountId;
-	fn boost_pool_account_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
+impl<T: Config> Pallet<T> {
+	pub fn boost_pool_account_balance(who: &T::AccountId, asset: Asset) -> AssetAmount {
 		let available = BoostPools::<T>::iter_prefix(asset).fold(0, |acc, (_tier, pool)| {
 			let Some(core_pool) = CorePools::<T>::get(asset, pool.core_pool_id) else {
 				return 0;

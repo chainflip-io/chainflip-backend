@@ -1298,10 +1298,10 @@ fn validator_registration_and_deregistration() {
 
 		// Deregistration is blocked while the validator is a bidder.
 		add_bids(vec![Bid { bidder_id: ALICE, amount: 100 }]);
-		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(ALICE),),
-			Error::<Test>::StillBidding
-		);
+		assert!(matches!(
+			ValidatorDeregistrationCheck::<Test>::check(&ALICE),
+			Err(Error::<Test>::StillBidding)
+		));
 
 		// Stop bidding, deregistration should be possible.
 		remove_bids(vec![ALICE]);
@@ -1321,17 +1321,17 @@ fn validator_deregistration_after_expired_epoch() {
 
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 
-		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
-			Error::<Test>::StillBidding
-		);
+		assert!(matches!(
+			ValidatorDeregistrationCheck::<Test>::check(&RETIRING_VALIDATOR),
+			Err(Error::<Test>::StillBidding)
+		));
 
 		assert_ok!(ValidatorPallet::stop_bidding(RuntimeOrigin::signed(RETIRING_VALIDATOR)));
 
-		assert_noop!(
-			ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(RETIRING_VALIDATOR),),
-			Error::<Test>::StillKeyHolder
-		);
+		assert!(matches!(
+			ValidatorDeregistrationCheck::<Test>::check(&RETIRING_VALIDATOR),
+			Err(Error::<Test>::StillKeyHolder)
+		));
 
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
 		ValidatorPallet::transition_to_next_epoch(REMAINING_AUTHORITIES.to_vec(), BOND);
@@ -1931,10 +1931,10 @@ mod operator {
 			.register_for_epoch::<Test>(current_epoch);
 
 			// Should fail - operator has unexpired delegation snapshots
-			assert_noop!(
-				ValidatorPallet::deregister_as_operator(OriginTrait::signed(ALICE)),
-				Error::<Test>::OperatorStillActive
-			);
+			assert!(matches!(
+				ValidatorDeregistrationCheck::<Test>::check(&ALICE),
+				Err(Error::<Test>::OperatorStillActive)
+			));
 
 			// After expiring the epoch, deregistration should succeed
 			ValidatorPallet::expire_epoch(current_epoch);
