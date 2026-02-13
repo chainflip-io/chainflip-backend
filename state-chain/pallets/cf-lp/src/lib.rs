@@ -712,7 +712,6 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	
 	#[frame_support::transactional]
 	fn purge_account_balance(
 		account_id: T::AccountId,
