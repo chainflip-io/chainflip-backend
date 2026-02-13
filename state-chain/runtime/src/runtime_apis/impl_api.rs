@@ -2023,7 +2023,7 @@ impl_runtime_apis! {
 				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(asset)
 			})
 		}
-    
+
 		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}
