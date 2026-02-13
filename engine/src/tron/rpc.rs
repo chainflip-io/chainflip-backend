@@ -22,7 +22,7 @@ use serde_json::from_value;
 
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 
-use super::rpc_client_api::{BlockBalance, BlockNumber, TransactionInfo};
+use super::rpc_client_api::{BlockBalance, BlockNumber, TransactionInfo, TronTransaction};
 use crate::evm::rpc::{EvmRpcApi, EvmRpcClient};
 
 // It is nice to separate the http and the json_rpc because some providers
@@ -85,6 +85,7 @@ impl TronRpcClient {
 pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	// HTTP API specific methods (Tron-specific, not available via JSON-RPC)
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo>;
+	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<TronTransaction>;
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
@@ -159,6 +160,20 @@ impl TronRpcApi for TronRpcClient {
 		Ok(transaction_info)
 	}
 
+	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<TronTransaction> {
+		let response = self
+			.call_http_api(
+				"/gettransactionbyid",
+				Some(serde_json::json!({"value": tx_id, "visible": false})),
+			)
+			.await?;
+
+		let transaction =
+			from_value(response).map_err(|err| anyhow!("Failed to parse transaction: {}", err))?;
+
+		Ok(transaction)
+	}
+
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
@@ -221,6 +236,31 @@ mod tests {
 		let tx_id = "cbc9697b1ec1c6d0802631c82c411b083fcbb8297d6ddf88525e8378c6bd76f7";
 		let result = tron_rpc_client.get_transaction_info_by_id(tx_id).await.unwrap();
 		println!("Transaction info query result: {:#?}", result);
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn test_tron_get_transaction_by_id() {
+		// Tron Nile testnet endpoints
+		let tron_rpc_client = TronRpcClient::new(
+			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
+			SecretUrl::from("https://nile.trongrid.io/jsonrpc".to_string()),
+			3448148188, // Nile testnet chain ID (0xcd8690dc)
+			"Tron-Nile",
+		)
+		.unwrap()
+		.await;
+
+		// Test getTransactionById with a transaction ID
+		let tx_id = "7a89015e99a64e1731efe6da8ae705384a51592e38e715a0b045809b62ccd31d";
+		let result = tron_rpc_client.get_transaction_by_id(tx_id).await.unwrap();
+		println!("Transaction query result: {:#?}", result);
+
+		// Verify the transaction ID matches
+		assert_eq!(result.tx_id, tx_id);
+
+		// Verify raw_data.data exists and contains the expected hex string
+		assert_eq!(result.raw_data.data, Some("48656c6c6f20436861696e666c69702100".to_string()));
 	}
 
 	#[ignore = "requires access to external RPC"]

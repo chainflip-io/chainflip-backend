@@ -134,3 +134,30 @@ pub struct TransactionInfo {
 	pub internal_transactions: Option<Vec<Value>>,
 	pub withdraw_expire_amount: Option<Amount>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TronTransaction {
+	#[serde(rename = "txID")]
+	pub tx_id: String,
+	pub raw_data: RawData,
+	pub raw_data_hex: String,
+	pub ret: Option<Vec<TransactionRet>>,
+	pub signature: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionRet {
+	#[serde(rename = "contractRet")]
+	pub contract_ret: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawData {
+	pub data: Option<String>,
+	pub contract: Vec<Value>,
+	pub ref_block_bytes: String,
+	pub ref_block_hash: String,
+	pub expiration: i64,
+	pub timestamp: i64,
+	pub fee_limit: Option<i64>,
+}

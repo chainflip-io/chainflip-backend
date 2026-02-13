@@ -27,7 +27,7 @@ use anyhow::Result;
 
 use super::{
 	rpc::{TronRpcApi, TronRpcClient},
-	rpc_client_api::{BlockBalance, BlockNumber, TransactionInfo},
+	rpc_client_api::{BlockBalance, BlockNumber, TransactionInfo, TronTransaction},
 };
 
 #[derive(Clone)]
@@ -89,6 +89,7 @@ impl TronRetryRpcClient {
 pub trait TronRetryRpcApi: Clone {
 	async fn chain_id(&self) -> U256;
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> TransactionInfo;
+	async fn get_transaction_by_id(&self, tx_id: &str) -> TronTransaction;
 	async fn get_block_balances(&self, block_number: BlockNumber, hash: &str) -> BlockBalance;
 }
 
@@ -111,6 +112,19 @@ impl TronRetryRpcApi for TronRetryRpcClient {
 				Box::pin(move |client| {
 					let tx_id = tx_id.clone();
 					Box::pin(async move { client.get_transaction_info_by_id(&tx_id).await })
+				}),
+			)
+			.await
+	}
+
+	async fn get_transaction_by_id(&self, tx_id: &str) -> TronTransaction {
+		let tx_id = tx_id.to_owned();
+		self.rpc_retry_client
+			.request(
+				RequestLog::new("getTransactionById".to_string(), Some(format!("{:?}", tx_id))),
+				Box::pin(move |client| {
+					let tx_id = tx_id.clone();
+					Box::pin(async move { client.get_transaction_by_id(&tx_id).await })
 				}),
 			)
 			.await
