@@ -69,10 +69,6 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.info('Refund vault swap completed ✅.');
 }
 
-// Note: if the collected fees are low, this function will fail with e.g.
-// `ethereumIngressEgress.BelowEgressDustLimit: The amount is below the minimum egress amount.`
-// In order to make bouncer less flaky we currently don't test this.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
   affiliateAccountId: string,
@@ -84,9 +80,19 @@ async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
   cf.debug('Affiliate account ID:', affiliateAccountId);
   cf.debug('Withdraw address:', withdrawAddress);
 
-  await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
-  });
+  try {
+    await cf.submitExtrinsic({
+      extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
+    });
+  } catch (error) {
+    if (`${error}`.includes('IngressEgress.BelowEgressDustLimit')) {
+      cf.info(
+        'Withdrawal request failed with BelowEgressDustLimit error. This means that the fee balance was above 0. So this counts as success for this test.',
+      );
+      return;
+    }
+    throw error;
+  }
 
   cf.info('Withdrawal request sent!');
   cf.debug('Waiting for balance change... Observing address:', withdrawAddress);
@@ -220,16 +226,13 @@ export async function testVaultSwap(testContext: TestContext) {
     (subcf) => testFeeCollection(subcf, Assets.Sol, testContext),
   ]);
 
-  // NOTE: the following is currently disabled due to fee withdrawal being flaky.
-  //
   // Test the affiliate withdrawal functionality
-  // const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
-  // await testWithdrawCollectedAffiliateFees(
-  //   cf.with({ account: broker }),
-  //   affiliateId,
-  //   refundAddress,
-  // );
-
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
+  await testWithdrawCollectedAffiliateFees(
+    cf.with({ account: broker }),
+    affiliateId,
+    refundAddress,
+  );
   await testRefundVaultSwap(cf);
   await testInvalidBtcVaultSwap(cf);
 }
