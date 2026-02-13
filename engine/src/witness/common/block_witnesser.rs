@@ -19,6 +19,14 @@ pub struct GenericBwVoter<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: 
 	_phantom: std::marker::PhantomData<I>,
 }
 
+impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
+	GenericBwVoter<I, Client>
+{
+	pub fn new(client: Client) -> Self {
+		Self { client, _phantom: Default::default() }
+	}
+}
+
 pub trait BlockClientFor<I: BlockWitnesserInstance<Chain: ChainTypes>> =
 	WitnessClientForBlockData<I::Chain, I::ElectionProperties, Vec<I::BlockEntry>>;
 

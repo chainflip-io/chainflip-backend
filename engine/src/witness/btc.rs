@@ -25,6 +25,7 @@ use crate::{
 		btc::fees::predict_fees,
 		common::{
 			block_height_witnesser::witness_headers,
+			block_witnesser::GenericBwVoter,
 			traits::{WitnessClient, WitnessClientForBlockData},
 		},
 	},
@@ -42,18 +43,15 @@ use futures::FutureExt;
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystemTypes,
-	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainTypes},
-		block_witnesser::state_machine::{BWElectionProperties, EngineElectionType},
-	},
+	electoral_systems::block_height_witnesser::{primitives::Header, ChainBlockHashOf},
 	VoteOf,
 };
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::witnessing::bitcoin_elections::{
-		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinDepositChannelWitnessingES,
-		BitcoinElectoralSystemRunner, BitcoinLiveness, BITCOIN_MAINNET_SAFETY_BUFFER,
+		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinElectoralSystemRunner, BitcoinLiveness,
+		BITCOIN_MAINNET_SAFETY_BUFFER,
 	},
 	BitcoinInstance, Runtime,
 };
@@ -68,9 +66,7 @@ use engine_sc_client::{
 	storage_api::StorageApi,
 };
 
-use state_chain_runtime::chainflip::witnessing::bitcoin_elections::{
-	BitcoinEgressWitnessingES, BitcoinFeeTracking, BitcoinVaultDepositWitnessingES,
-};
+use state_chain_runtime::chainflip::witnessing::bitcoin_elections::BitcoinFeeTracking;
 use std::sync::Arc;
 
 use crate::{
@@ -231,122 +227,7 @@ impl
 	}
 }
 
-async fn query_election_block<C: ChainTypes>(
-	client: &BtcCachingClient,
-	block_height: btc::BlockNumber,
-	election_type: EngineElectionType<C>,
-) -> Result<Option<(Vec<VerboseTransaction>, Option<btc::Hash>)>>
-where
-	ChainBlockHashOf<C>: AsRef<[u8]>,
-{
-	match election_type {
-		EngineElectionType::ByHash(hash) => {
-			let block =
-				client.block(bitcoin::BlockHash::from_slice(hash.as_ref()).unwrap()).await?;
-			Ok(Some((block.txdata, None)))
-		},
-		EngineElectionType::BlockHeight { submit_hash } => {
-			// check whether a block exists with the given height
-			if submit_hash {
-				let block_hash = client.best_block_hash().await?;
-				let best_block_header = client.block_header(block_hash).await?;
-				if best_block_header.height < block_height {
-					return Ok(None)
-				}
-			}
-
-			let block_hash = client.block_hash(block_height).await?;
-			let block = client.block(block_hash).await?;
-			Ok(Some((
-				block.txdata,
-				if submit_hash { Some(block.header.hash.to_byte_array().into()) } else { None },
-			)))
-		},
-	}
-}
-
-#[derive(Clone)]
-pub struct BitcoinDepositChannelWitnessingVoter {
-	client: BtcCachingClient,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<BitcoinDepositChannelWitnessingES> for BitcoinDepositChannelWitnessingVoter {
-	async fn vote(
-		&self,
-		_settings: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <BitcoinDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<BitcoinDepositChannelWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties {
-			block_height, properties: deposit_addresses, election_type, ..
-		} = properties;
-
-		let Some((txs, response_block_hash)) =
-			query_election_block(&self.client, block_height, election_type).await?
-		else {
-			return Ok(None)
-		};
-
-		let deposit_addresses = map_script_addresses(deposit_addresses);
-
-		let witnesses = deposit_witnesses(&txs, &deposit_addresses);
-
-		Ok(Some((witnesses, response_block_hash)))
-	}
-}
-
-#[derive(Clone)]
-pub struct BitcoinVaultDepositWitnessingVoter {
-	client: BtcCachingClient,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<BitcoinVaultDepositWitnessingES> for BitcoinVaultDepositWitnessingVoter {
-	async fn vote(
-		&self,
-		_settings: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <BitcoinVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<BitcoinVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: vaults, election_type, .. } =
-			properties;
-
-		let Some((txs, response_block_hash)) =
-			query_election_block(&self.client, block_height, election_type).await?
-		else {
-			return Ok(None)
-		};
-
-		let witnesses = vault_deposits(&txs, &vaults);
-		Ok(Some((witnesses, response_block_hash)))
-	}
-}
-
-#[derive(Clone)]
-pub struct BitcoinEgressWitnessingVoter {
-	client: BtcCachingClient,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<BitcoinEgressWitnessingES> for BitcoinEgressWitnessingVoter {
-	async fn vote(
-		&self,
-		_settings: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <BitcoinEgressWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> Result<Option<VoteOf<BitcoinEgressWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: tx_hashes, election_type, .. } =
-			properties;
-
-		let Some((txs, response_block_hash)) =
-			query_election_block(&self.client, block_height, election_type).await?
-		else {
-			return Ok(None)
-		};
-
-		let witnesses = egress_witnessing(&txs, tx_hashes);
-		Ok(Some((witnesses, response_block_hash)))
-	}
-}
-
+// --- fee witnessing ---
 #[derive(Clone)]
 pub struct BitcoinFeeVoter {
 	client: BtcCachingClient,
@@ -378,6 +259,7 @@ impl VoterApi<BitcoinFeeTracking> for BitcoinFeeVoter {
 	}
 }
 
+// --- liveness witnessing ---
 #[derive(Clone)]
 pub struct BitcoinLivenessVoter {
 	client: BtcCachingClient,
@@ -417,9 +299,9 @@ where
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightWitnesserVoter { client: client.clone() },
-						BitcoinDepositChannelWitnessingVoter { client: client.clone() },
-						BitcoinVaultDepositWitnessingVoter { client: client.clone() },
-						BitcoinEgressWitnessingVoter { client: client.clone() },
+						GenericBwVoter::new(client.clone()),
+						GenericBwVoter::new(client.clone()),
+						GenericBwVoter::new(client.clone()),
 						BitcoinFeeVoter { client: client.clone() },
 						BitcoinLivenessVoter { client: client.clone() },
 					)),
