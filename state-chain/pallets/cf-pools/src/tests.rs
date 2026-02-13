@@ -383,7 +383,7 @@ fn can_execute_scheduled_limit_order_updates() {
 	fn test_scheduled_limit_order_update(
 		update: impl Fn(OrderId, u64, AssetAmount) -> DispatchResult,
 	) {
-		const DISPATCH_AT: u64 = 6;
+		const DISPATCH_AT: u64 = 2;
 		const ORDER_ID: u64 = 0;
 		const AMOUNT: AssetAmount = 55;
 
@@ -483,7 +483,7 @@ fn test_dispatch_at_validation() {
 				Some(0),
 				IncreaseOrDecrease::Decrease(55),
 				// Too far in the future
-				Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 1)
+				Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64) + 1)
 			),
 			Error::<Test>::InvalidDispatchAt
 		);
@@ -497,7 +497,7 @@ fn test_dispatch_at_validation() {
 			Some(0),
 			IncreaseOrDecrease::Decrease(55),
 			// Valid dispatch at
-			Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64))
+			Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64))
 		));
 	});
 }
@@ -1473,8 +1473,8 @@ fn test_sweeping_when_updating_range_order() {
 #[test]
 fn test_limit_order_auto_close() {
 	const ASSET: Asset = Asset::Flip;
+	const DISPATCH_AT: u64 = 2;
 	const CLOSE_ORDER_AT: u64 = 10;
-	const DISPATCH_AT: u64 = 5;
 	const AMOUNT: AssetAmount = 10_000;
 	const ORDER_ID: u64 = 1;
 
@@ -1506,38 +1506,7 @@ fn test_limit_order_auto_close() {
 				Error::<Test>::InvalidCloseOrderAt
 			);
 
-			// Test close order block validation
-			assert_noop!(
-				LiquidityPools::set_limit_order(
-					RuntimeOrigin::signed(ALICE),
-					ASSET,
-					STABLE_ASSET,
-					Side::Sell,
-					ORDER_ID,
-					Some(5),
-					AMOUNT,
-					// Schedule the call for the same block as the close order, so it
-					// should be rejected
-					Some(CLOSE_ORDER_AT),
-					Some(CLOSE_ORDER_AT),
-				),
-				Error::<Test>::InvalidCloseOrderAt
-			);
-			assert_noop!(
-				LiquidityPools::set_limit_order(
-					RuntimeOrigin::signed(ALICE),
-					ASSET,
-					STABLE_ASSET,
-					Side::Sell,
-					ORDER_ID,
-					Some(5),
-					AMOUNT,
-					// Schedule the call for after the close order, so it should be rejected
-					Some(CLOSE_ORDER_AT + 1),
-					Some(CLOSE_ORDER_AT),
-				),
-				Error::<Test>::InvalidCloseOrderAt
-			);
+			// close_order_at == dispatch_at should be rejected
 			assert_noop!(
 				LiquidityPools::set_limit_order(
 					RuntimeOrigin::signed(ALICE),
@@ -1548,8 +1517,37 @@ fn test_limit_order_auto_close() {
 					Some(5),
 					AMOUNT,
 					Some(DISPATCH_AT),
-					// Schedule the close order for too far in the future
-					Some((SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 2),
+					Some(DISPATCH_AT),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			// close_order_at < dispatch_at should be rejected
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					Some(DISPATCH_AT + 1),
+					Some(DISPATCH_AT),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+			// close_order_at too far in the future should be rejected
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					ASSET,
+					STABLE_ASSET,
+					Side::Sell,
+					ORDER_ID,
+					Some(5),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					Some((SCHEDULE_CLOSE_LIMIT_BLOCKS as u64) + 2),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1692,4 +1690,340 @@ fn cancel_all_pool_positions() {
 		assert_eq!(count_orders(BASE_ASSET, ALICE), (0, 0, 0));
 		assert_eq!(count_orders(BASE_ASSET, BOB), (0, 0, 0));
 	});
+}
+
+mod scheduled_updates {
+	use super::*;
+
+	#[test]
+	fn limit_per_lp_per_block() {
+		const DISPATCH_AT: u64 = 2;
+		const AMOUNT: AssetAmount = 100;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT * 20);
+
+			// Can schedule up to 12 updates for the same (lp, block)
+			for i in 0..12u64 {
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					i,
+					Some(100),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					None,
+				));
+			}
+
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 12);
+
+			// The 13th should fail
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					12,
+					Some(100),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					None,
+				),
+				Error::<Test>::SheduledUpdateLimitReached
+			);
+		});
+	}
+
+	#[test]
+	fn limit_is_per_lp() {
+		const DISPATCH_AT: u64 = 2;
+		const AMOUNT: AssetAmount = 100;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT * 20);
+			MockBalance::credit_account(&BOB, STABLE_ASSET, AMOUNT * 20);
+
+			// Fill up Alice's limit for this block
+			for i in 0..12u64 {
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					i,
+					Some(100),
+					AMOUNT,
+					Some(DISPATCH_AT),
+					None,
+				));
+			}
+
+			// Bob can still schedule for the same block
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(BOB),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(100),
+				AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+		});
+	}
+
+	#[test]
+	fn limit_is_per_block() {
+		const AMOUNT: AssetAmount = 100;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT * 30);
+
+			// Fill up Alice's limit for block 2
+			for i in 0..12u64 {
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					i,
+					Some(100),
+					AMOUNT,
+					Some(2),
+					None,
+				));
+			}
+
+			// Alice can still schedule for block 3
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				12,
+				Some(100),
+				AMOUNT,
+				Some(3),
+				None,
+			));
+		});
+	}
+
+	#[test]
+	fn count_cleaned_up_on_dispatch() {
+		const DISPATCH_AT: u64 = 2;
+		const AMOUNT: AssetAmount = 100;
+
+		new_test_ext()
+			.execute_with(|| {
+				assert_ok!(LiquidityPools::new_pool(
+					RuntimeOrigin::root(),
+					Asset::Flip,
+					STABLE_ASSET,
+					0,
+					price_at_tick(0).unwrap(),
+				));
+
+				MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT * 5);
+
+				for i in 0..3u64 {
+					assert_ok!(LiquidityPools::set_limit_order(
+						RuntimeOrigin::signed(ALICE),
+						Asset::Flip,
+						STABLE_ASSET,
+						Side::Buy,
+						i,
+						Some(100),
+						AMOUNT,
+						Some(DISPATCH_AT),
+						None,
+					));
+				}
+
+				assert_eq!(
+					ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)),
+					3
+				);
+			})
+			.then_process_blocks_until_block(DISPATCH_AT)
+			.then_execute_with(|_| {
+				// Count should be cleaned up (removed from storage) after all updates dispatched
+				assert_eq!(
+					ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)),
+					0
+				);
+				// Storage entry should be removed entirely (ValueQuery default)
+				assert!(!ScheduledLimitOrderUpdateCount::<Test>::contains_key((
+					ALICE,
+					DISPATCH_AT
+				)));
+			});
+	}
+
+	#[test]
+	fn limit_applies_to_close_order_at() {
+		const AMOUNT: AssetAmount = 100;
+		const CLOSE_ORDER_AT: u64 = 10;
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, Asset::Flip, AMOUNT * 20);
+
+			// dispatch_at=None means immediate dispatch, but close_order_at schedules
+			// a Close update via try_schedule
+			for i in 0..12u64 {
+				assert_ok!(LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Sell,
+					i,
+					Some(5),
+					AMOUNT,
+					None,
+					Some(CLOSE_ORDER_AT),
+				));
+			}
+
+			assert_eq!(
+				ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, CLOSE_ORDER_AT)),
+				12
+			);
+
+			// The 13th close_order_at for the same block should fail
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Sell,
+					12,
+					Some(5),
+					AMOUNT,
+					None,
+					Some(CLOSE_ORDER_AT),
+				),
+				Error::<Test>::SheduledUpdateLimitReached
+			);
+		});
+	}
+
+	#[test]
+	fn dispatch_at_open_limit_boundary() {
+		// Test the exact boundary of SCHEDULE_OPEN_LIMIT_BLOCKS = 2
+		const CURRENT_BLOCK: u64 = 5;
+
+		new_test_ext().then_execute_at_block(CURRENT_BLOCK as u32, |_| {
+			// dispatch_at = current_block + 2 is valid (boundary)
+			assert_ok!(LiquidityPools::update_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(0),
+				IncreaseOrDecrease::Decrease(55),
+				Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64)),
+			));
+
+			// dispatch_at = current_block + 3 is invalid (one past boundary)
+			assert_noop!(
+				LiquidityPools::update_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					1,
+					Some(0),
+					IncreaseOrDecrease::Decrease(55),
+					Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64) + 1),
+				),
+				Error::<Test>::InvalidDispatchAt
+			);
+		});
+	}
+
+	#[test]
+	fn close_order_at_limit_boundary() {
+		// Test the exact boundary of SCHEDULE_CLOSE_LIMIT_BLOCKS = 20
+		const CURRENT_BLOCK: u64 = 5;
+		const DISPATCH_AT: u64 = CURRENT_BLOCK + 1;
+
+		new_test_ext().then_execute_at_block(CURRENT_BLOCK as u32, |_| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				0,
+				price_at_tick(0).unwrap(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, 10_000);
+
+			// close_order_at = current_block + 20 is valid (boundary)
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				0,
+				Some(100),
+				100,
+				Some(DISPATCH_AT),
+				Some(CURRENT_BLOCK + (SCHEDULE_CLOSE_LIMIT_BLOCKS as u64)),
+			));
+
+			// close_order_at = current_block + 21 is invalid (one past boundary)
+			assert_noop!(
+				LiquidityPools::set_limit_order(
+					RuntimeOrigin::signed(ALICE),
+					Asset::Flip,
+					STABLE_ASSET,
+					Side::Buy,
+					1,
+					Some(100),
+					100,
+					Some(DISPATCH_AT),
+					Some(CURRENT_BLOCK + (SCHEDULE_CLOSE_LIMIT_BLOCKS as u64) + 1),
+				),
+				Error::<Test>::InvalidCloseOrderAt
+			);
+		});
+	}
 }
