@@ -14,14 +14,76 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
+use ethers::types::H160;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+/// Tron address is 21 bytes: 0x41 prefix + 20 bytes (EVM address)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TronAddress(pub [u8; 21]);
+
+impl TronAddress {
+	/// Convert EVM address (H160/20 bytes) to Tron address (21 bytes)
+	/// by prepending 0x41
+	// pub fn from_evm_address(evm_address: H160) -> Self {
+	// 	let mut tron_address = [0u8; 21];
+	// 	tron_address[0] = 0x41;
+	// 	tron_address[1..].copy_from_slice(evm_address.as_bytes());
+	// 	TronAddress(tron_address)
+	// }
+
+	/// Convert Tron address (21 bytes) to EVM address (H160/20 bytes)
+	/// by removing the 0x41 prefix
+	pub fn to_evm_address(&self) -> anyhow::Result<H160> {
+		if self.0[0] == 0x41 {
+			Ok(H160::from_slice(&self.0[1..]))
+		} else {
+			Err(anyhow!("Invalid Tron address: expected 0x41 prefix"))
+		}
+	}
+}
+
+// Serialize as hex string for JSON (without 0x prefix)
+impl serde::Serialize for TronAddress {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serializer.serialize_str(&hex::encode(self.0))
+	}
+}
+
+// Deserialize from hex string (expects 42 characters: "41" + 40 hex chars)
+impl<'de> serde::Deserialize<'de> for TronAddress {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+		let hex_str = s.strip_prefix("0x").unwrap_or(&s);
+
+		if hex_str.len() != 42 {
+			return Err(serde::de::Error::custom(format!(
+				"Invalid hex length: expected 42, got {}",
+				hex_str.len()
+			)));
+		}
+
+		let bytes = hex::decode(hex_str)
+			.map_err(|e| serde::de::Error::custom(format!("Failed to decode hex: {}", e)))?;
+
+		let mut address = [0u8; 21];
+		address.copy_from_slice(&bytes);
+		Ok(TronAddress(address))
+	}
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockBalanceTrace {
 	pub operation_identifier: i64,
-	pub address: String,
-	pub amount: i64,
+	pub address: TronAddress,
+	pub amount: Amount,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,8 +96,11 @@ pub struct BlockBalance {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockIdentifier {
 	pub hash: String,
-	pub number: i64,
+	pub number: BlockNumber,
 }
+
+pub type BlockNumber = i64;
+pub type Amount = i64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBalanceTrace {
@@ -48,24 +113,24 @@ pub struct TransactionBalanceTrace {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionInfo {
-	pub id: Option<String>,
-	pub fee: Option<i64>,
+	pub id: String,
+	pub fee: Amount,
 	#[serde(rename = "blockNumber")]
-	pub block_number: Option<i64>,
+	pub block_number: BlockNumber,
 	#[serde(rename = "blockTimeStamp")]
-	pub block_time_stamp: Option<i64>,
+	pub block_time_stamp: i64,
 	#[serde(rename = "contractResult")]
 	pub contract_result: Option<Vec<String>>,
 	pub contract_address: Option<String>,
-	pub receipt: Option<Value>,
+	pub receipt: Value,
 	pub log: Option<Vec<Value>>,
 	pub result: Option<String>,
 	#[serde(rename = "resMessage")]
 	pub res_message: Option<String>,
 	#[serde(rename = "assetIssueID")]
 	pub asset_issue_id: Option<String>,
-	pub withdraw_amount: Option<i64>,
-	pub unfreeze_amount: Option<i64>,
+	pub withdraw_amount: Option<Amount>,
+	pub unfreeze_amount: Option<Amount>,
 	pub internal_transactions: Option<Vec<Value>>,
-	pub withdraw_expire_amount: Option<i64>,
+	pub withdraw_expire_amount: Option<Amount>,
 }

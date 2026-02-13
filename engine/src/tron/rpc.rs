@@ -15,16 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use ethers::types::{
-	Block, BlockNumber, Filter, Log, Transaction, TransactionReceipt, H256, U256, U64,
-};
+use ethers::types::{Block, Filter, Log, Transaction, TransactionReceipt, H256, U256, U64};
 use futures_core::Future;
 use reqwest::Client;
 use serde_json::from_value;
 
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 
-use super::rpc_client_api::{BlockBalance, TransactionInfo};
+use super::rpc_client_api::{BlockBalance, BlockNumber, TransactionInfo};
 use crate::evm::rpc::{EvmRpcApi, EvmRpcClient};
 
 // It is nice to separate the http and the json_rpc because some providers
@@ -89,7 +87,7 @@ pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo>;
 	async fn get_block_balances(
 		&self,
-		block_number: u64,
+		block_number: BlockNumber,
 		hash: &str,
 	) -> anyhow::Result<BlockBalance>;
 }
@@ -131,7 +129,7 @@ impl EvmRpcApi for TronRpcClient {
 	async fn fee_history(
 		&self,
 		block_count: U256,
-		newest_block: BlockNumber,
+		newest_block: ethers::types::BlockNumber,
 		reward_percentiles: &[f64],
 	) -> anyhow::Result<ethers::types::FeeHistory> {
 		self.evm_rpc_client
@@ -163,7 +161,7 @@ impl TronRpcApi for TronRpcClient {
 
 	async fn get_block_balances(
 		&self,
-		block_number: u64,
+		block_number: BlockNumber,
 		hash: &str,
 	) -> anyhow::Result<BlockBalance> {
 		let response = self
@@ -172,7 +170,7 @@ impl TronRpcApi for TronRpcClient {
 				Some(serde_json::json!({
 					"number": block_number,
 					"hash": hash,
-					"visible": true
+					"visible": false
 				})),
 			)
 			.await?;
@@ -208,7 +206,7 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
-	async fn test_tron_http_api() {
+	async fn test_tron_get_transaction_info() {
 		// Tron Nile testnet endpoints
 		let tron_rpc_client = TronRpcClient::new(
 			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
@@ -228,6 +226,7 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_tron_get_block_balances() {
+		// Using qucknode because we need a node with historical balance query enabled
 		let tron_rpc_client = TronRpcClient::new(
 			SecretUrl::from("https://docs-demo.tron-mainnet.quiknode.pro/wallet".to_string()),
 			SecretUrl::from("https://docs-demo.tron-mainnet.quiknode.pro/jsonrpc".to_string()),

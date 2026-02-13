@@ -16,7 +16,4 @@
 
 mod tron_deposits;
 
-use crate::tron::retry_rpc::{TronRetryRpcApi, TronRetryRpcClient};
-use anyhow::Result;
-
 pub use tron_deposits::*;
