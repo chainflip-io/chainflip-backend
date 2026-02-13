@@ -634,6 +634,10 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 		*self != Self::Pending
 	}
 
+	fn fetch_completion_action_required(&self) -> bool {
+		!matches!(self, Self::Deployed { .. })
+	}
+
 	/// Undeployed addresses need to be marked as Pending until the fetch is made.
 	fn on_fetch_scheduled(&mut self) -> bool {
 		match self {

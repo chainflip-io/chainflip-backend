@@ -138,7 +138,7 @@ impl StateChainGatewayAddressProvider for MockStateChainGatewayProvider {
 
 impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
 
-pub type MockEmissionsBroadcaster = MockBroadcaster<(MockUpdateFlipSupply, RuntimeCall)>;
+pub type MockEmissionsBroadcaster = MockBroadcaster<MockUpdateFlipSupply>;
 
 // The Emissions pallet has access to the Flip pallet, so we don't need to mock it.
 pub struct FlipDistribution;

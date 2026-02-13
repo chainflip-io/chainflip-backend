@@ -167,11 +167,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn start_next_broadcast_attempt() {
-		let (broadcast_id, _) = Pallet::<T, I>::threshold_sign_and_broadcast(
-			BenchmarkValue::benchmark_value(),
-			None,
-			|_| None,
-		);
+		let (broadcast_id, _) =
+			Pallet::<T, I>::threshold_sign_and_broadcast(BenchmarkValue::benchmark_value());
 		insert_transaction_broadcast_attempt::<T, I>(None, broadcast_id);
 
 		#[block]

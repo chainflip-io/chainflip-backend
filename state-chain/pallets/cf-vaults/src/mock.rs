@@ -169,7 +169,7 @@ impl pallet_cf_vaults::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
-	type Broadcaster = MockBroadcaster<(MockSetAggKeyWithAggKey, RuntimeCall)>;
+	type Broadcaster = MockBroadcaster<MockSetAggKeyWithAggKey>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type CfeMultisigRequest = MockCfeInterface;
