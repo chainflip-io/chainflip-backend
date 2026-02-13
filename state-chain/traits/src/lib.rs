@@ -1072,7 +1072,7 @@ pub trait AssetConverter {
 		required_gas: C::ChainAmount,
 	) -> C::ChainAmount {
 		let input_asset_generic: Asset = input_asset.into();
-		C::ChainAmount::try_from(Self::calculate_input_for_desired_output(
+		C::ChainAmount::try_from(Self::calculate_input_for_desired_output_or_default_to_zero(
 			input_asset_generic,
 			C::GAS_ASSET.into(),
 			required_gas.into(),
@@ -1086,7 +1086,7 @@ pub trait AssetConverter {
 	/// a swap.
 	///
 	/// Use this for transaction fees only.
-	fn calculate_input_for_desired_output(
+	fn calculate_input_for_desired_output_or_default_to_zero(
 		input_asset: Asset,
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,
@@ -1389,7 +1389,7 @@ pub trait PriceFeedApi {
 	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
 		if let (Some(price_1), Some(price_2)) = (Self::get_price(asset1), Self::get_price(asset2)) {
 			Some(OraclePrice {
-				price: price_1.price.relative_to(price_2.price),
+				price: price_1.price.divide_by(price_2.price),
 				stale: price_1.stale || price_2.stale,
 			})
 		} else {

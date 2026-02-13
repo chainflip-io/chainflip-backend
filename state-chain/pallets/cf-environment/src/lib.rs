@@ -738,6 +738,7 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn benchmark_realistic_call(
 			_origin: OriginFor<T>,
+			#[cfg(feature = "runtime-benchmarks")]
 			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
 		) -> DispatchResult {
 			Ok(())

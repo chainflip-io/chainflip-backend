@@ -2258,7 +2258,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							funding_amount
 						} else {
 							let input_amount =
-								T::AssetConverter::calculate_input_for_desired_output(
+								T::AssetConverter::calculate_input_for_desired_output_or_default_to_zero(
 									asset.into(),
 									Asset::Flip,
 									flip_amount_to_credit,
