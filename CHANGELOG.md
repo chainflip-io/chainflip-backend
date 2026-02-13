@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.12] - 2026-02-13
+
+### Fixes
+
+- Stricter limits on scheduled order updates.
+
 ## [2.0.11] - 2026-02-10
 
 ### Fixes
