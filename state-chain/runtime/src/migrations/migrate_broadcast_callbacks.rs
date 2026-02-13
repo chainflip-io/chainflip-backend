@@ -132,7 +132,7 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		let (success_callbacks, failure_callbacks) = <(u64, u64)>::decode(&mut state.as_slice())
+		let success_callbacks = <u64>::decode(&mut state.as_slice())
 			.map_err(|_| DispatchError::from("Failed to decode pre-migration state"))?;
 
 		let post_finalise_fetch_actions = broadcast_action_counts::<I>();
@@ -154,10 +154,8 @@ where
 	let mut finalise_fetch_actions = 0u64;
 
 	for (_, action) in pallet_cf_ingress_egress::BroadcastActions::<Runtime, I>::iter() {
-		match action {
-			pallet_cf_ingress_egress::BroadcastAction::FinaliseFetch(_) =>
-				finalise_fetch_actions += 1,
-			_ => {},
+		if let pallet_cf_ingress_egress::BroadcastAction::FinaliseFetch(_) = action {
+			finalise_fetch_actions += 1;
 		}
 	}
 
