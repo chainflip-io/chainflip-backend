@@ -36,12 +36,12 @@ use crate::{
 			contract_common::{events_at_block, query_election_block},
 			erc20_deposits::Erc20Events,
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
-			vault::{handle_vault_events, VaultEventConfig, VaultEvents},
+			vault::{handle_vault_events, VaultEvents},
 		},
 	},
 };
-use cf_chains::{eth::EthereumTrackedData, evm::ToAccountId32, Ethereum, ForeignChain};
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, Asset};
+use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32, Ethereum};
+use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::{
 	context,
 	task_scope::{self, Scope},
@@ -259,19 +259,9 @@ impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitn
 pub struct EthereumVaultDepositWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	vault_address: H160,
-	supported_assets: HashMap<H160, Asset>,
+	supported_assets: HashMap<H160, assets::eth::Asset>,
 }
 
-impl VaultEventConfig for EthereumVaultDepositWitnesserVoter {
-	type Chain = Ethereum;
-	type Instance = EthereumInstance;
-
-	const FOREIGN_CHAIN: ForeignChain = ForeignChain::Ethereum;
-
-	fn supported_assets(&self) -> &HashMap<H160, Asset> {
-		&self.supported_assets
-	}
-}
 #[async_trait::async_trait]
 impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesserVoter {
 	async fn vote(
@@ -293,7 +283,7 @@ impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesse
 		)
 		.await?;
 
-		let result = handle_vault_events(self, events, block_height)?;
+		let result = handle_vault_events(&self.supported_assets, events, block_height)?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
@@ -422,7 +412,7 @@ impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVot
 pub struct EthereumScUtilsVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	sc_utils_address: H160,
-	supported_assets: HashMap<H160, Asset>,
+	supported_assets: HashMap<H160, assets::eth::Asset>,
 }
 #[async_trait::async_trait]
 impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
@@ -482,7 +472,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Vault {
-									asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 								},
 								call: sc_call.to_vec(),
@@ -510,7 +500,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Transfer {
-									asset: (*asset).try_into().expect("we expect the asset to be an Eth Asset"),
+									asset: *asset,
 									amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
 									destination: to,
 								},
@@ -660,9 +650,9 @@ where
 	let wbtc_contract_address =
 		*supported_erc20_tokens.get(&EthAsset::Wbtc).context("WBTC not supported")?;
 
-	let supported_erc20_tokens: HashMap<H160, cf_primitives::Asset> = supported_erc20_tokens
+	let supported_erc20_tokens: HashMap<H160, assets::eth::Asset> = supported_erc20_tokens
 		.into_iter()
-		.map(|(asset, address)| (address, asset.into()))
+		.map(|(asset, address)| (address, asset))
 		.collect();
 
 	let sc_utils_address = state_chain_client

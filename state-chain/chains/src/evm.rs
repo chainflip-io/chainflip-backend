@@ -41,6 +41,13 @@ use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
 
+pub trait EvmChain = Chain<
+	ChainAccount = Address,
+	ChainAmount = u128,
+	DepositDetails = DepositDetails,
+	ChainCrypto = EvmCrypto,
+>;
+
 #[derive(
 	Clone,
 	Debug,
