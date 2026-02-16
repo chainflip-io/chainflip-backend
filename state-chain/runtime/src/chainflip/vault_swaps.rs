@@ -160,7 +160,8 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| match addr {
-		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) => Ok(inner),
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Trx(inner) =>
+			Ok(inner),
 		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
@@ -168,15 +169,16 @@ pub fn evm_vault_swap<A>(
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum | ForeignChain::Arbitrum => build_and_encode_cf_parameters(
-			refund_params,
-			dca_parameters,
-			boost_fee,
-			broker_id,
-			broker_commission,
-			processed_affiliate_fees,
-			channel_metadata.as_ref(),
-		),
+		ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+			build_and_encode_cf_parameters(
+				refund_params,
+				dca_parameters,
+				boost_fee,
+				broker_id,
+				broker_commission,
+				processed_affiliate_fees,
+				channel_metadata.as_ref(),
+			),
 		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
 	};
 
@@ -239,6 +241,14 @@ pub fn evm_vault_swap<A>(
 				.abi_encoded_payload())
 			}
 		},
+		Asset::Trx => {
+			// TODO: Implement Trx vault swap logic
+			Err(DispatchErrorWithMessage::from("Trx vault swaps not yet implemented"))
+		},
+		Asset::TronUsdt => {
+			// TODO: Implement TronUsdt vault swap logic
+			Err(DispatchErrorWithMessage::from("TronUsdt vault swaps not yet implemented"))
+		},
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),
@@ -259,6 +269,9 @@ pub fn evm_vault_swap<A>(
 			to: Environment::arb_vault_address(),
 			source_token_address,
 		})),
+		ForeignChain::Tron =>
+		// TODO: Implement Tron vault swap logic
+			Err(DispatchErrorWithMessage::from("Trx vault swaps not yet implemented")),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),

@@ -84,6 +84,7 @@ pub mod evm;
 pub mod hub;
 pub mod none;
 pub mod sol;
+pub mod tron;
 
 pub mod address;
 pub mod deposit_channel;

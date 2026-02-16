@@ -30,7 +30,7 @@ mod old {
 	use cf_chains::instances::{
 		ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance,
 		EthereumInstance, EvmInstance, PolkadotCryptoInstance, PolkadotInstance,
-		SolanaCryptoInstance, SolanaInstance,
+		SolanaCryptoInstance, SolanaInstance, TronInstance,
 	};
 	use codec::{Decode, Encode};
 	use sp_core::RuntimeDebug;
@@ -62,6 +62,7 @@ mod old {
 		pub broadcast_arbitrum: pallet_cf_broadcast::PalletSafeMode<ArbitrumInstance>,
 		pub broadcast_solana: pallet_cf_broadcast::PalletSafeMode<SolanaInstance>,
 		pub broadcast_assethub: pallet_cf_broadcast::PalletSafeMode<AssethubInstance>,
+		pub broadcast_tron: pallet_cf_broadcast::PalletSafeMode<TronInstance>,
 		pub witnesser: pallet_cf_witnesser::PalletSafeMode<safe_mode::WitnesserCallPermission>,
 		pub ingress_egress_ethereum: pallet_cf_ingress_egress::PalletSafeMode<EthereumInstance>,
 		pub ingress_egress_bitcoin: pallet_cf_ingress_egress::PalletSafeMode<BitcoinInstance>,
@@ -69,6 +70,7 @@ mod old {
 		pub ingress_egress_arbitrum: pallet_cf_ingress_egress::PalletSafeMode<ArbitrumInstance>,
 		pub ingress_egress_solana: pallet_cf_ingress_egress::PalletSafeMode<SolanaInstance>,
 		pub ingress_egress_assethub: pallet_cf_ingress_egress::PalletSafeMode<AssethubInstance>,
+		pub ingress_egress_tron: pallet_cf_ingress_egress::PalletSafeMode<TronInstance>,
 		pub elections_generic:
 			crate::chainflip::witnessing::generic_elections::GenericElectionsSafeMode,
 	}
@@ -99,6 +101,7 @@ impl OnRuntimeUpgrade for SafeModeMigration {
                     broadcast_arbitrum: old.broadcast_arbitrum,
                     broadcast_solana: old.broadcast_solana,
                     broadcast_assethub: old.broadcast_assethub,
+                    broadcast_tron: Default::default(),
                     witnesser: old.witnesser,
                     ingress_egress_ethereum: old.ingress_egress_ethereum,
                     ingress_egress_bitcoin: old.ingress_egress_bitcoin,
@@ -106,6 +109,7 @@ impl OnRuntimeUpgrade for SafeModeMigration {
                     ingress_egress_arbitrum: old.ingress_egress_arbitrum,
                     ingress_egress_solana: old.ingress_egress_solana,
                     ingress_egress_assethub: old.ingress_egress_assethub,
+                    ingress_egress_tron: Default::default(),
 					elections_generic: old.elections_generic,
                     ethereum_elections: EthereumElectionsSafeMode::code_green(),
 					arbitrum_elections: ArbitrumElectionsSafeMode::code_green(),

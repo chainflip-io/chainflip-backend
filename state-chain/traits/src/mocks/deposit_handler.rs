@@ -86,6 +86,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 				ForeignChain::Assethub => ForeignChainAddress::Hub(
 					PolkadotAccountId::from_aliased([channel_id as u8; 32]),
 				),
+				ForeignChain::Tron => ForeignChainAddress::Trx([channel_id as u8; 20].into()),
 			},
 			Default::default(),
 		)

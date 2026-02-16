@@ -24,8 +24,8 @@ use serde_json::Value;
 pub struct TronAddress(pub [u8; 21]);
 
 impl TronAddress {
-	/// Convert EVM address (H160/20 bytes) to Tron address (21 bytes)
-	/// by prepending 0x41
+	// Convert EVM address (H160/20 bytes) to Tron address (21 bytes)
+	// by prepending 0x41
 	// pub fn from_evm_address(evm_address: H160) -> Self {
 	// 	let mut tron_address = [0u8; 21];
 	// 	tron_address[0] = 0x41;
@@ -33,8 +33,8 @@ impl TronAddress {
 	// 	TronAddress(tron_address)
 	// }
 
-	/// Convert Tron address (21 bytes) to EVM address (H160/20 bytes)
-	/// by removing the 0x41 prefix
+	// Convert Tron address (21 bytes) to EVM address (H160/20 bytes)
+	// by removing the 0x41 prefix
 	pub fn to_evm_address(&self) -> anyhow::Result<H160> {
 		if self.0[0] == 0x41 {
 			Ok(H160::from_slice(&self.0[1..]))

@@ -402,6 +402,7 @@ impl_runtime_apis! {
 			let arb = pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap();
 			let sol = SolanaChainTrackingProvider::get_block_height();
 			let hub = pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::get().unwrap();
+			let trx = DummyTronChainTracking::get_block_height();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
@@ -410,6 +411,7 @@ impl_runtime_apis! {
 				solana: sol,
 				arbitrum: arb.block_height,
 				assethub: hub.block_height.into(),
+				tron: trx,
 			}
 		}
 
@@ -490,6 +492,7 @@ impl_runtime_apis! {
 				arbitrum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, ArbitrumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				solana: pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				assethub: pallet_cf_broadcast::PendingBroadcasts::<Runtime, AssethubInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				tron: pallet_cf_broadcast::PendingBroadcasts::<Runtime, TronInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 			}
 		}
 		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies {
@@ -517,6 +520,7 @@ impl_runtime_apis! {
 				arbitrum: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>, ArbitrumInstance>(),
 				solana: open_channels::<SolanaChainTrackingProvider, SolanaInstance>(),
 				assethub: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, AssethubInstance>, AssethubInstance>(),
+				tron: open_channels::<DummyTronChainTracking, TronInstance>(),
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
@@ -527,6 +531,7 @@ impl_runtime_apis! {
 				bitcoin: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
 				solana: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Solana.gas_asset()),
 				assethub: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Assethub.gas_asset()),
+				tron: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Tron.gas_asset()),
 			}
 		}
 		fn cf_build_version() -> LastRuntimeUpgradeInfo {
@@ -547,6 +552,7 @@ impl_runtime_apis! {
 					(broadcast_id, pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::get(broadcast_id.unwrap_or_default()).map(|broadcast_data| broadcast_data.transaction_out_id))
 				},
 				assethub: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, AssethubInstance>::get().map(|val| val.1),
+				tron: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, TronInstance>::get().map(|val| val.1),
 			}
 		}
 		fn cf_sol_nonces() -> SolanaNonces{
@@ -653,6 +659,16 @@ impl_runtime_apis! {
 
 		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			ArbitrumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_tron_electoral_data(_account_id: AccountId) -> Vec<u8> {
+			// Tron doesn't have elections, return empty data
+			Vec::new()
+		}
+
+		fn cf_tron_filter_votes(_account_id: AccountId, _proposed_votes: Vec<u8>) -> Vec<u8> {
+			// Tron doesn't have elections, return empty data
+			Vec::new()
 		}
 	}
 
@@ -1026,6 +1042,7 @@ impl_runtime_apis! {
 				any::ForeignChainAndAsset::Arbitrum(asset) => EgressDustLimit::<Runtime, ArbitrumInstance>::get(asset),
 				any::ForeignChainAndAsset::Solana(asset) => EgressDustLimit::<Runtime, SolanaInstance>::get(asset),
 				any::ForeignChainAndAsset::Assethub(asset) => EgressDustLimit::<Runtime, AssethubInstance>::get(asset),
+				any::ForeignChainAndAsset::Tron(asset) => EgressDustLimit::<Runtime, TronInstance>::get(asset),
 			}
 		}
 
@@ -1057,9 +1074,14 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
+				any::ForeignChainAndAsset::Tron(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
+						asset,
+						DummyTronChainTracking::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
+					))
+				},
 			}
 		}
-
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				any::ForeignChainAndAsset::Ethereum(asset) => {
@@ -1088,6 +1110,12 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
+				any::ForeignChainAndAsset::Tron(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
+						asset,
+						DummyTronChainTracking::estimate_fee(asset, IngressOrEgress::Egress)
+					))
+				},
 			}
 		}
 
@@ -1098,6 +1126,7 @@ impl_runtime_apis! {
 				ForeignChain::Polkadot => pallet_cf_ingress_egress::Pallet::<Runtime, PolkadotInstance>::witness_safety_margin().map(Into::into),
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::witness_safety_margin(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::witness_safety_margin(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::Pallet::<Runtime, TronInstance>::witness_safety_margin(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::witness_safety_margin().map(Into::into),
 			}
 		}
@@ -1241,6 +1270,16 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_failed_call_tron(broadcast_id: BroadcastId) -> Option<<cf_chains::Tron as cf_chains::Chain>::Transaction> {
+			if TronIngressEgress::get_failed_call(broadcast_id).is_some() {
+				TronBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
+					chainflip::TronTransactionBuilder::build_transaction(&api_call)
+				})
+			} else {
+				None
+			}
+		}
+
 		fn cf_witness_count(hash: pallet_cf_witnesser::CallHash, epoch_index: Option<EpochIndex>) -> Option<FailingWitnessValidators> {
 			let mut result: FailingWitnessValidators = FailingWitnessValidators {
 				failing_count: 0,
@@ -1267,6 +1306,7 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::channel_opening_fee(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::channel_opening_fee(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::Pallet::<Runtime, TronInstance>::channel_opening_fee(),
 			}
 		}
 
@@ -1278,6 +1318,7 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, ArbitrumInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, AssethubInstance>::get(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, TronInstance>::get(),
 			}
 		}
 
@@ -1289,6 +1330,7 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, ArbitrumInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, TronInstance>::get(),
 			}
 		}
 
@@ -1580,6 +1622,7 @@ impl_runtime_apis! {
 			Ok(match ForeignChain::from(source_asset) {
 				ForeignChain::Ethereum => build_and_encode_cf_parameters_for_chain!(Ethereum),
 				ForeignChain::Arbitrum => build_and_encode_cf_parameters_for_chain!(Arbitrum),
+				ForeignChain::Tron => build_and_encode_cf_parameters_for_chain!(Tron),
 				ForeignChain::Solana => build_and_encode_cf_parameters_for_chain!(Solana),
 				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
 			})
@@ -1603,6 +1646,7 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => preallocated_deposit_channels_for_chain::<Runtime, ArbitrumInstance>(&account_id),
 				ForeignChain::Solana => preallocated_deposit_channels_for_chain::<Runtime, SolanaInstance>(&account_id),
 				ForeignChain::Assethub => preallocated_deposit_channels_for_chain::<Runtime, AssethubInstance>(&account_id),
+				ForeignChain::Tron => preallocated_deposit_channels_for_chain::<Runtime, TronInstance>(&account_id),
 			}
 		}
 
@@ -1631,6 +1675,7 @@ impl_runtime_apis! {
 					open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, ArbitrumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, SolanaInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, TronInstance>(account_id.as_ref()),
 				].into_iter().flatten().collect()
 			}
 		}

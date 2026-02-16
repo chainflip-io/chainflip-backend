@@ -327,6 +327,7 @@ impl ExtBuilder {
 			assethub_vault: Default::default(),
 			arbitrum_vault: Default::default(),
 			solana_vault: Default::default(),
+			tron_vault: Default::default(),
 			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
@@ -336,6 +337,7 @@ impl ExtBuilder {
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
+			tron_ingress_egress: Default::default(),
 			solana_elections: SolanaElectionsConfig {
 				option_initial_state: Some(InitialState {
 					unsynchronised_state: (
@@ -400,6 +402,9 @@ impl ExtBuilder {
 			},
 			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
 				broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA,
+			},
+			tron_broadcaster: state_chain_runtime::TronBroadcasterConfig {
+				broadcast_timeout: 3 * BLOCKS_PER_MINUTE_TRON,
 			},
 		})
 	}

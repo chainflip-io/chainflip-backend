@@ -314,6 +314,11 @@ pub const ARB_CHAIN_ID: u64 = 2;
 
 pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([9u8; 20]);
 
+pub const TRON_KEY_MANAGER_ADDRESS: eth::Address = H160([10u8; 20]);
+pub const TRON_VAULT_ADDRESS: eth::Address = H160([11u8; 20]);
+pub const TRON_USDT_TOKEN_ADDRESS: eth::Address = H160([12u8; 20]);
+pub const TRON_CHAIN_ID: u64 = 3;
+
 cf_test_utilities::impl_test_helpers! {
 	Test,
 	RuntimeGenesisConfig {
@@ -331,6 +336,10 @@ cf_test_utilities::impl_test_helpers! {
 			arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
 			arb_usdt_address: ARB_USDT_TOKEN_ADDRESS,
 			arbitrum_chain_id: ARB_CHAIN_ID,
+			tron_key_manager_address: TRON_KEY_MANAGER_ADDRESS,
+			tron_vault_address: TRON_VAULT_ADDRESS,
+			tron_usdt_address: TRON_USDT_TOKEN_ADDRESS,
+			tron_chain_id: TRON_CHAIN_ID,
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
 			eth_usdt_address: [0x2; 20].into(),
@@ -424,6 +433,10 @@ pub mod benchmarks_mock {
 				arb_usdc_address: ARB_USDC_TOKEN_ADDRESS,
 				arb_usdt_address: ARB_USDT_TOKEN_ADDRESS,
 				arbitrum_chain_id: ARB_CHAIN_ID,
+				tron_key_manager_address: TRON_KEY_MANAGER_ADDRESS,
+				tron_vault_address: TRON_VAULT_ADDRESS,
+				tron_usdt_address: TRON_USDT_TOKEN_ADDRESS,
+				tron_chain_id: TRON_CHAIN_ID,
 				flip_token_address: [0u8; 20].into(),
 				eth_usdc_address: [0x2; 20].into(),
 				eth_usdt_address: [0x2; 20].into(),

@@ -43,6 +43,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 12;
+pub const TRON_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 3;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_key_manager_address: hex_literal::hex!("a16E02E87b7454126E5E10d957A927A7F5B5d2be"),
@@ -61,8 +62,14 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
 	arb_usdt_token_address: hex_literal::hex!("9A676e781A523b5d0C0e43731313A708CB607508"),
 
+	// TODO: Add the actual addresses for the TRON contracts once deployed
+	tron_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_usdt_token_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+	tron_chain_id: cf_chains::tron::CHAIN_ID_NILE_TESTNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"0361ef4fcc2f464a81f4f1a60387056e937d67e6f7f717936c143b4b0102f710d6"
 	),
@@ -489,3 +496,4 @@ pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; //todo
+pub const TRON_SAFETY_MARGIN: u64 = 10; // todo

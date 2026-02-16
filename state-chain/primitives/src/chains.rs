@@ -109,7 +109,8 @@ chains! {
 	Bitcoin = 3,
 	Arbitrum = 4,
 	Solana = 5,
-	Assethub = 6
+	Assethub = 6,
+	Tron = 7
 }
 
 /// Can be any Chain.
@@ -137,6 +138,7 @@ impl ForeignChain {
 			ForeignChain::Arbitrum => assets::any::Asset::ArbEth,
 			ForeignChain::Solana => assets::any::Asset::Sol,
 			ForeignChain::Assethub => assets::any::Asset::HubDot,
+			ForeignChain::Tron => assets::any::Asset::Trx,
 		}
 	}
 	pub const fn ccm_support(self) -> bool {
@@ -147,6 +149,7 @@ impl ForeignChain {
 			ForeignChain::Arbitrum => true,
 			ForeignChain::Solana => true,
 			ForeignChain::Assethub => true,
+			ForeignChain::Tron => true,
 		}
 	}
 }
@@ -159,6 +162,7 @@ fn chain_as_u32() {
 	assert_eq!(ForeignChain::Arbitrum as u32, 4);
 	assert_eq!(ForeignChain::Solana as u32, 5);
 	assert_eq!(ForeignChain::Assethub as u32, 6);
+	assert_eq!(ForeignChain::Tron as u32, 7);
 }
 
 #[test]
@@ -169,7 +173,8 @@ fn chain_id_to_chain() {
 	assert_eq!(ForeignChain::try_from(4), Ok(ForeignChain::Arbitrum));
 	assert_eq!(ForeignChain::try_from(5), Ok(ForeignChain::Solana));
 	assert_eq!(ForeignChain::try_from(6), Ok(ForeignChain::Assethub));
-	assert!(ForeignChain::try_from(7).is_err());
+	assert_eq!(ForeignChain::try_from(7), Ok(ForeignChain::Tron));
+	assert!(ForeignChain::try_from(8).is_err());
 }
 
 #[test]
@@ -180,6 +185,7 @@ fn test_chains() {
 	assert_eq!(Arbitrum.as_ref(), &ForeignChain::Arbitrum);
 	assert_eq!(Solana.as_ref(), &ForeignChain::Solana);
 	assert_eq!(Assethub.as_ref(), &ForeignChain::Assethub);
+	assert_eq!(Tron.as_ref(), &ForeignChain::Tron);
 }
 
 #[test]
@@ -190,6 +196,7 @@ fn test_get_chain_identifier() {
 	assert_eq!(Arbitrum::get(), ForeignChain::Arbitrum);
 	assert_eq!(Solana::get(), ForeignChain::Solana);
 	assert_eq!(Assethub::get(), ForeignChain::Assethub);
+	assert_eq!(Tron::get(), ForeignChain::Tron);
 }
 
 #[test]
@@ -217,5 +224,9 @@ fn test_chain_to_and_from_str() {
 	assert_eq!(
 		ForeignChain::from_str(ForeignChain::Assethub.to_string().as_str()).unwrap(),
 		ForeignChain::Assethub
+	);
+	assert_eq!(
+		ForeignChain::from_str(ForeignChain::Tron.to_string().as_str()).unwrap(),
+		ForeignChain::Tron
 	);
 }

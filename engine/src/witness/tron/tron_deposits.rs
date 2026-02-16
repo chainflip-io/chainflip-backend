@@ -18,12 +18,9 @@ use crate::{tron::retry_rpc::TronRetryRpcApi, witness::evm::vault::decode_cf_par
 use anyhow::ensure;
 use cf_chains::{
 	address::EncodedAddress, assets::any::Asset, eth::Address as EthAddress, CcmAdditionalData,
-	CcmChannelMetadata, CcmDepositMetadata, CcmMessage, Ethereum, ForeignChain,
-	ForeignChainAddress,
+	CcmChannelMetadata, CcmDepositMetadata, CcmMessage, ForeignChain, ForeignChainAddress,
 };
-use cf_primitives::{
-	AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters, GasAmount,
-};
+use cf_primitives::{GasAmount /* AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters*/};
 use codec::{Decode, Encode};
 use ethers::types::H160;
 // use pallet_cf_ingress_egress::VaultDepositWitness;
@@ -64,6 +61,7 @@ pub struct TronVaultSwapData {
 /// Returns two vectors:
 /// - First: (transaction_id, evm_address, amount) for each deposit channel change
 /// - Second: (transaction_id, vault_amount) for vault changes
+///
 /// Transactions with any negative deposit channel amounts are skipped entirely.
 pub async fn ingress_amounts<TronRetryRpcClient>(
 	tron_rpc: &TronRetryRpcClient,
@@ -317,7 +315,7 @@ mod tests {
 				let block_hash = "0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945";
 
 				// Example deposit channels - Tron addresses (21 bytes, with 0x41 prefix)
-				let deposit_channels_tron = vec![
+				let deposit_channels_tron = [
 					TronAddress(
 						hex::decode("41b7bd91a81449253dd0ee8c51c04e0578be6c4a91")
 							.unwrap()

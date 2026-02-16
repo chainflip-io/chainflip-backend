@@ -196,7 +196,8 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
 		match T::TargetChain::get() {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => pre_upgrade_evm::<T, I>(),
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+				pre_upgrade_evm::<T, I>(),
 			_ => {
 				log::info!("No migration requited for this chain");
 				Ok(vec![])
@@ -206,7 +207,8 @@ where
 
 	fn on_runtime_upgrade() -> Weight {
 		match T::TargetChain::get() {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => migrate_evm_channels::<T, I>(),
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+				migrate_evm_channels::<T, I>(),
 			_ => {
 				log::info!("No migration requited for this chain");
 				Weight::zero()
@@ -217,7 +219,8 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
 		match T::TargetChain::get() {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => post_upgrade_evm::<T, I>(state),
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+				post_upgrade_evm::<T, I>(state),
 			_ => {
 				log::info!("No migration requited for this chain");
 				Ok(())

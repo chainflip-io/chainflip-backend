@@ -533,6 +533,12 @@ where
                                             })
                                         }
                                     }
+                                    CfeEvent::TronTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload: _ }) => {
+                                        if nominee == account_id {
+                                            // TODO: Implement Tron transaction broadcasting
+                                            warn!("Tron TransactionBroadcastRequest {broadcast_id:?} received but not yet implemented");
+                                        }
+                                    }
                                     CfeEvent::PeerIdRegistered { .. } |
                                     CfeEvent::PeerIdDeregistered { .. } => {
                                         // p2p registration is handled in the p2p module.

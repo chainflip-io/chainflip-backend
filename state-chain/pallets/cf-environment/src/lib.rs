@@ -43,7 +43,7 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset, tron::Asset as TrxAsset},
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
@@ -337,6 +337,30 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Current id used in "as_derivative" calls for CCM calls into Assethub
 	pub type AssethubOutputAccountId<T> = StorageValue<_, OutputAccountId, ValueQuery>;
+
+	// TRON CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn supported_tron_assets)]
+	/// Map of supported assets for TRON
+	pub type TronSupportedAssets<T: Config> = StorageMap<_, Blake2_128Concat, TrxAsset, EvmAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_key_manager_address)]
+	/// The address of the TRON key manager contract
+	pub type TronKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_vault_address)]
+	/// The address of the TRON vault contract
+	pub type TronVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_chain_id)]
+	/// The TRON chain id
+	pub type TronChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type TronSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -829,6 +853,10 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
+		pub tron_usdt_address: EvmAddress,
+		pub tron_key_manager_address: EvmAddress,
+		pub tron_vault_address: EvmAddress,
+		pub tron_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
@@ -869,6 +897,11 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
+			TronKeyManagerAddress::<T>::set(self.tron_key_manager_address);
+			TronVaultAddress::<T>::set(self.tron_vault_address);
+			TronChainId::<T>::set(self.tron_chain_id);
+			TronSupportedAssets::<T>::insert(TrxAsset::TronUsdt, self.tron_usdt_address);
+
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
@@ -901,6 +934,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn next_arbitrum_signature_nonce() -> SignatureNonce {
 		ArbitrumSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+
+	pub fn next_tron_signature_nonce() -> SignatureNonce {
+		TronSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})

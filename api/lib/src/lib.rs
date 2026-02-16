@@ -48,7 +48,7 @@ pub mod primitives {
 pub use cf_chains::eth::Address as EthereumAddress;
 use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
-	SolanaInstance,
+	SolanaInstance, TronInstance,
 };
 pub use cf_node_client::WaitForResult;
 
@@ -908,6 +908,10 @@ fn fetch_preallocated_channels(
 		ForeignChain::Assethub => Box::pin(preallocated_channels_for_chain::<
 			state_chain_runtime::Runtime,
 			AssethubInstance,
+		>(rpc_client, account_id)),
+		ForeignChain::Tron => Box::pin(preallocated_channels_for_chain::<
+			state_chain_runtime::Runtime,
+			TronInstance,
 		>(rpc_client, account_id)),
 	}
 }

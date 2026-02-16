@@ -19,7 +19,7 @@ pub use super::{
 	common::*,
 	testnet::{
 		ARBITRUM_EXPIRY_BLOCKS, ASSETHUB_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS,
-		ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS,
+		ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS, TRON_EXPIRY_BLOCKS,
 	},
 };
 use cf_chains::{
@@ -63,8 +63,14 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
 	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
+	// TODO: Add the actual addresses for the TRON contracts once deployed
+	tron_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_usdt_token_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+	tron_chain_id: cf_chains::tron::CHAIN_ID_NILE_TESTNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"025e790770ed8e79c08d68fa781b2848651f3e94ef8b1305a7fb6de782798735ad"
 	),
@@ -451,3 +457,4 @@ pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
+pub const TRON_SAFETY_MARGIN: u64 = 10; // todo

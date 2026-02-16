@@ -212,6 +212,9 @@ decl_runtime_apis!(
 		fn cf_failed_call_arbitrum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
+		fn cf_failed_call_tron(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Tron as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(
