@@ -91,7 +91,7 @@ const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK
 /// Note this only applies to assets where we have oracle prices. If we don't have an oracle
 /// price we can't apply LPP at all and we treat the limit as zero because the slippage will
 /// always default to zero for those assets.
-pub const FALLBACK_DEFAULT_LPP_LIMIT: u16 = 100;
+pub const FALLBACK_DEFAULT_LPP_LIMIT_BPS: BasisPoints = 100;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
@@ -498,7 +498,7 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// If no oracle protection is set by the user, a default will be
 	/// applied. The default will be the sum of both pools' values. Only
 	/// used for regular swaps (not fee swaps). Set to `None` to reset
-	/// to the permissive default (100%).
+	/// to the permissive default (100bps per leg).
 	SetDefaultOraclePriceSlippageProtectionForAsset {
 		base_asset: Asset,
 		quote_asset: Asset,
@@ -760,7 +760,7 @@ pub mod pallet {
 		AssetPair,
 		BasisPoints,
 		ValueQuery,
-		ConstU16<FALLBACK_DEFAULT_LPP_LIMIT>,
+		ConstU16<FALLBACK_DEFAULT_LPP_LIMIT_BPS>,
 	>;
 
 	#[pallet::event]
@@ -1030,7 +1030,7 @@ pub mod pallet {
 		/// to.
 		BrokerBoundWithdrawalAddressRestrictionViolated,
 		/// A zero default slippage protection will result in most swaps failing. Set to `None` to
-		/// reset to the permissive default (100%).
+		/// reset to the permissive default (100bps).
 		ZeroDefaultSlippageNotAllowed,
 		/// The specified pool does not exist.
 		PoolDoesNotExist,
