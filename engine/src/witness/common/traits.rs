@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use anyhow::Result;
 use pallet_cf_elections::electoral_systems::block_height_witnesser::{
 	primitives::Header, ChainBlockHashOf, ChainTypes,
@@ -8,7 +10,7 @@ pub trait WitnessClient<Chain: ChainTypes>: Sync + Send {
 	/// Information that's required when querying for a block.
 	/// This has to contain at least the hash, but could contain more,
 	/// such as bloom filters for Ethereum.
-	type BlockQuery: Sync + Send;
+	type BlockQuery: Sync + Send + Clone + Debug;
 
 	// ---- methods for BHW ---
 
@@ -39,12 +41,14 @@ pub trait WitnessClient<Chain: ChainTypes>: Sync + Send {
 }
 
 #[async_trait::async_trait]
-pub trait WitnessClientForBlockData<Chain: ChainTypes, ElectionProperties, BlockData>:
-	WitnessClient<Chain>
-{
+pub trait WitnessClientForBlockData<Chain: ChainTypes, BlockData>: WitnessClient<Chain> {
+	type Config: Sync + Send = ();
+	type ElectionProperties = ();
+
 	async fn block_data_from_query(
 		&self,
-		election_properties: &ElectionProperties,
+		config: &Self::Config,
+		election_properties: &Self::ElectionProperties,
 		query: &Self::BlockQuery,
 	) -> Result<BlockData>;
 }

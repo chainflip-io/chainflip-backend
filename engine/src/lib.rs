@@ -18,6 +18,7 @@
 #![feature(map_try_insert)]
 #![feature(step_trait)]
 #![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 
 mod caching_request;
 pub mod common;

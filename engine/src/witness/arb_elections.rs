@@ -14,13 +14,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	evm::retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
+	evm::{
+		event::{evm_event_type, Event, EvmEventType},
+		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
+	},
 	witness::{
 		common::{block_height_witnesser::witness_headers, traits::WitnessClient},
 		evm::{
-			contract_common::{
-				evm_event_type, evm_events_at_block_range, query_election_block, EvmEventType,
-			},
+			contract_common::{evm_events_at_block_range, query_election_block},
 			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents, Erc20Events},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
@@ -70,6 +71,7 @@ use crate::{
 
 use anyhow::{Context, Result};
 
+#[derive_where::derive_where(Clone, Debug;)]
 pub struct EvmBlockRangeQuery<C: ChainWitnessConfig> {
 	pub blocks_heights: BlockWitnessRange<C>,
 	pub parent_hash_of_first_block: H256,
@@ -220,7 +222,7 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 		_bloom: Option<Bloom>,
 		block_height: BlockWitnessRange<Arbitrum>,
 		_block_hash: sp_core::H256,
-	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
+	) -> Result<Option<Vec<Event<Erc20Events>>>> {
 		let (contract_address, event_type) =
 			self.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
 				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
@@ -290,7 +292,7 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 		)
 		.await?;
 
-		let result = handle_vault_events(&self.supported_assets, events, *block_height.root())?;
+		let result = handle_vault_events(&self.supported_assets, events, &block_height)?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}

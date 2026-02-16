@@ -42,6 +42,7 @@ pub trait EvmChain = Chain<
 	ChainAmount = u128,
 	DepositDetails = DepositDetails,
 	ChainCrypto = EvmCrypto,
+	DepositChannelState = DeploymentStatus,
 >;
 
 #[derive(
