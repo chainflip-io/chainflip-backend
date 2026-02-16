@@ -54,6 +54,7 @@ pin-project = { workspace = true }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
+derive-where = { workspace = true }
 
 # Local deps
 cf-chains = { workspace = true, default-features = true }

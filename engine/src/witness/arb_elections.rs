@@ -18,8 +18,10 @@ use crate::{
 	witness::{
 		common::block_height_witnesser::{witness_headers, HeaderClient},
 		evm::{
-			contract_common::{events_at_block, query_election_block},
-			erc20_deposits::Erc20Events,
+			contract_common::{
+				evm_event_type, evm_events_at_block_range, query_election_block, EvmEventType,
+			},
+			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents, Erc20Events},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
 		},
@@ -132,8 +134,8 @@ pub struct ArbitrumDepositChannelWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	address_checker_address: H160,
 	vault_address: H160,
-	usdc_contract_address: H160,
-	usdt_contract_address: H160,
+	supported_asset_address_and_event_type:
+		HashMap<assets::arb::Asset, (H160, Arc<dyn EvmEventType<Erc20Events>>)>,
 }
 
 #[async_trait::async_trait]
@@ -155,51 +157,24 @@ impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitru
 	async fn get_events_for_erc20_asset(
 		&self,
 		asset: ArbAsset,
-		bloom: Option<Bloom>,
+		_bloom: Option<Bloom>,
 		block_height: BlockWitnessRange<Arbitrum>,
-		block_hash: sp_core::H256,
+		_block_hash: sp_core::H256,
 	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
-		use crate::witness::evm::{
-			contract_common::events_at_block,
-			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents},
-		};
+		let (contract_address, event_type) =
+			self.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
+				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
+			})?;
 
-		let events = match asset {
-			ArbAsset::ArbUsdc =>
-				events_at_block::<cf_chains::Arbitrum, UsdcEvents, ArbitrumChain, _>(
-					bloom,
-					block_height,
-					block_hash,
-					self.usdc_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| crate::witness::evm::contract_common::Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-			ArbAsset::ArbUsdt =>
-				events_at_block::<cf_chains::Arbitrum, UsdtEvents, ArbitrumChain, _>(
-					bloom,
-					block_height,
-					block_hash,
-					self.usdt_contract_address,
-					&self.client,
-				)
-				.await?
-				.into_iter()
-				.map(|event| crate::witness::evm::contract_common::Event {
-					event_parameters: event.event_parameters.into(),
-					tx_hash: event.tx_hash,
-					log_index: event.log_index,
-				})
-				.collect::<Vec<_>>(),
-			_ => return Ok(None), // Skip unsupported assets
-		};
-		Ok(Some(events))
+		let events = evm_events_at_block_range::<_, ArbitrumChain>(
+			&self.client,
+			event_type.clone(),
+			*contract_address,
+			block_height,
+		)
+		.await?;
+
+		return Ok(Some(events));
 	}
 }
 
@@ -244,15 +219,14 @@ impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesse
 	) -> std::result::Result<Option<VoteOf<ArbitrumVaultDepositWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _vault, election_type, .. } =
 			properties;
-		let (block, return_block_hash) =
+		let (_block, return_block_hash) =
 			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Arbitrum, VaultEvents, ArbitrumChain, _>(
-			block.bloom,
-			block_height,
-			block.hash,
-			self.vault_address,
+		let events = evm_events_at_block_range::<VaultEvents, ArbitrumChain>(
 			&self.client,
+			evm_event_type::<VaultEvents, VaultEvents>(),
+			self.vault_address,
+			block_height,
 		)
 		.await?;
 
@@ -286,15 +260,14 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 	) -> std::result::Result<Option<VoteOf<ArbitrumKeyManagerWitnessingES>>, anyhow::Error> {
 		let BWElectionProperties { block_height, properties: _key_manager, election_type, .. } =
 			properties;
-		let (block, return_block_hash) =
+		let (_block, return_block_hash) =
 			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
 
-		let events = events_at_block::<cf_chains::Arbitrum, KeyManagerEvents, ArbitrumChain, _>(
-			block.bloom,
-			block_height,
-			block.hash,
-			self.key_manager_address,
+		let events = evm_events_at_block_range::<KeyManagerEvents, ArbitrumChain>(
 			&self.client,
+			evm_event_type::<KeyManagerEvents, KeyManagerEvents>(),
+			self.key_manager_address,
+			block_height,
 		)
 		.await?;
 
@@ -405,6 +378,14 @@ where
 		.into_iter()
 		.map(|(asset, address)| (address, asset))
 		.collect();
+
+	let supported_asset_address_and_event_type = [
+		(ArbAsset::ArbUsdc, (usdc_contract_address, evm_event_type::<UsdcEvents, Erc20Events>())),
+		(ArbAsset::ArbUsdt, (usdt_contract_address, evm_event_type::<UsdtEvents, Erc20Events>())),
+	]
+	.into_iter()
+	.collect();
+
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
 			async {
@@ -417,8 +398,7 @@ where
 							client: client.clone(),
 							address_checker_address,
 							vault_address,
-							usdc_contract_address,
-							usdt_contract_address,
+							supported_asset_address_and_event_type,
 						},
 						ArbitrumVaultDepositWitnesserVoter {
 							client: client.clone(),
