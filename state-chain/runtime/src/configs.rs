@@ -62,6 +62,7 @@ use frame_support::{
 pub use frame_system::Call as SystemCall;
 use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
+use pallet_cf_lending_pools::PoolsDeregistrationCheck;
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 use pallet_cf_trading_strategy::TradingStrategyDeregistrationCheck;
 pub use pallet_cf_validator::SetSizeParameters;
@@ -493,7 +494,8 @@ impl pallet_cf_lp::Config for Runtime {
 impl pallet_cf_account_roles::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type DeregistrationCheck = (Bonder<Self>, TradingStrategyDeregistrationCheck<Self>);
+	type DeregistrationCheck =
+		(Bonder<Self>, TradingStrategyDeregistrationCheck<Self>, PoolsDeregistrationCheck<Self>);
 	type RuntimeCall = RuntimeCall;
 	type SpawnAccount = Funding;
 	#[cfg(feature = "runtime-benchmarks")]

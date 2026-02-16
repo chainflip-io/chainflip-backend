@@ -925,3 +925,67 @@ fn boost_pool_details() {
 		);
 	});
 }
+
+#[test]
+fn deregistration_check() {
+	use cf_traits::{mocks::price_feed_api::MockPriceFeedApi, DeregistrationCheck};
+
+	new_test_ext().execute_with(|| {
+		const BOOST_FUNDS: AssetAmount = 500_000_000;
+		const LENDER_FUNDS: AssetAmount = 1_000_000_000;
+
+		setup();
+
+		// Disable whitelist for lending
+		assert_ok!(LendingPools::update_whitelist(
+			RuntimeOrigin::root(),
+			WhitelistUpdate::SetAllowAll
+		));
+
+		// Set oracle prices for the assets
+		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 1_000_000);
+		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1_000_000);
+
+		// Credit LP with funds for both boost and lending
+		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Eth, BOOST_FUNDS);
+		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Flip, LENDER_FUNDS);
+
+		// Test with boost funds: deregistration should fail when LP has active boost funds
+		assert_ok!(LendingPools::add_boost_funds(
+			RuntimeOrigin::signed(LP),
+			Asset::Eth,
+			BOOST_FUNDS,
+			TIER_5_BPS
+		));
+
+		assert!(matches!(
+			PoolsDeregistrationCheck::<Test>::check(&LP),
+			Err(Error::<Test>::BoostedFundsRemaining)
+		));
+
+		// Withdraw boost funds - deregistration should succeed
+		assert_ok!(LendingPools::stop_boosting(RuntimeOrigin::signed(LP), Asset::Eth, TIER_5_BPS));
+
+		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
+
+		// Test with lending funds: deregistration should fail when LP has active lending funds
+		// First create a lending pool for the asset
+		assert_ok!(LendingPools::new_lending_pool(Asset::Flip));
+
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LP),
+			Asset::Flip,
+			LENDER_FUNDS
+		));
+
+		assert!(matches!(
+			PoolsDeregistrationCheck::<Test>::check(&LP),
+			Err(Error::<Test>::LendingFundsRemaining)
+		));
+
+		// Remove lending funds - deregistration should succeed
+		assert_ok!(LendingPools::remove_lender_funds(RuntimeOrigin::signed(LP), Asset::Flip, None));
+
+		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
+	});
+}
