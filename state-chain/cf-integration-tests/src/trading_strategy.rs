@@ -20,14 +20,17 @@ use cf_amm::math::Price;
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, FLIPPERINOS_PER_FLIP, STABLE_ASSET,
 };
-use cf_test_utilities::{assert_events_match, assert_matching_event_count};
+use cf_test_utilities::{
+	assert_events_match, assert_has_matching_event, assert_matching_event_count,
+};
 use frame_support::assert_ok;
+use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
 	chainflip::ChainlinkOracle, AssetBalances, Runtime, RuntimeEvent, RuntimeOrigin, System,
 };
 
 type TradingStrategyPallet = state_chain_runtime::TradingStrategy;
-use cf_traits::{BalanceApi, PriceFeedApi};
+use cf_traits::{BalanceApi, PoolApi, PriceFeedApi};
 use pallet_cf_trading_strategy::TradingStrategy;
 
 use crate::{
@@ -313,6 +316,12 @@ fn oracle_strategy_basic_usage() {
 				Runtime,
 				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 1
 			);
+			assert_eq!(state_chain_runtime::LiquidityPools::limit_orders(
+				BASE_ASSET,
+				STABLE_ASSET,
+				&BTreeSet::from([strategy_id.clone()]),
+			).unwrap(), 1);
+
 
 			// Make sure the orders did not update without a reason
 			System::reset_events();
@@ -329,10 +338,16 @@ fn oracle_strategy_basic_usage() {
 				Price::from_usd_cents(BASE_ASSET, STARTING_PRICE_CENTS-1),
 			);
 			advance_blocks(1);
+			 assert_matching_event_count!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(AMOUNT)),
+					.. }) => 1);
 			assert_matching_event_count!(
 				Runtime,
-				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 1
-			);
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(AMOUNT)),
+					.. }) => 1);
 
             // Do a swap
             let _ = do_eth_swap(

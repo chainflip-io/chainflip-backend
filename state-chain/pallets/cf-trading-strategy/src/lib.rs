@@ -293,7 +293,7 @@ pub mod pallet {
 			let mut order_cache: BTreeMap<Asset, Vec<LimitOrder<T::AccountId>>> = BTreeMap::new();
 			let oracle_strategies = Strategies::<T>::iter()
 				.filter_map(|(_, strategy_id, strategy)| {
-					if let TradingStrategy::OracleTracking { .. } = strategy {
+					if matches!(strategy, TradingStrategy::OracleTracking { .. }) {
 						Some(strategy_id)
 					} else {
 						None
@@ -458,6 +458,11 @@ pub mod pallet {
 										order_cache.get(&base_asset).unwrap()
 									},
 									Err(e) => {
+										log_or_panic!(
+											"Failed to get limit orders for asset {:?}: {:?}",
+											base_asset,
+											e
+										);
 										continue;
 									},
 								}
