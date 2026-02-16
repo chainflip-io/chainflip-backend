@@ -1968,6 +1968,10 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 		) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
+			if input_amount == 0 {
+				// Price is undefined when input is zero (would cause division by zero).
+				return Ok(None);
+			}
 			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
 				Some(oracle_price) if oracle_price.stale =>
 					Err(SwapFailureReason::OraclePriceStale),
