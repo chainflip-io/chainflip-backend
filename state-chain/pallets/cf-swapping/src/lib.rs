@@ -1975,11 +1975,12 @@ pub mod pallet {
 			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
 				Some(oracle_price) if oracle_price.stale =>
 					Err(SwapFailureReason::OraclePriceStale),
-				Some(oracle_price) => {
-					let execution_price =
-						Price::sell_price(input_amount.into(), output_amount.into());
-					Ok(Some(execution_price.hundredth_bps_difference_from(&oracle_price.price)))
-				},
+				Some(oracle_price) =>
+					Ok(Price::sell_price(input_amount.into(), output_amount.into()).map(
+						|execution_price| {
+							execution_price.hundredth_bps_difference_from(&oracle_price.price)
+						},
+					)),
 				None => Ok(None), // Price unavailable - skip the check
 			}
 		}
@@ -2795,7 +2796,7 @@ pub mod pallet {
 					.ok()
 					.filter(|v| *v > 0)
 					// Return USDC / Asset
-					.map(|estimation_output| {
+					.and_then(|estimation_output| {
 						Price::from_amounts(ESTIMATION_AMOUNT_USDC.into(), estimation_output.into())
 					})
 					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
@@ -2816,7 +2817,7 @@ pub mod pallet {
 					.ok()
 					.filter(|v| *v > 0)
 					// Return USDC / Asset
-					.map(|estimation_output| {
+					.and_then(|estimation_output| {
 						Price::from_amounts(estimation_output.into(), estimated_input.into())
 					})
 					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
