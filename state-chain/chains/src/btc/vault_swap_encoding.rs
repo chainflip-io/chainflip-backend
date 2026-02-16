@@ -58,7 +58,7 @@ impl Encode for UtxoEncodedData {
 			EncodedAddress::Arb(inner) => inner.encode_to(&mut r),
 			EncodedAddress::Sol(inner) => inner.encode_to(&mut r),
 			EncodedAddress::Hub(inner) => inner.encode_to(&mut r),
-			EncodedAddress::Trx(inner) => inner.encode_to(&mut r),
+			EncodedAddress::Tron(inner) => inner.encode_to(&mut r),
 		}
 
 		self.parameters.encode_to(&mut r);
@@ -89,7 +89,7 @@ impl Decode for UtxoEncodedData {
 			ForeignChain::Arbitrum => EncodedAddress::Arb(Decode::decode(input)?),
 			ForeignChain::Solana => EncodedAddress::Sol(Decode::decode(input)?),
 			ForeignChain::Assethub => EncodedAddress::Hub(Decode::decode(input)?),
-			ForeignChain::Tron => EncodedAddress::Trx(Decode::decode(input)?),
+			ForeignChain::Tron => EncodedAddress::Tron(Decode::decode(input)?),
 		};
 
 		let parameters = match version {

@@ -20,7 +20,9 @@ use cf_chains::{
 	address::EncodedAddress, assets::any::Asset, eth::Address as EthAddress, CcmAdditionalData,
 	CcmChannelMetadata, CcmDepositMetadata, CcmMessage, ForeignChain, ForeignChainAddress,
 };
-use cf_primitives::{GasAmount /* AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters*/};
+use cf_primitives::{
+	GasAmount, /* AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters */
+};
 use codec::{Decode, Encode};
 use ethers::types::H160;
 // use pallet_cf_ingress_egress::VaultDepositWitness;
@@ -47,7 +49,7 @@ pub struct TronVaultSwapData {
 	pub cf_parameters: Vec<u8>,
 	// These will be decodec from DCA Parameters
 	// pub broker_fee: Beneficiary<AccountId>,
-	// pub refund_params: ChannelRefundParametersForChain<Ethereum>, // TODO: To put TRON here
+	// pub refund_params: ChannelRefundParametersForChain<Tron>,
 	// pub dca_params: Option<DcaParameters>,
 	// pub boost_fee: u8,
 	// pub affiliate_fees: Affiliates<AffiliateShortId>,
@@ -175,7 +177,7 @@ where
 	// Fetch transaction data for each vault ingress and extract raw_data.data
 	let mut vault_swaps = Vec::new();
 
-	// TODO: We should do thes processing in parallel.
+	// TODO: We should do the processing in parallel.
 	// TODO: We need t get the ERC20 events to know vault changes for TRC-20 tokens. We
 	// then need to query for the transactions the same way as for the TRX Vault swaps.
 	for (tx_id, amount) in vault_changes {
@@ -213,19 +215,18 @@ where
 								println!("Successfully decoded cf_parameters with CCM:");
 								println!("  ccm_additional_data: {:?}", ccm_additional_data);
 
-								let deposit_metadata = Some(CcmDepositMetadata::<
-									ForeignChainAddress,
-									_,
-								> {
-									source_chain: ForeignChain::Ethereum, // TODO: Update to TRON
-									source_address: Default::default(),   /* No source address
-									                                       * for Tron Vault Swaps */
-									channel_metadata: CcmChannelMetadata {
-										message: message.clone(),
-										gas_budget: *gas_budget,
-										ccm_additional_data,
-									},
-								});
+								let deposit_metadata =
+									Some(CcmDepositMetadata::<ForeignChainAddress, _> {
+										source_chain: ForeignChain::Tron,
+										source_address: Default::default(), /* No source address
+										                                     * for Tron Vault
+										                                     * Swaps */
+										channel_metadata: CcmChannelMetadata {
+											message: message.clone(),
+											gas_budget: *gas_budget,
+											ccm_additional_data,
+										},
+									});
 								(vault_swap_params, deposit_metadata)
 							} else {
 								let (vault_swap_params, ()) =
@@ -256,7 +257,7 @@ where
 						vault_swaps.push(tx_id.clone());
 
 						// vault_swaps.push(crate::witness::evm::vault::vault_deposit_witness!(
-						// 	Asset::Eth, // TODO: Update to TRX or USDT
+						// 	Asset::Trx, // Use Trx or USDT
 						// 	amount,
 						// 	details.output_asset,
 						// 	details.destination_address,

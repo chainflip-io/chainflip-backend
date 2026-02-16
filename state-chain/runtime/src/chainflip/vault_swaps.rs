@@ -160,7 +160,7 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| match addr {
-		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Trx(inner) =>
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Tron(inner) =>
 			Ok(inner),
 		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
