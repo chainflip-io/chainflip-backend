@@ -270,7 +270,7 @@ pub async fn evm_events_at_block_range<Data: std::fmt::Debug, C: ChainTypes>(
 			event_type
 				.parse_log(unparsed_log)
 				.map_err(|err| {
-					tracing::warn!(
+					tracing::error!(
 						"event for contract {} could not be decoded in block range {:?}. Error: {err}",
 						contract_address, block_range
 					)
@@ -307,7 +307,7 @@ pub async fn evm_events_at_block<Data: std::fmt::Debug>(
 			event_type
 				.parse_log(unparsed_log)
 				.map_err(|err| {
-					tracing::warn!(
+					tracing::error!(
 						"event for contract {} could not be decoded in block {:?}. Error: {err}",
 						contract_address,
 						block_hash
