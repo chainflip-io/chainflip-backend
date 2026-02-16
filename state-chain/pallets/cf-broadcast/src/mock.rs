@@ -29,16 +29,15 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		block_height_provider::BlockHeightProvider, cfe_interface_mock::MockCfeInterface,
-		liability_tracker::MockLiabilityTracker, signer_nomination::MockNominator,
-		threshold_signer::MockThresholdSigner,
+		block_height_provider::BlockHeightProvider,
+		broadcast_outcome_handler::MockBroadcastOutcomeHandler,
+		cfe_interface_mock::MockCfeInterface, liability_tracker::MockLiabilityTracker,
+		signer_nomination::MockNominator, threshold_signer::MockThresholdSigner,
 	},
 	AccountRoleRegistry, ChainflipWithTargetChain, DummyEgressSuccessWitnesser, OnBroadcastReady,
 };
-use codec::{Decode, DecodeWithMemTracking, Encode};
-use frame_support::{derive_impl, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{derive_impl, parameter_types};
 use frame_system::pallet_prelude::BlockNumberFor;
-use scale_info::TypeInfo;
 use sp_core::ConstU64;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -67,29 +66,7 @@ pub type MockOffenceReporter =
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<<Ethereum as Chain>::ChainCrypto as ChainCrypto>::Payload>> = RefCell::new(vec![]);
-	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 	pub static VALID_METADATA: RefCell<bool> = RefCell::new(true);
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub struct MockCallback;
-
-impl MockCallback {
-	pub fn was_called() -> bool {
-		CALLBACK_CALLED.with(|cell| *cell.borrow())
-	}
-}
-
-impl UnfilteredDispatchable for MockCallback {
-	type RuntimeOrigin = RuntimeOrigin;
-
-	fn dispatch_bypass_filter(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
-		CALLBACK_CALLED.with(|cell| *cell.borrow_mut() = true);
-		Ok(().into())
-	}
 }
 
 pub struct MockBroadcastReadyProvider;
@@ -129,7 +106,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type EnsureThresholdSigned = FailOnNoneOrigin<Self>;
 	type WeightInfo = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type BroadcastCallable = MockCallback;
 	type SafeMode = MockRuntimeSafeMode;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 	type SafeModeBlockMargin = ConstU64<10>;
@@ -139,7 +115,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RetryPolicy = MockRetryPolicy;
 	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;
-	type OnBroadcastSuccess = ();
+	type BroadcastOutcomeHandler = MockBroadcastOutcomeHandler<MockEthereum>;
 }
 
 impl_mock_chainflip!(Test);

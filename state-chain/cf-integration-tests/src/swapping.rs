@@ -56,10 +56,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, Time},
 };
 use pallet_cf_asset_balances::FreeBalances;
-use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
-	RequestSuccessCallbacks,
-};
+use pallet_cf_broadcast::{AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls};
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
 use pallet_cf_pools::RangeOrderSize;
 use pallet_cf_swapping::{FeeRateAndMinimum, SwapRequestIdCounter, SwapRetryDelay};
@@ -884,8 +881,6 @@ fn can_resign_failed_ccm() {
 			);
 
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});
 }
 
@@ -979,8 +974,6 @@ fn can_handle_failed_vault_transfer() {
 			);
 
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});
 }
 

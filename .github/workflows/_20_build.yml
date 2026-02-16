@@ -21,6 +21,10 @@ on:
         default: rust-builder
         description: The CI runner to use
         type: string
+      version:
+        default: ""
+        description: Version suffix for artifact names (e.g., 2.0.3)
+        type: string
 
 env:
   FORCE_COLOR: 1
@@ -87,6 +91,17 @@ jobs:
           mkdir -p ./target/${{ inputs.binary-subdir }}
           cp ./target/${{ inputs.binary-subdir }}/deps/libchainflip_engine_v*.so ./target/${{ inputs.binary-subdir }}/ || true
 
+      - name: Extract version from binary 🔦
+        id: extract-version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(./ci/scripts/extract_version.sh "$(./target/${{ inputs.binary-subdir }}/chainflip-node --version)" full)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+          echo "Resolved version: $(grep '^version=' $GITHUB_OUTPUT | cut -d= -f2)"
+
       - name: Upload binary artifacts
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
@@ -104,6 +119,6 @@ jobs:
       - name: Upload runtime artifacts
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
-          name: chainflip-node-runtime-${{ inputs.profile }}
+          name: chainflip-node-runtime-${{ inputs.profile }}-${{ steps.extract-version.outputs.version }}
           path: |
             ./target/${{ inputs.binary-subdir }}/wbuild/state-chain-runtime/state_chain_runtime*.wasm

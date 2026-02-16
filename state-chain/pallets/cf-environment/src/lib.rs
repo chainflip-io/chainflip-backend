@@ -151,11 +151,7 @@ pub mod pallet {
 		type SolEnvironment: SolanaEnvironment;
 
 		/// Solana broadcaster.
-		type SolanaBroadcaster: Broadcaster<
-			Solana,
-			ApiCall = SolanaApi<Self::SolEnvironment>,
-			Callback = RuntimeCallFor<Self>,
-		>;
+		type SolanaBroadcaster: Broadcaster<Solana, ApiCall = SolanaApi<Self::SolEnvironment>>;
 
 		type RuntimeOrigin: From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>
 			+ OriginTrait<AccountId = <Self as frame_system::Config>::AccountId>;
@@ -753,6 +749,7 @@ pub mod pallet {
 		#[pallet::weight(Weight::zero())]
 		pub fn benchmark_realistic_call(
 			_origin: OriginFor<T>,
+			#[cfg(feature = "runtime-benchmarks")]
 			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
 		) -> DispatchResult {
 			Ok(())

@@ -299,7 +299,6 @@ impl ExactValueHook<SolSignature, TransactionSuccessDetails> for SolanaEgressWit
 		}
 
 		if let Err(err) = SolanaBroadcaster::egress_success(
-			pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 			TransactionConfirmation {
 				tx_out_id: signature,
 				// Assign any owed fees to the current key.

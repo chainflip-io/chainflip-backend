@@ -221,7 +221,7 @@ pub const BLOCKS_IN_YEAR: u32 = SECONDS_IN_YEAR / SECONDS_PER_BLOCK as u32;
 
 pub const BASIS_POINTS_PER_MILLION: u32 = 100;
 
-pub const MAX_BASIS_POINTS: u16 = 10_000;
+pub const ONE_AS_BASIS_POINTS: u16 = 10_000;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 

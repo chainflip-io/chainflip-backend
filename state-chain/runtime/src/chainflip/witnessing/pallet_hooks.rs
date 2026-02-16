@@ -73,7 +73,6 @@ hook_impls! {
 			},
 			Witness(egress) => {
 				if let Err(err) = pallet_cf_broadcast::Pallet::<T, I>::egress_success(
-					pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 					egress.clone(),
 					block_height,
 				) {
@@ -114,7 +113,6 @@ hook_impls! {
 				EvmKeyManagerEvent::SignatureAccepted(transaction_confirmation) => {
 					let tx_out_id = transaction_confirmation.tx_out_id.clone();
 					if let Err(err) = pallet_cf_broadcast::Pallet::<T,I>::egress_success(
-						pallet_cf_witnesser::RawOrigin::CurrentEpochWitnessThreshold.into(),
 						transaction_confirmation,
 						block_height
 					) {

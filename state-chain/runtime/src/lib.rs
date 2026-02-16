@@ -397,6 +397,7 @@ type AllMigrations = (
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	migrations::sol_election_settings::Migration,
+	migrations::migrate_broadcast_callbacks::Migration,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
 	MigrationsForV2_1,

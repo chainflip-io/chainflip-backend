@@ -29,6 +29,7 @@ pub mod asset_withholding;
 pub mod balance_api;
 pub mod block_height_provider;
 pub mod bonding;
+pub mod broadcast_outcome_handler;
 pub mod broadcaster;
 pub mod ccm_additional_data_handler;
 pub mod ceremony_id_provider;

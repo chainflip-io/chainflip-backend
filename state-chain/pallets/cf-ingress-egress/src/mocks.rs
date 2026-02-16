@@ -66,8 +66,7 @@ impl frame_system::Config for Test {
 	type Block = Block;
 }
 
-pub type MockEgressBroadcasterEth =
-	MockBroadcaster<(MockEthereumApiCall<MockEvmEnvironment>, RuntimeCall)>;
+pub type MockEgressBroadcasterEth = MockBroadcaster<MockEthereumApiCall<MockEvmEnvironment>>;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
@@ -91,8 +90,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
-pub type MockEgressBroadcasterBtc =
-	MockBroadcaster<(MockBitcoinApiCall<MockBtcEnvironment>, RuntimeCall)>;
+pub type MockEgressBroadcasterBtc = MockBroadcaster<MockBitcoinApiCall<MockBtcEnvironment>>;
 
 impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	fn generate_address(

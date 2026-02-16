@@ -44,7 +44,7 @@ impl AssetConverter for MockAssetConverter {
 	) -> C::ChainAmount {
 		let input_asset_generic: Asset = input_asset.into();
 
-		C::ChainAmount::try_from(Self::calculate_input_for_desired_output(
+		C::ChainAmount::try_from(Self::calculate_input_for_desired_output_or_default_to_zero(
 			input_asset_generic,
 			C::GAS_ASSET.into(),
 			required_gas.into(),
@@ -54,7 +54,7 @@ impl AssetConverter for MockAssetConverter {
 		.unwrap()
 	}
 
-	fn calculate_input_for_desired_output(
+	fn calculate_input_for_desired_output_or_default_to_zero(
 		input_asset: Asset,
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,

@@ -18,7 +18,7 @@ use super::*;
 use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{
 	AssetAmount, BasisPoints, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
-	MAX_BASIS_POINTS,
+	ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
 	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi,
@@ -248,7 +248,7 @@ fn witnessed_amount_does_not_match_boosted() {
 			prewitness_deposit(deposit_address, EthAsset::Eth, PREWITNESSED_DEPOSIT_AMOUNT);
 
 		const BOOST_FEE: AssetAmount =
-			PREWITNESSED_DEPOSIT_AMOUNT * TIER_5_BPS as u128 / MAX_BASIS_POINTS as u128;
+			PREWITNESSED_DEPOSIT_AMOUNT * TIER_5_BPS as u128 / ONE_AS_BASIS_POINTS as u128;
 
 		assert_boosted(deposit_address, deposit_id);
 		assert!(MockBoostApi::is_deposit_boosted(deposit_id));

@@ -41,9 +41,7 @@ use cf_traits::{
 use frame_support::{
 	derive_impl,
 	pallet_prelude::{InvalidTransaction, TransactionValidityError, ValidTransaction},
-	parameter_types,
-	traits::UnfilteredDispatchable,
-	DebugNoBound, DefaultNoBound,
+	parameter_types, DebugNoBound, DefaultNoBound,
 };
 use sp_core::{H160, H256};
 use sp_runtime::{
@@ -200,24 +198,15 @@ impl
 
 impl SolanaEnvironment for MockSolEnvironment {}
 
-pub struct MockSolanaBroadcaster<C>(PhantomData<C>);
-impl<C: UnfilteredDispatchable> Broadcaster<Solana> for MockSolanaBroadcaster<C> {
+pub struct MockSolanaBroadcaster;
+impl Broadcaster<Solana> for MockSolanaBroadcaster {
 	type ApiCall = cf_chains::sol::api::SolanaApi<MockSolEnvironment>;
-	type Callback = C;
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		SolanaCallBroadcasted::set(Some(api_call));
 		(1, 2)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_success_callback: Option<Self::Callback>,
-		_failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		unimplemented!()
 	}
 
 	fn threshold_sign_and_broadcast_rotation_tx(
@@ -323,7 +312,7 @@ impl pallet_cf_environment::Config for Test {
 	type RuntimeSafeMode = MockRuntimeSafeMode;
 	type CurrentReleaseVersion = CurrentReleaseVersion;
 	type SolEnvironment = MockSolEnvironment;
-	type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
+	type SolanaBroadcaster = MockSolanaBroadcaster;
 	type TransactionPayments = MockPayment<Self>;
 	type GetTransactionPayments = ();
 	type WeightInfo = ();
@@ -412,7 +401,7 @@ pub mod benchmarks_mock {
 		type RuntimeSafeMode = MockRuntimeSafeMode;
 		type CurrentReleaseVersion = CurrentReleaseVersion;
 		type SolEnvironment = MockSolEnvironment;
-		type SolanaBroadcaster = MockSolanaBroadcaster<RuntimeCall>;
+		type SolanaBroadcaster = MockSolanaBroadcaster;
 		type TransactionPayments = MockPayment<Self>;
 		type GetTransactionPayments = ();
 		type WeightInfo = ();

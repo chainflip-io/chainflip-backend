@@ -164,7 +164,7 @@ impl MockRedemptionChecker {
 
 impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 
-pub type MockFundingBroadcaster = MockBroadcaster<(MockRegisterRedemption, RuntimeCall)>;
+pub type MockFundingBroadcaster = MockBroadcaster<MockRegisterRedemption>;
 
 //we define a variant here so that decoding can also fail. Empty type always successfully decodes.
 #[derive(
