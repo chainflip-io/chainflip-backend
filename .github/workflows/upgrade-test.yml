@@ -231,6 +231,7 @@ jobs:
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
+          ./commands/generate_event_schemas.ts
           # TODO: This is a temporary workaround to setup swaps for the new assets Wbtc, ArbUsdt, and SolUsdt.
           # To remove after 2.1 is released.
           ./commands/setup_new_assets.ts

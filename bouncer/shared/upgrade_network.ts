@@ -14,6 +14,7 @@ import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import generate from '@chainflip/processor/generate';
+import { log } from 'console';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -273,17 +274,12 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(20000);
 
-  logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
-
-  // Regenerate event schemas, since they may have changed with the new runtime.
-  const generatedDir = path.join(import.meta.dirname, '..', 'generated', 'events');
-  await generate(generatedDir);
-
   // clear api caches (this seems to be required starting for node.js version >= 22.0)
   clearChainflipApiCache();
   clearSubscribeHeadsCache();
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
+  logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
   await submitGovernanceExtrinsic((api) =>
     api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
