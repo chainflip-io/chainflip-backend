@@ -355,6 +355,17 @@ pub struct FailedForeignChainCall {
 	pub original_epoch: EpochIndex,
 }
 
+/// Describes the action to take when a broadcast completes (succeeds or is aborted).
+#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum BroadcastAction<ChainAccount> {
+	/// On success: finalise fetch for these deposit addresses.
+	/// On abort: no-op.
+	FinaliseFetch(Vec<ChainAccount>),
+	/// On success: no-op.
+	/// On abort: record as a failed foreign chain call.
+	CcmBroadcast,
+}
+
 #[derive(
 	CloneNoBound,
 	RuntimeDebugNoBound,
@@ -730,11 +741,7 @@ pub mod pallet {
 			+ AdjustedFeeEstimationApi<Self::TargetChain>;
 
 		/// A broadcaster instance.
-		type Broadcaster: Broadcaster<
-			Self::TargetChain,
-			ApiCall = Self::ChainApiCall,
-			Callback = <Self as Config<I>>::RuntimeCall,
-		>;
+		type Broadcaster: Broadcaster<Self::TargetChain, ApiCall = Self::ChainApiCall>;
 
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: OnDeposit<Self::TargetChain>;
@@ -967,12 +974,12 @@ pub mod pallet {
 	pub type ProcessedUpTo<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, TargetChainBlockNumber<T, I>, ValueQuery>;
 
-	/// IMPORTANT!! Storage used to save short-living values, currently used as a workaround for
-	/// callbacks not accepting extra arguments at dispatch time if you use it be sure that it gets
-	/// set and killed atomically to avoid other operations changing its value.
+	/// Maps broadcast IDs to the action to take when the broadcast completes.
+	/// Set when initiating a broadcast, consumed on success or expiry for actions that have
+	/// explicit failure handling.
 	#[pallet::storage]
-	pub type WitnessedBlock<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, TargetChainBlockNumber<T, I>, OptionQuery>;
+	pub type BroadcastActions<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, BroadcastId, BroadcastAction<TargetChainAccount<T, I>>>;
 
 	/// Stores configuration param for maximum number of pre-allocated channels per account role.
 	#[pallet::storage]
@@ -1330,6 +1337,7 @@ pub mod pallet {
 					// The call is stale, clean up storage.
 					n if n >= 2 => {
 						T::Broadcaster::expire_broadcast(call.broadcast_id);
+						BroadcastActions::<T, I>::remove(call.broadcast_id);
 						Self::deposit_event(Event::<T, I>::FailedForeignChainCallExpired {
 							broadcast_id: call.broadcast_id,
 						});
@@ -1445,31 +1453,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Callback for when a signature is accepted by the chain.
-		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
-		pub fn finalise_ingress(
-			origin: OriginFor<T>,
-			addresses: Vec<TargetChainAccount<T, I>>,
-		) -> DispatchResult {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-
-			//We should always have a value here, but if we don't then we should use the max to
-			// be sure to not end up in the edge case
-			let block_number: u64 = WitnessedBlock::<T, I>::take()
-				.map(|bn| bn.unique_saturated_into())
-				.unwrap_or(u64::MAX);
-
-			for deposit_address in addresses {
-				DepositChannelLookup::<T, I>::mutate(&deposit_address, |deposit_channel_details| {
-					deposit_channel_details.as_mut().map(|details| {
-						details.deposit_channel.state.on_fetch_completed(block_number)
-					});
-				});
-			}
-			Ok(())
-		}
-
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		#[pallet::call_index(1)]
@@ -1548,30 +1531,6 @@ pub mod pallet {
 				destination_address,
 			});
 
-			Ok(())
-		}
-
-		/// Callback for when CCMs failed to be broadcasted. We will resign the call
-		/// so the user can broadcast the CCM themselves.
-		/// Requires Root origin.
-		#[pallet::weight(T::WeightInfo::ccm_broadcast_failed())]
-		#[pallet::call_index(5)]
-		pub fn ccm_broadcast_failed(
-			origin: OriginFor<T>,
-			broadcast_id: BroadcastId,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-
-			let current_epoch = T::EpochInfo::epoch_index();
-
-			// Stores the broadcast ID, so the user can use it to query for
-			// information such as Threshold Signature etc.
-			FailedForeignChainCalls::<T, I>::append(
-				current_epoch,
-				FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
-			);
-
-			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
 			Ok(())
 		}
 
@@ -1824,14 +1783,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.amount_after_fees;
 
 		// this is the function we use to broadcast, used multiple times below
-		let broadcast_and_finalise_ingress = |api_call| {
-			T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-				api_call,
-				tx.deposit_address.clone().map(|deposit_address| {
-					Call::finalise_ingress { addresses: vec![deposit_address] }.into()
-				}),
-				|_| None,
-			)
+		let broadcast_and_finalise_fetch = |api_call| {
+			let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+			if let Some(deposit_address) = tx.deposit_address.clone() {
+				let addresses =
+					Self::addresses_requiring_fetch_completion_action(vec![deposit_address]);
+				if !addresses.is_empty() {
+					BroadcastActions::<T, I>::insert(
+						broadcast_id,
+						BroadcastAction::FinaliseFetch(addresses),
+					);
+				}
+			}
+			broadcast_id
 		};
 
 		// the actual refund logic depends on whether we're doing a ccm refund or not
@@ -1849,7 +1813,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					},
 				)
 				.map_err(|_| RecordFailureAndAbortRefund)
-				.map(broadcast_and_finalise_ingress)
+				.map(broadcast_and_finalise_fetch)
 			},
 			// Case 2: ccm refund
 			Some(ref ccm_refund_metadata) => {
@@ -1864,7 +1828,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						fetch_command,
 						TransferForRejection::TransferWillBeCcmCallAndIsHandledSeparately,
 					)
-					.map(broadcast_and_finalise_ingress) {
+					.map(broadcast_and_finalise_fetch) {
 						Ok(_fetch_broadcast_id) => (),
 						Err(RejectError::NotRequired) => (),
 						Err(_) => return Err(RecordFailureAndAbortRefund)
@@ -1898,7 +1862,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
 				)
 				.map_err(|_| RecordFailureAndAbortRefund)
-				.map(broadcast_and_finalise_ingress)
+				.map(broadcast_and_finalise_fetch)
 			},
 		}
 	}
@@ -1933,6 +1897,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			})
 			.unwrap_or(true)
+	}
+
+	fn addresses_requiring_fetch_completion_action(
+		addresses: Vec<TargetChainAccount<T, I>>,
+	) -> Vec<TargetChainAccount<T, I>> {
+		addresses
+			.into_iter()
+			.filter(|address| {
+				DepositChannelLookup::<T, I>::get(address).is_some_and(|details| {
+					details.deposit_channel.state.fetch_completion_action_required()
+				})
+			})
+			.collect()
 	}
 
 	/// Take all scheduled egress requests and send them out in an `AllBatch` call.
@@ -2051,12 +2028,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			transfer_params,
 		) {
 			Ok(egress_transactions) => {
+				let addresses = Self::addresses_requiring_fetch_completion_action(addresses);
 				egress_transactions.into_iter().for_each(|(egress_transaction, egress_ids)| {
-					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-						egress_transaction,
-						Some(Call::finalise_ingress { addresses: addresses.clone() }.into()),
-						|_| None,
-					);
+					let (broadcast_id, _) =
+						T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+					if !addresses.is_empty() {
+						BroadcastActions::<T, I>::insert(
+							broadcast_id,
+							BroadcastAction::FinaliseFetch(addresses.clone()),
+						);
+					}
 					Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 						broadcast_id,
 						egress_ids,
@@ -2099,11 +2080,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.ccm_additional_data.clone(),
 			) {
 				Ok(api_call) => {
-					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-						api_call,
-						None,
-						|broadcast_id| Some(Call::ccm_broadcast_failed { broadcast_id }.into()),
-					);
+					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					BroadcastActions::<T, I>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,
 						egress_id: ccm.egress_id,
@@ -2258,7 +2236,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							funding_amount
 						} else {
 							let input_amount =
-								T::AssetConverter::calculate_input_for_desired_output(
+								T::AssetConverter::calculate_input_for_desired_output_or_default_to_zero(
 									asset.into(),
 									Asset::Flip,
 									flip_amount_to_credit,
@@ -3661,13 +3639,44 @@ impl<T: Config<I>, I: 'static> IngressEgressFeeApi<T::TargetChain> for Pallet<T,
 	}
 }
 
-impl<T: Config<I>, I: 'static> cf_traits::OnBroadcastSuccess<T::TargetChain> for Pallet<T, I> {
-	fn with_witness_block(
+impl<T: Config<I>, I: 'static> cf_traits::BroadcastOutcomeHandler<T::TargetChain> for Pallet<T, I> {
+	fn on_broadcast_success(
+		broadcast_id: BroadcastId,
 		witness_block: <T::TargetChain as Chain>::ChainBlockNumber,
-		f: impl FnOnce(),
 	) {
-		WitnessedBlock::<T, I>::set(Some(witness_block));
-		f();
-		WitnessedBlock::<T, I>::kill();
+		if let Some(action) = BroadcastActions::<T, I>::take(broadcast_id) {
+			match action {
+				BroadcastAction::FinaliseFetch(addresses) => {
+					let block_number: u64 = witness_block.unique_saturated_into();
+					for deposit_address in addresses {
+						DepositChannelLookup::<T, I>::mutate(
+							&deposit_address,
+							|deposit_channel_details| {
+								deposit_channel_details.as_mut().map(|details| {
+									details.deposit_channel.state.on_fetch_completed(block_number)
+								});
+							},
+						);
+					}
+				},
+				BroadcastAction::CcmBroadcast => {
+					// No success action for CCM broadcasts
+				},
+			}
+		}
+	}
+
+	fn on_broadcast_aborted(broadcast_id: BroadcastId) {
+		if matches!(
+			BroadcastActions::<T, I>::get(broadcast_id),
+			Some(BroadcastAction::CcmBroadcast)
+		) {
+			let current_epoch = T::EpochInfo::epoch_index();
+			FailedForeignChainCalls::<T, I>::append(
+				current_epoch,
+				FailedForeignChainCall { broadcast_id, original_epoch: current_epoch },
+			);
+			Self::deposit_event(Event::<T, I>::CcmBroadcastFailed { broadcast_id });
+		}
 	}
 }

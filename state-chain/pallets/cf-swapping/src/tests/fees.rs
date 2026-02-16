@@ -496,7 +496,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		SwapRate::set(2_f64);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Usdc,
 				1000,
@@ -507,7 +507,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Usdc,
 				1000,
@@ -518,7 +518,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Dot,
 				1000,
@@ -531,7 +531,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
 		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Eth,
 				10_u128.pow(18),
@@ -554,7 +554,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 		// Fallback to hard coded prices when swap simulation fails
 		MockSwappingApi::set_swaps_should_fail(true);
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Eth,
 				2 * 10u128.pow(18),
@@ -567,7 +567,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 		// Also fallback to hard coded prices when oracle is unavailable (This should never
 		// happen in the real world)
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Btc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
@@ -579,7 +579,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 
 		// Make sure the network fee is also taken into account when using hard coded prices
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Btc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
@@ -604,7 +604,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		MockPriceFeedApi::set_price_usd(Asset::ArbUsdc, 1);
 		MockPriceFeedApi::set_price_usd(Asset::Usdt, 1);
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Usdc,
 				Asset::Eth,
 				2 * 10u128.pow(18),
@@ -615,7 +615,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::ArbUsdc,
 				Asset::Usdt,
 				1_000_000_000,
@@ -626,7 +626,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Eth,
 				Asset::Btc,
 				10u128.pow(8),
@@ -637,7 +637,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		);
 
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Usdc,
 				Asset::Btc,
 				10u128.pow(8),
@@ -650,7 +650,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 
 		// Using both a hard coded price (Sol) and an oracle price (Btc)
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Sol,
 				Asset::Btc,
 				10u128.pow(8),
@@ -663,7 +663,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		// Using both Swap Simulation (Flip) and an oracle price (Btc)
 		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
 				Asset::Btc,
 				10u128.pow(8),
@@ -677,7 +677,7 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 		// Check that the network fee is still applied when using the same asset as the input and
 		// output
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Btc,
 				Asset::Btc,
 				10u128.pow(8),
@@ -689,11 +689,17 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 
 		// Make sure it can handle extreme edge cases
 		assert_eq!(
-			Swapping::calculate_input_for_desired_output(Asset::Btc, Asset::Eth, 0, true, false),
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
+				Asset::Btc,
+				Asset::Eth,
+				0,
+				true,
+				false
+			),
 			0
 		);
 		// Here we do not care about the actual value, just that it does not panic.
-		let _ = Swapping::calculate_input_for_desired_output(
+		let _ = Swapping::calculate_input_for_desired_output_or_default_to_zero(
 			Asset::Btc,
 			Asset::Eth,
 			u128::MAX,

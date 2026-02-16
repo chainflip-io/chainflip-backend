@@ -20,5 +20,6 @@ pub mod arbitrum_elections;
 pub mod ethereum_elections;
 pub mod housekeeping;
 pub mod ingress_delay;
+pub mod migrate_broadcast_callbacks;
 pub mod safe_mode;
 pub mod sol_election_settings;

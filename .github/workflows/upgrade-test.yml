@@ -128,13 +128,6 @@ jobs:
           name: chainflip-backend-bin-try-runtime
           path: upgrade-to-bins
 
-      - name: Download upgrade-to runtime 📥
-        if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
-        with:
-          name: chainflip-node-runtime-try-runtime
-          path: upgrade-to-runtime
-
       - name: Permissions for latest binaries 🛡️
         if: inputs.run-job
         run: |
@@ -143,10 +136,20 @@ jobs:
 
       - name: Get version of latest main ✍️
         if: inputs.run-job
+        id: main-version
         run: |
           set -x
           MAIN_VERSION=$(./upgrade-to-bins/chainflip-node --version)
           echo $MAIN_VERSION
+          VERSION=$(./ci/scripts/extract_version.sh "$MAIN_VERSION" full)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download upgrade-to runtime 📥
+        if: inputs.run-job && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-node-runtime-try-runtime-${{ steps.main-version.outputs.version }}
+          path: upgrade-to-runtime
 
       - name: Install solana ☀️
         if: inputs.run-job

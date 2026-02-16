@@ -50,6 +50,11 @@ pub trait ChannelLifecycleHooks: Sized {
 		true
 	}
 
+	/// Returns true if a fetch success callback is required to advance channel state.
+	fn fetch_completion_action_required(&self) -> bool {
+		false
+	}
+
 	/// Called when a fetch is scheduled for broadcast. Should return true if self was mutated.
 	fn on_fetch_scheduled(&mut self) -> bool {
 		false
