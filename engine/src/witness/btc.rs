@@ -166,15 +166,11 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 
 // --- deposit channel witnessing ---
 #[async_trait::async_trait]
-impl
-	WitnessClientForBlockData<
-		BitcoinChain,
-		Vec<DepositChannel<Bitcoin>>,
-		Vec<DepositWitness<Bitcoin>>,
-	> for BtcCachingClient
-{
+impl WitnessClientForBlockData<BitcoinChain, Vec<DepositWitness<Bitcoin>>> for BtcCachingClient {
+	type ElectionProperties = Vec<DepositChannel<Bitcoin>>;
 	async fn block_data_from_query(
 		&self,
+		_config: &(),
 		deposit_addresses: &Vec<DepositChannel<Bitcoin>>,
 		block_hash: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<Bitcoin>>> {
@@ -189,15 +185,13 @@ impl
 type PrivateBitcoinVaultChannel = (DepositAddress, AccountId32, u64);
 
 #[async_trait::async_trait]
-impl
-	WitnessClientForBlockData<
-		BitcoinChain,
-		Vec<PrivateBitcoinVaultChannel>,
-		Vec<VaultDepositWitness<Runtime, BitcoinInstance>>,
-	> for BtcCachingClient
+impl WitnessClientForBlockData<BitcoinChain, Vec<VaultDepositWitness<Runtime, BitcoinInstance>>>
+	for BtcCachingClient
 {
+	type ElectionProperties = Vec<PrivateBitcoinVaultChannel>;
 	async fn block_data_from_query(
 		&self,
+		_config: &(),
 		vault_channels: &Vec<PrivateBitcoinVaultChannel>,
 		block_hash: &Self::BlockQuery,
 	) -> Result<Vec<VaultDepositWitness<Runtime, BitcoinInstance>>> {
@@ -209,15 +203,13 @@ impl
 
 // --- egress witnessing ---
 #[async_trait::async_trait]
-impl
-	WitnessClientForBlockData<
-		BitcoinChain,
-		Vec<H256>,
-		Vec<TransactionConfirmation<Runtime, BitcoinInstance>>,
-	> for BtcCachingClient
+impl WitnessClientForBlockData<BitcoinChain, Vec<TransactionConfirmation<Runtime, BitcoinInstance>>>
+	for BtcCachingClient
 {
+	type ElectionProperties = Vec<H256>;
 	async fn block_data_from_query(
 		&self,
+		_config: &(),
 		tx_hashes: &Vec<H256>,
 		block_hash: &Self::BlockQuery,
 	) -> Result<Vec<TransactionConfirmation<Runtime, BitcoinInstance>>> {
@@ -299,9 +291,9 @@ where
 					state_chain_client,
 					CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
 						BitcoinBlockHeightWitnesserVoter { client: client.clone() },
-						GenericBwVoter::new(client.clone()),
-						GenericBwVoter::new(client.clone()),
-						GenericBwVoter::new(client.clone()),
+						GenericBwVoter::new(client.clone(), ()),
+						GenericBwVoter::new(client.clone(), ()),
+						GenericBwVoter::new(client.clone(), ()),
 						BitcoinFeeVoter { client: client.clone() },
 						BitcoinLivenessVoter { client: client.clone() },
 					)),

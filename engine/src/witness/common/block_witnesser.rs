@@ -16,19 +16,23 @@ use anyhow::Result;
 #[derive(Clone)]
 pub struct GenericBwVoter<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>> {
 	client: Client,
+	config: Client::Config,
 	_phantom: std::marker::PhantomData<I>,
 }
 
 impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 	GenericBwVoter<I, Client>
 {
-	pub fn new(client: Client) -> Self {
-		Self { client, _phantom: Default::default() }
+	pub fn new(client: Client, config: Client::Config) -> Self {
+		Self { client, config, _phantom: Default::default() }
 	}
 }
 
-pub trait BlockClientFor<I: BlockWitnesserInstance<Chain: ChainTypes>> =
-	WitnessClientForBlockData<I::Chain, I::ElectionProperties, Vec<I::BlockEntry>>;
+pub trait BlockClientFor<I: BlockWitnesserInstance<Chain: ChainTypes>> = WitnessClientForBlockData<
+	I::Chain,
+	Vec<I::BlockEntry>,
+	ElectionProperties = I::ElectionProperties,
+>;
 
 #[async_trait::async_trait]
 impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
@@ -46,14 +50,18 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 					.client
 					.block_query_from_hash_and_height(hash.clone(), properties.block_height)
 					.await?;
-				let data =
-					self.client.block_data_from_query(&properties.properties, &query).await?;
+				let data = self
+					.client
+					.block_data_from_query(&self.config, &properties.properties, &query)
+					.await?;
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: false } => {
 				let query = self.client.block_query_from_height(properties.block_height).await?;
-				let data =
-					self.client.block_data_from_query(&properties.properties, &query).await?;
+				let data = self
+					.client
+					.block_data_from_query(&self.config, &properties.properties, &query)
+					.await?;
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: true } => {
@@ -65,8 +73,10 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 				// query actual data
 				let (query, hash) =
 					self.client.block_query_and_hash_from_height(properties.block_height).await?;
-				let data =
-					self.client.block_data_from_query(&properties.properties, &query).await?;
+				let data = self
+					.client
+					.block_data_from_query(&self.config, &properties.properties, &query)
+					.await?;
 				Ok(Some((data, Some(hash))))
 			},
 		}

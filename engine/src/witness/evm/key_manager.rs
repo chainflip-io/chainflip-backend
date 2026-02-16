@@ -72,7 +72,7 @@ use state_chain_runtime::{
 	Runtime,
 };
 
-use super::contract_common::Event as ContractEvent;
+use crate::evm::event::Event;
 
 ////////////////////////////////////////////////////////
 // Elections code
@@ -94,7 +94,7 @@ pub trait KeyManagerEventConfig {
 
 pub async fn handle_key_manager_events<Config>(
 	config: &Config,
-	events: Vec<ContractEvent<KeyManagerEvents>>,
+	events: Vec<Event<KeyManagerEvents>>,
 	block_height: u64,
 ) -> Result<Vec<EvmKeyManagerEvent<Runtime, Config::Instance>>>
 where

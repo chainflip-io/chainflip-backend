@@ -14,12 +14,25 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::evm::{
-	cached_rpc::{AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult},
-	retry_rpc::EvmRetryRpcApi,
-	rpc::{address_checker::AddressState, EvmRpcSigningClient},
+use crate::{
+	evm::{
+		cached_rpc::{
+			AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult,
+		},
+		event::{evm_event_type, Event, EvmEventType},
+		retry_rpc::EvmRetryRpcApi,
+		rpc::{address_checker::AddressState, EvmRpcSigningClient},
+	},
+	witness::evm::{
+		erc20_deposits::Erc20Events, EvmAddressStateClient, EvmBlockQuery,
+		EvmDepositChannelWitnessingConfig, EvmEventClient,
+	},
 };
-use cf_chains::{evm::DeploymentStatus, witness_period::SaturatingStep, DepositChannel};
+use cf_chains::{
+	evm::{DeploymentStatus, EvmChain},
+	witness_period::SaturatingStep,
+	DepositChannel,
+};
 use ethers::{
 	abi::{ethereum_types::BloomInput, RawLog},
 	types::{Bloom, Log},
@@ -37,71 +50,6 @@ use std::{
 use super::{super::common::chain_source::Header, vault::VaultEvents};
 use anyhow::{anyhow, ensure, Result};
 use sp_core::{H160, H256, U256};
-
-// ----- generic event definitions ------
-
-/// Type for storing common (i.e. tx_hash) and specific event information
-#[derive(Debug, PartialEq, Eq)]
-pub struct Event<EventParameters: Debug> {
-	/// The transaction hash of the transaction that emitted this event
-	pub tx_hash: H256,
-	/// The index number of this particular log, in the list of logs emitted by the tx_hash
-	pub log_index: U256,
-	/// The event specific parameters
-	pub event_parameters: EventParameters,
-}
-
-impl<EventParameters: Debug> std::fmt::Display for Event<EventParameters> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "EventParameters: {:?}; tx_hash: {:#x}", self.event_parameters, self.tx_hash)
-	}
-}
-
-impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParameters> {
-	pub fn new_from_unparsed_logs(log: Log) -> Result<Self> {
-		Ok(Self {
-			tx_hash: log
-				.transaction_hash
-				.ok_or_else(|| anyhow!("Could not get transaction hash from ETH log"))?,
-			log_index: log
-				.log_index
-				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
-			event_parameters: EventParameters::decode_log(&RawLog {
-				topics: log.topics.into_iter().collect(),
-				data: log.data.to_vec(),
-			})?,
-		})
-	}
-}
-
-pub trait EvmEventType<Data: std::fmt::Debug>: Sync + Send {
-	fn parse_log(&self, log: Log) -> Result<Event<Data>>;
-}
-
-#[derive_where::derive_where(Default; )]
-pub struct EvmEventTypeCarrier<Event, TargetData> {
-	_phantom: std::marker::PhantomData<(Event, TargetData)>,
-}
-
-pub fn evm_event_type<
-	ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
-	TargetData: std::fmt::Debug + Sync + Send + 'static,
->() -> Arc<dyn EvmEventType<TargetData>> {
-	let event_carrier: EvmEventTypeCarrier<ParseData, TargetData> = Default::default();
-	Arc::new(event_carrier)
-}
-
-impl<
-		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData>,
-		TargetData: std::fmt::Debug + Sync + Send,
-	> EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
-{
-	fn parse_log(&self, log: Log) -> Result<Event<TargetData>> {
-		let Event { tx_hash, log_index, event_parameters } =
-			Event::<ParseData>::new_from_unparsed_logs(log)?;
-		Ok(Event { tx_hash, log_index, event_parameters: event_parameters.into() })
-	}
-}
 
 // ----- implementation ------
 
@@ -485,4 +433,129 @@ where
 			.collect(),
 		return_block_hash,
 	))
+}
+
+pub async fn witness_deposit_channels_generic2<
+	Chain: EvmChain<ChainAsset: std::hash::Hash>,
+	CT: ChainTypes<ChainBlockHash = H256>,
+	Client: EvmEventClient<CT> + EvmAddressStateClient<CT>,
+>(
+	client: &Client,
+	config: &EvmDepositChannelWitnessingConfig<Chain>,
+	query: &Client::BlockQuery,
+	deposit_addresses: Vec<DepositChannel<Chain>>,
+) -> Result<Vec<pallet_cf_ingress_egress::DepositWitness<Chain>>>
+where
+	Chain::ChainAmount: TryFrom<sp_core::U256>,
+	<Chain::ChainAmount as TryFrom<sp_core::U256>>::Error: std::fmt::Debug,
+{
+	use super::evm_deposits::eth_ingresses_at_block;
+	use itertools::Itertools;
+	use pallet_cf_ingress_egress::DepositWitness;
+
+	let address_checker_address = config.address_checker_address;
+	let vault_address = config.vault_address;
+
+	let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
+		deposit_addresses.into_iter().fold(
+			(Vec::new(), HashMap::new()),
+			|(mut eth, mut erc20), deposit_channel| {
+				let asset = deposit_channel.asset;
+				let address = deposit_channel.address;
+				if asset == Chain::GAS_ASSET {
+					eth.push((address, deposit_channel.state));
+				} else {
+					erc20.entry(asset).or_insert_with(Vec::new).push(address);
+				}
+				(eth, erc20)
+			},
+		);
+	let eth_addresses: HashSet<H160> =
+		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
+
+	// let block_start = *block_height.into_range_inclusive().start();
+	let block_start = query.get_lowest_block_height_of_query();
+	let undeployed_addresses: Vec<H160> = eth_deposit_channels
+		.into_iter()
+		.filter_map(|(address, deployment_status)| {
+			if deployment_status.is_deployed_before(&block_start) {
+				None
+			} else {
+				Some(address)
+			}
+		})
+		.collect();
+
+	let (undeployed_addr_states, events) = futures::try_join!(
+		client.address_states(address_checker_address, query.clone(), undeployed_addresses,),
+		async {
+			let events = client
+				.events_from_block_query(
+					vault_address,
+					evm_event_type::<VaultEvents, VaultEvents>(),
+					query.clone(),
+				)
+				.await?;
+			Ok::<_, anyhow::Error>(
+				events
+					.into_iter()
+					.filter_map(|event| match event.event_parameters {
+						VaultEvents::FetchedNativeFilter(inner_event)
+							if eth_addresses.contains(&inner_event.sender) =>
+							Some((inner_event, event.tx_hash)),
+						_ => None,
+					})
+					.collect::<Vec<_>>(),
+			)
+		},
+	)?;
+
+	let eth_ingresses = eth_ingresses_at_block(undeployed_addr_states, events)?;
+
+	let mut erc20_ingresses: Vec<DepositWitness<Chain>> = Vec::new();
+
+	// Handle each asset type separately with its specific event type
+	for (asset, deposit_channels) in erc20_deposit_channels {
+		let (contract_address, event_type) =
+			config.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
+				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
+			})?;
+
+		let events = client
+			.events_from_block_query(*contract_address, event_type.clone(), query.clone())
+			.await?;
+
+		let asset_ingresses = events
+			.into_iter()
+			.filter_map(|event| match event.event_parameters {
+				super::erc20_deposits::Erc20Events::TransferFilter { to, value, from: _ }
+					if deposit_channels.contains(&to) =>
+					Some(DepositWitness {
+						deposit_address: to,
+						amount: value.try_into().expect(
+							"Any ERC20 tokens we support should have amounts that fit into a u128",
+						),
+						asset,
+						deposit_details: Chain::DepositDetails {
+							tx_hashes: Some(vec![event.tx_hash]),
+						},
+					}),
+				_ => None,
+			})
+			.collect::<Vec<_>>();
+
+		erc20_ingresses.extend(asset_ingresses);
+	}
+
+	Ok(eth_ingresses
+		.into_iter()
+		.map(|(to_addr, value, tx_hashes)| DepositWitness {
+			deposit_address: to_addr,
+			asset: Chain::GAS_ASSET,
+			amount: value.try_into().expect("Ingress witness transfer value should fit u128"),
+			deposit_details: Chain::DepositDetails { tx_hashes },
+		})
+		.chain(erc20_ingresses)
+		.sorted_by_key(|deposit_witness| deposit_witness.deposit_address)
+		.collect())
 }

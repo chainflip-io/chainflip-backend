@@ -18,11 +18,13 @@ use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-		rpc::EvmRpcSigningClient,
+		event::{evm_event_type, Event, EvmEventType},
+		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::{
 		common::{
 			block_height_witnesser::witness_headers,
+			block_witnesser::GenericBwVoter,
 			traits::{WitnessClient, WitnessClientForBlockData},
 		},
 		eth::{
@@ -36,14 +38,14 @@ use crate::{
 			},
 		},
 		evm::{
-			contract_common::{
-				evm_event_type, evm_events_at_block, query_election_block, EvmEventType,
-			},
+			contract_common::{address_states, evm_events_at_block, query_election_block},
 			erc20_deposits::{
 				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents, Erc20Events,
 			},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
+			ConfigTrait, EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig,
+			EvmEventClient, EvmVoter, VaultDepositWitnessingConfig,
 		},
 	},
 };
@@ -57,12 +59,17 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
-use ethers::types::{Block, Bloom};
+use ethers::{
+	abi::ethereum_types::BloomInput,
+	types::{Block, Bloom, Log},
+};
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainBlockNumberOf},
+		block_height_witnesser::{
+			primitives::Header, ChainBlockHashOf, ChainBlockNumberOf, ChainTypes,
+		},
 		block_witnesser::state_machine::BWElectionProperties,
 	},
 	ElectoralSystemTypes, VoteOf,
@@ -88,32 +95,34 @@ use anyhow::{Context, Result};
 
 // ------------ configuring header and block clients for ethereum ------------
 
-#[derive(Clone)]
-pub struct EvmSingleBlockQueryWithBloom {
+#[derive(Clone, Debug)]
+pub struct EvmSingleBlockQuery {
 	pub block_height: u64,
-	pub hash: H256,
+	pub block_hash: H256,
+	pub parent_hash: H256,
 	pub bloom: Bloom,
 }
 
-impl EvmSingleBlockQueryWithBloom {
+impl EvmSingleBlockQuery {
 	fn try_from_native_block(block: Block<H256>) -> Result<Self> {
-		Ok(EvmSingleBlockQueryWithBloom {
+		Ok(EvmSingleBlockQuery {
 			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
-			hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			block_hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,
+			parent_hash: block.parent_hash,
 			bloom: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)),
 		})
 	}
 }
 
-#[derive(Clone)]
-pub struct EvmSingleBlockHeaderVoter<Config: Sync + Send> {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	config: Config,
+impl EvmBlockQuery for EvmSingleBlockQuery {
+	fn get_lowest_block_height_of_query(&self) -> u64 {
+		self.block_height
+	}
 }
 
 #[async_trait::async_trait]
-impl<Config: Sync + Send> WitnessClient<EthereumChain> for EvmSingleBlockHeaderVoter<Config> {
-	type BlockQuery = EvmSingleBlockQueryWithBloom;
+impl WitnessClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
 		Ok(self.client.get_block_number().await?.low_u64())
@@ -137,15 +146,15 @@ impl<Config: Sync + Send> WitnessClient<EthereumChain> for EvmSingleBlockHeaderV
 		&self,
 		hash: ChainBlockHashOf<EthereumChain>,
 		_height: ChainBlockNumberOf<EthereumChain>,
-	) -> Result<EvmSingleBlockQueryWithBloom> {
-		EvmSingleBlockQueryWithBloom::try_from_native_block(self.client.block_by_hash(hash).await?)
+	) -> Result<EvmSingleBlockQuery> {
+		EvmSingleBlockQuery::try_from_native_block(self.client.block_by_hash(hash).await?)
 	}
 
 	async fn block_query_from_height(
 		&self,
 		height: <EthereumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
 	) -> Result<Self::BlockQuery> {
-		EvmSingleBlockQueryWithBloom::try_from_native_block(self.client.block(height.into()).await?)
+		EvmSingleBlockQuery::try_from_native_block(self.client.block(height.into()).await?)
 	}
 
 	async fn block_query_and_hash_from_height(
@@ -154,46 +163,70 @@ impl<Config: Sync + Send> WitnessClient<EthereumChain> for EvmSingleBlockHeaderV
 	) -> Result<(Self::BlockQuery, ChainBlockHashOf<EthereumChain>)> {
 		let header = self.client.block(height.into()).await?;
 		let hash = header.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?;
-		let query = EvmSingleBlockQueryWithBloom::try_from_native_block(header)?;
+		let query = EvmSingleBlockQuery::try_from_native_block(header)?;
 		Ok((query, hash))
 	}
 }
 
-struct VaultDepositWitnessingConfig {
-	vault_address: H160,
-	supported_assets: HashMap<H160, assets::eth::Asset>,
-}
-
 #[async_trait::async_trait]
-impl
-	WitnessClientForBlockData<
-		EthereumChain,
-		(),
-		Vec<EvmVaultContractEvent<Runtime, EthereumInstance>>,
-	> for EvmSingleBlockHeaderVoter<VaultDepositWitnessingConfig>
-{
-	async fn block_data_from_query(
+impl EvmEventClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
-		_properties: &(),
-		header: &EvmSingleBlockQueryWithBloom,
-	) -> Result<Vec<EvmVaultContractEvent<Runtime, EthereumInstance>>> {
-		let events = events_at_block::<cf_chains::Ethereum, VaultEvents, EthereumChain, _>(
-			Some(header.bloom),
-			header.block_height,
-			header.hash,
-			self.config.vault_address,
-			&self.client,
-		)
-		.await?;
+		contract_address: H160,
+		event_type: Arc<dyn EvmEventType<Data>>,
+		query: Self::BlockQuery,
+	) -> Result<Vec<Event<Data>>> {
+		let mut contract_bloom = Bloom::default();
+		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
 
-		let result =
-			handle_vault_events(&self.config.supported_assets, events, header.block_height)?;
-		Ok(result.into_iter().sorted().collect())
+		// if we have logs for this block, fetch them.
+		let logs = if query.bloom.contains_bloom(&contract_bloom) {
+			self.client.get_logs(query.block_hash, contract_address).await?
+		} else {
+			// we know there won't be interesting logs, so don't fetch for events
+			vec![]
+		};
+		Ok(logs
+			.into_iter()
+			.filter_map(|unparsed_log| -> Option<Event<Data>> {
+				event_type
+					.parse_log(unparsed_log)
+					.map_err(|err| {
+						tracing::error!(
+						"event for contract {} could not be decoded in block {:?}. Error: {err}",
+						contract_address,
+						query.block_hash
+					)
+					})
+					.ok()
+			})
+			.collect())
 	}
 }
 
 #[async_trait::async_trait]
-impl VoterApi<EthereumBlockHeightWitnesserES> for EvmSingleBlockHeaderVoter<()> {
+impl EvmAddressStateClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+	async fn address_states(
+		&self,
+		address_checker_address: H160,
+		query: Self::BlockQuery,
+		addresses: Vec<H160>,
+	) -> Result<HashMap<H160, (AddressState, AddressState)>> {
+		address_states(
+			&self.client,
+			address_checker_address,
+			query.parent_hash,
+			query.block_hash,
+			addresses,
+		)
+		.await
+	}
+}
+
+// --- block height witnessing ---
+
+#[async_trait::async_trait]
+impl VoterApi<EthereumBlockHeightWitnesserES> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
 	async fn vote(
 		&self,
 		_settings: <EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
@@ -209,82 +242,7 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EvmSingleBlockHeaderVoter<()> 
 	}
 }
 
-// --- deposit channel witnessing ---
-
-#[derive(Clone)]
-pub struct EthereumDepositChannelWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	address_checker_address: H160,
-	vault_address: H160,
-	supported_asset_address_and_event_type:
-		HashMap<assets::eth::Asset, (H160, Arc<dyn EvmEventType<Erc20Events>>)>,
-}
-
-#[async_trait::async_trait]
-impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Ethereum, EthereumChain>
-	for EthereumDepositChannelWitnesserVoter
-{
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
-		&self.client
-	}
-
-	fn address_checker_address(&self) -> H160 {
-		self.address_checker_address
-	}
-
-	fn vault_address(&self) -> H160 {
-		self.vault_address
-	}
-
-	async fn get_events_for_erc20_asset(
-		&self,
-		asset: EthAsset,
-		bloom: Option<ethers::types::Bloom>,
-		_block_height: u64,
-		block_hash: sp_core::H256,
-	) -> Result<Option<Vec<crate::witness::evm::contract_common::Event<Erc20Events>>>> {
-		let (contract_address, event_type) =
-			self.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
-				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
-			})?;
-
-		let events = evm_events_at_block(
-			&self.client,
-			event_type.clone(),
-			*contract_address,
-			block_hash,
-			bloom,
-		)
-		.await?;
-
-		return Ok(Some(events))
-	}
-}
-
-#[async_trait::async_trait]
-impl VoterApi<EthereumDepositChannelWitnessingES> for EthereumDepositChannelWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <EthereumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumDepositChannelWitnessingES>>, anyhow::Error> {
-		use state_chain_runtime::chainflip::witnessing::ethereum_elections::EthereumChain;
-
-		let BWElectionProperties {
-			block_height, properties: deposit_addresses, election_type, ..
-		} = properties;
-
-		let (witnesses, return_block_hash) =
-			crate::witness::evm::contract_common::witness_deposit_channels_generic::<
-				cf_chains::Ethereum,
-				EthereumChain,
-				_,
-			>(self, block_height, election_type, deposit_addresses)
-			.await?;
-
-		Ok(Some((witnesses, return_block_hash)))
-	}
-}
+// --- egress witnessing ---
 
 #[derive(Clone)]
 pub struct EthereumVaultDepositWitnesserVoter {
@@ -314,7 +272,7 @@ impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesse
 		)
 		.await?;
 
-		let result = handle_vault_events(&self.supported_assets, events, block_height)?;
+		let result = handle_vault_events(&self.supported_assets, events, &block_height)?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
@@ -708,18 +666,22 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<EthereumElectoralSystemRunner, _>::new((
-						EvmSingleBlockHeaderVoter { client: client.clone(), config: () },
-						EthereumDepositChannelWitnesserVoter {
-							client: client.clone(),
-							address_checker_address,
-							vault_address,
-							supported_asset_address_and_event_type,
-						},
-						EthereumVaultDepositWitnesserVoter {
-							client: client.clone(),
-							vault_address,
-							supported_assets: supported_erc20_tokens.clone(),
-						},
+						EvmVoter { client: client.clone(), _phantom: Default::default() },
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EvmDepositChannelWitnessingConfig {
+								address_checker_address,
+								vault_address,
+								supported_asset_address_and_event_type,
+							},
+						),
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							VaultDepositWitnessingConfig {
+								vault_address,
+								supported_assets: supported_erc20_tokens.clone(),
+							},
+						),
 						EthereumKeyManagerWitnesserVoter {
 							client: client.clone(),
 							key_manager_address,

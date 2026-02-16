@@ -17,10 +17,10 @@
 use anyhow::{anyhow, Result};
 use ethers::abi::RawLog;
 
-use std::fmt::Debug;
-use web3::types::{Log, H256, U256};
-
-use super::core_h256;
+use std::{fmt::Debug, sync::Arc};
+// use web3::types::{Log, H256, U256};
+use ethers::types::Log;
+use sp_core::{H256, U256};
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
@@ -49,9 +49,38 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 				.log_index
 				.ok_or_else(|| anyhow!("Could not get log index from ETH log"))?,
 			event_parameters: EventParameters::decode_log(&RawLog {
-				topics: log.topics.into_iter().map(core_h256).collect(),
-				data: log.data.0,
+				topics: log.topics.into_iter().collect(),
+				data: log.data.to_vec(),
 			})?,
 		})
+	}
+}
+
+pub trait EvmEventType<Data: std::fmt::Debug>: Sync + Send {
+	fn parse_log(&self, log: Log) -> Result<Event<Data>>;
+}
+
+#[derive_where::derive_where(Default; )]
+pub struct EvmEventTypeCarrier<Event, TargetData> {
+	_phantom: std::marker::PhantomData<(Event, TargetData)>,
+}
+
+pub fn evm_event_type<
+	ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
+	TargetData: std::fmt::Debug + Sync + Send + 'static,
+>() -> Arc<dyn EvmEventType<TargetData>> {
+	let event_carrier: EvmEventTypeCarrier<ParseData, TargetData> = Default::default();
+	Arc::new(event_carrier)
+}
+
+impl<
+		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData>,
+		TargetData: std::fmt::Debug + Sync + Send,
+	> EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
+{
+	fn parse_log(&self, log: Log) -> Result<Event<TargetData>> {
+		let Event { tx_hash, log_index, event_parameters } =
+			Event::<ParseData>::new_from_unparsed_logs(log)?;
+		Ok(Event { tx_hash, log_index, event_parameters: event_parameters.into() })
 	}
 }
