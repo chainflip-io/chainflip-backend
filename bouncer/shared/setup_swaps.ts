@@ -1,3 +1,4 @@
+import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
@@ -59,6 +60,21 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     createLpPool(cf.logger, 'HubUsdc', price.get('HubUsdc')!),
     createLpPool(cf.logger, 'HubUsdt', price.get('HubUsdt')!),
   ]);
+
+  // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.swapping.updatePalletConfig(
+      [...price.keys()]
+        .filter((a): a is Asset => a !== 'Usdc')
+        .map((asset) => ({
+          SetDefaultOraclePriceSlippageProtectionForAsset: {
+            baseAsset: asset,
+            quoteAsset: 'Usdc',
+            bps: 10000,
+          },
+        })),
+    ),
+  );
 
   const lp1Deposits = (lpcf: ChainflipIO<A>) =>
     lpcf

@@ -24,6 +24,18 @@ async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
 
   cf.info('Pools for WBTC, ArbUsdt, SolUsdt set');
 
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.swapping.updatePalletConfig(
+      (['Wbtc', 'ArbUsdt', 'SolUsdt'] as const).map((asset) => ({
+        SetDefaultOraclePriceSlippageProtectionForAsset: {
+          baseAsset: asset,
+          quoteAsset: 'Usdc',
+          bps: 10000,
+        },
+      })),
+    ),
+  );
+
   const lp1Deposits = (lpcf: ChainflipIO<A>) =>
     lpcf
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
