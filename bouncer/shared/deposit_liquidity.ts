@@ -89,15 +89,13 @@ export async function depositLiquidity<A extends WithLpAccount>(
           )
         ) {
           return true;
-        } else {
-          cf.info(
-            `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))}.`,
-          );
-          return false;
         }
-      } else {
+        cf.info(
+          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))}.`,
+        );
         return false;
       }
+      return false;
     }),
   );
 
