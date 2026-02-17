@@ -155,7 +155,7 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-    	use pallet_cf_elections::UniqueMonotonicIdentifier;
+		use pallet_cf_elections::UniqueMonotonicIdentifier;
 
 		let old_settings_entries = Vec::<(
 			UniqueMonotonicIdentifier,

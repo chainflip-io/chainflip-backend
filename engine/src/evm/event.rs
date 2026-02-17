@@ -15,12 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
+use derive_where::derive_where;
 use ethers::abi::RawLog;
 
 use std::{fmt::Debug, sync::Arc};
 // use web3::types::{Log, H256, U256};
 use ethers::types::Log;
-use sp_core::{H256, U256};
+use sp_core::{H160, H256, U256};
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
@@ -60,7 +61,7 @@ pub trait EvmEventType<Data: std::fmt::Debug>: Sync + Send {
 	fn parse_log(&self, log: Log) -> Result<Event<Data>>;
 }
 
-#[derive_where::derive_where(Default; )]
+#[derive_where(Default; )]
 pub struct EvmEventTypeCarrier<Event, TargetData> {
 	_phantom: std::marker::PhantomData<(Event, TargetData)>,
 }
@@ -82,5 +83,21 @@ impl<
 		let Event { tx_hash, log_index, event_parameters } =
 			Event::<ParseData>::new_from_unparsed_logs(log)?;
 		Ok(Event { tx_hash, log_index, event_parameters: event_parameters.into() })
+	}
+}
+
+#[derive_where(Clone;)]
+pub struct EvmEventSource<EventData> {
+	pub contract_address: H160,
+	pub event_type: Arc<dyn EvmEventType<EventData>>,
+}
+
+impl<TargetData: std::fmt::Debug + Sync + Send + 'static> EvmEventSource<TargetData> {
+	pub fn new<
+		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
+	>(
+		contract_address: H160,
+	) -> Self {
+		EvmEventSource { contract_address, event_type: evm_event_type::<ParseData, TargetData>() }
 	}
 }

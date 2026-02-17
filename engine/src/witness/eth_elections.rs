@@ -18,13 +18,12 @@ use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-		event::{evm_event_type, Event, EvmEventType},
+		event::{evm_event_type, Event, EvmEventSource},
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::{
 		common::{
-			block_height_witnesser::witness_headers,
-			block_witnesser::GenericBwVoter,
+			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
 			traits::WitnessClient,
 		},
 		eth::{
@@ -40,7 +39,7 @@ use crate::{
 		evm::{
 			contract_common::{address_states, evm_events_at_block, query_election_block},
 			erc20_deposits::{
-				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents, Erc20Events,
+				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
 			},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
@@ -67,9 +66,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
-		block_height_witnesser::{
-			primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
-		},
+		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainBlockNumberOf},
 		block_witnesser::state_machine::BWElectionProperties,
 	},
 	ElectoralSystemTypes, VoteOf,
@@ -78,12 +75,12 @@ use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
-			EthereumBlockHeightWitnesserES, EthereumChain,
-			EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
-			EthereumLiveness, EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
-			EthereumVaultDepositWitnessingES, ScUtilsCall,
-			StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
-		},
+		EthereumBlockHeightWitnesserES, EthereumChain, EthereumElectoralSystemRunner,
+		EthereumFeeTracking, EthereumKeyManagerWitnessingES, EthereumLiveness,
+		EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
+		EthereumVaultDepositWitnessingES, ScUtilsCall,
+		StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
+	},
 	EthereumInstance,
 };
 use std::{collections::HashMap, sync::Arc};
@@ -169,8 +166,7 @@ impl WitnessClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuer
 impl EvmEventClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
-		contract_address: H160,
-		event_type: Arc<dyn EvmEventType<Data>>,
+		EvmEventSource { contract_address, event_type }: &EvmEventSource<Data>,
 		query: Self::BlockQuery,
 	) -> Result<Vec<Event<Data>>> {
 		let mut contract_bloom = Bloom::default();
@@ -178,7 +174,7 @@ impl EvmEventClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQue
 
 		// if we have logs for this block, fetch them.
 		let logs = if query.bloom.contains_bloom(&contract_bloom) {
-			self.client.get_logs(query.block_hash, contract_address).await?
+			self.client.get_logs(query.block_hash, *contract_address).await?
 		} else {
 			// we know there won't be interesting logs, so don't fetch for events
 			vec![]
@@ -648,13 +644,15 @@ where
 		.expect("Failed to get Sc Utils contract address from SC");
 
 	let supported_asset_address_and_event_type = [
-		(EthAsset::Usdc, (usdc_contract_address, evm_event_type::<UsdcEvents, Erc20Events>())),
-		(EthAsset::Usdt, (usdt_contract_address, evm_event_type::<UsdtEvents, Erc20Events>())),
-		(EthAsset::Flip, (flip_contract_address, evm_event_type::<FlipEvents, Erc20Events>())),
-		(EthAsset::Wbtc, (wbtc_contract_address, evm_event_type::<WbtcEvents, Erc20Events>())),
+		(EthAsset::Usdc, EvmEventSource::new::<UsdcEvents>(usdc_contract_address)),
+		(EthAsset::Usdt, EvmEventSource::new::<UsdtEvents>(usdt_contract_address)),
+		(EthAsset::Flip, EvmEventSource::new::<FlipEvents>(flip_contract_address)),
+		(EthAsset::Wbtc, EvmEventSource::new::<WbtcEvents>(wbtc_contract_address)),
 	]
 	.into_iter()
 	.collect();
+
+	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
 
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
@@ -668,14 +666,14 @@ where
 							EvmVoter::new(client.clone()),
 							EvmDepositChannelWitnessingConfig {
 								address_checker_address,
-								vault_address,
-								supported_asset_address_and_event_type,
+								vault_contract: vault_event_source.clone(),
+								supported_assets: supported_asset_address_and_event_type,
 							},
 						),
 						GenericBwVoter::new(
 							EvmVoter::new(client.clone()),
 							VaultDepositWitnessingConfig {
-								vault_address,
+								vault: vault_event_source,
 								supported_assets: supported_erc20_tokens.clone(),
 							},
 						),

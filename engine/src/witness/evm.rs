@@ -26,7 +26,7 @@ use derive_where::derive_where;
 use itertools::Itertools;
 use sp_runtime::AccountId32;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug};
 
 use cf_chains::{evm::EvmChain, Chain, DepositChannel};
 use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
@@ -36,7 +36,7 @@ use sp_core::{H160, H256};
 use crate::{
 	evm::{
 		cached_rpc::EvmCachingClient,
-		event::{evm_event_type, Event, EvmEventType},
+		event::{Event, EvmEventSource},
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::{
@@ -61,8 +61,7 @@ pub trait EvmEventClient<Chain: ChainTypes>:
 {
 	async fn events_from_block_query<Data: Debug>(
 		&self,
-		contract_address: H160,
-		event_type: Arc<dyn EvmEventType<Data>>,
+		event_source: &EvmEventSource<Data>,
 		query: Self::BlockQuery,
 	) -> Result<Vec<Event<Data>>>;
 }
@@ -97,9 +96,8 @@ impl<CT: ChainTypes, BlockQuery> EvmVoter<CT, BlockQuery> {
 #[derive(Clone)]
 pub struct EvmDepositChannelWitnessingConfig<C: Chain> {
 	pub address_checker_address: H160,
-	pub vault_address: H160,
-	pub supported_asset_address_and_event_type:
-		HashMap<C::ChainAsset, (H160, Arc<dyn EvmEventType<Erc20Events>>)>,
+	pub vault_contract: EvmEventSource<VaultEvents>,
+	pub supported_assets: HashMap<C::ChainAsset, EvmEventSource<Erc20Events>>,
 }
 
 #[async_trait::async_trait]
@@ -132,7 +130,7 @@ where
 // ----- vault deposit witnessing -----
 #[derive_where(Clone; )]
 pub struct VaultDepositWitnessingConfig<C: Chain> {
-	pub vault_address: H160,
+	pub vault: EvmEventSource<VaultEvents>,
 	pub supported_assets: HashMap<H160, C::ChainAsset>,
 }
 
@@ -151,14 +149,7 @@ impl<
 		_properties: &(),
 		query: &Self::BlockQuery,
 	) -> Result<Vec<EvmVaultContractEvent<T, I>>> {
-		let events = self
-			.events_from_block_query(
-				config.vault_address,
-				evm_event_type::<VaultEvents, VaultEvents>(),
-				query.clone(),
-			)
-			.await?;
-
+		let events = self.events_from_block_query(&config.vault, query.clone()).await?;
 		let result = handle_vault_events::<T, I>(&config.supported_assets, events, query)?;
 		Ok(result.into_iter().sorted().collect())
 	}
