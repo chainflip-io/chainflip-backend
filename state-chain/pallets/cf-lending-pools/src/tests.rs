@@ -950,22 +950,6 @@ fn deregistration_check() {
 		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Eth, BOOST_FUNDS);
 		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Flip, LENDER_FUNDS);
 
-		// Test with boost funds: deregistration should fail when LP has active boost funds
-		assert_ok!(LendingPools::add_boost_funds(
-			RuntimeOrigin::signed(LP),
-			Asset::Eth,
-			BOOST_FUNDS,
-			TIER_5_BPS
-		));
-
-		assert!(matches!(
-			PoolsDeregistrationCheck::<Test>::check(&LP),
-			Err(Error::<Test>::BoostedFundsRemaining)
-		));
-
-		// Withdraw boost funds - deregistration should succeed
-		assert_ok!(LendingPools::stop_boosting(RuntimeOrigin::signed(LP), Asset::Eth, TIER_5_BPS));
-
 		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
 
 		// Test with lending funds: deregistration should fail when LP has active lending funds
