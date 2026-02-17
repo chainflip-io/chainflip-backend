@@ -914,8 +914,11 @@ pub trait DeregistrationCheck {
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error>;
 }
 
-impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> DeregistrationCheck
-	for (A, B)
+impl<
+		A: DeregistrationCheck,
+		B: DeregistrationCheck<AccountId = A::AccountId>,
+		C: DeregistrationCheck<AccountId = A::AccountId>,
+	> DeregistrationCheck for (A, B, C)
 {
 	type AccountId = A::AccountId;
 	type Error = DispatchError;
@@ -924,6 +927,7 @@ impl<A: DeregistrationCheck, B: DeregistrationCheck<AccountId = A::AccountId>> D
 		A::check(account_id)
 			.map_err(Into::into)
 			.and_then(|()| B::check(account_id).map_err(Into::into))
+			.and_then(|()| C::check(account_id).map_err(Into::into))
 	}
 }
 

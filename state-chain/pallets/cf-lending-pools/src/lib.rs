@@ -58,8 +58,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, LpRegistration, PoolApi, PriceFeedApi, SafeModeSet,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, LpRegistration, PoolApi,
+	PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -574,6 +574,8 @@ pub mod pallet {
 		AccountNotWhitelisted,
 		/// Liquidations are currently disabled due to safe mode.
 		LiquidationsDisabled,
+		/// LP still has funds present in the lending pool
+		LendingFundsRemaining,
 	}
 
 	#[pallet::hooks]
@@ -1073,5 +1075,25 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<(), Error<T>>(())
 		})?)
+	}
+}
+
+pub struct PoolsDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for PoolsDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		for (_, lending_pool) in GeneralLendingPools::<T>::iter() {
+			ensure!(
+				!lending_pool.lender_shares.contains_key(account_id),
+				Error::<T>::LendingFundsRemaining
+			);
+		}
+
+		ensure!(!LoanAccounts::<T>::contains_key(account_id), Error::<T>::LendingFundsRemaining);
+
+		Ok(())
 	}
 }
