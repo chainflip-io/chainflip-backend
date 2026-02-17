@@ -21,6 +21,8 @@ futures-util = { workspace = true }
 futures = { workspace = true }
 futures-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+warp = { workspace = true }
 
 # local dependencies
 pallet-cf-elections = { workspace = true, default-features = true }

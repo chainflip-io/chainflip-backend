@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chainflip Elections Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f1117;
+            color: #c9d1d9;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .header {
+            position: sticky;
+            top: 0;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            z-index: 100;
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f0f6fc;
+            white-space: nowrap;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f85149;
+        }
+        .status-dot.connected { background: #3fb950; }
+        .status-dot.paused { background: #d29922; }
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+        button {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button:hover { background: #30363d; }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button:disabled:hover { background: #21262d; }
+        button.active {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: #fff;
+        }
+        .block-info {
+            font-size: 12px;
+            color: #8b949e;
+        }
+        .content {
+            padding: 16px 20px;
+            width: 100%;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        .block-section {
+            margin-bottom: 0;
+            min-width: clamp(280px, 24vw, 420px);
+            flex: 1 1 25%;
+        }
+        .block-section.latest-block {
+            min-width: clamp(520px, 48vw, 900px);
+            flex: 2 1 50%;
+        }
+        .content.blocks-2 .block-section {
+            min-width: clamp(300px, 34vw, 540px);
+            flex: 1 1 40%;
+        }
+        .content.blocks-2 .block-section.latest-block {
+            min-width: clamp(500px, 56vw, 980px);
+            flex: 3 1 60%;
+        }
+        .content.blocks-1 .block-section,
+        .content.latest-only .block-section {
+            min-width: min(1080px, calc(100vw - 56px));
+            flex: 1 1 100%;
+        }
+        .block-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f0f6fc;
+            padding: 8px 0;
+            border-bottom: 1px solid #21262d;
+            margin-bottom: 12px;
+        }
+        .chain-section {
+            margin-bottom: 16px;
+        }
+        .chain-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #d2a8ff;
+            padding: 6px 12px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .chain-header.bitcoin { color: #f7931a; }
+        .chain-header.solana { color: #9945ff; }
+        .chain-stats {
+            color: #8b949e;
+            font-weight: 400;
+        }
+        .elections-container {
+            border: 1px solid #30363d;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+        }
+        .election {
+            padding: 8px 12px;
+            border-bottom: 1px solid #21262d;
+        }
+        .election:last-child { border-bottom: none; }
+        .election-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .election-toggle {
+            color: #484f58;
+            font-size: 10px;
+            width: 12px;
+            transition: transform 0.15s;
+        }
+        .election-toggle.open { transform: rotate(90deg); }
+        .election-type {
+            background: #21262d;
+            color: #79c0ff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .election-id {
+            color: #8b949e;
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 600px;
+        }
+        .completed-badge {
+            background: #238636;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .election-details {
+            display: none;
+            margin-top: 6px;
+            padding-left: 20px;
+        }
+        .election-details.open { display: block; }
+        .vote-section-label {
+            color: #8b949e;
+            font-size: 11px;
+            font-style: italic;
+            margin-top: 4px;
+            margin-bottom: 2px;
+        }
+        .vote-row {
+            padding: 1px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .vote-component {
+            color: #7ee787;
+            word-break: break-all;
+        }
+        .vote-count {
+            color: #d29922;
+            white-space: nowrap;
+        }
+        .extrinsic-vote .vote-component { color: #79c0ff; }
+        .no-elections {
+            padding: 12px;
+            color: #484f58;
+            font-style: italic;
+        }
+        .overlay-mode {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px 24px;
+            font-size: 14px;
+            color: #d29922;
+            z-index: 200;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Chainflip Elections</h1>
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+        <span class="block-info" id="blockInfo"></span>
+        <div class="controls">
+            <button id="stopBtn" onclick="pauseUpdates()">Stop</button>
+            <button id="resumeBtn" onclick="resumeUpdates()" disabled>Resume</button>
+            <button id="showCompletedBtn" onclick="toggleShowCompleted()">Show Completed on Older Blocks</button>
+            <button onclick="clearDisplay()">Clear</button>
+            <button onclick="toggleMode()">
+                <span id="modeLabel">History</span>
+            </button>
+        </div>
+    </div>
+    <div class="overlay-mode" id="pausedOverlay">Paused - buffering updates</div>
+    <div class="content" id="content"></div>
+
+    <script>
+        const MAX_VISIBLE_BLOCKS = 3;
+        let paused = false;
+        let latestOnly = false;
+        let showCompleted = false;
+        let pendingUpdate = null;
+        let historyBlocks = [];
+        let ws;
+
+        function isSocketOpen() {
+            return ws && ws.readyState === WebSocket.OPEN;
+        }
+
+        function setConnectedStatus() {
+            document.getElementById('statusDot').className = 'status-dot connected';
+            document.getElementById('statusText').textContent = 'Connected';
+        }
+
+        function setPausedStatus() {
+            document.getElementById('statusDot').className = 'status-dot paused';
+            document.getElementById('statusText').textContent = 'Paused';
+        }
+
+        function setDisconnectedStatus() {
+            document.getElementById('statusDot').className = 'status-dot';
+            document.getElementById('statusText').textContent = 'Disconnected';
+        }
+
+        function updatePauseControls() {
+            const stopBtn = document.getElementById('stopBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            stopBtn.disabled = paused;
+            resumeBtn.disabled = !paused;
+            resumeBtn.classList.toggle('active', paused);
+        }
+
+        function appendLiveBlock(data) {
+            historyBlocks.unshift(data);
+            if (historyBlocks.length > MAX_VISIBLE_BLOCKS) {
+                historyBlocks.pop();
+            }
+        }
+
+        function renderBlockHtml(data, blockIndex) {
+            const sectionClass = blockIndex === 0 ? 'block-section latest-block' : 'block-section';
+            return `
+                <div class="${sectionClass}">
+                    <div class="block-header">Block ${data.block_number}</div>
+                    ${renderChain('bitcoin', 'Bitcoin', data.bitcoin, blockIndex)}
+                    ${renderChain('solana', 'Solana', data.solana, blockIndex)}
+                </div>
+            `;
+        }
+
+        function renderContent() {
+            const content = document.getElementById('content');
+            if (!historyBlocks.length) {
+                content.className = 'content';
+                content.innerHTML = '';
+                document.getElementById('blockInfo').textContent = '';
+                return;
+            }
+
+            document.getElementById('blockInfo').textContent = `Block #${historyBlocks[0].block_number}`;
+            if (latestOnly) {
+                content.className = 'content latest-only blocks-1';
+                content.innerHTML = renderBlockHtml(historyBlocks[0], 0);
+            } else {
+                const orderedBlocks = [...historyBlocks].reverse();
+                content.className = `content blocks-${orderedBlocks.length}`;
+                content.innerHTML = orderedBlocks
+                    .map((block, index) => renderBlockHtml(block, orderedBlocks.length - 1 - index))
+                    .join('');
+                content.scrollLeft = content.scrollWidth;
+            }
+        }
+
+        function connect() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws`);
+            ws.onopen = () => {
+                if (paused) {
+                    setPausedStatus();
+                } else {
+                    setConnectedStatus();
+                }
+            };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (paused) {
+                    pendingUpdate = data;
+                    return;
+                }
+                appendLiveBlock(data);
+                renderContent();
+            };
+            ws.onclose = () => {
+                if (paused) {
+                    setPausedStatus();
+                } else {
+                    setDisconnectedStatus();
+                }
+                setTimeout(connect, 3000);
+            };
+            ws.onerror = () => ws.close();
+        }
+
+        function pauseUpdates() {
+            if (paused) return;
+            paused = true;
+            const overlay = document.getElementById('pausedOverlay');
+            overlay.style.display = 'block';
+            setPausedStatus();
+            updatePauseControls();
+            setTimeout(() => {
+                if (paused) {
+                    overlay.style.display = 'none';
+                }
+            }, 1500);
+        }
+
+        function resumeUpdates() {
+            if (!paused) return;
+            paused = false;
+            const overlay = document.getElementById('pausedOverlay');
+            overlay.style.display = 'none';
+            updatePauseControls();
+
+            if (isSocketOpen()) {
+                setConnectedStatus();
+            } else {
+                setDisconnectedStatus();
+            }
+
+            if (pendingUpdate) {
+                appendLiveBlock(pendingUpdate);
+                pendingUpdate = null;
+                renderContent();
+            }
+        }
+
+        function toggleShowCompleted() {
+            showCompleted = !showCompleted;
+            const button = document.getElementById('showCompletedBtn');
+            button.textContent = showCompleted
+                ? 'Hide Completed on Older Blocks'
+                : 'Show Completed on Older Blocks';
+            button.classList.toggle('active', showCompleted);
+            renderContent();
+        }
+
+        function toggleMode() {
+            latestOnly = !latestOnly;
+            document.getElementById('modeLabel').textContent = latestOnly ? 'Latest Only' : 'History';
+            renderContent();
+        }
+
+        function clearDisplay() {
+            historyBlocks = [];
+            pendingUpdate = null;
+            document.getElementById('content').innerHTML = '';
+            document.getElementById('blockInfo').textContent = '';
+        }
+
+        function shouldShowCompletedInBlock(blockIndex) {
+            return blockIndex === 0 || showCompleted;
+        }
+
+        function renderChain(cls, name, chain, blockIndex) {
+            const includeCompleted = shouldShowCompletedInBlock(blockIndex);
+            const visibleElections = includeCompleted
+                ? chain.elections
+                : chain.elections.filter(el => !el.completed);
+            if (visibleElections.length === 0) {
+                const emptyMessage = includeCompleted
+                    ? 'No elections in this block'
+                    : 'No active elections in this block';
+                return `
+                    <div class="chain-section">
+                        <div class="chain-header ${cls}">
+                            ${name}
+                            <span class="chain-stats">${chain.active_count} active, ${chain.completed_count} completed</span>
+                        </div>
+                        <div class="elections-container">
+                            <div class="no-elections">${emptyMessage}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            return `
+                <div class="chain-section">
+                    <div class="chain-header ${cls}">
+                        ${name}
+                        <span class="chain-stats">${chain.active_count} active, ${chain.completed_count} completed</span>
+                    </div>
+                    <div class="elections-container">
+                        ${visibleElections.map(el => renderElection(el, blockIndex === 0)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderElection(el, defaultExpanded) {
+            const id = 'el-' + Math.random().toString(36).slice(2);
+            const hasDetails = el.bitmap_votes.length > 0 || el.individual_votes.length > 0 || el.extrinsic_votes.length > 0;
+            const expandedClass = defaultExpanded && hasDetails ? ' open' : '';
+            return `
+                <div class="election">
+                    <div class="election-header" onclick="toggleDetails('${id}')">
+                        ${hasDetails ? `<span class="election-toggle${expandedClass}" id="${id}-toggle">&#9654;</span>` : '<span style="width:12px"></span>'}
+                        <span class="election-type">${el.election_type}</span>
+                        ${el.completed ? '<span class="completed-badge">COMPLETED</span>' : ''}
+                        <span class="election-id" title="${escapeHtml(el.election_id)}">${escapeHtml(el.election_id)}</span>
+                    </div>
+                    ${hasDetails ? `<div class="election-details${expandedClass}" id="${id}">
+                        ${renderVotes('Bitmap votes', el.bitmap_votes, '')}
+                        ${renderVotes('Individual votes', el.individual_votes, '')}
+                        ${renderExtrinsicVotes(el.extrinsic_votes)}
+                    </div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderVotes(label, votes, cls) {
+            if (!votes.length) return '';
+            return `
+                <div class="vote-section-label">${label}:</div>
+                ${votes.map(v => `
+                    <div class="vote-row ${cls}">
+                        <span class="vote-component">${escapeHtml(v.component)}</span>
+                        <span class="vote-count">${v.count} votes</span>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function renderExtrinsicVotes(votes) {
+            if (!votes.length) return '';
+            return `
+                <div class="vote-section-label">New votes this block:</div>
+                ${votes.map(v => `
+                    <div class="vote-row extrinsic-vote">
+                        <span class="election-type" style="font-size:10px">${escapeHtml(v.variant_name)}</span>
+                        <span class="vote-component">${escapeHtml(v.detail)}</span>
+                        <span class="vote-count">${v.count} votes</span>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function toggleDetails(id) {
+            const el = document.getElementById(id);
+            const toggle = document.getElementById(id + '-toggle');
+            if (el) {
+                el.classList.toggle('open');
+                if (toggle) toggle.classList.toggle('open');
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        updatePauseControls();
+        connect();
+    </script>
+</body>
+</html>
