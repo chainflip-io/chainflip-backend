@@ -27,7 +27,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
   const lpUri = cf.requirements.account.uri;
-  cf.debug(`Depositing ${amount}${ccy} of liquidity for ${lpUri}`);
+  cf.info(`Depositing ${amount}${ccy} of liquidity for ${lpUri}`);
 
   await using chainflip = await getChainflipApi();
   const chain = shortChainFromAsset(ccy);
@@ -47,7 +47,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
     refundAddress = chain === 'Hub' ? decodeDotAddressForContract(refundAddress) : refundAddress;
     refundAddress = chain === 'Sol' ? decodeSolAddress(refundAddress) : refundAddress;
 
-    cf.debug(`Registering Liquidity Refund Address for ${refundAddress}`);
+    cf.info(`Registering Liquidity Refund Address for ${refundAddress}`);
     await cfMutex.runExclusive(lpUri, async () => {
       const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
       await chainflip.tx.liquidityProvider
@@ -56,7 +56,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
     });
   }
 
-  cf.debug(`Opening new liquidity deposit channel for ${lpUri}`);
+  cf.info(`Opening new liquidity deposit channel for ${lpUri}`);
 
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
@@ -69,7 +69,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
 
-  cf.debug(`Initiating transfer to ${ingressAddress}`);
+  cf.info(`Initiating transfer to ${ingressAddress}`);
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),
@@ -80,17 +80,27 @@ export async function depositLiquidity<A extends WithLpAccount>(
 
   await cf.stepUntilEvent(
     'AssetBalances.AccountCredited',
-    assetBalancesAccountCredited.refine(
-      (event) =>
-        event.asset === ccy &&
-        event.accountId === lp.address &&
-        isWithinOnePercent(
-          event.amountCredited,
-          BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
-        ),
-    ),
+    assetBalancesAccountCredited.refine((event) => {
+      if (event.asset === ccy && event.accountId === lp.address) {
+        if (
+          isWithinOnePercent(
+            event.amountCredited,
+            BigInt(amountToFineAmount(String(amount), assetDecimals(ccy))),
+          )
+        ) {
+          return true;
+        } else {
+          cf.info(
+            `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))}.`,
+          );
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }),
   );
 
-  cf.debug(`Liquidity deposited to ${ingressAddress}`);
+  cf.info(`Liquidity deposited to ${ingressAddress}`);
   return txHash;
 }
