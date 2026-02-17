@@ -25,7 +25,7 @@ use crate::{
 		common::{
 			block_height_witnesser::witness_headers,
 			block_witnesser::GenericBwVoter,
-			traits::{WitnessClient, WitnessClientForBlockData},
+			traits::WitnessClient,
 		},
 		eth::{
 			sc_utils::{
@@ -61,14 +61,14 @@ use engine_sc_client::{
 };
 use ethers::{
 	abi::ethereum_types::BloomInput,
-	types::{Block, Bloom, Log},
+	types::{Block, Bloom},
 };
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::{
 		block_height_witnesser::{
-			primitives::Header, ChainBlockHashOf, ChainBlockNumberOf, ChainTypes,
+			primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
 		},
 		block_witnesser::state_machine::BWElectionProperties,
 	},
@@ -77,17 +77,14 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthereumDeposit, EthereumDepositAndSCCall};
 use sp_core::{H160, H256};
 use state_chain_runtime::{
-	chainflip::witnessing::{
-		ethereum_elections::{
-			EthereumBlockHeightWitnesserES, EthereumChain, EthereumDepositChannelWitnessingES,
+	chainflip::witnessing::ethereum_elections::{
+			EthereumBlockHeightWitnesserES, EthereumChain,
 			EthereumElectoralSystemRunner, EthereumFeeTracking, EthereumKeyManagerWitnessingES,
 			EthereumLiveness, EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
 			EthereumVaultDepositWitnessingES, ScUtilsCall,
 			StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
 		},
-		pallet_hooks::EvmVaultContractEvent,
-	},
-	EthereumInstance, Runtime,
+	EthereumInstance,
 };
 use std::{collections::HashMap, sync::Arc};
 

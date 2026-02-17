@@ -28,7 +28,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use cf_chains::{evm::EvmChain, instances::ChainInstanceAlias, Chain, DepositChannel};
+use cf_chains::{evm::EvmChain, Chain, DepositChannel};
 use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::{H160, H256};
