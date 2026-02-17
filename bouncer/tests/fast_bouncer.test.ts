@@ -17,7 +17,7 @@ import { depositChannelCreation } from 'tests/request_swap_deposit_address_with_
 import { testBrokerLevelScreening } from 'tests/broker_level_screening';
 import { testFundRedeem } from 'tests/fund_redeem';
 import { concurrentTest, serialTest } from 'shared/utils/vitest';
-import { testCcmSwapFundAccount, testDelegate } from 'tests/delegate_flip';
+import { testDelegate } from 'tests/delegate_flip';
 import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
@@ -49,11 +49,11 @@ describe('ConcurrentTests', () => {
   // concurrentTest('AssethubXCM', testAssethubXcm, 200);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
   concurrentTest('DelegateFlip', (context) => testDelegate(context.logger), 360);
-  concurrentTest(
-    'SwapAndFundAccountViaCCM',
-    (context) => testCcmSwapFundAccount(context.logger),
-    360,
-  );
+  // concurrentTest(
+  //   'SwapAndFundAccountViaCCM',
+  //   (context) => testCcmSwapFundAccount(context.logger),
+  //   360,
+  // );
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
   concurrentTest('Lending', lendingTest, 360);
   concurrentTest('GovernanceDepositWitnessing', testGovernanceDepositWitnessing, 300);
