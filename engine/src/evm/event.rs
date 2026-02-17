@@ -16,10 +16,12 @@
 
 use anyhow::{anyhow, Result};
 use derive_where::derive_where;
-use ethers::abi::RawLog;
+use ethers::{abi::RawLog, contract::EthLogDecode};
 
-use std::{fmt::Debug, sync::Arc};
-// use web3::types::{Log, H256, U256};
+use std::{
+	fmt::{Debug, Display, Formatter},
+	sync::Arc,
+};
 use ethers::types::Log;
 use sp_core::{H160, H256, U256};
 
@@ -34,13 +36,13 @@ pub struct Event<EventParameters: Debug> {
 	pub event_parameters: EventParameters,
 }
 
-impl<EventParameters: Debug> std::fmt::Display for Event<EventParameters> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<EventParameters: Debug> Display for Event<EventParameters> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		write!(f, "EventParameters: {:?}; tx_hash: {:#x}", self.event_parameters, self.tx_hash)
 	}
 }
 
-impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParameters> {
+impl<EventParameters: Debug + EthLogDecode> Event<EventParameters> {
 	pub fn new_from_unparsed_logs(log: Log) -> Result<Self> {
 		Ok(Self {
 			tx_hash: log
@@ -57,7 +59,7 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 	}
 }
 
-pub trait EvmEventType<Data: std::fmt::Debug>: Sync + Send {
+pub trait EvmEventType<Data: Debug>: Sync + Send {
 	fn parse_log(&self, log: Log) -> Result<Event<Data>>;
 }
 
@@ -67,17 +69,15 @@ pub struct EvmEventTypeCarrier<Event, TargetData> {
 }
 
 pub fn evm_event_type<
-	ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
-	TargetData: std::fmt::Debug + Sync + Send + 'static,
+	ParseData: EthLogDecode + Debug + Into<TargetData> + 'static,
+	TargetData: Debug + Sync + Send + 'static,
 >() -> Arc<dyn EvmEventType<TargetData>> {
 	let event_carrier: EvmEventTypeCarrier<ParseData, TargetData> = Default::default();
 	Arc::new(event_carrier)
 }
 
-impl<
-		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData>,
-		TargetData: std::fmt::Debug + Sync + Send,
-	> EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
+impl<ParseData: EthLogDecode + Debug + Into<TargetData>, TargetData: Debug + Sync + Send>
+	EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
 {
 	fn parse_log(&self, log: Log) -> Result<Event<TargetData>> {
 		let Event { tx_hash, log_index, event_parameters } =
@@ -92,10 +92,8 @@ pub struct EvmEventSource<EventData> {
 	pub event_type: Arc<dyn EvmEventType<EventData>>,
 }
 
-impl<TargetData: std::fmt::Debug + Sync + Send + 'static> EvmEventSource<TargetData> {
-	pub fn new<
-		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
-	>(
+impl<TargetData: Debug + Sync + Send + 'static> EvmEventSource<TargetData> {
+	pub fn new<ParseData: EthLogDecode + Debug + Into<TargetData> + 'static>(
 		contract_address: H160,
 	) -> Self {
 		EvmEventSource { contract_address, event_type: evm_event_type::<ParseData, TargetData>() }
