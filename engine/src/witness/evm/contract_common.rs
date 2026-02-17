@@ -24,7 +24,7 @@ use crate::{
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::evm::{
-		erc20_deposits::Erc20Events, EvmAddressStateClient, EvmBlockQuery,
+		EvmAddressStateClient, EvmBlockQuery,
 		EvmDepositChannelWitnessingConfig, EvmEventClient,
 	},
 };
@@ -34,8 +34,8 @@ use cf_chains::{
 	DepositChannel,
 };
 use ethers::{
-	abi::{ethereum_types::BloomInput, RawLog},
-	types::{Bloom, Log},
+	abi::ethereum_types::BloomInput,
+	types::Bloom,
 };
 use futures::try_join;
 use pallet_cf_elections::electoral_systems::{
@@ -43,13 +43,12 @@ use pallet_cf_elections::electoral_systems::{
 };
 use std::{
 	collections::{HashMap, HashSet},
-	fmt::Debug,
 	sync::Arc,
 };
 
 use super::{super::common::chain_source::Header, vault::VaultEvents};
-use anyhow::{anyhow, ensure, Result};
-use sp_core::{H160, H256, U256};
+use anyhow::{ensure, Result};
+use sp_core::{H160, H256};
 
 // ----- implementation ------
 
