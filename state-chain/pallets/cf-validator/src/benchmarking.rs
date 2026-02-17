@@ -121,10 +121,11 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 	init_bidders::<T>(primary_candidates, epoch, 100_000u128);
 	init_bidders::<T>(secondary_candidates, epoch + LARGE_OFFSET, 90_000u128);
 
-	Pallet::<T>::try_start_keygen(RotationState::from_auction_outcome::<T>(AuctionOutcome {
+	Pallet::<T>::start_keygen_attempt(RotationState::from_auction_outcome::<T>(AuctionOutcome {
 		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
 		bond: 100u32.into(),
-	}));
+	}))
+	.unwrap();
 
 	assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 }
