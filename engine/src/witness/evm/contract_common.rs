@@ -24,8 +24,7 @@ use crate::{
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::evm::{
-		EvmAddressStateClient, EvmBlockQuery,
-		EvmDepositChannelWitnessingConfig, EvmEventClient,
+		EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig, EvmEventClient,
 	},
 };
 use cf_chains::{
@@ -33,10 +32,7 @@ use cf_chains::{
 	witness_period::SaturatingStep,
 	DepositChannel,
 };
-use ethers::{
-	abi::ethereum_types::BloomInput,
-	types::Bloom,
-};
+use ethers::{abi::ethereum_types::BloomInput, types::Bloom};
 use futures::try_join;
 use pallet_cf_elections::electoral_systems::{
 	block_height_witnesser::ChainTypes, block_witnesser::state_machine::EngineElectionType,
@@ -453,7 +449,6 @@ where
 	use pallet_cf_ingress_egress::DepositWitness;
 
 	let address_checker_address = config.address_checker_address;
-	let vault_address = config.vault_address;
 
 	let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
 		deposit_addresses.into_iter().fold(
@@ -488,13 +483,8 @@ where
 	let (undeployed_addr_states, events) = futures::try_join!(
 		client.address_states(address_checker_address, query.clone(), undeployed_addresses,),
 		async {
-			let events = client
-				.events_from_block_query(
-					vault_address,
-					evm_event_type::<VaultEvents, VaultEvents>(),
-					query.clone(),
-				)
-				.await?;
+			let events =
+				client.events_from_block_query(&config.vault_contract, query.clone()).await?;
 			Ok::<_, anyhow::Error>(
 				events
 					.into_iter()
@@ -515,14 +505,11 @@ where
 
 	// Handle each asset type separately with its specific event type
 	for (asset, deposit_channels) in erc20_deposit_channels {
-		let (contract_address, event_type) =
-			config.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
-				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
-			})?;
+		let event_source = config.supported_assets.get(&asset).ok_or_else(|| {
+			anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
+		})?;
 
-		let events = client
-			.events_from_block_query(*contract_address, event_type.clone(), query.clone())
-			.await?;
+		let events = client.events_from_block_query(event_source, query.clone()).await?;
 
 		let asset_ingresses = events
 			.into_iter()
