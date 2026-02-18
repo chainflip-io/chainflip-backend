@@ -15,7 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{
-	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	evm::{
+		EvmChain, EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee,
+	},
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -37,7 +39,10 @@ use super::{
 };
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
-	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+	witness::{
+		common::{RuntimeCallHasChain, RuntimeHasChain},
+		evm::EvmTransactionClient,
+	},
 };
 use num_traits::Zero;
 
@@ -61,16 +66,10 @@ impl Key {
 
 use anyhow::Result;
 
-use crate::evm::{
-	cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-	rpc::EvmRpcSigningClient,
-};
+use crate::evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_vaults::VaultKeyRotatedExternally;
-use state_chain_runtime::{
-	chainflip::witnessing::pallet_hooks::{self, EvmKeyManagerEvent},
-	Runtime,
-};
+use state_chain_runtime::chainflip::witnessing::pallet_hooks::{self, EvmKeyManagerEvent};
 
 use crate::evm::event::Event;
 
@@ -92,18 +91,17 @@ pub trait KeyManagerEventConfig {
 	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
 }
 
-pub async fn handle_key_manager_events<Config>(
-	config: &Config,
+pub async fn handle_key_manager_events<
+	T: pallet_hooks::Config<I, TargetChain: EvmChain>,
+	I: 'static,
+>(
+	client: &impl EvmTransactionClient,
 	events: Vec<Event<KeyManagerEvents>>,
 	block_height: u64,
-) -> Result<Vec<EvmKeyManagerEvent<Runtime, Config::Instance>>>
-where
-	Config: KeyManagerEventConfig,
-	Runtime: pallet_hooks::Config<Config::Instance, TargetChain = Config::Chain>,
-{
+) -> Result<Vec<EvmKeyManagerEvent<T, I>>> {
 	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
-		handle_key_manager_event::<Config>(
-			config,
+		handle_key_manager_event::<T, I>(
+			client,
 			event.event_parameters,
 			event.tx_hash,
 			block_height,
@@ -115,16 +113,12 @@ where
 	.collect())
 }
 
-async fn handle_key_manager_event<Config>(
-	config: &Config,
+async fn handle_key_manager_event<T: pallet_hooks::Config<I, TargetChain: EvmChain>, I: 'static>(
+	client: &impl EvmTransactionClient,
 	event: KeyManagerEvents,
 	tx_hash: H256,
 	block_height: u64,
-) -> Result<Option<EvmKeyManagerEvent<Runtime, Config::Instance>>>
-where
-	Config: KeyManagerEventConfig,
-	Runtime: pallet_hooks::Config<Config::Instance, TargetChain = Config::Chain>,
-{
+) -> Result<Option<EvmKeyManagerEvent<T, I>>> {
 	Ok(Some(match event {
 		KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 			new_agg_key, ..
@@ -135,7 +129,7 @@ where
 		}),
 		KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter { sig_data, .. }) => {
 			let TransactionReceipt { gas_used, effective_gas_price, from, to, .. } =
-				config.client().transaction_receipt(tx_hash).await?;
+				client.transaction_receipt(tx_hash).await?;
 
 			let gas_used = gas_used
 				.ok_or_else(|| {
@@ -153,7 +147,7 @@ where
 				.try_into()
 				.map_err(anyhow::Error::msg)?;
 
-			let transaction = config.client().get_transaction(tx_hash).await?;
+			let transaction = client.get_transaction(tx_hash).await?;
 			let tx_metadata = EvmTransactionMetadata {
 				contract: to.expect("To have a contract"),
 				max_fee_per_gas: transaction.max_fee_per_gas,

@@ -41,10 +41,10 @@ use crate::{
 			erc20_deposits::{
 				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
 			},
-			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
-			vault::{handle_vault_events, VaultEvents},
-			ConfigTrait, EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig,
-			EvmEventClient, EvmVoter, VaultDepositWitnessingConfig,
+			key_manager::KeyManagerEvents,
+			vault::VaultEvents,
+			EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig,
+			EvmEventClient, EvmKeyManagerWitnessingConfig, EvmVoter, VaultDepositWitnessingConfig,
 		},
 	},
 };
@@ -76,9 +76,8 @@ use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumElectoralSystemRunner,
-		EthereumFeeTracking, EthereumKeyManagerWitnessingES, EthereumLiveness,
-		EthereumScUtilsWitnessingES, EthereumStateChainGatewayWitnessingES,
-		EthereumVaultDepositWitnessingES, ScUtilsCall,
+		EthereumFeeTracking, EthereumLiveness, EthereumScUtilsWitnessingES,
+		EthereumStateChainGatewayWitnessingES, ScUtilsCall,
 		StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
@@ -238,40 +237,6 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EvmVoter<EthereumChain, EvmSin
 // --- egress witnessing ---
 
 #[derive(Clone)]
-pub struct EthereumVaultDepositWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	vault_address: H160,
-	supported_assets: HashMap<H160, assets::eth::Asset>,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<EthereumVaultDepositWitnessingES> for EthereumVaultDepositWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <EthereumVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <EthereumVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: _vault, election_type, .. } =
-			properties;
-		let (block, return_block_hash) =
-			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
-
-		let events = evm_events_at_block::<VaultEvents>(
-			&self.client,
-			evm_event_type::<VaultEvents, VaultEvents>(),
-			self.vault_address,
-			block.hash,
-			block.bloom,
-		)
-		.await?;
-
-		let result = handle_vault_events(&self.supported_assets, events, &block_height)?;
-
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
-	}
-}
-
-#[derive(Clone)]
 pub struct EthereumStateChainGatewayWitnesserVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
 	state_chain_gateway_address: H160,
@@ -342,48 +307,6 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 				_ => {},
 			}
 		}
-
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
-	}
-}
-
-#[derive(Clone)]
-pub struct EthereumKeyManagerWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	key_manager_address: H160,
-}
-
-impl KeyManagerEventConfig for EthereumKeyManagerWitnesserVoter {
-	type Chain = Ethereum;
-	type Instance = EthereumInstance;
-
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
-		&self.client
-	}
-}
-
-#[async_trait::async_trait]
-impl VoterApi<EthereumKeyManagerWitnessingES> for EthereumKeyManagerWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <EthereumKeyManagerWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <EthereumKeyManagerWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumKeyManagerWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: _key_manager, election_type, .. } =
-			properties;
-		let (block, return_block_hash) =
-			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
-
-		let events = evm_events_at_block::<KeyManagerEvents>(
-			&self.client,
-			evm_event_type::<KeyManagerEvents, KeyManagerEvents>(),
-			self.key_manager_address,
-			block.hash,
-			block.bloom,
-		)
-		.await?;
-
-		let result = handle_key_manager_events(self, events, block_height).await?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
@@ -653,6 +576,7 @@ where
 	.collect();
 
 	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
+	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
 
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
@@ -677,10 +601,10 @@ where
 								supported_assets: supported_erc20_tokens.clone(),
 							},
 						),
-						EthereumKeyManagerWitnesserVoter {
-							client: client.clone(),
-							key_manager_address,
-						},
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source },
+						),
 						EthereumFeeVoter { client: client.clone() },
 						EthereumLivenessVoter { client: client.clone() },
 						EthereumStateChainGatewayWitnesserVoter {
