@@ -66,7 +66,11 @@ use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-		rpc::EvmRpcSigningClient,
+		event::EvmEventSource,
+		rpc::{address_checker::AddressState, EvmRpcSigningClient},
+	},
+	witness::evm::{
+		contract_common::address_states, EvmAddressStateClient, EvmBlockQuery, EvmEventClient,
 	},
 };
 
@@ -79,13 +83,14 @@ pub struct EvmBlockRangeQuery<C: ChainWitnessConfig> {
 	pub hash_of_last_block: H256,
 }
 
-#[derive(Clone)]
-pub struct ArbitrumBlockHeightWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
+impl EvmBlockQuery for EvmBlockRangeQuery<Arbitrum> {
+	fn get_lowest_block_height_of_query(&self) -> u64 {
+		*self.blocks_heights.into_range_inclusive().start()
+	}
 }
 
 #[async_trait::async_trait]
-impl WitnessClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
+impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>> {
 	type BlockQuery = EvmBlockRangeQuery<Arbitrum>;
 
 	// --- BHW methods ---
@@ -176,7 +181,57 @@ impl WitnessClient<ArbitrumChain> for ArbitrumBlockHeightWitnesserVoter {
 }
 
 #[async_trait::async_trait]
-impl VoterApi<ArbitrumBlockHeightWitnesserES> for ArbitrumBlockHeightWitnesserVoter {
+impl EvmEventClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>> {
+	async fn events_from_block_query<Data: std::fmt::Debug>(
+		&self,
+		EvmEventSource { contract_address, event_type }: &EvmEventSource<Data>,
+		query: Self::BlockQuery,
+	) -> Result<Vec<Event<Data>>> {
+		Ok(self
+			.client
+			.get_logs_range(query.blocks_heights.into_range_inclusive(), *contract_address)
+			.await?
+			.into_iter()
+			.filter_map(|unparsed_log| -> Option<Event<_>> {
+				event_type
+					.parse_log(unparsed_log)
+					.map_err(|err| {
+						tracing::error!(
+						    "event for contract {} could not be decoded in block range {:?}. Error: {err}",
+						    contract_address, query.blocks_heights
+					    )
+					})
+					.ok()
+			})
+			.collect())
+	}
+}
+
+#[async_trait::async_trait]
+impl EvmAddressStateClient<ArbitrumChain>
+	for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>>
+{
+	async fn address_states(
+		&self,
+		address_checker_address: H160,
+		query: Self::BlockQuery,
+		addresses: Vec<H160>,
+	) -> Result<HashMap<H160, (AddressState, AddressState)>> {
+		address_states(
+			&self.client,
+			address_checker_address,
+			query.parent_hash_of_first_block,
+			query.hash_of_last_block,
+			addresses,
+		)
+		.await
+	}
+}
+
+#[async_trait::async_trait]
+impl VoterApi<ArbitrumBlockHeightWitnesserES>
+	for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>>
+{
 	async fn vote(
 		&self,
 		_settings: <ArbitrumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectoralSettings,
@@ -461,7 +516,7 @@ where
 					scope,
 					state_chain_client,
 					CompositeVoter::<ArbitrumElectoralSystemRunner, _>::new((
-						ArbitrumBlockHeightWitnesserVoter { client: client.clone() },
+						EvmVoter::new(client.clone()),
 						ArbitrumDepositChannelWitnesserVoter {
 							client: client.clone(),
 							address_checker_address,
