@@ -52,7 +52,17 @@ where
 				|(
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
-				)| { LimitOrder { base_asset, account_id, side, order_id, tick, amount } },
+				)| {
+					LimitOrder {
+						base_asset,
+						quote_asset: STABLE_ASSET,
+						account_id,
+						side,
+						order_id,
+						tick,
+						amount,
+					}
+				},
 			)
 			.collect()
 	}
@@ -105,7 +115,17 @@ where
 				|(
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
-				)| { LimitOrder { base_asset, account_id, side, order_id, tick, amount } },
+				)| {
+					LimitOrder {
+						base_asset,
+						quote_asset: STABLE_ASSET,
+						account_id,
+						side,
+						order_id,
+						tick,
+						amount,
+					}
+				},
 			)
 			.filter(|order| order.base_asset == base_asset && accounts.contains(&order.account_id))
 			.collect())

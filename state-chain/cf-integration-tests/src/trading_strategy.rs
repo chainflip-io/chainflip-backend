@@ -295,7 +295,7 @@ fn oracle_strategy_basic_usage() {
             register_refund_addresses(&DORIS);
             credit_account(&DORIS, BASE_ASSET, AMOUNT);
             const STRATEGY: TradingStrategy =
-                TradingStrategy::OracleTracking { base_asset: BASE_ASSET, buy_offset_tick: -10, sell_offset_tick: 10 };
+                TradingStrategy::OracleTracking { base_asset: BASE_ASSET, quote_asset: STABLE_ASSET, min_buy_offset_tick: -10, max_buy_offset_tick:  2, min_sell_offset_tick: 2, max_sell_offset_tick: 10};
             assert_ok!(TradingStrategyPallet::deploy_strategy(
                 RuntimeOrigin::signed(DORIS),
                 STRATEGY.clone(),
@@ -314,13 +314,13 @@ fn oracle_strategy_basic_usage() {
 			advance_blocks(1);
 			assert_matching_event_count!(
 				Runtime,
-				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 1
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 2
 			);
 			assert_eq!(state_chain_runtime::LiquidityPools::limit_orders(
 				BASE_ASSET,
 				STABLE_ASSET,
 				&BTreeSet::from([strategy_id.clone()]),
-			).unwrap(), 1);
+			).unwrap().len(), 2);
 
 
 			// Make sure the orders did not update without a reason
@@ -338,16 +338,33 @@ fn oracle_strategy_basic_usage() {
 				Price::from_usd_cents(BASE_ASSET, STARTING_PRICE_CENTS-1),
 			);
 			advance_blocks(1);
-			 assert_matching_event_count!(
+			
+			// Orders at the old ticks are removed and new ones are added at the new ticks
+			const ORDER_AMOUNT: AssetAmount = AMOUNT / 2;
+			 assert_has_matching_event!(
 				Runtime,
 				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
-					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(AMOUNT)),
-					.. }) => 1);
-			assert_matching_event_count!(
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
+					tick: -199,
+					.. }));
+			assert_has_matching_event!(
 				Runtime,
 				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
-					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(AMOUNT)),
-					.. }) => 1);
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
+					tick: -195,
+					.. }));
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(ORDER_AMOUNT)),
+					tick: -296,
+					.. }));
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { 
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(ORDER_AMOUNT)),
+					tick: -300,
+					.. }));
 
             // Do a swap
             let _ = do_eth_swap(

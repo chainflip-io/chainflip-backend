@@ -1191,6 +1191,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 				.cloned()
 				.map(|order| cf_amm::common::LimitOrder {
 					base_asset,
+					quote_asset,
 					account_id: order.lp,
 					side: Side::Sell,
 					order_id: order.id.saturated_into(),
@@ -1200,6 +1201,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 				.chain(pool.limit_orders.bids.iter().cloned().map(|order| {
 					cf_amm::common::LimitOrder {
 						base_asset,
+						quote_asset,
 						account_id: order.lp,
 						side: Side::Buy,
 						order_id: order.id.saturated_into(),

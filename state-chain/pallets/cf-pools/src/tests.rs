@@ -1723,6 +1723,7 @@ fn test_get_limit_orders() {
 			orders,
 			vec![cf_amm::common::LimitOrder {
 				base_asset: ASSET,
+				quote_asset: STABLE_ASSET,
 				account_id: ALICE,
 				side: Side::Sell,
 				order_id: 0,
