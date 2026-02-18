@@ -14,20 +14,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-	evm::{
-		event::{evm_event_type, Event, EvmEventType},
-		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
-	},
+	evm::{event::Event, retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult},
 	witness::{
 		common::{
 			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
 			traits::WitnessClient,
 		},
 		evm::{
-			contract_common::{evm_events_at_block_range, query_election_block},
-			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents, Erc20Events},
-			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
-			vault::{handle_vault_events, VaultEvents},
+			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents},
+			key_manager::KeyManagerEvents,
+			vault::VaultEvents,
 			EvmDepositChannelWitnessingConfig, EvmKeyManagerWitnessingConfig, EvmVoter,
 			VaultDepositWitnessingConfig,
 		},
@@ -45,22 +41,19 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi, STATE_CHAIN_CONNECTION,
 };
-use ethers::types::{Bloom, Bytes};
+use ethers::types::Bytes;
 use futures::FutureExt;
-use itertools::Itertools;
 use pallet_cf_elections::{
-	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainBlockNumberOf},
-		block_witnesser::state_machine::BWElectionProperties,
+	electoral_systems::block_height_witnesser::{
+		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
 use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::arbitrum_elections::{
-		ArbitrumBlockHeightWitnesserES, ArbitrumChain, ArbitrumDepositChannelWitnessingES,
-		ArbitrumElectoralSystemRunner, ArbitrumFeeTracking, ArbitrumKeyManagerWitnessingES,
-		ArbitrumLiveness, ArbitrumVaultDepositWitnessingES, ARBITRUM_MAINNET_SAFETY_BUFFER,
+		ArbitrumBlockHeightWitnesserES, ArbitrumChain, ArbitrumElectoralSystemRunner,
+		ArbitrumFeeTracking, ArbitrumLiveness, ARBITRUM_MAINNET_SAFETY_BUFFER,
 	},
 	ArbitrumInstance,
 };
@@ -248,159 +241,6 @@ impl VoterApi<ArbitrumBlockHeightWitnesserES>
 			"ARB BHW",
 		)
 		.await
-	}
-}
-
-#[derive(Clone)]
-pub struct ArbitrumDepositChannelWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	address_checker_address: H160,
-	vault_address: H160,
-	supported_asset_address_and_event_type:
-		HashMap<assets::arb::Asset, (H160, Arc<dyn EvmEventType<Erc20Events>>)>,
-}
-
-#[async_trait::async_trait]
-impl crate::witness::evm::contract_common::DepositChannelWitnesserConfig<Arbitrum, ArbitrumChain>
-	for ArbitrumDepositChannelWitnesserVoter
-{
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
-		&self.client
-	}
-
-	fn address_checker_address(&self) -> H160 {
-		self.address_checker_address
-	}
-
-	fn vault_address(&self) -> H160 {
-		self.vault_address
-	}
-
-	async fn get_events_for_erc20_asset(
-		&self,
-		asset: ArbAsset,
-		_bloom: Option<Bloom>,
-		block_height: BlockWitnessRange<Arbitrum>,
-		_block_hash: sp_core::H256,
-	) -> Result<Option<Vec<Event<Erc20Events>>>> {
-		let (contract_address, event_type) =
-			self.supported_asset_address_and_event_type.get(&asset).ok_or_else(|| {
-				anyhow::anyhow!("Tried to get erc20 events for unsupported asset: {asset:?}")
-			})?;
-
-		let events = evm_events_at_block_range::<_, ArbitrumChain>(
-			&self.client,
-			event_type.clone(),
-			*contract_address,
-			block_height,
-		)
-		.await?;
-
-		return Ok(Some(events));
-	}
-}
-
-#[async_trait::async_trait]
-impl VoterApi<ArbitrumDepositChannelWitnessingES> for ArbitrumDepositChannelWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <ArbitrumDepositChannelWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<ArbitrumDepositChannelWitnessingES>>, anyhow::Error> {
-		use state_chain_runtime::chainflip::witnessing::arbitrum_elections::ArbitrumChain;
-
-		let BWElectionProperties {
-			block_height, properties: deposit_addresses, election_type, ..
-		} = properties;
-
-		let (witnesses, return_block_hash) =
-			crate::witness::evm::contract_common::witness_deposit_channels_generic::<
-				cf_chains::Arbitrum,
-				ArbitrumChain,
-				_,
-			>(self, block_height, election_type, deposit_addresses)
-			.await?;
-
-		Ok(Some((witnesses, return_block_hash)))
-	}
-}
-
-#[derive(Clone)]
-pub struct ArbitrumVaultDepositWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	vault_address: H160,
-	supported_assets: HashMap<H160, assets::arb::Asset>,
-}
-
-#[async_trait::async_trait]
-impl VoterApi<ArbitrumVaultDepositWitnessingES> for ArbitrumVaultDepositWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <ArbitrumVaultDepositWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <ArbitrumVaultDepositWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<ArbitrumVaultDepositWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: _vault, election_type, .. } =
-			properties;
-		let (_block, return_block_hash) =
-			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
-
-		let events = evm_events_at_block_range::<VaultEvents, ArbitrumChain>(
-			&self.client,
-			evm_event_type::<VaultEvents, VaultEvents>(),
-			self.vault_address,
-			block_height,
-		)
-		.await?;
-
-		let result = handle_vault_events(&self.supported_assets, events, &block_height)?;
-
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
-	}
-}
-
-#[derive(Clone)]
-pub struct ArbitrumKeyManagerWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	key_manager_address: H160,
-}
-
-impl KeyManagerEventConfig for ArbitrumKeyManagerWitnesserVoter {
-	type Chain = Arbitrum;
-	type Instance = ArbitrumInstance;
-
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient> {
-		&self.client
-	}
-}
-
-#[async_trait::async_trait]
-impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVoter {
-	async fn vote(
-		&self,
-		_settings: <ArbitrumKeyManagerWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <ArbitrumKeyManagerWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<ArbitrumKeyManagerWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: _key_manager, election_type, .. } =
-			properties;
-		let (_block, return_block_hash) =
-			query_election_block::<_, Arbitrum>(&self.client, block_height, election_type).await?;
-
-		let events = evm_events_at_block_range::<KeyManagerEvents, ArbitrumChain>(
-			&self.client,
-			evm_event_type::<KeyManagerEvents, KeyManagerEvents>(),
-			self.key_manager_address,
-			block_height,
-		)
-		.await?;
-
-		let result = handle_key_manager_events(
-			&EvmVoter::<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>>::new(self.client.clone()),
-			events,
-			*block_height.root(),
-		)
-		.await?;
-
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
 
