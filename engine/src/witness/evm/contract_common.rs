@@ -16,27 +16,18 @@
 
 use crate::{
 	evm::{
-		cached_rpc::{
-			AddressCheckerRetryRpcApiWithResult, EvmCachingClient, EvmRetryRpcApiWithResult,
-		},
-		event::{Event, EvmEventType},
-		retry_rpc::EvmRetryRpcApi,
-		rpc::{address_checker::AddressState, EvmRpcSigningClient},
+		cached_rpc::AddressCheckerRetryRpcApiWithResult, event::Event, retry_rpc::EvmRetryRpcApi,
+		rpc::address_checker::AddressState,
 	},
 	witness::evm::{
 		EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig, EvmEventClient,
 	},
 };
-use cf_chains::{evm::EvmChain, witness_period::SaturatingStep, DepositChannel};
+use cf_chains::{evm::EvmChain, DepositChannel};
 use ethers::{abi::ethereum_types::BloomInput, types::Bloom};
 use futures::try_join;
-use pallet_cf_elections::electoral_systems::{
-	block_height_witnesser::ChainTypes, block_witnesser::state_machine::EngineElectionType,
-};
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
+use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
+use std::collections::{HashMap, HashSet};
 
 use super::{super::common::chain_source::Header, vault::VaultEvents};
 use anyhow::{ensure, Result};
@@ -78,94 +69,6 @@ where
 	.collect::<anyhow::Result<Vec<_>>>()
 }
 
-pub struct EvmBlockHeader {
-	pub hash: H256,
-	pub parent_hash: H256,
-	pub bloom: Option<Bloom>,
-}
-
-pub async fn query_election_block<
-	CT: ChainTypes<ChainBlockHash = H256>,
-	C: cf_chains::Chain<ChainBlockNumber = u64>,
->(
-	client: &EvmCachingClient<EvmRpcSigningClient>,
-	block_height: CT::ChainBlockNumber,
-	election_type: EngineElectionType<CT>,
-) -> Result<(EvmBlockHeader, Option<CT::ChainBlockHash>)> {
-	match election_type {
-		EngineElectionType::ByHash(hash) => {
-			let block = client.block_by_hash(hash).await?;
-			if let Some(block_hash) = block.hash {
-				if block_hash != hash {
-					return Err(anyhow::anyhow!(
-						"Block hash from RPC ({}) doesn't match election block hash: {}",
-						block_hash,
-						hash
-					));
-				}
-				Ok((
-					EvmBlockHeader {
-						hash: block_hash,
-						parent_hash: if C::WITNESS_PERIOD == 1 {
-							block.parent_hash
-						} else {
-							let block_number_range = C::block_witness_range(
-								block.number.ok_or(anyhow::anyhow!("No block number"))?.low_u64(),
-							);
-							client.block((*block_number_range.start()).into()).await?.parent_hash
-						},
-						bloom: if C::WITNESS_PERIOD == 1 {
-							Some(block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)))
-						} else {
-							None
-						},
-					},
-					None,
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {:?}",
-					block_height
-				))
-			}
-		},
-		EngineElectionType::BlockHeight { submit_hash } => {
-			let block_number_range = block_height.into_range_inclusive();
-			let block = client.block((*block_number_range.end()).into()).await?;
-			if let (Some(block_number), Some(block_hash)) = (block.number, block.hash) {
-				if block_number.as_u64() != *block_number_range.end() {
-					return Err(anyhow::anyhow!(
-						"Block number from RPC ({}) doesn't match election block height: {:?}",
-						block_number,
-						block_height
-					));
-				}
-				Ok((
-					EvmBlockHeader {
-						hash: block_hash,
-						parent_hash: if C::WITNESS_PERIOD == 1 {
-							block.parent_hash
-						} else {
-							client.block((*block_number_range.start()).into()).await?.parent_hash
-						},
-						bloom: if C::WITNESS_PERIOD == 1 {
-							Some(block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)))
-						} else {
-							None
-						},
-					},
-					if submit_hash { Some(block_hash) } else { None },
-				))
-			} else {
-				Err(anyhow::anyhow!(
-					"Block number or hash is none for block number: {:?}",
-					block_height
-				))
-			}
-		},
-	}
-}
-
 pub async fn address_states<EvmCachingClient>(
 	eth_rpc: &EvmCachingClient,
 	address_checker_address: H160,
@@ -193,68 +96,6 @@ where
 		.into_iter()
 		.zip(previous_address_states.into_iter().zip(address_states))
 		.collect::<HashMap<H160, _>>())
-}
-
-pub async fn evm_events_at_block_range<Data: std::fmt::Debug, C: ChainTypes>(
-	client: &impl EvmRetryRpcApiWithResult,
-	event_type: Arc<dyn EvmEventType<Data>>,
-	contract_address: H160,
-	block_range: C::ChainBlockNumber,
-) -> Result<Vec<Event<Data>>> {
-	Ok(client
-		.get_logs_range(block_range.into_range_inclusive(), contract_address)
-		.await?
-		.into_iter()
-		.filter_map(|unparsed_log| -> Option<Event<Data>> {
-			event_type
-				.parse_log(unparsed_log)
-				.map_err(|err| {
-					tracing::error!(
-						"event for contract {} could not be decoded in block range {:?}. Error: {err}",
-						contract_address, block_range
-					)
-				})
-				.ok()
-		})
-		.collect())
-}
-
-pub async fn evm_events_at_block<Data: std::fmt::Debug>(
-	client: &impl EvmRetryRpcApiWithResult,
-	event_type: Arc<dyn EvmEventType<Data>>,
-	contract_address: H160,
-	block_hash: H256,
-	bloom: Option<Bloom>,
-) -> Result<Vec<Event<Data>>> {
-	let bloom = bloom.ok_or(anyhow::anyhow!(
-		"We should always have a bloom for chains with WITNESS_PERIOD==1"
-	))?;
-
-	let mut contract_bloom = Bloom::default();
-	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
-
-	// if we have logs for this block, fetch them.
-	let logs = if bloom.contains_bloom(&contract_bloom) {
-		client.get_logs(block_hash, contract_address).await?
-	} else {
-		// we know there won't be interesting logs, so don't fetch for events
-		vec![]
-	};
-	Ok(logs
-		.into_iter()
-		.filter_map(|unparsed_log| -> Option<Event<Data>> {
-			event_type
-				.parse_log(unparsed_log)
-				.map_err(|err| {
-					tracing::error!(
-						"event for contract {} could not be decoded in block {:?}. Error: {err}",
-						contract_address,
-						block_hash
-					)
-				})
-				.ok()
-		})
-		.collect())
 }
 
 /// Generic helper function for deposit channel witnessing
