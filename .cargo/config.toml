@@ -62,6 +62,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0002: Unsoundness in the lru crate. Our immediate dependency is patched, but not the transitive dependency, which is limited to libp2p-identify and smoldot crates.
 # - RUSTSEC-2026-0009: Medium severity, but only exploitable if user-provided strings are parsed into a time format by the `time` dependency.
 # - RUSTSEC-2026-0006: Impact is unlikely and upgrading requires polkadot-sdk bump.
+# - RUSTSEC-2026-0012: Impacts optional `asm` feature of the keccak library. This library is a transitive dependency through sha3 and merlin, both of which don't use this optional feature. 
 cf-audit = '''
 audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2021-0139
@@ -92,6 +93,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0007
 	--ignore RUSTSEC-2026-0009
 	--ignore RUSTSEC-2026-0006
+	--ignore RUSTSEC-2026-0012
 '''
 
 [build]
