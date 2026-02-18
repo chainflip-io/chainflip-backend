@@ -45,7 +45,7 @@ use ethers::types::Bytes;
 use futures::FutureExt;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
-		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
+		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf, ChainTypes,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
@@ -80,26 +80,30 @@ pub struct EvmBlockRangeQuery<C: ChainWitnessConfig> {
 	pub hash_of_last_block: H256,
 }
 
-impl EvmBlockQuery for EvmBlockRangeQuery<Arbitrum> {
+impl<W: ChainWitnessConfig> EvmBlockQuery for EvmBlockRangeQuery<W> {
 	fn get_lowest_block_height_of_query(&self) -> u64 {
 		*self.blocks_heights.into_range_inclusive().start()
 	}
 }
 
+trait RangeWitnessConfig = ChainWitnessConfig<ChainBlockNumber = u64> + Sync + Send;
+
+trait EvmBlockRangeChainType<C: ChainWitnessConfig> =
+	ChainTypes<ChainBlockNumber = BlockWitnessRange<C>, ChainBlockHash = H256> + Sync + Send;
+
 #[async_trait::async_trait]
-impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>> {
-	type BlockQuery = EvmBlockRangeQuery<Arbitrum>;
+impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> WitnessClient<Chain>
+	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+{
+	type BlockQuery = EvmBlockRangeQuery<W>;
 
 	// --- BHW methods ---
 
-	async fn best_block_header(&self) -> Result<Header<ArbitrumChain>> {
+	async fn best_block_header(&self) -> Result<Header<Chain>> {
 		self.block_header_by_height(self.best_block_number().await?).await
 	}
 
-	async fn block_header_by_height(
-		&self,
-		height: BlockWitnessRange<Arbitrum>,
-	) -> Result<Header<ArbitrumChain>> {
+	async fn block_header_by_height(&self, height: BlockWitnessRange<W>) -> Result<Header<Chain>> {
 		let range = height.into_range_inclusive();
 		let (block_start, block_end) = futures::try_join!(
 			self.client.block((*range.start()).into()),
@@ -112,15 +116,12 @@ impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery
 		})
 	}
 
-	async fn best_block_number(&self) -> Result<BlockWitnessRange<Arbitrum>> {
+	async fn best_block_number(&self) -> Result<BlockWitnessRange<W>> {
 		let best_block = self.client.get_block_number().await?.low_u64();
-		let range =
-			block_witness_range(<Arbitrum as ChainWitnessConfig>::WITNESS_PERIOD, best_block);
-		let block_witness_range = BlockWitnessRange::try_new(block_witness_root(
-			<Arbitrum as ChainWitnessConfig>::WITNESS_PERIOD,
-			best_block,
-		))
-		.map_err(|_| anyhow::anyhow!("Failed to build BlockWitnessRange"))?;
+		let range = block_witness_range(W::WITNESS_PERIOD, best_block);
+		let block_witness_range =
+			BlockWitnessRange::try_new(block_witness_root(W::WITNESS_PERIOD, best_block))
+				.map_err(|_| anyhow::anyhow!("Failed to build BlockWitnessRange"))?;
 		if best_block == *range.end() {
 			return Ok(block_witness_range);
 		}
@@ -131,8 +132,8 @@ impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery
 
 	async fn block_query_from_hash_and_height(
 		&self,
-		hash: ChainBlockHashOf<ArbitrumChain>,
-		height: ChainBlockNumberOf<ArbitrumChain>,
+		hash: ChainBlockHashOf<Chain>,
+		height: ChainBlockNumberOf<Chain>,
 	) -> Result<Self::BlockQuery> {
 		let header = self.block_header_by_height(height).await?;
 		if header.hash != hash {
@@ -151,7 +152,7 @@ impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery
 
 	async fn block_query_from_height(
 		&self,
-		height: <ArbitrumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
+		height: Chain::ChainBlockNumber,
 	) -> Result<Self::BlockQuery> {
 		let header = self.block_header_by_height(height).await?;
 		Ok(EvmBlockRangeQuery {
@@ -163,8 +164,8 @@ impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery
 
 	async fn block_query_and_hash_from_height(
 		&self,
-		height: <ArbitrumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
-	) -> Result<(Self::BlockQuery, ChainBlockHashOf<ArbitrumChain>)> {
+		height: Chain::ChainBlockNumber,
+	) -> Result<(Self::BlockQuery, Chain::ChainBlockHash)> {
 		let header = self.block_header_by_height(height).await?;
 		Ok((
 			EvmBlockRangeQuery {
@@ -178,7 +179,9 @@ impl WitnessClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery
 }
 
 #[async_trait::async_trait]
-impl EvmEventClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>> {
+impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Chain>
+	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
+{
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
 		EvmEventSource { contract_address, event_type }: &EvmEventSource<Data>,
@@ -205,8 +208,8 @@ impl EvmEventClient<ArbitrumChain> for EvmVoter<ArbitrumChain, EvmBlockRangeQuer
 }
 
 #[async_trait::async_trait]
-impl EvmAddressStateClient<ArbitrumChain>
-	for EvmVoter<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>>
+impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmAddressStateClient<Chain>
+	for EvmVoter<Chain, EvmBlockRangeQuery<W>>
 {
 	async fn address_states(
 		&self,

@@ -67,7 +67,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
 	electoral_systems::block_height_witnesser::{
-		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
+		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf, ChainTypes,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
@@ -111,21 +111,25 @@ impl EvmBlockQuery for EvmSingleBlockQuery {
 		self.block_height
 	}
 }
+trait EvmSingleBlockChainTypes =
+	ChainTypes<ChainBlockNumber = u64, ChainBlockHash = H256> + Sync + Send;
 
 #[async_trait::async_trait]
-impl WitnessClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+impl<Chain: EvmSingleBlockChainTypes> WitnessClient<Chain>
+	for EvmVoter<Chain, EvmSingleBlockQuery>
+{
 	type BlockQuery = EvmSingleBlockQuery;
 
 	async fn best_block_number(&self) -> Result<u64> {
 		Ok(self.client.get_block_number().await?.low_u64())
 	}
 
-	async fn best_block_header(&self) -> Result<Header<EthereumChain>> {
+	async fn best_block_header(&self) -> Result<Header<Chain>> {
 		let best_number = self.client.get_block_number().await?;
 		Ok(self.block_header_by_height(best_number.low_u64()).await?)
 	}
 
-	async fn block_header_by_height(&self, height: u64) -> Result<Header<EthereumChain>> {
+	async fn block_header_by_height(&self, height: u64) -> Result<Header<Chain>> {
 		let block = self.client.block(height.into()).await?;
 		Ok(Header {
 			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
@@ -136,22 +140,22 @@ impl WitnessClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuer
 
 	async fn block_query_from_hash_and_height(
 		&self,
-		hash: ChainBlockHashOf<EthereumChain>,
-		_height: ChainBlockNumberOf<EthereumChain>,
+		hash: ChainBlockHashOf<Chain>,
+		_height: ChainBlockNumberOf<Chain>,
 	) -> Result<EvmSingleBlockQuery> {
 		EvmSingleBlockQuery::try_from_native_block(self.client.block_by_hash(hash).await?)
 	}
 
 	async fn block_query_from_height(
 		&self,
-		height: <EthereumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
+		height: Chain::ChainBlockNumber,
 	) -> Result<Self::BlockQuery> {
 		EvmSingleBlockQuery::try_from_native_block(self.client.block(height.into()).await?)
 	}
 
 	async fn block_query_and_hash_from_height(
 		&self,
-		height: <EthereumChain as pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes>::ChainBlockNumber,
+		height: Chain::ChainBlockNumber,
 	) -> Result<(Self::BlockQuery, ChainBlockHashOf<EthereumChain>)> {
 		let header = self.client.block(height.into()).await?;
 		let hash = header.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?;
@@ -161,7 +165,9 @@ impl WitnessClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuer
 }
 
 #[async_trait::async_trait]
-impl EvmEventClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+impl<Chain: EvmSingleBlockChainTypes> EvmEventClient<Chain>
+	for EvmVoter<Chain, EvmSingleBlockQuery>
+{
 	async fn events_from_block_query<Data: std::fmt::Debug>(
 		&self,
 		EvmEventSource { contract_address, event_type }: &EvmEventSource<Data>,
@@ -196,7 +202,9 @@ impl EvmEventClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQue
 }
 
 #[async_trait::async_trait]
-impl EvmAddressStateClient<EthereumChain> for EvmVoter<EthereumChain, EvmSingleBlockQuery> {
+impl<Chain: EvmSingleBlockChainTypes> EvmAddressStateClient<Chain>
+	for EvmVoter<Chain, EvmSingleBlockQuery>
+{
 	async fn address_states(
 		&self,
 		address_checker_address: H160,
