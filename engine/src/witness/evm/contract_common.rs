@@ -261,7 +261,7 @@ pub async fn evm_events_at_block<Data: std::fmt::Debug>(
 ///
 /// This function handles the common logic for witnessing deposit channels on EVM chains.
 /// The chain-specific parts (native asset, ERC20 asset handling) are provided via parameters.
-pub async fn witness_deposit_channels_generic2<
+pub async fn witness_deposit_channels_generic<
 	Chain: EvmChain<ChainAsset: std::hash::Hash>,
 	CT: ChainTypes<ChainBlockHash = H256>,
 	Client: EvmEventClient<CT> + EvmAddressStateClient<CT>,
