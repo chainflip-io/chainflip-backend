@@ -26,6 +26,7 @@ use crate::{
 		retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
 		PolkadotHash, PolkadotHeader,
 	},
+	polkadot_source,
 	witness::common::{
 		chain_source::{BoxChainStream, ChainClient, ChainSource, Header},
 		ExternalChainSource,
@@ -34,61 +35,7 @@ use crate::{
 use futures::{stream::StreamExt, Stream};
 
 use anyhow::Result;
-use subxt::{self, config::Header as SubxtHeader};
-
-macro_rules! polkadot_source {
-	($self:expr, $func:ident, $retry_limit:expr, $unwrap_events:expr) => {{
-		struct State<C> {
-			client: C,
-			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
-		}
-
-		let client = $self.client.clone();
-		let stream = client.$func().await;
-		let unwrap_events = $unwrap_events;
-
-		(
-			Box::pin(stream::unfold(State { client, stream }, move |mut state| async move {
-				loop {
-					while let Ok(Some(header)) =
-						tokio::time::timeout(TIMEOUT, state.stream.next()).await
-					{
-						if let Ok(header) = header {
-							let Some(events) = unwrap_events(
-								state
-									.client
-									.events(header.hash(), header.parent_hash, $retry_limit)
-									.await,
-							) else {
-								continue
-							};
-
-							return Some((
-								Header {
-									index: header.number,
-									hash: header.hash(),
-									parent_hash: Some(header.parent_hash),
-									data: events,
-								},
-								state,
-							))
-						}
-					}
-					// We don't want to spam retries if the node returns a stream that's empty
-					// immediately.
-					tracing::warn!(
-						"Timeout getting next header from Assethub {} stream. Restarting stream...",
-						stringify!($func)
-					);
-					tokio::time::sleep(RESTART_STREAM_DELAY).await;
-					let stream = state.client.$func().await;
-					state = State { client: state.client, stream };
-				}
-			})),
-			$self.client.clone(),
-		)
-	}};
-}
+use subxt;
 
 #[derive(Clone)]
 pub struct HubUnfinalisedSource<C> {

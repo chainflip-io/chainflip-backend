@@ -39,7 +39,6 @@ frame_support::construct_runtime!(
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type Block = Block;
-	type RuntimeEvent = RuntimeEvent;
 	type OnNewAccount = MockAccountRoles;
 	type OnKilledAccount = MockAccountRoles;
 }
@@ -76,7 +75,6 @@ impl SpawnAccount for MockSpawnAccount {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = frame_system::EnsureRoot<<Self as frame_system::Config>::AccountId>;
 	type DeregistrationCheck = MockDeregistrationCheck<Self::AccountId>;
 	type RuntimeCall = RuntimeCall;

@@ -15,14 +15,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 /// Struct containing info for the TransferFallback call in the Vault contract.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct TransferFallback {
 	/// The failed transfer that needs to be addressed.
 	transfer_param: EncodableTransferAssetParams,
@@ -53,10 +53,9 @@ mod test_transfer_fallback {
 		eth::api::abi::load_abi,
 		evm::{
 			api::{EvmReplayProtection, EvmTransactionBuilder},
-			SchnorrVerificationComponents,
+			Address, SchnorrVerificationComponents,
 		},
 	};
-	use ethabi::Address;
 
 	#[test]
 	fn test_payload() {
@@ -112,7 +111,7 @@ mod test_transfer_fallback {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),

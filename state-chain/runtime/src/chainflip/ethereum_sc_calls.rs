@@ -1,7 +1,7 @@
 use crate::{chainflip::TypeInfo, Decode, Encode, Runtime, RuntimeCall};
 use cf_chains::evm::Address as EthereumAddress;
 use cf_primitives::FlipBalance;
-use codec::MaxEncodedLen;
+use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::UnfilteredDispatchable,
@@ -25,7 +25,17 @@ impl EthereumAccount {
 }
 
 #[derive(
-	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Debug,
+	Serialize,
+	Deserialize,
 )]
 pub enum DelegationApi<A> {
 	Delegate {
@@ -56,7 +66,17 @@ impl<A> DelegationApi<A> {
 }
 
 #[derive(
-	Clone, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Debug, Serialize, Deserialize,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Debug,
+	Serialize,
+	Deserialize,
 )]
 #[serde(tag = "API")]
 pub enum EthereumSCApi<A> {

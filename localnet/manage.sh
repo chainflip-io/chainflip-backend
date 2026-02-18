@@ -51,12 +51,13 @@ get-workflow() {
 
   if [[ $WORKFLOW =~ build-localnet|recreate ]]; then
     echo "❓ Would you like to run a 1 or 3 node network? (Type 1 or 3)"
-    read -r NODE_COUNT_INPUT
+    read -p "(default: 1) " NODE_COUNT_INPUT
+    NODE_COUNT_INPUT=${NODE_COUNT_INPUT:-"1"}
     if [[ "$NODE_COUNT_INPUT" != "1" && "$NODE_COUNT_INPUT" != "3" ]]; then
-      echo "❌ Invalid NODE_COUNT value: $NODE_COUNT"
+      echo "❌ Invalid NODE_COUNT value: $NODE_COUNT_INPUT"
       exit 1
     fi
-    echo "🎩 You have chosen $NODE_COUNT node(s) network"
+    echo "🎩 You have chosen $NODE_COUNT_INPUT node(s) network"
     export NODE_COUNT="$NODE_COUNT_INPUT-node"
 
     if [[ -z "${BINARY_ROOT_PATH}" ]]; then

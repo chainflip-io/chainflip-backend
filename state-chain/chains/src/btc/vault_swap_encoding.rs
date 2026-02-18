@@ -16,7 +16,7 @@
 
 use crate::address::EncodedAddress;
 use cf_primitives::{AffiliateAndFee, Asset, AssetAmount, ForeignChain};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
@@ -107,7 +107,9 @@ impl Decode for UtxoEncodedData {
 const MAX_AFFILIATES: u32 = 2;
 
 // The encoding of these parameters is the same across chains
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, MaxEncodedLen, TypeInfo, Clone, PartialEq, Debug,
+)]
 pub struct BtcCfParametersV1 {
 	// --- FoK fields (refund address is stored externally) ---
 	pub retry_duration: u16,

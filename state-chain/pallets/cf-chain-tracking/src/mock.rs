@@ -45,7 +45,6 @@ impl frame_system::Config for Test {
 impl_mock_chainflip!(Test);
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();
 }

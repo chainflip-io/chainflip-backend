@@ -59,8 +59,8 @@ use frame_support::{
 	instances::*,
 	sp_runtime::traits::{BlakeTwo256, ConvertInto, One, OpaqueKeys, Verify},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
-use frame_system::{offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
 use pallet_cf_lending_pools::PoolsDeregistrationCheck;
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
@@ -80,7 +80,6 @@ pub use sp_runtime::{Perbill, Permill};
 use sp_version::RuntimeVersion;
 
 impl pallet_cf_validator::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type EpochTransitionHandler = ChainflipEpochTransitions;
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
@@ -141,9 +140,24 @@ parameter_types! {
 /// `pallet_transaction_payment::ChargeTransactionPayment`.
 pub struct GetTransactionPayments;
 
-impl Get<pallet_transaction_payment::ChargeTransactionPayment<Runtime>> for GetTransactionPayments {
-	fn get() -> pallet_transaction_payment::ChargeTransactionPayment<Runtime> {
-		pallet_transaction_payment::ChargeTransactionPayment::from(Default::default())
+impl
+	Get<(
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+		pallet_transaction_payment::Val<Runtime>,
+	)> for GetTransactionPayments
+{
+	fn get() -> (
+		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+		pallet_transaction_payment::Val<Runtime>,
+	) {
+		(
+			pallet_transaction_payment::ChargeTransactionPayment::from(Default::default()),
+			// Used as a default value for the implicit parameter in transaction payment validation
+			// for non-native signed calls. This parameter is currently ignored, pending
+			// replacement of the current legacy implementation with TransactionExtension based
+			// validation.
+			pallet_transaction_payment::Val::NoCharge,
+		)
 	}
 }
 
@@ -167,7 +181,6 @@ impl ChainflipWithTargetChain<Instance6> for Runtime {
 }
 
 impl pallet_cf_environment::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
@@ -195,7 +208,6 @@ parameter_types! {
 }
 
 impl pallet_cf_swapping::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
@@ -218,7 +230,6 @@ impl pallet_cf_swapping::Config for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -228,7 +239,6 @@ impl pallet_cf_vaults::Config<Instance1> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance2> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = dot::api::PolkadotApi<DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -238,7 +248,6 @@ impl pallet_cf_vaults::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance3> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -248,7 +257,6 @@ impl pallet_cf_vaults::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance4> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = cf_chains::arb::api::ArbitrumApi<EvmEnvironment>;
 	type Broadcaster = ArbitrumBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -258,7 +266,6 @@ impl pallet_cf_vaults::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance5> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = cf_chains::sol::api::SolanaApi<SolEnvironment>;
 	type Broadcaster = SolanaBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -268,7 +275,6 @@ impl pallet_cf_vaults::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance6> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = hub::api::AssethubApi<HubEnvironment>;
 	type Broadcaster = AssethubBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -280,7 +286,6 @@ impl pallet_cf_vaults::Config<Instance6> for Runtime {
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
@@ -311,7 +316,6 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
@@ -342,7 +346,6 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
@@ -373,7 +376,6 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
@@ -404,7 +406,6 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = false;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
@@ -435,7 +436,6 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
@@ -466,7 +466,6 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_pools::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type LpBalance = AssetBalances;
 	type LpStats = LiquidityProvider;
 	type LpRegistrationApi = LiquidityProvider;
@@ -476,7 +475,6 @@ impl pallet_cf_pools::Config for Runtime {
 }
 
 impl pallet_cf_lp::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type AddressConverter = ChainAddressConverter;
@@ -492,7 +490,6 @@ impl pallet_cf_lp::Config for Runtime {
 }
 
 impl pallet_cf_account_roles::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type DeregistrationCheck =
 		(Bonder<Self>, TradingStrategyDeregistrationCheck<Self>, PoolsDeregistrationCheck<Self>);
@@ -501,14 +498,6 @@ impl pallet_cf_account_roles::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = Flip;
 	type WeightInfo = pallet_cf_account_roles::weights::PalletWeight<Runtime>;
-}
-
-impl<LocalCall> SendTransactionTypes<LocalCall> for Runtime
-where
-	RuntimeCall: From<LocalCall>,
-{
-	type Extrinsic = UncheckedExtrinsic;
-	type OverarchingCall = RuntimeCall;
 }
 
 impl pallet_session::Config for Runtime {
@@ -520,10 +509,16 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Validator;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type ValidatorIdOf = ConvertInto;
+	type DisablingStrategy = ();
+	type Currency = pallet_cf_flip::Pallet<Runtime>;
+	// Keys deposit is set to 0: Chainflip does not require a key deposit. Validator constraints are
+	// handled via other mechanisms (see the validator pallet).
+	type KeyDeposit = ConstU128<0>;
 	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
 impl pallet_session::historical::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
 	type FullIdentification = ();
 	type FullIdentificationOf = ();
 }
@@ -638,16 +633,17 @@ impl pallet_authorship::Config for Runtime {
 }
 
 impl pallet_cf_flip::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type BlocksPerDay = ConstU32<DAYS>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 	type CallIndexer = chainflip::LpOrderCallIndexer;
+	// Required to satisfy trait bounds on InspectHold implementation, required by
+	// pallet_session::Config::Currency.
+	type RuntimeHoldReason = pallet_session::HoldReason;
 }
 
 impl pallet_cf_witnesser::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = RuntimeSafeMode;
@@ -659,7 +655,6 @@ impl pallet_cf_witnesser::Config for Runtime {
 }
 
 impl pallet_cf_funding::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type ThresholdCallable = RuntimeCall;
 	type FunderId = AccountId;
 	type Flip = Flip;
@@ -675,7 +670,6 @@ impl pallet_cf_funding::Config for Runtime {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
 	type WeightInfo = pallet_cf_tokenholder_governance::weights::PalletWeight<Runtime>;
 	type VotingPeriod = ConstU32<{ 14 * DAYS }>;
@@ -688,7 +682,6 @@ impl pallet_cf_tokenholder_governance::Config for Runtime {
 impl pallet_cf_governance::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_governance::weights::PalletWeight<Runtime>;
 	type UpgradeCondition = pallet_cf_validator::NotDuringRotation<Runtime>;
@@ -698,7 +691,6 @@ impl pallet_cf_governance::Config for Runtime {
 }
 
 impl pallet_cf_emissions::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type HostChain = Ethereum;
 	type FlipBalance = FlipBalance;
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
@@ -724,6 +716,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type WeightToFee = ConstantMultiplier<FlipBalance, ConstU128<{ TX_FEE_MULTIPLIER }>>;
 	type LengthToFee = ConstantMultiplier<FlipBalance, ConstU128<1_000_000>>;
 	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
+	type WeightInfo = pallet_transaction_payment::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -736,7 +729,6 @@ impl pallet_cf_cfe_interface::Config for Runtime {
 }
 
 impl pallet_cf_reputation::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type HeartbeatBlockInterval = ConstU32<HEARTBEAT_BLOCK_INTERVAL>;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
@@ -747,7 +739,6 @@ impl pallet_cf_reputation::Config for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
@@ -763,7 +754,6 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
@@ -779,7 +769,6 @@ impl pallet_cf_threshold_signature::Config<Instance15> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
@@ -795,7 +784,6 @@ impl pallet_cf_threshold_signature::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = chainflip::Offence;
 	type RuntimeOrigin = RuntimeOrigin;
 	type ThresholdCallable = RuntimeCall;
@@ -811,7 +799,6 @@ impl pallet_cf_threshold_signature::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -836,7 +823,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance2> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -861,7 +847,6 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance3> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -886,7 +871,6 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance4> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -911,7 +895,6 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance5> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -936,7 +919,6 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance6> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -961,7 +943,6 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_asset_balances::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type PolkadotKeyProvider = PolkadotThresholdSigner;
 	type PoolApi = LiquidityPools;
@@ -969,44 +950,37 @@ impl pallet_cf_asset_balances::Config for Runtime {
 }
 
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance2> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Polkadot;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Arbitrum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Solana;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Assethub;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_elections::Config<Instance5> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Solana as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::solana_elections::SolanaElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1017,7 +991,6 @@ impl pallet_cf_elections::Config<Instance5> for Runtime {
 
 impl pallet_cf_elections::Config<Instance3> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Bitcoin as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::bitcoin_elections::BitcoinElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1028,7 +1001,6 @@ impl pallet_cf_elections::Config<Instance3> for Runtime {
 
 impl pallet_cf_elections::Config for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = "GenericElections";
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::generic_elections::GenericElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1039,7 +1011,6 @@ impl pallet_cf_elections::Config for Runtime {
 
 impl pallet_cf_elections::Config<Instance1> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Ethereum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::ethereum_elections::EthereumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1050,7 +1021,6 @@ impl pallet_cf_elections::Config<Instance1> for Runtime {
 
 impl pallet_cf_elections::Config<Instance4> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Arbitrum as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner =
 		chainflip::witnessing::arbitrum_elections::ArbitrumElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1060,7 +1030,6 @@ impl pallet_cf_elections::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_trading_strategy::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_trading_strategy::weights::PalletWeight<Runtime>;
 	type LpOrdersWeights = LiquidityPools;
 	type BalanceApi = AssetBalances;
@@ -1070,7 +1039,6 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 }
 
 impl pallet_cf_lending_pools::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_cf_lending_pools::weights::PalletWeight<Runtime>;
 	type Balance = AssetBalances;
 	type SwapRequestHandler = Swapping;

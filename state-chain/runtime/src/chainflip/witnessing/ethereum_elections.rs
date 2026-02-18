@@ -12,14 +12,13 @@ use crate::{
 	AccountId, EthereumChainTracking, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{
-	eth::{self, EthereumTrackedData},
-	instances::EthereumInstance,
-	witness_period::SaturatingStep,
+	eth::EthereumTrackedData, evm, instances::EthereumInstance, witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
 use cf_primitives::BlockWitnesserEvent;
 use cf_traits::{impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook};
 use cf_utilities::{derive_common_traits, hook_impls, impls};
+use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -50,7 +49,6 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -76,13 +74,13 @@ pub struct EthereumChainTag;
 pub type EthereumChain = TypesFor<EthereumChainTag>;
 impl ChainTypes for EthereumChain {
 	type ChainBlockNumber = <Ethereum as Chain>::ChainBlockNumber;
-	type ChainBlockHash = eth::H256;
+	type ChainBlockHash = evm::H256;
 	const NAME: &'static str = "Ethereum";
 }
 
 pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum EthereumElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<<Ethereum as Chain>::ChainBlockNumber> },
 }
@@ -253,7 +251,7 @@ derive_common_traits! {
 		Funded {
 			account_id: AccountId,
 			amount: FlipBalance<Runtime>,
-			funder: eth::Address,
+			funder: evm::Address,
 			tx_hash: EthTransactionHash,
 		},
 		RedemptionExecuted {
@@ -428,7 +426,7 @@ pub type EthereumScUtilsWitnessingES =
 // ------------------------ liveness ---------------------------
 pub type EthereumLiveness = Liveness<
 	<Ethereum as Chain>::ChainBlockNumber,
-	eth::H256,
+	evm::H256,
 	ReportFailedLivenessCheck<Ethereum>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -665,7 +663,7 @@ impl_pallet_safe_mode! {
 	sc_utils_witnessing
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
 		<TypesFor<EthereumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,

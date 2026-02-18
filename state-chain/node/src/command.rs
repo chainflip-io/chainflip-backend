@@ -52,8 +52,8 @@ impl SubstrateCli for Cli {
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
 		Ok(match id {
-			"dev" => Box::new(chain_spec::cf_development_config()?),
-			"dev-3" => Box::new(chain_spec::cf_three_node_development_config()?),
+			"dev" => Box::new(chain_spec::cf_development_chain_spec()?),
+			"dev-3" => Box::new(chain_spec::cf_three_node_development_chain_spec()?),
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
 				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
@@ -80,6 +80,7 @@ pub fn run() -> sc_cli::Result<()> {
 
 	match &cli.subcommand {
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
+		#[expect(deprecated)]
 		Some(Subcommand::BuildSpec(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			runner.sync_run(|config| cmd.run(config.chain_spec, config.network))
@@ -91,6 +92,10 @@ pub fn run() -> sc_cli::Result<()> {
 					service::new_partial(&config)?;
 				Ok((cmd.run(client, import_queue), task_manager))
 			})
+		},
+		Some(Subcommand::ExportChainSpec(cmd)) => {
+			let chain_spec = cli.load_spec(&cmd.chain)?;
+			cmd.run(chain_spec)
 		},
 		Some(Subcommand::ExportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -161,19 +166,21 @@ pub fn run() -> sc_cli::Result<()> {
 							service::new_partial(&config)?;
 						let db = backend.expose_db();
 						let storage = backend.expose_storage();
+						let shared_cache = backend.expose_shared_trie_cache();
 
-						cmd.run(config, client, db, storage)
+						cmd.run(config, client, db, storage, shared_cache)
 					},
 					BenchmarkCmd::Overhead(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						let ext_builder = RemarkBuilder::new(client.clone());
 
 						cmd.run(
-							config,
+							config.chain_spec.name().into(),
 							client,
 							inherent_benchmark_data()?,
 							Vec::new(),
 							&ext_builder,
+							false,
 						)
 					},
 					BenchmarkCmd::Extrinsic(cmd) => {

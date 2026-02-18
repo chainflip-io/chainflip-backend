@@ -15,7 +15,7 @@ use crate::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use cf_traits::{Hook, HookType, Validate};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use core::ops::Range;
 use derive_where::derive_where;
 use generic_typeinfo_derive::GenericTypeInfo;
@@ -30,7 +30,7 @@ use sp_std::{fmt::Debug, vec::Vec};
 /// contain only type definitions, as used in many parts of
 /// the state machine based electoral systems.
 #[derive_where(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord;)]
-#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Deserialize, Serialize)]
 #[codec(encode_bound())]
 #[serde(bound = "")]
 #[scale_info(skip_type_params(Tag1, Tag2))]
@@ -126,6 +126,7 @@ pub trait BWProcessorTypes: Sized + 'static + Debug + Clone + Eq {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Deserialize,
 	Serialize,

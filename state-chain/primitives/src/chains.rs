@@ -23,7 +23,7 @@ pub mod assets;
 macro_rules! chains {
 	( $( $chain:ident = $index:literal),+ ) => {
 		$(
-			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Ord, PartialOrd)]
+			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Ord, PartialOrd)]
 			pub struct $chain;
 
 			impl AsRef<ForeignChain> for $chain {
@@ -45,7 +45,7 @@ macro_rules! chains {
 			}
 		)+
 
-		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, Hash)]
+		#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Copy, Hash)]
 		#[derive(Serialize, Deserialize)]
 		#[repr(u32)]
 		pub enum ForeignChain {
@@ -120,6 +120,7 @@ chains! {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Copy,

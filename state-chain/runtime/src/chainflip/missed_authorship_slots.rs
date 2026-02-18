@@ -146,20 +146,23 @@ mod test_missed_authorship_slots {
 
 	#[test]
 	fn test_missed_slots() {
+		use sp_runtime::traits::BlockNumberProvider;
+
 		// The genesis slot is some value greater than zero.
 		const GENESIS_SLOT: u64 = 12345u64;
 
-		fn simulate_block_authorship<F: Fn(Vec<u64>)>(block_number: u64, assertions: F) {
+		fn simulate_block_authorship<F: Fn(Vec<u64>)>(slot: u64, assertions: F) {
 			// one slot per block, so slot == block_number
-			let author_slot = Slot::from(GENESIS_SLOT + block_number);
+			let author_slot = Slot::from(GENESIS_SLOT + slot);
 			let pre_digest =
 				Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, author_slot.encode())] };
 
+			let next_block_number = System::current_block_number() + 1u64;
 			System::reset_events();
-			System::initialize(&block_number, &System::parent_hash(), &pre_digest);
-			System::on_initialize(block_number);
+			System::initialize(&next_block_number, &System::parent_hash(), &pre_digest);
+			System::on_initialize(next_block_number);
 			assertions(<MissedAuraSlots as MissedAuthorshipSlots>::missed_slots().collect());
-			Aura::on_initialize(block_number);
+			Aura::on_initialize(next_block_number);
 		}
 
 		new_test_ext(vec![0, 1, 2, 3, 4]).execute_with(|| {

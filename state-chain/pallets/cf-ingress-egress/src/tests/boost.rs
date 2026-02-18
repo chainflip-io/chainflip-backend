@@ -828,6 +828,7 @@ mod delayed_boosting {
 	use crate::{
 		BoostedVaultTransactions, ScheduledTransactionsForRejection, TransactionRejectionDetails,
 	};
+	use sp_core::H256;
 	use sp_runtime::traits::BlockNumberProvider;
 
 	const BOOST_DELAY: u64 = 1;

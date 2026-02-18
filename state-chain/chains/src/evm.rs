@@ -21,22 +21,18 @@ pub mod tokenizable;
 use crate::*;
 use cf_primitives::ChannelId;
 use cf_runtime_utilities::log_or_panic;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::ParamType;
-pub use ethabi::{
-	encode,
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
+pub use ethabi::{encode, Address, Hash, Token, Uint, Word};
 use evm::tokenizable::Tokenizable;
 use frame_support::sp_runtime::{
-	traits::{Hash, Keccak256},
+	traits::{Hash as _, Keccak256},
 	AccountId32, RuntimeDebug,
 };
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-pub use sp_core::{ecdsa::Signature, ConstBool};
+pub use sp_core::{ecdsa::Signature, ConstBool, H256, U256};
 use sp_std::{convert::TryFrom, str, vec};
 
 use crate::DepositDetailsToTransactionInId;
@@ -55,6 +51,7 @@ pub trait EvmChain = Chain<
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Default,
 	Serialize,
@@ -153,6 +150,7 @@ impl Display for AggKeyVerificationError {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Copy,
@@ -204,6 +202,7 @@ impl Default for ParityBit {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Copy,
@@ -397,6 +396,7 @@ impl Tokenizable for AggKey {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Copy,
 	Clone,
@@ -422,15 +422,25 @@ pub struct SchnorrVerificationComponents {
 ///
 /// We assume the access_list (EIP-2930) is not required.
 #[derive(
-	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
 )]
 pub struct Transaction {
 	pub chain_id: u64,
-	pub max_priority_fee_per_gas: Option<Uint>, // EIP-1559
-	pub max_fee_per_gas: Option<Uint>,
-	pub gas_limit: Option<Uint>,
+	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
+	pub max_fee_per_gas: Option<U256>,
+	pub gas_limit: Option<U256>,
 	pub contract: Address,
-	pub value: Uint,
+	pub value: U256,
 	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
 }
@@ -438,6 +448,7 @@ pub struct Transaction {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Clone,
 	RuntimeDebug,
@@ -450,10 +461,10 @@ pub struct Transaction {
 	PartialOrd,
 )]
 pub struct EvmTransactionMetadata {
-	pub max_fee_per_gas: Option<Uint>,
-	pub max_priority_fee_per_gas: Option<Uint>,
+	pub max_fee_per_gas: Option<U256>,
+	pub max_priority_fee_per_gas: Option<U256>,
 	pub contract: Address,
-	pub gas_limit: Option<Uint>,
+	pub gas_limit: Option<U256>,
 }
 
 impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMetadata<C>
@@ -482,131 +493,19 @@ impl<C: Chain<Transaction = Transaction, TransactionRef = H256>> TransactionMeta
 	}
 }
 
-impl Transaction {
-	fn check_contract(
-		&self,
-		recovered: ethereum::TransactionAction,
-	) -> Result<(), CheckedTransactionParameter> {
-		match recovered {
-			ethereum::TransactionAction::Call(address) => {
-				if address.as_bytes() != self.contract.as_bytes() {
-					return Err(CheckedTransactionParameter::ContractAddress)
-				}
-			},
-			ethereum::TransactionAction::Create => return Err(CheckedTransactionParameter::Action),
-		};
-		Ok(())
-	}
-
-	fn check_gas_limit(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
-		if let Some(expected) = self.gas_limit {
-			if expected != recovered {
-				return Err(CheckedTransactionParameter::GasLimit)
-			}
-		}
-		Ok(())
-	}
-
-	fn check_chain_id(&self, recovered: u64) -> Result<(), CheckedTransactionParameter> {
-		if self.chain_id != recovered {
-			return Err(CheckedTransactionParameter::ChainId)
-		}
-		Ok(())
-	}
-
-	fn check_data(&self, recovered: Vec<u8>) -> Result<(), CheckedTransactionParameter> {
-		if self.data != recovered {
-			return Err(CheckedTransactionParameter::Data)
-		}
-		Ok(())
-	}
-
-	fn check_value(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
-		if self.value != recovered {
-			return Err(CheckedTransactionParameter::Value)
-		}
-		Ok(())
-	}
-
-	fn check_max_fee_per_gas(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
-		if let Some(expected) = self.max_fee_per_gas {
-			if expected != recovered {
-				return Err(CheckedTransactionParameter::MaxFeePerGas)
-			}
-		}
-		Ok(())
-	}
-
-	fn check_max_priority_fee_per_gas(
-		&self,
-		recovered: Uint,
-	) -> Result<(), CheckedTransactionParameter> {
-		if let Some(expected) = self.max_priority_fee_per_gas {
-			if expected != recovered {
-				return Err(CheckedTransactionParameter::MaxPriorityFeePerGas)
-			}
-		}
-		Ok(())
-	}
-
-	/// Returns an error if any of the recovered transaction parameters do not match those specified
-	/// in the original [Transaction].
-	///
-	/// See [CheckedTransactionParameter].
-	pub fn match_against_recovered(
-		&self,
-		recovered: ethereum::TransactionV2,
-	) -> Result<(), TransactionVerificationError> {
-		match recovered {
-			ethereum::TransactionV2::Legacy(tx) => {
-				let msg: ethereum::LegacyTransactionMessage = tx.into();
-				let chain_id = msg.chain_id.ok_or(CheckedTransactionParameter::ChainId)?;
-				self.check_chain_id(chain_id)?;
-				self.check_gas_limit(msg.gas_limit)?;
-				self.check_data(msg.input)?;
-				self.check_value(msg.value)?;
-				self.check_contract(msg.action)?;
-			},
-			ethereum::TransactionV2::EIP2930(tx) => {
-				let msg: ethereum::EIP2930TransactionMessage = tx.into();
-				self.check_chain_id(msg.chain_id)?;
-				self.check_gas_limit(msg.gas_limit)?;
-				self.check_data(msg.input)?;
-				self.check_value(msg.value)?;
-				self.check_contract(msg.action)?;
-			},
-			ethereum::TransactionV2::EIP1559(tx) => {
-				let msg: ethereum::EIP1559TransactionMessage = tx.into();
-				self.check_chain_id(msg.chain_id)?;
-				self.check_gas_limit(msg.gas_limit)?;
-				self.check_max_fee_per_gas(msg.max_fee_per_gas)?;
-				self.check_max_priority_fee_per_gas(msg.max_priority_fee_per_gas)?;
-				self.check_data(msg.input)?;
-				self.check_value(msg.value)?;
-				self.check_contract(msg.action)?;
-			},
-		};
-
-		Ok(())
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Default)]
-pub struct TransactionHash(H256);
-impl core::fmt::Debug for TransactionHash {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
-		f.write_fmt(format_args!("{:#?}", self.0))
-	}
-}
-
-impl From<H256> for TransactionHash {
-	fn from(x: H256) -> Self {
-		Self(x)
-	}
-}
-
 #[derive(
-	Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug, Default, Serialize, Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	Copy,
+	Debug,
+	Default,
+	Serialize,
+	Deserialize,
 )]
 pub enum DeploymentStatus {
 	#[default]
@@ -681,7 +580,7 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EvmFetchId {
 	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.
 	DeployAndFetch(ChannelId),
@@ -692,7 +591,7 @@ pub enum EvmFetchId {
 }
 
 /// Errors that can occur when verifying an EVM transaction.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum TransactionVerificationError {
 	/// The transaction's chain id is invalid.
 	InvalidChainId,
@@ -709,7 +608,9 @@ pub enum TransactionVerificationError {
 }
 
 /// Parameters that are checked as part of EVM transaction verification.
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq,
+)]
 pub enum CheckedTransactionParameter {
 	ChainId,
 	GasLimit,
@@ -735,6 +636,7 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Copy,
@@ -745,8 +647,8 @@ impl From<CheckedTransactionParameter> for TransactionVerificationError {
 )]
 pub struct TransactionFee {
 	// priority + base
-	pub effective_gas_price: EthAmount,
-	pub gas_used: u128,
+	pub effective_gas_price: AssetAmount,
+	pub gas_used: AssetAmount,
 }
 
 impl DepositDetailsToTransactionInId<EvmCrypto> for DepositDetails {
@@ -1027,9 +929,6 @@ fn metadata_verification() {
 	// Wrong contract address.
 	assert!(!<EvmTransactionMetadata as TransactionMetadata<Ethereum>>::verify_metadata(
 		&submitted_metadata,
-		&EvmTransactionMetadata {
-			contract: ethereum_types::H160::repeat_byte(1u8),
-			..submitted_metadata
-		}
+		&EvmTransactionMetadata { contract: sp_core::H160::repeat_byte(1u8), ..submitted_metadata }
 	));
 }

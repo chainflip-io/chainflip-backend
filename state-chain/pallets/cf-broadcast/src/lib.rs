@@ -36,7 +36,7 @@ use cf_traits::{
 	ElectionEgressWitnesser, EpochInfo, GetBlockHeight, RotationBroadcastsPending, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
@@ -50,7 +50,6 @@ use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
@@ -66,12 +65,25 @@ impl_pallet_safe_mode! {
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
@@ -128,7 +140,16 @@ pub mod pallet {
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
 	/// All data contained in a Broadcast
-	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
+	#[derive(
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		GenericTypeInfo,
+		CloneNoBound,
+	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
@@ -158,10 +179,6 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>:
 		ChainflipWithTargetChain<I, TargetChain: PalletInstanceAlias>
 	{
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
@@ -257,7 +274,18 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Copy,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 

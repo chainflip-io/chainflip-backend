@@ -16,16 +16,27 @@
 
 use crate::{
 	address::IntoForeignChainAddress,
-	evm::{api::EvmReplayProtection, TransactionFee},
+	evm::{api::EvmReplayProtection, Address, TransactionFee},
 	IntoTransactionInIdForAnyChain, *,
 };
 use cf_utilities::SliceToArray;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::parameter_types;
-use sp_core::{ConstBool, H160};
+use sp_core::ConstBool;
 use sp_std::marker::PhantomData;
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthereum;
 
 impl Get<ForeignChain> for MockEthereum {
@@ -59,6 +70,7 @@ parameter_types! {
 	Ord,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -90,7 +102,7 @@ impl MockEthereumTransactionMetadata {
 
 impl IntoForeignChainAddress<MockEthereum> for u64 {
 	fn into_foreign_chain_address(self) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(H160::repeat_byte(self as u8))
+		ForeignChainAddress::Eth(Address::repeat_byte(self as u8))
 	}
 }
 
@@ -105,7 +117,7 @@ impl Chain for MockEthereum {
 	type ChainCrypto = MockEthereumChainCrypto;
 
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = TransactionFee;
 	type TrackedData = MockTrackedData;
 	type ChainAsset = assets::eth::Asset;
@@ -149,7 +161,7 @@ impl TryFrom<ForeignChainAddress> for u64 {
 
 impl From<u64> for ForeignChainAddress {
 	fn from(id: u64) -> Self {
-		ForeignChainAddress::Eth(H160::from_low_u64_be(id))
+		ForeignChainAddress::Eth(Address::from_low_u64_be(id))
 	}
 }
 
@@ -159,7 +171,19 @@ impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
 	}
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockLifecycleHooks;
 
 impl ChannelLifecycleHooks for MockLifecycleHooks {
@@ -182,6 +206,7 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -215,7 +240,7 @@ impl FeeEstimationApi<MockEthereum> for MockTrackedData {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct MockTransaction;
 
 impl FeeRefundCalculator<MockEthereum> for MockTransaction {
@@ -238,6 +263,7 @@ impl FeeRefundCalculator<MockEthereum> for MockTransaction {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -259,6 +285,7 @@ pub struct MockThresholdSignature<K, P> {
 	MaxEncodedLen,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Ord,
 	PartialOrd,
@@ -274,7 +301,18 @@ impl IntoTransactionInIdForAnyChain<MockEthereumChainCrypto> for [u8; 4] {
 /// A key that should be not accepted as handover result
 pub const BAD_AGG_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"bad!");
 
-#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthereumChainCrypto;
 impl ChainCrypto for MockEthereumChainCrypto {
 	const NAME: &'static str = "MockEthereum";
@@ -347,7 +385,16 @@ pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 pub const MOCK_TX_METADATA: <MockEthereum as Chain>::TransactionMetadata =
 	MockEthereumTransactionMetadata;
 
-#[derive(Encode, Decode, TypeInfo, CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+)]
 #[scale_info(skip_type_params(C))]
 pub struct MockApiCall<C: ChainCrypto> {
 	pub payload: <C as ChainCrypto>::Payload,

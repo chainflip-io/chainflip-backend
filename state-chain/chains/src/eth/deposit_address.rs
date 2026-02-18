@@ -14,11 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::Address as EthereumAddress;
 use cf_primitives::ChannelId;
 use cf_utilities::SliceToArray;
-use ethereum_types::H160;
 use frame_support::sp_runtime::traits::{Hash, Keccak256};
+use sp_core::H160 as EthereumAddress;
 use sp_std::{mem::size_of, vec::Vec};
 
 // From master branch of chainflip-eth-contracts
@@ -64,7 +63,7 @@ const DEPOSIT_CONTRACT_BYTECODE: [u8; 1114] = hex_literal::hex!(
 // Always the same, this is a CREATE2 constant.
 const PREFIX_BYTE: u8 = 0xff;
 
-pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = H160([0xEE; 20]);
+pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = EthereumAddress([0xEE; 20]);
 
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
 ///
@@ -96,7 +95,7 @@ pub fn get_create_2_address(
 	)
 	.collect::<Vec<_>>();
 
-	H160(Keccak256::hash(&create_2_args)[12..].copy_to_array())
+	EthereumAddress(Keccak256::hash(&create_2_args)[12..].copy_to_array())
 }
 
 /// Get the CREATE2 salt for a given channel_id, equivalent to the big-endian u32, left-padded to 32
@@ -113,15 +112,15 @@ mod test_super {
 	use super::*;
 	// Based on previously verified values.
 	const VAULT_ADDRESS: EthereumAddress =
-		H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
+		EthereumAddress(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
 	const FLIP_ADDRESS: EthereumAddress =
-		H160(hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"));
+		EthereumAddress(hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"));
 
 	#[test]
 	fn test_eth_eth() {
 		assert_eq!(
 			get_create_2_address(VAULT_ADDRESS, None, 420696969),
-			H160(hex_literal::hex!("311373270d730749FF22fd3c1F9836AA803Be47a"))
+			EthereumAddress(hex_literal::hex!("311373270d730749FF22fd3c1F9836AA803Be47a"))
 		);
 
 		println!("Derivation worked for ETH:ETH! 🚀");
@@ -131,11 +130,11 @@ mod test_super {
 	fn test_eth_flip() {
 		// Based on previously verified values.
 		const VAULT_ADDRESS: EthereumAddress =
-			H160(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
+			EthereumAddress(hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"));
 
 		assert_eq!(
 			get_create_2_address(VAULT_ADDRESS, Some(FLIP_ADDRESS), 42069),
-			H160(hex_literal::hex!("e3477D1C61feDe43a5bbB5A7Fd40489225D18826"))
+			EthereumAddress(hex_literal::hex!("e3477D1C61feDe43a5bbB5A7Fd40489225D18826"))
 		);
 		println!("Derivation worked for ETH:FLIP! 🚀");
 	}

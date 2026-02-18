@@ -23,6 +23,7 @@ use generic_typeinfo_derive::GenericTypeInfo;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,

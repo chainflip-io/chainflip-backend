@@ -18,6 +18,7 @@ use super::*;
 use anyhow::anyhow;
 use frame_support::sp_runtime::AccountId32;
 use sp_core::crypto::Ss58Codec;
+use sp_std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct SubstrateNetworkAddress {

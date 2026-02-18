@@ -35,7 +35,7 @@ use cf_traits::{
 	EpochInfo, SafeMode,
 };
 use cf_utilities::success_threshold_from_share_count;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::GetDispatchInfo,
 	ensure,
@@ -53,6 +53,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 	Deserialize,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Copy,
@@ -107,7 +108,18 @@ pub trait WitnessDataExtraction {
 	fn is_dot_witnessing(&self) -> bool;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	FailedToWitnessInTime,
 }
@@ -122,9 +134,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type RuntimeOrigin: From<RawOrigin>;
 
@@ -160,7 +169,9 @@ pub mod pallet {
 	}
 
 	/// A hash to index the call by.
-	#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		Clone, Copy, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+	)]
 	pub struct CallHash(pub [u8; 32]);
 	impl sp_std::fmt::Debug for CallHash {
 		fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
@@ -218,7 +229,7 @@ pub mod pallet {
 					witnessed_calls_storage
 						.extract_if(.., |(_, call, _)| {
 							let next_weight =
-								used_weight.saturating_add(call.get_dispatch_info().weight);
+								used_weight.saturating_add(call.get_dispatch_info().call_weight);
 							if remaining_weight.all_gte(next_weight) &&
 								safe_mode.should_dispatch(call)
 							{
@@ -426,7 +437,7 @@ pub mod pallet {
 		/// - [DuplicateWitness](Error::DuplicateWitness)
 		#[pallet::call_index(0)]
 		#[pallet::weight((
-			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().weight /
+			T::WeightInfo::witness_at_epoch().saturating_add(call.get_dispatch_info().call_weight /
 				T::EpochInfo::authority_count_at_epoch(*epoch_index).unwrap_or(1u32) as u64)
 		, DispatchClass::Operational))]
 		pub fn witness_at_epoch(
@@ -529,7 +540,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		// This weight is not strictly correct but since it's a governance call, weight is
 		// irrelevant.
-		#[pallet::weight(T::WeightInfo::force_witness().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(T::WeightInfo::force_witness().saturating_add(call.get_dispatch_info().call_weight))]
 		pub fn force_witness(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -562,7 +573,7 @@ pub mod pallet {
 		/// Emits an event to notify that this call has been witnessed. Then, it dispatches the call
 		/// using the prewitness threshold origin.
 		#[pallet::call_index(3)]
-		#[pallet::weight(call.get_dispatch_info().weight)]
+		#[pallet::weight(call.get_dispatch_info().call_weight)]
 		pub fn prewitness_and_execute(
 			origin: OriginFor<T>,
 			call: Box<<T as Config>::RuntimeCall>,
@@ -590,7 +601,17 @@ pub mod pallet {
 	pub type Origin = RawOrigin;
 
 	/// The raw origin enum for this pallet.
-	#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,

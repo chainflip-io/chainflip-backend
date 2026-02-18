@@ -187,25 +187,32 @@ fn get_compiled_binary_path() -> Option<String> {
 	}
 }
 
-fn detect_js_runtime() -> Option<JsRuntime> {
+fn resolve_js_runtime() -> Result<JsRuntime, &'static str> {
 	// First, check for pre-compiled binary (fastest)
-	if let Some(binary_path) = get_compiled_binary_path() {
-		return Some(JsRuntime::CompiledBinary(binary_path));
-	}
+	let runtime = if let Some(binary_path) = get_compiled_binary_path() {
+		return Ok(JsRuntime::CompiledBinary(binary_path));
+	} else if Command::new("bun").arg("--version").output().is_ok() {
+		JsRuntime::Bun
+	} else if Command::new("npx").arg("--version").output().is_ok() {
+		JsRuntime::Node
+	} else {
+		return Err("No suitable JS runtime found");
+	};
 
 	// Check if node_modules exists (dependencies installed)
-	let node_modules = std::path::Path::new(TS_SIGNER_DIR).join("node_modules");
-	if !node_modules.exists() {
-		return None;
+	if !std::path::Path::new(TS_SIGNER_DIR).join("node_modules").exists() {
+		match runtime {
+			JsRuntime::Bun => Command::new("bun"),
+			JsRuntime::Node => Command::new("npm"),
+			JsRuntime::CompiledBinary(_) => unreachable!(),
+		}
+		.current_dir(TS_SIGNER_DIR)
+		.arg("i")
+		.output()
+		.map_err(|_| "Failed to install JS dependencies for eip712-hasher")?;
 	}
 
-	if Command::new("bun").arg("--version").output().is_ok() {
-		Some(JsRuntime::Bun)
-	} else if Command::new("npx").arg("--version").output().is_ok() {
-		Some(JsRuntime::Node)
-	} else {
-		None
-	}
+	Ok(runtime)
 }
 
 fn hash_with_ts_lib(
@@ -266,7 +273,7 @@ macro_rules! eip712_test {
 	($name:ident, $expr:expr) => {
 		#[test]
 		fn $name() {
-			let Some(runtime) = detect_js_runtime() else {
+			let Ok(runtime) = resolve_js_runtime() else {
 				panic!("Skipping test: neither bun nor node/npx is installed");
 			};
 

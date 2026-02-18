@@ -32,8 +32,8 @@ use itertools::Itertools;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::H256;
 use sp_runtime::{
-	traits::Hash, transaction_validity::TransactionValidityError, ApplyExtrinsicResult,
-	MultiAddress,
+	generic::Preamble, traits::Hash, transaction_validity::TransactionValidityError,
+	ApplyExtrinsicResult, MultiAddress,
 };
 use state_chain_runtime::{BlockNumber, Nonce, RuntimeEvent, UncheckedExtrinsic};
 use thiserror::Error;
@@ -581,14 +581,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				let extrinsic = &block.extrinsics[extrinsic_index as usize];
 
 				// Find any submissions that are for the nonce of the extrinsic
-				if let Some(submissions) = extrinsic.signature.as_ref().and_then(
-					|(address, _, (.., frame_system::CheckNonce(nonce), _, _, _))| {
+				if let Some(submissions) = match extrinsic.preamble {
+					Preamble::Signed(
+						ref address,
+						_,
+						(.., frame_system::CheckNonce(nonce), _, _, _, _),
+					) => {
 						// We only care about the extrinsic if it is from our account
 						(*address == MultiAddress::Id(self.signer.account_id.clone()))
 							.then_some(())
-							.and_then(|_| self.submissions_by_nonce.remove(nonce))
+							.and_then(|_| self.submissions_by_nonce.remove(&nonce))
 					},
-				) {
+					_ => None,
+				} {
 					let tx_hash =
 						<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(
 							extrinsic,

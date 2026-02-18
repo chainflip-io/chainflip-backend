@@ -275,6 +275,7 @@ where
 				reputation_points: account_info.reputation_points,
 				keyholder_epochs: account_info.keyholder_epochs,
 				is_current_authority: account_info.is_current_authority,
+				#[expect(deprecated)]
 				is_current_backup: account_info.is_current_backup,
 				is_qualified: account_info.is_qualified,
 				is_online: account_info.is_online,

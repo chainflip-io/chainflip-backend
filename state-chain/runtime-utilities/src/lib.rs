@@ -26,6 +26,10 @@ use frame_support::{
 };
 use sp_std::marker::PhantomData;
 
+pub mod __reexports {
+	pub use log;
+}
+
 mod helper_functions;
 pub use helper_functions::*;
 
@@ -90,27 +94,27 @@ where
 /// Logs if running in release, panics if running in test.
 #[macro_export]
 macro_rules! log_or_panic {
-    ($($arg:tt)*) => {
+	($($arg:tt)*) => {
 		if cfg!(debug_assertions) {
 			use scale_info::prelude::format;
-            panic!("log_or_panic: {}", format_args!($($arg)*));
+			panic!("log_or_panic: {}", format_args!($($arg)*));
 		} else {
 			use scale_info::prelude::format;
-            log::error!("log_or_panic: {}", format_args!($($arg)*));
+			$crate::__reexports::log::error!("log_or_panic: {}", format_args!($($arg)*));
 		}
-    };
+	};
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use frame_support::storage_alias;
 
 	#[storage_alias]
 	type Store = StorageValue<Test, MyEnumType>;
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking)]
 	enum MyEnumType {
 		A(u32),
 		B(Vec<u8>),
@@ -131,7 +135,7 @@ mod test {
 #[cfg(test)]
 mod test_derive {
 	use super::*;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use frame_support::{storage_alias, Twox64Concat};
 
 	#[storage_alias]
@@ -150,13 +154,13 @@ mod test_derive {
 	#[storage_alias]
 	type MapStore<T> = StorageMap<Pallet, Twox64Concat, u32, MyGenericEnumType<T>>;
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, EnumVariant)]
 	enum MyEnumType {
 		A(u32),
 		B(Vec<u8>),
 	}
 
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumVariant)]
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, EnumVariant)]
 	enum MyGenericEnumType<T: Config> {
 		A(T::Inner),
 		B(T::Inner),

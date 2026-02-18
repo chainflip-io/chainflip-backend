@@ -12,13 +12,15 @@ use crate::{
 	ArbitrumChainTracking, ArbitrumIngressEgress, Runtime,
 };
 use cf_chains::{
-	arb::{self, ArbitrumTrackedData},
+	arb::ArbitrumTrackedData,
+	evm,
 	instances::ArbitrumInstance,
 	witness_period::{BlockWitnessRange, SaturatingStep},
 	Arbitrum, Chain, DepositChannel,
 };
 use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook};
 use cf_utilities::impls;
+use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -71,13 +73,13 @@ pub struct ArbitrumChainTag;
 pub type ArbitrumChain = TypesFor<ArbitrumChainTag>;
 impl ChainTypes for ArbitrumChain {
 	type ChainBlockNumber = BlockWitnessRange<Arbitrum>;
-	type ChainBlockHash = arb::H256;
+	type ChainBlockHash = evm::H256;
 	const NAME: &'static str = "Arbitrum";
 }
 
 pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum ArbitrumElectoralEvents {
 	ReorgDetected {
 		reorged_blocks: RangeInclusive<<ArbitrumChain as ChainTypes>::ChainBlockNumber>,
@@ -252,7 +254,7 @@ pub type ArbitrumKeyManagerWitnessingES =
 // ------------------------ liveness ---------------------------
 pub type ArbitrumLiveness = Liveness<
 	<Arbitrum as Chain>::ChainBlockNumber,
-	arb::H256,
+	evm::H256,
 	ReportFailedLivenessCheck<Arbitrum>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -439,7 +441,7 @@ impl_pallet_safe_mode! {
 	key_manager_witnessing,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
 		<TypesFor<ArbitrumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,

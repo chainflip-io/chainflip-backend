@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{
-	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	evm::{
+		Address as EvmAddress, EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents,
+		TransactionFee, H256,
+	},
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -25,7 +28,6 @@ use ethers::{
 	types::{Bloom, TransactionReceipt},
 };
 use futures_core::Future;
-use sp_core::{H160, H256};
 use tracing::{info, trace};
 
 use super::{
@@ -50,11 +52,11 @@ impl Key {
 	/// Equivalent to secp256k1::PublicKey.serialize()
 	pub fn serialize(&self) -> [u8; 33] {
 		let mut bytes: [u8; 33] = [0; 33];
-		self.pub_key_x.to_big_endian(&mut bytes[1..]);
 		bytes[0] = match self.pub_key_y_parity.is_zero() {
 			true => 2,
 			false => 3,
 		};
+		bytes[1..33].copy_from_slice(&self.pub_key_x.to_big_endian());
 		bytes
 	}
 }
@@ -80,7 +82,7 @@ use super::contract_common::Event as ContractEvent;
 /// Configuration trait for chain-specific key manager event handling.
 pub trait KeyManagerEventConfig {
 	type Chain: Chain<
-		ChainAccount = H160,
+		ChainAccount = EvmAddress,
 		ChainCrypto = cf_chains::evm::EvmCrypto,
 		ChainBlockNumber = u64,
 		TransactionFee = TransactionFee,
@@ -163,7 +165,7 @@ where
 
 			EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
 				tx_out_id: SchnorrVerificationComponents {
-					s: sig_data.sig.into(),
+					s: sig_data.sig.to_big_endian(),
 					k_times_g_address: sig_data.k_times_g_address.into(),
 				},
 				signer_id: from,
@@ -187,14 +189,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
-		contract_address: H160,
+		contract_address: EvmAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
 		Inner::Chain: Chain<
 			ChainCrypto = EvmCrypto,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
 			TransactionRef = H256,
@@ -236,7 +238,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								new_agg_key.serialize(),
 							),
 							block_number: header.index,
-							tx_id: event.tx_hash,
+							tx_id: H256(event.tx_hash.0),
 						}
 						.into(),
 						KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
@@ -277,10 +279,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								ChainInstanceFor<Inner::Chain>,
 							>::transaction_succeeded {
 								tx_out_id: SchnorrVerificationComponents {
-									s: sig_data.sig.into(),
+									s: sig_data.sig.to_big_endian(),
 									k_times_g_address: sig_data.k_times_g_address.into(),
 								},
-								signer_id: from,
+								signer_id: from.0.into(),
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
 								transaction_ref: transaction.hash,
@@ -310,14 +312,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
-
+	use super::*;
 	use std::{path::PathBuf, str::FromStr};
 
 	use cf_chains::{Chain, Ethereum};
 	use cf_primitives::AccountRole;
 	use cf_utilities::task_scope::task_scope;
 	use futures_util::FutureExt;
-	use sp_core::{H160, U256};
+	use sp_core::U256;
 
 	use super::super::source::EvmSource;
 
@@ -376,7 +378,7 @@ mod tests {
 							println!("Witnessed call: {:?}", call);
 						},
 						retry_client,
-						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
+						EvmAddress::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
 					)
 					.spawn(scope);
 

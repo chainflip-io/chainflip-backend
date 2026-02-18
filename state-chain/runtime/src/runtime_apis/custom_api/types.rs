@@ -21,13 +21,13 @@ use cf_chains::{
 	self,
 	address::EncodedAddress,
 	assets::any::AssetMap,
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
 	sol::SolInstructionRpc,
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain, GasAmount};
+use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -168,9 +168,9 @@ pub mod validator_info_before_v7 {
 		pub is_qualified: bool,
 		pub is_online: bool,
 		pub is_bidding: bool,
-		pub bound_redeem_address: Option<EthereumAddress>,
+		pub bound_redeem_address: Option<EvmAddress>,
 		pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-		pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+		pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 		pub estimated_redeemable_balance: AssetAmount,
 	}
 }
@@ -184,6 +184,7 @@ impl From<validator_info_before_v7::ValidatorInfo> for ValidatorInfo {
 			reputation_points: old.reputation_points,
 			keyholder_epochs: old.keyholder_epochs,
 			is_current_authority: old.is_current_authority,
+			#[expect(deprecated)]
 			is_current_backup: old.is_current_backup,
 			is_qualified: old.is_qualified,
 			is_online: old.is_online,
@@ -210,9 +211,9 @@ pub struct ValidatorInfo {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>, // APY for validator/back only. In Basis points.
-	pub restricted_balances: BTreeMap<EthereumAddress, AssetAmount>,
+	pub restricted_balances: BTreeMap<EvmAddress, AssetAmount>,
 	pub estimated_redeemable_balance: AssetAmount,
 	pub operator: Option<AccountId32>,
 }
@@ -419,12 +420,12 @@ pub struct BrokerInfo<BtcAddress> {
 	pub btc_vault_deposit_address: Option<BtcAddress>,
 	pub affiliates: Vec<(AccountId32, AffiliateDetails)>,
 	pub bond: AssetAmount,
-	pub bound_fee_withdrawal_address: Option<EthereumAddress>,
+	pub bound_fee_withdrawal_address: Option<EvmAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Serialize, Deserialize)]
 pub struct CcmData {
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 	pub message_length: u32,
 }
 
@@ -692,9 +693,9 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub bond: Balance,
 	pub estimated_redeemable_balance: Balance,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
-	pub restricted_balances: BTreeMap<EthereumAddress, Balance>,
+	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
 	#[serde(skip_serializing_if = "Option::is_none")]

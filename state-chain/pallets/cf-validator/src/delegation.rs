@@ -1,7 +1,7 @@
 use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
 use cf_primitives::EpochIndex;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
 use frame_support::{
 	sp_runtime::{traits::AtLeast32BitUnsigned, Perquintill},
@@ -31,6 +31,7 @@ pub enum AssociationToOperator {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	Serialize,
 	Deserialize,
 	TypeInfo,
@@ -54,7 +55,18 @@ impl<T> DelegationAmount<T> {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum Change<T> {
 	Increase(T),
 	Decrease(T),
@@ -70,6 +82,7 @@ pub enum Change<T> {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Deserialize,
@@ -88,6 +101,7 @@ pub enum DelegationAcceptance {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Clone,
@@ -106,7 +120,17 @@ pub struct OperatorSettings {
 /// A snapshot of delegations to an operator for a specific epoch, including all
 /// necessary information for reward distribution.
 #[derive(
-	Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, Debug, Serialize, Deserialize,
+	Clone,
+	PartialEq,
+	Eq,
+	Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Debug,
+	Serialize,
+	Deserialize,
 )]
 pub struct DelegationSnapshot<Account: Ord, Bid> {
 	pub operator: Account,

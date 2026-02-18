@@ -18,6 +18,7 @@
 #![feature(step_trait)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
+
 pub mod chainflip;
 pub mod configs;
 pub mod constants;
@@ -30,11 +31,9 @@ mod weights;
 
 pub use configs::*;
 
-use crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS;
 use codec::{Decode, Encode};
 // use constants::common::*;
 use frame_support::sp_runtime::{
-	create_runtime_str,
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
 };
@@ -95,14 +94,14 @@ pub mod opaque {
 //   https://docs.substrate.io/v3/runtime/upgrades#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("chainflip-node"),
-	impl_name: create_runtime_str!("chainflip-node"),
+	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
+	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
 	spec_version: 2_01_00,
 	impl_version: 1,
-	apis: RUNTIME_API_VERSIONS,
+	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
-	state_version: 1,
+	system_version: 1,
 };
 
 /// The version information used to identify this runtime when compiled natively.
@@ -261,8 +260,11 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// A Block signed with a Justification
 pub type SignedBlock = generic::SignedBlock<Block>;
-/// The SignedExtension to the basic transaction logic.
-pub type SignedExtra = (
+/// BlockId type as expected by this runtime.
+pub type BlockId = generic::BlockId<Block>;
+/// The `TransactionExtension` to the basic transaction logic.
+pub type TxExtension = (
+	frame_system::AuthorizeCall<Runtime>,
 	frame_system::CheckNonZeroSender<Runtime>,
 	frame_system::CheckSpecVersion<Runtime>,
 	frame_system::CheckTxVersion<Runtime>,
@@ -272,14 +274,15 @@ pub type SignedExtra = (
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	frame_metadata_hash_extension::CheckMetadataHash<Runtime>,
+	frame_system::WeightReclaim<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, TxExtension>;
 /// The payload being signed in transactions.
-pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
+pub type SignedPayload = generic::SignedPayload<RuntimeCall, TxExtension>;
 /// Extrinsic type that has already been checked.
-pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra>;
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, RuntimeCall, TxExtension>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -289,6 +292,24 @@ pub type Executive = frame_executive::Executive<
 	PalletExecutionOrder,
 	AllMigrations,
 >;
+
+impl<LocalCall> frame_system::offchain::CreateTransactionBase<LocalCall> for Runtime
+where
+	RuntimeCall: From<LocalCall>,
+{
+	type Extrinsic = UncheckedExtrinsic;
+	type RuntimeCall = RuntimeCall;
+}
+
+// Required for Grandpa equivocation reporting.
+impl<LocalCall> frame_system::offchain::CreateInherent<LocalCall> for Runtime
+where
+	RuntimeCall: From<LocalCall>,
+{
+	fn create_bare(call: RuntimeCall) -> UncheckedExtrinsic {
+		UncheckedExtrinsic::new_bare(call)
+	}
+}
 
 pub type PalletExecutionOrder = (
 	System,
@@ -489,6 +510,10 @@ type MigrationsForV2_1 = (
 		include_instances: [EthereumInstance, ArbitrumInstance],
 		exclude_instances: [PolkadotInstance, BitcoinInstance, SolanaInstance, AssethubInstance],
 	},
+	pallet_session::migrations::v1::MigrateV0ToV1<
+		Runtime,
+		pallet_session::migrations::v1::InitOffenceSeverity<Runtime>,
+	>,
 );
 
 #[cfg(test)]

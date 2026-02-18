@@ -106,6 +106,22 @@ const getCachedSubstrateApi = (endpoint: string) =>
       },
     });
 
+    // HACK: Force the API to use Extrinsic v4.
+    // PolkaJS defaults to the latest extrinsic version supported by the node, despite the fact
+    // that signing for V5 extrinsics is not yet supported.
+    if (apiPromise.extrinsicVersion === 5) {
+      await apiPromise.isReady;
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      const apiPromiseAny = apiPromise as any;
+      apiPromiseAny._extrinsicType = 4;
+      if (apiPromiseAny._rx) {
+        Object.defineProperty(apiPromiseAny._rx, 'extrinsicType', {
+          get: () => 4,
+        });
+        apiPromiseAny._rx._extrinsicType = 4;
+      }
+    }
+
     return new Proxy(apiPromise as unknown as DisposableApiPromise, {
       get(target, prop, receiver) {
         if (prop === Symbol.asyncDispose) {

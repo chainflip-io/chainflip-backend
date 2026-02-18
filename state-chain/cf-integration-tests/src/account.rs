@@ -17,7 +17,7 @@
 //! Contains tests related to Accounts in the runtime
 
 use crate::network;
-use cf_chains::eth::Address as EthereumAddress;
+use cf_chains::evm::Address as EvmAddress;
 use cf_traits::EpochInfo;
 use frame_support::assert_noop;
 use pallet_cf_account_roles::VanityNames;
@@ -65,7 +65,7 @@ fn account_deletion_removes_relevant_storage_items() {
 			Funding::redeem(
 				state_chain_runtime::RuntimeOrigin::signed(backup_node.clone()),
 				RedemptionAmount::Max,
-				EthereumAddress::repeat_byte(0x22),
+				EvmAddress::repeat_byte(0x22),
 				Default::default()
 			),
 			pallet_cf_funding::Error::<Runtime>::AccountMustBeUnregistered
@@ -74,11 +74,7 @@ fn account_deletion_removes_relevant_storage_items() {
 		network::Cli::stop_bidding(&backup_node);
 		network::Cli::deregister_as_validator(&backup_node);
 
-		network::Cli::redeem(
-			&backup_node,
-			RedemptionAmount::Max,
-			EthereumAddress::repeat_byte(0x22),
-		);
+		network::Cli::redeem(&backup_node, RedemptionAmount::Max, EvmAddress::repeat_byte(0x22));
 
 		// Sign the redemption request
 		testnet.move_forward_blocks(1);
