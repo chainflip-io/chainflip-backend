@@ -1421,6 +1421,10 @@ impl_runtime_apis! {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
 				},
+				VaultSwapExtraParametersEncoded::Tron(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				}
 			};
 
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
@@ -1491,6 +1495,10 @@ impl_runtime_apis! {
 				(
 					ForeignChain::Arbitrum,
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				)|
+				(
+					ForeignChain::Tron,
+					VaultSwapExtraParametersEncoded::Tron(extra_params)
 				) => {
 					crate::chainflip::vault_swaps::evm_vault_swap(
 						broker,

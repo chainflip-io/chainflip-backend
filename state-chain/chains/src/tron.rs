@@ -24,7 +24,7 @@ pub mod fees {
 	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 21_000; // Base energy transaction cost
 	pub const ENERGY_GAS_COST_PER_FETCH_NATIVE: u128 = 65_000; // Cost to fetch tokens from deposit channel
 	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 65_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 0; // Native TRX transfers included in base
+	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 10; // Native TRX transfers included in base
 	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 45_000; // TRC-20 token transfer
 
 	// Bandwidth in out case depends on the length. Both types of fetches have the same length
@@ -88,7 +88,7 @@ impl Chain for Tron {
 	type ChainAccount = eth::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
-	type DepositDetails = evm::DepositDetails; // TODO: To update??
+	type DepositDetails = evm::DepositDetails;
 	type Transaction = TronTransaction;
 	type TransactionMetadata = TronTransactionMetadata;
 	type TransactionRef = H256;
@@ -115,7 +115,6 @@ impl Chain for Tron {
 pub struct TronTrackedData {}
 
 impl Default for TronTrackedData {
-	#[track_caller]
 	fn default() -> Self {
 		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
 		Self {}
@@ -126,13 +125,37 @@ impl TronTrackedData {
 	pub fn new() -> Self {
 		Self {}
 	}
+
+	/// Calculate the fee for a CCM egress transaction
+	pub fn calculate_ccm_fee(
+		&self,
+		is_native_asset: bool,
+		gas_budget: GasAmount,
+		message_length: usize,
+	) -> <Tron as Chain>::ChainAmount {
+		use crate::tron::fees::*;
+
+		let energy = ENERGY_BASE_COST_PER_BATCH.saturating_add(gas_budget) +
+			if is_native_asset {
+				ENERGY_COST_PER_TRANSFER_NATIVE
+			} else {
+				ENERGY_COST_PER_TRANSFER_TOKEN
+			};
+		let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
+			(message_length as u128).saturating_mul(BANDWIDTH_PER_BYTE);
+
+		energy
+			.saturating_mul(ENERGY_PER_TX_TRX_BURN)
+			.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
+	}
 }
 
 // TODO: To review. This currently will return the worst case scenario cost-wise - all energy
 // and bandwhidth are paid with burning TRX on transaction inclusion. This approach plus using
 // the governance fee multiplier is one alternative. It can then be adjusted depending on how
-// much bandwidth and energy we have available. The alternative is to track how much energy
-// we have available in chaintracking.
+// much bandwidth and energy we have available. However, we might want CCM to always pay the
+// full price.
+// The alternative is to track how much energy we have available in chaintracking.
 impl FeeEstimationApi<Tron> for TronTrackedData {
 	fn estimate_fee(
 		&self,
@@ -175,22 +198,11 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 					.saturating_mul(ENERGY_PER_TX_TRX_BURN)
 					.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
 			},
-			IngressOrEgress::EgressCcm { gas_budget, message_length } => {
-				let energy = ENERGY_BASE_COST_PER_BATCH.saturating_add(gas_budget) +
-					match asset {
-						assets::tron::Asset::Trx => ENERGY_COST_PER_TRANSFER_NATIVE,
-						assets::tron::Asset::TronUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
-					};
-				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
-					match asset {
-						assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_TRANSFER,
-						assets::tron::Asset::TronUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
-					} + (message_length as u128).saturating_mul(BANDWIDTH_PER_BYTE);
-
-				energy
-					.saturating_mul(ENERGY_PER_TX_TRX_BURN)
-					.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
-			},
+			IngressOrEgress::EgressCcm { gas_budget, message_length } => self.calculate_ccm_fee(
+				asset == assets::tron::Asset::Trx,
+				gas_budget,
+				message_length,
+			),
 		}
 	}
 }
@@ -215,25 +227,24 @@ pub struct TronTransactionMetadata {
 	// pub gas_limit: Option<Uint>,
 	pub contract: Address,
 	pub fee_limit: Option<Uint>,
-	// Depending on how we end up implementing the fee charging, we
+	// TODO: Depending on how we end up implementing the fee charging, we
 	// might end up with a user paying only part of the egresses costs.
 	// For normal transactions that's fine. For CCM, where the user
 	// sets the budget, this could be a problem. Energy consumption
-	// can't be set in the transaction and limiting the final fee is
+	// can't be set in the transaction . Limiting the final fee is
 	// not reliable if we have a lot of energy available - CCM could
-	// then be used to "drain" a lot of the energy. Therefore,
-	// we could consider using a max_energy in the meteadata for the
-	// engines to estimate the energy before actuallly broadcasting it,
-	// similar to the gas_limit in other EVM-based chains. We shall
-	// then use the `triggerConstantSmartContract` api call.
-	// Alternatively or parallely we could decide to charg the user
-	// in full for CCM transacctions as if the whole tx energy and
-	// bandwith was paid by burning TRX. This way we can't end up in
-	// a deficit.
-	// pub max_energy: Option<Uint>,
+	// then be used to "drain" a lot of the energy.
+	// An alternative is limiting the energy by having a `max_energy`
+	// and then doing an energy estimation on the engines
+	// (`triggerConstantSmartContract`) similar to what we do for
+	// the gas limit in other EVM-based chains. However, energy estimation
+	// technically can't be relied upon neither, as the state of the
+	// receiving contract can change.
+	// The alternatives then are either charging in full to the user
+	// for CCM transactions as if the whole tx energy and bandwith
+	// was paid by burning TRX, or implementing a whitelist.
 }
 
-// TODO: To update/review
 impl<C: Chain<Transaction = TronTransaction, TransactionRef = H256>> TransactionMetadata<C>
 	for TronTransactionMetadata
 {
@@ -248,12 +259,11 @@ impl<C: Chain<Transaction = TronTransaction, TransactionRef = H256>> Transaction
 			};
 		}
 
-		// TODO: Fee_limit is optional?
 		self.contract == expected_metadata.contract && check_optional!(fee_limit)
 	}
 }
 
-// TODO: TBD
+// TODO: TBD if we need all these parameters.
 #[derive(
 	Clone,
 	Debug,

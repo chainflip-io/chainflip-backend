@@ -16,7 +16,7 @@
 
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
-	eth::deposit_address::get_create_2_address,
+	eth::deposit_address::get_create_2_address_tron,
 	Chain, Tron,
 };
 use cf_primitives::{chains::assets::tron, ChannelId};
@@ -31,8 +31,7 @@ impl AddressDerivationApi<Tron> for AddressDerivation {
 		source_asset: tron::Asset,
 		channel_id: ChannelId,
 	) -> Result<<Tron as Chain>::ChainAccount, AddressDerivationError> {
-		// TODO: We need to implement the address derivation for Tron
-		Ok(get_create_2_address(
+		Ok(get_create_2_address_tron(
 			Environment::tron_vault_address(),
 			<EvmEnvironment as EvmEnvironmentProvider<Tron>>::token_address(source_asset),
 			channel_id,

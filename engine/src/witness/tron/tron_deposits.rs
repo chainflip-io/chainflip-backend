@@ -46,13 +46,9 @@ pub struct TronVaultSwapData {
 	pub ccm_data: Option<(GasAmount, CcmMessage)>,
 	// pub tx_id: H256, // This is interpreted from the tx
 	// pub deposit_address: EthAddress, // This will be None for Tron vault swaps
+	// The rest will be decoded from the CfParameters for consistency in EVMs.
+	// broker_fee, refund_params, dca_params, boost_fee, affiliate_fees
 	pub cf_parameters: Vec<u8>,
-	// These will be decodec from DCA Parameters
-	// pub broker_fee: Beneficiary<AccountId>,
-	// pub refund_params: ChannelRefundParametersForChain<Tron>,
-	// pub dca_params: Option<DcaParameters>,
-	// pub boost_fee: u8,
-	// pub affiliate_fees: Affiliates<AffiliateShortId>,
 }
 
 /// Query block balance information from the Tron blockchain and calculate
@@ -256,15 +252,15 @@ where
 						// (VaultDepositWitness type)
 						vault_swaps.push(tx_id.clone());
 
-						// vault_swaps.push(crate::witness::evm::vault::vault_deposit_witness!(
-						// 	Asset::Trx, // Use Trx or USDT
-						// 	amount,
+						// let vault_deposit_witness =
+						// crate::witness::evm::vault::vault_deposit_witness!( 	Asset::Trx, //
+						// Use Trx or USDT 	amount,
 						// 	details.output_asset,
 						// 	details.destination_address,
 						// 	deposit_metadata,
 						// 	tx_id,
 						// 	vault_swap_params
-						// ));
+						// );
 					}
 				}
 			}

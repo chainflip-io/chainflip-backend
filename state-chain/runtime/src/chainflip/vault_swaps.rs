@@ -45,7 +45,7 @@ use cf_primitives::{
 	SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{AffiliateRegistry, SwapParameterValidation};
-use codec::Decode;
+use codec::{Decode, Encode};
 
 use frame_support::pallet_prelude::DispatchError;
 use sol_prim::consts::SOL_USD_DECIMAL;
@@ -185,20 +185,20 @@ pub fn evm_vault_swap<A>(
 	let mut source_token_address = None;
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
-			if let Some(ccm) = channel_metadata {
+			if let Some(ccm) = channel_metadata.clone() {
 				Ok(cf_chains::evm::api::x_call_native::XCallNative::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					ccm.message.to_vec(),
 					ccm.gas_budget,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			},
@@ -219,35 +219,35 @@ pub fn evm_vault_swap<A>(
 				.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?,
 			);
 
-			if let Some(ccm) = channel_metadata {
+			if let Some(ccm) = channel_metadata.clone() {
 				Ok(cf_chains::evm::api::x_call_token::XCallToken::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					ccm.message.to_vec(),
 					ccm.gas_budget,
 					*source_token_address_ref,
 					amount,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_token::XSwapToken::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					*source_token_address_ref,
 					amount,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			}
 		},
 		Asset::Trx => {
-			// TODO: Implement Trx vault swap logic
-			Err(DispatchErrorWithMessage::from("Trx vault swaps not yet implemented"))
+			// TODO: Implement Trx calldata vault swap logic. Should be a TRX transfer to the Vault.
+			Err(DispatchErrorWithMessage::from("Trx vault swaps calldata not yet implemented"))
 		},
 		Asset::TronUsdt => {
-			// TODO: Implement TronUsdt vault swap logic
-			Err(DispatchErrorWithMessage::from("TronUsdt vault swaps not yet implemented"))
+			// TODO: Implement TronUsdt vault swap logic. Should be a USDT transfer to the Vault.
+			Err(DispatchErrorWithMessage::from("TronUsdt vault swaps calldata not yet implemented"))
 		},
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
@@ -269,9 +269,31 @@ pub fn evm_vault_swap<A>(
 			to: Environment::arb_vault_address(),
 			source_token_address,
 		})),
-		ForeignChain::Tron =>
-		// TODO: Implement Tron vault swap logic
-			Err(DispatchErrorWithMessage::from("Trx vault swaps not yet implemented")),
+		ForeignChain::Tron => {
+			// Encode TronVaultSwapData for the note
+			let ccm_data =
+				channel_metadata.as_ref().map(|ccm| (ccm.gas_budget, ccm.message.clone()));
+
+			let tron_vault_swap_data =
+				(destination_asset, destination_address.clone(), ccm_data, cf_parameters.clone());
+
+			let note = tron_vault_swap_data.encode();
+
+			Ok(VaultSwapDetails::tron(
+				EvmCallDetails {
+					calldata,
+					// Only return `amount` for native currently. 0 for Tokens
+					value: if source_asset == Asset::Trx {
+						U256::from(amount)
+					} else {
+						U256::default()
+					},
+					to: Environment::tron_vault_address(),
+					source_token_address,
+				},
+				note,
+			))
+		},
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),

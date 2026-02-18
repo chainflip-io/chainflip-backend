@@ -105,6 +105,12 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(flatten)]
 		instruction: SolInstructionRpc,
 	},
+	Tron {
+		#[serde(flatten)]
+		details: EvmCallDetails,
+		#[serde(with = "sp_core::bytes")]
+		note: Vec<u8>,
+	},
 }
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
@@ -131,6 +137,10 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
+	pub fn tron(details: EvmCallDetails, note: Vec<u8>) -> Self {
+		VaultSwapDetails::Tron { details, note }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -141,6 +151,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
+			VaultSwapDetails::Tron { details, note } => VaultSwapDetails::Tron { details, note },
 		}
 	}
 }

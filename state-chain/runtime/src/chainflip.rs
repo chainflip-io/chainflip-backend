@@ -158,8 +158,6 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-// TODO: Think how we want to address this in TRON
-// const TRON_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -217,7 +215,7 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 	}
 
 	fn refresh_unsigned_data(_unsigned_tx: &mut TronTransaction) {
-		// Nothing to update? Should we at least update with the multiplier?
+		// Nothing to update (unless we decide on tracking the energy available via chaintracking)
 	}
 
 	fn requires_signature_refresh(
@@ -235,13 +233,21 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 	}
 
 	fn calculate_gas_limit(call: &TronApi<EvmEnvironment>) -> Option<U256> {
-		if let (Some((_gas_budget, _message_length, _transfer_asset)), Some(_native_asset)) = (
+		if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) = (
 			call.ccm_transfer_data(),
 			<EvmEnvironment as EvmEnvironmentProvider<Tron>>::token_address(Tron::GAS_ASSET),
 		) {
-			// TODO: Implement the right calculations
-			None
+			use cf_chains::tron::TronTrackedData;
+			let tracked_data = TronTrackedData::new();
+			let is_native_asset = transfer_asset == native_asset;
+			Some(
+				tracked_data
+					.calculate_ccm_fee(is_native_asset, gas_budget, message_length)
+					.into(),
+			)
 		} else {
+			// TODO: Do we set no fee_limit? TBD depending on the approach on energy, but most
+			// likely no fee_limit
 			None
 		}
 	}
