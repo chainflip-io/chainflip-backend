@@ -25,6 +25,7 @@ use crate::{
 			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents, Erc20Events},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
+			EvmVoter,
 		},
 	},
 };
@@ -333,7 +334,12 @@ impl VoterApi<ArbitrumKeyManagerWitnessingES> for ArbitrumKeyManagerWitnesserVot
 		)
 		.await?;
 
-		let result = handle_key_manager_events(self, events, *block_height.root()).await?;
+		let result = handle_key_manager_events(
+			&EvmVoter::<ArbitrumChain, EvmBlockRangeQuery<Arbitrum>>::new(self.client.clone()),
+			events,
+			*block_height.root(),
+		)
+		.await?;
 
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}

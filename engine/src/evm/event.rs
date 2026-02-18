@@ -18,12 +18,12 @@ use anyhow::{anyhow, Result};
 use derive_where::derive_where;
 use ethers::{abi::RawLog, contract::EthLogDecode};
 
+use ethers::types::Log;
+use sp_core::{H160, H256, U256};
 use std::{
 	fmt::{Debug, Display, Formatter},
 	sync::Arc,
 };
-use ethers::types::Log;
-use sp_core::{H160, H256, U256};
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]

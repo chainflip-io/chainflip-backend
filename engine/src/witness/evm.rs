@@ -23,9 +23,12 @@ pub mod vault;
 
 use anyhow::Result;
 use derive_where::derive_where;
+use ethers::types::{Transaction, TransactionReceipt};
 use itertools::Itertools;
 use sp_runtime::AccountId32;
-use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
+use state_chain_runtime::chainflip::witnessing::pallet_hooks::{
+	EvmKeyManagerEvent, EvmVaultContractEvent,
+};
 use std::{collections::HashMap, fmt::Debug};
 
 use cf_chains::{evm::EvmChain, Chain, DepositChannel};
@@ -35,7 +38,7 @@ use sp_core::{H160, H256};
 
 use crate::{
 	evm::{
-		cached_rpc::EvmCachingClient,
+		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
 		event::{Event, EvmEventSource},
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
@@ -44,6 +47,7 @@ use crate::{
 		evm::{
 			contract_common::witness_deposit_channels_generic2,
 			erc20_deposits::Erc20Events,
+			key_manager::{handle_key_manager_events, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
 		},
 	},
@@ -78,7 +82,12 @@ pub trait EvmAddressStateClient<Chain: ChainTypes>:
 	) -> Result<HashMap<H160, (AddressState, AddressState)>, anyhow::Error>;
 }
 
-pub trait ConfigTrait = Sync + Send + Clone;
+#[async_trait::async_trait]
+pub trait EvmTransactionClient {
+	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction>;
+}
+
 #[derive_where(Clone; )]
 pub struct EvmVoter<CT: ChainTypes, BlockQuery> {
 	pub client: EvmCachingClient<EvmRpcSigningClient>,
@@ -88,6 +97,19 @@ pub struct EvmVoter<CT: ChainTypes, BlockQuery> {
 impl<CT: ChainTypes, BlockQuery> EvmVoter<CT, BlockQuery> {
 	pub fn new(client: EvmCachingClient<EvmRpcSigningClient>) -> Self {
 		Self { client, _phantom: Default::default() }
+	}
+}
+
+#[async_trait::async_trait]
+impl<CT: ChainTypes + Sync + Send, BlockQuery: Sync + Send> EvmTransactionClient
+	for EvmVoter<CT, BlockQuery>
+{
+	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
+		self.client.transaction_receipt(tx_hash).await
+	}
+
+	async fn get_transaction(&self, tx_hash: H256) -> Result<Transaction> {
+		self.client.get_transaction(tx_hash).await
 	}
 }
 
@@ -151,6 +173,36 @@ impl<
 	) -> Result<Vec<EvmVaultContractEvent<T, I>>> {
 		let events = self.events_from_block_query(&config.vault, query.clone()).await?;
 		let result = handle_vault_events::<T, I>(&config.supported_assets, events, query)?;
+		Ok(result.into_iter().sorted().collect())
+	}
+}
+
+// ----- key manager witnessing -----
+#[derive(Clone)]
+pub struct EvmKeyManagerWitnessingConfig {
+	pub key_manager: EvmEventSource<KeyManagerEvents>,
+}
+
+#[async_trait::async_trait]
+impl<
+		CT: ChainTypes,
+		T: pallet_cf_ingress_egress::Config<I, TargetChain: EvmChain, AccountId = AccountId32>
+			+ pallet_cf_vaults::Config<I>
+			+ pallet_cf_broadcast::Config<I>,
+		I: 'static,
+		Client: EvmEventClient<CT> + EvmTransactionClient,
+	> WitnessClientForBlockData<CT, Vec<EvmKeyManagerEvent<T, I>>> for Client
+{
+	type Config = EvmKeyManagerWitnessingConfig;
+	async fn block_data_from_query(
+		&self,
+		config: &Self::Config,
+		_properties: &(),
+		query: &Self::BlockQuery,
+	) -> Result<Vec<EvmKeyManagerEvent<T, I>>> {
+		let block_height = query.get_lowest_block_height_of_query();
+		let events = self.events_from_block_query(&config.key_manager, query.clone()).await?;
+		let result = handle_key_manager_events::<T, I>(self, events, block_height).await?;
 		Ok(result.into_iter().sorted().collect())
 	}
 }
