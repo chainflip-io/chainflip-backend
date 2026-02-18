@@ -191,7 +191,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			None,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BTreeSet::from([ALICE]), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -320,7 +320,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(MockBalance::get_balance(&BOB, Asset::Eth), 0);
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BTreeSet::from([ALICE]), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -333,7 +333,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BTreeSet::from([BOB]), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &BOB, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -1181,7 +1181,7 @@ fn cancel_all_limit_orders_for_account() {
 
 		let count_orders = |base_asset, lp| {
 			let orders =
-				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, &BTreeSet::from([lp]), false)
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
 					.unwrap()
 					.limit_orders;
 
@@ -1587,7 +1587,7 @@ fn test_limit_order_auto_close() {
 
 			// The order should be present in the pool
 			assert_eq!(
-				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, &BTreeSet::from([ALICE]), false)
+				LiquidityPools::pool_orders_for_account(ASSET, STABLE_ASSET, &ALICE, false)
 					.unwrap()
 					.limit_orders
 					.asks
@@ -1606,7 +1606,7 @@ fn test_limit_order_auto_close() {
 				}) => ()
 			);
 			assert_eq!(
-				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, &BTreeSet::from([ALICE]), false)
+				LiquidityPools::pool_orders_for_account(ASSET, STABLE_ASSET, &ALICE, false)
 					.unwrap()
 					.limit_orders
 					.asks
@@ -1665,12 +1665,12 @@ fn cancel_all_pool_positions() {
 
 		let count_orders = |base_asset, lp| {
 			let limit_orders =
-				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, &BTreeSet::from([lp]), false)
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
 					.unwrap()
 					.limit_orders;
 
 			let range_orders =
-				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, &BTreeSet::from([lp]), false)
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
 					.unwrap()
 					.range_orders;
 

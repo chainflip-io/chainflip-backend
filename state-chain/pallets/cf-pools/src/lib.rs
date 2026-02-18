@@ -1167,12 +1167,8 @@ impl<T: Config> PoolApi for Pallet<T> {
 		who: &Self::AccountId,
 		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
-		let pool_orders = Self::pool_orders(
-			asset_pair.base,
-			asset_pair.quote,
-			&BTreeSet::from([who.clone()]),
-			true,
-		)?;
+		let pool_orders =
+			Self::pool_orders_for_account(asset_pair.base, asset_pair.quote, who, true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
@@ -1217,15 +1213,11 @@ impl<T: Config> PoolApi for Pallet<T> {
 		let mut result: AssetMap<AssetAmount> = AssetMap::from_fn(|_| 0);
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
-			let pool_orders = match Self::pool_orders(
-				base_asset,
-				Asset::Usdc,
-				&BTreeSet::from([who.clone()]),
-				false,
-			) {
-				Ok(orders) => orders,
-				Err(_) => continue,
-			};
+			let pool_orders =
+				match Self::pool_orders_for_account(base_asset, Asset::Usdc, who, false) {
+					Ok(orders) => orders,
+					Err(_) => continue,
+				};
 			for ask in pool_orders.limit_orders.asks {
 				result[base_asset] = result[base_asset]
 					.saturating_add(ask.sell_amount.saturated_into::<AssetAmount>());
@@ -2220,6 +2212,22 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns the limit and range orders for a given Liquidity Provider within the given pool.
+	pub fn pool_orders_for_account(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		account: &T::AccountId,
+		filled_orders: bool,
+	) -> Result<PoolOrders<T>, DispatchError> {
+		Self::pool_orders(
+			base_asset,
+			quote_asset,
+			&BTreeSet::from([account.clone()]),
+			filled_orders,
+		)
+	}
+
+	/// Returns the limit and range orders for a given Liquidity Providers within the given pool.
+	/// Empty set of accounts will return all orders within the pool.
 	pub fn pool_orders(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
