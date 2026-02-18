@@ -18,7 +18,7 @@ use crate::{
 	elections::voter_api::{CompositeVoter, VoterApi},
 	evm::{
 		cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-		event::{evm_event_type, Event, EvmEventSource},
+		event::{Event, EvmEventSource},
 		rpc::{address_checker::AddressState, EvmRpcSigningClient},
 	},
 	witness::{
@@ -38,7 +38,7 @@ use crate::{
 			},
 		},
 		evm::{
-			contract_common::{address_states, evm_events_at_block, query_election_block},
+			contract_common::address_states,
 			erc20_deposits::{
 				flip::FlipEvents, usdc::UsdcEvents, usdt::UsdtEvents, wbtc::WbtcEvents,
 			},
@@ -49,7 +49,7 @@ use crate::{
 		},
 	},
 };
-use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32, Ethereum};
+use cf_chains::{assets, eth::EthereumTrackedData, evm::ToAccountId32};
 use cf_primitives::chains::assets::eth::Asset as EthAsset;
 use cf_utilities::{
 	context,
@@ -66,9 +66,8 @@ use ethers::{
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_elections::{
-	electoral_systems::{
-		block_height_witnesser::{primitives::Header, ChainBlockHashOf, ChainBlockNumberOf},
-		block_witnesser::state_machine::BWElectionProperties,
+	electoral_systems::block_height_witnesser::{
+		primitives::Header, ChainBlockHashOf, ChainBlockNumberOf,
 	},
 	ElectoralSystemTypes, VoteOf,
 };
@@ -77,7 +76,7 @@ use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumElectoralSystemRunner,
-		EthereumFeeTracking, EthereumLiveness, EthereumScUtilsWitnessingES, ScUtilsCall,
+		EthereumFeeTracking, EthereumLiveness, ScUtilsCall,
 		StateChainGatewayEvent as ScGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
@@ -301,36 +300,25 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
 }
 
 // --- sc utils witnessing ---
-
 #[derive(Clone)]
-pub struct EthereumScUtilsVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	sc_utils_address: H160,
+pub struct EthereumScUtilsWitnessingConfig {
+	sc_utils: EvmEventSource<ScUtilsEvents>,
 	supported_assets: HashMap<H160, assets::eth::Asset>,
 }
 #[async_trait::async_trait]
-impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
-	async fn vote(
+impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
+	for EvmVoter<EthereumChain, EvmSingleBlockQuery>
+{
+	type Config = EthereumScUtilsWitnessingConfig;
+	async fn block_data_from_query(
 		&self,
-		_settings: <EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumScUtilsWitnessingES>>, anyhow::Error> {
-		let BWElectionProperties { block_height, properties: _sc_utils, election_type, .. } =
-			properties;
-		let (block, return_block_hash) =
-			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
-
-		let events = evm_events_at_block::<ScUtilsEvents>(
-			&self.client,
-			evm_event_type::<ScUtilsEvents, ScUtilsEvents>(),
-			self.sc_utils_address,
-			block.hash,
-			block.bloom,
-		)
-		.await?;
+		config: &Self::Config,
+		_properties: &(),
+		query: &Self::BlockQuery,
+	) -> Result<Vec<ScUtilsCall>> {
+		let events = self.events_from_block_query(&config.sc_utils, query.clone()).await?;
 
 		let mut result: Vec<ScUtilsCall> = Vec::new();
-
 		for event in events {
 			match event.event_parameters {
 				ScUtilsEvents::DepositToScGatewayAndScCallFilter(
@@ -362,7 +350,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 						sc_call,
 					},
 				) => {
-					if let Some(asset) = self.supported_assets.get(&token) {
+					if let Some(asset) = config.supported_assets.get(&token) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Vault {
@@ -390,7 +378,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 					to,
 					sc_call,
 				}) => {
-					if let Some(asset) = self.supported_assets.get(&token) {
+					if let Some(asset) = config.supported_assets.get(&token) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
 								deposit: EthereumDeposit::Transfer {
@@ -429,7 +417,7 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 			}
 		}
 
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
+		Ok(result.into_iter().sorted().collect())
 	}
 }
 
@@ -576,6 +564,7 @@ where
 	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
 	let sc_gateway_event_source =
 		EvmEventSource::new::<StateChainGatewayEvents>(state_chain_gateway_address);
+	let sc_utils_event_source = EvmEventSource::new::<ScUtilsEvents>(sc_utils_address);
 
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
@@ -612,11 +601,13 @@ where
 								state_chain_gateway: sc_gateway_event_source,
 							},
 						),
-						EthereumScUtilsVoter {
-							client: client.clone(),
-							sc_utils_address,
-							supported_assets: supported_erc20_tokens,
-						},
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EthereumScUtilsWitnessingConfig {
+								sc_utils: sc_utils_event_source,
+								supported_assets: supported_erc20_tokens,
+							},
+						),
 					)),
 					Some(client.cache_invalidation_senders),
 					"Ethereum",
