@@ -176,11 +176,15 @@ jobs:
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
-          touch ./localnet/.setup_complete
-          # TODO: This is a temporary fix to allow the localnet docker-compose.yml from an older commit to run the latest solana and EVM images. Remove after 2.1 is released.
+          # TODO: These are temporary fixes to allow the localnet docker-compose.yml from an older commit
+          # to run the latest solana and EVM images. Remove after 2.1 is released.
           sed -i 's|ghcr.io/chainflip-io/solana-localnet-ledger:v[^ ]*|ghcr.io/chainflip-io/solana-localnet-ledger:${{ env.SOLANA_PROGRAMS_VERSION }}|g' localnet/docker-compose.yml
           sed -i 's|\(ghcr.io/chainflip-io/chainflip-eth-contracts/[^:]*:\)v[^ ]*|\1${{ env.EVM_CONTRACTS_VERSION }}-${NODE_COUNT}|g' localnet/docker-compose.yml
           ./localnet/manage.sh
+          # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
+          git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
+          docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
       # TODO: This is a temporary workaround to insert the image nonces and the ALT address. Remove after 2.1 is released.
@@ -212,6 +216,8 @@ jobs:
         if: inputs.run-job
         shell: bash
         id: upgrade-network
+        env:
+          SKIP_BLS_TESTS: "true"
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
@@ -226,10 +232,13 @@ jobs:
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
         id: post-upgrade-bouncer
+        env:
+          SKIP_BLS_TESTS: "true"
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
+          ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
           # TODO: This is a temporary workaround to setup swaps for the new assets Wbtc, ArbUsdt, and SolUsdt.
           # To remove after 2.1 is released.

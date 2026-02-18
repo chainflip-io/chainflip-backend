@@ -19,7 +19,7 @@ use cf_primitives::chains::assets::any;
 use cf_runtime_utilities::log_or_panic;
 use cf_utilities::{impls, macros::*};
 use frame_system::pallet_prelude::BlockNumberFor;
-use sp_core::{Get, RuntimeDebug, H160};
+use sp_core::{Get, H160};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use pallet_cf_elections::{
@@ -208,27 +208,31 @@ impls! {
 
 pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;
 
-/// data for events
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct OraclePriceUpdate {
-	/// internal price with 128 bits fractional part
-	price: Price,
+// data for events
 
-	/// base asset, here interpreted as "fine" asset
-	base_asset: PriceAsset,
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub struct OraclePriceUpdate {
+		/// internal price with 128 bits fractional part
+		price: Price,
 
-	/// quote asset, here interpreted as "fine" asset
-	quote_asset: PriceAsset,
+		/// base asset, here interpreted as "fine" asset
+		base_asset: PriceAsset,
 
-	/// seconds since Unix epoch
-	updated_at_oracle_timestamp: u64,
+		/// quote asset, here interpreted as "fine" asset
+		quote_asset: PriceAsset,
+
+		/// seconds since Unix epoch
+		updated_at_oracle_timestamp: u64,
+	}
 }
-
 //--------------- all generic ESs -------------
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub enum GenericElectoralEvents {
-	OraclePricesUpdated { prices: Vec<OraclePriceUpdate> },
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub enum GenericElectoralEvents {
+		OraclePricesUpdated { prices: Vec<OraclePriceUpdate> },
+	}
 }
 
 impl_pallet_safe_mode! {

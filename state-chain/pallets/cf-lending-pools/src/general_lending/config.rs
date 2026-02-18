@@ -3,7 +3,17 @@ use super::*;
 /// Interest "curve" is defined as two linear segments. One is in effect from 0% to
 /// `junction_utilisation`, and the second is in effect from `junction_utilisation` to 100%.
 #[derive(
-	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct InterestRateConfiguration {
 	pub interest_at_zero_utilisation: Permill,
@@ -27,7 +37,17 @@ impl InterestRateConfiguration {
 }
 
 #[derive(
-	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct LendingPoolConfiguration {
 	pub origination_fee: Permill,
@@ -39,7 +59,17 @@ pub struct LendingPoolConfiguration {
 }
 
 #[derive(
-	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct LtvThresholds {
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
@@ -84,7 +114,17 @@ impl LtvThresholds {
 }
 
 #[derive(
-	Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
 )]
 pub struct NetworkFeeContributions {
 	/// A fixed % that's added to the base interest to get the total borrow rate (as a % on the
@@ -98,7 +138,7 @@ pub struct NetworkFeeContributions {
 	pub low_ltv_penalty_max: Permill,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct LendingConfiguration {
 	/// This configuration is used unless it is overridden in `pool_config_overrides`.
 	pub default_pool_config: LendingPoolConfiguration,

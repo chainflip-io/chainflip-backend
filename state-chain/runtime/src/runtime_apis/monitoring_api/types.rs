@@ -116,7 +116,7 @@ pub struct AuthoritiesInfo {
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct LastRuntimeUpgradeInfo {
 	pub spec_version: u32,
-	pub spec_name: sp_runtime::RuntimeString,
+	pub spec_name: String,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]

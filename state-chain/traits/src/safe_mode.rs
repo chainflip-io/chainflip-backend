@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -66,7 +66,7 @@ macro_rules! impl_runtime_safe_mode {
 		mod __inner {
 			use super::*;
 			use $crate::{SafeMode, SetSafeMode};
-			use codec::{Encode, Decode};
+			use codec::{Encode, Decode, DecodeWithMemTracking};
 			use frame_support::{
 				storage::StorageValue,
 				traits::Get,
@@ -74,7 +74,7 @@ macro_rules! impl_runtime_safe_mode {
 			};
 			use scale_info::TypeInfo;
 
-			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+			#[derive(serde::Serialize, serde::Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 			pub struct $runtime_safe_mode {
 				$( pub $name: $pallet_safe_mode ),*
 			}
@@ -158,87 +158,98 @@ macro_rules! impl_runtime_safe_mode {
 /// ```
 #[macro_export]
 macro_rules! impl_pallet_safe_mode {
-    // Case for the non-generic version
-    (
-        $pallet_safe_mode:ident; $($flag:ident),+ $(,)?
-    ) => {
-        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
-        pub struct $pallet_safe_mode {
-            $(
-                pub $flag: bool,
-            )+
-        }
+	// Case for the non-generic version
+	(
+		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
+	) => {
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+		pub struct $pallet_safe_mode {
+			$(
+				pub $flag: bool,
+			)+
+		}
 
-        impl Default for $pallet_safe_mode {
-            fn default() -> Self {
-                <Self as $crate::SafeMode>::code_green()
-            }
-        }
+		impl Default for $pallet_safe_mode {
+			fn default() -> Self {
+				<Self as $crate::SafeMode>::code_green()
+			}
+		}
 
-        impl $crate::SafeMode for $pallet_safe_mode {
-            fn code_red() -> Self {
-	            Self {
-	                $(
-	                    $flag: false,
-	                )+
-	            }
-            }
-            fn code_green() -> Self {
-	            Self {
-	                $(
-	                    $flag: true,
-	                )+
-	            }
-            }
-        }
-    };
+		impl $crate::SafeMode for $pallet_safe_mode {
+			fn code_red() -> Self {
+				Self {
+					$(
+						$flag: false,
+					)+
+				}
+			}
+			fn code_green() -> Self {
+				Self {
+					$(
+						$flag: true,
+					)+
+				}
+			}
+		}
+	};
 
-    // Case for the generic version
-    (
-        $pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
-    ) => {
-        #[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
+	// Case for the generic version
+	(
+		$pallet_safe_mode:ident<$generic:ident>; $($flag:ident),+ $(,)?
+	) => {
+		#[derive(serde::Serialize, serde::Deserialize, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::pallet_prelude::RuntimeDebug)]
 		#[scale_info(skip_type_params($generic))]
-        pub struct $pallet_safe_mode<$generic: 'static> {
-            $(
-                pub $flag: bool,
-            )+
-            #[doc(hidden)]
-            #[codec(skip)]
-            #[serde(skip_serializing)]
-            _phantom: ::core::marker::PhantomData<$generic>,
-        }
+		pub struct $pallet_safe_mode<$generic: 'static> {
+			$(
+				pub $flag: bool,
+			)+
+			#[doc(hidden)]
+			#[codec(skip)]
+			#[serde(skip_serializing)]
+			_phantom: ::core::marker::PhantomData<$generic>,
+		}
 
-        impl<$generic> Default for $pallet_safe_mode<$generic> {
-            fn default() -> Self {
-                <Self as $crate::SafeMode>::code_green()
-            }
-        }
+		impl<$generic> Default for $pallet_safe_mode<$generic> {
+			fn default() -> Self {
+				<Self as $crate::SafeMode>::code_green()
+			}
+		}
 
-        impl<$generic> $crate::SafeMode for $pallet_safe_mode<$generic> {
-        	fn code_red() -> Self {
-         		Self {
-         			$(
-         				$flag: false,
-         			)+
-         			_phantom: ::core::marker::PhantomData,
-         		}
-            }
-            fn code_green() -> Self {
-         		Self {
-         			$(
-         				$flag: true,
-         			)+
-         			_phantom: ::core::marker::PhantomData,
-         		}
-            }
-        }
-    };
+		impl<$generic> $crate::SafeMode for $pallet_safe_mode<$generic> {
+			fn code_red() -> Self {
+				Self {
+					$(
+						$flag: false,
+					)+
+					_phantom: ::core::marker::PhantomData,
+				}
+			}
+			fn code_green() -> Self {
+				Self {
+					$(
+						$flag: true,
+					)+
+					_phantom: ::core::marker::PhantomData,
+				}
+			}
+		}
+	};
 }
 
 /// A wrapper around a BTreeSet to make setting safe mode for all items easier. Amber contains a
 /// list of disabled items.
-#[derive(Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Default)]
+#[derive(
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Default,
+)]
 pub enum SafeModeSet<T: Ord> {
 	#[default]
 	Green,
@@ -286,7 +297,7 @@ impl<T: Ord + Serialize + strum::IntoEnumIterator> Serialize for SafeModeSet<T> 
 #[cfg(test)]
 pub(crate) mod test {
 	use super::*;
-	use codec::{Decode, Encode, MaxEncodedLen};
+	use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 	use frame_support::{pallet_prelude::ValueQuery, storage_alias};
 	use scale_info::TypeInfo;
 
@@ -299,6 +310,7 @@ pub(crate) mod test {
 		serde::Deserialize,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
 		TypeInfo,
 		Clone,
@@ -315,6 +327,7 @@ pub(crate) mod test {
 		serde::Deserialize,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		MaxEncodedLen,
 		TypeInfo,
 		Clone,

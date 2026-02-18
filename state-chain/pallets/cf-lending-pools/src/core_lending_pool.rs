@@ -19,7 +19,7 @@ mod tests;
 
 use cf_primitives::{define_wrapper_type, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{
 		helpers_128bit::multiply_by_rational_with_rounding, PerThing, Perquintill, Rounding,
@@ -42,7 +42,9 @@ mod scaled_amount {
 	use frame_support::sp_runtime::{traits::Saturating, SaturatedConversion};
 
 	/// Represents 1/SCALE_FACTOR of Asset amount as a way to gain extra precision.
-	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+	#[derive(
+		Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default,
+	)]
 	pub struct ScaledAmount<const SCALE_FACTOR: u128> {
 		val: u128,
 	}

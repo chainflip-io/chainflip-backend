@@ -34,13 +34,14 @@ use crate::{
 use futures::{stream::StreamExt, Stream};
 
 use anyhow::Result;
-use subxt::{self, config::Header as SubxtHeader};
+use subxt;
 
+#[macro_export]
 macro_rules! polkadot_source {
 	($self:expr, $func:ident, $retry_limit:expr, $unwrap_events:expr) => {{
 		struct State<C> {
 			client: C,
-			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
+			stream: Pin<Box<dyn Stream<Item = Result<(PolkadotHash, PolkadotHeader)>> + Send>>,
 		}
 
 		let client = $self.client.clone();
@@ -50,15 +51,12 @@ macro_rules! polkadot_source {
 		(
 			Box::pin(stream::unfold(State { client, stream }, move |mut state| async move {
 				loop {
-					while let Ok(Some(header)) =
+					while let Ok(Some(result)) =
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
-						if let Ok(header) = header {
+						if let Ok((hash, header)) = result {
 							let Some(events) = unwrap_events(
-								state
-									.client
-									.events(header.hash(), header.parent_hash, $retry_limit)
-									.await,
+								state.client.events(hash, header.parent_hash, $retry_limit).await,
 							) else {
 								continue
 							};
@@ -66,7 +64,7 @@ macro_rules! polkadot_source {
 							return Some((
 								Header {
 									index: header.number,
-									hash: header.hash(),
+									hash,
 									parent_hash: Some(header.parent_hash),
 									data: events,
 								},

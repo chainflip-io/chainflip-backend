@@ -19,10 +19,10 @@
 use core::marker::PhantomData;
 use std::collections::BTreeSet;
 
-use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, DecodeWithMemTracking, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinCrypto, BitcoinFeeInfo},
-	eth,
+	evm,
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
@@ -40,12 +40,12 @@ use cf_traits::{
 };
 use frame_support::{
 	derive_impl,
-	pallet_prelude::{InvalidTransaction, TransactionValidityError},
+	pallet_prelude::{InvalidTransaction, TransactionValidityError, ValidTransaction},
 	parameter_types, DebugNoBound, DefaultNoBound,
 };
 use sp_core::{H160, H256};
 use sp_runtime::{
-	traits::{DispatchInfoOf, SignedExtension},
+	traits::{AsSystemOriginSigner, DispatchInfoOf, DispatchOriginOf, TransactionExtension},
 	DispatchError,
 };
 
@@ -130,7 +130,7 @@ parameter_types! {
 	pub static SolanaCallBroadcasted: Option<SolanaApi<MockSolEnvironment>> = None;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockSolEnvironment;
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for MockSolEnvironment {
 	fn lookup(_s: ApiEnvironment) -> Option<SolApiEnvironment> {
@@ -239,26 +239,57 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 pub type MockBitcoinKeyProvider = MockKeyProvider<BitcoinCrypto>;
 
 /// A Mock payment extension that simply checks whether the account exists in the system.
-#[derive(Clone, DebugNoBound, DefaultNoBound, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	Clone,
+	DebugNoBound,
+	DefaultNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct MockPayment<T>(PhantomData<T>);
 
-impl<T: frame_system::Config + Send + Sync + 'static> SignedExtension for MockPayment<T> {
-	type AccountId = T::AccountId;
-	type AdditionalSigned = ();
-	type Call = T::RuntimeCall;
-	type Pre = ();
+impl<T: frame_system::Config<AccountId = u64> + Send + Sync + 'static>
+	TransactionExtension<T::RuntimeCall> for MockPayment<T>
+where
+	DispatchOriginOf<T::RuntimeCall>: AsSystemOriginSigner<T::AccountId>,
+{
 	const IDENTIFIER: &'static str = "UnitSignedExtension";
-	fn additional_signed(&self) -> Result<(), TransactionValidityError> {
-		Ok(())
+
+	type Implicit = ();
+	type Val = ();
+	type Pre = ();
+
+	fn weight(&self, _call: &T::RuntimeCall) -> sp_runtime::Weight {
+		Default::default()
 	}
-	fn pre_dispatch(
+
+	fn validate(
+		&self,
+		origin: sp_runtime::traits::DispatchOriginOf<T::RuntimeCall>,
+		_call: &T::RuntimeCall,
+		_info: &DispatchInfoOf<T::RuntimeCall>,
+		_len: usize,
+		_self_implicit: Self::Implicit,
+		_inherited_implication: &impl sp_runtime::traits::Implication,
+		_source: frame_support::pallet_prelude::TransactionSource,
+	) -> sp_runtime::traits::ValidateResult<Self::Val, T::RuntimeCall> {
+		Ok((ValidTransaction::default(), (), origin))
+	}
+
+	fn prepare(
 		self,
-		who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_val: Self::Val,
+		origin: &sp_runtime::traits::DispatchOriginOf<T::RuntimeCall>,
+		_call: &T::RuntimeCall,
+		_info: &DispatchInfoOf<T::RuntimeCall>,
 		_len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
+		let who = origin.as_system_origin_signer().ok_or(InvalidTransaction::BadSigner)?;
 		if frame_system::Account::<T>::contains_key(who) {
 			Ok(())
 		} else {
@@ -270,7 +301,6 @@ impl<T: frame_system::Config + Send + Sync + 'static> SignedExtension for MockPa
 impl pallet_cf_environment::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
@@ -288,20 +318,20 @@ impl pallet_cf_environment::Config for Test {
 	type WeightInfo = ();
 }
 
-pub const STATE_CHAIN_GATEWAY_ADDRESS: eth::Address = H160([0u8; 20]);
-pub const ETH_KEY_MANAGER_ADDRESS: eth::Address = H160([1u8; 20]);
-pub const ETH_VAULT_ADDRESS: eth::Address = H160([2u8; 20]);
-pub const ETH_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([3u8; 20]);
+pub const STATE_CHAIN_GATEWAY_ADDRESS: evm::Address = H160([0u8; 20]);
+pub const ETH_KEY_MANAGER_ADDRESS: evm::Address = H160([1u8; 20]);
+pub const ETH_VAULT_ADDRESS: evm::Address = H160([2u8; 20]);
+pub const ETH_ADDRESS_CHECKER_ADDRESS: evm::Address = H160([3u8; 20]);
 pub const ETH_CHAIN_ID: u64 = 1;
 
-pub const ARB_KEY_MANAGER_ADDRESS: eth::Address = H160([4u8; 20]);
-pub const ARB_VAULT_ADDRESS: eth::Address = H160([5u8; 20]);
-pub const ARB_USDC_TOKEN_ADDRESS: eth::Address = H160([6u8; 20]);
-pub const ARB_USDT_TOKEN_ADDRESS: eth::Address = H160([7u8; 20]);
-pub const ARB_ADDRESS_CHECKER_ADDRESS: eth::Address = H160([8u8; 20]);
+pub const ARB_KEY_MANAGER_ADDRESS: evm::Address = H160([4u8; 20]);
+pub const ARB_VAULT_ADDRESS: evm::Address = H160([5u8; 20]);
+pub const ARB_USDC_TOKEN_ADDRESS: evm::Address = H160([6u8; 20]);
+pub const ARB_USDT_TOKEN_ADDRESS: evm::Address = H160([7u8; 20]);
+pub const ARB_ADDRESS_CHECKER_ADDRESS: evm::Address = H160([8u8; 20]);
 pub const ARB_CHAIN_ID: u64 = 2;
 
-pub const ETH_SC_UTILS_ADDRESS: eth::Address = H160([9u8; 20]);
+pub const ETH_SC_UTILS_ADDRESS: evm::Address = H160([9u8; 20]);
 
 cf_test_utilities::impl_test_helpers! {
 	Test,
@@ -360,7 +390,6 @@ pub mod benchmarks_mock {
 	impl pallet_cf_environment::Config for BenchmarksTest {
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
-		type RuntimeEvent = RuntimeEvent;
 		type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 		type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 		type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
@@ -388,11 +417,11 @@ pub mod benchmarks_mock {
 	}
 
 	impl pallet_cf_flip::Config for BenchmarksTest {
-		type RuntimeEvent = RuntimeEvent;
 		type Balance = u128;
 		type BlocksPerDay = ConstU64<14400>;
 		type WeightInfo = ();
 		type WaivedFees = MockWaivedFees;
+		type RuntimeHoldReason = ();
 		type CallIndexer = ();
 	}
 

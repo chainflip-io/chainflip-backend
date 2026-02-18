@@ -41,7 +41,9 @@ describe('ConcurrentTests', () => {
   concurrentTest('DCASwaps', testDCASwaps, 300);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
+  if (!process.env.SKIP_BLS_TESTS) {
+    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
+  }
   concurrentTest('VaultSwaps', testVaultSwap, 600);
   // This test times out far too often.
   // TODO: figure out how to make it less flaky.

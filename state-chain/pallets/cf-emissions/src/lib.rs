@@ -65,9 +65,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: cf_traits::Chainflip {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The host chain to which we broadcast supply updates.
 		///
 		/// In practice this is always [Ethereum] but making this configurable simplifies

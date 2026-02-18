@@ -9,11 +9,9 @@ use crate::electoral_systems::{
 };
 use cf_chains::witness_period::SaturatingStep;
 use cf_traits::{Hook, Validate};
-use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use itertools::Either;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{fmt::Debug, vec::Vec};
 
 defx! {

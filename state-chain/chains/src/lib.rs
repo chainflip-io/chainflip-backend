@@ -45,9 +45,9 @@ use address::{
 };
 use cf_primitives::{
 	Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId, ChannelId,
-	DcaParameters, EgressId, EthAmount, GasAmount, IngressOrEgress, TxId,
+	DcaParameters, EgressId, IngressOrEgress, TxId,
 };
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member, RuntimeDebug},
 	sp_runtime::{
@@ -101,7 +101,7 @@ pub mod mocks;
 
 pub mod witness_period {
 	use crate::ChainWitnessConfig;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use core::{
 		iter::Step,
 		ops::{Rem, Sub},
@@ -118,7 +118,7 @@ pub mod witness_period {
 	use sp_std::ops::RangeInclusive;
 
 	// So we can store a range-like object in storage, since this has encode and decode.
-	#[derive(Encode, Decode, TypeInfo, Deserialize, Serialize)]
+	#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Deserialize, Serialize)]
 	#[derive_where(
 		Debug,
 		Clone,
@@ -675,7 +675,18 @@ impl<C: Chain> TransactionMetadata<C> for () {
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
-#[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	RuntimeDebug,
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+)]
 pub struct FetchAssetParams<C: Chain> {
 	pub deposit_fetch_id: <C as Chain>::DepositFetchId,
 	pub asset: <C as Chain>::ChainAsset,
@@ -692,7 +703,7 @@ impl<C: Chain> BenchmarkValue for FetchAssetParams<C> {
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
 	pub amount: <C as Chain>::ChainAmount,
@@ -806,7 +817,7 @@ pub trait RegisterRedemption: ApiCall<<Ethereum as Chain>::ChainCrypto> {
 		amount: u128,
 		address: &[u8; 20],
 		expiry: u64,
-		executor: Option<eth::Address>,
+		executor: Option<evm::Address>,
 	) -> Self;
 }
 
@@ -830,7 +841,7 @@ pub trait FetchAndCloseSolanaVaultSwapAccounts: ApiCall<<Solana as Chain>::Chain
 	) -> Result<Self, SolanaTransactionBuildingError>;
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, TypeInfo)]
 pub enum AllBatchError {
 	/// Empty transaction - the call is not required.
 	NotRequired,
@@ -917,13 +928,31 @@ pub trait ConsolidateCall<C: Chain>: ApiCall<C::ChainCrypto> {
 	fn consolidate_utxos() -> Result<Self, ConsolidationError>;
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub enum FetchForRejection<C: Chain> {
 	Fetch { deposit_fetch_id: C::DepositFetchId },
 	NotRequired,
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub enum TransferForRejection<C: Chain> {
 	Transfer { address: C::ChainAccount, amount: C::ChainAmount },
 	TransferWillBeCcmCallAndIsHandledSeparately,
@@ -962,7 +991,7 @@ pub trait AllBatch<C: Chain>: ApiCall<C::ChainCrypto> {
 	}
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, TypeInfo)]
 pub enum ExecutexSwapAndCallError {
 	/// The chain does not support CCM functionality.
 	Unsupported,
@@ -987,7 +1016,7 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -1009,13 +1038,13 @@ pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
 		transfer_param: TransferAssetParams<C>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError>;
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, PartialEq, Eq, TypeInfo)]
 pub enum TransferFallbackError {
 	/// The chain does not support this functionality.
 	Unsupported,
@@ -1053,7 +1082,7 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-#[derive(Debug, Clone, TypeInfo, Encode, Decode, PartialEq, Eq)]
+#[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
 pub enum TransactionInIdForAnyChain {
 	Evm(H256),
 	Bitcoin(H256),
@@ -1113,7 +1142,7 @@ impl IntoTransactionInIdForAnyChain<NoneChainCrypto> for () {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapOrigin<AccountId> {
 	DepositChannel {
 		deposit_address: address::EncodedAddress,
@@ -1140,7 +1169,7 @@ impl<AccountId> SwapOrigin<AccountId> {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum DepositOriginType {
 	DepositChannel,
 	Vault,
@@ -1159,6 +1188,7 @@ pub type CcmMessage = BoundedVec<u8, ConstU32<MAX_CCM_MSG_LENGTH>>;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -1231,6 +1261,7 @@ mod bounded_hex {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -1244,7 +1275,7 @@ pub struct CcmChannelMetadata<AdditionalData> {
 	pub message: CcmMessage,
 	/// User funds designated to be used for gas.
 	#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
-	pub gas_budget: GasAmount,
+	pub gas_budget: AssetAmount,
 	/// Additional parameters for the cross chain message.
 	pub ccm_additional_data: AdditionalData,
 }
@@ -1293,12 +1324,13 @@ impl<T> From<CcmChannelMetadata<T>> for CcmParams {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
 	TypeInfo,
-	Serialize,
-	Deserialize,
 	PartialOrd,
 	Ord,
-	MaxEncodedLen,
+	Serialize,
+	Deserialize,
 )]
 pub struct CcmDepositMetadata<Address, AdditionalData> {
 	pub channel_metadata: CcmChannelMetadata<AdditionalData>,
@@ -1356,6 +1388,7 @@ impl<AdditionalData> CcmDepositMetadata<ForeignChainAddress, AdditionalData> {
 	CloneNoBound,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	DebugNoBound,
@@ -1416,7 +1449,18 @@ pub trait DepositDetailsToTransactionInId<C: ChainCrypto> {
 }
 
 #[derive(
-	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	PartialEq,
+	Eq,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 pub struct EvmVaultSwapExtraParameters<Address, Amount> {
 	pub input_amount: Amount,
@@ -1445,7 +1489,18 @@ impl<Address: Clone, Amount> EvmVaultSwapExtraParameters<Address, Amount> {
 }
 
 #[derive(
-	Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize, PartialOrd, Ord,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	PartialEq,
+	Eq,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
 )]
 #[serde(tag = "chain")]
 pub enum VaultSwapExtraParameters<Address, Amount> {
@@ -1543,7 +1598,7 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 /// Type used internally within the State chain.
 pub type VaultSwapExtraParametersEncoded = VaultSwapExtraParameters<EncodedAddress, AssetAmount>;
 
-#[derive(Clone, Debug, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+#[derive(Clone, Debug, Encode, Decode, DecodeWithMemTracking, Serialize, Deserialize, TypeInfo)]
 pub struct VaultSwapInput<Address, Amount> {
 	pub source_asset: AnyChainAsset,
 	pub destination_asset: AnyChainAsset,

@@ -23,7 +23,7 @@ use frame_support::{Deserialize, Serialize};
 use std::ops::Range;
 
 pub use cf_chains::{
-	eth::Address as EthereumAddress,
+	evm::Address as EthereumAddress,
 	refund_parameters::RpcChannelRefundParameters as RefundParametersRpc,
 };
 pub use cf_utilities::rpc::NumberOrHex;

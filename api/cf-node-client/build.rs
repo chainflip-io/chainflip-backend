@@ -41,7 +41,7 @@ fn main() {
 			substitute_type(
 				path = "cf_amm::common::Side",
 				with = "::subxt::utils::Static<cf_amm::common::Side>"
-			)
+			),
 		)]
 		pub mod cf_static_runtime {{}}
 	"#,

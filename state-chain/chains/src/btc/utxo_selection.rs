@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -29,7 +29,9 @@ pub enum UtxoSelectionError {
 	InsufficientFundsInAvailableUtxos,
 }
 
-#[derive(Encode, Decode, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug)]
+#[derive(
+	Encode, Decode, DecodeWithMemTracking, Default, PartialEq, Copy, Clone, TypeInfo, RuntimeDebug,
+)]
 pub struct ConsolidationParameters {
 	/// Consolidate when total UTXO count reaches this threshold
 	pub consolidation_threshold: u32,

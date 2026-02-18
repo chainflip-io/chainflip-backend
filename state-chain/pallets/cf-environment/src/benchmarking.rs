@@ -29,13 +29,13 @@ use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 #[allow(dead_code)]
 pub mod benchmark_types {
 	use cf_primitives::{Asset, AssetAmount};
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode};
 	use scale_info::TypeInfo;
 	use sp_std::collections::btree_map::BTreeMap;
 
 	/// Mimics a realistic pallet call similar to `request_loan`.
 	/// Parameters: asset enum, amount (u128), optional asset, BTreeMap<Asset, Amount>
-	#[derive(TypeInfo, Clone, Encode, Decode, Debug, PartialEq, Eq)]
+	#[derive(TypeInfo, Clone, Encode, Decode, DecodeWithMemTracking, Debug, PartialEq, Eq)]
 	pub struct RealisticCallParams {
 		pub loan_asset: Asset,
 		pub loan_amount: AssetAmount,
@@ -61,7 +61,6 @@ pub mod benchmark_types {
 	}
 }
 
-#[expect(clippy::multiple_bound_locations)]
 #[benchmarks(
 	where
 	T: pallet_cf_flip::Config,
@@ -570,9 +569,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_verify_signature() {
-		use cf_chains::{
-			eth::Address as EvmAddress,
-			evm::{verify_evm_signature, Signature as EthereumSignature},
+		use cf_chains::evm::{
+			verify_evm_signature, Address as EvmAddress, Signature as EthereumSignature,
 		};
 
 		// Pre-computed test data: a valid EIP-712 payload and matching signature.

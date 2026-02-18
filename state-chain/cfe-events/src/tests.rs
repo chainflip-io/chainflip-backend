@@ -21,7 +21,7 @@ use core::str::FromStr;
 use cf_chains::{
 	btc::{self, BitcoinTransactionData},
 	dot::{EncodedPolkadotPayload, PolkadotAccountId, PolkadotTransactionData},
-	evm::{self, Address, ParityBit, H256},
+	evm::{self, Address, Hash, ParityBit},
 	sol::{
 		sol_tx_core::{CompiledInstruction, MessageHeader},
 		RawSolHash, SolPubkey, SolVersionedMessage, SolVersionedMessageV0, SolVersionedTransaction,
@@ -54,7 +54,7 @@ fn event_decoding() {
 						pub_key_y_parity: ParityBit::Even,
 					},
 					signatories: participants.clone(),
-					payload: H256::from_str(
+					payload: Hash::from_str(
 						"dc24f5f2ca2d74483d546815943a90827265b99ca3f1e0e139053794b041acf9",
 					)
 					.unwrap(),

@@ -14,8 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::str::FromStr;
-
 use crate::*;
 
 pub mod api;
@@ -37,15 +35,18 @@ use dot::{
 
 pub use cf_primitives::chains::Assethub;
 use cf_primitives::PolkadotBlockNumber;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
-	pallet_prelude::{TransactionValidity, TransactionValidityError, ValidTransaction},
+	pallet_prelude::{TransactionSource, TransactionValidityError, UnknownTransaction},
 	sp_runtime::generic::Era,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::SignedPayload,
-	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension},
+	traits::{
+		BlakeTwo256, DispatchInfoOf, DispatchOriginOf, Dispatchable, Hash, Implication,
+		TransactionExtension, ValidateResult,
+	},
 };
 
 pub const REFERENCE_HUBDOT_PRICE_IN_USD: PolkadotBalance = 4_000_000u128; //4 usd
@@ -87,7 +88,7 @@ pub type AssethubUncheckedExtrinsic =
 pub type OutputAccountId = u64;
 
 /// The builder for creating and signing assethub extrinsics, and creating signature payload
-#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq, Clone)]
 pub struct AssethubExtrinsicBuilder {
 	pub extrinsic_call: AssethubRuntimeCall,
 	pub replay_protection: PolkadotReplayProtection,
@@ -128,14 +129,14 @@ pub fn calculate_derived_address(
 	PolkadotAccountId::from_aliased(payload_hash)
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct AssethubChargeAssetTxPayment {
 	#[codec(compact)]
 	tip: u128,
 	asset_id: Option<u32>,
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct AssethubSignedExtra(
 	pub  (
 		(),
@@ -150,10 +151,15 @@ pub struct AssethubSignedExtra(
 	),
 );
 
-impl SignedExtension for AssethubSignedExtra {
-	type AccountId = PolkadotAccountId;
-	type Call = ();
-	type AdditionalSigned = (
+/// Dummy implementation of TransactionExtension for PolkadotSignedExtra.
+///
+/// The dummy implementation is required to satisfy trait bounds on [SignedPayload].
+impl TransactionExtension<AssethubRuntimeCall> for AssethubSignedExtra {
+	const IDENTIFIER: &'static str = "AssethubSignedExtra";
+
+	type Pre = ();
+	type Val = ();
+	type Implicit = (
 		(),
 		PolkadotSpecVersion,
 		PolkadotTransactionVersion,
@@ -164,48 +170,44 @@ impl SignedExtension for AssethubSignedExtra {
 		(),
 		polkadot_sdk_types::MetadataHash,
 	);
-	type Pre = ();
-	const IDENTIFIER: &'static str = "AssethubSignedExtra";
 
-	// This is a dummy implementation of additional_signed required by SignedPayload. This is never
-	// actually used since the extrinsic builder that constructs the payload uses its own
-	// additional_signed and constructs payload from raw.
-	fn additional_signed(
-		&self,
-	) -> sp_std::result::Result<Self::AdditionalSigned, TransactionValidityError> {
+	fn implicit(&self) -> Result<Self::Implicit, TransactionValidityError> {
 		Ok((
 			(),
-			9300,
-			15,
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
-			H256::from_str("91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3")
-				.unwrap(),
+			0,
+			0,
+			H256([0; 32]),
+			H256([0; 32]),
 			(),
 			(),
 			(),
 			polkadot_sdk_types::MetadataHash::None,
 		))
 	}
-
-	fn pre_dispatch(
-		self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> Result<(), TransactionValidityError> {
-		Ok(())
-	}
-
 	fn validate(
 		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
+		_origin: DispatchOriginOf<AssethubRuntimeCall>,
+		_call: &AssethubRuntimeCall,
+		_info: &DispatchInfoOf<AssethubRuntimeCall>,
 		_len: usize,
-	) -> TransactionValidity {
-		Ok(<ValidTransaction as Default>::default())
+		_self_implicit: Self::Implicit,
+		_inherited_implication: &impl Implication,
+		_source: TransactionSource,
+	) -> ValidateResult<Self::Val, AssethubRuntimeCall> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
+	}
+	fn weight(&self, _call: &AssethubRuntimeCall) -> sp_runtime::Weight {
+		Default::default()
+	}
+	fn prepare(
+		self,
+		_val: Self::Val,
+		_origin: &sp_runtime::traits::DispatchOriginOf<AssethubRuntimeCall>,
+		_call: &AssethubRuntimeCall,
+		_info: &DispatchInfoOf<AssethubRuntimeCall>,
+		_len: usize,
+	) -> Result<Self::Pre, TransactionValidityError> {
+		Err(TransactionValidityError::Unknown(UnknownTransaction::Custom(0xcf)))
 	}
 }
 
@@ -292,7 +294,17 @@ impl AssethubExtrinsicBuilder {
 }
 
 #[derive(
-	Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Serialize, Deserialize,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+	Debug,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
 )]
 pub struct AssethubTrackedData {
 	pub median_tip: PolkadotBalance,
@@ -350,7 +362,7 @@ impl FeeRefundCalculator<Assethub> for PolkadotTransactionData {
 
 // The Assethub Runtime type that is expected by the assethub runtime
 #[expect(clippy::large_enum_variant)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssethubRuntimeCall {
 	#[codec(index = 0u8)]
 	System(SystemCall),
@@ -366,12 +378,30 @@ pub enum AssethubRuntimeCall {
 	Assets(AssetsCall),
 }
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+/// Dummy implementation of the Dispatchable trait for AssethubRuntimeCall.
+///
+/// We never actually dispatch these calls, but we need to implement the trait
+/// to satify trait requirements on TransactionExtension and SignedPayload.
+impl Dispatchable for AssethubRuntimeCall {
+	type RuntimeOrigin = ();
+	type Config = ();
+	type Info = ();
+	type PostInfo = ();
+
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+		Ok(())
+	}
+}
+
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum SystemCall {}
 
 #[expect(non_camel_case_types)]
 #[expect(clippy::large_enum_variant)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum XcmCall {
 	#[codec(index = 1u8)]
 	teleport_assets {
@@ -454,7 +484,7 @@ pub enum XcmCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum BalancesCall {
 	/// Transfer some liquid free balance to another account.
 	///
@@ -497,7 +527,7 @@ pub enum BalancesCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum UtilityCall {
 	/// Send a batch of dispatch calls.
 	///
@@ -584,7 +614,7 @@ pub enum UtilityCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum ProxyCall {
 	/// Dispatch the given `call` from an account that the sender is authorised for through
 	/// `add_proxy`.
@@ -835,7 +865,7 @@ pub enum ProxyCall {
 }
 
 #[expect(non_camel_case_types)]
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssetsCall {
 	#[codec(index = 8u8)]
 	transfer {

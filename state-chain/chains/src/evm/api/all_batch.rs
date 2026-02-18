@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
@@ -23,7 +23,7 @@ use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AllBatch {
 	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
 	/// contracts.
@@ -69,17 +69,18 @@ impl EvmCall for AllBatch {
 mod test_all_batch {
 	use super::*;
 	use crate::{
-		eth::api::abi::load_abi,
+		eth::api::{abi::load_abi, EthereumApi},
 		evm::{
 			api::{EvmReplayProtection, EvmTransactionBuilder},
 			EvmFetchId, SchnorrVerificationComponents,
 		},
-		AllBatch, FetchAssetParams,
+		AllBatch, FetchAssetParams, ReplayProtectionProvider,
 	};
-	use cf_primitives::chains::assets;
+	use cf_primitives::{
+		chains::{assets, Ethereum},
+		EgressId,
+	};
 	use cf_utilities::assert_matches;
-
-	use eth::api::EthereumApi;
 
 	#[test]
 	fn test_payload() {
@@ -169,7 +170,7 @@ mod test_all_batch {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
@@ -188,7 +189,7 @@ mod test_all_batch {
 	const CHANNEL_ID: u64 = 12345;
 
 	impl ReplayProtectionProvider<Ethereum> for MockEnvironment {
-		fn replay_protection(contract_address: eth::Address) -> EvmReplayProtection {
+		fn replay_protection(contract_address: Address) -> EvmReplayProtection {
 			EvmReplayProtection {
 				nonce: Self::next_nonce(),
 				chain_id: Self::chain_id(),
@@ -199,16 +200,16 @@ mod test_all_batch {
 	}
 
 	impl EvmEnvironmentProvider<Ethereum> for MockEnvironment {
-		fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
-			Some(eth::Address::from_low_u64_be(asset as u64))
+		fn token_address(asset: assets::eth::Asset) -> Option<Address> {
+			Some(Address::from_low_u64_be(asset as u64))
 		}
 
-		fn key_manager_address() -> eth::Address {
-			eth::Address::from_low_u64_be(1)
+		fn key_manager_address() -> Address {
+			Address::from_low_u64_be(1)
 		}
 
-		fn vault_address() -> EvmAddress {
-			eth::Address::from_low_u64_be(2)
+		fn vault_address() -> Address {
+			Address::from_low_u64_be(2)
 		}
 
 		fn chain_id() -> super::EvmChainId {
@@ -226,9 +227,7 @@ mod test_all_batch {
 			AllBatch::new_unsigned_impl(
 				vec![
 					FetchAssetParams {
-						deposit_fetch_id: EvmFetchId::Fetch(eth::Address::from_low_u64_be(
-							CHANNEL_ID,
-						)),
+						deposit_fetch_id: EvmFetchId::Fetch(Address::from_low_u64_be(CHANNEL_ID)),
 						asset: assets::eth::Asset::Usdc,
 					},
 					FetchAssetParams {
@@ -258,11 +257,11 @@ mod test_all_batch {
 			all_batch::AllBatch {
 				fetch_deploy_params: vec![EncodableFetchDeployAssetParams {
 					channel_id: CHANNEL_ID,
-					asset: eth::Address::from_low_u64_be(assets::eth::Asset::Eth as u64),
+					asset: Address::from_low_u64_be(assets::eth::Asset::Eth as u64),
 				}],
 				fetch_params: vec![EncodableFetchAssetParams {
-					contract_address: eth::Address::from_low_u64_be(CHANNEL_ID),
-					asset: eth::Address::from_low_u64_be(assets::eth::Asset::Usdc as u64),
+					contract_address: Address::from_low_u64_be(CHANNEL_ID),
+					asset: Address::from_low_u64_be(assets::eth::Asset::Usdc as u64),
 				}],
 				transfer_params: vec![],
 			}

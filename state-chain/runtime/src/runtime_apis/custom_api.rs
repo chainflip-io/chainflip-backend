@@ -27,7 +27,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
@@ -83,9 +83,9 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
-		fn cf_eth_flip_token_address() -> EthereumAddress;
-		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_key_manager_address() -> EthereumAddress;
+		fn cf_eth_flip_token_address() -> EvmAddress;
+		fn cf_eth_state_chain_gateway_address() -> EvmAddress;
+		fn cf_eth_key_manager_address() -> EvmAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 		fn cf_eth_vault() -> ([u8; 33], u32);
@@ -311,7 +311,7 @@ decl_runtime_apis!(
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
 		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
-			caller: EthereumAddress,
+			caller: EvmAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(11)]

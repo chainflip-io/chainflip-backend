@@ -16,7 +16,7 @@
 
 use core::cmp::Reverse;
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
@@ -61,7 +61,17 @@ pub trait FromSolOrNot {
 pub type SolanaVaultSwapAccountsLastClosedAt<BlockNumber> = BlockNumber;
 
 #[derive(
-	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, Default,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Default,
 )]
 pub struct SolanaVaultSwapsKnownAccounts<Account: Ord> {
 	pub witnessed_open_accounts: Vec<(Account, bool)>,
@@ -79,7 +89,18 @@ impl BenchmarkValue for SolanaVaultSwapsKnownAccounts<VaultSwapAccountAndSender>
 }
 
 #[derive(
-	Clone, PartialEq, Eq, Debug, Serialize, Deserialize, TypeInfo, Encode, Decode, Ord, PartialOrd,
+	Clone,
+	PartialEq,
+	Eq,
+	Debug,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Ord,
+	PartialOrd,
 )]
 pub struct SolanaVaultSwapsVote<Account: Ord, SwapDetails: Ord + FromSolOrNot> {
 	pub new_accounts: BTreeSet<(Account, Option<SwapDetails>)>,

@@ -24,7 +24,7 @@ export const frameSupportDispatchDispatchClass = simpleEnum(['Normal', 'Operatio
 
 export const frameSupportDispatchPays = simpleEnum(['Yes', 'No']);
 
-export const frameSupportDispatchDispatchInfo = z.object({
+export const frameSystemDispatchEventInfo = z.object({
   weight: spWeightsWeightV2Weight,
   class: frameSupportDispatchDispatchClass,
   paysFee: frameSupportDispatchPays,
@@ -49,6 +49,23 @@ export const spArithmeticArithmeticError = simpleEnum(['Underflow', 'Overflow', 
 
 export const spRuntimeTransactionalError = simpleEnum(['LimitReached', 'NoLayer']);
 
+export const spRuntimeProvingTrieTrieError = simpleEnum([
+  'InvalidStateRoot',
+  'IncompleteDatabase',
+  'ValueAtIncompleteKey',
+  'DecoderError',
+  'InvalidHash',
+  'DuplicateKey',
+  'ExtraneousNode',
+  'ExtraneousValue',
+  'ExtraneousHashReference',
+  'InvalidChildReference',
+  'ValueMismatch',
+  'IncompleteProof',
+  'RootMismatch',
+  'DecodeError',
+]);
+
 export const spRuntimeDispatchError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Other') }),
   z.object({ __kind: z.literal('CannotLookup') }),
@@ -64,6 +81,7 @@ export const spRuntimeDispatchError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Corruption') }),
   z.object({ __kind: z.literal('Unavailable') }),
   z.object({ __kind: z.literal('RootNotAllowed') }),
+  z.object({ __kind: z.literal('Trie'), value: spRuntimeProvingTrieTrieError }),
 ]);
 
 export const accountId = z

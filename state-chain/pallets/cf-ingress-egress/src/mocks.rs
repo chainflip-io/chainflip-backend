@@ -119,7 +119,6 @@ impl ChainflipWithTargetChain<Instance1> for Test {
 }
 
 impl Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
@@ -154,7 +153,6 @@ impl ChainflipWithTargetChain<Instance2> for Test {
 }
 
 impl Config<Instance2> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;

@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Encode, Decode, TypeInfo, PartialEq, Eq, Debug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq, Debug)]
 pub enum WhitelistStatus<AccountId> {
 	/// All accounts can use lending
 	AllowAll,
@@ -50,7 +50,7 @@ impl<AccountId: Ord> WhitelistStatus<AccountId> {
 }
 
 /// Update to the lending whitelist that can be submitted via config update.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum WhitelistUpdate<AccountId> {
 	/// Set the whitelist to allow all accounts
 	SetAllowAll,

@@ -343,10 +343,10 @@ services:
       - "${INDEXER_DB_PORT:-5432}:5432"
 
   indexer:
+    image: ghcr.io/chainflip-io/squid-sdk/substrate-ingest:latest
     depends_on:
       - postgres
     restart: on-failure
-    image: subsquid/substrate-ingest:firesquid
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command:
@@ -355,4 +355,6 @@ services:
         "ws://host.docker.internal:9944",
         "--out",
         "postgres://postgres:postgres@postgres:${INDEXER_DB_PORT:-5432}/squid_archive",
+        "--finalized-blocks",
+        "false",
       ]

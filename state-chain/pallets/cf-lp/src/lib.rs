@@ -205,10 +205,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// Because we want to emit events when there is a config change during
-		/// a runtime upgrade
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// API for handling asset deposits.
 		type DepositHandler: DepositApi<
 			AnyChain,

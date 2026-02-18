@@ -28,8 +28,7 @@ use sc_client_api::{Backend, BlockBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
 use sc_keystore::Keystore;
-use sc_rpc_spec_v2::{chain_spec as chain_spec_rpc, chain_spec::ChainSpecApiServer};
-use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncParams};
+use sc_service::{error::Error as ServiceError, Configuration, TaskManager, WarpSyncConfig};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
@@ -54,7 +53,7 @@ pub type Service = sc_service::PartialComponents<
 	FullBackend,
 	FullSelectChain,
 	sc_consensus::DefaultImportQueue<Block>,
-	sc_transaction_pool::FullPool<Block, FullClient>,
+	sc_transaction_pool::TransactionPoolHandle<Block, FullClient>,
 	(
 		sc_consensus_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, FullSelectChain>,
 		sc_consensus_grandpa::LinkHalf<Block, FullClient, FullSelectChain>,
@@ -75,7 +74,7 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 		})
 		.transpose()?;
 
-	let executor = sc_service::new_wasm_executor::<sp_io::SubstrateHostFunctions>(config);
+	let executor = sc_service::new_wasm_executor::<sp_io::SubstrateHostFunctions>(&config.executor);
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(
@@ -92,12 +91,15 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 
 	let select_chain = sc_consensus::LongestChain::new(backend.clone());
 
-	let transaction_pool = sc_transaction_pool::BasicPool::new_full(
-		config.transaction_pool.clone(),
-		config.role.is_authority().into(),
-		config.prometheus_registry(),
-		task_manager.spawn_essential_handle(),
-		client.clone(),
+	let transaction_pool = Arc::from(
+		sc_transaction_pool::Builder::new(
+			task_manager.spawn_essential_handle(),
+			client.clone(),
+			config.role.is_authority().into(),
+		)
+		.with_options(config.transaction_pool.clone())
+		.with_prometheus(config.prometheus_registry())
+		.build(),
 	);
 
 	let (grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
@@ -176,7 +178,7 @@ pub fn new_full<
 		Block,
 		<Block as sp_runtime::traits::Block>::Hash,
 		N,
-	>::new(&config.network);
+	>::new(&config.network, config.prometheus_registry().cloned());
 	let metrics = N::register_notification_metrics(config.prometheus_registry());
 
 	let peer_store_handle = net_config.peer_store_handle();
@@ -198,7 +200,7 @@ pub fn new_full<
 		Vec::default(),
 	));
 
-	let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
+	let (network, system_rpc_tx, tx_handler_controller, sync_service) =
 		sc_service::build_network(sc_service::BuildNetworkParams {
 			config: &config,
 			net_config,
@@ -207,15 +209,13 @@ pub fn new_full<
 			spawn_handle: task_manager.spawn_handle(),
 			import_queue,
 			block_announce_validator_builder: None,
-			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
+			warp_sync_config: Some(WarpSyncConfig::WithProvider(warp_sync)),
 			block_relay: None,
 			metrics,
 		})?;
 
 	if config.offchain_worker.enabled {
-		task_manager.spawn_handle().spawn(
-			"offchain-workers-runner",
-			"offchain-worker",
+		let offchain_workers =
 			sc_offchain::OffchainWorkers::new(sc_offchain::OffchainWorkerOptions {
 				runtime_api_provider: client.clone(),
 				is_validator: config.role.is_authority(),
@@ -227,9 +227,11 @@ pub fn new_full<
 				network_provider: Arc::new(network.clone()),
 				enable_http_requests: true,
 				custom_extensions: |_| vec![],
-			})
-			.run(client.clone(), task_manager.spawn_handle())
-			.boxed(),
+			})?;
+		task_manager.spawn_handle().spawn(
+			"offchain-workers-runner",
+			"offchain-worker",
+			offchain_workers.run(client.clone(), task_manager.spawn_handle()).boxed(),
 		);
 	}
 
@@ -254,10 +256,7 @@ pub fn new_full<
 		)
 	};
 
-	// [CF] Required for Chainspec RPC.
-	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
-
-	let role = config.role.clone();
+	let role = config.role;
 	let force_authoring = config.force_authoring;
 	let backoff_authoring_blocks: Option<()> = None;
 	let name = config.network.node_name.clone();
@@ -269,7 +268,6 @@ pub fn new_full<
 		let backend = backend.clone();
 		let pool = transaction_pool.clone();
 		let executor = Arc::new(task_manager.spawn_handle());
-		let chain_spec = config.chain_spec.cloned_box();
 		let keystore = keystore_container.local_keystore().clone();
 
 		// try to get the broker key pair from the node keystore
@@ -316,31 +314,18 @@ pub fn new_full<
 			log::info!("🗝️ Lp key found in the keystore, enabling LP-related RPCs");
 		}
 
-		Box::new(move |deny_unsafe, subscription_executor| {
+		Box::new(move |subscription_executor| {
 			let build = || {
 				let mut module = RpcModule::new(());
 
 				module.merge(substrate_frame_rpc_system::SystemApiServer::into_rpc(
-					substrate_frame_rpc_system::System::new(
-						client.clone(),
-						pool.clone(),
-						deny_unsafe,
-					),
+					substrate_frame_rpc_system::System::new(client.clone(), pool.clone()),
 				))?;
 
 				module.merge(
 					pallet_transaction_payment_rpc::TransactionPaymentApiServer::into_rpc(
 						pallet_transaction_payment_rpc::TransactionPayment::new(client.clone()),
 					),
-				)?;
-
-				module.merge(
-					chain_spec_rpc::ChainSpec::new(
-						chain_spec.name().to_string(),
-						genesis_hash,
-						chain_spec.properties(),
-					)
-					.into_rpc(),
 				)?;
 
 				module.merge(
@@ -506,6 +491,5 @@ pub fn new_full<
 		);
 	}
 
-	network_starter.start_network();
 	Ok(task_manager)
 }

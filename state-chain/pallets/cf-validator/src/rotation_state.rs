@@ -18,7 +18,7 @@ use crate::*;
 use frame_support::sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
 	pub primary_candidates: Vec<Id>,
 	pub banned: BTreeSet<Id>,
