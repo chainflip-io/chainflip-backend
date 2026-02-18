@@ -19,13 +19,17 @@ use crate::{
 		retry_rpc::node_interface::NodeInterfaceRetryRpcApiWithResult,
 	},
 	witness::{
-		common::{block_height_witnesser::witness_headers, traits::WitnessClient},
+		common::{
+			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
+			traits::WitnessClient,
+		},
 		evm::{
 			contract_common::{evm_events_at_block_range, query_election_block},
 			erc20_deposits::{usdc::UsdcEvents, usdt::UsdtEvents, Erc20Events},
 			key_manager::{handle_key_manager_events, KeyManagerEventConfig, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
-			EvmVoter,
+			EvmDepositChannelWitnessingConfig, EvmKeyManagerWitnessingConfig, EvmVoter,
+			VaultDepositWitnessingConfig,
 		},
 	},
 };
@@ -503,11 +507,14 @@ where
 		.collect();
 
 	let supported_asset_address_and_event_type = [
-		(ArbAsset::ArbUsdc, (usdc_contract_address, evm_event_type::<UsdcEvents, Erc20Events>())),
-		(ArbAsset::ArbUsdt, (usdt_contract_address, evm_event_type::<UsdtEvents, Erc20Events>())),
+		(ArbAsset::ArbUsdc, EvmEventSource::new::<UsdcEvents>(usdc_contract_address)),
+		(ArbAsset::ArbUsdt, EvmEventSource::new::<UsdtEvents>(usdt_contract_address)),
 	]
 	.into_iter()
 	.collect();
+
+	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
+	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
 
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
@@ -517,21 +524,25 @@ where
 					state_chain_client,
 					CompositeVoter::<ArbitrumElectoralSystemRunner, _>::new((
 						EvmVoter::new(client.clone()),
-						ArbitrumDepositChannelWitnesserVoter {
-							client: client.clone(),
-							address_checker_address,
-							vault_address,
-							supported_asset_address_and_event_type,
-						},
-						ArbitrumVaultDepositWitnesserVoter {
-							client: client.clone(),
-							vault_address,
-							supported_assets: supported_erc20_tokens.clone(),
-						},
-						ArbitrumKeyManagerWitnesserVoter {
-							client: client.clone(),
-							key_manager_address,
-						},
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EvmDepositChannelWitnessingConfig {
+								address_checker_address,
+								vault_contract: vault_event_source.clone(),
+								supported_assets: supported_asset_address_and_event_type,
+							},
+						),
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							VaultDepositWitnessingConfig {
+								vault: vault_event_source,
+								supported_assets: supported_erc20_tokens.clone(),
+							},
+						),
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source },
+						),
 						ArbitrumFeeVoter { client: client.clone() },
 						ArbitrumLivenessVoter { client: client.clone() },
 					)),
