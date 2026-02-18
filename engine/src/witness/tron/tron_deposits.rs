@@ -21,7 +21,8 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, CcmMessage, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{
-	GasAmount,  /* chains::assets::tron::Asset, AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters */
+	GasAmount, /* chains::assets::tron::Asset, AccountId, AffiliateShortId, Affiliates,
+	           * Beneficiary, DcaParameters */
 };
 use codec::{Decode, Encode};
 use ethers::types::{H160, H256};
@@ -251,7 +252,7 @@ where
 						println!("  deposit_metadata: {:?}", deposit_metadata);
 						println!("  amount: {:?}", amount);
 
-					vault_swaps.push(tx_id);
+						vault_swaps.push(tx_id);
 					}
 				}
 			}
@@ -268,6 +269,7 @@ mod tests {
 	use crate::{
 		tron::{
 			retry_rpc::{TronEndpoints, TronRetryRpcClient},
+			rpc::TronRpcClient,
 			rpc_client_api::TronAddress,
 		},
 		witness::tron::tron_deposits::{
@@ -526,35 +528,5 @@ mod tests {
 		println!("  Hex: {}", hex_encoded);
 		println!("  Bytes: {:?}", encoded);
 		println!("  Length: {} bytes", encoded.len());
-
-		// TODO We need to reencode cf_parameters for that.
-
-		// Create a sample TronVaultSwapData with CCM
-		// let vault_swap_data_with_ccm = TronVaultSwapData {
-		// 	output_asset: Asset::Usdc,
-		// 	destination_address: EncodedAddress::Eth([0xab; 20]),
-		// 	ccm_data: Some((1000000u128, vec![0x48, 0x65, 0x6c, 0x6c, 0x6f].try_into().unwrap())),
-		// 	cf_parameters: vec![0x04, 0x05, 0x06, 0x07],
-		// };
-
-		// let encoded_with_ccm = vault_swap_data_with_ccm.encode();
-		// let hex_encoded_with_ccm = hex::encode(&encoded_with_ccm);
-
-		// println!("\nEncoded TronVaultSwapData (with CCM):");
-		// println!("  Hex: {}", hex_encoded_with_ccm);
-		// println!("  Bytes: {:?}", encoded_with_ccm);
-		// println!("  Length: {} bytes", encoded_with_ccm.len());
-
-		// // Verify round-trip decoding
-		// let decoded: TronVaultSwapData =
-		// 	codec::Decode::decode(&mut &encoded[..]).expect("Should decode successfully");
-		// assert_eq!(decoded, vault_swap_data);
-
-		// let decoded_with_ccm: TronVaultSwapData =
-		// 	codec::Decode::decode(&mut &encoded_with_ccm[..])
-		// 		.expect("Should decode successfully");
-		// assert_eq!(decoded_with_ccm, vault_swap_data_with_ccm);
-
-		// println!("\nRound-trip encoding/decoding successful!");
 	}
 }

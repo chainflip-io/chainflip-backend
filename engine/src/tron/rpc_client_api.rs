@@ -26,12 +26,12 @@ pub struct TronAddress(pub [u8; 21]);
 impl TronAddress {
 	// Convert EVM address (H160/20 bytes) to Tron address (21 bytes)
 	// by prepending 0x41
-	// pub fn from_evm_address(evm_address: H160) -> Self {
-	// 	let mut tron_address = [0u8; 21];
-	// 	tron_address[0] = 0x41;
-	// 	tron_address[1..].copy_from_slice(evm_address.as_bytes());
-	// 	TronAddress(tron_address)
-	// }
+	pub fn from_evm_address(evm_address: H160) -> Self {
+		let mut tron_address = [0u8; 21];
+		tron_address[0] = 0x41;
+		tron_address[1..].copy_from_slice(evm_address.as_bytes());
+		TronAddress(tron_address)
+	}
 
 	// Convert Tron address (21 bytes) to EVM address (H160/20 bytes)
 	// by removing the 0x41 prefix
@@ -160,4 +160,44 @@ pub struct RawData {
 	pub expiration: i64,
 	pub timestamp: i64,
 	pub fee_limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BroadcastResponse {
+	pub result: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub txid: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub message: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub code: Option<String>,
+}
+
+pub struct TronTransactionRequest {
+	pub owner_address: TronAddress,
+	pub contract_address: TronAddress,
+	pub function_selector: String,
+	pub parameter: Vec<u8>,
+	pub fee_limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerSmartContractRequest {
+	pub owner_address: TronAddress,
+	pub contract_address: TronAddress,
+	pub function_selector: String,
+	pub parameter: Vec<u8>,
+	pub fee_limit: i64,
+}
+
+/// Response from triggersmartcontract - contains unsigned transaction data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionExtention {
+	pub transaction: TronTransaction,
+	pub result: TransactionExtentionResult,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionExtentionResult {
+	pub result: bool,
 }

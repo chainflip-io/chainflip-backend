@@ -299,8 +299,8 @@ pub struct TronTransactionFee {
 	pub energy_penalty_total: u64,
 }
 
-// TODO: To update/review
 /// Required information to construct and sign a TRON transaction.
+// TODO: To update/review. We might want to add the function selector as a string here.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
