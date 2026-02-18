@@ -111,16 +111,10 @@ pub async fn witness_deposit_channels_generic<
 	config: &EvmDepositChannelWitnessingConfig<Chain>,
 	query: &Client::BlockQuery,
 	deposit_addresses: Vec<DepositChannel<Chain>>,
-) -> Result<Vec<pallet_cf_ingress_egress::DepositWitness<Chain>>>
-where
-	Chain::ChainAmount: TryFrom<sp_core::U256>,
-	<Chain::ChainAmount as TryFrom<sp_core::U256>>::Error: std::fmt::Debug,
-{
+) -> Result<Vec<pallet_cf_ingress_egress::DepositWitness<Chain>>> {
 	use super::evm_deposits::eth_ingresses_at_block;
 	use itertools::Itertools;
 	use pallet_cf_ingress_egress::DepositWitness;
-
-	let address_checker_address = config.address_checker_address;
 
 	let (eth_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
 		deposit_addresses.into_iter().fold(
@@ -139,7 +133,6 @@ where
 	let eth_addresses: HashSet<H160> =
 		eth_deposit_channels.iter().map(|(address, _state)| *address).collect();
 
-	// let block_start = *block_height.into_range_inclusive().start();
 	let block_start = query.get_lowest_block_height_of_query();
 	let undeployed_addresses: Vec<H160> = eth_deposit_channels
 		.into_iter()
@@ -153,7 +146,7 @@ where
 		.collect();
 
 	let (undeployed_addr_states, events) = futures::try_join!(
-		client.address_states(address_checker_address, query.clone(), undeployed_addresses,),
+		client.address_states(config.address_checker_address, query.clone(), undeployed_addresses,),
 		async {
 			let events =
 				client.events_from_block_query(&config.vault_contract, query.clone()).await?;
