@@ -23,8 +23,9 @@ use crate::{
 	},
 	witness::{
 		common::{
-			block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter,
-			traits::WitnessClient,
+			block_height_witnesser::witness_headers,
+			block_witnesser::GenericBwVoter,
+			traits::{WitnessClient, WitnessClientForBlockData},
 		},
 		eth::{
 			sc_utils::{
@@ -76,9 +77,8 @@ use sp_core::{H160, H256};
 use state_chain_runtime::{
 	chainflip::witnessing::ethereum_elections::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumElectoralSystemRunner,
-		EthereumFeeTracking, EthereumLiveness, EthereumScUtilsWitnessingES,
-		EthereumStateChainGatewayWitnessingES, ScUtilsCall,
-		StateChainGatewayEvent as SCStateChainGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
+		EthereumFeeTracking, EthereumLiveness, EthereumScUtilsWitnessingES, ScUtilsCall,
+		StateChainGatewayEvent as ScGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
 	},
 	EthereumInstance,
 };
@@ -234,40 +234,28 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EvmVoter<EthereumChain, EvmSin
 	}
 }
 
-// --- egress witnessing ---
+// --- statechain gateway witnessing ---
 
 #[derive(Clone)]
-pub struct EthereumStateChainGatewayWitnesserVoter {
-	client: EvmCachingClient<EvmRpcSigningClient>,
-	state_chain_gateway_address: H160,
+pub struct EthereumStateChainGatewayWitnessingConfig {
+	state_chain_gateway: EvmEventSource<StateChainGatewayEvents>,
 }
+
 #[async_trait::async_trait]
-impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatewayWitnesserVoter {
-	async fn vote(
+impl WitnessClientForBlockData<EthereumChain, Vec<ScGatewayEvent>>
+	for EvmVoter<EthereumChain, EvmSingleBlockQuery>
+{
+	type Config = EthereumStateChainGatewayWitnessingConfig;
+	async fn block_data_from_query(
 		&self,
-		_settings: <EthereumStateChainGatewayWitnessingES as ElectoralSystemTypes>::ElectoralSettings,
-		properties: <EthereumStateChainGatewayWitnessingES as ElectoralSystemTypes>::ElectionProperties,
-	) -> std::result::Result<Option<VoteOf<EthereumStateChainGatewayWitnessingES>>, anyhow::Error>
-	{
-		let BWElectionProperties {
-			block_height,
-			properties: _state_chain_gateway,
-			election_type,
-			..
-		} = properties;
-		let (block, return_block_hash) =
-			query_election_block::<_, Ethereum>(&self.client, block_height, election_type).await?;
+		config: &Self::Config,
+		_properties: &(),
+		query: &Self::BlockQuery,
+	) -> Result<Vec<ScGatewayEvent>> {
+		let events =
+			self.events_from_block_query(&config.state_chain_gateway, query.clone()).await?;
 
-		let events = evm_events_at_block::<StateChainGatewayEvents>(
-			&self.client,
-			evm_event_type::<StateChainGatewayEvents, StateChainGatewayEvents>(),
-			self.state_chain_gateway_address,
-			block.hash,
-			block.bloom,
-		)
-		.await?;
-
-		let mut result: Vec<SCStateChainGatewayEvent> = Vec::new();
+		let mut result: Vec<ScGatewayEvent> = Vec::new();
 		for event in events {
 			match event.event_parameters {
 				StateChainGatewayEvents::FundedFilter(FundedFilter {
@@ -275,7 +263,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 					amount,
 					funder,
 				}) => {
-					result.push(SCStateChainGatewayEvent::Funded {
+					result.push(ScGatewayEvent::Funded {
 						account_id: account_id.into(),
 						amount: amount.try_into().expect("Funded amount should fit in u128"),
 						funder,
@@ -286,7 +274,7 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 					node_id: account_id,
 					amount,
 				}) => {
-					result.push(SCStateChainGatewayEvent::RedemptionExecuted {
+					result.push(ScGatewayEvent::RedemptionExecuted {
 						account_id: account_id.into(),
 						redeemed_amount: amount
 							.try_into()
@@ -298,9 +286,9 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 					node_id: account_id,
 					amount: _,
 				}) => {
-					result.push(SCStateChainGatewayEvent::RedemptionExpired {
+					result.push(ScGatewayEvent::RedemptionExpired {
 						account_id: account_id.into(),
-						block_number: block_height,
+						block_number: query.block_height,
 						tx_hash: event.tx_hash.into(),
 					});
 				},
@@ -308,9 +296,11 @@ impl VoterApi<EthereumStateChainGatewayWitnessingES> for EthereumStateChainGatew
 			}
 		}
 
-		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
+		Ok(result.into_iter().sorted().collect())
 	}
 }
+
+// --- sc utils witnessing ---
 
 #[derive(Clone)]
 pub struct EthereumScUtilsVoter {
@@ -442,6 +432,8 @@ impl VoterApi<EthereumScUtilsWitnessingES> for EthereumScUtilsVoter {
 		Ok(Some((result.into_iter().sorted().collect(), return_block_hash)))
 	}
 }
+
+// --- fee witnessing ---
 #[derive(Clone)]
 pub struct EthereumFeeVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
@@ -476,6 +468,7 @@ impl VoterApi<EthereumFeeTracking> for EthereumFeeVoter {
 	}
 }
 
+// --- liveness witnessing ---
 #[derive(Clone)]
 pub struct EthereumLivenessVoter {
 	client: EvmCachingClient<EvmRpcSigningClient>,
@@ -491,6 +484,10 @@ impl VoterApi<EthereumLiveness> for EthereumLivenessVoter {
 		Ok(Some(block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?))
 	}
 }
+
+// ------------------------------------------
+// ---    starting all ethereum voters    ---
+// ------------------------------------------
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
@@ -577,6 +574,8 @@ where
 
 	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
 	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
+	let sc_gateway_event_source =
+		EvmEventSource::new::<StateChainGatewayEvents>(state_chain_gateway_address);
 
 	scope.spawn(async move {
 		task_scope::task_scope(|scope| {
@@ -607,10 +606,12 @@ where
 						),
 						EthereumFeeVoter { client: client.clone() },
 						EthereumLivenessVoter { client: client.clone() },
-						EthereumStateChainGatewayWitnesserVoter {
-							client: client.clone(),
-							state_chain_gateway_address,
-						},
+						GenericBwVoter::new(
+							EvmVoter::new(client.clone()),
+							EthereumStateChainGatewayWitnessingConfig {
+								state_chain_gateway: sc_gateway_event_source,
+							},
+						),
 						EthereumScUtilsVoter {
 							client: client.clone(),
 							sc_utils_address,

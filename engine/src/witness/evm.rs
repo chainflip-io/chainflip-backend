@@ -27,7 +27,7 @@ use ethers::types::{Transaction, TransactionReceipt};
 use itertools::Itertools;
 use sp_runtime::AccountId32;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::{
-	EvmKeyManagerEvent, EvmVaultContractEvent,
+	self, EvmKeyManagerEvent, EvmVaultContractEvent,
 };
 use std::{collections::HashMap, fmt::Debug};
 
@@ -45,7 +45,7 @@ use crate::{
 	witness::{
 		common::traits::{WitnessClient, WitnessClientForBlockData},
 		evm::{
-			contract_common::witness_deposit_channels_generic2,
+			contract_common::witness_deposit_channels_generic,
 			erc20_deposits::Erc20Events,
 			key_manager::{handle_key_manager_events, KeyManagerEvents},
 			vault::{handle_vault_events, VaultEvents},
@@ -139,7 +139,7 @@ where
 		deposit_channels: &Vec<DepositChannel<C>>,
 		query: &Self::BlockQuery,
 	) -> Result<Vec<DepositWitness<C>>> {
-		witness_deposit_channels_generic2::<C, CT, Self>(
+		witness_deposit_channels_generic::<C, CT, Self>(
 			&self,
 			config,
 			query,
@@ -186,9 +186,7 @@ pub struct EvmKeyManagerWitnessingConfig {
 #[async_trait::async_trait]
 impl<
 		CT: ChainTypes,
-		T: pallet_cf_ingress_egress::Config<I, TargetChain: EvmChain, AccountId = AccountId32>
-			+ pallet_cf_vaults::Config<I>
-			+ pallet_cf_broadcast::Config<I>,
+		T: pallet_hooks::Config<I, TargetChain: EvmChain, AccountId = AccountId32>,
 		I: 'static,
 		Client: EvmEventClient<CT> + EvmTransactionClient,
 	> WitnessClientForBlockData<CT, Vec<EvmKeyManagerEvent<T, I>>> for Client

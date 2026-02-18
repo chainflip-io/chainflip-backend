@@ -42,7 +42,7 @@ pub trait WitnessClient<Chain: ChainTypes>: Sync + Send {
 
 #[async_trait::async_trait]
 pub trait WitnessClientForBlockData<Chain: ChainTypes, BlockData>: WitnessClient<Chain> {
-	type Config: Sync + Send = ();
+	type Config: Sync + Send + Clone = ();
 	type ElectionProperties = ();
 
 	async fn block_data_from_query(
