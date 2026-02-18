@@ -21,10 +21,10 @@ use cf_chains::{
 	CcmChannelMetadata, CcmDepositMetadata, CcmMessage, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{
-	GasAmount, /* AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters */
+	GasAmount,  /* chains::assets::tron::Asset, AccountId, AffiliateShortId, Affiliates, Beneficiary, DcaParameters */
 };
 use codec::{Decode, Encode};
-use ethers::types::H160;
+use ethers::types::{H160, H256};
 // use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -61,13 +61,13 @@ pub struct TronVaultSwapData {
 /// - Second: (transaction_id, vault_amount) for vault changes
 ///
 /// Transactions with any negative deposit channel amounts are skipped entirely.
-pub async fn ingress_amounts<TronRetryRpcClient>(
+pub async fn trx_ingress_amounts<TronRetryRpcClient>(
 	tron_rpc: &TronRetryRpcClient,
 	deposit_channels: &[H160],
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-) -> Result<(Vec<(String, H160, u64)>, Vec<(String, u64)>), anyhow::Error>
+) -> Result<(Vec<(H256, H160, u64)>, Vec<(H256, u64)>), anyhow::Error>
 where
 	TronRetryRpcClient: TronRetryRpcApi + Send + Sync + Clone,
 {
@@ -87,8 +87,8 @@ where
 		block_balance.block_identifier.number
 	);
 
-	let mut deposit_channel_changes: Vec<(String, H160, u64)> = Vec::new();
-	let mut vault_changes: Vec<(String, u64)> = Vec::new();
+	let mut deposit_channel_changes: Vec<(H256, H160, u64)> = Vec::new();
+	let mut vault_changes: Vec<(H256, u64)> = Vec::new();
 
 	// Iterate over transaction balance traces
 	'transaction_loop: for tx_trace in block_balance.transaction_balance_trace {
@@ -97,7 +97,7 @@ where
 			continue;
 		}
 
-		let tx_id = tx_trace.transaction_identifier.clone();
+		let tx_id = tx_trace.transaction_identifier;
 		let mut channel_balances: HashMap<H160, u64> = HashMap::new();
 		let mut vault_balance: u64 = 0;
 
@@ -136,7 +136,7 @@ where
 
 		// Add the deposit channel changes to the result vector
 		for (channel, amount) in channel_balances {
-			deposit_channel_changes.push((tx_id.clone(), channel, amount));
+			deposit_channel_changes.push((tx_id, channel, amount));
 		}
 
 		// Add the vault change to the result vector (even if 0)
@@ -149,7 +149,7 @@ where
 }
 
 /// Query block balance information and fetch transaction details for vault ingresses.
-/// This function calls `ingress_amounts` to get deposit channel and vault changes,
+/// This function calls `trx_ingress_amounts` to get deposit channel and vault changes,
 /// then fetches and validates transaction information for each vault ingress.
 /// Returns:
 /// - deposit_channel_changes: Vec of (transaction_id, evm_address, amount)
@@ -160,24 +160,27 @@ pub async fn ingress_deposit_channels_and_vault_swaps<TronRetryRpcClient>(
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-) -> Result<(Vec<(String, H160, u64)>, Vec<String>), anyhow::Error>
+) -> Result<(Vec<(H256, H160, u64)>, Vec<H256>), anyhow::Error>
 where
 	TronRetryRpcClient: TronRetryRpcApi + Send + Sync + Clone,
 {
 	// Get ingress amounts for deposit channels and vault
 	let (deposit_channel_changes, vault_changes) =
-		ingress_amounts(tron_rpc, deposit_channels, vault_address, block_number, block_hash)
+		trx_ingress_amounts(tron_rpc, deposit_channels, vault_address, block_number, block_hash)
 			.await?;
 
 	println!("vault_changes: {:?}", vault_changes);
 	// Fetch transaction data for each vault ingress and extract raw_data.data
 	let mut vault_swaps = Vec::new();
 
-	// TODO: We should do the processing in parallel.
-	// TODO: We need t get the ERC20 events to know vault changes for TRC-20 tokens. We
-	// then need to query for the transactions the same way as for the TRX Vault swaps.
+	// TODO: We should do the processing (query of transactions) in parallel.
+	// TODO: We need to get the ERC20 events to know vault changes for TRC-20 tokens. We
+	// then need to query for the transactions the same way as for the TRX Vault swaps except
+	// we get the amount from the event, the "to" must be our Vault. The ERC20 deposit
+	// witnessing can be done in parallel to TRX witnessing.
 	for (tx_id, amount) in vault_changes {
-		let transaction = tron_rpc.get_transaction_by_id(&tx_id).await;
+		let tx_id_str = format!("{:x}", tx_id);
+		let transaction = tron_rpc.get_transaction_by_id(&tx_id_str).await;
 
 		// TODO: We could have the amount in the encoded payload (memo) or not. If so, we
 		// would then need to check it against the amount from the balance trace or the
@@ -248,25 +251,15 @@ where
 						println!("  deposit_metadata: {:?}", deposit_metadata);
 						println!("  amount: {:?}", amount);
 
-						// TODO To push the whole Vault swap and/or vote on that.
-						// (VaultDepositWitness type)
-						vault_swaps.push(tx_id.clone());
-
-						// let vault_deposit_witness =
-						// crate::witness::evm::vault::vault_deposit_witness!( 	Asset::Trx, //
-						// Use Trx or USDT 	amount,
-						// 	details.output_asset,
-						// 	details.destination_address,
-						// 	deposit_metadata,
-						// 	tx_id,
-						// 	vault_swap_params
-						// );
+					vault_swaps.push(tx_id);
 					}
 				}
 			}
 		}
 	}
 
+	// TODO: convert deposit_channel_changes to `DepositWitness`` and vault_swaps to
+	// `EvmVaultContractEvent`
 	Ok((deposit_channel_changes, vault_swaps))
 }
 
@@ -277,7 +270,9 @@ mod tests {
 			retry_rpc::{TronEndpoints, TronRetryRpcClient},
 			rpc_client_api::TronAddress,
 		},
-		witness::tron::tron_deposits::{ingress_amounts, ingress_deposit_channels_and_vault_swaps},
+		witness::tron::tron_deposits::{
+			ingress_deposit_channels_and_vault_swaps, trx_ingress_amounts,
+		},
 	};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
 	use ethers::types::H160;
@@ -285,7 +280,7 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
-	async fn test_get_tron_ingress_amounts() {
+	async fn test_get_tron_trx_ingress_amounts() {
 		task_scope::task_scope(|scope| {
 			async {
 				let retry_client = TronRetryRpcClient::new(
@@ -353,7 +348,7 @@ mod tests {
 				.to_evm_address()
 				.unwrap();
 
-				let (deposit_channel_changes, vault_changes) = ingress_amounts(
+				let (deposit_channel_changes, vault_changes) = trx_ingress_amounts(
 					&retry_client,
 					&deposit_channels,
 					vault_address,
@@ -367,7 +362,8 @@ mod tests {
 					deposit_channel_changes,
 					vec![(
 						"faaaba965bce89c1cb28cada1615d75d2e3c3a05970e8a3bbc296a1239d411e2"
-							.to_string(),
+							.parse()
+							.unwrap(),
 						H160::from_slice(
 							&hex::decode("595aeac7a37b75c0abe0561e1390c748b5dc4ca2").unwrap()
 						),
@@ -378,7 +374,8 @@ mod tests {
 					vault_changes,
 					vec![(
 						"011fc77de4dd7777d1ddaa5d5411b28c250000631f8aeda0c5808d0d5134e4ca"
-							.to_string(),
+							.parse()
+							.unwrap(),
 						2
 					)]
 				);
@@ -393,7 +390,7 @@ mod tests {
 				.to_evm_address()
 				.unwrap();
 
-				let (deposit_channel_changes, vault_changes) = ingress_amounts(
+				let (deposit_channel_changes, vault_changes) = trx_ingress_amounts(
 					&retry_client,
 					&deposit_channels,
 					vault_address,
@@ -407,7 +404,8 @@ mod tests {
 					deposit_channel_changes,
 					vec![(
 						"faaaba965bce89c1cb28cada1615d75d2e3c3a05970e8a3bbc296a1239d411e2"
-							.to_string(),
+							.parse()
+							.unwrap(),
 						H160::from_slice(
 							&hex::decode("595aeac7a37b75c0abe0561e1390c748b5dc4ca2").unwrap()
 						),

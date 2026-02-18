@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod transfer_token;
 pub mod x_call_native;
 pub mod x_call_token;
 pub mod x_swap_native;

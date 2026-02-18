@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use ethers::types::H160;
+use ethers::types::{H160, H256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -104,7 +104,7 @@ pub type Amount = i64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionBalanceTrace {
-	pub transaction_identifier: String,
+	pub transaction_identifier: H256,
 	pub operation: Vec<BlockBalanceTrace>,
 	#[serde(rename = "type")]
 	pub type_field: String,
@@ -138,7 +138,7 @@ pub struct TransactionInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TronTransaction {
 	#[serde(rename = "txID")]
-	pub tx_id: String,
+	pub tx_id: H256,
 	pub raw_data: RawData,
 	pub raw_data_hex: String,
 	pub ret: Option<Vec<TransactionRet>>,

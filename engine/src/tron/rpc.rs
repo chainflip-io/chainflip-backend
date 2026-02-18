@@ -257,7 +257,7 @@ mod tests {
 		println!("Transaction query result: {:#?}", result);
 
 		// Verify the transaction ID matches
-		assert_eq!(result.tx_id, tx_id);
+		assert_eq!(result.tx_id, tx_id.parse().unwrap());
 
 		// Verify raw_data.data exists and contains the expected hex string
 		assert_eq!(result.raw_data.data, Some("48656c6c6f20436861696e666c69702100".to_string()));

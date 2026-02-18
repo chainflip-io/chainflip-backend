@@ -241,14 +241,12 @@ pub fn evm_vault_swap<A>(
 				.abi_encoded_payload())
 			}
 		},
-		Asset::Trx => {
-			// TODO: Implement Trx calldata vault swap logic. Should be a TRX transfer to the Vault.
-			Err(DispatchErrorWithMessage::from("Trx vault swaps calldata not yet implemented"))
-		},
-		Asset::TronUsdt => {
-			// TODO: Implement TronUsdt vault swap logic. Should be a USDT transfer to the Vault.
-			Err(DispatchErrorWithMessage::from("TronUsdt vault swaps calldata not yet implemented"))
-		},
+		Asset::Trx => Ok(vec![]),
+		Asset::TronUsdt => Ok(cf_chains::evm::api::transfer_token::TransferToken::new(
+			Environment::tron_vault_address(),
+			amount,
+		)
+		.abi_encoded_payload()),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),
@@ -279,6 +277,20 @@ pub fn evm_vault_swap<A>(
 
 			let note = tron_vault_swap_data.encode();
 
+			let to = if source_asset == Asset::Trx {
+				Environment::tron_vault_address()
+			} else {
+				let source_token_address_ref = source_token_address.insert(
+					<EvmEnvironment as EvmEnvironmentProvider<cf_chains::Tron>>::token_address(
+						source_asset.try_into().expect("Only TronUsdt asset is processed here"),
+					)
+					.ok_or(DispatchErrorWithMessage::from(
+						"Failed to look up Tron token address",
+					))?,
+				);
+				*source_token_address_ref
+			};
+
 			Ok(VaultSwapDetails::tron(
 				EvmCallDetails {
 					calldata,
@@ -288,7 +300,7 @@ pub fn evm_vault_swap<A>(
 					} else {
 						U256::default()
 					},
-					to: Environment::tron_vault_address(),
+					to,
 					source_token_address,
 				},
 				note,

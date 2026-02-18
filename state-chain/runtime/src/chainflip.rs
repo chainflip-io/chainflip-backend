@@ -178,13 +178,6 @@ impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
 	}
 }
 
-// TODO: Think how we want to do this
-impl EvmPriorityFee<Tron> for TronTransactionBuilder {
-	fn get_priority_fee(_tracked_data: &<Tron as Chain>::TrackedData) -> Option<U256> {
-		Some(U256::from(0))
-	}
-}
-
 pub struct EthTransactionBuilder;
 pub struct ArbTransactionBuilder;
 impl_transaction_builder_for_evm_chain!(
@@ -246,8 +239,7 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 					.into(),
 			)
 		} else {
-			// TODO: Do we set no fee_limit? TBD depending on the approach on energy, but most
-			// likely no fee_limit
+			// TODO: Do we set no fee_limit?
 			None
 		}
 	}
