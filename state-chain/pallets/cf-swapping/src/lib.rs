@@ -2784,7 +2784,6 @@ pub mod pallet {
 			maybe_ccm_metadata: Option<CcmDepositMetadataChecked<ForeignChainAddress>>,
 			egress_type: EgressType,
 		) {
-			let is_ccm = maybe_ccm_metadata.is_some();
 			match T::EgressHandler::schedule_egress(asset, amount, address, maybe_ccm_metadata) {
 				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld }) =>
 					match egress_type {
@@ -2808,9 +2807,6 @@ pub mod pallet {
 					},
 				Err(err) => match egress_type {
 					EgressType::Regular => {
-						if is_ccm {
-							log_or_panic!("CCM egress scheduling should never fail.");
-						}
 						Self::deposit_event(Event::<T>::SwapEgressIgnored {
 							swap_request_id,
 							asset,

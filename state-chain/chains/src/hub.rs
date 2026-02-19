@@ -82,6 +82,7 @@ impl Chain for Assethub {
 /// The payload being signed in transactions.
 pub type AssethubPayload = SignedPayload<AssethubRuntimeCall, AssethubSignedExtra>;
 
+/// Use this for authoring V4 extrinsics.
 pub type AssethubUncheckedExtrinsic =
 	GenericUncheckedExtrinsic<AssethubRuntimeCall, AssethubSignedExtra>;
 
@@ -148,6 +149,8 @@ pub struct AssethubSignedExtra(
 		(),
 		AssethubChargeAssetTxPayment,
 		polkadot_sdk_types::CheckMetadataHash,
+		(), // EthSetOrigin
+		(), // StorageWeightReclaim
 	),
 );
 
@@ -236,6 +239,8 @@ impl AssethubExtrinsicBuilder {
 			(),
 			AssethubChargeAssetTxPayment { tip: TIP, asset_id: None },
 			polkadot_sdk_types::CheckMetadataHash::default(),
+			(),
+			(),
 		))
 	}
 
