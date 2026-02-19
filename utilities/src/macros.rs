@@ -108,6 +108,20 @@ macro_rules! define_empty_struct {
 			#[derive(PartialOrd, Ord)]
 			$vis struct $struct_name {}
 		}
+		#[cfg(test)]
+		impl proptest::prelude::Arbitrary for $struct_name {
+			type Parameters = ();
+			type Strategy = impl proptest::prelude::Strategy<Value = Self> + Clone + Sync + Send;
+			fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+				proptest::prelude::Just(Default::default())
+			}
+		}
+		impl cf_traits::Validate for $struct_name {
+			type Error = ();
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				Ok(())
+			}
+		}
 	};
 	// This is the entry point for structs with type parameters
 	(

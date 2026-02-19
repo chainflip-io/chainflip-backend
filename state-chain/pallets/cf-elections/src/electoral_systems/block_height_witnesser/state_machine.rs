@@ -229,13 +229,12 @@ pub mod tests {
 	};
 	use cf_chains::{self, witness_period::BlockWitnessRange, ChainWitnessConfig};
 	use cf_traits::hook_test_utils::MockHook;
+	use cf_utilities::define_empty_struct;
 	use proptest::{
 		arbitrary::arbitrary_with,
 		prelude::{any, prop, Arbitrary, Just, Strategy},
 		prop_oneof,
 	};
-	use scale_info::TypeInfo;
-	use serde::{Deserialize, Serialize};
 	use sp_std::{fmt::Debug, vec::Vec};
 
 	use super::{
@@ -364,28 +363,23 @@ pub mod tests {
 		);
 	}
 
-	#[derive(TypeInfo)]
-	struct TestChain {}
+	define_empty_struct! { struct TestChain; }
 	impl ChainWitnessConfig for TestChain {
 		const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 		type ChainBlockNumber = u32;
 	}
-
-	impl ChainTypes for TypesFor<TestChain> {
+	impl ChainTypes for TestChain {
 		type ChainBlockNumber = BlockWitnessRange<TestChain>;
 		type ChainBlockHash = bool;
 
 		const NAME: &'static str = "Mock";
 	}
 
-	#[derive(
-		Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, Serialize, Deserialize, TypeInfo,
-	)]
-	struct TestTypes2 {}
+	define_empty_struct! { struct TestTypes2; }
 	impl BHWTypes for TestTypes2 {
 		type BlockHeightChangeHook = MockHook<HookTypeFor<Self, BlockHeightChangeHook>>;
 		type ReorgHook = MockHook<HookTypeFor<Self, ReorgHook>>;
-		type Chain = TypesFor<TestChain>;
+		type Chain = TestChain;
 	}
 
 	#[test]
