@@ -77,7 +77,6 @@ macro_rules! define_empty_struct {
 	( [$name:ident $(: $path:path)? >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name $(:$path)?, >; ] $($rest)* }};
 	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
-
 	// the main branch
 	(
 		[>;]
@@ -86,7 +85,7 @@ macro_rules! define_empty_struct {
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::derive_common_traits!{
-			#[derive(TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
 			$vis struct $struct_name<$($names_and_bounds)*>
 			(
@@ -105,6 +104,17 @@ macro_rules! define_empty_struct {
 			}
 		}
 	};
+	// This is a special case handling structs without type parameters
+	(
+		$vis:vis struct $struct_name:ident;
+	) => {
+		cf_utilities::derive_common_traits!{
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(PartialOrd, Ord)]
+			$vis struct $struct_name {}
+		}
+	};
+	// This is the entry point for structs with type parameters
 	(
 		$vis:vis struct $struct_name:ident<$($rest:tt)*
 	) => {
