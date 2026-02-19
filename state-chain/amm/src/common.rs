@@ -220,6 +220,7 @@ impl<T: core::ops::Add<R>, R> core::ops::Add<PoolPairsMap<R>> for PoolPairsMap<T
 	Hash,
 	PartialOrd,
 	Ord,
+	DecodeWithMemTracking,
 )]
 pub struct AssetPair {
 	assets: PoolPairsMap<Asset>,
