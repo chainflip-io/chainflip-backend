@@ -199,10 +199,12 @@ pub struct TronTransactionBuilder;
 impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilder {
 	fn build_transaction(signed_call: &TronApi<EvmEnvironment>) -> TronTransaction {
 		TronTransaction {
-			chain_id: signed_call.replay_protection().chain_id,
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
-			fee_limit: Self::calculate_gas_limit(signed_call),
+			// TODO: Leave some default here but it should never fail.
+			fee_limit: Self::calculate_gas_limit(signed_call)
+				.map(|v| v.as_u64())
+				.unwrap_or(250_000),
 			..Default::default()
 		}
 	}
@@ -225,22 +227,22 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 		})
 	}
 
+	// This will calculate the fee_limit
 	fn calculate_gas_limit(call: &TronApi<EvmEnvironment>) -> Option<U256> {
+		use cf_chains::tron::TronTrackedData;
+		let tracked_data = TronTrackedData::new();
 		if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) = (
 			call.ccm_transfer_data(),
 			<EvmEnvironment as EvmEnvironmentProvider<Tron>>::token_address(Tron::GAS_ASSET),
 		) {
-			use cf_chains::tron::TronTrackedData;
-			let tracked_data = TronTrackedData::new();
 			let is_native_asset = transfer_asset == native_asset;
 			Some(
 				tracked_data
-					.calculate_ccm_fee(is_native_asset, gas_budget, message_length)
+					.calcualte_ccm_fee_limit(is_native_asset, gas_budget, message_length)
 					.into(),
 			)
 		} else {
-			// TODO: Do we set no fee_limit?
-			None
+			Some(tracked_data.calculate_fee_limit().into())
 		}
 	}
 }

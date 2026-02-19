@@ -16,22 +16,23 @@
 
 use crate::{
 	evm::rpc::EvmRpcApi,
-	retrier::{Attempt, MAX_RPC_RETRY_DELAY, RequestLog, RetrierClient},
-	settings::{NodeContainer, TronEndpoints}, tron::rpc::TronSigningRpcApi,
+	retrier::{Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
+	settings::{NodeContainer, TronEndpoints},
+	tron::rpc::TronSigningRpcApi,
 };
-use std::future::Future;
-use futures::future;
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use ethers::types::{Block, Filter, Log, Transaction, TransactionReceipt, H256, U256, U64};
+use futures::future;
+use std::future::Future;
 
 use anyhow::Result;
 
 use super::{
 	rpc::{TronRpcApi, TronRpcClient, TronRpcSigningClient},
 	rpc_client_api::{
-		BlockBalance, BlockNumber, TransactionInfo, TriggerSmartContractRequest,
-		TronTransaction, UnsignedTronTransaction, TronTransactionRequest, TronAddress
+		BlockBalance, BlockNumber, TransactionInfo, TriggerSmartContractRequest, TronAddress,
+		TronTransaction, TronTransactionRequest, UnsignedTronTransaction,
 	},
 };
 
@@ -67,8 +68,6 @@ impl<Rpc: TronRpcApi> TronRetryRpcClient<Rpc> {
 	}
 }
 
-
-
 impl TronRetryRpcClient<TronRpcSigningClient> {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
@@ -81,29 +80,33 @@ impl TronRetryRpcClient<TronRpcSigningClient> {
 		let primary_fut = {
 			let http = nodes.primary.http_endpoint.clone();
 			let json = nodes.primary.json_rpc_endpoint.clone();
-			TronRpcSigningClient::new(private_key_file.clone(), http, json, expected_chain_id, chain_name)?
-		};
-		let backup_fut = nodes.backup.as_ref().map(|ep| {
 			TronRpcSigningClient::new(
 				private_key_file.clone(),
-				ep.http_endpoint.clone(),
-				ep.json_rpc_endpoint.clone(),
+				http,
+				json,
 				expected_chain_id,
 				chain_name,
-			)
-		}).transpose()?;
+			)?
+		};
+		let backup_fut = nodes
+			.backup
+			.as_ref()
+			.map(|ep| {
+				TronRpcSigningClient::new(
+					private_key_file.clone(),
+					ep.http_endpoint.clone(),
+					ep.json_rpc_endpoint.clone(),
+					expected_chain_id,
+					chain_name,
+				)
+			})
+			.transpose()?;
 		let primary = primary_fut.await;
 		let backup = match backup_fut {
 			Some(fut) => Some(fut.await),
 			None => None,
 		};
-		Ok(Self::from_inner_clients(
-			scope,
-			primary,
-			backup,
-			chain_name,
-			witness_period,
-		))
+		Ok(Self::from_inner_clients(scope, primary, backup, chain_name, witness_period))
 	}
 }
 
@@ -328,16 +331,30 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 					let transaction = transaction.clone();
 					let signer_address = TronAddress::from_evm_address(client.address());
 					let contract_address = TronAddress::from_evm_address(transaction.contract);
-					Box::pin(async move { client.send_transaction(TronTransactionRequest{
-						owner_address: signer_address,
-						contract_address,
-						 // TODO: Add function selector? Maybe we need to remove the first 4 bytes of the data.
-						function_selector: "".to_string(),
-						parameter: transaction.data,
-						// TODO: This should almost certainly not be an option coming from the SC (unless we do energy estimation here)
-						fee_limit: transaction.fee_limit.unwrap_or(U256::from(100000)).as_u64() as i64,
-						// value is automatically defaulted to zero
-					}).await })
+					Box::pin(async move {
+						client
+							.send_transaction(TronTransactionRequest {
+								owner_address: signer_address,
+								contract_address,
+								function_selector: std::str::from_utf8(
+									&transaction.function_selector,
+								)?
+								.to_string(),
+								parameter: transaction.data,
+								fee_limit: {
+									// This should never happen but just in case. We could consider
+									// using u32 in the SC.
+									if transaction.fee_limit > i64::MAX as u64 {
+										return Err(anyhow::anyhow!(
+											"fee_limit too large to fit in i64"
+										));
+									}
+									transaction.fee_limit as i64
+								},
+								// value is automatically defaulted to zero
+							})
+							.await
+					})
 				}),
 				MAX_BROADCAST_RETRIES,
 			)

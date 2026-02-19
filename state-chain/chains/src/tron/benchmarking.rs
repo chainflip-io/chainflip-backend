@@ -49,7 +49,7 @@ impl BenchmarkValue for Tron {
 impl BenchmarkValue for TronTransactionMetadata {
 	fn benchmark_value() -> Self {
 		use crate::evm::Address;
-		Self { contract: Address::zero(), fee_limit: None }
+		Self { contract: Address::zero(), fee_limit: Default::default() }
 	}
 }
 
@@ -72,11 +72,11 @@ impl BenchmarkValue for TronTransaction {
 	fn benchmark_value() -> Self {
 		use crate::evm::Address;
 		Self {
-			chain_id: super::CHAIN_ID_MAINNET,
-			fee_limit: None,
+			fee_limit: Default::default(),
 			contract: Address::zero(),
 			value: 0u64.into(),
 			data: b"do_something()".to_vec(),
+			function_selector: [0u8; 16].to_vec(),
 		}
 	}
 }

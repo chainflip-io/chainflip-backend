@@ -127,7 +127,7 @@ impl TronTrackedData {
 	}
 
 	/// Calculate the fee for a CCM egress transaction
-	pub fn calculate_ccm_fee(
+	pub fn calcualte_ccm_fee_limit(
 		&self,
 		is_native_asset: bool,
 		gas_budget: GasAmount,
@@ -147,6 +147,16 @@ impl TronTrackedData {
 		energy
 			.saturating_mul(ENERGY_PER_TX_TRX_BURN)
 			.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
+	}
+
+	pub fn calculate_fee_limit(&self) -> <Tron as Chain>::ChainAmount {
+		// TODO: To implement fee limit for normal transactions for the fee_limit. We
+		// probably want to reuse logic from the FeeEstimation api as in CCM. However,
+		// we have to take into account that for normal transactions we might want to charge
+		// only part of the fee (subsidized energy) but we might want to charge fully for CCM.
+		// So maybe we have a lower estimation and then we still set the higher fee limit
+		// so it doesn't fail if there is no energy available?
+		20
 	}
 }
 
@@ -198,11 +208,12 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 					.saturating_mul(ENERGY_PER_TX_TRX_BURN)
 					.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
 			},
-			IngressOrEgress::EgressCcm { gas_budget, message_length } => self.calculate_ccm_fee(
-				asset == assets::tron::Asset::Trx,
-				gas_budget,
-				message_length,
-			),
+			IngressOrEgress::EgressCcm { gas_budget, message_length } => self
+				.calcualte_ccm_fee_limit(
+					asset == assets::tron::Asset::Trx,
+					gas_budget,
+					message_length,
+				),
 		}
 	}
 }
@@ -226,10 +237,7 @@ pub struct TronTransactionMetadata {
 	// pub max_priority_fee_per_gas: Option<Uint>,
 	// pub gas_limit: Option<Uint>,
 	pub contract: Address,
-	// TODO: Fee limit is mandatory when broadcasting the transaction.
-	// Since the engines will need to set one we probably want to make
-	// it mandatory here and in the TronTransaction.
-	pub fee_limit: Option<Uint>,
+	pub fee_limit: u64,
 	// TODO: Depending on how we end up implementing the fee charging, we
 	// might end up with a user paying only part of the egresses costs.
 	// For normal transactions that's fine. For CCM, where the user
@@ -256,13 +264,7 @@ impl<C: Chain<Transaction = TronTransaction, TransactionRef = H256>> Transaction
 	}
 
 	fn verify_metadata(&self, expected_metadata: &Self) -> bool {
-		macro_rules! check_optional {
-			($field:ident) => {
-				(expected_metadata.$field.is_none() || expected_metadata.$field == self.$field)
-			};
-		}
-
-		self.contract == expected_metadata.contract && check_optional!(fee_limit)
+		self.contract == expected_metadata.contract && self.fee_limit == expected_metadata.fee_limit
 	}
 }
 
@@ -303,18 +305,17 @@ pub struct TronTransactionFee {
 }
 
 /// Required information to construct and sign a TRON transaction.
-// TODO: To update/review. We might want to add the function selector as a string here.
-// TODO: Like in the TranscationMetadata we might want to make fee_limit mandatory.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub struct TronTransaction {
-	pub chain_id: u64,
-	pub fee_limit: Option<Uint>,
+	pub fee_limit: u64,
 	pub contract: Address,
 	pub value: Uint,
 	#[serde(with = "hex::serde")]
 	pub data: Vec<u8>,
+	// This is representing a string
+	pub function_selector: Vec<u8>,
 }
 
 impl FeeRefundCalculator<Tron> for TronTransaction {
@@ -331,13 +332,8 @@ impl FeeRefundCalculator<Tron> for TronTransaction {
 		// Calculate total fee paid (energy_fee + net_fee)
 		let fee_paid = (fee_paid.energy_fee.saturating_add(fee_paid.net_fee)) as u128;
 
-		// Limit the refund by fee_limit if it exists
-		if let Some(fee_limit) = self.fee_limit {
-			let fee_limit_u128: u128 = fee_limit.try_into().unwrap_or(u128::MAX);
-			min(fee_paid, fee_limit_u128)
-		} else {
-			fee_paid
-		}
+		let fee_limit_u128: u128 = self.fee_limit.into();
+		min(fee_paid, fee_limit_u128)
 	}
 }
 

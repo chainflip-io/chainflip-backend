@@ -68,7 +68,7 @@ pub async fn trx_ingress_amounts<Client>(
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-	) -> Result<(Vec<(H256, H160, u64)>, Vec<(H256, u64)>), anyhow::Error>
+) -> Result<(Vec<(H256, H160, u64)>, Vec<(H256, u64)>), anyhow::Error>
 where
 	Client: TronRetryRpcApi + Send + Sync + Clone,
 {
@@ -161,7 +161,7 @@ pub async fn ingress_deposit_channels_and_vault_swaps<Client>(
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-	) -> Result<(Vec<(H256, H160, u64)>, Vec<H256>), anyhow::Error>
+) -> Result<(Vec<(H256, H160, u64)>, Vec<H256>), anyhow::Error>
 where
 	Client: TronRetryRpcApi + Send + Sync + Clone,
 {
@@ -283,24 +283,27 @@ mod tests {
 	async fn test_get_tron_trx_ingress_amounts() {
 		task_scope::task_scope(|scope| {
 			async {
-				   let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
-					scope,
-					crate::settings::NodeContainer {
-						primary: TronEndpoints {
-							http_endpoint: SecretUrl::from(
-								"https://docs-demo.tron-mainnet.quiknode.pro/wallet".to_string(),
-							),
-							json_rpc_endpoint: SecretUrl::from(
-								"https://docs-demo.tron-mainnet.quiknode.pro/jsonrpc".to_string(),
-							),
+				let retry_client =
+					TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
+						scope,
+						crate::settings::NodeContainer {
+							primary: TronEndpoints {
+								http_endpoint: SecretUrl::from(
+									"https://docs-demo.tron-mainnet.quiknode.pro/wallet"
+										.to_string(),
+								),
+								json_rpc_endpoint: SecretUrl::from(
+									"https://docs-demo.tron-mainnet.quiknode.pro/jsonrpc"
+										.to_string(),
+								),
+							},
+							backup: None,
 						},
-						backup: None,
-					},
-					728126428, // Mainnet chain ID (0x2b6653dc)
-					1,         // witness_period
-				)
-				.await
-				.unwrap();
+						728126428, // Mainnet chain ID (0x2b6653dc)
+						1,         // witness_period
+					)
+					.await
+					.unwrap();
 
 				// Test block from mainnet
 				let block_num = 80079354i64;
@@ -427,24 +430,25 @@ mod tests {
 	async fn test_ingress_deposit_channels_and_vault_swaps() {
 		task_scope::task_scope(|scope| {
 			async {
-				   let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
-					scope,
-					crate::settings::NodeContainer {
-						primary: TronEndpoints {
-							http_endpoint: SecretUrl::from(
-								"https://nile.trongrid.io/wallet".to_string(),
-							),
-							json_rpc_endpoint: SecretUrl::from(
-								"https://nile.trongrid.io/jsonrpc".to_string(),
-							),
+				let retry_client =
+					TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
+						scope,
+						crate::settings::NodeContainer {
+							primary: TronEndpoints {
+								http_endpoint: SecretUrl::from(
+									"https://nile.trongrid.io/wallet".to_string(),
+								),
+								json_rpc_endpoint: SecretUrl::from(
+									"https://nile.trongrid.io/jsonrpc".to_string(),
+								),
+							},
+							backup: None,
 						},
-						backup: None,
-					},
-					3448148188,
-					1,
-				)
-				.await
-				.unwrap();
+						3448148188,
+						1,
+					)
+					.await
+					.unwrap();
 
 				// Test block - update these values
 				let block_num = 64843264;
