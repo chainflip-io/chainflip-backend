@@ -2,10 +2,7 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		witnessing::{
-			elections::TypesFor,
-			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
-		},
+		witnessing::pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
@@ -19,7 +16,7 @@ use cf_chains::{
 };
 use cf_primitives::BlockWitnesserEvent;
 use cf_traits::{impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook};
-use cf_utilities::{derive_common_traits, hook_impls, impls};
+use cf_utilities::{define_empty_struct, derive_common_traits, hook_impls, impls};
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -71,8 +68,7 @@ pub type EthereumElectoralSystemRunner = CompositeRunner<
 	EthereumElectionHooks,
 >;
 
-pub struct EthereumChainTag;
-pub type EthereumChain = TypesFor<EthereumChainTag>;
+define_empty_struct! { pub struct EthereumChain; }
 impl ChainTypes for EthereumChain {
 	type ChainBlockNumber = <Ethereum as Chain>::ChainBlockNumber;
 	type ChainBlockHash = eth::H256;
@@ -87,11 +83,11 @@ pub enum EthereumElectoralEvents {
 }
 
 // ------------------------ block height tracking ---------------------------
-/// The electoral system for block height tracking
-pub struct EthereumBlockHeightWitnesser;
+// The electoral system for block height tracking
+define_empty_struct! { pub struct EthereumBlockHeightWitnesser; }
 
 impls! {
-	for TypesFor<EthereumBlockHeightWitnesser>:
+	for EthereumBlockHeightWitnesser:
 
 	/// Associating the SM related types to the struct
 	BHWTypes {
@@ -133,12 +129,11 @@ impls! {
 }
 
 /// Generating the state machine-based electoral system
-pub type EthereumBlockHeightWitnesserES =
-	StatemachineElectoralSystem<TypesFor<EthereumBlockHeightWitnesser>>;
+pub type EthereumBlockHeightWitnesserES = StatemachineElectoralSystem<EthereumBlockHeightWitnesser>;
 
 // ------------------------ deposit channel witnessing ---------------------------
 
-impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
+impl BlockWitnesserInstance for EthereumDepositChannelWitnessing {
 	const BWNAME: &'static str = "DepositChannel";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
@@ -175,18 +170,18 @@ impl BlockWitnesserInstance for TypesFor<EthereumDepositChannelWitnessing> {
 	}
 }
 
-/// The electoral system for deposit channel witnessing
-pub struct EthereumDepositChannelWitnessing;
+// The electoral system for deposit channel witnessing
+define_empty_struct! { pub struct EthereumDepositChannelWitnessing; }
 
 /// Generating the state machine-based electoral system
 pub type EthereumDepositChannelWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumDepositChannelWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<EthereumDepositChannelWitnessing>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
-/// The electoral system for vault deposit witnessing
-pub struct EthereumVaultDepositWitnessing;
+// The electoral system for vault deposit witnessing
+define_empty_struct! { pub struct EthereumVaultDepositWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
+impl BlockWitnesserInstance for EthereumVaultDepositWitnessing {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
@@ -213,15 +208,15 @@ impl BlockWitnesserInstance for TypesFor<EthereumVaultDepositWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type EthereumVaultDepositWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumVaultDepositWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<EthereumVaultDepositWitnessing>>;
 
 // ------------------------ State Chain Gateway witnessing ---------------------------
 
-/// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
-/// implemented here and not in `pallet_hooks.rs`.
-pub struct EthereumStateChainGatewayWitnessing;
+// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
+// implemented here and not in `pallet_hooks.rs`.
+define_empty_struct! { pub struct EthereumStateChainGatewayWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<EthereumStateChainGatewayWitnessing> {
+impl BlockWitnesserInstance for EthereumStateChainGatewayWitnessing {
 	const BWNAME: &'static str = "StateChainGateway";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
@@ -269,7 +264,7 @@ derive_common_traits! {
 }
 
 hook_impls! {
-	for TypesFor<EthereumStateChainGatewayWitnessing>:
+	for EthereumStateChainGatewayWitnessing:
 
 	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<StateChainGatewayEvent>, ChainBlockNumberOf<EthereumChain>)) -> () {
 		match event {
@@ -315,14 +310,13 @@ hook_impls! {
 }
 
 /// Generating the state machine-based electoral system
-pub type EthereumStateChainGatewayWitnessingES = StatemachineElectoralSystem<
-	GenericBlockWitnesser<TypesFor<EthereumStateChainGatewayWitnessing>>,
->;
+pub type EthereumStateChainGatewayWitnessingES =
+	StatemachineElectoralSystem<GenericBlockWitnesser<EthereumStateChainGatewayWitnessing>>;
 
 // ------------------------ Key Manager witnessing ---------------------------
-pub struct EthereumKeyManagerWitnessing;
+define_empty_struct! { pub struct EthereumKeyManagerWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<EthereumKeyManagerWitnessing> {
+impl BlockWitnesserInstance for EthereumKeyManagerWitnessing {
 	const BWNAME: &'static str = "KeyManager";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
@@ -349,14 +343,14 @@ impl BlockWitnesserInstance for TypesFor<EthereumKeyManagerWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type EthereumKeyManagerWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumKeyManagerWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<EthereumKeyManagerWitnessing>>;
 
 // ------------------------ SC Utils witnessing ---------------------------
-/// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
-/// implemented here and not in `pallet_hooks.rs`.
-pub struct EthereumScUtilsWitnessing;
+// This BW instance is special and only exists for ethereum. Thus the ExecutionTarget hook is
+// implemented here and not in `pallet_hooks.rs`.
+define_empty_struct! { pub struct EthereumScUtilsWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<EthereumScUtilsWitnessing> {
+impl BlockWitnesserInstance for EthereumScUtilsWitnessing {
 	const BWNAME: &'static str = "ScUtils";
 	type Runtime = Runtime;
 	type Chain = EthereumChain;
@@ -394,7 +388,7 @@ derive_common_traits! {
 }
 
 hook_impls! {
-	for TypesFor<EthereumScUtilsWitnessing>:
+	for EthereumScUtilsWitnessing:
 
 	fn(&mut self, (event, _block_height): (BlockWitnesserEvent<ScUtilsCall>, ChainBlockNumberOf<EthereumChain>)) -> () {
 		match event {
@@ -422,7 +416,7 @@ hook_impls! {
 
 /// Generating the state machine-based electoral system
 pub type EthereumScUtilsWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<EthereumScUtilsWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<EthereumScUtilsWitnessing>>;
 
 // ------------------------ liveness ---------------------------
 pub type EthereumLiveness = Liveness<
@@ -667,7 +661,7 @@ impl_pallet_safe_mode! {
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
-		<TypesFor<EthereumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
+		<EthereumDepositChannelWitnessing as BlockWitnesserInstance>::ElectionProperties,
 	),
 	Vaults(()),
 	StateChainGateway(()),
