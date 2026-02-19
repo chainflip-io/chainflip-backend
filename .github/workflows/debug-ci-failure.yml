@@ -18,9 +18,7 @@ on:
         type: string
 
 permissions:
-  contents: write
   actions: read
-  pull-requests: write
 
 jobs:
   debug:
@@ -62,9 +60,7 @@ jobs:
 
           DUMP_FILE=$(find /tmp/debug/indexer-dump -type f | head -1)
           echo "Loading dump from: $DUMP_FILE"
-          # Strip the \restrict directive that the CI dump includes
-          grep -v '\\restrict' "$DUMP_FILE" | \
-            psql -h localhost -U postgres -d indexer 2>&1 | tail -5
+          psql -h localhost -U postgres -d indexer < "$DUMP_FILE" 2>&1 | tail -5
 
           echo "=== Database loaded. Top event types: ==="
           psql -h localhost -U postgres -d indexer \
@@ -73,7 +69,7 @@ jobs:
       - name: Run Claude Code debugger
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
           prompt: |
             You are debugging a CI test failure for the chainflip-backend project.
 
@@ -129,7 +125,19 @@ jobs:
 
             Be concise. Focus on evidence, not speculation.
 
-            ## Reference: swap lifecycle events
+            ## Reference
+
+            ### Addresses and Hash formats
+
+            The same data might be stored or displayed in different ways in different sources. In some cases, conversion
+            might be necessary to accurately trace data flow through the system. For example:
+            - Logs might contain an EVM address with an all-lowercase hex string, while the same address appears 
+            in the database in mixed upper-lower-case format.
+            - For bitcoin, addresses might be in the standard format of bitcoin addresses (BECH32 etc.) or in the 
+            internal state-chain representation. 
+            - Bitcoin transactions might be referenced in reversed byte order in some logs or DB fields.
+
+            ### Swap lifecycle events
 
             If the failure involves a swap, you can trace its lifecycle through these events
             in the indexer database (linked by `swapRequestId` in the args JSON):
@@ -147,12 +155,6 @@ jobs:
             ## After diagnosis: capture learnings
 
             If this debugging session reveals a failure pattern that is NOT already documented
-            in the "Reference" sections above, open a PR against this workflow file
-            (`.github/workflows/debug-ci-failure.yml`) to add the new pattern. This helps
-            future debugging runs identify the same issue faster.
-
-            The PR should:
-            - Add the new pattern to the appropriate reference section (or create a new one)
-            - Include a concise description and what to look for in the data
-            - Reference the run ID where this pattern was first observed
-            - Use branch name `debug/learnings-<short-description>`
+            in the "Reference" sections above, include a "Suggested learnings" section in your
+            output with the proposed additions to this workflow file's reference sections.
+            Format it as a ready-to-apply diff so a human can easily turn it into a PR.
