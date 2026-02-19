@@ -4,9 +4,9 @@
 macro_rules! derive_common_traits {
 	($($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
+			Debug, Clone, PartialEq, Eq, codec::Encode, codec::Decode,
 		)]
-		#[derive(Deserialize, Serialize)]
+		#[derive(serde::Deserialize, serde::Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
 		$($Definition)*
 	};
@@ -22,9 +22,9 @@ macro_rules! derive_common_traits_no_bounds {
 		#[derive_where::derive_where(
 			Debug, Clone, PartialEq, Eq;
 		)]
-		#[derive(Encode, Decode)]
+		#[derive(codec::Encode, codec::Decode)]
 		#[codec(encode_bound())]
-		#[derive(Deserialize, Serialize)]
+		#[derive(serde::Deserialize, serde::Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
 		$($Definition)*
 	};
@@ -72,7 +72,6 @@ macro_rules! define_empty_struct {
 	( [$name:ident $(: $path:path)? >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name $(:$path)?, >; ] $($rest)* }};
 	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
-
 	// the main branch
 	(
 		[>;]
@@ -81,7 +80,7 @@ macro_rules! define_empty_struct {
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::derive_common_traits!{
-			#[derive(TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
 			$vis struct $struct_name<$($names_and_bounds)*>
 			(
@@ -100,6 +99,17 @@ macro_rules! define_empty_struct {
 			}
 		}
 	};
+	// This is a special case handling structs without type parameters
+	(
+		$vis:vis struct $struct_name:ident;
+	) => {
+		cf_utilities::derive_common_traits!{
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(PartialOrd, Ord)]
+			$vis struct $struct_name {}
+		}
+	};
+	// This is the entry point for structs with type parameters
 	(
 		$vis:vis struct $struct_name:ident<$($rest:tt)*
 	) => {
