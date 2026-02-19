@@ -18,7 +18,7 @@ use cf_chains::{
 use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{Chainflip, Hook};
-use cf_utilities::{cargo_fmt_ignore, derive_common_traits, impls};
+use cf_utilities::{cargo_fmt_ignore, define_empty_struct, derive_common_traits, impls};
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
@@ -57,8 +57,6 @@ use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
 
-use super::elections::TypesFor;
-
 pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	(
 		BitcoinBlockHeightWitnesserES,
@@ -74,8 +72,7 @@ pub type BitcoinElectoralSystemRunner = CompositeRunner<
 	BitcoinElectionHooks,
 >;
 
-pub struct BitcoinChainTag;
-pub type BitcoinChain = TypesFor<BitcoinChainTag>;
+define_empty_struct! { pub struct BitcoinChain; }
 impl ChainTypes for BitcoinChain {
 	type ChainBlockNumber = btc::BlockNumber;
 	type ChainBlockHash = btc::Hash;
@@ -87,11 +84,11 @@ pub enum BitcoinElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<btc::BlockNumber> },
 }
 // ------------------------ block height tracking ---------------------------
-/// The electoral system for block height tracking
-pub struct BitcoinBlockHeightWitnesser;
+// The electoral system for block height tracking
+define_empty_struct! { pub struct BitcoinBlockHeightWitnesser; }
 
 impls! {
-	for TypesFor<BitcoinBlockHeightWitnesser>:
+	for BitcoinBlockHeightWitnesser:
 
 	/// Associating the SM related types to the struct
 	BHWTypes {
@@ -133,13 +130,12 @@ impls! {
 }
 
 /// Generating the state machine-based electoral system
-pub type BitcoinBlockHeightWitnesserES =
-	StatemachineElectoralSystem<TypesFor<BitcoinBlockHeightWitnesser>>;
+pub type BitcoinBlockHeightWitnesserES = StatemachineElectoralSystem<BitcoinBlockHeightWitnesser>;
 
 // ------------------------ deposit channel witnessing ---------------------------
-/// The electoral system for deposit channel witnessing
-pub struct BitcoinDepositChannelWitnessing;
-impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
+// The electoral system for deposit channel witnessing
+define_empty_struct! { pub struct BitcoinDepositChannelWitnessing; }
+impl BlockWitnesserInstance for BitcoinDepositChannelWitnessing {
 	const BWNAME: &'static str = "DepositChannel";
 	type Runtime = Runtime;
 	type Chain = BitcoinChain;
@@ -225,13 +221,13 @@ impl BlockWitnesserInstance for TypesFor<BitcoinDepositChannelWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinDepositChannelWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<BitcoinDepositChannelWitnessing>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
-/// The electoral system for vault deposit witnessing
-pub struct BitcoinVaultDepositWitnessing;
+// The electoral system for vault deposit witnessing
+define_empty_struct! { pub struct BitcoinVaultDepositWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
+impl BlockWitnesserInstance for BitcoinVaultDepositWitnessing {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = BitcoinChain;
@@ -271,13 +267,13 @@ impl BlockWitnesserInstance for TypesFor<BitcoinVaultDepositWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinVaultDepositWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<BitcoinVaultDepositWitnessing>>;
 
 // ------------------------ egress witnessing ---------------------------
-/// The electoral system for egress witnessing
-pub struct BitcoinEgressWitnessing;
+// The electoral system for egress witnessing
+define_empty_struct! { pub struct BitcoinEgressWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
+impl BlockWitnesserInstance for BitcoinEgressWitnessing {
 	const BWNAME: &'static str = "Egress";
 	type Runtime = Runtime;
 	type Chain = BitcoinChain;
@@ -308,7 +304,7 @@ impl BlockWitnesserInstance for TypesFor<BitcoinEgressWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type BitcoinEgressWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<BitcoinEgressWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<BitcoinEgressWitnessing>>;
 
 // ------------------------ liveness ---------------------------
 pub type BitcoinLiveness = Liveness<
@@ -512,9 +508,11 @@ pub struct BitcoinElectoralSystemConfiguration;
 
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
 pub enum ElectionTypes {
-	DepositChannels(<GenericBlockWitnesser<TypesFor<BitcoinDepositChannelWitnessing>> as BWTypes>::ElectionProperties),
-	Vaults(<GenericBlockWitnesser<TypesFor<BitcoinVaultDepositWitnessing>> as BWTypes>::ElectionProperties),
-	Egresses(<GenericBlockWitnesser<TypesFor<BitcoinEgressWitnessing>> as BWTypes>::ElectionProperties),
+	DepositChannels(
+		<GenericBlockWitnesser<BitcoinDepositChannelWitnessing> as BWTypes>::ElectionProperties,
+	),
+	Vaults(<GenericBlockWitnesser<BitcoinVaultDepositWitnessing> as BWTypes>::ElectionProperties),
+	Egresses(<GenericBlockWitnesser<BitcoinEgressWitnessing> as BWTypes>::ElectionProperties),
 }
 
 impl pallet_cf_elections::ElectoralSystemConfiguration for BitcoinElectoralSystemConfiguration {
