@@ -19,16 +19,16 @@ use super::{
 		chain_source::ChainClient,
 		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	},
-	contract_common::{events_at_block_deprecated, Event},
+	contract_common::events_at_block_deprecated,
 };
-use crate::evm::retry_rpc::EvmRetryRpcApi;
+use crate::evm::{event::Event, retry_rpc::EvmRetryRpcApi};
 use anyhow::{anyhow, Result};
 use codec::Decode;
 use ethers::types::Bloom;
 use futures_core::Future;
 use itertools::Itertools;
 use sp_core::{Get, H256};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
@@ -50,7 +50,7 @@ abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json")
 
 pub fn decode_cf_parameters<RefundAddress, CcmData>(
 	cf_parameters: &[u8],
-	block_height: u64,
+	block_query: impl Debug,
 ) -> Result<(VaultSwapParametersV1<RefundAddress>, CcmData)>
 where
 	RefundAddress: Decode,
@@ -59,7 +59,7 @@ where
 	cf_chains::cf_parameters::decode_cf_parameters(cf_parameters)
 		.inspect_err(|_| {
 			tracing::warn!(
-				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_height}"
+				"Failed to decode cf_parameters: {cf_parameters:?} at block {block_query:?}"
 			)
 		})
 		.map_err(|e| anyhow!(e))
@@ -396,7 +396,7 @@ pub fn handle_vault_events<
 >(
 	supported_assets: &HashMap<H160, <T::TargetChain as Chain>::ChainAsset>,
 	events: Vec<Event<VaultEvents>>,
-	block_height: u64,
+	block_query: &impl Debug,
 ) -> Result<Vec<EvmVaultContractEvent<T, I>>> {
 	let mut result = Vec::new();
 
@@ -405,7 +405,7 @@ pub fn handle_vault_events<
 			supported_assets,
 			event.event_parameters,
 			event.tx_hash,
-			block_height,
+			block_query,
 		)? {
 			result.push(mapped);
 		}
@@ -425,7 +425,7 @@ fn handle_vault_event<
 	supported_assets: &HashMap<H160, <T::TargetChain as Chain>::ChainAsset>,
 	event: VaultEvents,
 	tx_hash: H256,
-	block_height: u64,
+	block_query: &impl Debug,
 ) -> Result<Option<EvmVaultContractEvent<T, I>>> {
 	Ok(Some(match event {
 		VaultEvents::SwapNativeFilter(SwapNativeFilter {
@@ -437,7 +437,7 @@ fn handle_vault_event<
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
+				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
 			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<T::TargetChain as Chain>::GAS_ASSET,
@@ -459,7 +459,7 @@ fn handle_vault_event<
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
+				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
 			let asset = supported_assets
 				.get(&src_token)
@@ -486,7 +486,7 @@ fn handle_vault_event<
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
+				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
 			EvmVaultContractEvent::VaultDeposit(Box::new(vault_deposit_witness!(
 				<T::TargetChain as Chain>::GAS_ASSET,
@@ -523,7 +523,7 @@ fn handle_vault_event<
 			cf_parameters,
 		}) => {
 			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
+				decode_cf_parameters(&cf_parameters[..], block_query)?;
 
 			let asset = supported_assets
 				.get(&src_token)

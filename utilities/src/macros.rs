@@ -114,6 +114,8 @@ macro_rules! define_empty_struct {
 pub use define_empty_struct;
 
 /// Syntax sugar for implementing multiple traits for a single type.
+/// All attributes (e.g. `#[doc]`, `#[async_trait::async_trait]`, etc.) placed
+/// before a trait block are forwarded to the generated `impl` item.
 ///
 /// Example use:
 ///
@@ -125,17 +127,18 @@ pub use define_empty_struct;
 ///     Copy {
 ///         ...
 ///     }
-///     Default {
+///     #[async_trait::async_trait]
+///     SomeAsyncTrait {
 ///         ...
 ///     }
 /// }
 pub macro impls {
 	// trait implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
+	$(#[$meta:meta])* $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
-        $(#[doc = $doc_text])?
+        $(#[$meta])*
         impl$(<$($bounds)*>)? $($trait for)? $name
 		$(where $($trait_bounds)*)?
 		{
@@ -148,6 +151,8 @@ pub macro impls {
 }
 
 /// Syntax sugar for implementing multiple hooks for a single type.
+/// All attributes placed before a hook block are forwarded to the generated
+/// `impl` item.
 ///
 /// Example use:
 ///
@@ -167,11 +172,11 @@ pub macro impls {
 pub macro hook_impls {
 	// hook implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? fn(&mut $self:ident, $args:tt: $input_ty:ty) -> $output_ty:ty
+	$(#[$meta:meta])* fn(&mut $self:ident, $args:tt: $input_ty:ty) -> $output_ty:ty
 	$(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
-        $(#[doc = $doc_text])?
+        $(#[$meta])*
         impl$(<$($bounds)*>)? cf_traits::Hook<($input_ty, $output_ty)> for $name
 		$(where $($trait_bounds)*)?
 		{
