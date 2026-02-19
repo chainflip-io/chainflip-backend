@@ -16,13 +16,14 @@ anyhow = { workspace = true, optional = true }
 async-broadcast = { workspace = true, optional = true }
 async-channel = { workspace = true, optional = true }
 bs58 = { workspace = true }
+codec = { workspace = true, features = ["derive"] }
 clap = { workspace = true, features = ["derive"], optional = true }
 futures = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 lazy_format = { workspace = true }
-lazy_static = { workspace = true }
+lazy_static = { workspace = true, optional = true }
 log = { workspace = true }
 mockall = { workspace = true, optional = true }
 num-traits = { workspace = true, optional = true }
@@ -31,16 +32,16 @@ predicates = { workspace = true, optional = true }
 prometheus = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
-scopeguard = { workspace = true }
-serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
+scopeguard = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true, optional = false }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
 tracing = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true, features = [
-	"json",
-	"env-filter",
+  "json",
+  "env-filter",
 ] }
 url = { workspace = true, optional = true }
 warp = { workspace = true, optional = true }
@@ -56,31 +57,33 @@ reqwest = { workspace = true, features = ["rustls-tls"] }
 
 [features]
 std = [
-	"dep:anyhow",
-	"dep:async-broadcast",
-	"dep:predicates",
-	"dep:mockall",
-	"dep:futures",
-	"dep:futures-util",
-	"dep:tokio",
-	"hex/std",
-	"dep:async-channel",
-	"itertools/use_std",
-	"dep:pin-project",
-	"dep:prometheus",
-	"dep:serde",
-	"serde?/std",
-	"dep:scale-info",
-	"dep:scale-json",
-	"dep:thiserror",
-	"dep:tracing",
-	"dep:tracing-subscriber",
-	"dep:warp",
-	"sp-core/std",
-	"dep:num-traits",
-	"dep:regex",
-	"dep:url",
-	"dep:clap",
+  "codec/std",
+  "dep:anyhow",
+  "dep:async-broadcast",
+  "dep:predicates",
+  "dep:lazy_static",
+  "dep:mockall",
+  "dep:futures",
+  "dep:futures-util",
+  "dep:scopeguard",
+  "dep:tokio",
+  "hex/std",
+  "dep:async-channel",
+  "itertools/use_std",
+  "dep:pin-project",
+  "dep:prometheus",
+  "serde/std",
+  "dep:scale-info",
+  "dep:scale-json",
+  "dep:thiserror",
+  "dep:tracing",
+  "dep:tracing-subscriber",
+  "dep:warp",
+  "sp-core/std",
+  "dep:num-traits",
+  "dep:regex",
+  "dep:url",
+  "dep:clap",
 ]
 default = ["std"]
 test-utils = ["dep:tempfile", "dep:tracing", "dep:tracing-subscriber"]

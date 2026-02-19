@@ -36,7 +36,7 @@ mod swapping;
 mod trading_strategy;
 mod witnessing;
 
-use cf_chains::eth::Address as EthereumAddress;
+use cf_chains::evm::Address as EvmAddress;
 use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
 use cf_traits::EpochInfo;
 use frame_support::{
@@ -55,8 +55,8 @@ use state_chain_runtime::{
 };
 
 type NodeId = AccountId32;
-const ETH_DUMMY_ADDR: EthereumAddress = EthereumAddress::repeat_byte(42u8);
-const ETH_ZERO_ADDRESS: EthereumAddress = EthereumAddress::repeat_byte(0xff);
+const ETH_DUMMY_ADDR: EvmAddress = EvmAddress::repeat_byte(42u8);
+const ETH_ZERO_ADDRESS: EvmAddress = EvmAddress::repeat_byte(0xff);
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
 pub const GENESIS_KEY_SEED: u64 = 42;

@@ -53,7 +53,19 @@ impl frame_system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct MockSetAggKeyWithAggKey {
 	old_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
 	new_key: <<MockEthereum as Chain>::ChainCrypto as ChainCrypto>::AggKey,
@@ -129,7 +141,17 @@ parameter_types! {
 	pub const KeygenResponseGracePeriod: u64 = 25;
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub enum MockRuntimeSafeMode {
 	CodeRed,
 	CodeGreen,
@@ -166,10 +188,9 @@ impl ChainflipWithTargetChain<()> for Test {
 }
 
 impl pallet_cf_vaults::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type WeightInfo = ();
-	type Broadcaster = MockBroadcaster<(MockSetAggKeyWithAggKey, RuntimeCall)>;
+	type Broadcaster = MockBroadcaster<MockSetAggKeyWithAggKey>;
 	type SafeMode = MockRuntimeSafeMode;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type CfeMultisigRequest = MockCfeInterface;

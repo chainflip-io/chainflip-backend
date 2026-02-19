@@ -1,6 +1,6 @@
-use codec::EncodeLike;
 pub use codec::{Decode, Encode};
 pub use enum_iterator::Sequence;
+use frame_support::Parameter;
 pub use scale_info::TypeInfo;
 pub use serde::{Deserialize, Serialize};
 pub use sp_std::fmt::Debug;
@@ -22,8 +22,7 @@ where <Self as Arbitrary>::Strategy: Clone + Sync + Send;
 #[cfg(not(test))]
 pub trait MaybeArbitrary = core::any::Any;
 
-pub trait CommonTraits =
-	Debug + Clone + Encode + EncodeLike + Decode + Serde + Eq + TypeInfo + 'static + Send + Sync;
+pub trait CommonTraits = Parameter + Serde + 'static + Send + Sync;
 
 //-------- derive macros ----------
 #[cfg(test)]

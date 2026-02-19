@@ -106,7 +106,7 @@ where
 										} else {
 											Some(core_h256(raw_evm_header.parent_hash))
 										},
-										data: raw_evm_header.logs_bloom,
+										data: Bloom(raw_evm_header.logs_bloom.0),
 									})
 								}) {
 								if state.evm_header_sequence.back().is_some_and(

@@ -1,12 +1,17 @@
+pub mod __external {
+	pub use codec;
+	pub use serde::{Deserialize, Serialize};
+}
+
 /// Adds #[derive] statements for commonly used traits. These are currently: Debug, Clone,
 /// PartialEq, Eq, Encode, Decode, Serialize, Deserialize
 #[macro_export]
 macro_rules! derive_common_traits {
 	($($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
+			Debug, Clone, PartialEq, Eq, $crate::__external::codec::Encode, $crate::__external::codec::Decode, $crate::__external::codec::DecodeWithMemTracking,
 		)]
-		#[derive(Deserialize, Serialize)]
+		#[derive($crate::__external::Deserialize, $crate::__external::Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
 		$($Definition)*
 	};
@@ -22,9 +27,9 @@ macro_rules! derive_common_traits_no_bounds {
 		#[derive_where::derive_where(
 			Debug, Clone, PartialEq, Eq;
 		)]
-		#[derive(Encode, Decode)]
+		#[derive($crate::__external::codec::Encode, $crate::__external::codec::Decode, $crate::__external::codec::DecodeWithMemTracking)]
 		#[codec(encode_bound())]
-		#[derive(Deserialize, Serialize)]
+		#[derive($crate::__external::Deserialize, $crate::__external::Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
 		$($Definition)*
 	};

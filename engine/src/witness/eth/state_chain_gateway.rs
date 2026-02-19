@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use ethers::prelude::abigen;
+use ethers::prelude::*;
 
 abigen!(
 	StateChainGateway,

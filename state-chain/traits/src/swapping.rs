@@ -24,24 +24,35 @@ use cf_chains::{
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiaries, BlockNumber, DcaParameters, SwapRequestId,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use crate::lending::LoanId;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum SwapType {
 	Swap,
 	NetworkFee,
 	IngressEgressFee,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum LendingSwapType<AccountId> {
 	Liquidation { borrower_id: AccountId, loan_id: LoanId },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapOutputActionGeneric<Address, AccountId> {
 	Egress {
 		ccm_deposit_metadata: Option<CcmDepositMetadata<Address, DecodedCcmAdditionalData>>,
@@ -114,7 +125,7 @@ impl<AccountId> SwapRequestType<AccountId> {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapRequestTypeGeneric<Address, AccountId> {
 	NetworkFee,
 	IngressEgressFee,
@@ -126,7 +137,7 @@ pub type SwapRequestType<AccountId> = SwapRequestTypeGeneric<ForeignChainAddress
 pub type SwapRequestTypeEncoded<AccountId> = SwapRequestTypeGeneric<EncodedAddress, AccountId>;
 
 #[expect(clippy::large_enum_variant)]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(AccountId))]
 pub enum ExpiryBehaviour<AccountId> {
 	NoExpiry,
@@ -137,7 +148,7 @@ pub enum ExpiryBehaviour<AccountId> {
 	},
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(AccountId))]
 pub struct PriceLimitsAndExpiry<AccountId> {
 	pub expiry_behaviour: ExpiryBehaviour<AccountId>,

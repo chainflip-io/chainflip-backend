@@ -23,6 +23,7 @@ use generic_typeinfo_derive::GenericTypeInfo;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
@@ -48,6 +49,11 @@ pub trait ChannelLifecycleHooks: Sized {
 	/// Returns true if fetches can be made from the channel in the current state.
 	fn can_fetch(&self) -> bool {
 		true
+	}
+
+	/// Returns true if a fetch success callback is required to advance channel state.
+	fn fetch_completion_action_required(&self) -> bool {
+		false
 	}
 
 	/// Called when a fetch is scheduled for broadcast. Should return true if self was mutated.

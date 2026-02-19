@@ -27,14 +27,13 @@ use codec::Decode;
 use ethers::types::Bloom;
 use futures_core::Future;
 use itertools::Itertools;
-use sp_core::{Get, H256};
+use sp_core::Get;
 use std::collections::HashMap;
 
 use cf_chains::{
 	address::{EncodedAddress, IntoForeignChainAddress},
 	cf_parameters::VaultSwapParametersV1,
-	eth::Address as EthereumAddress,
-	evm::{DepositDetails, EvmChain},
+	evm::{Address as EvmAddress, DepositDetails, EvmChain, H256},
 	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
 	ForeignChainAddress,
 };
@@ -66,7 +65,7 @@ where
 }
 
 pub fn call_from_event<
-	C: cf_chains::Chain<ChainAccount = EthereumAddress, ChainBlockNumber = u64>,
+	C: cf_chains::Chain<ChainAccount = EvmAddress, ChainBlockNumber = u64>,
 	CallBuilder: IngressCallBuilder<Chain = C>,
 >(
 	block_height: u64,
@@ -74,10 +73,10 @@ pub fn call_from_event<
 	// can be different for different EVM chains
 	native_asset: Asset,
 	source_chain: ForeignChain,
-	supported_assets: &HashMap<EthereumAddress, Asset>,
+	supported_assets: &HashMap<EvmAddress, Asset>,
 ) -> Result<Option<RuntimeCall>>
 where
-	EthereumAddress: IntoForeignChainAddress<C>,
+	EvmAddress: IntoForeignChainAddress<C>,
 {
 	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
 		EncodedAddress::from_chain_bytes(chain, bytes)
@@ -241,7 +240,7 @@ where
 				.try_into()
 				.expect("Asset translated from EthereumAddress must be supported by the chain."),
 			amount: try_into_primitive(amount)?,
-			destination_address: recipient,
+			destination_address: recipient.0.into(),
 		})),
 		_ => None,
 	})
@@ -276,7 +275,7 @@ macro_rules! vault_deposit_witness {
 pub(crate) use vault_deposit_witness;
 
 pub trait IngressCallBuilder {
-	type Chain: cf_chains::Chain<ChainAccount = EthereumAddress>;
+	type Chain: cf_chains::Chain<ChainAccount = EvmAddress>;
 
 	fn vault_swap_request(
 		block_height: <Self::Chain as cf_chains::Chain>::ChainBlockNumber,
@@ -308,19 +307,19 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
-		contract_address: EthereumAddress,
+		contract_address: EvmAddress,
 		native_asset: Asset,
 		source_chain: ForeignChain,
-		supported_assets: HashMap<EthereumAddress, Asset>,
+		supported_assets: HashMap<EvmAddress, Asset>,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain: cf_chains::Chain<
 			ChainAmount = u128,
 			DepositDetails = DepositDetails,
-			ChainAccount = EthereumAddress,
+			ChainAccount = EvmAddress,
 		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		EthereumAddress: IntoForeignChainAddress<Inner::Chain>,
+		EvmAddress: IntoForeignChainAddress<Inner::Chain>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 			+ Send
 			+ Sync

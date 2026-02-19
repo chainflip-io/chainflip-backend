@@ -1,4 +1,4 @@
 import { z } from 'zod';
-import { frameSupportDispatchDispatchInfo } from '../common';
+import { frameSystemDispatchEventInfo } from '../common';
 
-export const systemExtrinsicSuccess = z.object({ dispatchInfo: frameSupportDispatchDispatchInfo });
+export const systemExtrinsicSuccess = z.object({ dispatchInfo: frameSystemDispatchEventInfo });

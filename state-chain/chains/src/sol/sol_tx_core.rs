@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,18 @@ pub use sol_prim::*;
 pub mod rpc_types {
 	use super::*;
 
-	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+	#[derive(
+		Debug,
+		PartialEq,
+		Eq,
+		Clone,
+		Serialize,
+		Deserialize,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+	)]
 	pub struct SolInstructionRpc {
 		pub program_id: SolAddress,
 		pub accounts: Vec<SolAccountMetaRpc>,
@@ -56,7 +67,18 @@ pub mod rpc_types {
 		}
 	}
 
-	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo)]
+	#[derive(
+		Debug,
+		PartialEq,
+		Eq,
+		Clone,
+		Serialize,
+		Deserialize,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+	)]
 	pub struct SolAccountMetaRpc {
 		pub address: SolAddress,
 		pub is_signer: bool,
@@ -77,6 +99,7 @@ pub mod rpc_types {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -103,7 +126,18 @@ impl From<CcmAddress> for AccountMeta {
 }
 
 #[derive(
-	Encode, Decode, TypeInfo, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
 )]
 pub struct CcmAccounts {
 	pub cf_receiver: CcmAddress,

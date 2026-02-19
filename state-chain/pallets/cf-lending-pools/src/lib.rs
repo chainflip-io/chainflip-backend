@@ -58,8 +58,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, LpRegistration, PoolApi, PriceFeedApi, SafeModeSet,
-	SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, LpRegistration, PoolApi,
+	PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
 };
 use frame_support::{
 	fail,
@@ -91,7 +91,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BoostConfiguration {
 	/// The fraction of the network fee that is deducted from the boost fee.
 	pub network_fee_deduction_from_boost_percent: Percent,
@@ -99,7 +99,18 @@ pub struct BoostConfiguration {
 	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
 }
 
-#[derive(Serialize, Deserialize, Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+)]
 pub struct PalletSafeMode {
 	pub add_boost_funds_enabled: bool,
 	pub stop_boosting_enabled: bool,
@@ -145,7 +156,7 @@ impl cf_traits::SafeMode for PalletSafeMode {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum PalletConfigUpdate {
 	SetBoostConfig {
 		config: BoostConfiguration,
@@ -190,13 +201,15 @@ define_wrapper_type!(CorePoolId, u32);
 const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per extrinsic
 
 // Rename this to LoanPurpose?
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialOrd, Ord,
+)]
 pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
 /// Indicates how the action of adding collateral was triggered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum CollateralAddedActionType {
 	/// Triggered manually by the user. Collateral is taken from the user's free balance.
 	Manual,
@@ -209,7 +222,7 @@ pub enum CollateralAddedActionType {
 }
 
 /// Indicates how the action of repaying a loan was triggered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum LoanRepaidActionType {
 	/// Triggered manually by the user. Loan is repaid from the user's free balance.
 	Manual,
@@ -296,9 +309,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 
@@ -564,6 +574,8 @@ pub mod pallet {
 		AccountNotWhitelisted,
 		/// Liquidations are currently disabled due to safe mode.
 		LiquidationsDisabled,
+		/// LP still has funds present in the lending pool
+		LendingFundsRemaining,
 	}
 
 	#[pallet::hooks]
@@ -1063,5 +1075,25 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<(), Error<T>>(())
 		})?)
+	}
+}
+
+pub struct PoolsDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for PoolsDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		for (_, lending_pool) in GeneralLendingPools::<T>::iter() {
+			ensure!(
+				!lending_pool.lender_shares.contains_key(account_id),
+				Error::<T>::LendingFundsRemaining
+			);
+		}
+
+		ensure!(!LoanAccounts::<T>::contains_key(account_id), Error::<T>::LendingFundsRemaining);
+
+		Ok(())
 	}
 }

@@ -19,7 +19,7 @@ pub use cf_amm::common::{PoolPairsMap, Side};
 use cf_amm::math::Price;
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount, OrderId, Tick};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,7 @@ use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,

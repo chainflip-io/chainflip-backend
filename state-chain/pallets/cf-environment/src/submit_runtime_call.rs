@@ -41,23 +41,68 @@ pub const DOMAIN_OFFCHAIN_PREFIX: &str = "chainflip offchain";
 
 pub type BatchedCalls<T> = BoundedVec<<T as Config>::RuntimeCall, ConstU32<MAX_BATCHED_CALLS>>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, Serialize, Deserialize, TypeInfo)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Serialize,
+	Deserialize,
+	TypeInfo,
+)]
 pub struct TransactionMetadata {
 	pub nonce: u32,
 	pub expiry_block: BlockNumber,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum EthEncodingType {
 	PersonalSign,
 	Eip712,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum SolEncodingType {
 	Domain,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
 pub enum SignatureData {
 	Solana { signature: SolSignature, signer: SolAddress, sig_type: SolEncodingType },
 	Ethereum { signature: EthereumSignature, signer: EvmAddress, sig_type: EthEncodingType },
@@ -122,7 +167,7 @@ pub(crate) fn batch_all<T: Config>(
 	Ok(Some(base_weight.saturating_add(weight)).into())
 }
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug, Clone, PartialEq)]
 pub struct ChainflipExtrinsic<C> {
 	pub call: C,
 	pub transaction_metadata: TransactionMetadata,
@@ -137,7 +182,7 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 		(Weight::zero(), DispatchClass::Operational),
 		|(total_weight, dispatch_class): (Weight, DispatchClass), di| {
 			(
-				total_weight.saturating_add(di.weight),
+				total_weight.saturating_add(di.call_weight),
 				// If not all are `Operational`, we want to use `DispatchClass::Normal`.
 				if di.class == DispatchClass::Normal { di.class } else { dispatch_class },
 			)

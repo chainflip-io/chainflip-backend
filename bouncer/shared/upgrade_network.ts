@@ -272,13 +272,12 @@ async function incompatibleUpgradeNoBuild(
 
   await sleep(20000);
 
-  logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
-
   // clear api caches (this seems to be required starting for node.js version >= 22.0)
   clearChainflipApiCache();
   clearSubscribeHeadsCache();
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
+  logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
   await submitGovernanceExtrinsic((api) =>
     api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,

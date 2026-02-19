@@ -14,11 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use ethers::prelude::*;
-
 use anyhow::{Ok, Result};
 
 use super::{EvmRpcClient, EvmRpcSigningClient};
+use ethers::prelude::*;
 
 abigen!(AddressChecker, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IAddressChecker.json");
 

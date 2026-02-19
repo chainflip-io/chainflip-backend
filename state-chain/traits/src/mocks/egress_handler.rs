@@ -20,8 +20,8 @@ use cf_chains::{
 	ccm_checker::DecodedCcmAdditionalData, CcmDepositMetadataChecked, CcmMessage, Chain,
 	ForeignChainAddress,
 };
-use cf_primitives::{AssetAmount, EgressCounter, GasAmount};
-use codec::{Decode, Encode};
+use cf_primitives::{AssetAmount, EgressCounter};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError,
@@ -35,7 +35,7 @@ impl<C> MockPallet for MockEgressHandler<C> {
 	const PREFIX: &'static [u8] = b"MockEgressHandler";
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum MockEgressParameter<C: Chain> {
 	Swap {
 		asset: C::ChainAsset,
@@ -49,7 +49,7 @@ pub enum MockEgressParameter<C: Chain> {
 		destination_address: C::ChainAccount,
 		message: CcmMessage,
 		ccm_additional_data: DecodedCcmAdditionalData,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 	},
 }
 

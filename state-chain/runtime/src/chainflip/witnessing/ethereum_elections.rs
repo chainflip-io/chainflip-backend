@@ -12,14 +12,13 @@ use crate::{
 	AccountId, EthereumChainTracking, EthereumIngressEgress, Runtime,
 };
 use cf_chains::{
-	eth::{self, EthereumTrackedData},
-	instances::EthereumInstance,
-	witness_period::SaturatingStep,
+	eth::EthereumTrackedData, evm, instances::EthereumInstance, witness_period::SaturatingStep,
 	Chain, DepositChannel, Ethereum,
 };
 use cf_primitives::BlockWitnesserEvent;
 use cf_traits::{impl_pallet_safe_mode, Chainflip, FundAccount, FundingSource, Hook};
 use cf_utilities::{derive_common_traits, hook_impls, impls};
+use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -50,7 +49,6 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;
@@ -60,11 +58,11 @@ pub type EthereumElectoralSystemRunner = CompositeRunner<
 		EthereumBlockHeightWitnesserES,
 		EthereumDepositChannelWitnessingES,
 		EthereumVaultDepositWitnessingES,
-		EthereumStateChainGatewayWitnessingES,
 		EthereumKeyManagerWitnessingES,
-		EthereumScUtilsWitnessingES,
 		EthereumFeeTracking,
 		EthereumLiveness,
+		EthereumStateChainGatewayWitnessingES,
+		EthereumScUtilsWitnessingES,
 	),
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -76,13 +74,13 @@ pub struct EthereumChainTag;
 pub type EthereumChain = TypesFor<EthereumChainTag>;
 impl ChainTypes for EthereumChain {
 	type ChainBlockNumber = <Ethereum as Chain>::ChainBlockNumber;
-	type ChainBlockHash = eth::H256;
+	type ChainBlockHash = evm::H256;
 	const NAME: &'static str = "Ethereum";
 }
 
 pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum EthereumElectoralEvents {
 	ReorgDetected { reorged_blocks: RangeInclusive<<Ethereum as Chain>::ChainBlockNumber> },
 }
@@ -253,7 +251,7 @@ derive_common_traits! {
 		Funded {
 			account_id: AccountId,
 			amount: FlipBalance<Runtime>,
-			funder: eth::Address,
+			funder: evm::Address,
 			tx_hash: EthTransactionHash,
 		},
 		RedemptionExecuted {
@@ -428,7 +426,7 @@ pub type EthereumScUtilsWitnessingES =
 // ------------------------ liveness ---------------------------
 pub type EthereumLiveness = Liveness<
 	<Ethereum as Chain>::ChainBlockNumber,
-	eth::H256,
+	evm::H256,
 	ReportFailedLivenessCheck<Ethereum>,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -463,15 +461,15 @@ impl
 		EthereumBlockHeightWitnesserES,
 		EthereumDepositChannelWitnessingES,
 		EthereumVaultDepositWitnessingES,
-		EthereumStateChainGatewayWitnessingES,
 		EthereumKeyManagerWitnessingES,
-		EthereumScUtilsWitnessingES,
 		EthereumFeeTracking,
 		EthereumLiveness,
+		EthereumStateChainGatewayWitnessingES,
+		EthereumScUtilsWitnessingES,
 	> for EthereumElectionHooks
 {
 	fn on_finalize(
-		(block_height_witnesser_identifiers, deposit_channel_witnessing_identifiers, vault_deposits_identifiers, state_chain_gateway_identifiers, key_manager_identifiers, sc_utils_identifiers, fee_identifiers, liveness_identifiers): (
+		(block_height_witnesser_identifiers, deposit_channel_witnessing_identifiers, vault_deposits_identifiers, key_manager_identifiers, fee_identifiers, liveness_identifiers, state_chain_gateway_identifiers, sc_utils_identifiers): (
 			Vec<
 				ElectionIdentifier<
 					<EthereumBlockHeightWitnesserES as ElectoralSystemTypes>::ElectionIdentifierExtra,
@@ -489,17 +487,7 @@ impl
 			>,
 			Vec<
 				ElectionIdentifier<
-					<EthereumStateChainGatewayWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
-				>,
-			>,
-			Vec<
-				ElectionIdentifier<
 					<EthereumKeyManagerWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
-				>,
-			>,
-			Vec<
-				ElectionIdentifier<
-					<EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 			Vec<
@@ -510,6 +498,16 @@ impl
 			Vec<
 				ElectionIdentifier<
 					<EthereumFeeTracking as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<EthereumStateChainGatewayWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
+				>,
+			>,
+			Vec<
+				ElectionIdentifier<
+					<EthereumScUtilsWitnessingES as ElectoralSystemTypes>::ElectionIdentifierExtra,
 				>,
 			>,
 		),
@@ -540,14 +538,6 @@ impl
 			>,
 		>(vault_deposits_identifiers, &chain_progress.clone())?;
 
-		EthereumStateChainGatewayWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumStateChainGatewayWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(state_chain_gateway_identifiers, &chain_progress.clone())?;
-
 		EthereumKeyManagerWitnessingES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -555,14 +545,6 @@ impl
 				RunnerStorageAccess<Runtime, EthereumInstance>,
 			>,
 		>(key_manager_identifiers, &chain_progress.clone())?;
-
-		EthereumScUtilsWitnessingES::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				EthereumScUtilsWitnessingES,
-				RunnerStorageAccess<Runtime, EthereumInstance>,
-			>,
-		>(sc_utils_identifiers, &chain_progress.clone())?;
 
 		EthereumFeeTracking::on_finalize::<
 			DerivedElectoralAccess<
@@ -591,6 +573,22 @@ impl
 				crate::Validator::current_epoch(),
 			),
 		)?;
+
+		EthereumStateChainGatewayWitnessingES::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				EthereumStateChainGatewayWitnessingES,
+				RunnerStorageAccess<Runtime, EthereumInstance>,
+			>,
+		>(state_chain_gateway_identifiers, &chain_progress.clone())?;
+
+		EthereumScUtilsWitnessingES::on_finalize::<
+			DerivedElectoralAccess<
+				_,
+				EthereumScUtilsWitnessingES,
+				RunnerStorageAccess<Runtime, EthereumInstance>,
+			>,
+		>(sc_utils_identifiers, &chain_progress.clone())?;
 
 		Ok(())
 	}
@@ -628,30 +626,30 @@ pub fn initial_state() -> InitialStateOf<Runtime, EthereumInstance> {
 				safety_margin: 2,
 				safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 			},
-			BlockWitnesserSettings {
-				max_ongoing_elections: 15,
-				max_optimistic_elections: 1,
-				safety_margin: 2,
-				safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
-			},
-			BlockWitnesserSettings {
-				max_ongoing_elections: 15,
-				max_optimistic_elections: 1,
-				safety_margin: 2,
-				safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
-			},
 			Default::default(),
 			(),
+			BlockWitnesserSettings {
+				max_ongoing_elections: 15,
+				max_optimistic_elections: 1,
+				safety_margin: 2,
+				safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
+			},
+			BlockWitnesserSettings {
+				max_ongoing_elections: 15,
+				max_optimistic_elections: 1,
+				safety_margin: 2,
+				safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
+			},
 		),
 		settings: (
 			Default::default(),
 			Default::default(),
 			Default::default(),
 			Default::default(),
-			Default::default(),
-			Default::default(),
 			(FEE_HISTORY_WINDOW, PRIORITY_FEE_PERCENTILE),
 			LIVENESS_CHECK_DURATION,
+			Default::default(),
+			Default::default(),
 		),
 		shared_data_reference_lifetime: 8,
 	}
@@ -665,7 +663,7 @@ impl_pallet_safe_mode! {
 	sc_utils_witnessing
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
 		<TypesFor<EthereumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
@@ -718,7 +716,7 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 					) {
 					log::error!("{e:?}: Failed to create vault witnessing governance election with properties for block {block_height}");
 				},
-			ElectionTypes::StateChainGateway(_) =>
+			ElectionTypes::KeyManager(_) =>
 				if let Err(e) =
 					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _, _, _)| {
@@ -731,14 +729,14 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 							Ok(())
 						},
 					) {
-					log::error!("{e:?}: Failed to create state chain gateway witnessing governance election with properties for block {block_height}");
+					log::error!("{e:?}: Failed to create key manager witnessing governance election with properties for block {block_height}");
 				},
-			ElectionTypes::KeyManager(_) =>
+			ElectionTypes::StateChainGateway(_) =>
 				if let Err(e) =
 					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _, _, _)| {
 							state
-								.4
+								.6
 								.elections
 								.ongoing
 								.entry(block_height)
@@ -746,14 +744,14 @@ impl pallet_cf_elections::ElectoralSystemConfiguration for ElectoralSystemConfig
 							Ok(())
 						},
 					) {
-					log::error!("{e:?}: Failed to create key manager witnessing governance election with properties for block {block_height}");
+					log::error!("{e:?}: Failed to create state chain gateway witnessing governance election with properties for block {block_height}");
 				},
 			ElectionTypes::ScUtils(_) =>
 				if let Err(e) =
 					RunnerStorageAccess::<Runtime, EthereumInstance>::mutate_unsynchronised_state(
 						|state: &mut (_, _, _, _, _, _, _, _)| {
 							state
-								.5
+								.7
 								.elections
 								.ongoing
 								.entry(block_height)

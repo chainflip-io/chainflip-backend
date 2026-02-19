@@ -55,7 +55,7 @@ use self::{
 	sol::retry_rpc::SolRetryRpcClient,
 };
 use anyhow::Context;
-use cf_chains::Chain;
+use cf_chains::{evm::U256, Chain};
 use cf_primitives::AccountRole;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -250,7 +250,7 @@ async fn run_main(
 
 			// Create all the clients
 			let eth_client = {
-				let expected_eth_chain_id = web3::types::U256::from(
+				let expected_eth_chain_id = U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,
@@ -273,7 +273,7 @@ async fn run_main(
 				)
 			};
 			let arb_client = {
-				let expected_arb_chain_id = web3::types::U256::from(
+				let expected_arb_chain_id = U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,

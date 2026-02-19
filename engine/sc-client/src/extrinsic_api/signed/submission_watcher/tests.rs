@@ -53,7 +53,7 @@ async fn should_update_version_on_bad_proof() {
 					impl_version: 0,
 					apis: vec![].into(),
 					transaction_version: 0,
-					state_version: 0,
+					system_version: 0,
 				};
 				assert_ne!(
 				new_runtime_version,

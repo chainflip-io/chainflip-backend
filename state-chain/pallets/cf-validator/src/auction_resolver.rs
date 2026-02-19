@@ -21,7 +21,17 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
 )]
 pub struct SetSizeMaximisingAuctionResolver {
 	current_size: u32,
@@ -37,6 +47,7 @@ pub struct SetSizeMaximisingAuctionResolver {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	Serialize,
@@ -48,7 +59,18 @@ pub struct SetSizeParameters {
 	pub max_expansion: u32,
 }
 
-#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum AuctionError {
 	/// Parameters must make sense ie. min <= max. And zero is not a valid size.
 	InvalidParameters,
@@ -59,7 +81,18 @@ pub enum AuctionError {
 }
 
 /// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, Serialize, Deserialize)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	RuntimeDebug,
+	Serialize,
+	Deserialize,
+)]
 pub struct AuctionOutcome<Id, Amount> {
 	/// The auction winners, sorted by descending bid.
 	pub winners: Vec<Id>,

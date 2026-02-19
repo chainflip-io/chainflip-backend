@@ -17,8 +17,8 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{Chain, ChainCrypto, Ethereum, ForeignChain, SetGovKeyWithAggKeyError};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_waived_fees, mocks::fee_payment::MockFeePayment,
-	BroadcastAnyChainGovKey, CommKeyBroadcaster, WaivedFees,
+	impl_mock_chainflip, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
+	CommKeyBroadcaster,
 };
 use codec::{Decode, Encode};
 use frame_support::{derive_impl, parameter_types, traits::HandleLifetime};
@@ -54,9 +54,6 @@ impl_mock_chainflip!(Test);
 parameter_types! {
 	pub const BlocksPerDay: u64 = 14400;
 }
-
-// Implement mock for RestrictionHandler
-impl_mock_waived_fees!(AccountId, RuntimeCall);
 
 pub struct MockBroadcaster;
 
@@ -123,7 +120,6 @@ impl CommKeyBroadcaster for MockBroadcaster {
 }
 
 impl pallet_cf_tokenholder_governance::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = MockFeePayment<Self>;
 	type CommKeyBroadcaster = MockBroadcaster;
 	type AnyChainGovKeyBroadcaster = MockBroadcaster;

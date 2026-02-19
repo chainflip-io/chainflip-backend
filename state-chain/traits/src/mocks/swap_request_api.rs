@@ -22,7 +22,7 @@ use crate::{
 };
 use cf_chains::{Chain, SwapOrigin};
 use cf_primitives::{Asset, AssetAmount, Beneficiaries, DcaParameters, SwapRequestId};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 
 use crate::mocks::MockPalletStorage;
@@ -32,7 +32,7 @@ use super::MockPallet;
 /// Simple mock that applies 1:1 swap ratio to all pairs.
 pub struct MockSwapRequestHandler<T>(sp_std::marker::PhantomData<T>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct MockSwapRequest {
 	pub input_asset: Asset,
 	pub output_asset: Asset,

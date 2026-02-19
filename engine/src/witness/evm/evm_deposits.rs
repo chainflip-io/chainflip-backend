@@ -14,38 +14,39 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+	super::common::chunked_chain_source::chunked_by_vault::{
+		builder::ChunkedByVaultBuilder, ChunkedByVault,
+	},
+	contract_common::events_at_block_deprecated,
+	vault::FetchedNativeFilter,
+};
 use crate::{
-	evm::retry_rpc::address_checker::*,
-	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+	evm::{
+		retry_rpc::{address_checker::*, EvmRetryRpcApi},
+		rpc::address_checker::*,
+	},
+	witness::{
+		common::{
+			chain_source::Header,
+			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
+			RuntimeCallHasChain, RuntimeHasChain,
+		},
+		evm::vault::VaultEvents,
+	},
 };
 use anyhow::ensure;
-use cf_chains::{instances::ChainInstanceFor, Chain};
+use cf_chains::{
+	evm::{DepositDetails, H256},
+	instances::ChainInstanceFor,
+	Chain,
+};
 use cf_primitives::EpochIndex;
-use ethers::types::Bloom;
+use ethers::{abi::Address as EvmAddress, prelude::*, types::Bloom};
 use futures_core::Future;
-use sp_core::H256;
 
-use crate::witness::{
-	common::chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-	evm::vault::VaultEvents,
-};
-
-use std::collections::{BTreeMap, HashMap};
-
-use cf_chains::evm::DepositDetails;
-use ethers::prelude::*;
 use itertools::Itertools;
-use sp_core::U256;
-
-use crate::evm::rpc::address_checker::*;
-
-use super::{contract_common::events_at_block_deprecated, vault::FetchedNativeFilter};
-use crate::witness::common::chain_source::Header;
-
-use super::super::common::chunked_chain_source::chunked_by_vault::{
-	builder::ChunkedByVaultBuilder, ChunkedByVault,
-};
-use crate::evm::retry_rpc::EvmRetryRpcApi;
+use std::collections::{BTreeMap, HashMap};
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	/// We track Ethereum deposits by checking the balance via our own deployed AddressChecker
@@ -61,14 +62,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		process_call: ProcessCall,
 		eth_rpc: EvmRetryRpcClient,
 		native_asset: <Inner::Chain as cf_chains::Chain>::ChainAsset,
-		address_checker_address: H160,
-		vault_address: H160,
+		address_checker_address: EvmAddress,
+		vault_address: EvmAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner::Chain: cf_chains::Chain<
 			ChainAmount = u128,
 			DepositDetails = DepositDetails,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 		>,
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = (Bloom, Addresses<Inner>)>,
 		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
@@ -140,7 +141,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 										.into_iter()
 										.map(|(to_addr, value, tx_hashes)| {
 											pallet_cf_ingress_egress::DepositWitness {
-												deposit_address: to_addr,
+												deposit_address: H160(to_addr.0),
 												asset: native_asset,
 												amount:
 													value
@@ -346,8 +347,6 @@ mod tests {
 	use cf_utilities::task_scope;
 	use ethers::prelude::U256;
 	use futures_util::FutureExt;
-
-	use super::super::vault::VaultEvents;
 
 	#[test]
 	fn block_empty_lists() {

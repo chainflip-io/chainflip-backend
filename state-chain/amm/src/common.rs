@@ -16,7 +16,7 @@
 
 use cf_amm_math::*;
 use cf_primitives::{Asset, AssetAmount, OrderId};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
@@ -49,6 +49,7 @@ pub enum SetFeesError {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Deserialize,
@@ -81,7 +82,19 @@ impl core::ops::Not for Side {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Debug,
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	MaxEncodedLen,
+	TypeInfo,
+)]
 pub enum Pairs {
 	Base,
 	Quote,
@@ -118,6 +131,7 @@ impl Pairs {
 	Hash,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,

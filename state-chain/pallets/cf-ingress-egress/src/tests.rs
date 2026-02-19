@@ -18,8 +18,8 @@ mod boost;
 mod screening;
 
 use crate::{
-	mocks::*, BoostDelayBlocks, BoostStatus, Call as PalletCall, ChannelAction, ChannelIdCounter,
-	ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
+	mocks::*, BoostDelayBlocks, BoostStatus, BroadcastAction, BroadcastActions, ChannelAction,
+	ChannelIdCounter, ChannelOpeningFee, CrossChainMessage, DepositAction, DepositChannelLifetime,
 	DepositChannelLookup, DepositChannelPool, DepositFailedDetails, DepositFailedReason,
 	DepositOrigin, DepositWitness, DisabledEgressAssets, EgressDustLimit, Event,
 	Event as PalletEvent, FailedForeignChainCall, FailedForeignChainCalls, FailedRejections,
@@ -33,8 +33,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	assets::{any::Asset, eth::Asset as EthAsset},
 	btc::{BitcoinNetwork, ScriptPubkey},
-	eth::Address as EthereumAddress,
-	evm::{DepositDetails, EvmFetchId, H256},
+	evm::{Address as EthereumAddress, DepositDetails, EvmFetchId, Hash as EvmHash},
 	mocks::MockEthereum,
 	AccountOrAddress, CcmChannelMetadata, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 	CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain, ChannelRefundParametersForChain,
@@ -64,8 +63,8 @@ use cf_traits::{
 		swap_parameter_validation::MockSwapParameterValidation,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
-	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, DepositApi, EgressApi,
-	EpochInfo,
+	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BalanceApi, BroadcastOutcomeHandler,
+	DepositApi, EgressApi, EpochInfo,
 	ExpiryBehaviour::RefundIfExpires,
 	FetchesTransfersLimitProvider, FundingInfo, GetBlockHeight, PriceLimitsAndExpiry, SafeMode,
 	ScheduledEgressDetails, SwapOutputAction, SwapRequestType, INITIAL_FLIP_FUNDING,
@@ -78,6 +77,7 @@ use cf_utilities::assert_matches;
 use cf_chains::address::AddressDerivationApi;
 use cf_primitives::chains::assets::btc;
 use cf_traits::mocks::account_role_registry::MockAccountRoleRegistry;
+use codec::DecodeWithMemTracking;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	instances::{Instance1, Instance2},
@@ -496,7 +496,7 @@ fn addresses_are_getting_reused() {
 		.then_execute_at_next_block(|(channels, broadcast_ids)| {
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
-				MockEgressBroadcasterEth::dispatch_success_callback(id);
+				EthereumIngressEgress::on_broadcast_success(id, Default::default());
 			}
 			channels
 		})
@@ -531,17 +531,19 @@ fn addresses_are_getting_reused() {
 #[test]
 fn proof_address_pool_integrity() {
 	new_test_ext().execute_with(|| {
-		let channel_details = (0..3)
-			.map(|id| request_address_and_deposit(id, EthAsset::Eth))
-			.collect::<Vec<_>>();
+		for id in 0..3 {
+			request_address_and_deposit(id, EthAsset::Eth);
+		}
 		// All addresses in use
 		expect_size_of_address_pool(0);
 		EthereumIngressEgress::on_finalize(1);
-		for (_id, address) in channel_details {
-			assert_ok!(EthereumIngressEgress::finalise_ingress(
-				RuntimeOrigin::root(),
-				vec![address]
-			));
+		// Simulate broadcast success for all pending broadcasts.
+		// on_finalize stored BroadcastActions for the batch broadcast(s).
+		let broadcast_ids = BroadcastActions::<Test, Instance1>::iter()
+			.map(|(broadcast_id, _)| broadcast_id)
+			.collect::<Vec<_>>();
+		for broadcast_id in broadcast_ids {
+			EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		}
 		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
 		set_eth_processed_up_to(recycle_block);
@@ -559,15 +561,16 @@ fn proof_address_pool_integrity() {
 #[test]
 fn create_new_address_while_pool_is_empty() {
 	new_test_ext().execute_with(|| {
-		let channel_details = (0..2)
-			.map(|id| request_address_and_deposit(id, EthAsset::Eth))
-			.collect::<Vec<_>>();
+		for id in 0..2 {
+			request_address_and_deposit(id, EthAsset::Eth);
+		}
 		EthereumIngressEgress::on_finalize(1);
-		for (_id, address) in channel_details {
-			assert_ok!(EthereumIngressEgress::finalise_ingress(
-				RuntimeOrigin::root(),
-				vec![address]
-			));
+		// Simulate broadcast success for all pending broadcasts.
+		let broadcast_ids = BroadcastActions::<Test, Instance1>::iter()
+			.map(|(broadcast_id, _)| broadcast_id)
+			.collect::<Vec<_>>();
+		for broadcast_id in broadcast_ids {
+			EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		}
 		let recycle_block = EthereumIngressEgress::expiry_and_recycle_block_height().2;
 		set_eth_processed_up_to(recycle_block);
@@ -871,10 +874,10 @@ fn multi_use_deposit_same_block() {
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcasterEth::get_success_pending_callbacks();
 			assert!(scheduled_fetches.len() == 1);
 			assert!(pending_api_calls.len() == 1);
-			assert!(pending_callbacks.len() == 1);
+			// Verify BroadcastActions has an entry for the broadcast
+			assert!(BroadcastActions::<Test, Instance1>::get(1).is_some());
 			assert!(
 				matches!(
 					scheduled_fetches.last().unwrap(),
@@ -900,13 +903,15 @@ fn multi_use_deposit_same_block() {
 				"Expected one AllBatch apicall to be scheduled for address deployment, got {:?}.",
 				pending_api_calls
 			);
-			assert_matches!(
-				pending_callbacks.last().unwrap(),
-				RuntimeCall::EthereumIngressEgress(PalletCall::finalise_ingress { .. })
-			);
 		})
 		.then_execute_at_next_block(|ctx| {
-			MockEgressBroadcasterEth::dispatch_all_success_callbacks();
+			// Simulate broadcast success for all broadcasts that have an ingress action pending.
+			let broadcast_ids = BroadcastActions::<Test, Instance1>::iter()
+				.map(|(broadcast_id, _)| broadcast_id)
+				.collect::<Vec<_>>();
+			for broadcast_id in broadcast_ids {
+				EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
+			}
 			ctx
 		})
 		.then_execute_with_keep_context(|(_, _, deposit_address)| {
@@ -919,10 +924,12 @@ fn multi_use_deposit_same_block() {
 			));
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
 			let pending_api_calls = MockEgressBroadcasterEth::get_pending_api_calls();
-			let pending_callbacks = MockEgressBroadcasterEth::get_success_pending_callbacks();
 			assert!(scheduled_fetches.is_empty());
 			assert!(pending_api_calls.len() == 2);
-			assert!(pending_callbacks.len() == 1);
+			assert!(
+				BroadcastActions::<Test, Instance1>::iter().next().is_none(),
+				"Expected no finalise-ingress action for fetches that don't require completion"
+			);
 			assert!(
 				matches!(
 					&pending_api_calls[1],
@@ -1110,11 +1117,12 @@ fn handle_pending_deployment() {
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::decode_len().unwrap_or_default(),
 			1
 		);
-		// Now finalize the first fetch and deploy the address with that.
-		assert_ok!(EthereumIngressEgress::finalise_ingress(
-			RuntimeOrigin::root(),
-			vec![deposit_address]
-		));
+		// Now finalize the first fetch by simulating broadcast success.
+		let broadcast_id = BroadcastActions::<Test, Instance1>::iter()
+			.next()
+			.map(|(broadcast_id, _)| broadcast_id)
+			.expect("expected one pending broadcast action");
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::decode_len().unwrap_or_default(),
 			1
@@ -1166,11 +1174,12 @@ fn handle_pending_deployment_same_block() {
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::decode_len().unwrap_or_default(),
 			1
 		);
-		// Simulate the finalization of the first fetch request.
-		assert_ok!(EthereumIngressEgress::finalise_ingress(
-			RuntimeOrigin::root(),
-			vec![deposit_address]
-		));
+		// Simulate the finalization of the first fetch request by triggering broadcast success.
+		let broadcast_id = BroadcastActions::<Test, Instance1>::iter()
+			.next()
+			.map(|(broadcast_id, _)| broadcast_id)
+			.expect("expected one pending broadcast action");
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
 		// Process deposit (again).
 		EthereumIngressEgress::on_finalize(3);
 		// All fetch requests should be processed.
@@ -1193,8 +1202,13 @@ fn channel_reuse_with_different_assets() {
 		)])
 		.map_context(|mut result| result.pop().unwrap())
 		.then_execute_at_next_block(|ctx| {
-			// Dispatch callbacks to finalise the ingress.
-			MockEgressBroadcasterEth::dispatch_all_success_callbacks();
+			// Simulate broadcast success for all broadcasts that have an ingress action pending.
+			let broadcast_ids = BroadcastActions::<Test, Instance1>::iter()
+				.map(|(broadcast_id, _)| broadcast_id)
+				.collect::<Vec<_>>();
+			for broadcast_id in broadcast_ids {
+				EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
+			}
 			ctx
 		})
 		.then_execute_with_keep_context(|(request, _, address)| {
@@ -1395,28 +1409,95 @@ fn all_can_be_recycled() {
 }
 
 #[test]
+fn finalise_fetch_action_is_preserved_on_abort() {
+	new_test_ext().execute_with(|| {
+		let (_, deposit_address) = request_address_and_deposit(ALICE, EthAsset::Eth);
+		EthereumIngressEgress::on_finalize(1);
+
+		let (broadcast_id, action) = BroadcastActions::<Test, Instance1>::iter()
+			.next()
+			.expect("expected a pending broadcast action");
+		assert_eq!(action, BroadcastAction::FinaliseFetch(vec![deposit_address]));
+		assert_eq!(
+			DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+				.unwrap()
+				.deposit_channel
+				.state,
+			cf_chains::evm::DeploymentStatus::Pending
+		);
+
+		// Aborts can be followed by a late success witness. Keep the action until success.
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+		assert_eq!(
+			BroadcastActions::<Test, Instance1>::get(broadcast_id),
+			Some(BroadcastAction::FinaliseFetch(vec![deposit_address]))
+		);
+		assert_eq!(
+			DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+				.unwrap()
+				.deposit_channel
+				.state,
+			cf_chains::evm::DeploymentStatus::Pending
+		);
+
+		EthereumIngressEgress::on_broadcast_success(broadcast_id, 42);
+		assert!(BroadcastActions::<Test, Instance1>::get(broadcast_id).is_none());
+		assert_eq!(
+			DepositChannelLookup::<Test, Instance1>::get(deposit_address)
+				.unwrap()
+				.deposit_channel
+				.state,
+			cf_chains::evm::DeploymentStatus::Deployed { at_block_height: 42 }
+		);
+	});
+}
+
+#[test]
 fn failed_ccm_is_stored() {
 	new_test_ext().execute_with(|| {
 		let epoch = MockEpochInfo::epoch_index();
 		let broadcast_id = 1;
 		assert_eq!(FailedForeignChainCalls::<Test, Instance1>::get(epoch), vec![]);
 
-		assert_noop!(
-			EthereumIngressEgress::ccm_broadcast_failed(RuntimeOrigin::signed(ALICE), broadcast_id,),
-			sp_runtime::DispatchError::BadOrigin
-		);
-		assert_ok!(EthereumIngressEgress::ccm_broadcast_failed(
-			RuntimeOrigin::root(),
-			broadcast_id,
-		));
+		// Store a CcmBroadcast action and simulate broadcast abort.
+		BroadcastActions::<Test, Instance1>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
 
 		assert_eq!(
 			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
 			vec![FailedForeignChainCall { broadcast_id, original_epoch: epoch }]
 		);
+		assert_eq!(
+			BroadcastActions::<Test, Instance1>::get(broadcast_id),
+			Some(BroadcastAction::CcmBroadcast)
+		);
 		System::assert_last_event(RuntimeEvent::EthereumIngressEgress(Event::CcmBroadcastFailed {
 			broadcast_id,
 		}));
+	});
+}
+
+#[test]
+fn failed_ccm_is_recorded_on_repeated_aborts() {
+	new_test_ext().execute_with(|| {
+		let epoch = MockEpochInfo::epoch_index();
+		let broadcast_id = 9;
+		BroadcastActions::<Test, Instance1>::insert(broadcast_id, BroadcastAction::CcmBroadcast);
+
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+		EthereumIngressEgress::on_broadcast_aborted(broadcast_id);
+
+		assert_eq!(
+			BroadcastActions::<Test, Instance1>::get(broadcast_id),
+			Some(BroadcastAction::CcmBroadcast)
+		);
+		assert_eq!(
+			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
+			vec![
+				FailedForeignChainCall { broadcast_id, original_epoch: epoch },
+				FailedForeignChainCall { broadcast_id, original_epoch: epoch }
+			]
+		);
 	});
 }
 
@@ -1435,8 +1516,11 @@ fn on_finalize_handles_failed_calls() {
 			1_000_000,
 			destination_address
 		));
-		assert_ok!(EthereumIngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 12,));
-		assert_ok!(EthereumIngressEgress::ccm_broadcast_failed(RuntimeOrigin::root(), 13,));
+		// Simulate CCM broadcast aborts via the BroadcastOutcomeHandler.
+		BroadcastActions::<Test, Instance1>::insert(12, BroadcastAction::CcmBroadcast);
+		EthereumIngressEgress::on_broadcast_aborted(12);
+		BroadcastActions::<Test, Instance1>::insert(13, BroadcastAction::CcmBroadcast);
+		EthereumIngressEgress::on_broadcast_aborted(13);
 
 		assert_eq!(
 			FailedForeignChainCalls::<Test, Instance1>::get(epoch),
@@ -2315,7 +2399,7 @@ fn submit_vault_swap_request(
 	deposit_address: H160,
 	destination_address: EncodedAddress,
 	deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
-	tx_id: H256,
+	tx_id: EvmHash,
 	deposit_details: DepositDetails,
 	broker_fee: Beneficiary<u64>,
 	affiliate_fees: Affiliates<AffiliateShortId>,
@@ -2386,7 +2470,7 @@ fn can_request_swap_via_extrinsic() {
 					},
 					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 					origin: SwapOrigin::Vault {
-						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					remaining_input_amount: INPUT_AMOUNT,
@@ -2463,7 +2547,7 @@ fn vault_swaps_support_affiliate_fees() {
 						Beneficiary { account: AFFILIATE_1, bps: AFFILIATE_FEE }
 					],
 					origin: SwapOrigin::Vault {
-						tx_id: cf_chains::TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: cf_chains::TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					remaining_input_amount: INPUT_AMOUNT,
@@ -2572,7 +2656,7 @@ fn can_request_ccm_swap_via_extrinsic() {
 					},
 					broker_fees: bounded_vec![Beneficiary { account: BROKER, bps: 0 }],
 					origin: SwapOrigin::Vault {
-						tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
+						tx_id: TransactionInIdForAnyChain::Evm(EvmHash::default()),
 						broker_id: Some(BROKER),
 					},
 					accumulated_output_amount: 0,
@@ -2836,7 +2920,7 @@ fn ignore_change_of_minimum_deposit_if_deposit_is_boosted() {
 		},
 		boost_fee: 5,
 		channel_id: None,
-		origin: DepositOrigin::Vault { tx_id: H256::default(), broker_id: Some(BROKER) },
+		origin: DepositOrigin::Vault { tx_id: EvmHash::default(), broker_id: Some(BROKER) },
 	};
 
 	let full_witness = |boost_status| {
@@ -2953,7 +3037,7 @@ mod evm_transaction_rejection {
 		TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
-		assets::eth::Asset as EthAsset, evm::H256, ChannelLifecycleHooks,
+		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
 		DepositDetailsToTransactionInId, Ethereum, FetchForRejection,
 	};
 	use cf_traits::{
@@ -2968,11 +3052,11 @@ mod evm_transaction_rejection {
 	fn deposit_with_multiple_txs() {
 		new_test_ext().execute_with(|| {
 			let tx_ids = vec![
-				H256::from_str(
+				EvmHash::from_str(
 					"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 				)
 				.unwrap(),
-				H256::from_str(
+				EvmHash::from_str(
 					"0x3214567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 				)
 				.unwrap(),
@@ -3045,7 +3129,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn deposit_with_single_tx() {
 		new_test_ext().execute_with(|| {
-			let tx_id = H256::from_str(
+			let tx_id = EvmHash::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			)
 			.unwrap();
@@ -3137,7 +3221,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
 		new_test_ext().execute_with(|| {
-			let tx_id = H256::from_str(
+			let tx_id = EvmHash::from_str(
 				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			)
 			.unwrap();
@@ -3200,10 +3284,10 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn whitelisted_broker_can_reject_two_concurrent_swap_deposits() {
-		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xaa);
-		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xbb);
-		const COMMINGLED_TX_ID: H256 = H256::repeat_byte(0xcc);
-		const CLEAN_TX_ID: H256 = H256::repeat_byte(0xdd);
+		const TAINTED_TX_ID_1: EvmHash = EvmHash::repeat_byte(0xaa);
+		const TAINTED_TX_ID_2: EvmHash = EvmHash::repeat_byte(0xbb);
+		const COMMINGLED_TX_ID: EvmHash = EvmHash::repeat_byte(0xcc);
+		const CLEAN_TX_ID: EvmHash = EvmHash::repeat_byte(0xdd);
 
 		new_test_ext()
 			.request_deposit_addresses::<Instance1>(&[DepositRequest::SimpleSwap {
@@ -3274,9 +3358,11 @@ mod evm_transaction_rejection {
 			.then_process_blocks(1)
 			.then_execute_with(|(deposits, broadcast_ids)| {
 				assert_eq!(broadcast_ids.len(), 1, "Expected 1 broadcast id");
-				let _ = MockEgressBroadcasterEth::get_success_pending_callbacks()
-					.pop()
-					.expect("Expected a callback");
+				// Verify that a BroadcastAction was stored for the broadcast.
+				assert!(
+					BroadcastActions::<Test, Instance1>::get(broadcast_ids[0]).is_some(),
+					"Expected a BroadcastAction for the broadcast"
+				);
 
 				MockEgressBroadcasterEth::get_pending_api_calls()
 					.into_iter()
@@ -3347,12 +3433,12 @@ mod evm_transaction_rejection {
 				));
 				deposits
 			})
-			// Simulate success -> apply success callbacks
-			.then_apply_extrinsics(|_| {
-				MockEgressBroadcasterEth::get_success_pending_callbacks()
-					.iter()
-					.map(|call| (OriginTrait::root(), call.clone(), Ok(())))
-					.collect::<Vec<_>>()
+			// Simulate success -> trigger broadcast success for all pending broadcasts.
+			.then_execute_at_next_block(|ctx| {
+				for (broadcast_id, _) in BroadcastActions::<Test, Instance1>::iter() {
+					EthereumIngressEgress::on_broadcast_success(broadcast_id, Default::default());
+				}
+				ctx
 			})
 			.then_process_blocks(1)
 			.then_execute_with_keep_context(|_| {
@@ -3382,7 +3468,7 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn mark_after_prewitness_has_no_effect() {
-		const TAINTED_TX_ID: H256 = H256::repeat_byte(0xab);
+		const TAINTED_TX_ID: EvmHash = EvmHash::repeat_byte(0xab);
 		const DEPOSIT_AMOUNT: AssetAmount = 1_000_000;
 
 		new_test_ext()
@@ -3494,8 +3580,8 @@ mod evm_transaction_rejection {
 
 	#[test]
 	fn boosted_transaction_can_be_rejected_by_whitelisted_broker_or_owner() {
-		const TAINTED_TX_ID_1: H256 = H256::repeat_byte(0xab);
-		const TAINTED_TX_ID_2: H256 = H256::repeat_byte(0xcd);
+		const TAINTED_TX_ID_1: EvmHash = EvmHash::repeat_byte(0xab);
+		const TAINTED_TX_ID_2: EvmHash = EvmHash::repeat_byte(0xcd);
 
 		new_test_ext()
 			// Add boost liquidity
@@ -3596,7 +3682,7 @@ mod evm_transaction_rejection {
 	#[test]
 	fn rejecting_vault_swap() {
 		let tx_id =
-			H256::from_str("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
+			EvmHash::from_str("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")
 				.unwrap();
 
 		new_test_ext()
@@ -3713,7 +3799,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: None,
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
@@ -3740,7 +3826,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
@@ -3767,7 +3853,7 @@ fn test_various_refund_reasons() {
 			output_asset: Asset::Eth,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			deposit_metadata: Default::default(),
-			tx_id: H256::default(),
+			tx_id: EvmHash::default(),
 			broker_fee: Some(Beneficiary { account: BROKER, bps: 0 }),
 			affiliate_fees: Default::default(),
 			refund_params: ChannelRefundParametersForChain::<Ethereum> {
@@ -3798,7 +3884,16 @@ fn rollback_storage_if_transactional_call_fails() {
 		use scale_info::TypeInfo;
 		use sp_core::{Decode, Encode};
 
-		#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+		#[derive(
+			CloneNoBound,
+			DebugNoBound,
+			PartialEqNoBound,
+			Eq,
+			Encode,
+			Decode,
+			DecodeWithMemTracking,
+			TypeInfo,
+		)]
 		pub struct RollbackStorageCall;
 
 		impl ApiCall<EvmCrypto> for RollbackStorageCall {

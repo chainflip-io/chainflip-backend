@@ -18,7 +18,7 @@ use crate::evm::AggKey;
 
 use super::*;
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use ethabi::Token;
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
@@ -26,7 +26,17 @@ use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct SetAggKeyWithAggKey {
 	/// The new public key.
 	pub new_key: AggKey,
@@ -134,13 +144,13 @@ mod test_set_agg_key_with_agg_key {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
 					// nodeId: bytes32
 					Token::Tuple(vec![
-						Token::Uint(FAKE_NEW_KEY_X.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_NEW_KEY_X)),
 						Token::Uint(FAKE_NEW_KEY_Y.into()),
 					]),
 				])

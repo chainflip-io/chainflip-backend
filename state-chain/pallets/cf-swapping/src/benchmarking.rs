@@ -19,7 +19,7 @@
 use super::*;
 
 use cf_chains::{
-	address::EncodedAddress, benchmarking_value::BenchmarkValue, eth::Address as EthereumAddress,
+	address::EncodedAddress, benchmarking_value::BenchmarkValue, evm::Address as EthereumAddress,
 };
 use cf_primitives::{AccountRole, AffiliateShortId, Beneficiary, FLIPPERINOS_PER_FLIP};
 use cf_traits::{AccountRoleRegistry, Chainflip, FeePayment};

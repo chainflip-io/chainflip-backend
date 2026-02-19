@@ -21,7 +21,7 @@ use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::offence_reporting::MockOffenceReporter, AccountRoleRegistry, CallDispatchFilter,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{derive_impl, pallet_prelude::RuntimeDebug, parameter_types};
 use frame_system as system;
 use scale_info::TypeInfo;
@@ -55,6 +55,7 @@ parameter_types! {
 	serde::Deserialize,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Copy,
@@ -74,7 +75,6 @@ impl CallDispatchFilter<RuntimeCall> for MockCallFilter {
 pub type OffenceReporter = MockOffenceReporter<u64, PalletOffence>;
 
 impl pallet_cf_witness::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type SafeMode = MockRuntimeSafeMode;
@@ -88,7 +88,6 @@ impl pallet_cf_witness::Config for Test {
 impl_mock_chainflip!(Test);
 
 impl dummy::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
 }
 

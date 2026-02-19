@@ -684,21 +684,21 @@ where
 							vault_address,
 							supported_assets: supported_erc20_tokens.clone(),
 						},
-						EthereumStateChainGatewayWitnesserVoter {
-							client: client.clone(),
-							state_chain_gateway_address,
-						},
 						EthereumKeyManagerWitnesserVoter {
 							client: client.clone(),
 							key_manager_address,
+						},
+						EthereumFeeVoter { client: client.clone() },
+						EthereumLivenessVoter { client: client.clone() },
+						EthereumStateChainGatewayWitnesserVoter {
+							client: client.clone(),
+							state_chain_gateway_address,
 						},
 						EthereumScUtilsVoter {
 							client: client.clone(),
 							sc_utils_address,
 							supported_assets: supported_erc20_tokens,
 						},
-						EthereumFeeVoter { client: client.clone() },
-						EthereumLivenessVoter { client: client.clone() },
 					)),
 					Some(client.cache_invalidation_senders),
 					"Ethereum",

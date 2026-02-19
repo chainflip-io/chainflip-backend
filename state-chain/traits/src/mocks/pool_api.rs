@@ -12,7 +12,7 @@ use cf_amm::{
 };
 use cf_chains::assets::any::AssetMap;
 use cf_primitives::{Asset, AssetAmount, OrderId, STABLE_ASSET};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{DispatchError, DispatchResult},
 	weights::Weight,
@@ -28,7 +28,7 @@ use super::{MockPallet, MockPalletStorage};
 
 pub struct MockPoolApi<AccountId = u64>(PhantomData<AccountId>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 struct TickAndAmount {
 	tick: Tick,
 	amount: AssetAmount,

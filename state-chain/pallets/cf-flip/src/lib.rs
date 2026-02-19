@@ -26,6 +26,8 @@ mod benchmarking;
 mod imbalances;
 mod on_charge_transaction;
 
+pub mod substrate_impls;
+
 pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
@@ -37,19 +39,19 @@ pub use on_charge_transaction::{
 	CallIndexer, FeeScalingRateConfig, FlipTransactionPayment, UP_FRONT_ESCROW_FEE,
 };
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Zero},
+		traits::{AtLeast32BitUnsigned, Zero},
 		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
 };
 use frame_system::pallet_prelude::*;
 use on_charge_transaction::CallIndexFor;
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{marker::PhantomData, prelude::*};
 
 pub use pallet::*;
 
@@ -61,6 +63,7 @@ pub use pallet::*;
 	EqNoBound,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 )]
@@ -70,7 +73,7 @@ pub enum PalletConfigUpdate {
 	SetFeeScalingRate(FeeScalingRateConfig),
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 #[scale_info(skip_type_params(T))]
 pub struct OpaqueCallIndex<T: Config>(pub(crate) Vec<u8>, PhantomData<T>);
 
@@ -98,20 +101,8 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip<Amount = Self::Balance> {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The balance of an account.
-		type Balance: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ From<u128>
-			+ From<u64>;
+		type Balance: frame_support::traits::tokens::Balance + From<u128> + From<u64>;
 
 		/// Blocks per day.
 		#[pallet::constant]
@@ -127,6 +118,9 @@ pub mod pallet {
 		>;
 
 		type CallIndexer: CallIndexer<<Self as frame_system::Config>::RuntimeCall>;
+
+		/// Required in order to inject a HoldReason for impls in [substrate_impls]
+		type RuntimeHoldReason: Encode + TypeInfo + 'static;
 	}
 
 	#[pallet::pallet]
@@ -281,7 +275,18 @@ pub mod pallet {
 }
 
 /// All balance information for a Flip account.
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	PartialEq,
+	Eq,
+	Default,
+	RuntimeDebug,
+)]
 pub struct FlipAccount<Amount> {
 	/// Total amount of funds in account. Includes any bonded and vesting funds. Excludes any funds
 	/// in the process of being redeemed.

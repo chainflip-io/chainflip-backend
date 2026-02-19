@@ -15,9 +15,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{eth::Address, ForeignChain};
+use cf_chains::{evm::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{pallet_prelude::*, traits::StorageVersion, RuntimeDebugNoBound};
 use sp_std::{cmp::PartialEq, vec::Vec};
 
@@ -33,7 +33,9 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(
+	Clone, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, RuntimeDebugNoBound,
+)]
 #[scale_info(skip_type_params(T))]
 pub enum Proposal {
 	SetGovernanceKey(ForeignChain, Vec<u8>),
@@ -56,8 +58,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
 		/// Broadcasts the community key.

@@ -31,26 +31,25 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination, Broadcaster,
-	CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain, ElectionEgressWitnesser, EpochInfo,
-	GetBlockHeight, OnBroadcastSuccess, RotationBroadcastsPending, ThresholdSigner,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, BroadcastNomination,
+	BroadcastOutcomeHandler, Broadcaster, CfeBroadcastRequest, Chainflip, ChainflipWithTargetChain,
+	ElectionEgressWitnesser, EpochInfo, GetBlockHeight, RotationBroadcastsPending, ThresholdSigner,
 };
 use cfe_events::TxBroadcastRequest;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{ensure, DispatchResult, RuntimeDebug},
 	sp_runtime::{
 		traits::{One, Saturating},
 		DispatchError,
 	},
-	traits::{Defensive, Get, OriginTrait, StorageVersion, UnfilteredDispatchable},
+	traits::{Defensive, Get, StorageVersion},
 	Twox64Concat,
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
@@ -66,17 +65,30 @@ impl_pallet_safe_mode! {
 /// The number of broadcast attempts that were made before this one.
 pub type AttemptCount = u32;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletOffence {
 	FailedToBroadcastTransaction,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(13);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -84,8 +96,8 @@ pub mod pallet {
 	use cf_chains::{benchmarking_value::BenchmarkValue, instances::PalletInstanceAlias};
 	use cf_runtime_utilities::log_or_panic;
 	use cf_traits::{
-		AccountRoleRegistry, BroadcastNomination, ChainflipWithTargetChain, LiabilityTracker,
-		OnBroadcastReady, OnBroadcastSuccess, TargetChainOf,
+		AccountRoleRegistry, BroadcastNomination, BroadcastOutcomeHandler,
+		ChainflipWithTargetChain, LiabilityTracker, OnBroadcastReady, TargetChainOf,
 	};
 	use cf_utilities::derive_common_traits_no_bounds;
 	use frame_support::{
@@ -128,7 +140,16 @@ pub mod pallet {
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
 	/// All data contained in a Broadcast
-	#[derive(RuntimeDebug, PartialEq, Eq, Encode, Decode, GenericTypeInfo, CloneNoBound)]
+	#[derive(
+		RuntimeDebug,
+		PartialEq,
+		Eq,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		GenericTypeInfo,
+		CloneNoBound,
+	)]
 	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
 	pub struct BroadcastData<T: Config<I>, I: 'static> {
 		#[skip_name_expansion]
@@ -158,10 +179,6 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>:
 		ChainflipWithTargetChain<I, TargetChain: PalletInstanceAlias>
 	{
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The pallet dispatches calls, so it depends on the runtime's aggregated Call type.
 		type RuntimeCall: From<Call<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeCall>;
 
@@ -169,11 +186,6 @@ pub mod pallet {
 		type RuntimeOrigin: From<Origin<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeOrigin>
 			+ Into<Result<Origin<Self, I>, <Self as Config<I>>::RuntimeOrigin>>;
-
-		/// The call type that is used to dispatch a broadcast callback.
-		type BroadcastCallable: Member
-			+ Parameter
-			+ UnfilteredDispatchable<RuntimeOrigin = <Self as frame_system::Config>::RuntimeOrigin>;
 
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
@@ -209,8 +221,8 @@ pub mod pallet {
 
 		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
 
-		/// Hook called when a broadcast is successfully witnessed on the external chain.
-		type OnBroadcastSuccess: OnBroadcastSuccess<Self::TargetChain>;
+		/// Hook called when a broadcast succeeds or is aborted.
+		type BroadcastOutcomeHandler: BroadcastOutcomeHandler<Self::TargetChain>;
 
 		/// Get the latest block height of the target chain via Chain Tracking.
 		type ChainTracking: GetBlockHeight<Self::TargetChain>;
@@ -262,7 +274,18 @@ pub mod pallet {
 	}
 
 	#[pallet::origin]
-	#[derive(PartialEq, Eq, Copy, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	#[derive(
+		PartialEq,
+		Eq,
+		Copy,
+		Clone,
+		RuntimeDebug,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
@@ -274,18 +297,6 @@ pub mod pallet {
 	/// A counter for incrementing the broadcast id.
 	#[pallet::storage]
 	pub type BroadcastIdCounter<T, I = ()> = StorageValue<_, BroadcastId, ValueQuery>;
-
-	/// Callbacks to be dispatched when the SignatureAccepted event has been witnessed.
-	#[pallet::storage]
-	#[pallet::getter(fn request_success_callback)]
-	pub type RequestSuccessCallbacks<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
-
-	/// Callbacks to be dispatched when a broadcast failure has been witnessed.
-	#[pallet::storage]
-	#[pallet::getter(fn request_failed_callback)]
-	pub type RequestFailureCallbacks<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
 
 	/// Contains a Set of the authorities that have failed to sign a particular broadcast.
 	#[pallet::storage]
@@ -405,9 +416,6 @@ pub mod pallet {
 		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
-		/// A signature accepted event on the target chain has been witnessed and the callback was
-		/// executed.
-		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 		/// The fee paid for broadcasting a transaction has been recorded.
 		TransactionFeeDeficitRecorded {
 			beneficiary: SignerIdFor<T, I>,
@@ -634,7 +642,6 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin.clone())?;
 
 			Self::egress_success(
-				origin,
 				TransactionConfirmation {
 					tx_out_id,
 					signer_id,
@@ -788,7 +795,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn egress_success(
-		origin: OriginFor<T>,
 		TransactionConfirmation {
 			tx_out_id,
 			signer_id,
@@ -857,24 +863,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 		}
 
-		if let Some(callback) = RequestSuccessCallbacks::<T, I>::take(broadcast_id) {
-			RequestFailureCallbacks::<T, I>::remove(broadcast_id);
-
-			T::OnBroadcastSuccess::with_witness_block(witnessed_at_block, || {
-				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-					broadcast_id,
-					result: callback.dispatch_bypass_filter(origin.clone()).map(|_| ()).map_err(
-						|e| {
-							log::warn!(
-								"Callback execution has failed for broadcast {}.",
-								broadcast_id
-							);
-							e.error
-						},
-					),
-				})
-			});
-		}
+		T::BroadcastOutcomeHandler::on_broadcast_success(broadcast_id, witnessed_at_block);
 
 		// Report the people who failed to broadcast this tx during its whole lifetime.
 		let failed_broadcasters = FailedBroadcasters::<T, I>::take(broadcast_id);
@@ -924,21 +913,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Request a threshold signature, providing [Call::on_signature_ready] as the callback.
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
-		maybe_success_callback: Option<<T as Config<I>>::BroadcastCallable>,
-		maybe_failed_callback_generator: impl FnOnce(
-			BroadcastId,
-		) -> Option<<T as Config<I>>::BroadcastCallable>,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = Self::next_broadcast_id();
 
 		PendingBroadcasts::<T, I>::append(broadcast_id);
-
-		if let Some(callback) = maybe_success_callback {
-			RequestSuccessCallbacks::<T, I>::insert(broadcast_id, callback);
-		}
-		if let Some(callback) = maybe_failed_callback_generator(broadcast_id) {
-			RequestFailureCallbacks::<T, I>::insert(broadcast_id, callback);
-		}
 
 		(broadcast_id, Self::threshold_sign(api_call, broadcast_id, true))
 	}
@@ -1133,21 +1111,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// broadcasters any more.
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
 
-		// Call the failed callback and clean up the callback storage.
-		if let Some(callback) = RequestFailureCallbacks::<T, I>::get(broadcast_id) {
-			Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
-				broadcast_id,
-				result: callback.dispatch_bypass_filter(OriginTrait::root()).map(|_| ()).map_err(
-					|e| {
-						log::error!(
-							"Broadcast failure callback execution has failed for broadcast {}.",
-							broadcast_id
-						);
-						e.error
-					},
-				),
-			});
-		}
+		T::BroadcastOutcomeHandler::on_broadcast_aborted(broadcast_id);
 
 		Self::deposit_event(Event::<T, I>::BroadcastAborted { broadcast_id });
 		Self::remove_pending_broadcast(&broadcast_id);
@@ -1172,20 +1136,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
-	type Callback = <T as Config<I>>::BroadcastCallable;
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, None, |_| None)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		api_call: Self::ApiCall,
-		success_callback: Option<Self::Callback>,
-		failed_callback_generator: impl FnOnce(BroadcastId) -> Option<Self::Callback>,
-	) -> BroadcastId {
-		Self::threshold_sign_and_broadcast(api_call, success_callback, failed_callback_generator).0
+		Self::threshold_sign_and_broadcast(api_call)
 	}
 
 	fn threshold_sign(api_call: Self::ApiCall) -> (BroadcastId, ThresholdSignatureRequestId) {
@@ -1223,9 +1178,6 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	}
 
 	fn expire_broadcast(broadcast_id: BroadcastId) {
-		// These would otherwise be cleaned up when the broadcast succeeds or aborts.
-		RequestSuccessCallbacks::<T, I>::remove(broadcast_id);
-		RequestFailureCallbacks::<T, I>::remove(broadcast_id);
 		Self::clean_up_broadcast_storage(broadcast_id);
 	}
 

@@ -111,18 +111,18 @@ where
 		if key == current_key {
 			return self.key_components.sign(message)
 		}
-		if self.previous_key_components.is_some() &&
-			self.previous_key_components.as_ref().unwrap().agg_key() == key
-		{
-			return self.previous_key_components.as_ref().unwrap().sign(message)
+		if let Some(previous_key_components) = &self.previous_key_components {
+			if previous_key_components.agg_key() == key {
+				return previous_key_components.sign(message)
+			}
 		}
-		if self.proposed_key_components.is_some() &&
-			self.proposed_key_components.as_ref().unwrap().agg_key() == key
-		{
-			self.proposed_key_components.as_ref().unwrap().sign(message)
-		} else {
-			panic!("Unknown key");
+		if let Some(proposed_key_components) = &self.proposed_key_components {
+			if proposed_key_components.agg_key() == key {
+				return proposed_key_components.sign(message)
+			}
 		}
+
+		panic!("Unknown key");
 	}
 
 	pub fn propose_new_key(&mut self) -> AggKey {

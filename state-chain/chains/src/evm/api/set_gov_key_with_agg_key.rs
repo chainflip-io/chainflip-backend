@@ -15,13 +15,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
-use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{Address, Token};
+use crate::evm::Address;
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
+use ethabi::Token;
 use frame_support::pallet_prelude::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct SetGovKeyWithAggKey {
 	/// The new gov key.
 	pub new_gov_key: Address,
@@ -92,7 +103,7 @@ mod test_set_gov_key_with_agg_key {
 				.encode_input(&[
 					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Uint(FAKE_SIG.into()),
+						Token::Uint(U256::from_big_endian(&FAKE_SIG)),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),

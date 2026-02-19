@@ -35,7 +35,7 @@ use frame_support::{
 	dispatch::GetDispatchInfo,
 	error::BadOrigin,
 	pallet_prelude::{DispatchResult, StorageVersion},
-	traits::{EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnNewAccount, OriginTrait},
+	traits::{EnsureOrigin, HandleLifetime, OnKilledAccount, OnNewAccount, OriginTrait},
 };
 
 use sp_runtime::traits::Dispatchable;
@@ -61,7 +61,6 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + cf_traits::Chainflip {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		type DeregistrationCheck: DeregistrationCheck<
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -218,7 +217,7 @@ pub mod pallet {
 		///
 		/// The call is executed with the sub-account's account id as the dispatch origin.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().weight))]
+		#[pallet::weight(T::WeightInfo::as_sub_account().saturating_add(call.get_dispatch_info().call_weight))]
 		#[allow(clippy::useless_conversion)]
 		pub fn as_sub_account(
 			origin: OriginFor<T>,

@@ -66,14 +66,13 @@ use cf_chains::{
 		PolkadotTransactionData, ResetProxyAccountNonce, RuntimeVersion,
 	},
 	eth::{
-		self,
 		api::{EthereumApi, StateChainGatewayAddressProvider},
 		deposit_address::ETHEREUM_ETH_ADDRESS,
 		Ethereum,
 	},
 	evm::{
 		api::{EvmChainId, EvmEnvironmentProvider, EvmReplayProtection},
-		EvmCrypto, Transaction,
+		Address as EvmAddress, EvmCrypto, Transaction,
 	},
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
@@ -96,7 +95,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
-	ChannelId, DcaParameters, MAX_BASIS_POINTS,
+	ChannelId, DcaParameters, ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
@@ -104,9 +103,7 @@ use cf_traits::{
 	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
 	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
-
-use codec::{Decode, Encode};
-use eth::Address as EvmAddress;
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 	pallet_prelude::DispatchError,
@@ -492,7 +489,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct DotEnvironment;
 
 impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
@@ -524,7 +521,7 @@ impl ChainEnvironment<cf_chains::dot::api::VaultAccount, PolkadotAccountId> for 
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct HubEnvironment;
 
 impl ReplayProtectionProvider<Assethub> for HubEnvironment {
@@ -562,7 +559,7 @@ impl ChainEnvironment<cf_chains::hub::api::VaultAccount, PolkadotAccountId> for 
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BtcEnvironment;
 
 impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
@@ -582,7 +579,7 @@ impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct SolEnvironment;
 
 impl ChainEnvironment<ApiEnvironment, SolApiEnvironment> for SolEnvironment {
@@ -956,7 +953,7 @@ pub fn calculate_account_apy(account_id: &AccountId) -> Option<u32> {
 			let apy = FixedU64::from_rational(validator_reward_pa, Flip::balance(account_id));
 
 			// Convert APY to Basis Point.
-			apy.checked_mul_int(MAX_BASIS_POINTS as u32).unwrap_or_default()
+			apy.checked_mul_int(ONE_AS_BASIS_POINTS as u32).unwrap_or_default()
 		})
 }
 
