@@ -39,7 +39,7 @@ use pallet_cf_elections::{
 	generic_tools::*,
 };
 
-use crate::{chainflip::witnessing::elections::TypesFor, Runtime, Timestamp};
+use crate::{Runtime, Timestamp};
 use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook, OraclePrice};
 use pallet_cf_elections::{
 	electoral_system::ElectoralSystem,
@@ -134,10 +134,10 @@ impl<F: Container> ChainlinkOraclePriceSettings<F> {
 
 //--------------- instantiation of Chainlink ES -------------
 
-pub struct Chainlink;
+define_empty_struct! { pub struct Chainlink; }
 
 impls! {
-	for TypesFor<Chainlink>:
+	for Chainlink:
 
 	OPTypes {
 		type StateChainBlockNumber = BlockNumberFor<Runtime>;
@@ -206,7 +206,7 @@ impls! {
 	}
 }
 
-pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<TypesFor<Chainlink>>;
+pub type ChainlinkOraclePriceES = StatemachineElectoralSystem<Chainlink>;
 
 /// data for events
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
@@ -334,7 +334,7 @@ pub fn set_price(asset: any::Asset, price: Price) {
 
 	let price = statechain_price_to_chainlink_price(&price.into(), asset_pair).unwrap();
 
-	let mut state: OraclePriceTracker<TypesFor<Chainlink>> =
+	let mut state: OraclePriceTracker<Chainlink> =
 		pallet_cf_elections::ElectoralUnsynchronisedState::<Runtime>::get().unwrap().0;
 	state.chain_states.arbitrum.price.insert(
 		asset_pair,
