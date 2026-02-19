@@ -502,7 +502,6 @@ pub mod pallet {
 						let ticks_need_update = existing_orders.iter().any(|existing_order| {
 							!new_orders.iter().any(|new_order| {
 								existing_order.side == new_order.side &&
-									existing_order.order_id == new_order.order_id &&
 									existing_order.tick == new_order.tick
 							})
 						});
