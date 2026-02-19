@@ -40,7 +40,7 @@ use std::{
 	env,
 	net::{IpAddr, SocketAddr},
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc, oneshot};
 use warp::Filter;
 
 type BitcoinVoteStorageTuple = <BitcoinElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage;
@@ -82,7 +82,8 @@ struct ChainElections {
 #[derive(Serialize, Clone)]
 struct ElectionSummary {
 	election_type: String,
-	election_id: String,
+	composite_id: String,
+	election_properties: String,
 	completed: bool,
 	bitmap_votes: Vec<VoteGroup>,
 	individual_votes: Vec<VoteGroup>,
@@ -97,7 +98,6 @@ struct VoteGroup {
 
 #[derive(Serialize, Clone)]
 struct ExtrinsicVoteGroup {
-	variant_name: String,
 	detail: String,
 	count: u32,
 }
@@ -106,7 +106,10 @@ struct ExtrinsicVoteGroup {
 
 const DASHBOARD_HTML: &str = include_str!("../dashboard.html");
 
-async fn run_dashboard(bind_addr: SocketAddr, tx: broadcast::Sender<String>) {
+type BlockQueryRequest = (u32, oneshot::Sender<Result<String, String>>);
+type BlockQuerySender = mpsc::Sender<BlockQueryRequest>;
+
+async fn run_dashboard(bind_addr: SocketAddr, tx: broadcast::Sender<String>, block_query_tx: BlockQuerySender) {
 	let index = warp::path::end().and(warp::get()).map(|| warp::reply::html(DASHBOARD_HTML));
 
 	let ws_route = warp::path("ws").and(warp::ws()).map(move |ws: warp::ws::Ws| {
@@ -114,7 +117,40 @@ async fn run_dashboard(bind_addr: SocketAddr, tx: broadcast::Sender<String>) {
 		ws.on_upgrade(move |websocket| handle_ws_client(websocket, rx))
 	});
 
-	let routes = index.or(ws_route);
+	let block_query = warp::path!("api" / "block" / u32)
+		.and(warp::get())
+		.then(move |number: u32| {
+			let tx = block_query_tx.clone();
+			async move {
+				let (reply_tx, reply_rx) = oneshot::channel();
+				if tx.send((number, reply_tx)).await.is_err() {
+					return warp::http::Response::builder()
+						.status(500)
+						.header("content-type", "application/json")
+						.body(r#"{"error":"Internal error"}"#.to_string())
+						.unwrap();
+				}
+				match reply_rx.await {
+					Ok(Ok(json)) => warp::http::Response::builder()
+						.status(200)
+						.header("content-type", "application/json")
+						.body(json)
+						.unwrap(),
+					Ok(Err(e)) => warp::http::Response::builder()
+						.status(400)
+						.header("content-type", "application/json")
+						.body(format!(r#"{{"error":"{}"}}"#, e.replace('"', r#"\""#)))
+						.unwrap(),
+					Err(_) => warp::http::Response::builder()
+						.status(500)
+						.header("content-type", "application/json")
+						.body(r#"{"error":"Query failed"}"#.to_string())
+						.unwrap(),
+				}
+			}
+		});
+
+	let routes = index.or(ws_route).or(block_query);
 
 	println!("Dashboard available at http://{}", bind_addr);
 	warp::serve(routes).run(bind_addr).await;
@@ -174,48 +210,344 @@ fn solana_election_type_name(
 	}
 }
 
-fn bitcoin_vote_variant_name(
-	variant: &<BitcoinVoteStorageTuple as VoteStorage>::PartialVote,
-) -> &'static str {
-	match variant {
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::A(_) =>
-			"BlockHeight",
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::B(_) =>
-			"DepositChannel",
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::C(_) =>
-			"VaultDeposit",
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::D(_) =>
-			"Egress",
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::EE(
-			_,
-		) => "FeeTracking",
-		pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::FF(
-			_,
-		) => "Liveness",
+async fn build_block_update(
+	client: &StateChainClient<()>,
+	block_number: u32,
+	block_hash: state_chain_runtime::Hash,
+) -> Result<BlockUpdate, String> {
+	let previous_block_number = block_number
+		.checked_sub(1)
+		.ok_or_else(|| "No previous block".to_string())?;
+	let last_block_hash = client
+		.base_rpc_client
+		.block_hash(previous_block_number)
+		.await
+		.map_err(|e| format!("RPC error: {:?}", e))?
+		.ok_or_else(|| format!("Block {} not found", previous_block_number))?;
+
+	// ===== Query SharedData (from both X and X-1 for resolving hashes) =====
+	let mut bitcoin_shared_data_map = client.storage_map::<pallet_cf_elections::SharedData::<Runtime, BitcoinInstance>, BTreeMap<_,_>>(block_hash).await.expect("Should always exist");
+	bitcoin_shared_data_map.extend(
+		client.storage_map::<pallet_cf_elections::SharedData::<Runtime, BitcoinInstance>, BTreeMap<_,_>>(last_block_hash).await.expect("Should always exist")
+	);
+	let mut solana_shared_data_map = client.storage_map::<pallet_cf_elections::SharedData::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_hash).await.expect("Should always exist");
+	solana_shared_data_map.extend(
+		client.storage_map::<pallet_cf_elections::SharedData::<Runtime, SolanaInstance>, BTreeMap<_,_>>(last_block_hash).await.expect("Should always exist")
+	);
+
+	// ===== Query ElectionProperties at X-1 (to get all active elections before this block) =====
+	let bitcoin_elections_prev: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BitcoinElectionProperties> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, BitcoinInstance>, _>(last_block_hash)
+		.await
+		.expect("Should always exist");
+	let solana_elections_prev: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, SolanaElectionProperties> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, SolanaInstance>, _>(last_block_hash)
+		.await
+		.expect("Should always exist");
+
+	// ===== Query ElectionProperties at X (to detect completed elections) =====
+	let bitcoin_elections_curr: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BitcoinElectionProperties> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, BitcoinInstance>, _>(block_hash)
+		.await
+		.expect("Should always exist");
+	let solana_elections_curr: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, SolanaElectionProperties> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, SolanaInstance>, _>(block_hash)
+		.await
+		.expect("Should always exist");
+
+	// ===== Query BitmapComponents at X-1 (existing shared votes) =====
+	let bitcoin_bitmap_components: BTreeMap<UniqueMonotonicIdentifier, BitcoinElectionBitmapComponents> = client
+		.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, BitcoinInstance>, _>(last_block_hash)
+		.await
+		.expect("Should always exist");
+	let solana_bitmap_components: BTreeMap<UniqueMonotonicIdentifier, SolanaElectionBitmapComponents> = client
+		.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, SolanaInstance>, _>(last_block_hash)
+		.await
+		.expect("Should always exist");
+
+	// ===== Build mapping from UniqueMonotonicIdentifier to full ElectionIdentifier =====
+	let btc_unique_to_election: BTreeMap<UniqueMonotonicIdentifier, ElectionIdentifier<BitcoinElectionIdentifierExtra>> = bitcoin_elections_prev
+		.keys()
+		.map(|eid| (*eid.unique_monotonic(), *eid))
+		.collect();
+	let sol_unique_to_election: BTreeMap<UniqueMonotonicIdentifier, ElectionIdentifier<SolanaElectionIdentifierExtra>> = solana_elections_prev
+		.keys()
+		.map(|eid| (*eid.unique_monotonic(), *eid))
+		.collect();
+
+	// ===== Build vote summary from storage =====
+	let mut bitcoin_storage_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, Vec<(BitcoinBitmapComponent, u32)>> = BTreeMap::new();
+	let mut solana_storage_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, Vec<(SolanaBitmapComponent, u32)>> = BTreeMap::new();
+
+	for (unique_id, bitmap_data) in &bitcoin_bitmap_components {
+		if let Some(election_id) = btc_unique_to_election.get(unique_id) {
+			let vote_list = bitcoin_storage_votes.entry(*election_id).or_default();
+			for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
+				let count = bitvec.count_ones() as u32;
+				vote_list.push((bitmap_component.clone(), count));
+			}
+		}
 	}
+	for (unique_id, bitmap_data) in &solana_bitmap_components {
+		if let Some(election_id) = sol_unique_to_election.get(unique_id) {
+			let vote_list = solana_storage_votes.entry(*election_id).or_default();
+			for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
+				let count = bitvec.count_ones() as u32;
+				vote_list.push((bitmap_component.clone(), count));
+			}
+		}
+	}
+
+	// ===== Query IndividualComponents at X-1 (bulk fetch) =====
+	let bitcoin_individual_components: Vec<_> = client
+		.storage_double_map::<pallet_cf_elections::IndividualComponents::<Runtime, BitcoinInstance>, Vec<_>>(last_block_hash)
+		.await
+		.expect("Should always exist");
+	let solana_individual_components: Vec<_> = client
+		.storage_double_map::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>, Vec<_>>(last_block_hash)
+		.await
+		.expect("Should always exist");
+
+	let mut bitcoin_individual_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, Vec<(BitcoinIndividualComponent, u32)>> = BTreeMap::new();
+	let mut solana_individual_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, Vec<(SolanaIndividualComponent, u32)>> = BTreeMap::new();
+
+	for ((unique_id, _validator), (_props, component)) in &bitcoin_individual_components {
+		if let Some(election_id) = btc_unique_to_election.get(unique_id) {
+			let vote_list = bitcoin_individual_votes.entry(*election_id).or_default();
+			if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
+				*count += 1;
+			} else {
+				vote_list.push((component.clone(), 1));
+			}
+		}
+	}
+	for ((unique_id, _validator), (_props, component)) in &solana_individual_components {
+		if let Some(election_id) = sol_unique_to_election.get(unique_id) {
+			let vote_list = solana_individual_votes.entry(*election_id).or_default();
+			if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
+				*count += 1;
+			} else {
+				vote_list.push((component.clone(), 1));
+			}
+		}
+	}
+
+	// ===== Track new votes from extrinsics =====
+	let mut bitcoin_extrinsic_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BTreeMap<<BitcoinVoteStorageTuple as VoteStorage>::PartialVote, u32>> = BTreeMap::new();
+	let mut solana_extrinsic_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, BTreeMap<<SolanaVoteStorageTuple as VoteStorage>::PartialVote, u32>> = BTreeMap::new();
+	let signed_block = client.base_rpc_client.block(block_hash).await.unwrap();
+	if let Some(block) = signed_block {
+		let extrinsics = block.block.extrinsics;
+		for ex in extrinsics {
+			match ex.function {
+				state_chain_runtime::RuntimeCall::SolanaElections(call) => {
+					match call {
+						pallet_cf_elections::Call::vote { authority_votes } => {
+							for (election_id, vote) in *authority_votes {
+								match vote {
+									pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
+										solana_extrinsic_votes.entry(election_id).or_default()
+											.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
+									},
+									pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
+										let partial = <SolanaVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| {
+											let hash = SharedDataHash::of(&shared_data);
+											solana_shared_data_map.insert(hash, shared_data);
+											hash
+										});
+										solana_extrinsic_votes.entry(election_id).or_default()
+											.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
+									},
+								}
+							}
+						},
+						pallet_cf_elections::Call::provide_shared_data { shared_data } => {
+							let shared_data_hash = SharedDataHash::of(&shared_data);
+							solana_shared_data_map.insert(shared_data_hash, *shared_data);
+						}
+						_ => {},
+					}
+				},
+				state_chain_runtime::RuntimeCall::BitcoinElections(call) => {
+					match call {
+						pallet_cf_elections::Call::vote { authority_votes } => {
+							for (election_id, vote) in *authority_votes {
+								match vote {
+									pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
+										bitcoin_extrinsic_votes.entry(election_id).or_default()
+											.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
+									},
+									pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
+										let partial = <BitcoinVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| {
+											let hash = SharedDataHash::of(&shared_data);
+											bitcoin_shared_data_map.insert(hash, shared_data);
+											hash
+										});
+										bitcoin_extrinsic_votes.entry(election_id).or_default()
+											.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
+									},
+								}
+							}
+						},
+						pallet_cf_elections::Call::provide_shared_data { shared_data } => {
+							let shared_data_hash = SharedDataHash::of(&shared_data);
+							bitcoin_shared_data_map.insert(shared_data_hash, *shared_data);
+						},
+						_ => {},
+					}
+				},
+				_ => {},
+			}
+		}
+	}
+
+	// ===== Detect completed elections =====
+	let bitcoin_completed: Vec<_> = bitcoin_elections_prev.keys()
+		.filter(|eid| !bitcoin_elections_curr.contains_key(eid))
+		.cloned()
+		.collect();
+	let solana_completed: Vec<_> = solana_elections_prev.keys()
+		.filter(|eid| !solana_elections_curr.contains_key(eid))
+		.cloned()
+		.collect();
+
+	let btc_active = bitcoin_elections_prev.len();
+	let btc_completed_count = bitcoin_completed.len();
+	let sol_active = solana_elections_prev.len();
+	let sol_completed_count = solana_completed.len();
+
+	// ===== Build dashboard update =====
+	let btc_election_summaries: Vec<ElectionSummary> = bitcoin_elections_prev.iter().map(|(election_id, props)| {
+		let is_completed = bitcoin_completed.contains(election_id);
+		let bitmap_votes = bitcoin_storage_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
+				component: format_bitcoin_bitmap_component(comp, &bitcoin_shared_data_map),
+				count: *count,
+			}).collect())
+			.unwrap_or_default();
+		let individual_votes = bitcoin_individual_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
+				component: format_for_display(&format!("{:?}", comp)),
+				count: *count,
+			}).collect())
+			.unwrap_or_default();
+		let extrinsic_votes = bitcoin_extrinsic_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(partial, count)| {
+				let detail = format_bitcoin_vote_detail(partial, &bitcoin_shared_data_map);
+				ExtrinsicVoteGroup { detail, count: *count }
+			}).collect())
+			.unwrap_or_default();
+		ElectionSummary {
+			election_type: bitcoin_election_type_name(election_id).to_string(),
+			composite_id: format!("{:?}", election_id.extra()),
+			election_properties: format_for_display(&format!("{:?}", props)),
+			completed: is_completed,
+			bitmap_votes,
+			individual_votes,
+			extrinsic_votes,
+		}
+	}).collect();
+
+	let sol_election_summaries: Vec<ElectionSummary> = solana_elections_prev.iter().map(|(election_id, props)| {
+		let is_completed = solana_completed.contains(election_id);
+		let bitmap_votes = solana_storage_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
+				component: format_solana_bitmap_component(comp, &solana_shared_data_map),
+				count: *count,
+			}).collect())
+			.unwrap_or_default();
+		let individual_votes = solana_individual_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
+				component: format_for_display(&format!("{:?}", comp)),
+				count: *count,
+			}).collect())
+			.unwrap_or_default();
+		let extrinsic_votes = solana_extrinsic_votes.get(election_id)
+			.map(|votes| votes.iter().map(|(partial, count)| {
+				let detail = format_solana_vote_detail(partial, &solana_shared_data_map);
+				ExtrinsicVoteGroup { detail, count: *count }
+			}).collect())
+			.unwrap_or_default();
+		ElectionSummary {
+			election_type: solana_election_type_name(election_id).to_string(),
+			composite_id: format!("{:?}", election_id.extra()),
+			election_properties: format_for_display(&format!("{:?}", props)),
+			completed: is_completed,
+			bitmap_votes,
+			individual_votes,
+			extrinsic_votes,
+		}
+	}).collect();
+
+	Ok(BlockUpdate {
+		block_number,
+		bitcoin: ChainElections {
+			active_count: btc_active,
+			completed_count: btc_completed_count,
+			elections: btc_election_summaries,
+		},
+		solana: ChainElections {
+			active_count: sol_active,
+			completed_count: sol_completed_count,
+			elections: sol_election_summaries,
+		},
+	})
 }
 
-fn solana_vote_variant_name(
-	variant: &<SolanaVoteStorageTuple as VoteStorage>::PartialVote,
-) -> &'static str {
-	match variant {
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::A(_) =>
-			"BlockHeight",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::B(_) =>
-			"Ingress",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::C(_) =>
-			"Nonce",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::D(_) =>
-			"Egress",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::EE(
-			_,
-		) => "Liveness",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::FF(
-			_,
-		) => "VaultSwap",
-		pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::G(_) =>
-			"ALT",
+fn print_block_summary(update: &BlockUpdate) {
+	let prev = update.block_number.saturating_sub(1);
+
+	println!("\nBITCOIN ELECTIONS ({} active, {} completed this block):",
+		update.bitcoin.active_count, update.bitcoin.completed_count);
+	for el in &update.bitcoin.elections {
+		let status = if el.completed { " [COMPLETED]" } else { "" };
+		println!("  [{}] {} {}{}", el.election_type, el.composite_id, el.election_properties, status);
+		if !el.bitmap_votes.is_empty() {
+			println!("    Bitmap votes (from storage at block {}):", prev);
+			for v in &el.bitmap_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.individual_votes.is_empty() {
+			println!("    Individual votes (from storage at block {}):", prev);
+			for v in &el.individual_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.extrinsic_votes.is_empty() {
+			println!("    New votes this block:");
+			for v in &el.extrinsic_votes {
+				println!("      {}: {} votes", v.detail, v.count);
+			}
+		}
 	}
+
+	println!("\nSOLANA ELECTIONS ({} active, {} completed this block):",
+		update.solana.active_count, update.solana.completed_count);
+	for el in &update.solana.elections {
+		let status = if el.completed { " [COMPLETED]" } else { "" };
+		println!("  [{}] {} {}{}", el.election_type, el.composite_id, el.election_properties, status);
+		if !el.bitmap_votes.is_empty() {
+			println!("    Bitmap votes (from storage at block {}):", prev);
+			for v in &el.bitmap_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.individual_votes.is_empty() {
+			println!("    Individual votes (from storage at block {}):", prev);
+			for v in &el.individual_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.extrinsic_votes.is_empty() {
+			println!("    New votes this block:");
+			for v in &el.extrinsic_votes {
+				println!("      {}: {} votes", v.detail, v.count);
+			}
+		}
+	}
+
+	println!("\n{}", "=".repeat(80));
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
@@ -230,6 +562,31 @@ async fn observe_elections(rpc_url: String) {
 	let (ws_tx, _) = broadcast::channel::<String>(32);
 
 	task_scope::task_scope(|scope| async move {
+		// Connect client first (needed by both live stream and REST endpoint)
+		let (finalized_stream, _unfinalized_stream, client) =
+			StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
+
+		// Block query channel for REST endpoint
+		let (block_query_tx, mut block_query_rx) = mpsc::channel::<BlockQueryRequest>(8);
+
+		// Spawn block query handler
+		let query_client = client.clone();
+		scope.spawn_weak(async move {
+			while let Some((block_number, reply_tx)) = block_query_rx.recv().await {
+				let result = match query_client.base_rpc_client.block_hash(block_number).await {
+					Ok(Some(block_hash)) =>
+						match build_block_update(&query_client, block_number, block_hash).await {
+							Ok(update) => serde_json::to_string(&update)
+								.map_err(|e| format!("Serialization error: {:?}", e)),
+							Err(e) => Err(e),
+						},
+					Ok(None) => Err(format!("Block {} not found", block_number)),
+					Err(e) => Err(format!("RPC error: {:?}", e)),
+				};
+				let _ = reply_tx.send(result);
+			}
+			Ok(())
+		});
 
 		// Spawn dashboard web server
 		let dashboard_port: u16 = env::var("DASHBOARD_PORT")
@@ -243,421 +600,132 @@ async fn observe_elections(rpc_url: String) {
 		let dashboard_addr = SocketAddr::new(dashboard_host, dashboard_port);
 		let ws_tx_for_server = ws_tx.clone();
 		scope.spawn_weak(async move {
-			run_dashboard(dashboard_addr, ws_tx_for_server).await;
+			run_dashboard(dashboard_addr, ws_tx_for_server, block_query_tx).await;
 			Ok(())
 		});
 
-		let (finalized_stream, _unfinalized_stream, client) = StateChainClient::connect_without_account(scope, &rpc_url).await.unwrap();
-		finalized_stream.for_each(|block_info| {
-			let client_copy = client.clone();
-			let ws_tx = ws_tx.clone();
-			async move {
-				println!("\n{:=^80}", format!(" Block {} ", block_info.number));
-				let Some(previous_block_number) = block_info.number.checked_sub(1) else {
-					println!("Skipping block {} because there is no previous block", block_info.number);
-					return;
-				};
-				let last_block_hash = client_copy
-					.base_rpc_client
-					.block_hash(previous_block_number)
-					.await
-					.expect("Shouldn't fail")
-					.unwrap();
-
-				// ===== Query SharedData (from both X and X-1 for resolving hashes) =====
-				let mut bitcoin_shared_data_map = client_copy.storage_map::<pallet_cf_elections::SharedData::<Runtime, BitcoinInstance>, BTreeMap<_,_>>(block_info.hash).await.expect("Should always exist");
-				bitcoin_shared_data_map.extend(
-					client_copy.storage_map::<pallet_cf_elections::SharedData::<Runtime, BitcoinInstance>, BTreeMap<_,_>>(last_block_hash).await.expect("Should always exist")
-				);
-				let mut solana_shared_data_map = client_copy.storage_map::<pallet_cf_elections::SharedData::<Runtime, SolanaInstance>, BTreeMap<_,_>>(block_info.hash).await.expect("Should always exist");
-				solana_shared_data_map.extend(
-					client_copy.storage_map::<pallet_cf_elections::SharedData::<Runtime, SolanaInstance>, BTreeMap<_,_>>(last_block_hash).await.expect("Should always exist")
-				);
-
-				// ===== Query ElectionProperties at X-1 (to get all active elections before this block) =====
-				let bitcoin_elections_prev: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BitcoinElectionProperties> = client_copy
-					.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, BitcoinInstance>, _>(last_block_hash)
-					.await
-					.expect("Should always exist");
-				let solana_elections_prev: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, SolanaElectionProperties> = client_copy
-					.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, SolanaInstance>, _>(last_block_hash)
-					.await
-					.expect("Should always exist");
-
-				// ===== Query ElectionProperties at X (to detect completed elections) =====
-				let bitcoin_elections_curr: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BitcoinElectionProperties> = client_copy
-					.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, BitcoinInstance>, _>(block_info.hash)
-					.await
-					.expect("Should always exist");
-				let solana_elections_curr: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, SolanaElectionProperties> = client_copy
-					.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, SolanaInstance>, _>(block_info.hash)
-					.await
-					.expect("Should always exist");
-
-				// ===== Query BitmapComponents at X-1 (existing shared votes) =====
-				let bitcoin_bitmap_components: BTreeMap<UniqueMonotonicIdentifier, BitcoinElectionBitmapComponents> = client_copy
-					.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, BitcoinInstance>, _>(last_block_hash)
-					.await
-					.expect("Should always exist");
-				let solana_bitmap_components: BTreeMap<UniqueMonotonicIdentifier, SolanaElectionBitmapComponents> = client_copy
-					.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, SolanaInstance>, _>(last_block_hash)
-					.await
-					.expect("Should always exist");
-
-				// ===== Build mapping from UniqueMonotonicIdentifier to full ElectionIdentifier =====
-				let btc_unique_to_election: BTreeMap<UniqueMonotonicIdentifier, ElectionIdentifier<BitcoinElectionIdentifierExtra>> = bitcoin_elections_prev
-					.keys()
-					.map(|eid| (*eid.unique_monotonic(), *eid))
-					.collect();
-				let sol_unique_to_election: BTreeMap<UniqueMonotonicIdentifier, ElectionIdentifier<SolanaElectionIdentifierExtra>> = solana_elections_prev
-					.keys()
-					.map(|eid| (*eid.unique_monotonic(), *eid))
-					.collect();
-
-				// ===== Build vote summary from storage =====
-				// Map: ElectionIdentifier -> Vec<(BitmapComponent, vote count)>
-				// Using Vec instead of BTreeMap because BitmapComponent doesn't implement Ord
-				let mut bitcoin_storage_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, Vec<(BitcoinBitmapComponent, u32)>> = BTreeMap::new();
-				let mut solana_storage_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, Vec<(SolanaBitmapComponent, u32)>> = BTreeMap::new();
-
-				// Count votes from BitmapComponents
-				for (unique_id, bitmap_data) in &bitcoin_bitmap_components {
-					if let Some(election_id) = btc_unique_to_election.get(unique_id) {
-						let vote_list = bitcoin_storage_votes.entry(*election_id).or_default();
-						for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
-							let count = bitvec.count_ones() as u32;
-							vote_list.push((bitmap_component.clone(), count));
-						}
-					}
-				}
-				for (unique_id, bitmap_data) in &solana_bitmap_components {
-					if let Some(election_id) = sol_unique_to_election.get(unique_id) {
-						let vote_list = solana_storage_votes.entry(*election_id).or_default();
-						for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
-							let count = bitvec.count_ones() as u32;
-							vote_list.push((bitmap_component.clone(), count));
-						}
-					}
-				}
-
-					// ===== Query IndividualComponents at X-1 (bulk fetch) =====
-				let bitcoin_individual_components: Vec<_> = client_copy
-					.storage_double_map::<pallet_cf_elections::IndividualComponents::<Runtime, BitcoinInstance>, Vec<_>>(last_block_hash)
-					.await
-					.expect("Should always exist");
-				let solana_individual_components: Vec<_> = client_copy
-					.storage_double_map::<pallet_cf_elections::IndividualComponents::<Runtime, SolanaInstance>, Vec<_>>(last_block_hash)
-					.await
-					.expect("Should always exist");
-
-				// Map: ElectionIdentifier -> Vec<(IndividualComponent, vote count)>
-				let mut bitcoin_individual_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, Vec<(BitcoinIndividualComponent, u32)>> = BTreeMap::new();
-				let mut solana_individual_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, Vec<(SolanaIndividualComponent, u32)>> = BTreeMap::new();
-
-				for ((unique_id, _validator), (_props, component)) in &bitcoin_individual_components {
-					if let Some(election_id) = btc_unique_to_election.get(unique_id) {
-						let vote_list = bitcoin_individual_votes.entry(*election_id).or_default();
-						if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
-							*count += 1;
-						} else {
-							vote_list.push((component.clone(), 1));
-						}
-					}
-				}
-				for ((unique_id, _validator), (_props, component)) in &solana_individual_components {
-					if let Some(election_id) = sol_unique_to_election.get(unique_id) {
-						let vote_list = solana_individual_votes.entry(*election_id).or_default();
-						if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
-							*count += 1;
-						} else {
-							vote_list.push((component.clone(), 1));
-						}
-					}
-				}
-
-				// ===== Track new votes from extrinsics =====
-				let mut bitcoin_extrinsic_votes: BTreeMap<ElectionIdentifier<BitcoinElectionIdentifierExtra>, BTreeMap<<BitcoinVoteStorageTuple as VoteStorage>::PartialVote, u32>> = BTreeMap::new();
-				let mut solana_extrinsic_votes: BTreeMap<ElectionIdentifier<SolanaElectionIdentifierExtra>, BTreeMap<<SolanaVoteStorageTuple as VoteStorage>::PartialVote, u32>> = BTreeMap::new();
-				let signed_block = client_copy.base_rpc_client.block(block_info.hash).await.unwrap();
-				if let Some(block) = signed_block {
-					let extrinsics = block.block.extrinsics;
-					for ex in extrinsics {
-						match ex.function {
-							state_chain_runtime::RuntimeCall::SolanaElections(call) => {
-								match call {
-									pallet_cf_elections::Call::vote { authority_votes } => {
-										for (election_id, vote) in *authority_votes {
-											match vote {
-												pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
-													solana_extrinsic_votes.entry(election_id).or_default()
-														.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
-												},
-												pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
-													let partial = <SolanaVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| SharedDataHash::of(&shared_data));
-													solana_extrinsic_votes.entry(election_id).or_default()
-														.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
-												},
-											}
-										}
-									},
-									pallet_cf_elections::Call::provide_shared_data { shared_data } => {
-										let shared_data_hash = SharedDataHash::of(&shared_data);
-										println!("  [Solana] Providing shared data: {:?} -> {:?}", shared_data_hash, shared_data);
-									}
-									_ => {},
-								}
-							},
-							state_chain_runtime::RuntimeCall::BitcoinElections(call) => {
-								match call {
-									pallet_cf_elections::Call::vote { authority_votes } => {
-										for (election_id, vote) in *authority_votes {
-											match vote {
-												pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(partial) => {
-													bitcoin_extrinsic_votes.entry(election_id).or_default()
-														.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
-												},
-												pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
-													let partial = <BitcoinVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| SharedDataHash::of(&shared_data));
-													bitcoin_extrinsic_votes.entry(election_id).or_default()
-														.entry(partial.clone()).and_modify(|entry| *entry += 1).or_insert(1);
-												},
-											}
-										}
-									},
-									pallet_cf_elections::Call::provide_shared_data { shared_data } => {
-										let shared_data_hash = SharedDataHash::of(&shared_data);
-										println!("  [Bitcoin] Providing shared data: {:?} -> {:?}", shared_data_hash, shared_data);
-									},
-									_ => {},
-								}
-							},
-							_ => {},
-						}
-					}
-
-					// ===== Detect completed elections =====
-					let bitcoin_completed: Vec<_> = bitcoin_elections_prev.keys()
-						.filter(|eid| !bitcoin_elections_curr.contains_key(eid))
-						.cloned()
-						.collect();
-					let solana_completed: Vec<_> = solana_elections_prev.keys()
-						.filter(|eid| !solana_elections_curr.contains_key(eid))
-						.cloned()
-						.collect();
-
-					// ===== Print vote summary =====
-					let btc_active = bitcoin_elections_prev.len();
-					let btc_completed_count = bitcoin_completed.len();
-					let sol_active = solana_elections_prev.len();
-					let sol_completed_count = solana_completed.len();
-
-					println!("\nBITCOIN ELECTIONS ({} active, {} completed this block):", btc_active, btc_completed_count);
-					for (election_id, _props) in &bitcoin_elections_prev {
-						let is_completed = bitcoin_completed.contains(election_id);
-						let status = if is_completed { " [COMPLETED]" } else { "" };
-						let election_type = bitcoin_election_type_name(election_id);
-						println!("  [{}] Election {:?}{}", election_type, election_id, status);
-
-						// Show storage votes (from BitmapComponents)
-						if let Some(vote_list) = bitcoin_storage_votes.get(election_id) {
-							println!("    Bitmap votes (from storage at block {}):", previous_block_number);
-							for (bitmap_component, count) in vote_list {
-								let resolved_component =
-									format_bitcoin_bitmap_component(bitmap_component, &bitcoin_shared_data_map);
-								println!("      {}: {} votes", resolved_component, count);
+		finalized_stream
+			.for_each(|block_info| {
+				let client = client.clone();
+				let ws_tx = ws_tx.clone();
+				async move {
+					println!("\n{:=^80}", format!(" Block {} ", block_info.number));
+					match build_block_update(&client, block_info.number, block_info.hash).await {
+						Ok(update) => {
+							print_block_summary(&update);
+							if let Ok(json) = serde_json::to_string(&update) {
+								let _ = ws_tx.send(json);
 							}
-						}
-
-						// Show storage votes (from IndividualComponents)
-						if let Some(vote_list) = bitcoin_individual_votes.get(election_id) {
-							println!("    Individual votes (from storage at block {}):", previous_block_number);
-							for (individual_component, count) in vote_list {
-								println!("      {:?}: {} votes", individual_component, count);
-							}
-						}
-
-						// Show new votes from this block's extrinsics
-						if let Some(extrinsic_votes) = bitcoin_extrinsic_votes.get(election_id) {
-							println!("    New votes this block:");
-							for (partial, count) in extrinsic_votes {
-								let variant_name = bitcoin_vote_variant_name(partial);
-								match partial {
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::A(inner) => {
-											let result = bitcoin_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::B(inner) => {
-											let result = bitcoin_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::C(inner) => {
-											let result = bitcoin_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::D(inner) => {
-											let result = bitcoin_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::EE(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote::FF(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-									}
-							}
-						}
-					}
-
-					println!("\nSOLANA ELECTIONS ({} active, {} completed this block):", sol_active, sol_completed_count);
-					for (election_id, _props) in &solana_elections_prev {
-						let is_completed = solana_completed.contains(election_id);
-						let status = if is_completed { " [COMPLETED]" } else { "" };
-						let election_type = solana_election_type_name(election_id);
-						println!("  [{}] Election {:?}{}", election_type, election_id, status);
-
-						// Show storage votes (from BitmapComponents)
-						if let Some(vote_list) = solana_storage_votes.get(election_id) {
-							println!("    Bitmap votes (from storage at block {}):", previous_block_number);
-							for (bitmap_component, count) in vote_list {
-								let resolved_component =
-									format_solana_bitmap_component(bitmap_component, &solana_shared_data_map);
-								println!("      {}: {} votes", resolved_component, count);
-							}
-						}
-
-						// Show storage votes (from IndividualComponents)
-						if let Some(vote_list) = solana_individual_votes.get(election_id) {
-							println!("    Individual votes (from storage at block {}):", previous_block_number);
-							for (individual_component, count) in vote_list {
-								println!("      {:?}: {} votes", individual_component, count);
-							}
-						}
-
-						// Show new votes from this block's extrinsics
-						if let Some(extrinsic_votes) = solana_extrinsic_votes.get(election_id) {
-							println!("    New votes this block:");
-							for (partial, count) in extrinsic_votes {
-								let variant_name = solana_vote_variant_name(partial);
-								match partial {
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::A(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::B(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::C(inner) => {
-											let result = solana_shared_data_map.get(&inner.value);
-											println!("      [{}] {:?} Slot {:?}: {} votes", variant_name, result, inner.block, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::D(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::EE(inner) => {
-											println!("      [{}] {:?}: {} votes", variant_name, inner, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::FF(inner) => {
-											let result = solana_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-										pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote::G(inner) => {
-											let result = solana_shared_data_map.get(inner);
-											println!("      [{}] {:?}: {} votes", variant_name, result, count);
-										},
-									}
-							}
-						}
-					}
-
-					println!("\n{}", "=".repeat(80));
-
-					// ===== Build and broadcast dashboard update =====
-					let btc_election_summaries: Vec<ElectionSummary> = bitcoin_elections_prev.keys().map(|election_id| {
-						let is_completed = bitcoin_completed.contains(election_id);
-						let bitmap_votes = bitcoin_storage_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
-								component: format_bitcoin_bitmap_component(comp, &bitcoin_shared_data_map),
-								count: *count,
-							}).collect())
-							.unwrap_or_default();
-						let individual_votes_json = bitcoin_individual_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
-								component: format!("{:?}", comp),
-								count: *count,
-							}).collect())
-							.unwrap_or_default();
-						let extrinsic_votes_json = bitcoin_extrinsic_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(partial, count)| {
-								let variant_name = bitcoin_vote_variant_name(partial).to_string();
-								let detail = format_bitcoin_vote_detail(partial, &bitcoin_shared_data_map);
-								ExtrinsicVoteGroup { variant_name, detail, count: *count }
-							}).collect())
-							.unwrap_or_default();
-						ElectionSummary {
-							election_type: bitcoin_election_type_name(election_id).to_string(),
-							election_id: format!("{:?}", election_id),
-							completed: is_completed,
-							bitmap_votes,
-							individual_votes: individual_votes_json,
-							extrinsic_votes: extrinsic_votes_json,
-						}
-					}).collect();
-
-					let sol_election_summaries: Vec<ElectionSummary> = solana_elections_prev.keys().map(|election_id| {
-						let is_completed = solana_completed.contains(election_id);
-						let bitmap_votes = solana_storage_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
-								component: format_solana_bitmap_component(comp, &solana_shared_data_map),
-								count: *count,
-							}).collect())
-							.unwrap_or_default();
-						let individual_votes_json = solana_individual_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(comp, count)| VoteGroup {
-								component: format!("{:?}", comp),
-								count: *count,
-							}).collect())
-							.unwrap_or_default();
-						let extrinsic_votes_json = solana_extrinsic_votes.get(election_id)
-							.map(|votes| votes.iter().map(|(partial, count)| {
-								let variant_name = solana_vote_variant_name(partial).to_string();
-								let detail = format_solana_vote_detail(partial, &solana_shared_data_map);
-								ExtrinsicVoteGroup { variant_name, detail, count: *count }
-							}).collect())
-							.unwrap_or_default();
-						ElectionSummary {
-							election_type: solana_election_type_name(election_id).to_string(),
-							election_id: format!("{:?}", election_id),
-							completed: is_completed,
-							bitmap_votes,
-							individual_votes: individual_votes_json,
-							extrinsic_votes: extrinsic_votes_json,
-						}
-					}).collect();
-
-					let block_update = BlockUpdate {
-						block_number: block_info.number,
-						bitcoin: ChainElections {
-							active_count: btc_active,
-							completed_count: btc_completed_count,
-							elections: btc_election_summaries,
 						},
-						solana: ChainElections {
-							active_count: sol_active,
-							completed_count: sol_completed_count,
-							elections: sol_election_summaries,
+						Err(e) => {
+							println!("Error processing block {}: {}", block_info.number, e);
 						},
-					};
-
-					if let Ok(json) = serde_json::to_string(&block_update) {
-						let _ = ws_tx.send(json);
 					}
 				}
-			}
-		}).await;
+			})
+			.await;
 
 		Ok(())
 
-		 }.boxed()).await.unwrap()
+	}.boxed())
+	.await
+	.unwrap()
+}
+
+fn strip_composite_prefix(s: &str) -> String {
+	for prefix in ["EE(", "FF(", "A(", "B(", "C(", "D(", "G("] {
+		if s.starts_with(prefix) && s.ends_with(')') {
+			let inner = &s[prefix.len()..s.len() - 1];
+			// Verify parentheses are balanced in the inner content
+			let mut depth = 0i32;
+			let balanced = inner.chars().all(|ch| {
+				match ch {
+					'(' => depth += 1,
+					')' => {
+						depth -= 1;
+						if depth < 0 {
+							return false;
+						}
+					},
+					_ => {},
+				}
+				true
+			}) && depth == 0;
+			if balanced {
+				return inner.to_string();
+			}
+		}
+	}
+	s.to_string()
+}
+
+/// Convert byte array patterns like `[186, 23, 45, ...]` to hex `0xba172d...`
+fn bytes_to_hex(s: &str) -> String {
+	let chars: Vec<char> = s.chars().collect();
+	let mut result = String::with_capacity(s.len());
+	let mut i = 0;
+
+	while i < chars.len() {
+		if chars[i] == '[' {
+			let start = i;
+			i += 1;
+			let content_start = i;
+			let mut depth = 1;
+			while i < chars.len() && depth > 0 {
+				match chars[i] {
+					'[' => depth += 1,
+					']' => depth -= 1,
+					_ => {},
+				}
+				if depth > 0 {
+					i += 1;
+				}
+			}
+			if depth == 0 {
+				let content: String = chars[content_start..i].iter().collect();
+				i += 1; // skip ']'
+
+				let mut bytes = Vec::new();
+				let mut valid = !content.trim().is_empty();
+				if valid {
+					for part in content.split(',') {
+						match part.trim().parse::<u16>() {
+							Ok(n) if n <= 255 => bytes.push(n as u8),
+							_ => {
+								valid = false;
+								break;
+							},
+						}
+					}
+				}
+
+				if valid && bytes.len() >= 8 {
+					result.push_str("0x");
+					for b in &bytes {
+						result.push_str(&format!("{:02x}", b));
+					}
+				} else {
+					result.push('[');
+					result.push_str(&content);
+					result.push(']');
+				}
+			} else {
+				// Unbalanced brackets
+				let remainder: String = chars[start..i].iter().collect();
+				result.push_str(&remainder);
+			}
+		} else {
+			result.push(chars[i]);
+			i += 1;
+		}
+	}
+
+	result
+}
+
+/// Strip composite prefix and convert byte arrays to hex
+fn format_for_display(debug_str: &str) -> String {
+	bytes_to_hex(&strip_composite_prefix(debug_str))
 }
 
 fn resolve_shared_data_value(
@@ -665,7 +733,7 @@ fn resolve_shared_data_value(
 	shared_data_map: &BTreeMap<SharedDataHash, impl std::fmt::Debug>,
 ) -> String {
 	match shared_data_map.get(shared_data_hash) {
-		Some(value) => format!("{:?}", value),
+		Some(value) => format_for_display(&format!("{:?}", value)),
 		None => format!("MissingSharedData({:?})", shared_data_hash),
 	}
 }
@@ -676,16 +744,12 @@ fn format_bitcoin_bitmap_component(
 ) -> String {
 	use pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeBitmapComponent;
 	match component {
-		CompositeBitmapComponent::A(shared_data_hash) =>
-			format!("A({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::B(shared_data_hash) =>
-			format!("B({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::C(shared_data_hash) =>
-			format!("C({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::D(shared_data_hash) =>
-			format!("D({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::EE(value) => format!("EE({:?})", value),
-		CompositeBitmapComponent::FF(value) => format!("FF({:?})", value),
+		CompositeBitmapComponent::A(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::B(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::C(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::D(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::EE(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::FF(value) => bytes_to_hex(&format!("{:?}", value)),
 	}
 }
 
@@ -695,16 +759,13 @@ fn format_solana_bitmap_component(
 ) -> String {
 	use pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositeBitmapComponent;
 	match component {
-		CompositeBitmapComponent::A(value) => format!("A({:?})", value),
-		CompositeBitmapComponent::B(value) => format!("B({:?})", value),
-		CompositeBitmapComponent::C(shared_data_hash) =>
-			format!("C({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::D(value) => format!("D({:?})", value),
-		CompositeBitmapComponent::EE(value) => format!("EE({:?})", value),
-		CompositeBitmapComponent::FF(shared_data_hash) =>
-			format!("FF({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
-		CompositeBitmapComponent::G(shared_data_hash) =>
-			format!("G({})", resolve_shared_data_value(shared_data_hash, shared_data_map)),
+		CompositeBitmapComponent::A(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::B(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::C(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::D(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::EE(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::FF(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::G(hash) => resolve_shared_data_value(hash, shared_data_map),
 	}
 }
 
@@ -714,12 +775,12 @@ fn format_bitcoin_vote_detail(
 ) -> String {
 	use pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote;
 	match partial {
-		CompositePartialVote::A(inner) => format!("{:?}", shared_data_map.get(inner)),
-		CompositePartialVote::B(inner) => format!("{:?}", shared_data_map.get(inner)),
-		CompositePartialVote::C(inner) => format!("{:?}", shared_data_map.get(inner)),
-		CompositePartialVote::D(inner) => format!("{:?}", shared_data_map.get(inner)),
-		CompositePartialVote::EE(inner) => format!("{:?}", inner),
-		CompositePartialVote::FF(inner) => format!("{:?}", inner),
+		CompositePartialVote::A(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::B(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::C(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::D(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::FF(inner) => bytes_to_hex(&format!("{:?}", inner)),
 	}
 }
 
@@ -729,13 +790,15 @@ fn format_solana_vote_detail(
 ) -> String {
 	use pallet_cf_elections::vote_storage::composite::tuple_7_impls::CompositePartialVote;
 	match partial {
-		CompositePartialVote::A(inner) => format!("{:?}", inner),
-		CompositePartialVote::B(inner) => format!("{:?}", inner),
+		CompositePartialVote::A(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::B(inner) => bytes_to_hex(&format!("{:?}", inner)),
 		CompositePartialVote::C(inner) =>
-			format!("{:?} Slot {:?}", shared_data_map.get(&inner.value), inner.block),
-		CompositePartialVote::D(inner) => format!("{:?}", inner),
-		CompositePartialVote::EE(inner) => format!("{:?}", inner),
-		CompositePartialVote::FF(inner) => format!("{:?}", shared_data_map.get(inner)),
-		CompositePartialVote::G(inner) => format!("{:?}", shared_data_map.get(inner)),
+			format!("{} Slot {:?}", resolve_shared_data_value(&inner.value, shared_data_map), inner.block),
+		CompositePartialVote::D(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::FF(inner) =>
+			resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::G(inner) =>
+			resolve_shared_data_value(inner, shared_data_map),
 	}
 }
