@@ -67,7 +67,6 @@ impl Key {
 
 use anyhow::Result;
 
-use crate::evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient};
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_vaults::VaultKeyRotatedExternally;
 use state_chain_runtime::chainflip::witnessing::pallet_hooks::{self, EvmKeyManagerEvent};
@@ -76,21 +75,6 @@ use crate::evm::event::Event;
 
 ////////////////////////////////////////////////////////
 // Elections code
-
-/// Configuration trait for chain-specific key manager event handling.
-pub trait KeyManagerEventConfig {
-	type Chain: Chain<
-		ChainAccount = EvmAddress,
-		ChainCrypto = cf_chains::evm::EvmCrypto,
-		ChainBlockNumber = u64,
-		TransactionFee = TransactionFee,
-		TransactionMetadata = EvmTransactionMetadata,
-		TransactionRef = H256,
-	>;
-	type Instance: 'static;
-
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
-}
 
 pub async fn handle_key_manager_events<
 	T: pallet_hooks::Config<I, TargetChain: EvmChain>,
