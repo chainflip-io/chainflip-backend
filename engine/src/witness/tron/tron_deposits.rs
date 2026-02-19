@@ -268,8 +268,7 @@ where
 mod tests {
 	use crate::{
 		tron::{
-			retry_rpc::{TronEndpoints, TronRetryRpcClient},
-			rpc_client_api::TronAddress,
+			retry_rpc::TronRetryRpcClient, rpc_client_api::TronAddress, settings::TronEndpoints,
 		},
 		witness::tron::tron_deposits::{
 			ingress_deposit_channels_and_vault_swaps, trx_ingress_amounts,
