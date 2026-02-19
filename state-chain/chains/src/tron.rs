@@ -226,6 +226,9 @@ pub struct TronTransactionMetadata {
 	// pub max_priority_fee_per_gas: Option<Uint>,
 	// pub gas_limit: Option<Uint>,
 	pub contract: Address,
+	// TODO: Fee limit is mandatory when broadcasting the transaction.
+	// Since the engines will need to set one we probably want to make
+	// it mandatory here and in the TronTransaction.
 	pub fee_limit: Option<Uint>,
 	// TODO: Depending on how we end up implementing the fee charging, we
 	// might end up with a user paying only part of the egresses costs.
@@ -301,6 +304,7 @@ pub struct TronTransactionFee {
 
 /// Required information to construct and sign a TRON transaction.
 // TODO: To update/review. We might want to add the function selector as a string here.
+// TODO: Like in the TranscationMetadata we might want to make fee_limit mandatory.
 #[derive(
 	Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq, Serialize, Deserialize,
 )]

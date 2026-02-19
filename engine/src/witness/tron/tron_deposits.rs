@@ -269,7 +269,6 @@ mod tests {
 	use crate::{
 		tron::{
 			retry_rpc::{TronEndpoints, TronRetryRpcClient},
-			rpc::TronRpcClient,
 			rpc_client_api::TronAddress,
 		},
 		witness::tron::tron_deposits::{

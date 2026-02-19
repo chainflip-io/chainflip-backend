@@ -178,7 +178,7 @@ pub struct TronTransactionRequest {
 	pub contract_address: TronAddress,
 	pub function_selector: String,
 	pub parameter: Vec<u8>,
-	pub fee_limit: Option<i64>,
+	pub fee_limit: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,4 +200,12 @@ pub struct TransactionExtention {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionExtentionResult {
 	pub result: bool,
+}
+
+/// Data returned from trigger_smart_contract containing unsigned transaction information
+#[derive(Debug, Clone)]
+pub struct UnsignedTronTransaction {
+	pub tx_id: H256,
+	pub raw_data_hex: String,
+	pub raw_data: Value,
 }

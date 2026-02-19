@@ -22,13 +22,14 @@ use ethers::{
 use futures_core::Future;
 use reqwest::Client;
 use serde_json::from_value;
+use sp_core::ecdsa::Signature;
 use std::{path::PathBuf, str::FromStr};
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, redact_endpoint_secret::SecretUrl};
 
 use super::rpc_client_api::{
 	BlockBalance, BlockNumber, BroadcastResponse, TransactionInfo, TriggerSmartContractRequest,
-	TronTransaction, TronTransactionRequest,
+	TronTransaction, TronTransactionRequest, UnsignedTronTransaction,
 };
 use crate::evm::rpc::{EvmRpcApi, EvmRpcClient};
 
@@ -133,8 +134,15 @@ pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	async fn broadcast_hex(&self, transaction_hex: &str) -> anyhow::Result<serde_json::Value>;
 	async fn trigger_smart_contract(
 		&self,
-		request: super::rpc_client_api::TriggerSmartContractRequest,
-	) -> anyhow::Result<String>;
+		request: TriggerSmartContractRequest,
+	) -> anyhow::Result<UnsignedTronTransaction>;
+	async fn broadcast_transaction(
+		&self,
+		tx_id: H256,
+		raw_data: serde_json::Value,
+		raw_data_hex: String,
+		signatures: Vec<Signature>,
+	) -> anyhow::Result<BroadcastResponse>;
 }
 
 // Implement EvmRpcApi for TronRpcClient to delegate JSON-RPC calls to the underlying EVM client.
@@ -200,6 +208,18 @@ impl TronRpcApi for TronRpcClient {
 			.call_http_api("/gettransactioninfobyid", Some(serde_json::json!({"value": tx_id})))
 			.await?;
 
+		// If the transaction exists but is not yet included or has low number of confirmations it
+		// can  return an empty object. Erroring with a different message than the JSON convertion
+		// for clarity.
+		if let Some(obj) = response.as_object() {
+			if obj.is_empty() {
+				return Err(anyhow!(
+					"Transaction info not available yet for tx_id: {}. The transaction may still be processing or does not exist.",
+					tx_id
+				));
+			}
+		}
+
 		let transaction_info = from_value(response)
 			.map_err(|err| anyhow!("Failed to parse transaction info: {}", err))?;
 
@@ -213,6 +233,18 @@ impl TronRpcApi for TronRpcClient {
 				Some(serde_json::json!({"value": tx_id, "visible": false})),
 			)
 			.await?;
+
+		// If the transaction exists but is not yet included or has low number of confirmations it
+		// can  return an empty object. Erroring with a different message than the JSON convertion
+		// for clarity.
+		if let Some(obj) = response.as_object() {
+			if obj.is_empty() {
+				return Err(anyhow!(
+					"Transaction info not available yet for tx_id: {}. The transaction may still be processing or does not exist.",
+					tx_id
+				));
+			}
+		}
 
 		let transaction =
 			from_value(response).map_err(|err| anyhow!("Failed to parse transaction: {}", err))?;
@@ -257,11 +289,10 @@ impl TronRpcApi for TronRpcClient {
 
 	async fn trigger_smart_contract(
 		&self,
-		request: super::rpc_client_api::TriggerSmartContractRequest,
-	) -> anyhow::Result<String> {
+		request: TriggerSmartContractRequest,
+	) -> anyhow::Result<UnsignedTronTransaction> {
 		// Build the request body explicitly with visible set to false
-		// Note: TronAddress will serialize to hex via its custom Serialize impl
-		// Vec<u8> parameter needs manual hex encoding
+		// call_value, call_token_value and token_id will never be needed
 		let body = serde_json::json!({
 			"owner_address": request.owner_address,
 			"contract_address": request.contract_address,
@@ -282,7 +313,41 @@ impl TronRpcApi for TronRpcClient {
 			return Err(anyhow!("Failed to trigger smart contract: result is false"));
 		}
 
-		Ok(transaction_extension.transaction.raw_data_hex)
+		let tx = transaction_extension.transaction;
+
+		Ok(UnsignedTronTransaction {
+			tx_id: tx.tx_id,
+			raw_data_hex: tx.raw_data_hex,
+			raw_data: serde_json::to_value(&tx.raw_data)
+				.map_err(|e| anyhow!("Failed to serialize raw_data: {}", e))?,
+		})
+	}
+
+	async fn broadcast_transaction(
+		&self,
+		tx_id: H256,
+		raw_data: serde_json::Value,
+		raw_data_hex: String,
+		signatures: Vec<Signature>,
+	) -> anyhow::Result<BroadcastResponse> {
+		// Convert signatures to hex strings
+		let signature_strings: Vec<String> =
+			signatures.iter().map(|sig| hex::encode(sig.0)).collect();
+
+		let body = serde_json::json!({
+			"txID": format!("{:x}", tx_id),
+			"raw_data": raw_data,
+			"raw_data_hex": raw_data_hex,
+			"signature": signature_strings,
+			"visible": false
+		});
+
+		let response = self.call_http_api("/broadcasttransaction", Some(body)).await?;
+
+		let broadcast_response: BroadcastResponse = from_value(response)
+			.map_err(|e| anyhow!("Failed to parse broadcast response: {}", e))?;
+
+		Ok(broadcast_response)
 	}
 }
 
@@ -293,7 +358,6 @@ pub trait TronSigningRpcApi: TronRpcApi {
 	async fn send_transaction(&self, tx: TronTransactionRequest) -> anyhow::Result<H256>;
 }
 
-// Implement TronRpcApi for TronRpcSigningClient by delegating to the underlying rpc_client
 #[async_trait::async_trait]
 impl TronRpcApi for TronRpcSigningClient {
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
@@ -318,13 +382,24 @@ impl TronRpcApi for TronRpcSigningClient {
 
 	async fn trigger_smart_contract(
 		&self,
-		request: super::rpc_client_api::TriggerSmartContractRequest,
-	) -> anyhow::Result<String> {
+		request: TriggerSmartContractRequest,
+	) -> anyhow::Result<UnsignedTronTransaction> {
 		self.rpc_client.trigger_smart_contract(request).await
+	}
+
+	async fn broadcast_transaction(
+		&self,
+		tx_id: H256,
+		raw_data: serde_json::Value,
+		raw_data_hex: String,
+		signatures: Vec<Signature>,
+	) -> anyhow::Result<BroadcastResponse> {
+		self.rpc_client
+			.broadcast_transaction(tx_id, raw_data, raw_data_hex, signatures)
+			.await
 	}
 }
 
-// Implement TronSigningRpcApi for TronRpcSigningClient
 #[async_trait::async_trait]
 impl TronSigningRpcApi for TronRpcSigningClient {
 	fn address(&self) -> H160 {
@@ -332,18 +407,51 @@ impl TronSigningRpcApi for TronRpcSigningClient {
 	}
 
 	async fn send_transaction(&self, tx: TronTransactionRequest) -> anyhow::Result<H256> {
-		// Convert the transaction bytes to hex string
-		// TODO: Implement proper transaction signing and encoding. We probably
-		// want to call first the trigger_smart_contract, get the raw_data_hex,
-		// sign it and then broadcast it using broadcast_hex.
-		let transaction_hex = "deadbeef".to_string();
+		// Build the trigger smart contract request
+		let trigger_request = TriggerSmartContractRequest {
+			owner_address: tx.owner_address,
+			contract_address: tx.contract_address,
+			function_selector: tx.function_selector,
+			parameter: tx.parameter,
+			fee_limit: tx.fee_limit,
+		};
 
-		// Broadcast the transaction. We could potentially use broadcastTransaction too.
-		let response_value = self.broadcast_hex(&transaction_hex).await?;
+		// Get the unsigned transaction from trigger_smart_contract
+		// TODO: TBD if we want to check some of the returned transaction data
+		// to ensure that the rpc is not returning some malicious values. We
+		// could check the fee_limit, owner_address and some few mmore values.
+		// However, we can't really check everything unless we do the same
+		// process locally so it might be ok to just trust the rpc.
+		let unsigned_tx = self.trigger_smart_contract(trigger_request).await?;
 
-		// Parse response into BroadcastResponse struct
-		let response: BroadcastResponse = from_value(response_value)
-			.map_err(|e| anyhow!("Failed to parse broadcast response: {}", e))?;
+		// Decode the raw_data_hex to bytes
+		let raw_data_bytes = hex::decode(&unsigned_tx.raw_data_hex)
+			.map_err(|e| anyhow!("Failed to decode raw_data_hex: {}", e))?;
+
+		// Hash the raw data with SHA256 (TRON uses SHA256, not Keccak256)
+		let hash = sp_core::hashing::sha2_256(&raw_data_bytes);
+
+		// Sign the hash using the wallet
+		let signature = self.wallet.sign_hash(H256::from(hash))?;
+
+		// Convert ethers signature to sp_core::ecdsa::Signature
+		// TRON uses recoverable signatures (65 bytes: r(32) + s(32) + v(1))
+		let mut sig_bytes = [0u8; 65];
+		signature.r.to_big_endian(&mut sig_bytes[0..32]);
+		signature.s.to_big_endian(&mut sig_bytes[32..64]);
+		sig_bytes[64] = signature.v as u8;
+
+		let signature = Signature::from(sig_bytes);
+
+		// Broadcast the signed transaction
+		let response = self
+			.broadcast_transaction(
+				unsigned_tx.tx_id,
+				unsigned_tx.raw_data,
+				unsigned_tx.raw_data_hex,
+				vec![signature],
+			)
+			.await?;
 
 		// Check if the broadcast was successful
 		if !response.result {
@@ -353,17 +461,8 @@ impl TronSigningRpcApi for TronRpcSigningClient {
 			return Err(anyhow!("Transaction broadcast failed: {}{}", error_message, error_code));
 		}
 
-		// Extract transaction ID from successful response
-		let tx_id = response
-			.txid
-			.ok_or_else(|| anyhow!("Broadcast succeeded but missing txid in response"))?;
-
-		// Parse the hex string to H256
-		let tx_hash = H256::from_slice(
-			&hex::decode(&tx_id).map_err(|e| anyhow!("Failed to decode transaction ID: {}", e))?,
-		);
-
-		Ok(tx_hash)
+		// The transaction ID is already in the unsigned_tx
+		Ok(unsigned_tx.tx_id)
 	}
 }
 
@@ -412,6 +511,28 @@ mod tests {
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
 	async fn test_tron_get_transaction_by_id() {
+		// Tron Nile testnet endpoints
+		let tron_rpc_client = TronRpcClient::new(
+			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
+			SecretUrl::from("https://nile.trongrid.io/jsonrpc".to_string()),
+			3448148188, // Nile testnet chain ID (0xcd8690dc)
+			"Tron-Nile",
+		)
+		.unwrap()
+		.await;
+
+		// Test getTransactionById with a transaction ID
+		let tx_id = "bd17efdc7bd30e3887a3af59454bbe219ba53a4d91040aae4c0948edda586c0f";
+		let result = tron_rpc_client.get_transaction_by_id(tx_id).await.unwrap();
+		println!("Transaction query result: {:#?}", result);
+
+		// Verify the transaction ID matches
+		assert_eq!(result.tx_id, tx_id.parse().unwrap());
+	}
+
+	#[ignore = "requires access to external RPC"]
+	#[tokio::test]
+	async fn test_tron_get_note() {
 		// Tron Nile testnet endpoints
 		let tron_rpc_client = TronRpcClient::new(
 			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
@@ -486,11 +607,82 @@ mod tests {
 			fee_limit: 1000000000,
 		};
 
-		let raw_data_hex = tron_rpc_client.trigger_smart_contract(request).await.unwrap();
-		println!("Trigger smart contract result (raw_data_hex): {}", raw_data_hex);
+		let unsigned_tx = tron_rpc_client.trigger_smart_contract(request).await.unwrap();
+		println!("Trigger smart contract {:?}", unsigned_tx);
+		println!("Trigger smart contract result (tx_id): {:x}", unsigned_tx.tx_id);
+		println!(
+			"Trigger smart contract result (raw_data_hex length): {}",
+			unsigned_tx.raw_data_hex.len()
+		);
 
-		// Verify we got a non-empty hex string
-		assert!(!raw_data_hex.is_empty());
-		assert!(raw_data_hex.len() > 0);
+		// Verify we got valid data
+		assert!(!unsigned_tx.raw_data_hex.is_empty());
+		assert!(unsigned_tx.raw_data_hex.len() > 0);
+	}
+
+	#[ignore = "requires access to external RPC and private key"]
+	#[tokio::test]
+	async fn test_tron_send_transaction() {
+		// Fill in the path to your private key file
+		let private_key_file =
+			PathBuf::from("/home/albert/work/backend_tron/chainflip-backend/tron_private_key");
+
+		// Tron Mainnet endpoints
+		let tron_signing_client = TronRpcSigningClient::new(
+			private_key_file,
+			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
+			SecretUrl::from("https://nile.trongrid.io/jsonrpc".to_string()),
+			3448148188, // Nile testnet chain ID (0xcd8690dc)
+			"Tron-Nile",
+		)
+		.unwrap()
+		.await;
+
+		println!("Signer address: {:x}", tron_signing_client.address());
+
+		// Create a transaction request to transfer USDT (same data as
+		// test_tron_trigger_smart_contract)
+		let tx_request = TronTransactionRequest {
+            owner_address: TronAddress(
+                hex::decode("41f10b2b8efd89cb89c3c43b54d628b4f15302233e")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            contract_address: TronAddress(
+                hex::decode("41eca9bc828a3005b9a3b909f2cc5c2a54794de05f")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            function_selector: "transfer(address,uint256)".to_string(),
+            parameter: hex::decode(
+                "00000000000000000000004115208EF33A926919ED270E2FA61367B2DA3753DA0000000000000000000000000000000000000000000000000000000000000032"
+            )
+            .unwrap(),
+            fee_limit: 1000000000,
+        };
+
+		// Send the transaction (encode + sign + broadcast)
+		let tx_hash = tron_signing_client.send_transaction(tx_request).await.unwrap();
+
+		println!("Transaction sent successfully!");
+		println!("Transaction hash: {:x}", tx_hash);
+
+		// We need to wait for the transaction to be included
+		println!("Waiting for transaction to be processed...");
+		tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;
+
+		// Verify the transaction was broadcast by fetching its info
+		let tx_info = tron_signing_client
+			.get_transaction_info_by_id(&format!("{:x}", tx_hash))
+			.await
+			.map_err(|e| {
+				eprintln!("Failed to get transaction info: {}", e);
+				e
+			})
+			.unwrap();
+
+		println!("Transaction info: {:#?}", tx_info);
 	}
 }
