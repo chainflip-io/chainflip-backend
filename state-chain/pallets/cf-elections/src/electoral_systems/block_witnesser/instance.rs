@@ -7,7 +7,6 @@ use frame_support::{pallet_prelude::*, DefaultNoBound};
 use sp_std::collections::btree_map::BTreeMap;
 
 use frame_system::pallet_prelude::BlockNumberFor;
-use serde::{Deserialize, Serialize};
 
 use crate::{
 	electoral_systems::{

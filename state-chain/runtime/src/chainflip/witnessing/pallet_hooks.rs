@@ -2,7 +2,6 @@ use cf_chains::instances::PalletInstanceAlias;
 use cf_primitives::BlockWitnesserEvent;
 use cf_traits::Hook;
 use cf_utilities::{define_empty_struct, derive_common_traits_no_bounds, hook_impls};
-use codec::{Decode, Encode};
 use generic_typeinfo_derive::GenericTypeInfo;
 use pallet_cf_broadcast::TransactionConfirmation;
 use pallet_cf_governance::GovCallHash;
@@ -11,7 +10,6 @@ use pallet_cf_ingress_egress::{
 };
 use pallet_cf_vaults::VaultKeyRotatedExternally;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::boxed::Box;
 
 // open up this enum since it's used in many matches

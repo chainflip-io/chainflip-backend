@@ -50,7 +50,6 @@ use pallet_cf_elections::{
 use pallet_cf_funding::{EthTransactionHash, EthereumDepositAndSCCall, FlipBalance};
 use pallet_cf_ingress_egress::{DepositWitness, ProcessedUpTo};
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_core::{Decode, Encode, Get};
 use sp_runtime::RuntimeDebug;
 use sp_std::vec::Vec;

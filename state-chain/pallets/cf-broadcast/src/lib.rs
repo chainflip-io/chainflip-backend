@@ -50,7 +50,6 @@ use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use scale_info::TypeInfo;
-use serde::{Deserialize, Serialize};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 pub use weights::WeightInfo;
 
