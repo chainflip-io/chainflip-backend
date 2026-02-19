@@ -15,23 +15,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	mock::*, AggStats, DeltaStats, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
-	Pallet, PalletSafeMode, WindowedEma, ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_30_DAYS,
-	ALPHA_HALF_LIFE_7_DAYS, EMA_PRUNE_THRESHOLD_USD, STATS_UPDATE_INTERVAL_IN_BLOCKS,
+	ALPHA_HALF_LIFE_1_DAY, ALPHA_HALF_LIFE_7_DAYS, ALPHA_HALF_LIFE_30_DAYS, AggStats, DeltaStats,
+	EMA_PRUNE_THRESHOLD_USD, Error, Event, LiquidityRefundAddress, LpAggStats, LpDeltaStats,
+	Pallet, PalletSafeMode, STATS_UPDATE_INTERVAL_IN_BLOCKS, WindowedEma, mock::*,
+	weights::WeightInfo as _,
 };
 use std::collections::BTreeMap;
 
-use cf_chains::{address::EncodedAddress, ForeignChainAddress};
-use cf_primitives::{Asset, AssetAmount, ForeignChain, SwapRequestId, SECONDS_PER_BLOCK};
+use cf_chains::{ForeignChainAddress, address::EncodedAddress};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, SECONDS_PER_BLOCK, SwapRequestId};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
-	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	AccountRoleRegistry, BalanceApi, Chainflip,
 	ExpiryBehaviour::RefundIfExpires,
 	LpStatsApi, PriceLimitsAndExpiry, SafeMode, SetSafeMode, SwapOutputAction, SwapRequestType,
+	mocks::swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 };
-use frame_support::{assert_err, assert_noop, assert_ok, error::BadOrigin, traits::OriginTrait};
+use frame_support::{
+	assert_err, assert_noop, assert_ok, error::BadOrigin, pallet_prelude::Weight,
+	traits::OriginTrait,
+};
 use sp_runtime::FixedU128;
 
 #[test]
@@ -636,7 +640,7 @@ fn update_agg_stats_updates_correctly() {
 		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128); // 500 usd
 
 		// Call the update function and verify that delta stats are deleted after the update
-		LiquidityProvider::update_agg_stats();
+		LiquidityProvider::update_agg_stats(Weight::MAX);
 		// After calling update_agg_stats(), all Delta stats should be deleted
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT, Asset::Eth), None);
 		assert_eq!(LpDeltaStats::<Test>::get(LP_ACCOUNT_2, Asset::Flip), None);
@@ -704,17 +708,21 @@ fn update_agg_stats_prunes_below_threshold() {
 			lp_stats.insert(Asset::Flip, above_threshold);
 		});
 
-		LiquidityProvider::update_agg_stats();
+		LiquidityProvider::update_agg_stats(Weight::MAX);
 
 		let agg_stats_map = LpAggStats::<Test>::get();
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT)
-			.and_then(|stats| stats.get(&Asset::Eth))
-			.is_none());
-		assert!(agg_stats_map
-			.get(&LP_ACCOUNT_2)
-			.and_then(|stats| stats.get(&Asset::Flip))
-			.is_some());
+		assert!(
+			agg_stats_map
+				.get(&LP_ACCOUNT)
+				.and_then(|stats| stats.get(&Asset::Eth))
+				.is_none()
+		);
+		assert!(
+			agg_stats_map
+				.get(&LP_ACCOUNT_2)
+				.and_then(|stats| stats.get(&Asset::Flip))
+				.is_some()
+		);
 
 		let lp2_stats = agg_stats_map.get(&LP_ACCOUNT_2).unwrap().get(&Asset::Flip).unwrap();
 		assert!(
@@ -722,6 +730,72 @@ fn update_agg_stats_prunes_below_threshold() {
 				FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD)
 		);
 	});
+}
+
+#[test]
+fn update_agg_stats_metered_in_steps_equals_single_pass() {
+	// Set up identical initial state in two test runs: one processes everything in a single call
+	// with unlimited budget, the other uses a budget that only allows one LP per call.
+
+	fn setup_state() {
+		let pre_existing_eth_stats = AggStats::new(DeltaStats {
+			limit_orders_swap_usd_volume: FixedU128::from_inner(1_000_000_000u128),
+		});
+		let pre_existing_flip_stats = AggStats::new(DeltaStats {
+			limit_orders_swap_usd_volume: FixedU128::from_inner(2_000_000_000u128),
+		});
+
+		LpAggStats::<Test>::mutate(|m| {
+			m.entry(LP_ACCOUNT).or_default().insert(Asset::Eth, pre_existing_eth_stats);
+			m.entry(LP_ACCOUNT_2).or_default().insert(Asset::Flip, pre_existing_flip_stats);
+		});
+
+		// Deltas for existing LPs
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT, &Asset::Eth, 700_000_000u128);
+		LiquidityProvider::on_limit_order_filled(&LP_ACCOUNT_2, &Asset::Flip, 500_000_000u128);
+
+		// Delta for a brand-new LP (no pre-existing AggStats)
+		LiquidityProvider::on_limit_order_filled(&NON_LP_ACCOUNT, &Asset::Eth, 300_000_000u128);
+	}
+
+	// Run 1: single pass with unlimited budget
+	let single_pass_result = new_test_ext()
+		.execute_with(|| {
+			setup_state();
+			LiquidityProvider::update_agg_stats(Weight::MAX);
+			LpAggStats::<Test>::get()
+		})
+		.into_context();
+
+	// Run 2: multiple passes with a tight budget
+	let multi_pass_result = new_test_ext()
+		.execute_with(|| {
+			setup_state();
+
+			let overhead = <Test as crate::Config>::WeightInfo::update_agg_stats_existing(0);
+			let per_existing = <Test as crate::Config>::WeightInfo::update_agg_stats_existing(1)
+				.saturating_sub(overhead);
+			let per_new = <Test as crate::Config>::WeightInfo::update_agg_stats_new(1)
+				.saturating_sub(<Test as crate::Config>::WeightInfo::update_agg_stats_new(0));
+
+			// Budget for exactly 2 existing LPs, no new LPs
+			let budget_two_existing = overhead.saturating_add(per_existing.saturating_mul(2u64));
+			// Budget for exactly 1 new LP, no existing LPs
+			let budget_one_new = overhead.saturating_add(per_new);
+
+			// First call: processes both existing LPs
+			LiquidityProvider::update_agg_stats(budget_two_existing);
+			// Second call: processes the new LP delta
+			LiquidityProvider::update_agg_stats(budget_one_new);
+
+			// All deltas should now be drained
+			assert_eq!(LpDeltaStats::<Test>::iter().count(), 0);
+
+			LpAggStats::<Test>::get()
+		})
+		.into_context();
+
+	assert_eq!(single_pass_result, multi_pass_result);
 }
 
 #[test]
@@ -771,12 +845,16 @@ fn test_purge_balances() {
 		}) => ()
 		);
 
-		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT)
-			.iter()
-			.all(|(_, amount)| *amount == 0));
+		assert!(
+			MockBalanceApi::free_balances(&LP_ACCOUNT)
+				.iter()
+				.all(|(_, amount)| *amount == 0)
+		);
 
-		assert!(MockBalanceApi::free_balances(&LP_ACCOUNT_2)
-			.iter()
-			.all(|(_, amount)| *amount == 0));
+		assert!(
+			MockBalanceApi::free_balances(&LP_ACCOUNT_2)
+				.iter()
+				.all(|(_, amount)| *amount == 0)
+		);
 	});
 }

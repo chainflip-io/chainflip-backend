@@ -179,7 +179,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::update_agg_stats(Weight::MAX);
 		}
 
 		// Verify existing LPs had their stats updated
@@ -218,7 +218,7 @@ mod benchmarks {
 
 		#[block]
 		{
-			Pallet::<T>::update_agg_stats();
+			Pallet::<T>::update_agg_stats(Weight::MAX);
 		}
 
 		// Verify new LPs were added to agg stats

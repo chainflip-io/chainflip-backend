@@ -362,16 +362,25 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
-			let mut weight_used: Weight = T::DbWeight::get().reads(1);
+		fn on_idle(current_block: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			let base_weight = T::DbWeight::get().reads(1);
+
+			if !remaining_weight.all_gte(base_weight) {
+				return Weight::zero()
+			}
+
+			let mut weight_used = base_weight;
 
 			let blocks_elapsed = current_block.saturating_sub(StatsLastUpdatedAt::<T>::get());
 
 			if blocks_elapsed.saturated_into::<u64>() >= STATS_UPDATE_INTERVAL_IN_BLOCKS {
-				weight_used += Self::update_agg_stats();
+				let write_overhead = T::DbWeight::get().writes(1);
+				let stats_budget =
+					remaining_weight.saturating_sub(weight_used).saturating_sub(write_overhead);
+				weight_used += Self::update_agg_stats(stats_budget);
 
 				StatsLastUpdatedAt::<T>::put(current_block);
-				weight_used += T::DbWeight::get().writes(1);
+				weight_used += write_overhead;
 			}
 			weight_used
 		}
@@ -672,14 +681,38 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn update_agg_stats() -> Weight {
+	fn update_agg_stats(weight_budget: Weight) -> Weight {
+		let overhead = T::WeightInfo::update_agg_stats_existing(0);
+		if !weight_budget.all_gte(overhead) {
+			return Weight::zero()
+		}
+
+		let per_existing_lp = T::WeightInfo::update_agg_stats_existing(1).saturating_sub(overhead);
+		let per_new_lp = T::WeightInfo::update_agg_stats_new(1)
+			.saturating_sub(T::WeightInfo::update_agg_stats_new(0));
+
+		let mut remaining_budget = weight_budget.saturating_sub(overhead);
+
 		LpAggStats::<T>::mutate(|agg_stats_map| {
 			let prune_threshold = FixedU128::from_inner(EMA_PRUNE_THRESHOLD_USD);
 			let mut empty_lps: Vec<T::AccountId> = Vec::new();
+			let mut processed_lps = sp_std::collections::btree_set::BTreeSet::<T::AccountId>::new();
+			let mut existing_lps_count: u32 = 0;
+			let mut extra_lps_count: u32 = 0;
+			let max_existing_lps = remaining_budget
+				.ref_time()
+				.checked_div(per_existing_lp.ref_time())
+				.and_then(|max| u32::try_from(max).ok())
+				.unwrap_or(u32::MAX);
 
-			// For every existing Lp, update their Aggregate stats from accumulated delta stats
-			let existing_lps_count = agg_stats_map.len() as u32;
+			// Phase 1: Update existing LPs within budget
 			for (lp, lp_stats) in agg_stats_map.iter_mut() {
+				if existing_lps_count >= max_existing_lps {
+					break;
+				}
+				processed_lps.insert(lp.clone());
+				existing_lps_count += 1;
+
 				for (asset, agg_stats) in lp_stats.iter_mut() {
 					agg_stats.update(&LpDeltaStats::<T>::take(lp, asset).unwrap_or_default());
 				}
@@ -689,12 +722,35 @@ impl<T: Config> Pallet<T> {
 					empty_lps.push(lp.clone());
 				}
 			}
+			remaining_budget = remaining_budget
+				.saturating_sub(per_existing_lp.saturating_mul(existing_lps_count.into()));
+			let max_new_lps = remaining_budget
+				.ref_time()
+				.checked_div(per_new_lp.ref_time())
+				.and_then(|max| u32::try_from(max).ok())
+				.unwrap_or(u32::MAX);
 
-			// Any left-over deltas correspond to LPs that didn't have Aggregate entries yet
-			let mut extra_lps_count = 0;
-			for (lp, asset, delta) in LpDeltaStats::<T>::drain() {
-				agg_stats_map.entry(lp.clone()).or_default().insert(asset, AggStats::new(delta));
+			// Phase 2: Process remaining delta entries within budget.
+			// Skip deltas for existing LPs that weren't processed in Phase 1,
+			// as those should be processed together with their EMA decay.
+			let mut deltas_to_remove: Vec<(T::AccountId, Asset)> = Vec::new();
+			for (lp, asset, delta) in LpDeltaStats::<T>::iter() {
+				if extra_lps_count >= max_new_lps {
+					break;
+				}
+
+				if agg_stats_map.contains_key(&lp) && !processed_lps.contains(&lp) {
+					continue;
+				}
+
 				extra_lps_count += 1;
+
+				agg_stats_map.entry(lp.clone()).or_default().insert(asset, AggStats::new(delta));
+				deltas_to_remove.push((lp, asset));
+			}
+
+			for (lp, asset) in deltas_to_remove {
+				LpDeltaStats::<T>::remove(&lp, asset);
 			}
 
 			for lp in empty_lps {
