@@ -62,15 +62,15 @@ pub struct TronVaultSwapData {
 /// - Second: (transaction_id, vault_amount) for vault changes
 ///
 /// Transactions with any negative deposit channel amounts are skipped entirely.
-pub async fn trx_ingress_amounts<TronRetryRpcClient>(
-	tron_rpc: &TronRetryRpcClient,
+pub async fn trx_ingress_amounts<Client>(
+	tron_rpc: &Client,
 	deposit_channels: &[H160],
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-) -> Result<(Vec<(H256, H160, u64)>, Vec<(H256, u64)>), anyhow::Error>
+	) -> Result<(Vec<(H256, H160, u64)>, Vec<(H256, u64)>), anyhow::Error>
 where
-	TronRetryRpcClient: TronRetryRpcApi + Send + Sync + Clone,
+	Client: TronRetryRpcApi + Send + Sync + Clone,
 {
 	let block_balance = tron_rpc.get_block_balances(block_number, block_hash).await;
 
@@ -155,15 +155,15 @@ where
 /// Returns:
 /// - deposit_channel_changes: Vec of (transaction_id, evm_address, amount)
 /// - vault_swaps: Vec of Vault swaps
-pub async fn ingress_deposit_channels_and_vault_swaps<TronRetryRpcClient>(
-	tron_rpc: &TronRetryRpcClient,
+pub async fn ingress_deposit_channels_and_vault_swaps<Client>(
+	tron_rpc: &Client,
 	deposit_channels: &[H160],
 	vault_address: H160,
 	block_number: i64,
 	block_hash: &str,
-) -> Result<(Vec<(H256, H160, u64)>, Vec<H256>), anyhow::Error>
+	) -> Result<(Vec<(H256, H160, u64)>, Vec<H256>), anyhow::Error>
 where
-	TronRetryRpcClient: TronRetryRpcApi + Send + Sync + Clone,
+	Client: TronRetryRpcApi + Send + Sync + Clone,
 {
 	// Get ingress amounts for deposit channels and vault
 	let (deposit_channel_changes, vault_changes) =
@@ -283,7 +283,7 @@ mod tests {
 	async fn test_get_tron_trx_ingress_amounts() {
 		task_scope::task_scope(|scope| {
 			async {
-				let retry_client = TronRetryRpcClient::new(
+				   let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
 					scope,
 					crate::settings::NodeContainer {
 						primary: TronEndpoints {
@@ -427,7 +427,7 @@ mod tests {
 	async fn test_ingress_deposit_channels_and_vault_swaps() {
 		task_scope::task_scope(|scope| {
 			async {
-				let retry_client = TronRetryRpcClient::new(
+				   let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcSigningClient>::new(
 					scope,
 					crate::settings::NodeContainer {
 						primary: TronEndpoints {

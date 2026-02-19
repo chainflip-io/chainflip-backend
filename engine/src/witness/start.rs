@@ -21,7 +21,7 @@ use crate::{
 	db::PersistentKeyDB,
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
-	sol::retry_rpc::SolRetryRpcClient,
+	sol::retry_rpc::SolRetryRpcClient, tron::retry_rpc::TronRetryRpcClient,
 };
 use cf_utilities::task_scope::Scope;
 use engine_sc_client::{
@@ -38,7 +38,8 @@ use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
 
-// TODO: Add TRON client
+// TODO: Add TRON
+
 
 /// Starts all the witnessing tasks.
 // It's important that this function is not blocking, at any point, even if there is no connection

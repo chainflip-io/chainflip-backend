@@ -16,10 +16,11 @@
 
 use crate::{
 	evm::rpc::EvmRpcApi,
-	retrier::{RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
-	settings::{NodeContainer, TronEndpoints},
+	retrier::{Attempt, MAX_RPC_RETRY_DELAY, RequestLog, RetrierClient},
+	settings::{NodeContainer, TronEndpoints}, tron::rpc::TronSigningRpcApi,
 };
-// use cf_chains::Tron;
+use std::future::Future;
+use futures::future;
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use ethers::types::{Block, Filter, Log, Transaction, TransactionReceipt, H256, U256, U64};
@@ -27,57 +28,82 @@ use ethers::types::{Block, Filter, Log, Transaction, TransactionReceipt, H256, U
 use anyhow::Result;
 
 use super::{
-	rpc::{TronRpcApi, TronRpcClient},
+	rpc::{TronRpcApi, TronRpcClient, TronRpcSigningClient},
 	rpc_client_api::{
-		BlockBalance, BlockNumber, BroadcastResponse, TransactionInfo, TriggerSmartContractRequest,
-		TronTransaction, UnsignedTronTransaction,
+		BlockBalance, BlockNumber, TransactionInfo, TriggerSmartContractRequest,
+		TronTransaction, UnsignedTronTransaction, TronTransactionRequest, TronAddress
 	},
 };
-use sp_core::ecdsa::Signature;
 
 #[derive(Clone)]
-pub struct TronRetryRpcClient {
-	rpc_retry_client: RetrierClient<TronRpcClient>,
+pub struct TronRetryRpcClient<Rpc: TronRpcApi> {
+	rpc_retry_client: RetrierClient<Rpc>,
 	chain_name: &'static str,
 	witness_period: u64,
 }
 
 const TRON_RPC_TIMEOUT: Duration = Duration::from_secs(4);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
+const MAX_BROADCAST_RETRIES: Attempt = 2;
 
-impl TronRetryRpcClient {
+impl<Rpc: TronRpcApi> TronRetryRpcClient<Rpc> {
+	fn from_inner_clients(
+		scope: &Scope<'_, anyhow::Error>,
+		rpc_client: Rpc,
+		backup_rpc_client: Option<Rpc>,
+		chain_name: &'static str,
+		witness_period: u64,
+	) -> Self {
+		let rpc_retry_client = RetrierClient::new(
+			scope,
+			"tron_rpc",
+			future::ready(rpc_client),
+			backup_rpc_client.map(future::ready),
+			TRON_RPC_TIMEOUT,
+			MAX_RPC_RETRY_DELAY,
+			MAX_CONCURRENT_SUBMISSIONS,
+		);
+		Self { rpc_retry_client, chain_name, witness_period }
+	}
+}
+
+
+
+impl TronRetryRpcClient<TronRpcSigningClient> {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<TronEndpoints>,
 		expected_chain_id: u64,
 		chain_name: &'static str,
 		witness_period: u64,
+		private_key_file: std::path::PathBuf,
 	) -> Result<Self> {
-		let primary = {
+		let primary_fut = {
 			let http = nodes.primary.http_endpoint.clone();
 			let json = nodes.primary.json_rpc_endpoint.clone();
-			TronRpcClient::new(http, json, expected_chain_id, chain_name)?
+			TronRpcSigningClient::new(private_key_file.clone(), http, json, expected_chain_id, chain_name)?
 		};
-		let backup = if let Some(backup_endpoint) = nodes.backup.clone() {
-			Some(TronRpcClient::new(
-				backup_endpoint.http_endpoint,
-				backup_endpoint.json_rpc_endpoint,
+		let backup_fut = nodes.backup.as_ref().map(|ep| {
+			TronRpcSigningClient::new(
+				private_key_file.clone(),
+				ep.http_endpoint.clone(),
+				ep.json_rpc_endpoint.clone(),
 				expected_chain_id,
 				chain_name,
-			)?)
-		} else {
-			None
+			)
+		}).transpose()?;
+		let primary = primary_fut.await;
+		let backup = match backup_fut {
+			Some(fut) => Some(fut.await),
+			None => None,
 		};
-		let rpc_retry_client = RetrierClient::new(
+		Ok(Self::from_inner_clients(
 			scope,
-			"tron_rpc",
 			primary,
 			backup,
-			TRON_RPC_TIMEOUT,
-			MAX_RPC_RETRY_DELAY,
-			MAX_CONCURRENT_SUBMISSIONS,
-		);
-		Ok(Self { rpc_retry_client, chain_name, witness_period })
+			chain_name,
+			witness_period,
+		))
 	}
 }
 
@@ -92,13 +118,6 @@ pub trait TronRetryRpcApi: Clone {
 		&self,
 		request: TriggerSmartContractRequest,
 	) -> UnsignedTronTransaction;
-	async fn broadcast_transaction(
-		&self,
-		tx_id: H256,
-		raw_data: serde_json::Value,
-		raw_data_hex: String,
-		signatures: Vec<Signature>,
-	) -> BroadcastResponse;
 
 	// EVM-compatible JSON-RPC methods (via Tron's JSON-RPC)
 	async fn chain_id(&self) -> U256;
@@ -112,7 +131,15 @@ pub trait TronRetryRpcApi: Clone {
 }
 
 #[async_trait::async_trait]
-impl TronRetryRpcApi for TronRetryRpcClient {
+pub trait TronRetrySigningRpcApi {
+	async fn broadcast_transaction(
+		&self,
+		tx: cf_chains::tron::TronTransaction,
+	) -> anyhow::Result<H256>;
+}
+
+#[async_trait::async_trait]
+impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApi for TronRetryRpcClient<Rpc> {
 	// Tron HTTP API methods
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> TransactionInfo {
 		let tx_id = tx_id.to_owned();
@@ -179,30 +206,6 @@ impl TronRetryRpcApi for TronRetryRpcClient {
 				Box::pin(move |client| {
 					let request = request.clone();
 					Box::pin(async move { client.trigger_smart_contract(request).await })
-				}),
-			)
-			.await
-	}
-
-	async fn broadcast_transaction(
-		&self,
-		tx_id: H256,
-		raw_data: serde_json::Value,
-		raw_data_hex: String,
-		signatures: Vec<Signature>,
-	) -> BroadcastResponse {
-		self.rpc_retry_client
-			.request(
-				RequestLog::new("broadcastTransaction".to_string(), Some(format!("{:?}", tx_id))),
-				Box::pin(move |client| {
-					let raw_data = raw_data.clone();
-					let raw_data_hex = raw_data_hex.clone();
-					let signatures = signatures.clone();
-					Box::pin(async move {
-						client
-							.broadcast_transaction(tx_id, raw_data, raw_data_hex, signatures)
-							.await
-					})
 				}),
 			)
 			.await
@@ -303,6 +306,40 @@ impl TronRetryRpcApi for TronRetryRpcClient {
 			.request(
 				RequestLog::new("eth_blockNumber".to_string(), None),
 				Box::pin(move |client| Box::pin(async move { client.get_block_number().await })),
+			)
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> {
+	async fn broadcast_transaction(
+		&self,
+		transaction: cf_chains::tron::TronTransaction,
+	) -> anyhow::Result<H256> {
+		let _s = self.chain_name.to_owned();
+		self.rpc_retry_client
+			.request_with_limit(
+				RequestLog::new(
+					"broadcastTransaction".to_string(),
+					Some(format!("{:?}", transaction)),
+				),
+				Box::pin(move |client| {
+					let transaction = transaction.clone();
+					let signer_address = TronAddress::from_evm_address(client.address());
+					let contract_address = TronAddress::from_evm_address(transaction.contract);
+					Box::pin(async move { client.send_transaction(TronTransactionRequest{
+						owner_address: signer_address,
+						contract_address,
+						 // TODO: Add function selector? Maybe we need to remove the first 4 bytes of the data.
+						function_selector: "".to_string(),
+						parameter: transaction.data,
+						// TODO: This should almost certainly not be an option coming from the SC (unless we do energy estimation here)
+						fee_limit: transaction.fee_limit.unwrap_or(U256::from(100000)).as_u64() as i64,
+						// value is automatically defaulted to zero
+					}).await })
+				}),
+				MAX_BROADCAST_RETRIES,
 			)
 			.await
 	}
