@@ -90,17 +90,49 @@ jobs:
       - name: List keys 🗝️
         run: gpg -K
 
+      - name: Restore aptly DB from S3 💾
+        run: |
+          export AWS_SDK_LOAD_CONFIG=1
+          mkdir -p ~/.aptly/db
+          # No || true: a real sync failure (permissions, network) must fail loudly.
+          # aws s3 sync exits 0 on a first run when nothing exists yet, so this is safe.
+          aws s3 sync "s3://${REPO_BUCKET}/aptly-db/" ~/.aptly/db/
+
       - name: Setup aptly 🛠
         run: |
           export AWS_SDK_LOAD_CONFIG=1
           gpg --no-default-keyring --keyring trustedkeys.gpg --keyserver keyserver.ubuntu.com --recv-keys ${{ env.GPG_KEY_ID }}
-          aptly repo create -distribution=${{ steps.vars.outputs.codename }} local
+          aptly repo create -distribution=${{ steps.vars.outputs.codename }} local || echo "Repo already exists, continuing with existing repo"
           aptly repo add local packages/*.deb
           aptly repo search local
 
       - name: Publish packages to chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }} 🚀
         run: |
-          aptly publish -gpg-key=${{ env.GPG_KEY_ID }} repo local "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
+          export AWS_SDK_LOAD_CONFIG=1
+          ENDPOINT="s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
+          DB_HAS_CONTENT=$(find ~/.aptly/db/ -type f 2>/dev/null | wc -l)
+          ENDPOINT_KNOWN=$(aptly publish list -raw 2>/dev/null | grep -c "^${ENDPOINT} " || true)
+          if [ "${DB_HAS_CONTENT}" -gt 0 ] && [ "${ENDPOINT_KNOWN}" -eq 0 ]; then
+            echo "ERROR: aptly DB was restored from S3 but endpoint ${ENDPOINT} was not found in it."
+            echo "Refusing to run 'aptly publish repo' which would overwrite the existing index with only the current packages."
+            exit 1
+          fi
+          if [ "${ENDPOINT_KNOWN}" -gt 0 ]; then
+            aptly publish update \
+              -gpg-key=${{ env.GPG_KEY_ID }} \
+              ${{ steps.vars.outputs.codename }} \
+              "${ENDPOINT}"
+          else
+            aptly publish \
+              -gpg-key=${{ env.GPG_KEY_ID }} \
+              repo local \
+              "${ENDPOINT}"
+          fi
+
+      - name: Save aptly DB to S3 💾
+        run: |
+          export AWS_SDK_LOAD_CONFIG=1
+          aws s3 sync ~/.aptly/db/ "s3://${REPO_BUCKET}/aptly-db/"
 
       - name: Set Summary Title 📝
         if: inputs.environment == 'production'
