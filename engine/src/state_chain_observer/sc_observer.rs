@@ -231,6 +231,8 @@ macro_rules! match_event {
     }}
 }
 
+// TODO: Add TRON client
+
 pub async fn start<
 	StateChainClient,
 	BlockStream,

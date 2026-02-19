@@ -75,6 +75,12 @@ pub struct HttpEndpoint {
 	pub http_endpoint: SecretUrl,
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct TronEndpoints {
+	pub http_endpoint: SecretUrl,
+	pub json_rpc_endpoint: SecretUrl,
+}
+
 pub trait ValidateSettings {
 	fn validate(&self) -> Result<(), ConfigError>;
 }
@@ -94,6 +100,17 @@ impl ValidateSettings for HttpEndpoint {
 	/// Ensure the endpoints are valid HTTP and WS endpoints.
 	fn validate(&self) -> Result<(), ConfigError> {
 		validate_http_endpoint(self.http_endpoint.clone())
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		Ok(())
+	}
+}
+
+impl ValidateSettings for TronEndpoints {
+	/// Ensure the endpoints are valid HTTP endpoints.
+	fn validate(&self) -> Result<(), ConfigError> {
+		validate_http_endpoint(self.http_endpoint.clone())
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(self.json_rpc_endpoint.clone())
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -195,6 +212,20 @@ impl Hub {
 	}
 }
 
+#[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
+pub struct Tron {
+	#[serde(flatten)]
+	pub nodes: NodeContainer<TronEndpoints>,
+	#[serde(deserialize_with = "deser_path")]
+	pub private_key_file: PathBuf,
+}
+
+impl Tron {
+	pub fn validate_settings(&self) -> Result<(), ConfigError> {
+		self.nodes.validate()
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Signing {
 	#[serde(deserialize_with = "deser_path")]
@@ -212,6 +243,7 @@ pub struct Settings {
 	pub arb: Evm,
 	pub sol: Sol,
 	pub hub: Hub,
+	pub tron: Tron,
 
 	pub health_check: Option<HealthCheck>,
 	pub prometheus: Option<Prometheus>,
@@ -311,6 +343,22 @@ pub struct HubOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+pub struct TronOptions {
+	#[clap(long = "tron.rpc.http_endpoint")]
+	pub tron_http_endpoint: Option<String>,
+	#[clap(long = "tron.rpc.json_rpc_endpoint")]
+	pub tron_json_rpc_endpoint: Option<String>,
+
+	#[clap(long = "tron.backup_rpc.http_endpoint")]
+	pub tron_backup_http_endpoint: Option<String>,
+	#[clap(long = "tron.backup_rpc.json_rpc_endpoint")]
+	pub tron_backup_json_rpc_endpoint: Option<String>,
+
+	#[clap(long = "tron.private_key_file")]
+	pub tron_private_key_file: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
 	#[clap(long = "p2p.node_key_file")]
 	node_key_file: Option<PathBuf>,
@@ -353,6 +401,9 @@ pub struct CommandLineOptions {
 	#[clap(flatten)]
 	pub hub_opts: HubOptions,
 
+	#[clap(flatten)]
+	pub tron_opts: TronOptions,
+
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
 	pub health_check_hostname: Option<String>,
@@ -392,6 +443,7 @@ impl Default for CommandLineOptions {
 			arb_opts: ArbOptions::default(),
 			sol_opts: SolOptions::default(),
 			hub_opts: HubOptions::default(),
+			tron_opts: TronOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			prometheus_hostname: None,
@@ -412,6 +464,7 @@ const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
 
 const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
 const ARB_PRIVATE_KEY_FILE: &str = "arb.private_key_file";
+const TRON_PRIVATE_KEY_FILE: &str = "tron.private_key_file";
 
 const SIGNING_DB_FILE: &str = "signing.db_file";
 
@@ -578,6 +631,8 @@ impl CfSettings for Settings {
 
 		self.hub.validate_settings()?;
 
+		self.tron.validate_settings()?;
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(&self.signing.db_file).map_err(|e| ConfigError::Message(e.to_string()))?;
@@ -595,6 +650,11 @@ impl CfSettings for Settings {
 		self.arb.private_key_file = resolve_settings_path(
 			config_root,
 			&self.arb.private_key_file,
+			Some(PathResolutionExpectation::ExistingFile),
+		)?;
+		self.tron.private_key_file = resolve_settings_path(
+			config_root,
+			&self.tron.private_key_file,
 			Some(PathResolutionExpectation::ExistingFile),
 		)?;
 		self.signing.db_file = resolve_settings_path(config_root, &self.signing.db_file, None)?;
@@ -646,6 +706,13 @@ impl CfSettings for Settings {
 					.expect("Invalid arb_private_key path"),
 			)?
 			.set_default(
+				TRON_PRIVATE_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid tron_private_key path"),
+			)?
+			.set_default(
 				SIGNING_DB_FILE,
 				PathBuf::from(config_root)
 					.join("data.db")
@@ -676,6 +743,8 @@ impl Source for CommandLineOptions {
 		self.sol_opts.insert_all(&mut map);
 
 		self.hub_opts.insert_all(&mut map);
+
+		self.tron_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -838,6 +907,26 @@ impl HubOptions {
 	}
 }
 
+impl TronOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "tron.rpc.http_endpoint", &self.tron_http_endpoint);
+		insert_command_line_option(map, "tron.rpc.json_rpc_endpoint", &self.tron_json_rpc_endpoint);
+
+		insert_command_line_option(
+			map,
+			"tron.backup_rpc.http_endpoint",
+			&self.tron_backup_http_endpoint,
+		);
+		insert_command_line_option(
+			map,
+			"tron.backup_rpc.json_rpc_endpoint",
+			&self.tron_backup_json_rpc_endpoint,
+		);
+
+		insert_command_line_option_path(map, TRON_PRIVATE_KEY_FILE, &self.tron_private_key_file);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -906,7 +995,8 @@ pub mod tests {
 		BTC_RPC_PASSWORD, BTC_RPC_USER, ETH_BACKUP_HTTP_ENDPOINT, ETH_BACKUP_WS_ENDPOINT,
 		ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT, HUB_BACKUP_HTTP_ENDPOINT, HUB_BACKUP_WS_ENDPOINT,
 		HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT, NODE_P2P_IP_ADDRESS, SOL_BACKUP_HTTP_ENDPOINT,
-		SOL_HTTP_ENDPOINT,
+		SOL_HTTP_ENDPOINT, TRON_BACKUP_HTTP_ENDPOINT, TRON_BACKUP_JSON_RPC_ENDPOINT,
+		TRON_HTTP_ENDPOINT, TRON_JSON_RPC_ENDPOINT,
 	};
 
 	use super::*;
@@ -964,7 +1054,12 @@ pub mod tests {
 		ARB_HTTP_ENDPOINT => "http://localhost:8547",
 		ARB_WS_ENDPOINT => "ws://localhost:8548",
 		ARB_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8547",
-		ARB_BACKUP_WS_ENDPOINT => "ws://second.localhost:8548"
+		ARB_BACKUP_WS_ENDPOINT => "ws://second.localhost:8548",
+
+		TRON_HTTP_ENDPOINT => "http://localhost:8090",
+		TRON_JSON_RPC_ENDPOINT => "http://localhost:8091",
+		TRON_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8090",
+		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -994,6 +1089,8 @@ pub mod tests {
 			settings.hub.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_assethub_rpc:443/<secret_key>"
 		);
+		assert_eq!(settings.tron.nodes.primary.http_endpoint.as_ref(), "http://localhost:8090");
+		assert_eq!(settings.tron.nodes.primary.json_rpc_endpoint.as_ref(), "http://localhost:8091");
 		assert_eq!(
 			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8545"
@@ -1009,6 +1106,14 @@ pub mod tests {
 		assert_eq!(
 			settings.hub.nodes.backup.unwrap().ws_endpoint.as_ref(),
 			"wss://second.my_fake_assethub_rpc:443/<secret_key>"
+		);
+		assert_eq!(
+			settings.tron.nodes.backup.clone().unwrap().http_endpoint.as_ref(),
+			"http://second.localhost:8090"
+		);
+		assert_eq!(
+			settings.tron.nodes.backup.unwrap().json_rpc_endpoint.as_ref(),
+			"http://second.localhost:8091"
 		);
 	}
 
@@ -1113,6 +1218,15 @@ pub mod tests {
 
 				hub_backup_ws_endpoint: Some("ws://second.endpoint:4321".to_owned()),
 				hub_backup_http_endpoint: Some("http://second.endpoint:4321".to_owned()),
+			},
+			tron_opts: TronOptions {
+				tron_http_endpoint: Some("http://tron-endpoint:4321".to_owned()),
+				tron_json_rpc_endpoint: Some("http://tron-jsonrpc-endpoint:4321".to_owned()),
+				tron_backup_http_endpoint: Some("http://second.tron-endpoint:4321".to_owned()),
+				tron_backup_json_rpc_endpoint: Some(
+					"http://second.tron-jsonrpc-endpoint:4321".to_owned(),
+				),
+				tron_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
@@ -1232,6 +1346,27 @@ pub mod tests {
 			opts.hub_opts.hub_backup_http_endpoint.unwrap(),
 			hub_backup_node.http_endpoint.as_ref()
 		);
+
+		assert_eq!(
+			opts.tron_opts.tron_http_endpoint.unwrap(),
+			settings.tron.nodes.primary.http_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.tron_opts.tron_json_rpc_endpoint.clone().unwrap(),
+			settings.tron.nodes.primary.json_rpc_endpoint.as_ref()
+		);
+
+		let tron_backup_node = settings.tron.nodes.backup.unwrap();
+		assert_eq!(
+			opts.tron_opts.tron_backup_http_endpoint.unwrap(),
+			tron_backup_node.http_endpoint.as_ref()
+		);
+		assert_eq!(
+			opts.tron_opts.tron_backup_json_rpc_endpoint.unwrap(),
+			tron_backup_node.json_rpc_endpoint.as_ref()
+		);
+
+		assert!(settings.tron.private_key_file.ends_with("eth_private_key_2"));
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),

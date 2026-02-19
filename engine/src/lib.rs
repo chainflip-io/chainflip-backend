@@ -129,6 +129,7 @@ pub fn settings_and_run_main(
     }
 }
 
+// TODO: Add TRON Client
 async fn run_main(
 	settings: Settings,
 	start_from: Option<state_chain_runtime::BlockNumber>,

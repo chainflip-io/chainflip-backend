@@ -38,6 +38,8 @@ use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
 
+// TODO: Add TRON client
+
 /// Starts all the witnessing tasks.
 // It's important that this function is not blocking, at any point, even if there is no connection
 // to any or all chains. This implies that the `start` function for each chain should not be
