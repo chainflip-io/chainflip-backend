@@ -1763,6 +1763,15 @@ export const palletCfTradingStrategyTradingStrategy = z.discriminatedUnion('__ki
     maxSellTick: z.number(),
     baseAsset: cfPrimitivesChainsAssetsAnyAsset,
   }),
+  z.object({
+    __kind: z.literal('OracleTracking'),
+    minBuyOffsetTick: z.number(),
+    maxBuyOffsetTick: z.number(),
+    minSellOffsetTick: z.number(),
+    maxSellOffsetTick: z.number(),
+    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
+    quoteAsset: cfPrimitivesChainsAssetsAnyAsset,
+  }),
 ]);
 
 export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('__kind', [
