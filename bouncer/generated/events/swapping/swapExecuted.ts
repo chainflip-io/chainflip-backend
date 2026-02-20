@@ -12,4 +12,5 @@ export const swappingSwapExecuted = z.object({
   intermediateAmount: numberOrHex.nullish(),
   outputAmount: numberOrHex,
   oracleDelta: z.number().nullish(),
+  oracleDeltaExFees: z.number().nullish(),
 });

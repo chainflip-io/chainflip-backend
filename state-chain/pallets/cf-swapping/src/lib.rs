@@ -17,7 +17,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use cf_amm::{
-	common::Side,
+	common::{AssetPair, Side},
 	math::{Price, PriceLimits},
 };
 use cf_chains::{
@@ -43,7 +43,7 @@ use cf_traits::{
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{Get, Saturating},
+		traits::{ConstU16, Get, Saturating},
 		DispatchError, Permill, TransactionOutcome,
 	},
 	storage::with_transaction_unchecked,
@@ -80,11 +80,18 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(15);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
+
+/// Default oracle price slippage protection when no specific value is configured.
+///
+/// Note this only applies to assets where we have oracle prices. If we don't have an oracle
+/// price we can't apply LPP at all and we treat the limit as zero because the slippage will
+/// always default to zero for those assets.
+pub const FALLBACK_DEFAULT_LPP_LIMIT_BPS: BasisPoints = 100;
 
 pub struct DefaultSwapRetryDelay<T> {
 	_phantom: PhantomData<T>,
@@ -131,6 +138,7 @@ pub struct SwapState<T: Config> {
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
 	pub oracle_delta: Option<SignedBasisPoints>,
+	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
 }
 
 impl<T: Config> SwapState<T> {
@@ -142,6 +150,7 @@ impl<T: Config> SwapState<T> {
 			broker_fee_taken: None,
 			swap,
 			oracle_delta: None,
+			oracle_delta_ex_fees: None,
 		}
 	}
 
@@ -512,6 +521,15 @@ pub enum PalletConfigUpdate<T: Config> {
 	/// Set a custom network fee for internal swaps for a specific asset. Set to None to remove the
 	/// custom network fee rate for that asset and fallback to the standard internal network fee.
 	SetInternalSwapNetworkFeeForAsset { asset: Asset, rate: Option<Permill> },
+	/// If no oracle protection is set by the user, a default will be
+	/// applied. The default will be the sum of both pools' values. Only
+	/// used for regular swaps (not fee swaps). Set to `None` to reset
+	/// to the permissive default (100bps per leg).
+	SetDefaultOraclePriceSlippageProtectionForAsset {
+		base_asset: Asset,
+		quote_asset: Asset,
+		bps: Option<BasisPoints>,
+	},
 }
 
 impl_pallet_safe_mode! {
@@ -758,6 +776,16 @@ pub mod pallet {
 	pub type BoundBrokerWithdrawalAddress<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, EthereumAddress, OptionQuery>;
 
+	#[pallet::storage]
+	pub type DefaultOraclePriceSlippageProtection<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		AssetPair,
+		BasisPoints,
+		ValueQuery,
+		ConstU16<FALLBACK_DEFAULT_LPP_LIMIT_BPS>,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	#[expect(clippy::large_enum_variant)]
@@ -821,7 +849,14 @@ pub mod pallet {
 			broker_fee: AssetAmount,
 			intermediate_amount: Option<AssetAmount>,
 			output_amount: AssetAmount,
+			// Total difference between final swap output price and oracle price (including fees).
+			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
+			// Cumulative price delta across both swap legs (excluding fees).
+			// Negative values indicate worse execution price compared to oracle.
+			// `Some` if oracle price available for at least one leg; `None` if unavailable for
+			// both.
+			oracle_delta_ex_fees: Option<SignedBasisPoints>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -1010,13 +1045,18 @@ pub mod pallet {
 		CannotEncodeData,
 		/// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		/// Account already exists, cannot opet a creation deposit channel
+		/// Account already exists, cannot open an account creation deposit channel.
 		AccountAlreadyExists,
 		/// The broker is already bound to a withdrawal address.
 		BrokerAlreadyBound,
 		/// The broker tried to withdraw to an address which is not the address the broker is bound
 		/// to.
-		BrokerBoundWithdrwalAddressRestrictionViolated,
+		BrokerBoundWithdrawalAddressRestrictionViolated,
+		/// A zero default slippage protection will result in most swaps failing. Set to `None` to
+		/// reset to the permissive default (100bps).
+		ZeroDefaultSlippageNotAllowed,
+		/// The specified pool does not exist.
+		PoolDoesNotExist,
 	}
 
 	#[pallet::genesis_config]
@@ -1166,7 +1206,7 @@ pub mod pallet {
 				if let Some(bound_address) = BoundBrokerWithdrawalAddress::<T>::get(&account_id) {
 					ensure!(
 						destination_address_internal == ForeignChainAddress::Eth(bound_address),
-						Error::<T>::BrokerBoundWithdrwalAddressRestrictionViolated
+						Error::<T>::BrokerBoundWithdrawalAddressRestrictionViolated
 					);
 				}
 			}
@@ -1286,6 +1326,20 @@ pub mod pallet {
 						} else {
 							InternalSwapNetworkFeeForAsset::<T>::remove(asset);
 						},
+					PalletConfigUpdate::SetDefaultOraclePriceSlippageProtectionForAsset {
+						base_asset,
+						quote_asset,
+						bps,
+					} => {
+						let pool = AssetPair::new(base_asset, quote_asset)
+							.ok_or(Error::<T>::PoolDoesNotExist)?;
+						if let Some(bps) = bps {
+							ensure!(bps != 0, Error::<T>::ZeroDefaultSlippageNotAllowed);
+							DefaultOraclePriceSlippageProtection::<T>::insert(pool, bps);
+						} else {
+							DefaultOraclePriceSlippageProtection::<T>::remove(pool);
+						}
+					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
 			}
@@ -1878,7 +1932,7 @@ pub mod pallet {
 										),
 									),
 								)],
-							_ => &mut vec![],
+							SwapRequestState::NetworkFee => &mut vec![],
 						}
 					} else {
 						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
@@ -1937,14 +1991,19 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 		) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
+			if input_amount == 0 {
+				// Price is undefined when input is zero (would cause division by zero).
+				return Ok(None);
+			}
 			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
 				Some(oracle_price) if oracle_price.stale =>
 					Err(SwapFailureReason::OraclePriceStale),
-				Some(oracle_price) => {
-					let execution_price =
-						Price::sell_price(input_amount.into(), output_amount.into());
-					Ok(Some(execution_price.hundredth_bps_difference_from(&oracle_price.price)))
-				},
+				Some(oracle_price) =>
+					Ok(Price::sell_price(input_amount.into(), output_amount.into()).map(
+						|execution_price| {
+							execution_price.hundredth_bps_difference_from(&oracle_price.price)
+						},
+					)),
 				None => Ok(None), // Price unavailable - skip the check
 			}
 		}
@@ -1952,56 +2011,13 @@ pub mod pallet {
 		/// Enforce price protections. Must be called after the final output has been set.
 		pub(super) fn check_swap_price_violation(
 			swap: &SwapState<T>,
-		) -> Result<(), SwapFailureReason> {
+		) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
 			let Some(final_output) = swap.final_output else {
 				log_or_panic!("Final output should be set");
 				return Err(SwapFailureReason::LogicError);
 			};
 
 			if let Some(params) = swap.refund_params() {
-				// Oracle price protection, aka Live price protection (LPP)
-				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
-					if let Some(stable_amount_after_fees) = swap.stable_amount {
-						// Calculate the slippage from oracle prices for both legs of the swap.
-						// If any price is unavailable (None), skip the oracle check for that leg.
-						let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
-							Some(Default::default())
-						} else {
-							Self::get_delta_from_oracle_price(
-								swap.swap.input_amount,
-								stable_amount_after_fees + swap.fees_amount(),
-								swap.input_asset(),
-								STABLE_ASSET,
-							)?
-						};
-						let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
-							Some(Default::default())
-						} else {
-							Self::get_delta_from_oracle_price(
-								stable_amount_after_fees,
-								final_output,
-								STABLE_ASSET,
-								swap.output_asset(),
-							)?
-						};
-
-						// Only check slippage if both legs have oracle prices available
-						if let (Some(to_stable), Some(from_stable)) =
-							(to_stable_delta, from_stable_delta)
-						{
-							if to_stable
-								.saturating_add(&from_stable)
-								// The swapper expresses the limit as a worst acceptable *sell*
-								// price, so slippage needs to be measured in the negative
-								// direction (lower sell price is worse).
-								.breaches_limit(SignedBasisPoints::negative_slippage(max_slippage))
-							{
-								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
-							}
-						}
-					}
-				}
-
 				// Minimum price protection, aka FoK price protection
 				let min_price_output = params
 					.price_limits
@@ -2013,7 +2029,61 @@ pub mod pallet {
 				}
 			}
 
-			Ok(())
+			// Calculate oracle delta without fees
+			if let Some(stable_amount_after_fees) = swap.stable_amount {
+				// Calculate the slippage from oracle prices for both legs of the swap.
+				let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
+					Some(SignedHundredthBasisPoints(0))
+				} else {
+					Self::get_delta_from_oracle_price(
+						swap.swap.input_amount,
+						stable_amount_after_fees + swap.fees_amount(),
+						swap.input_asset(),
+						STABLE_ASSET,
+					)?
+				};
+				let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
+					Some(SignedHundredthBasisPoints(0))
+				} else {
+					Self::get_delta_from_oracle_price(
+						stable_amount_after_fees,
+						final_output,
+						STABLE_ASSET,
+						swap.output_asset(),
+					)?
+				};
+
+				// Sum the deltas or just use a single leg delta if the other leg doesn't have
+				// an oracle price.
+				let total_delta = match (to_stable_delta, from_stable_delta) {
+					(Some(to_stable), Some(from_stable)) =>
+						Some(to_stable.saturating_add(&from_stable)),
+					// Use the one sided slippage as long as that side is not USDC.
+					(Some(delta), None) if swap.input_asset() != STABLE_ASSET => Some(delta),
+					(None, Some(delta)) if swap.output_asset() != STABLE_ASSET => Some(delta),
+					_ => None,
+				};
+
+				if let Some(total_delta) = total_delta {
+					// Oracle price protection, aka Live price protection (LPP)
+					if let Some(params) = swap.refund_params() {
+						if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
+							// The swapper expresses the limit as a worst acceptable *sell*
+							// price, so slippage needs to be measured in the negative
+							// direction (lower sell price is worse).
+							if total_delta <
+								SignedBasisPoints::negative_slippage(max_slippage).into()
+							{
+								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
+							}
+						}
+					}
+
+					return Ok(Some(total_delta.pessimistic_rounded_into()));
+				}
+			}
+
+			Ok(None)
 		}
 
 		#[transactional]
@@ -2033,7 +2103,8 @@ pub mod pallet {
 			swaps
 				.into_iter()
 				.for_each(|mut swap| match Self::check_swap_price_violation(&swap) {
-					Ok(()) => {
+					Ok(oracle_delta_ex_fees) => {
+						swap.oracle_delta_ex_fees = oracle_delta_ex_fees;
 						swap.oracle_delta = Self::get_delta_from_oracle_price(
 							swap.input_amount(),
 							swap.final_output.unwrap_or(0),
@@ -2088,7 +2159,7 @@ pub mod pallet {
 							},
 							dca_state: DcaState {
 								scheduled_chunks: BTreeSet::from([(swap_id)]),
-								remaining_input_amount: 0,
+								remaining_input_amount: amount,
 								remaining_chunks: 0,
 								chunk_interval: SWAP_DELAY_BLOCKS,
 								accumulated_output_amount: 0,
@@ -2370,6 +2441,7 @@ pub mod pallet {
 				output_amount,
 				intermediate_amount: swap.intermediate_amount(),
 				oracle_delta: swap.oracle_delta,
+				oracle_delta_ex_fees: swap.oracle_delta_ex_fees,
 			});
 
 			let request_completed = match &mut request.state {
@@ -2747,7 +2819,7 @@ pub mod pallet {
 					.ok()
 					.filter(|v| *v > 0)
 					// Return USDC / Asset
-					.map(|estimation_output| {
+					.and_then(|estimation_output| {
 						Price::from_amounts(ESTIMATION_AMOUNT_USDC.into(), estimation_output.into())
 					})
 					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
@@ -2768,7 +2840,7 @@ pub mod pallet {
 					.ok()
 					.filter(|v| *v > 0)
 					// Return USDC / Asset
-					.map(|estimation_output| {
+					.and_then(|estimation_output| {
 						Price::from_amounts(estimation_output.into(), estimated_input.into())
 					})
 					.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
@@ -2901,6 +2973,45 @@ pub mod pallet {
 			};
 			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
 		}
+
+		/// Returns the configured default oracle price slippage protection for a single pool leg.
+		/// Returns `None` if the asset has no oracle price feed or no valid pool pair.
+		pub fn default_oracle_lpp_for_asset(asset: Asset) -> Option<BasisPoints> {
+			T::PriceFeedApi::get_price(asset)?;
+			Some(DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
+				asset,
+				STABLE_ASSET,
+			)?))
+		}
+
+		/// Returns the default price protection to apply to a one or two-leg swap.
+		///
+		/// Returns `None` if no oracle price is available for any leg of the swap (no
+		/// meaningful protection can be applied). For two-leg swaps where only one leg
+		/// has an oracle, the other leg contributes zero to the total limit so that
+		/// the oracle-priced leg is still protected.
+		fn get_default_oracle_price_protection(
+			input_asset: Asset,
+			output_asset: Asset,
+		) -> Option<BasisPoints> {
+			match (input_asset, output_asset) {
+				// Swaps to/from the stable asset use a single pool, so only one
+				// leg's slippage applies.
+				(STABLE_ASSET, asset) | (asset, STABLE_ASSET) =>
+					Self::default_oracle_lpp_for_asset(asset),
+				// Non-stable swaps go through two pools. At least one leg must have
+				// oracle data for the default to be meaningful.
+				(input_asset, output_asset) => match (
+					Self::default_oracle_lpp_for_asset(input_asset),
+					Self::default_oracle_lpp_for_asset(output_asset),
+				) {
+					(Some(input_lpp), Some(output_lpp)) =>
+						Some(input_lpp.saturating_add(output_lpp)),
+					(Some(lpp), None) | (None, Some(lpp)) => Some(lpp),
+					(None, None) => None,
+				},
+			}
+		}
 	}
 
 	impl<T: Config> SwapRequestHandler for Pallet<T> {
@@ -2964,6 +3075,22 @@ pub mod pallet {
 				dca_params
 			});
 
+			// Enforce the default oracle price protection for regular swaps
+			let processed_price_limits_and_expiry = match request_type {
+				SwapRequestType::Regular { .. } | SwapRequestType::RegularNoNetworkFee { .. } => {
+					price_limits_and_expiry.map(|limits| PriceLimitsAndExpiry {
+						// Only apply default oracle protection if no slippage is already set
+						max_oracle_price_slippage: if limits.max_oracle_price_slippage.is_none() {
+							Self::get_default_oracle_price_protection(input_asset, output_asset)
+						} else {
+							limits.max_oracle_price_slippage
+						},
+						..limits
+					})
+				},
+				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee => None,
+			};
+
 			Self::deposit_event(Event::<T>::SwapRequested {
 				swap_request_id: request_id,
 				input_asset,
@@ -2972,7 +3099,7 @@ pub mod pallet {
 				request_type: request_type.clone().into_encoded::<T::AddressConverter>(),
 				origin: origin.clone(),
 				broker_fees: broker_fees.clone(),
-				price_limits_and_expiry: price_limits_and_expiry.clone(),
+				price_limits_and_expiry: processed_price_limits_and_expiry.clone(),
 				dca_parameters: dca_params.clone(),
 			});
 
@@ -3051,7 +3178,7 @@ pub mod pallet {
 						input_asset,
 						output_asset,
 						chunk_input_amount,
-						price_limits_and_expiry.as_ref(),
+						processed_price_limits_and_expiry.as_ref(),
 						SwapType::Swap,
 						request_id,
 						SWAP_DELAY_BLOCKS.into(),
@@ -3072,7 +3199,7 @@ pub mod pallet {
 									input_asset,
 									output_asset,
 									chunk_input_amount,
-									price_limits_and_expiry.as_ref(),
+									processed_price_limits_and_expiry.as_ref(),
 									SwapType::Swap,
 									request_id,
 									SWAP_DELAY_BLOCKS.saturating_add(chunk_interval).into(),
@@ -3090,7 +3217,7 @@ pub mod pallet {
 							output_asset,
 							state: SwapRequestState::UserSwap {
 								output_action: output_action.clone(),
-								price_limits_and_expiry,
+								price_limits_and_expiry: processed_price_limits_and_expiry,
 								dca_state,
 								fees,
 							},

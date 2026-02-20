@@ -894,6 +894,7 @@ fn input_amount_excludes_network_fee() {
 				output_amount: expected_input_amount * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
 				oracle_delta: None,
+				oracle_delta_ex_fees: None,
 			}));
 		});
 }
@@ -985,6 +986,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_amount: INTERMEDIATE_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1,
 				intermediate_amount: None,
 				oracle_delta: None,
+				oracle_delta_ex_fees: None,
 			}));
 
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1);
@@ -1011,6 +1013,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_amount: AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
 				intermediate_amount: None,
 				oracle_delta: None,
+				oracle_delta_ex_fees: None,
 			}));
 
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1 + ALICE_FEE_2);
@@ -1043,6 +1046,7 @@ fn expect_earned_fees_to_be_recorded() {
 				output_amount: INTERMEDIATE_AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
 				intermediate_amount: Some(INTERMEDIATE_AMOUNT_AFTER_FEES),
 				oracle_delta: None,
+				oracle_delta_ex_fees: None,
 			}));
 
 			assert_eq!(

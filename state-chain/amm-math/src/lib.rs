@@ -77,7 +77,7 @@ impl SqrtPrice {
 	}
 
 	pub fn from_amounts_bounded(quote: Amount, base: Amount) -> Self {
-		assert!(!quote.is_zero() || !base.is_zero());
+		debug_assert!(!quote.is_zero() || !base.is_zero());
 
 		if base.is_zero() {
 			MAX_SQRT_PRICE
@@ -426,21 +426,29 @@ impl Price {
 		SqrtPrice::from_amounts_bounded(quote, base).into()
 	}
 
-	pub fn from_amounts(quote: Amount, base: Amount) -> Self {
-		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
+	/// Returns None if the base amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn from_amounts(quote: Amount, base: Amount) -> Option<Self> {
+		mul_div_floor_checked(quote, U256::one() << Self::FRACTIONAL_BITS, base).map(Price)
 	}
 
 	/// The price obtained by selling `input` amount of asset to receive `output` amount of asset.
 	///
 	/// Higher sell price is better for the seller (more output for the same input).
-	pub fn sell_price(input: Amount, output: Amount) -> Self {
+	///
+	/// Returns None if the output amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn sell_price(input: Amount, output: Amount) -> Option<Self> {
 		Self::from_amounts(output, input)
 	}
 
 	/// The price of buying `output` amount of asset with `input` amount of asset.
 	///
 	/// Higher buy price is worse for the buyer (less output for the same input).
-	pub fn buy_price(input: Amount, output: Amount) -> Self {
+	///
+	/// Returns None if the input amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn buy_price(input: Amount, output: Amount) -> Option<Self> {
 		Self::from_amounts(input, output)
 	}
 

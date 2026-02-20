@@ -217,20 +217,20 @@ macro_rules! impl_pallet_safe_mode {
 
 		impl<$generic> $crate::SafeMode for $pallet_safe_mode<$generic> {
 			fn code_red() -> Self {
-		 		Self {
-		 			$(
-		 				$flag: false,
-		 			)+
-		 			_phantom: ::core::marker::PhantomData,
-		 		}
+				Self {
+					$(
+						$flag: false,
+					)+
+					_phantom: ::core::marker::PhantomData,
+				}
 			}
 			fn code_green() -> Self {
-		 		Self {
-		 			$(
-		 				$flag: true,
-		 			)+
-		 			_phantom: ::core::marker::PhantomData,
-		 		}
+				Self {
+					$(
+						$flag: true,
+					)+
+					_phantom: ::core::marker::PhantomData,
+				}
 			}
 		}
 	};

@@ -3,7 +3,7 @@
 //
 // This command for setting up new assets
 
-import { getContractAddress, runWithTimeoutAndExit, decodeSolAddress } from 'shared/utils';
+import { getContractAddress, runWithTimeoutAndExit, decodeSolAddress, Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 import { PublicKey } from '@solana/web3.js';
@@ -23,6 +23,23 @@ async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
   ]);
 
   cf.info('Pools for WBTC, ArbUsdt, SolUsdt set');
+
+  // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
+  // We do this for all assets, not just new ones, because the migration sets default values that
+  // we want to override.
+  await submitGovernanceExtrinsic((api) =>
+    api.tx.swapping.updatePalletConfig(
+      [...price.keys()]
+        .filter((a): a is Asset => a !== 'Usdc')
+        .map((asset) => ({
+          SetDefaultOraclePriceSlippageProtectionForAsset: {
+            baseAsset: asset,
+            quoteAsset: 'Usdc',
+            bps: 10000,
+          },
+        })),
+    ),
+  );
 
   const lp1Deposits = (lpcf: ChainflipIO<A>) =>
     lpcf

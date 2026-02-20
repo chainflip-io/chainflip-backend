@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_amm_math::*;
+use cf_primitives::{Asset, STABLE_ASSET};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -201,6 +202,61 @@ impl<T: core::ops::Add<R>, R> core::ops::Add<PoolPairsMap<R>> for PoolPairsMap<T
 	type Output = PoolPairsMap<<T as core::ops::Add<R>>::Output>;
 	fn add(self, rhs: PoolPairsMap<R>) -> Self::Output {
 		PoolPairsMap { base: self.base + rhs.base, quote: self.quote + rhs.quote }
+	}
+}
+
+// TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
+// nature.
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Hash,
+	PartialOrd,
+	Ord,
+	DecodeWithMemTracking,
+)]
+pub struct AssetPair {
+	assets: PoolPairsMap<Asset>,
+}
+impl AssetPair {
+	pub fn new(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
+		Some(AssetPair {
+			assets: match (base_asset, quote_asset) {
+				(STABLE_ASSET, STABLE_ASSET) => None,
+				(_unstable_asset, STABLE_ASSET) =>
+					Some(PoolPairsMap { base: base_asset, quote: quote_asset }),
+				_ => None,
+			}?,
+		})
+	}
+
+	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Side)> {
+		#[expect(clippy::manual_map)]
+		if let Some(asset_pair) = Self::new(from, to) {
+			Some((asset_pair, Side::Sell))
+		} else if let Some(asset_pair) = Self::new(to, from) {
+			Some((asset_pair, Side::Buy))
+		} else {
+			None
+		}
+	}
+
+	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Side) -> (Asset, Asset) {
+		match side {
+			Side::Buy => (quote_asset, base_asset),
+			Side::Sell => (base_asset, quote_asset),
+		}
+	}
+
+	pub fn assets(&self) -> PoolPairsMap<Asset> {
+		self.assets
 	}
 }
 

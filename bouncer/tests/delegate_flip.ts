@@ -84,9 +84,10 @@ export async function testDelegate(logger: Logger) {
   logger.debug(`Uri for unique operator account is: "${uri}"`);
 
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
-  const wallet = await createEvmWalletAndFund(logger, 'Flip');
+  const amountString = defaultAssetAmounts('Flip');
+  const wallet = await createEvmWalletAndFund(logger, 'Flip', amountString);
 
-  const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
+  const amount = amountToFineAmountBigInt(amountString, 'Flip');
 
   logger.info('Registering operator ' + uri + '...');
   const operator = await setupAccount(logger, uri, AccountRole.Operator);
