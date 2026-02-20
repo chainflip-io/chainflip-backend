@@ -69,81 +69,88 @@ impl<Rpc: TronRpcApi> TronRetryRpcClient<Rpc> {
 }
 
 impl TronRetryRpcClient<TronRpcClient> {
-       pub async fn new(
-	       scope: &Scope<'_, anyhow::Error>,
-	       nodes: NodeContainer<TronEndpoints>,
-	       expected_chain_id: U256,
-	       tron_rpc_client_name: &'static str,
-	       chain_name: &'static str,
-	       witness_period: u64,
-       ) -> Result<Self> {
-	       let rpc_client_fut = TronRpcClient::new(
-		       nodes.primary.http_endpoint.clone(),
-		       nodes.primary.json_rpc_endpoint.clone(),
-		       expected_chain_id.as_u64(),
-		       chain_name,
-	       )?;
-	       let rpc_client = rpc_client_fut.await;
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<TronEndpoints>,
+		expected_chain_id: U256,
+		tron_rpc_client_name: &'static str,
+		chain_name: &'static str,
+		witness_period: u64,
+	) -> Result<Self> {
+		let rpc_client_fut = TronRpcClient::new(
+			nodes.primary.http_endpoint.clone(),
+			nodes.primary.json_rpc_endpoint.clone(),
+			expected_chain_id.as_u64(),
+			chain_name,
+		)?;
+		let rpc_client = rpc_client_fut.await;
 
-	       let backup_rpc_client = match &nodes.backup {
-		       Some(ep) => {
-			       let fut = TronRpcClient::new(
-				       ep.http_endpoint.clone(),
-				       ep.json_rpc_endpoint.clone(),
-				       expected_chain_id.as_u64(),
-				       chain_name,
-			       )?;
-			       Some(fut.await)
-		       },
-		       None => None,
-	       };
+		let backup_rpc_client = match &nodes.backup {
+			Some(ep) => {
+				let fut = TronRpcClient::new(
+					ep.http_endpoint.clone(),
+					ep.json_rpc_endpoint.clone(),
+					expected_chain_id.as_u64(),
+					chain_name,
+				)?;
+				Some(fut.await)
+			},
+			None => None,
+		};
 
-	       Ok(Self::from_inner_clients(
-		       scope,
-		       rpc_client,
-		       backup_rpc_client,
-		       tron_rpc_client_name,
-		       chain_name,
-		       witness_period,
-	       ))
-       }
+		Ok(Self::from_inner_clients(
+			scope,
+			rpc_client,
+			backup_rpc_client,
+			tron_rpc_client_name,
+			chain_name,
+			witness_period,
+		))
+	}
 }
 
 impl TronRetryRpcClient<TronRpcSigningClient> {
-       pub async fn new(
-	       scope: &Scope<'_, anyhow::Error>,
-	       nodes: NodeContainer<TronEndpoints>,
-	       expected_chain_id: U256,
-	       tron_rpc_client_name: &'static str,
-	       chain_name: &'static str,
-	       witness_period: u64,
-	       private_key_file: std::path::PathBuf,
-       ) -> Result<Self> {
-	       let rpc_client_fut = TronRpcSigningClient::new(
-		       private_key_file.clone(),
-		       nodes.primary.http_endpoint.clone(),
-		       nodes.primary.json_rpc_endpoint.clone(),
-		       expected_chain_id.as_u64(),
-		       chain_name,
-	       )?;
-	       let rpc_client = rpc_client_fut.await;
+	pub async fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		nodes: NodeContainer<TronEndpoints>,
+		expected_chain_id: U256,
+		tron_rpc_client_name: &'static str,
+		chain_name: &'static str,
+		witness_period: u64,
+		private_key_file: std::path::PathBuf,
+	) -> Result<Self> {
+		let rpc_client_fut = TronRpcSigningClient::new(
+			private_key_file.clone(),
+			nodes.primary.http_endpoint.clone(),
+			nodes.primary.json_rpc_endpoint.clone(),
+			expected_chain_id.as_u64(),
+			chain_name,
+		)?;
+		let rpc_client = rpc_client_fut.await;
 
-	       let backup_rpc_client = match &nodes.backup {
-		       Some(ep) => {
-			       let fut = TronRpcSigningClient::new(
-				       private_key_file.clone(),
-				       ep.http_endpoint.clone(),
-				       ep.json_rpc_endpoint.clone(),
-				       expected_chain_id.as_u64(),
-				       chain_name,
-			       )?;
-			       Some(fut.await)
-		       },
-		       None => None,
-	       };
+		let backup_rpc_client = match &nodes.backup {
+			Some(ep) => {
+				let fut = TronRpcSigningClient::new(
+					private_key_file.clone(),
+					ep.http_endpoint.clone(),
+					ep.json_rpc_endpoint.clone(),
+					expected_chain_id.as_u64(),
+					chain_name,
+				)?;
+				Some(fut.await)
+			},
+			None => None,
+		};
 
-	       Ok(Self::from_inner_clients(scope, rpc_client, backup_rpc_client, tron_rpc_client_name, chain_name, witness_period))
-       }
+		Ok(Self::from_inner_clients(
+			scope,
+			rpc_client,
+			backup_rpc_client,
+			tron_rpc_client_name,
+			chain_name,
+			witness_period,
+		))
+	}
 }
 
 #[async_trait::async_trait]

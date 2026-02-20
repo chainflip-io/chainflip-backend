@@ -263,7 +263,7 @@ where
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
-    TronRpc: TronRetrySigningRpcApi + Send + Sync + Clone + 'static,
+	TronRpc: TronRetrySigningRpcApi + Send + Sync + Clone + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,

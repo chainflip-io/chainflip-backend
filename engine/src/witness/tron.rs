@@ -87,7 +87,6 @@ pub use tron_deposits::*;
 // 		.await
 // 		.context("Failed to get Vault contract address from SC")?;
 
-
 // 	let supported_tron_erc20_assets: HashMap<TronAsset, H160> = state_chain_client
 // 		.storage_map::<pallet_cf_environment::TronSupportedAssets<state_chain_runtime::Runtime>, _>(
 // 			state_chain_client.latest_finalized_block().hash,
@@ -292,8 +291,8 @@ pub use tron_deposits::*;
 // 					engine_sc_client::StateChainClient::connect_with_account(
 // 						scope,
 // 						"ws://localhost:9944",
-// 						PathBuf::from("/Users/kylezs/Documents/cf-repos/chainflip-backend/localnet/init/keys/bashful/signing_key_file").as_path(),
-// 						AccountRole::Validator,
+// 						PathBuf::from("/Users/kylezs/Documents/cf-repos/chainflip-backend/localnet/init/keys/
+// bashful/signing_key_file").as_path(), 						AccountRole::Validator,
 // 						false,
 // 						false,
 // 						None,
@@ -324,8 +323,8 @@ pub use tron_deposits::*;
 
 // 					TronRetryRpcClient::<TronRpcSigningClient>::new(
 // 						scope,
-// 						PathBuf::from("/Users/kylezs/Documents/cf-repos/chainflip-backend/localnet/init/keys/bashful/eth_private_key_file"),
-// 						NodeContainer { primary: WsHttpEndpoints { ws_endpoint: "ws://localhost:8548".into(), http_endpoint: "http://localhost:8547".into()}, backup: None },
+// 						PathBuf::from("/Users/kylezs/Documents/cf-repos/chainflip-backend/localnet/init/keys/
+// bashful/eth_private_key_file"), 						NodeContainer { primary: WsHttpEndpoints { ws_endpoint: "ws://localhost:8548".into(), http_endpoint: "http://localhost:8547".into()}, backup: None },
 // 						expected_tron_chain_id,
 // 						"tron_rpc",
 // 						"tron_subscribe_client",
@@ -337,8 +336,8 @@ pub use tron_deposits::*;
 // 				let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 // 				let db = Arc::new(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap());
 
-
-// 				start(scope, tron_client, witness_call, state_chain_client, state_chain_stream, epoch_source, db).await.unwrap();
+// 				start(scope, tron_client, witness_call, state_chain_client, state_chain_stream, epoch_source,
+// db).await.unwrap();
 
 // 				Ok(())
 // 			}

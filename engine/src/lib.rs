@@ -361,7 +361,8 @@ async fn run_main(
 					"Tron",
 					cf_chains::Tron::WITNESS_PERIOD,
 					settings.tron.private_key_file,
-				).await?
+				)
+				.await?
 			};
 
 			witness::start::start(

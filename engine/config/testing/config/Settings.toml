@@ -29,16 +29,15 @@ http_endpoint = "http://localhost:8547"
 ws_endpoint = "ws://localhost:8899"
 http_endpoint = "http://localhost:8899"
 
-[tron.rpc]
-http_endpoint = "http://localhost:8090"
-json_rpc_endpoint = "http://localhost:8091"
-backup_http_endpoint = "http://second.localhost:8090"
-backup_json_rpc_endpoint = "http://second.localhost:8091"
-
 [hub.rpc]
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
 ws_endpoint = "wss://my_fake_assethub_rpc:443/secret_key"
 http_endpoint = "http://my_fake_assethub_rpc:443/secret_key"
+
+[tron.rpc]
+http_endpoint = "http://localhost:8090"
+json_rpc_endpoint = "http://localhost:8091"
+
 
 [health_check]
 hostname = "127.0.0.1"

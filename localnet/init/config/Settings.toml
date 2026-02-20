@@ -69,9 +69,12 @@ http_endpoint = "http://localhost:8899"
 # [sol.backup_rpc]
 # http_endpoint = "http://localhost:8899"
 
+# TODO: Using temporarily ethereum so the engine starts
 [tron.rpc]
-http_endpoint = "http://localhost:8090"
-json_rpc_endpoint = "http://localhost:8090"
+# http_endpoint = "http://localhost:8090"
+# json_rpc_endpoint = "http://localhost:8090"
+http_endpoint = "http://localhost:8545"
+json_rpc_endpoint = "http://localhost:8545"
 
 # optional
 # [tron.backup.rpc]
