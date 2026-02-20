@@ -293,7 +293,7 @@ export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
     case 'Btc':
     case 'Wbtc':
-      return '0.05';
+      return '0.1';
     case 'Eth':
     case 'ArbEth':
       return '5';
