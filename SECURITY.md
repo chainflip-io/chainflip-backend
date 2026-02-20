@@ -9,7 +9,7 @@ Chainflip Labs is committed to ensuring the security and integrity of the Chainf
 
 - The Chainflip Protocol Code, including its Rust backend and solidity smart contracts.
 - Public API endpoints and associated services.
-- Chainflip Labs operated web applications related to the protocol, including scan, swap, auctions, and validators.
+- chainflip.io operated web applications related to the protocol, including scan, swap, auctions, and validators.
 
 **Please note that this program does not cover:**
 
@@ -31,9 +31,13 @@ If you discover a potential security vulnerability, please report it to Chainfli
 
 ## Rewards and Recognition
 
+Chainflip Labs has rewarded several researchers over the years for their efforts and responsible disclosure. 
+
 Chainflip Labs will reward security researchers for responsibly disclosing security vulnerabilities based on the severity and impact of the issue. Rewards will be provided at the discretion of Chainflip Labs.
 
-The severity of the issue will be assessed according to the Common Vulnerability Scoring System (CVSS) version 3.0. Researchers are encouraged to provide CVSS scores when reporting vulnerabilities.
+The severity of the issue will be assessed according to expected impacts of the issue, using other similar programs as a baseline, though Chainflip will assess severity and corresponding reward size on a case by case basis.
+
+Issues in which an attacker has no direct financial incentive to conduct the attack are automatically downgraded in terms of their severity.
 
 Rewards will be issued in FLIP tokens unless otherwise agreed upon with the researcher.
 
