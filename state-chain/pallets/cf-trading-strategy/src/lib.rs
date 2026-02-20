@@ -421,7 +421,10 @@ pub mod pallet {
 									continue;
 								}
 							},
-							_ => unreachable!("Unreachable due to match above"),
+							_ => {
+								log_or_panic!("Unreachable due to match above");
+								continue;
+							},
 						};
 
 						// Get the existing open orders for the strategy
@@ -434,10 +437,8 @@ pub mod pallet {
 									STABLE_ASSET,
 									&fetch_orders_for_strategies,
 								) {
-									Ok(pool_orders) => {
-										order_cache.insert(base_asset, pool_orders);
-										order_cache.get(&base_asset).unwrap()
-									},
+									Ok(pool_orders) =>
+										order_cache.entry(base_asset).or_insert(pool_orders),
 									Err(e) => {
 										log_or_panic!(
 											"Failed to get limit orders for asset {:?}: {:?}",
@@ -472,7 +473,7 @@ pub mod pallet {
 
 						// Use the balance of assets to calculate the desired limit orders
 						let total = total_quote.saturating_add(total_base);
-						let new_orders: Vec<_> = inventory_based_strategy_logic::<T>(
+						let new_orders: Vec<_> = inventory_based_strategy_logic(
 							total_quote,
 							total,
 							relative_tick + min_buy_tick,
@@ -484,7 +485,7 @@ pub mod pallet {
 						)
 						.into_iter()
 						.chain(
-							inventory_based_strategy_logic::<T>(
+							inventory_based_strategy_logic(
 								total_base,
 								total,
 								relative_tick + min_sell_tick,
@@ -835,20 +836,20 @@ impl<T: Config> Pallet<T> {
 /// order:
 /// 1. A dynamic order at a tick that is more defensive than the average tick. This is the same
 ///    logic as the dynamic order above.
-fn inventory_based_strategy_logic<T: Config>(
+fn inventory_based_strategy_logic<AccountId: Clone>(
 	amount: AssetAmount,
 	total: AssetAmount,
 	min_tick: Tick,
 	max_tick: Tick,
 	side: Side,
-	account_id: T::AccountId,
+	account_id: AccountId,
 	base_asset: Asset,
 	quote_asset: Asset,
-) -> Vec<LimitOrder<T::AccountId>> {
+) -> Vec<LimitOrder<AccountId>> {
 	if total == 0 {
 		return Vec::new();
 	}
-	let mut orders: BTreeMap<Tick, LimitOrder<T::AccountId>> = BTreeMap::new();
+	let mut orders: BTreeMap<Tick, LimitOrder<AccountId>> = BTreeMap::new();
 	let half_total = total / 2;
 
 	// Simple order logic:
