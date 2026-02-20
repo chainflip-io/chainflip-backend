@@ -402,7 +402,7 @@ impl_runtime_apis! {
 			let arb = pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap();
 			let sol = SolanaChainTrackingProvider::get_block_height();
 			let hub = pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::get().unwrap();
-			let trx = DummyTronChainTracking::get_block_height();
+			let tron = pallet_cf_chain_tracking::CurrentChainState::<Runtime, TronInstance>::get().unwrap();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
@@ -411,7 +411,7 @@ impl_runtime_apis! {
 				solana: sol,
 				arbitrum: arb.block_height,
 				assethub: hub.block_height.into(),
-				tron: trx,
+				tron: tron.block_height,
 			}
 		}
 
@@ -520,7 +520,7 @@ impl_runtime_apis! {
 				arbitrum: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>, ArbitrumInstance>(),
 				solana: open_channels::<SolanaChainTrackingProvider, SolanaInstance>(),
 				assethub: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, AssethubInstance>, AssethubInstance>(),
-				tron: open_channels::<DummyTronChainTracking, TronInstance>(),
+				tron: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, TronInstance>, TronInstance>(),
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
@@ -1077,7 +1077,7 @@ impl_runtime_apis! {
 				any::ForeignChainAndAsset::Tron(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
 						asset,
-						DummyTronChainTracking::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
+						pallet_cf_chain_tracking::Pallet::<Runtime, TronInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
 			}
@@ -1113,7 +1113,7 @@ impl_runtime_apis! {
 				any::ForeignChainAndAsset::Tron(asset) => {
 					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
 						asset,
-						DummyTronChainTracking::estimate_fee(asset, IngressOrEgress::Egress)
+						pallet_cf_chain_tracking::Pallet::<Runtime, TronInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
 			}
@@ -1716,10 +1716,12 @@ impl_runtime_apis! {
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
 			let arb_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, ArbitrumInstance>();
 			let sol_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, SolanaInstance>();
+			let tron_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, TronInstance>();
 			let accounts = btc_chain_accounts.keys()
 				.chain(eth_chain_accounts.keys())
 				.chain(arb_chain_accounts.keys())
 				.chain(sol_chain_accounts.keys())
+				.chain(tron_chain_accounts.keys())
 				.cloned().collect::<BTreeSet<_>>();
 
 			accounts.into_iter().map(|key| {
@@ -1730,6 +1732,7 @@ impl_runtime_apis! {
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						sol_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						tron_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
 				})
 			}).collect()

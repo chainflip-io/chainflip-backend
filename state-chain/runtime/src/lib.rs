@@ -252,12 +252,14 @@ mod runtime {
 	#[runtime::pallet_index(57)]
 	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
 
-	//  TODO: Not adding chaintracking nor any elections for now
+	// TODO: Not adding elections for now.
 	#[runtime::pallet_index(58)]
-	pub type TronVault = pallet_cf_vaults<Instance7>;
+	pub type TronChainTracking = pallet_cf_chain_tracking<Instance7>;
 	#[runtime::pallet_index(59)]
-	pub type TronBroadcaster = pallet_cf_broadcast<Instance7>;
+	pub type TronVault = pallet_cf_vaults<Instance7>;
 	#[runtime::pallet_index(60)]
+	pub type TronBroadcaster = pallet_cf_broadcast<Instance7>;
+	#[runtime::pallet_index(61)]
 	pub type TronIngressEgress = pallet_cf_ingress_egress<Instance7>;
 }
 
@@ -326,6 +328,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumChainTracking,
 	SolanaChainTracking,
 	AssethubChainTracking,
+	TronChainTracking,
 	// Elections
 	GenericElections,
 	SolanaElections,
@@ -409,7 +412,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, AssethubInstance>,
-	// No TronChainTracking pallet for now
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,

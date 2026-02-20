@@ -201,10 +201,10 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 		TronTransaction {
 			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
-			// TODO: Leave some default here but it should never fail.
+			// Leave a default here but it should never fail.
 			fee_limit: Self::calculate_gas_limit(signed_call)
 				.map(|v| v.as_u64())
-				.unwrap_or(250_000),
+				.unwrap_or(u64::try_from(DEFAULT_TRX_FEE_LIMIT_NON_CCM).unwrap_or(u64::MAX)),
 			..Default::default()
 		}
 	}

@@ -25,7 +25,8 @@ use cf_chains::{
 		api::DurableNonceAndAccount, AddressLookupTableAccount, SolAddress, SolApiEnvironment,
 		SolHash, SolTrackedData,
 	},
-	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot,
+	tron::TronTrackedData,
+	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Tron,
 };
 use cf_primitives::{
 	chains::Solana, AccountRole, AuthorityCount, ChainflipNetwork, NetworkEnvironment,
@@ -1056,6 +1057,12 @@ fn testnet_genesis(
 					median_tip: 0,
 					runtime_version: hub_runtime_version,
 				},
+			},
+		},
+		tron_chain_tracking: state_chain_runtime::TronChainTrackingConfig {
+			init_chain_state: ChainState::<Tron> {
+				block_height: 0,
+				tracked_data: TronTrackedData {},
 			},
 		},
 		// Channel lifetimes are set to ~2 hours at average block times.

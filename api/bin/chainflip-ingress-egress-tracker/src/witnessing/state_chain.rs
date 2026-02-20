@@ -738,6 +738,7 @@ where
 		ArbitrumChainTracking(_) |
 		SolanaChainTracking(_) |
 		AssethubChainTracking(_) |
+		TronChainTracking(_) |
 		EthereumVault(_) |
 		PolkadotVault(_) |
 		BitcoinVault(_) |

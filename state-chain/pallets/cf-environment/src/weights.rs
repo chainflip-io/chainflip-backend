@@ -56,6 +56,7 @@ pub trait WeightInfo {
 	fn witness_initialize_arbitrum_vault() -> Weight;
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
+	fn witness_initialize_tron_vault() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
 	fn non_native_signed_call() -> Weight;
 	fn batch(c: u32, ) -> Weight;
@@ -168,6 +169,22 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `1981`
 		// Minimum execution time: 22_491_000 picoseconds.
 		Weight::from_parts(22_759_000, 1981)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+
+	/// Storage: `TronVault::PendingVaultActivation` (r:1 w:1)
+	/// Proof: `TronVault::PendingVaultActivation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TronVault::VaultStartBlockNumbers` (r:0 w:1)
+	/// Proof: `TronVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn witness_initialize_tron_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `426`
+		//  Estimated: `1911`
+		// Minimum execution time: 21_541_000 picoseconds.
+		Weight::from_parts(22_025_000, 1911)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -450,6 +467,22 @@ impl WeightInfo for () {
 		//  Estimated: `1981`
 		// Minimum execution time: 22_491_000 picoseconds.
 		Weight::from_parts(22_759_000, 1981)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
+	}
+
+	/// Storage: `TronVault::PendingVaultActivation` (r:1 w:1)
+	/// Proof: `TronVault::PendingVaultActivation` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
+	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `TronVault::VaultStartBlockNumbers` (r:0 w:1)
+	/// Proof: `TronVault::VaultStartBlockNumbers` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn witness_initialize_tron_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `426`
+		//  Estimated: `1911`
+		// Minimum execution time: 21_541_000 picoseconds.
+		Weight::from_parts(22_025_000, 1911)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}

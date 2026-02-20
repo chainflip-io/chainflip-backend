@@ -115,6 +115,12 @@ pub struct WitnesserCallPermission {
 	pub assethub_chain_tracking: bool,
 	pub assethub_ingress_egress: bool,
 	pub assethub_vault: bool,
+
+	// Tron pallets
+	pub tron_broadcast: bool,
+	pub tron_chain_tracking: bool,
+	pub tron_ingress_egress: bool,
+	pub tron_vault: bool,
 }
 
 impl WitnesserCallPermission {
@@ -145,6 +151,10 @@ impl WitnesserCallPermission {
 			assethub_chain_tracking: true,
 			assethub_ingress_egress: true,
 			assethub_vault: true,
+			tron_broadcast: true,
+			tron_chain_tracking: true,
+			tron_ingress_egress: true,
+			tron_vault: true,
 		}
 	}
 }
@@ -183,6 +193,11 @@ impl CallDispatchFilter<RuntimeCall> for WitnesserCallPermission {
 			RuntimeCall::AssethubChainTracking(..) => self.assethub_chain_tracking,
 			RuntimeCall::AssethubIngressEgress(..) => self.assethub_ingress_egress,
 			RuntimeCall::AssethubVault(..) => self.assethub_vault,
+
+			RuntimeCall::TronBroadcaster(..) => self.tron_broadcast,
+			RuntimeCall::TronChainTracking(..) => self.tron_chain_tracking,
+			RuntimeCall::TronIngressEgress(..) => self.tron_ingress_egress,
+			RuntimeCall::TronVault(..) => self.tron_vault,
 
 			_ => {
 				cf_runtime_utilities::log_or_panic!(

@@ -231,11 +231,28 @@ impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pall
 		asset: <T::TargetChain as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
 	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_fee(asset, ingress_or_egress),
-		)
+		let chain: cf_primitives::ForeignChain = asset.into();
+		let estimated_fee = CurrentChainState::<T, I>::get()
+			.expect(NO_CHAIN_STATE)
+			.tracked_data
+			.estimate_fee(asset, ingress_or_egress.clone());
+
+		// For Tron we will use the multiplier to account for energy availability so we
+		// can adjust the fee accordingly. However, for CCM we want to charge users the
+		// actual fee as we can't control the amount of energy the users can spend, we
+		// can only control the TRX burnt. Therefore we charge full TRX burnt for CCMs.
+		// Alternatively we can apply the multiplier to all and just whitelist CCM receivers.
+		// TODO: Actually this makes me think that with the new CCM gas_budget it might
+		// not make sense to be applying the multiplier for all chains. It only makes sense
+		// if we think our base gas/fee is off already, as the gas_budget on top is paid in
+		// full by the user. Maybe that is overdoing it though and we just want to raise it
+		// accross the board.
+		if chain == cf_primitives::ForeignChain::Tron &&
+			matches!(ingress_or_egress, IngressOrEgress::EgressCcm { .. })
+		{
+			estimated_fee
+		} else {
+			FeeMultiplier::<T, I>::get().saturating_mul_int(estimated_fee)
+		}
 	}
 }

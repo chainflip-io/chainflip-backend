@@ -40,6 +40,7 @@ use cf_chains::{
 		verify_sol_signature, SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana,
 		NONCE_NUMBER_CRITICAL_NONCES,
 	},
+	tron::Tron,
 	Chain,
 };
 use cf_primitives::{
@@ -126,6 +127,8 @@ pub mod pallet {
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 		/// On new key witnessed handler for Assethub
 		type AssethubVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Assethub>;
+		/// On new key witnessed handler for Tron
+		type TronVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Tron>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -436,6 +439,8 @@ pub mod pallet {
 		NonNativeSignedCall,
 		// Runtime Call Batch was dispatched
 		BatchCompleted,
+		/// Tron Initialized: contract addresses have been set, first key activated
+		TronInitialized,
 	}
 
 	#[pallet::call]
@@ -764,6 +769,28 @@ pub mod pallet {
 			_origin: OriginFor<T>,
 			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
 		) -> DispatchResult {
+			Ok(())
+		}
+
+		/// Manually witnesses the current Tron block number to complete the pending vault
+		/// rotation.
+		#[pallet::call_index(12)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(T::WeightInfo::witness_initialize_tron_vault())]
+		pub fn witness_initialize_tron_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for Tron
+			T::TronVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::TronInitialized);
+
 			Ok(())
 		}
 	}
