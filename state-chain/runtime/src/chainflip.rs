@@ -242,17 +242,17 @@ impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilde
 					.into(),
 			)
 		} else {
-			/// Calculate the fee limit for a normal egress transaction, which can be any of the
-			/// api calls (AllBatch, SetAggKeyWithAggKey...) except the CCM egress. This is
-			/// different from other EVMs were we can just leave the gaslimit empty to let the
-			/// engines estimate it. Ideally we'd want to do something similar to the
-			/// `calculate_ccm_fee_limit`, getting the data from the api call or directly getting
-			/// the energy+bandwidth or even the fee. Then we can set the correct fee limit here.
-			/// However, there is only one way to get repaid, by executing the exact right call
-			/// to Tron. Tron's fees are pretty much deterministic so there is no way to grief
-			/// us. We therefore set a reasonably high fee_limit for now. TODO: Revisit if we
-			/// actually want to calculate the exact fee_limit for each call here or we are
-			/// comfortable with this approach.
+			// Calculate the fee limit for a normal egress transaction, which can be any of the
+			// api calls (AllBatch, SetAggKeyWithAggKey...) except the CCM egress. This is
+			// different from other EVMs were we can just leave the gaslimit empty to let the
+			// engines estimate it. Ideally we'd want to do something similar to the
+			// `calculate_ccm_fee_limit`, getting the data from the api call or directly getting
+			// the energy+bandwidth or even the fee. Then we can set the correct fee limit here.
+			// However, there is only one way to get repaid, by executing the exact right call
+			// to Tron. Tron's fees are pretty much deterministic so there is no way to grief
+			// us. We therefore set a reasonably high fee_limit for now. TODO: Revisit if we
+			// actually want to calculate the exact fee_limit for each call here or we are
+			// comfortable with this approach.
 			Some(DEFAULT_TRX_FEE_LIMIT_NON_CCM.into())
 		}
 	}

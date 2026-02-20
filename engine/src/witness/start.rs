@@ -22,7 +22,7 @@ use crate::{
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
-	tron::retry_rpc::TronRetryRpcClient,
+	tron::{retry_rpc::TronRetryRpcClient, rpc::TronRpcSigningClient},
 };
 use cf_utilities::task_scope::Scope;
 use engine_sc_client::{
@@ -39,8 +39,6 @@ use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
 
-// TODO: Add TRON
-
 /// Starts all the witnessing tasks.
 // It's important that this function is not blocking, at any point, even if there is no connection
 // to any or all chains. This implies that the `start` function for each chain should not be
@@ -53,6 +51,7 @@ pub async fn start<StateChainClient>(
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
+	_tron_client: TronRetryRpcClient<TronRpcSigningClient>,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
 	_unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
@@ -131,6 +130,9 @@ where
 		epoch_source,
 		db,
 	);
+
+	// TODO: To add TRON client when elections are added
+	// let start_tron = super::tron_elections::start(scope, tron_client, state_chain_client.clone());
 
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
