@@ -20,15 +20,21 @@ use cf_amm::math::Price;
 use cf_primitives::{
 	AccountId, AccountRole, Asset, AssetAmount, FLIPPERINOS_PER_FLIP, STABLE_ASSET,
 };
-use cf_test_utilities::assert_events_match;
+use cf_test_utilities::{
+	assert_events_match, assert_has_matching_event, assert_matching_event_count,
+};
 use frame_support::assert_ok;
-use state_chain_runtime::{AssetBalances, Runtime, RuntimeEvent, RuntimeOrigin};
+use sp_std::collections::btree_set::BTreeSet;
+use state_chain_runtime::{
+	chainflip::ChainlinkOracle, AssetBalances, Runtime, RuntimeEvent, RuntimeOrigin, System,
+};
 
 type TradingStrategyPallet = state_chain_runtime::TradingStrategy;
-use cf_traits::BalanceApi;
+use cf_traits::{BalanceApi, PoolApi, PriceFeedApi};
 use pallet_cf_trading_strategy::TradingStrategy;
 
 use crate::{
+	advance_blocks,
 	network::register_refund_addresses,
 	swapping::{credit_account, do_eth_swap, new_pool},
 };
@@ -256,4 +262,152 @@ fn inventory_based_strategy_basic_usage() {
             const ROUNDING_ERROR: AssetAmount = 2;
             assert_eq!(balances[QUOTE_ASSET], swap_input_amount - ROUNDING_ERROR);
         });
+}
+#[test]
+fn oracle_strategy_basic_usage() {
+	const DECIMALS: u128 = 10u128.pow(6);
+	const AMOUNT: AssetAmount = 10_000 * DECIMALS;
+	const STARTING_PRICE_CENTS: u32 = 99;
+
+	super::genesis::with_test_defaults()
+		.with_additional_accounts(&[
+			(DORIS, AccountRole::LiquidityProvider, 5 * FLIPPERINOS_PER_FLIP),
+			(ZION, AccountRole::Broker, 5 * FLIPPERINOS_PER_FLIP),
+		])
+		.build()
+		.execute_with(|| {
+			new_pool(BASE_ASSET, 0, Price::at_tick_zero());
+			turn_off_thresholds();
+
+			// Set the oracle prices
+			ChainlinkOracle::set_price(
+				BASE_ASSET,
+				Price::from_usd_cents(BASE_ASSET, STARTING_PRICE_CENTS),
+			);
+			ChainlinkOracle::set_price(STABLE_ASSET, Price::from_usd_cents(STABLE_ASSET, 101));
+
+			// Start trading strategy
+			register_refund_addresses(&DORIS);
+			credit_account(&DORIS, BASE_ASSET, AMOUNT);
+			const STRATEGY: TradingStrategy = TradingStrategy::OracleTracking {
+				base_asset: BASE_ASSET,
+				quote_asset: STABLE_ASSET,
+				min_buy_offset_tick: -10,
+				max_buy_offset_tick: 2,
+				min_sell_offset_tick: 2,
+				max_sell_offset_tick: 10,
+			};
+			assert_ok!(TradingStrategyPallet::deploy_strategy(
+				RuntimeOrigin::signed(DORIS),
+				STRATEGY.clone(),
+				BTreeMap::from_iter([(BASE_ASSET, AMOUNT)]),
+			));
+
+			// Get the strategy ID from the emitted event
+			let strategy_id = assert_events_match!(
+				Runtime,
+				RuntimeEvent::TradingStrategy(pallet_cf_trading_strategy::Event::StrategyDeployed {
+					account_id: DORIS,
+					strategy_id,
+					strategy: STRATEGY
+				}) => strategy_id
+			);
+
+			// Make sure the limit orders opened
+			System::reset_events();
+			advance_blocks(1);
+			assert_matching_event_count!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 2
+			);
+			assert_eq!(
+				state_chain_runtime::LiquidityPools::limit_orders(
+					BASE_ASSET,
+					STABLE_ASSET,
+					&BTreeSet::from([strategy_id.clone()]),
+				)
+				.unwrap()
+				.len(),
+				2
+			);
+
+			// Make sure the orders did not update without a reason
+			System::reset_events();
+			advance_blocks(1);
+			assert_matching_event_count!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated { .. }) => 0
+			);
+
+			// Change a price to trigger an update
+			System::reset_events();
+			ChainlinkOracle::set_price(
+				BASE_ASSET,
+				Price::from_usd_cents(BASE_ASSET, STARTING_PRICE_CENTS - 1),
+			);
+			advance_blocks(1);
+
+			// Orders at the old ticks are removed and new ones are added at the new ticks
+			const ORDER_AMOUNT: AssetAmount = AMOUNT / 2;
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
+					tick: -199,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Decrease(ORDER_AMOUNT)),
+					tick: -195,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(ORDER_AMOUNT)),
+					tick: -296,
+					..
+				})
+			);
+			assert_has_matching_event!(
+				Runtime,
+				RuntimeEvent::LiquidityPools(pallet_cf_pools::Event::LimitOrderUpdated {
+					sell_amount_change: Some(cf_traits::IncreaseOrDecrease::Increase(ORDER_AMOUNT)),
+					tick: -300,
+					..
+				})
+			);
+
+			// Do a swap
+			let _ = do_eth_swap(
+				QUOTE_ASSET.try_into().unwrap(),
+				BASE_ASSET.try_into().unwrap(),
+				&ZION,
+				AMOUNT / 2,
+			);
+
+			// Stop the strategy
+			assert_ok!(TradingStrategyPallet::close_strategy(
+				RuntimeOrigin::signed(DORIS),
+				strategy_id
+			));
+
+			// Check our balances
+			let balances = AssetBalances::free_balances(&DORIS);
+			let starting_value =
+				ChainlinkOracle::get_price(BASE_ASSET).unwrap().price.output_amount_ceil(AMOUNT);
+			let base_value = ChainlinkOracle::get_price(BASE_ASSET)
+				.unwrap()
+				.price
+				.output_amount_ceil(balances[BASE_ASSET]);
+			let quote_value = ChainlinkOracle::get_price(QUOTE_ASSET)
+				.unwrap()
+				.price
+				.output_amount_ceil(balances[QUOTE_ASSET]);
+			assert!(base_value + quote_value > starting_value, "Should see increase due to tick",);
+		});
 }

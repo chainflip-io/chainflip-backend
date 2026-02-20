@@ -27,8 +27,8 @@ mod old {
 	use frame_support::{pallet_prelude::OptionQuery, storage_alias, Twox64Concat};
 	use sp_std::collections::btree_map::BTreeMap;
 
-	use cf_primitives::Tick;
-	use cf_traits::{OrderId, PoolPairsMap};
+	use cf_primitives::{OrderId, Tick};
+	use cf_traits::PoolPairsMap;
 	use codec::{Decode, Encode};
 
 	use crate::{AssetPair, Config, Pallet};

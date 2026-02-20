@@ -30,8 +30,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountId, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, IngressOrEgress,
+	OrderId,
 };
-use cf_traits::{AssetConverter, OrderId};
+use cf_traits::AssetConverter;
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
 use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
 use sp_runtime::{

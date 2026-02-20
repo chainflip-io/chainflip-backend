@@ -20,7 +20,7 @@ use sp_runtime::{Permill, SaturatedConversion};
 use std::{collections::BTreeMap, vec};
 
 use crate::{
-	genesis,
+	advance_blocks, genesis,
 	network::{
 		fund_authorities_and_join_auction, new_account, register_refund_addresses,
 		setup_account_and_peer_mapping, Cli, Network,
@@ -43,17 +43,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	EgressId, IngressOrEgress, OrderId, SwapId, FLIPPERINOS_PER_FLIP, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
-	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, OrderId, PoolApi,
-	PoolPairsMap, SwapType,
+	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, PoolApi, PoolPairsMap,
+	SwapType,
 };
 use frame_support::{
 	assert_ok,
 	instances::Instance1,
-	traits::{OnFinalize, OnIdle, Time},
+	traits::{OnFinalize, Time},
 };
 use pallet_cf_asset_balances::FreeBalances;
 use pallet_cf_broadcast::{AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls};
@@ -68,7 +69,7 @@ use state_chain_runtime::{
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Timestamp, Validator, Weight,
+	System, Timestamp, Validator,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -186,19 +187,8 @@ pub fn do_eth_swap(
 	Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.
 	clone()).unwrap()).unwrap() == deposit_address && input_amount == amount => swap_request_id);
 
-	// Advance 2 blocks so the swap can be processed
-	assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-	state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-	state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-		3,
-		Weight::from_parts(1_000_000_000_000, u64::MAX),
-	);
-	assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-	state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
-	state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-		4,
-		Weight::from_parts(1_000_000_000_000, u64::MAX),
-	);
+	// Process this block and then advance 2 blocks so the swap can be processed
+	advance_blocks(1 + SWAP_DELAY_BLOCKS);
 
 	// Check for swap events
 	if from_asset == STABLE_ASSET || to_asset == STABLE_ASSET {
@@ -532,37 +522,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			swap_request_id_in_event == swap_request_id => swap_id
 		);
 
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
-		System::set_block_number(3);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			3,
-			Weight::from_parts(1_000_000_000_000, 0),
-		);
-
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(3);
-		System::set_block_number(4);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			4,
-			Weight::from_parts(1_000_000_000_000, 0),
-		);
-
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(4);
-		System::set_block_number(5);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			5,
-			Weight::from_parts(1_000_000_000_000, 0),
-		);
-
-		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
-		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(5);
-		System::set_block_number(6);
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			6,
-			Weight::from_parts(1_000_000_000_000, 0),
-		);
+		advance_blocks(4);
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,

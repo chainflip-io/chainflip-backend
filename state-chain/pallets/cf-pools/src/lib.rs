@@ -23,7 +23,7 @@ use cf_amm::{
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
@@ -31,8 +31,8 @@ use cf_traits::{
 };
 use sp_runtime::Saturating;
 
+pub use cf_traits::IncreaseOrDecrease;
 use cf_traits::LpRegistration;
-pub use cf_traits::{IncreaseOrDecrease, OrderId};
 use core::ops::Range;
 use frame_support::{
 	pallet_prelude::*,
@@ -46,7 +46,7 @@ use frame_system::{
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 mod benchmarking;
 pub mod migrations;
@@ -1180,10 +1180,45 @@ impl<T: Config> PoolApi for Pallet<T> {
 		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
 		let pool_orders =
-			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
+			Self::pool_orders_for_account(asset_pair.base, asset_pair.quote, who, true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		accounts: &BTreeSet<Self::AccountId>,
+	) -> Result<Vec<cf_amm::common::LimitOrder<Self::AccountId>>, DispatchError> {
+		let pool_orders = Self::pool_orders(base_asset, quote_asset, accounts, true);
+		pool_orders.map(|pool| {
+			pool.limit_orders
+				.asks
+				.iter()
+				.cloned()
+				.map(|order| cf_amm::common::LimitOrder {
+					base_asset,
+					quote_asset,
+					account_id: order.lp,
+					side: Side::Sell,
+					order_id: order.id.saturated_into(),
+					tick: order.tick,
+					amount: order.sell_amount.saturated_into(),
+				})
+				.chain(pool.limit_orders.bids.iter().cloned().map(|order| {
+					cf_amm::common::LimitOrder {
+						base_asset,
+						quote_asset,
+						account_id: order.lp,
+						side: Side::Buy,
+						order_id: order.id.saturated_into(),
+						tick: order.tick,
+						amount: order.sell_amount.saturated_into(),
+					}
+				}))
+				.collect()
+		})
 	}
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
@@ -1191,7 +1226,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
 			let pool_orders =
-				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+				match Self::pool_orders_for_account(base_asset, Asset::Usdc, who, false) {
 					Ok(orders) => orders,
 					Err(_) => continue,
 				};
@@ -2322,37 +2357,51 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns the limit and range orders for a given Liquidity Provider within the given pool.
+	pub fn pool_orders_for_account(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		account: &T::AccountId,
+		filled_orders: bool,
+	) -> Result<PoolOrders<T>, DispatchError> {
+		Self::pool_orders(
+			base_asset,
+			quote_asset,
+			&BTreeSet::from([account.clone()]),
+			filled_orders,
+		)
+	}
+
+	/// Returns the limit and range orders for a given Liquidity Providers within the given pool.
+	/// Empty set of accounts will return all orders within the pool.
 	pub fn pool_orders(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
-		option_lp: Option<T::AccountId>,
+		accounts: &BTreeSet<T::AccountId>,
 		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
 		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
-		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair(
 				|asset, limit_orders_cache| {
 					cf_utilities::conditional::conditional(
-						option_lp,
-						|lp| {
-							limit_orders_cache
-								.get(lp)
-								.into_iter()
-								.flatten()
-								.map(|(id, tick)| (lp.clone(), *id, *tick))
-						},
+						accounts.is_empty(),
 						|()| {
 							limit_orders_cache.iter().flat_map(move |(lp, orders)| {
-								orders.iter().map({
-									let lp = lp.clone();
-									move |(id, tick)| (lp.clone(), *id, *tick)
-								})
+								orders.iter().map(move |(id, tick)| (lp.clone(), *id, *tick))
+							})
+						},
+						|()| {
+							accounts.iter().flat_map(|lp| {
+								limit_orders_cache
+									.get(lp)
+									.into_iter()
+									.flatten()
+									.map(|(id, tick)| (lp.clone(), *id, *tick))
 							})
 						},
 					)
-					.filter_map(|(lp, id, tick)| {
+					.filter_map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
 						let (collected, position_info) = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
@@ -2374,13 +2423,15 @@ impl<T: Config> Pallet<T> {
 				},
 			)),
 			range_orders: cf_utilities::conditional::conditional(
-				option_lp,
-				|lp| {
-					pool.range_orders_cache
-						.get(lp)
-						.into_iter()
-						.flatten()
-						.map(|(id, range)| (lp.clone(), *id, range.clone()))
+				!accounts.is_empty(),
+				|()| {
+					accounts.iter().flat_map(|lp| {
+						pool.range_orders_cache
+							.get(lp)
+							.into_iter()
+							.flatten()
+							.map(|(id, range)| (lp.clone(), *id, range.clone()))
+					})
 				},
 				|()| {
 					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
@@ -2391,16 +2442,16 @@ impl<T: Config> Pallet<T> {
 					})
 				},
 			)
-			.map(|(lp, id, tick_range)| {
+			.flat_map(|(lp, id, tick_range): (T::AccountId, OrderId, Range<Tick>)| {
 				let (collected, position_info) =
 					pool.pool_state.range_order(&(lp.clone(), id), tick_range.clone()).unwrap();
-				RangeOrder {
+				sp_std::iter::once(RangeOrder {
 					lp: lp.clone(),
 					id: id.into(),
 					range: tick_range.clone(),
 					liquidity: position_info.liquidity,
 					fees_earned: collected.accumulative_fees,
-				}
+				})
 			})
 			.collect(),
 		})
