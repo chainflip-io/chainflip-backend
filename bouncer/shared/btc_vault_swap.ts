@@ -80,7 +80,6 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
           (event) => event.brokerId === broker.keypair.address,
         ),
       },
-      filteredError: 'swapping.PrivateChannelExistsForBroker',
     });
 
     cf.debug(
@@ -91,8 +90,6 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
     // Fetch the private channel instead, if the extrinsic fails
     if (err instanceof Error && err.message.includes('swapping.PrivateChannelExistsForBroker')) {
       const privateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
-      cf.warn(`got an error fetching private channel: ${privateChannel}`);
-
       if (privateChannel) {
         return privateChannel;
       }

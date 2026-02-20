@@ -32,6 +32,7 @@ import { newEvmAddress } from 'shared/new_evm_address';
 import { brokerApiEndpoint } from 'shared/json_rpc';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { SwapContext } from '../shared/utils/swap_context';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
@@ -40,7 +41,7 @@ async function testSuccessiveDepositEvm<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
-  testContext: TestContext,
+  swapContext: SwapContext,
 ) {
   const swapParams = await testSwap(
     cf,
@@ -48,7 +49,7 @@ async function testSuccessiveDepositEvm<A = []>(
     destAsset,
     undefined,
     undefined,
-    testContext.swapContext,
+    swapContext,
     'EvmDepositTestFirstDeposit',
   );
 
@@ -65,7 +66,7 @@ async function testNoDuplicateWitnessing<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
-  testContext: TestContext,
+  swapContext: SwapContext,
 ) {
   const swapParams = await testSwap(
     cf,
@@ -73,12 +74,12 @@ async function testNoDuplicateWitnessing<A = []>(
     destAsset,
     undefined,
     undefined,
-    testContext.swapContext,
+    swapContext,
     'NoDuplicateWitnessingTest',
   );
 
   // Check the Deposit contract is deployed. It is assumed that the funds are fetched immediately.
-  const observingSwapScheduled = observeBadEvent(testContext.logger, 'swapping:SwapScheduled', {
+  const observingSwapScheduled = observeBadEvent(cf.logger, 'swapping:SwapScheduled', {
     test: (event) => {
       if (typeof event.data.origin === 'object' && 'DepositChannel' in event.data.origin) {
         const channelMatches =
@@ -94,19 +95,19 @@ async function testNoDuplicateWitnessing<A = []>(
 
   // Arbitrary time value that should be enough to determine that another swap has not been triggered.
   // Trying to witness the fetch BroadcastSuccess is just unnecessarily complicated here.
-  await sleep(100000);
+  await sleep(60000);
 
   await observingSwapScheduled.stop();
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
-async function testTxMultipleVaultSwaps(
-  parentLogger: Logger,
+async function testTxMultipleVaultSwaps<A = []>(
+  parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
 ) {
-  const { destAddress, tag } = await prepareSwap(parentLogger, sourceAsset, destAsset);
-  const logger = parentLogger.child({ tag });
+  const { destAddress, tag } = await prepareSwap(parentCf.logger, sourceAsset, destAsset);
+  const cf = parentCf.withChildLogger(`${tag} testTxMultipleVaultSwaps`);
 
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
 
@@ -130,24 +131,34 @@ async function testTxMultipleVaultSwaps(
       numSwaps,
     )
     .encodeABI();
+
+  await cf.stepUntilLatestBlock()
+
   const receipt = await signAndSendTxEvm(
-    logger,
+    cf.logger,
     chainFromAsset(sourceAsset),
     cfTesterAddress,
     (amount * BigInt(numSwaps)).toString(),
     txData,
   );
 
+  // const channelMatches = checkTransactionInMatches(event.origin, id);
+  // const sourceAssetMatches = sourceAsset === event.inputAsset;
+  // const destAssetMatches = destAsset === event.outputAsset;
+  // const requestTypeMatches = checkRequestTypeMatches(event.requestType, swapRequestType);
+
   let eventCounter = 0;
-  const observingEvent = observeEvent(logger, 'swapping:SwapRequested', {
+  const observingEvent = observeEvent(cf.logger, 'swapping:SwapRequested', {
     test: (event) => {
       if (
         typeof event.data.origin === 'object' &&
         'Vault' in event.data.origin &&
-        event.data.origin.Vault.txId.Evm === receipt.transactionHash
+        event.data.origin.Vault.txId.Evm === receipt.transactionHash // &&
+        // (event.data.inputAsset as Asset) === sourceAsset &&
+        // (event.data.outputAsset as Asset) === destAsset
       ) {
         if (++eventCounter > numSwaps) {
-          throwError(logger, new Error('Multiple swap scheduled events detected'));
+          throwError(cf.logger, new Error('Multiple swap scheduled events detected'));
         }
       }
       return false;
@@ -183,7 +194,8 @@ async function testDoubleDeposit<A = []>(
     undefined,
     'EvmDoubleDepositTest',
   );
-  const cf = parentCf.withChildLogger(tag);
+
+  const cf = parentCf.withChildLogger(`${tag} testDoubleDeposit`);
   const swapParams = await requestNewSwap(cf, sourceAsset, destAsset, destAddress);
 
   {
@@ -213,12 +225,14 @@ async function testDoubleDeposit<A = []>(
   await swapRequestedHandle;
 }
 
-async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
-  const logger = parentLogger.child({ tag: 'test' });
+async function testEvmLegacyCfParametersVaultSwap<A = []>(
+  parentCf: ChainflipIO<A>,
+) {
+  const cf = parentCf.withChildLogger('testEvmLegacyCfParametersVaultSwap');
 
   const sourceAsset = 'ArbEth';
   const srcChain = 'Arbitrum';
-  const evmWallet = await createEvmWalletAndFund(logger, sourceAsset);
+  const evmWallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
   const web3 = new Web3(getEvmEndpoint(srcChain));
 
   // Hardcoded payload obtained encoding a Vault Swap with the old Encoding
@@ -263,10 +277,10 @@ async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
     const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
-    logger.info(`Vault swap transaction sent with hash: ${receipt.transactionHash}`);
+    cf.info(`Vault swap transaction sent with hash: ${receipt.transactionHash}`);
 
     const depositFinalisedEvent = observeEvent(
-      logger,
+      cf.logger,
       `${chainFromAsset(sourceAsset).toLowerCase()}IngressEgress:DepositFinalised`,
       {
         test: (event) =>
@@ -279,7 +293,7 @@ async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
     // but the swap is observed correctly.
     const unknownBrokerEvent = vaultSwapDetails.broker
       ? observeEvent(
-          logger,
+          cf.logger,
           `${chainFromAsset(sourceAsset).toLowerCase()}IngressEgress:UnknownBroker`,
           {
             test: (event) => event.data.brokerId === vaultSwapDetails.broker,
@@ -292,19 +306,20 @@ async function testEvmLegacyCfParametersVaultSwap(parentLogger: Logger) {
 }
 
 async function testEncodeCfParameters<A = []>(
-  parentcf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
 ) {
   const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
   const cfVaultAddress = getContractAddress(chainFromAsset(sourceAsset), 'VAULT');
   const cfVaultContract = new web3.eth.Contract(cfEvmVaultAbi, cfVaultAddress);
-  const { destAddress, tag } = await prepareSwap(parentcf.logger, sourceAsset, destAsset);
-  const cf = parentcf.withChildLogger(tag);
+
+  const { destAddress, tag } = await prepareSwap(parentCf.logger, sourceAsset, destAsset);
+  const cf = parentCf.withChildLogger(`${tag} testEncodeCfParameters`);
 
   const fillOrKillParams: FillOrKillParamsX128 = {
     retryDurationBlocks: 10,
-    refundAddress: newEvmAddress('refund_eth'),
+    refundAddress: newEvmAddress(`refund_eth_${tag}`),
     minPriceX128: '0',
     refundCcmMetadata: undefined,
     maxOraclePriceSlippage: undefined,
@@ -336,6 +351,9 @@ async function testEncodeCfParameters<A = []>(
     )
     .encodeABI();
 
+  // Move cf to the latest SC block
+  await cf.stepUntilLatestBlock()
+
   const receipt = await signAndSendTxEvm(
     cf.logger,
     chainFromAsset(sourceAsset),
@@ -353,50 +371,61 @@ async function testEncodeCfParameters<A = []>(
   );
 }
 
-export async function testEvmDeposits(testContext: TestContext) {
-  const cf = await newChainflipIO(testContext.logger, []);
+export async function dotestEvmDeposits<A = []>(
+  cf: ChainflipIO<A>,
+  swapContext: SwapContext,
+): Promise<void> {
+  const depositTests = (parentCf: ChainflipIO<A>) =>
+    parentCf.all([
+      (subcf) => testSuccessiveDepositEvm(subcf, 'Eth', 'Sol', swapContext),
+      (subcf) => testSuccessiveDepositEvm(subcf, 'Flip', 'Btc', swapContext),
+      (subcf) => testSuccessiveDepositEvm(subcf, 'ArbEth', 'Flip', swapContext),
+      (subcf) => testSuccessiveDepositEvm(subcf, 'ArbUsdc', 'Btc', swapContext),
+    ]);
 
-  const depositTests = Promise.all([
-    testSuccessiveDepositEvm(cf, 'Eth', 'Sol', testContext),
-    testSuccessiveDepositEvm(cf, 'Flip', 'Btc', testContext),
-    testSuccessiveDepositEvm(cf, 'ArbEth', 'Flip', testContext),
-    testSuccessiveDepositEvm(cf, 'ArbUsdc', 'Btc', testContext),
-  ]);
+  const noDuplicatedWitnessingTest = (parentCf: ChainflipIO<A>) =>
+    parentCf.all([
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Eth', 'Sol', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Eth', 'Btc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Eth', 'Flip', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Eth', 'Usdc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Sol', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Btc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Flip', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Usdc', swapContext),
+    ]);
 
-  const noDuplicatedWitnessingTest = Promise.all([
-    testNoDuplicateWitnessing(cf, 'Eth', 'Sol', testContext),
-    testNoDuplicateWitnessing(cf, 'Eth', 'Btc', testContext),
-    testNoDuplicateWitnessing(cf, 'Eth', 'Flip', testContext),
-    testNoDuplicateWitnessing(cf, 'Eth', 'Usdc', testContext),
-    testNoDuplicateWitnessing(cf, 'ArbEth', 'Sol', testContext),
-    testNoDuplicateWitnessing(cf, 'ArbEth', 'Btc', testContext),
-    testNoDuplicateWitnessing(cf, 'ArbEth', 'Flip', testContext),
-    testNoDuplicateWitnessing(cf, 'ArbEth', 'Usdc', testContext),
-  ]);
+  const multipleTxSwapsTest = (parentCf: ChainflipIO<A>) =>
+    parentCf.all([
+      (subcf) => testTxMultipleVaultSwaps(subcf, 'Eth', 'Flip'),
+      (subcf) => testTxMultipleVaultSwaps(subcf, 'ArbEth', 'Flip'),
+    ]);
 
-  const multipleTxSwapsTest = Promise.all([
-    testTxMultipleVaultSwaps(testContext.logger, 'Eth', 'Flip'),
-    testTxMultipleVaultSwaps(testContext.logger, 'ArbEth', 'Flip'),
-  ]);
+  const doubleDepositTests = (parentCf: ChainflipIO<A>) =>
+    parentCf.all([
+      (subcf) => testDoubleDeposit(subcf, 'Eth', 'Flip'),
+      (subcf) => testDoubleDeposit(subcf, 'Usdc', 'Flip'),
+      (subcf) => testDoubleDeposit(subcf, 'ArbEth', 'Sol'),
+      (subcf) => testDoubleDeposit(subcf, 'ArbUsdc', 'Flip'),
+    ]);
 
-  const doubleDepositTests = Promise.all([
-    testDoubleDeposit(cf, 'Eth', 'Flip'),
-    testDoubleDeposit(cf, 'Usdc', 'Flip'),
-    testDoubleDeposit(cf, 'ArbEth', 'Sol'),
-    testDoubleDeposit(cf, 'ArbUsdc', 'Flip'),
-  ]);
+  const testEncodingCfParameters = (parentCf: ChainflipIO<A>) =>
+    parentCf.all([
+      (subcf) => testEncodeCfParameters(subcf, 'ArbEth', 'Eth'),
+      (subcf) => testEncodeCfParameters(subcf, 'Eth', 'Flip'),
+    ]);
 
-  const testEncodingCfParameters = Promise.all([
-    testEncodeCfParameters(cf, 'ArbEth', 'Eth'),
-    testEncodeCfParameters(cf, 'Eth', 'Flip'),
-  ]);
-
-  await Promise.all([
+  await cf.all([
     depositTests,
     noDuplicatedWitnessingTest,
     multipleTxSwapsTest,
     doubleDepositTests,
-    testEvmLegacyCfParametersVaultSwap(testContext.logger),
+    testEvmLegacyCfParametersVaultSwap,
     testEncodingCfParameters,
   ]);
+}
+
+export async function testEvmDeposits(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
+  await dotestEvmDeposits(cf, testContext.swapContext);
 }

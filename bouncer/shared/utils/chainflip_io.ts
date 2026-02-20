@@ -1,8 +1,8 @@
 import {
   createStateChainKeypair,
-  extractExtrinsicResult,
   isValidHexHash,
   sleep,
+  toExtrinsicResult,
   waitForExt,
 } from 'shared/utils';
 import { z } from 'zod';
@@ -127,7 +127,6 @@ export class ChainflipIO<Requirements> {
     arg: {
       extrinsic: ExtrinsicFromApi;
       expectedEvent?: { name: EventName; schema?: Schema };
-      filteredError?: string;
     },
   ): Promise<z.infer<Schema>> {
     return this.runExclusively('submitExtrinsic', async () => {
@@ -143,18 +142,12 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(
-        chainflipApi,
-        this.logger,
-        'InBlock',
-        release,
-        arg.filteredError,
-      );
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
       const unsub = await ext.signAndSend(this.requirements.account.keypair, { nonce }, waiter);
-      const result = extractExtrinsicResult(chainflipApi, await promise);
+      const result = await toExtrinsicResult(chainflipApi, promise);
       unsub();
 
       if (!result.ok) {
@@ -300,6 +293,26 @@ export class ChainflipIO<Requirements> {
    */
   async stepOneBlock() {
     this.lastIoBlockHeight += 1;
+  }
+
+  /**
+   * Advance the current chainflip block height by N block.
+   */
+  async stepNBlocks(n: number) {
+    this.lastIoBlockHeight += n;
+  }
+
+  currentBlockHeight() : number {
+    return this.lastIoBlockHeight;
+  }
+
+  async stepUntilLatestBlock() {
+    await using chainflipApi = await getChainflipApi();
+    const signedBlock = await chainflipApi.rpc.chain.getBlock();
+    const latestBlockNumber = Number(signedBlock.block.header.number);
+    if (this.lastIoBlockHeight < latestBlockNumber) {
+      this.lastIoBlockHeight = latestBlockNumber;
+    }
   }
 
   /**

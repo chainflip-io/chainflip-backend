@@ -1,24 +1,27 @@
 import assert from 'assert';
 import { InternalAsset as Asset } from '@chainflip/cli';
-// eslint-disable-next-line no-restricted-imports
-import type { KeyringPair } from '@polkadot/keyring/types';
 import {
   Assets,
+  chainFromAsset,
   defaultAssetAmounts,
-  handleSubstrateError,
+  doBtcAddressesMatch,
   newAssetAddress,
   sleep,
 } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
 import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
 import { AccountRole, setupAccount } from 'shared/setup_account';
-import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
+import { executeVaultSwap, prepareVaultSwapSource, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
-import { getChainflipApi } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
-import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import {
+  ChainflipIO, FullAccount,
+  fullAccountFromUri,
+  newChainflipIO,
+} from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { SwapContext } from '../shared/utils/swap_context';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -41,8 +44,10 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   };
 
   cf.info('Sending vault swap...');
+  const source = await prepareVaultSwapSource(cf, inputAsset);
   await executeVaultSwap(
     cf,
+    source,
     inputAsset,
     destAsset,
     destAddress,
@@ -71,12 +76,13 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
 }
 
 async function testWithdrawCollectedAffiliateFees<A = []>(
-  cf: ChainflipIO<A>,
-  broker: KeyringPair,
+  parentCf: ChainflipIO<A>,
+  brokerAccount: FullAccount<'Broker'>,
   affiliateAccountId: string,
   withdrawAddress: string,
 ) {
-  const chainflip = await getChainflipApi();
+
+  const cf = parentCf.with({ account: brokerAccount });
 
   const balanceObserveTimeout = 60;
   let success = false;
@@ -84,10 +90,9 @@ async function testWithdrawCollectedAffiliateFees<A = []>(
   cf.debug('Affiliate account ID:', affiliateAccountId);
   cf.debug('Withdraw address:', withdrawAddress);
 
-  const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-  await chainflip.tx.swapping
-    .affiliateWithdrawalRequest(affiliateAccountId)
-    .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+  await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
+  });
 
   cf.info('Withdrawal request sent!');
   cf.debug('Waiting for balance change... Observing address:', withdrawAddress);
@@ -108,11 +113,12 @@ async function testWithdrawCollectedAffiliateFees<A = []>(
 async function testFeeCollection<A = []>(
   parentCf: ChainflipIO<A>,
   inputAsset: Asset,
-  testContext: TestContext,
-): Promise<[KeyringPair, string, string]> {
+  swapContext: SwapContext,
+): Promise<[FullAccount<'Broker'>, string, string]> {
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri: `//${string}` = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
   const broker = await setupAccount(parentCf, brokerUri, AccountRole.Broker);
+  const brokerAccount = fullAccountFromUri(brokerUri, 'Broker');
 
   const cf = parentCf.with({
     account: fullAccountFromUri(brokerUri, 'Broker'),
@@ -139,12 +145,14 @@ async function testFeeCollection<A = []>(
     undefined, // addressType
     undefined, // messageMetadata
     'VaultSwapFeeTest',
-    testContext.swapContext,
+    swapContext,
   );
 
-  // Amounts before swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
-  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
+  // Amounts before swap, always zero because broker is newly setup and funded
+  // const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
+  // const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
+  const earnedBrokerFeesBefore = BigInt(0);
+  const earnedAffiliateFeesBefore = BigInt(0);
   cf.debug('Earned broker fees before:', earnedBrokerFeesBefore);
   cf.debug('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
@@ -156,7 +164,7 @@ async function testFeeCollection<A = []>(
     destAsset,
     destAddress,
     undefined, // messageMetadata
-    testContext.swapContext,
+    swapContext,
     depositAmount,
     0, // boostFeeBps
     undefined, // fillOrKillParams
@@ -179,7 +187,7 @@ async function testFeeCollection<A = []>(
     `No increase in earned affiliate fees after ${inputAsset} swap`,
   );
 
-  return Promise.resolve([broker, affiliateId, refundAddress]);
+  return Promise.resolve([brokerAccount, affiliateId, refundAddress]);
 }
 
 async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
@@ -205,23 +213,34 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
 
   await cf.stepUntilEvent(
     'BitcoinIngressEgress.DepositFinalised',
-    bitcoinIngressEgressDepositFinalised.refine((event) => event.action.__kind === 'Unrefundable'),
+    bitcoinIngressEgressDepositFinalised.refine(
+      (event) => event.action.__kind === 'Unrefundable'),
   );
 
   cf.info('Invalid BTC vault swap ingressed ✅.');
 }
 
+async function testFeeCollectionWithdrawal<A = []>(
+  cf: ChainflipIO<A>,
+  inputAsset: Asset,
+  swapContext: SwapContext,
+) {
+  // Test the affiliate withdrawal functionality
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, inputAsset, swapContext);
+  await testWithdrawCollectedAffiliateFees(cf, broker, affiliateId, refundAddress);
+}
+
 export async function testVaultSwap(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
+
   await cf.all([
-    (subcf) => testFeeCollection(subcf, Assets.Eth, testContext),
-    (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext),
-    (subcf) => testFeeCollection(subcf, Assets.Sol, testContext),
+    (subcf) => testFeeCollection(subcf, Assets.Eth, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.Sol, testContext.swapContext),
+    (subcf) => testFeeCollectionWithdrawal(subcf, Assets.Btc, testContext.swapContext),
+    (subcf) => testRefundVaultSwap(subcf),
+    (subcf) => testInvalidBtcVaultSwap(subcf)
   ]);
 
-  // Test the affiliate withdrawal functionality
-  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
-  await testWithdrawCollectedAffiliateFees(cf, broker, affiliateId, refundAddress);
-  await testRefundVaultSwap(cf);
-  await testInvalidBtcVaultSwap(cf);
+
 }

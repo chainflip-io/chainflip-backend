@@ -93,7 +93,7 @@ export async function addLenderFunds<A extends WithLpAccount>(
 
 /// Creates lending pools for multiple assets and funds the BTC one.
 export async function setupLendingPools<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
-  const cf = parentCf.with({ account: fullAccountFromUri('//LP_BOOST', 'LP') });
+  const cf = parentCf.with({ account: fullAccountFromUri('//LP_LENDING', 'LP') });
 
   cf.info('Creating Lending Pools');
   const newPools: LendingPoolId[] = assets.map((asset) => ({ asset }));

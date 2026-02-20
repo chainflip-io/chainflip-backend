@@ -121,4 +121,6 @@ export async function updateDefaultPriceFeeds(logger: Logger) {
     updatePriceFeed(logger, 'Arbitrum', 'USDC', defaultPrice.get('Usdc')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDT', defaultPrice.get('Usdt')!.toString()),
   ]);
+
+  logger.info('All price feeds updated');
 }

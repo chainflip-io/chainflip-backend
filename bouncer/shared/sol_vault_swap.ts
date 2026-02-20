@@ -193,6 +193,7 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
   if (transactionData === null) {
     throwError(cf.logger, new Error('Solana TransactionData is empty'));
   }
+  cf.debug(`Solana transactionData = ${transactionData}`);
   return { txHash, slot: transactionData!.slot, accountAddress: newEventAccountPublicKey };
 }
 

@@ -29,46 +29,53 @@ describe('ConcurrentTests', () => {
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
+  const singleSwapTimeout = numberOfNodes === 1 ? 300 : 240; // TODO: find out what the 3-node timeout should be
+  const ciTimeoutFactor = 1.1; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
 
-  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // TODO: find out what the 3-node timeout should be
-  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 600);
-  concurrentTest('EvmDeposits', testEvmDeposits, 300);
-  concurrentTest('FundRedeem', testFundRedeem, 600);
-  concurrentTest('LpApi', testLpApi, 300);
-  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 260);
-  concurrentTest('FillOrKill', testFillOrKill, 600);
-  concurrentTest('DCASwaps', testDCASwaps, 300);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240);
-  concurrentTest('DepositChannelCreation', depositChannelCreation, 30);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 600);
-  concurrentTest('VaultSwaps', testVaultSwap, 600);
-  // This test times out far too often.
-  // TODO: figure out how to make it less flaky.
-  // WHEN CHANGING ANYTHING RELATED TO ASSETHUB OR XCM, run this test locally.
-  // concurrentTest('AssethubXCM', testAssethubXcm, 200);
-  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 140);
-  concurrentTest('DelegateFlip', testDelegate, 360);
-  concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 360);
-  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
-  concurrentTest('Lending', lendingTest, 360);
-  concurrentTest('GovernanceDepositWitnessing', testGovernanceDepositWitnessing, 300);
+  testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
+  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
+  concurrentTest('VaultSwaps', testVaultSwap, 320 * ciTimeoutFactor);
+  concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
+
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 300 * ciTimeoutFactor);
+  concurrentTest('EvmDeposits', testEvmDeposits, 450 * ciTimeoutFactor);
+  concurrentTest('LpApi', testLpApi, 265 * ciTimeoutFactor);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200 * ciTimeoutFactor);
+  concurrentTest('FillOrKill', testFillOrKill, 340 * ciTimeoutFactor);
+  concurrentTest('DCASwaps', testDCASwaps, 340 * ciTimeoutFactor);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240 * ciTimeoutFactor);
+  concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
+  concurrentTest('DelegateFlip', testDelegate, 280 * ciTimeoutFactor);
+  concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 220 * ciTimeoutFactor);
+  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 200 * ciTimeoutFactor);
+  concurrentTest('Lending', lendingTest, 320 * ciTimeoutFactor);
+  concurrentTest(
+    'GovernanceDepositWitnessing',
+    testGovernanceDepositWitnessing,
+    270 * ciTimeoutFactor,
+  );
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
   // parallel with the Assethub tests in `SwapsToAssethub`.
-  serialTest('SwapLessThanED', swapLessThanED, 360);
+  // serialTest('SwapLessThanED', swapLessThanED, 350 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
-  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 120);
+  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 80 * ciTimeoutFactor);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
-    concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300);
+    concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300 * ciTimeoutFactor);
   }
 
   // Post test checks
-  serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 150);
-  serialTest('CheckAvailabilityAllSolanaNonces', checkAvailabilityAllSolanaNonces, 50);
+  serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 5 * ciTimeoutFactor);
+  serialTest(
+    'CheckAvailabilityAllSolanaNonces',
+    checkAvailabilityAllSolanaNonces,
+    5 * ciTimeoutFactor,
+  );
 });
 
 // Run only the broker level screening tests

@@ -12,7 +12,7 @@ import {
   SwapRequestType,
   TransactionOrigin,
 } from 'shared/utils';
-import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
+import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -40,7 +40,12 @@ async function testMinPriceRefund<A = []>(
     `FoK_${sourceAsset}_${destAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
   );
 
-  const refundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
+  const refundAddress = await newAssetAddress(
+    sourceAsset,
+    randomBytes(32).toString('hex'),
+    undefined,
+    ccmRefund,
+  );
   const destAddress = await newAssetAddress(destAsset, randomBytes(32).toString('hex'));
   cf.debug(`Swap destination address: ${destAddress}`);
   cf.debug(`Refund address: ${refundAddress}`);
@@ -71,11 +76,12 @@ async function testMinPriceRefund<A = []>(
     `Fok swap started from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
   );
 
-  let swapRequestedHandle;
+  let swapRequestedEvent;
+  let ccmEventEmitted;
 
   if (!swapViaVault) {
     cf.debug(`Requesting swap from ${sourceAsset} to ${destAsset} with unrealistic min price`);
-    const swapRequest = await requestNewSwap(
+    const swapParams = await requestNewSwap(
       cf,
       sourceAsset,
       destAsset,
@@ -85,25 +91,47 @@ async function testMinPriceRefund<A = []>(
       0, // boostFeeBps
       refundParameters,
     );
-    const depositAddress = swapRequest.depositAddress;
-    swapRequestedHandle = observeSwapRequested(
-      cf,
-      sourceAsset,
-      destAsset,
-      { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
-      SwapRequestType.Regular,
-    );
+    const depositAddress = swapParams.depositAddress;
+
+    ccmEventEmitted = refundParameters.refundCcmMetadata
+      ? observeCcmReceived(
+          sourceAsset,
+          sourceAsset,
+          refundParameters.refundAddress,
+          refundParameters.refundCcmMetadata,
+        )
+      : Promise.resolve();
 
     // Deposit the asset
     await send(cf.logger, sourceAsset, depositAddress, amount.toString());
     cf.debug(`Sent ${amount} ${sourceAsset} to ${depositAddress}`);
+
+    swapRequestedEvent = await observeSwapRequested(
+      cf,
+      sourceAsset,
+      destAsset,
+      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+      SwapRequestType.Regular,
+    );
   } else {
     const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
     subcf.debug(
       `Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`,
     );
+    const source = await prepareVaultSwapSource(subcf, sourceAsset);
+
+    ccmEventEmitted = refundParameters.refundCcmMetadata
+      ? observeCcmReceived(
+          sourceAsset,
+          sourceAsset,
+          refundParameters.refundAddress,
+          refundParameters.refundCcmMetadata,
+        )
+      : Promise.resolve();
+
     const { transactionId } = await executeVaultSwap(
       subcf,
+      source,
       sourceAsset,
       destAsset,
       destAddress,
@@ -113,7 +141,7 @@ async function testMinPriceRefund<A = []>(
       refundParameters,
     );
 
-    swapRequestedHandle = observeSwapRequested(
+    swapRequestedEvent = await observeSwapRequested(
       cf,
       sourceAsset,
       destAsset,
@@ -122,7 +150,6 @@ async function testMinPriceRefund<A = []>(
     );
   }
 
-  const swapRequestedEvent = await swapRequestedHandle;
   const swapRequestId = Number(swapRequestedEvent.swapRequestId);
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
@@ -130,15 +157,6 @@ async function testMinPriceRefund<A = []>(
     test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
     historicalCheckBlocks: 10,
   }).event;
-
-  const ccmEventEmitted = refundParameters.refundCcmMetadata
-    ? observeCcmReceived(
-        sourceAsset,
-        sourceAsset,
-        refundParameters.refundAddress,
-        refundParameters.refundCcmMetadata,
-      )
-    : Promise.resolve();
 
   // Wait for the refund to be scheduled and executed
   await Promise.all([
@@ -201,7 +219,7 @@ export async function testFillOrKill(testContext: TestContext) {
     (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true),
     (subcf) => testMinPriceRefund(subcf, Assets.Sol, 1000, true),
     (subcf) => testMinPriceRefund(subcf, Assets.ArbUsdc, 5, false, true),
-    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1, false, true),
+    (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 50, false, true),
     (subcf) => testMinPriceRefund(subcf, Assets.SolUsdc, 1, false, true),
     (subcf) => testMinPriceRefund(subcf, Assets.ArbEth, 5, true, true),
     (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10, true, true),

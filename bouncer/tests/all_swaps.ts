@@ -88,26 +88,30 @@ export function testAllSwaps(timeoutPerSwap: number) {
     AssetsWithoutAssethubAndDot.sort()
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
-        // Regular swaps
-        appendSwap(sourceAsset, destAsset, testSwap);
 
-        const sourceChain = chainFromAsset(sourceAsset);
-        const destChain = chainFromAsset(destAsset);
-        if (vaultSwapSupportedChains.includes(sourceChain)) {
-          // Vault Swaps
-          appendSwap(sourceAsset, destAsset, testVaultSwap);
+        // TODO: remove Just for testing
+        // if (sourceAsset === 'Usdc' && chainFromAsset(destAsset) === 'Solana') {
+          // Regular swaps
+          appendSwap(sourceAsset, destAsset, testSwap);
 
-          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-            // CCM Vault swaps
-            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+          const sourceChain = chainFromAsset(sourceAsset);
+          const destChain = chainFromAsset(destAsset);
+          if (vaultSwapSupportedChains.includes(sourceChain)) {
+            // Vault Swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap);
+
+            // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+            if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+              // CCM Vault swaps
+              appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+            }
           }
-        }
 
-        if (ccmSupportedChains.includes(destChain)) {
-          // CCM swaps
-          appendSwap(sourceAsset, destAsset, testSwap, true);
-        }
+          if (ccmSupportedChains.includes(destChain)) {
+            // CCM swaps
+            appendSwap(sourceAsset, destAsset, testSwap, true);
+          }
+       // }
       });
   });
 

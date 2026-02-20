@@ -51,6 +51,7 @@ import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
   cfChainsAddressForeignChainAddress,
+  cfChainsBtcScriptPubkey,
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
 } from 'generated/events/common';
@@ -690,13 +691,48 @@ export async function observeBroadcastSuccess(logger: Logger, broadcastId: Broad
   await observeBroadcastFailure.stop();
 }
 
+export type ExtendedBtcAddressType = BtcAddressType | 'Taproot';
+
+export function doBtcAddressesMatch(
+  btcEventAddress: z.infer<typeof cfChainsBtcScriptPubkey>,
+  btcAddress: string,
+  btcAddrType: ExtendedBtcAddressType,
+): boolean {
+  if (btcAddrType === 'Taproot') {
+    // Decode the Bench32 address and convert from Buffer to hex
+    const { data } = bitcoin.address.fromBech32(btcAddress);
+    const taprootHex = ('0x' + Buffer.from(data).toString('hex')) as HexString;
+    return btcEventAddress.__kind === 'Taproot' && btcEventAddress.value === taprootHex;
+  }
+
+  const decoded = bitcoin.address.fromBase58Check(btcAddress);
+  const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
+  return btcEventAddress.__kind === btcAddrType && btcEventAddress.value === hashHex;
+}
+
+export function toBtcEventAddresses(
+  btcAddress: string,
+  btcAddrType: ExtendedBtcAddressType,
+): z.infer<typeof cfChainsBtcScriptPubkey> {
+  if (btcAddrType === 'Taproot') {
+    // Decode the Bench32 address and convert from Buffer to hex
+    const { data } = bitcoin.address.fromBech32(btcAddress);
+    const taprootHex = ('0x' + Buffer.from(data).toString('hex')) as HexString;
+    return { __kind: 'Taproot', value: taprootHex};
+  }
+
+  const decoded = bitcoin.address.fromBase58Check(btcAddress);
+  const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
+  return { __kind: btcAddrType, value: hashHex };
+}
+
 // Takes an address from index events and checks whether it matches an input chain address to
 // For Eth, Arb, Sol nad hub it expects a HexString
 export function doAddressesMatch(
   eventAddress: z.infer<typeof cfChainsAddressForeignChainAddress>,
   chain: Chain,
   address: string,
-  btcAddressType?: BtcAddressType,
+  btcAddressType?: ExtendedBtcAddressType,
 ): boolean {
   const validateHexString = (addr: string): HexString => {
     const addrLowerCase = addr.toLowerCase();
@@ -717,13 +753,59 @@ export function doAddressesMatch(
     }
     case 'Bitcoin': {
       const btcAddrType = btcAddressType ?? 'P2PKH';
-      const decoded = bitcoin.address.fromBase58Check(address);
-      const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
       return (
         eventAddress.__kind === 'Btc' &&
-        eventAddress.value.__kind === btcAddrType &&
-        eventAddress.value.value === hashHex
+        doBtcAddressesMatch(eventAddress.value, address, btcAddrType)
       );
+    }
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
+export function toEventAddress(
+  chain: Chain,
+  address: string,
+  btcAddressType?: ExtendedBtcAddressType,
+): z.infer<typeof cfChainsAddressForeignChainAddress> {
+
+  const isHexAddress = (addr: string): boolean => {
+    const addrLowerCase = addr.toLowerCase();
+    return addrLowerCase.startsWith('0x');
+  }
+  const validateHexString = (addr: string): HexString => {
+    const addrLowerCase = addr.toLowerCase();
+    if (!/^0x[a-f0-9]+$/.test(addrLowerCase)) {
+      throw new Error(`Invalid hex address: ${addr}`);
+    }
+    return addrLowerCase as HexString;
+  };
+
+  const shortChain = shortChainFromChain(chain);
+
+  switch (shortChain) {
+    case 'Eth':
+    case 'Arb': {
+      const hexAddress = validateHexString(address);
+      return { __kind: shortChain, value: hexAddress };
+    }
+    case 'Sol': {
+      const hexAddress = isHexAddress(address)
+        ? validateHexString(address)
+        : // eslint-disable-next-line @typescript-eslint/no-use-before-define
+          (decodeSolAddress(address) as HexString);
+      return { __kind: shortChain, value: hexAddress };
+    }
+    case 'Hub': {
+      const hexAddress = isHexAddress(address)
+        ? validateHexString(address)
+        : // eslint-disable-next-line @typescript-eslint/no-use-before-define
+          (decodeDotAddressForContract(address) as HexString);
+      return { __kind: shortChain, value: hexAddress };
+    }
+    case 'Btc': {
+      const btcAddrType = btcAddressType ?? 'P2PKH';
+      return { __kind: 'Btc', value: toBtcEventAddresses(address, btcAddrType) };
     }
     default:
       throw new Error(`Unsupported chain: ${chain}`);
@@ -865,17 +947,19 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 120,
+  timeoutSeconds = 300,
 ): Promise<number> {
-  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
+  logger.debug(
+    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
+  );
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
       logger.debug(
-        `Observed balance increase of ${newBalance - initialBalance}${dstCcy} in ${i * 3} seconds`,
+        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
       );
       return newBalance;
     }
@@ -1198,7 +1282,6 @@ export function handleSubstrateError(api: ApiPromise, exit = true) {
  * @param logger - The logger instance.
  * @param waitForStatus - The status to wait for, either 'InBlock' or 'Finalized'.
  * @param mutexRelease - Optional function to release a mutex after the extrinsic is processed.
- * @param filteredError - If extrinsic error matches filteredError it's not logged
  * @returns An object containing a promise that resolves with the events and a waiter function
  *          that should be passed during extrinsic submission.
  */
@@ -1207,7 +1290,6 @@ export function waitForExt(
   logger: Logger,
   waitForStatus: 'InBlock' | 'Finalized',
   mutexRelease?: () => void,
-  filteredError?: string,
 ): {
   promise: Promise<ISubmittableResult>;
   waiter: (result: ISubmittableResult) => void;
@@ -1223,7 +1305,7 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.trace(`Extrinsic status: ${status.toString()}`);
+      // logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
         // logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         try {
@@ -1231,9 +1313,7 @@ export function waitForExt(
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
-          if (!(filteredError && err.message.includes(filteredError))) {
-            throwError(logger, err);
-          }
+          // throwError(logger, err);
         }
         return;
       }
@@ -1249,7 +1329,7 @@ export function waitForExt(
         logger.warn(`Extrinsic failed: ${status.toString()}`);
         const error = new Error(`Extrinsic failed with status: ${status.toString()}`);
         reject(error);
-        throwError(logger, error);
+        // throwError(logger, error);
       }
     },
   };
@@ -1347,6 +1427,18 @@ export function extractExtrinsicResult(
     return Err(`Extrinsic failed: ${error}`);
   }
   return Ok(extrinsicResult);
+}
+
+export async function toExtrinsicResult(
+  chainflipApi: DisposableApiPromise,
+  extrinsicResultPromise: Promise<ISubmittableResult>,
+): Promise<Result<ISubmittableResult, string>> {
+  try {
+    const result = await extrinsicResultPromise;
+    return extractExtrinsicResult(chainflipApi, result);
+  } catch (err) {
+    return Err(`${err}`);
+  }
 }
 
 /// Submits an extrinsic and waits for it to be included in a block.

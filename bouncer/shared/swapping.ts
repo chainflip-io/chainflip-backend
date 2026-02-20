@@ -332,7 +332,7 @@ export async function testVaultSwap(
   );
 
   const cf = parentCf
-    .with({ account: fullAccountFromUri('//BROKER_1', 'Broker') })
+    .with({ account: fullAccountFromUri('//BROKER_2', 'Broker') })
     .withChildLogger(tag);
 
   return performVaultSwap(cf, sourceAsset, destAsset, destAddress, messageMetadata, swapContext);

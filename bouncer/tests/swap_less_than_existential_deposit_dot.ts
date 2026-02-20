@@ -33,6 +33,7 @@ export async function swapLessThanED(testContext: TestContext) {
     cf.debug(`Generated Dot address: ${address}`);
 
     await performAndTrackSwap(parentCf, 'Usdc', 'HubDot', address, inputAmount);
+
     // if for some reason the balance after swapping is > 0 it means that the output was larger than
     // ED, so we'll retry the test with a lower input
     if (parseFloat(await getDotBalance(address)) > 0) {
