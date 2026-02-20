@@ -500,12 +500,18 @@ pub mod pallet {
 						.collect();
 
 						// Check if the ticks changed to justify updating the orders.
-						let ticks_need_update = existing_orders.iter().any(|existing_order| {
-							!new_orders.iter().any(|new_order| {
-								existing_order.side == new_order.side &&
-									existing_order.tick == new_order.tick
-							})
-						});
+						let ticks_need_update =
+							if matches!(strategy, TradingStrategy::OracleTracking { .. }) {
+								existing_orders
+									.iter()
+									.map(|order| (order.tick, order.side))
+									.collect::<BTreeSet<_>>() != new_orders
+									.iter()
+									.map(|order| (order.tick, order.side))
+									.collect::<BTreeSet<_>>()
+							} else {
+								false
+							};
 
 						// Minimum threshold of 1 to prevent updating with 0 amounts
 						let base_threshold = core::cmp::max(

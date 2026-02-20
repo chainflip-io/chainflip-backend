@@ -1282,11 +1282,9 @@ mod inventory_based_strategy {
 					RuntimeOrigin::signed(LP),
 					TradingStrategy::InventoryBased {
 						base_asset: BASE_ASSET,
-						// Using a min and max tick that are the same so that a change in tick will
-						// not trigger an update, only a change in amount.
 						min_buy_tick: -10,
-						max_buy_tick: -10,
-						min_sell_tick: 10,
+						max_buy_tick: 0,
+						min_sell_tick: 0,
 						max_sell_tick: 10,
 					},
 					initial_amounts.clone(),
@@ -1304,7 +1302,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
-							tick: -10,
+							tick: -5,
 							amount: STARTING_AMOUNT
 						},
 						LimitOrder {
@@ -1313,7 +1311,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_1,
-							tick: 10,
+							tick: 5,
 							amount: STARTING_AMOUNT
 						}
 					]
@@ -1337,7 +1335,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
-							tick: -10,
+							tick: -5,
 							amount: STARTING_AMOUNT
 						},
 						LimitOrder {
@@ -1346,7 +1344,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_1,
-							tick: 10,
+							tick: 5,
 							amount: STARTING_AMOUNT
 						}
 					]
@@ -1369,7 +1367,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
-							tick: -10,
+							tick: -5,
 							amount: STARTING_AMOUNT + THRESHOLD
 						},
 						LimitOrder {
@@ -1378,7 +1376,7 @@ mod inventory_based_strategy {
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_0,
-							tick: 10,
+							tick: 5,
 							amount: STARTING_AMOUNT
 						},
 					]
