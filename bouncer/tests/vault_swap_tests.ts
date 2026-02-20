@@ -2,9 +2,7 @@ import assert from 'assert';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   Assets,
-  chainFromAsset,
   defaultAssetAmounts,
-  doBtcAddressesMatch,
   newAssetAddress,
   sleep,
 } from 'shared/utils';

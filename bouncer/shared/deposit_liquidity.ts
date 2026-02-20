@@ -90,7 +90,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),
-    130,
+    150,
     cf.logger,
     `sending liquidity ${amount} ${ccy}.`,
   );

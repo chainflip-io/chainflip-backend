@@ -29,32 +29,31 @@ describe('ConcurrentTests', () => {
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
-  const singleSwapTimeout = numberOfNodes === 1 ? 300 : 240; // TODO: find out what the 3-node timeout should be
-  const ciTimeoutFactor = 1.1; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
+  const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
+  const ciTimeoutFactor = 1.4; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
 
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
-  concurrentTest('VaultSwaps', testVaultSwap, 320 * ciTimeoutFactor);
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 300 * ciTimeoutFactor);
+  concurrentTest('EvmDeposits', testEvmDeposits, 310 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
-
-  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 300 * ciTimeoutFactor);
-  concurrentTest('EvmDeposits', testEvmDeposits, 450 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 265 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200 * ciTimeoutFactor);
-  concurrentTest('FillOrKill', testFillOrKill, 340 * ciTimeoutFactor);
-  concurrentTest('DCASwaps', testDCASwaps, 340 * ciTimeoutFactor);
+  concurrentTest('FillOrKill', testFillOrKill, 280 * ciTimeoutFactor);
+  concurrentTest('DCASwaps', testDCASwaps, 190 * ciTimeoutFactor);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
+  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 340 * ciTimeoutFactor);
+  concurrentTest('VaultSwaps', testVaultSwap, 330 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
-  concurrentTest('DelegateFlip', testDelegate, 280 * ciTimeoutFactor);
-  concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 220 * ciTimeoutFactor);
-  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 200 * ciTimeoutFactor);
-  concurrentTest('Lending', lendingTest, 320 * ciTimeoutFactor);
+  concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
+  concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
+  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 240 * ciTimeoutFactor);
+  concurrentTest('Lending', lendingTest, 348 * ciTimeoutFactor);
   concurrentTest(
     'GovernanceDepositWitnessing',
     testGovernanceDepositWitnessing,
-    270 * ciTimeoutFactor,
+    265 * ciTimeoutFactor,
   );
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
@@ -62,7 +61,7 @@ describe('ConcurrentTests', () => {
   // serialTest('SwapLessThanED', swapLessThanED, 350 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
-  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 80 * ciTimeoutFactor);
+  serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);
 
   // Tests that only work if there is more than one node
   if (numberOfNodes > 1) {
