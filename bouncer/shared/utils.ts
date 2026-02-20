@@ -718,6 +718,14 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
+export function isEvmChain(chain: Chain): boolean {
+  return evmChains.includes(chain);
+}
+
+export function isEvmAsset(asset: Asset): boolean {
+  return isEvmChain(chainFromAsset(asset));
+}
+
 export function stateChainAssetFromAsset(asset: Asset): AssetAndChain {
   if (isSDKAsset(asset)) {
     return {
