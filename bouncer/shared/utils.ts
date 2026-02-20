@@ -1462,13 +1462,17 @@ export async function createEvmWallet(chain?: Chain): Promise<HDNodeWallet> {
   return wallet;
 }
 
-export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
+export async function createEvmWalletAndFund(
+  logger: Logger,
+  asset: Asset,
+  amount?: string,
+): Promise<HDNodeWallet> {
   const chain = chainFromAsset(asset);
   const wallet = await createEvmWallet(chain);
 
   await Promise.all([
     send(logger, chainGasAsset(chain) as SDKAsset, wallet.address),
-    send(logger, asset, wallet.address),
+    send(logger, asset, wallet.address, amount),
   ]);
   return wallet;
 }
