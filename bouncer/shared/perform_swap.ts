@@ -275,7 +275,7 @@ export async function executeVaultSwap(
     logger.trace('Executing EVM vault swap');
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(logger, sourceAsset);
+    const wallet = await createEvmWalletAndFund(logger, sourceAsset, amount);
     sourceAddress = wallet.address.toLowerCase();
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
