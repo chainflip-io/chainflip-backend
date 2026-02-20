@@ -19,23 +19,26 @@ pub mod api;
 
 pub mod benchmarking;
 
-// TODO: To update/change.
+// TODO: To revisit those numbers, they are rough estimations.
 pub mod fees {
-	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 21_000; // Base energy transaction cost
-	pub const ENERGY_GAS_COST_PER_FETCH_NATIVE: u128 = 65_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 65_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 10; // Native TRX transfers included in base
-	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 45_000; // TRC-20 token transfer
+	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 40_000; // Base energy transaction cost
+	pub const ENERGY_COST_PER_FETCH_NATIVE: u128 = 20_000; // Cost to fetch tokens from deposit channel
+	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 30_000; // Cost to fetch tokens from deposit channel
+	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 20_000; // Native TRX transfers included in base
+	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 30_000; // TRC-20 token transfer
 
 	// Bandwidth in out case depends on the length. Both types of fetches have the same length
 	//  and transferring and fetching is the same length for native and token assets.
-	pub const BANDWITH_BASE_COST_PER_BATCH: u128 = 5_000;
-	pub const BANDWITH_BASE_COST_PER_TRANSFER: u128 = 5_000;
-	pub const BANDWITH_BASE_COST_PER_FETCH: u128 = 5_000;
+	pub const BANDWITH_BASE_COST_PER_BATCH: u128 = 268 + 100;
+	pub const BANDWITH_BASE_COST_PER_TRANSFER: u128 = 288;
+	pub const BANDWITH_BASE_COST_PER_FETCH: u128 = 288;
 
 	pub const ENERGY_PER_TX_TRX_BURN: u128 = 420; // 0.00042 TRX per 1 Energy
-	pub const BANDWIDTH_PER_TX_TRX_BURN: u128 = 345000; // 0.0001 TRX per 1 Bandwidth
+	pub const BANDWIDTH_PER_TX_TRX_BURN: u128 = 1_000; // 0.0001 TRX per 1 Bandwidth
 	pub const BANDWIDTH_PER_BYTE: u128 = 1; // 1 Bandwidth per byte of transaction data
+
+	// Energy is in Sun ( 1 TRX = 1,000,000 SUN)
+	pub const DEFAULT_TRX_FEE_LIMIT_NON_CCM: u128 = 50_000_000;
 }
 
 use crate::{
@@ -127,7 +130,7 @@ impl TronTrackedData {
 	}
 
 	/// Calculate the fee for a CCM egress transaction
-	pub fn calcualte_ccm_fee_limit(
+	pub fn calculate_ccm_fee_limit(
 		&self,
 		is_native_asset: bool,
 		gas_budget: GasAmount,
@@ -148,23 +151,13 @@ impl TronTrackedData {
 			.saturating_mul(ENERGY_PER_TX_TRX_BURN)
 			.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
 	}
-
-	pub fn calculate_fee_limit(&self) -> <Tron as Chain>::ChainAmount {
-		// TODO: To implement fee limit for normal transactions for the fee_limit. We
-		// probably want to reuse logic from the FeeEstimation api as in CCM. However,
-		// we have to take into account that for normal transactions we might want to charge
-		// only part of the fee (subsidized energy) but we might want to charge fully for CCM.
-		// So maybe we have a lower estimation and then we still set the higher fee limit
-		// so it doesn't fail if there is no energy available?
-		20
-	}
 }
 
 // TODO: To review. This currently will return the worst case scenario cost-wise - all energy
-// and bandwhidth are paid with burning TRX on transaction inclusion. This approach plus using
-// the governance fee multiplier is one alternative. It can then be adjusted depending on how
-// much bandwidth and energy we have available. However, we might want CCM to always pay the
-// full price.
+// and bandwidth are paid with burning TRX on transaction inclusion. This approach plus using
+// the chaintracking fee multiplier is one alternative. It can then be adjusted depending on
+// how much bandwidth and energy we have available. However, we might want CCM to always pay
+// the full price.
 // The alternative is to track how much energy we have available in chaintracking.
 impl FeeEstimationApi<Tron> for TronTrackedData {
 	fn estimate_fee(
@@ -178,7 +171,7 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 			IngressOrEgress::IngressDepositChannel => {
 				let energy = ENERGY_BASE_COST_PER_BATCH +
 					match asset {
-						assets::tron::Asset::Trx => ENERGY_GAS_COST_PER_FETCH_NATIVE,
+						assets::tron::Asset::Trx => ENERGY_COST_PER_FETCH_NATIVE,
 						assets::tron::Asset::TronUsdt => ENERGY_COST_PER_FETCH_TOKEN,
 					};
 				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
@@ -209,7 +202,7 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 					.saturating_add(bandwidth.saturating_mul(BANDWIDTH_PER_TX_TRX_BURN))
 			},
 			IngressOrEgress::EgressCcm { gas_budget, message_length } => self
-				.calcualte_ccm_fee_limit(
+				.calculate_ccm_fee_limit(
 					asset == assets::tron::Asset::Trx,
 					gas_budget,
 					message_length,
