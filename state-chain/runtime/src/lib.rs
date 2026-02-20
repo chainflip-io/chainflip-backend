@@ -16,6 +16,7 @@
 
 #![feature(trait_alias)]
 #![feature(step_trait)]
+#![feature(impl_trait_in_assoc_type)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 pub mod chainflip;

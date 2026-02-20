@@ -30,7 +30,6 @@ use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
-use serde::{Deserialize, Serialize};
 use sp_std::prelude::*;
 
 mod benchmarking;

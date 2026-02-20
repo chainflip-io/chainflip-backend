@@ -34,7 +34,6 @@ use crate::{
 		mocks::{ElectoralSystemState, TestSetup},
 		state_machine::{
 			consensus::{ConsensusMechanism, SuccessThreshold},
-			core::TypesFor,
 			state_machine_es::{StatemachineElectoralSystem, StatemachineElectoralSystemTypes},
 		},
 	},
@@ -44,6 +43,7 @@ use cf_traits::{
 	hook_test_utils::{ConstantHook, MockHook},
 	Hook, HookType,
 };
+use cf_utilities::define_empty_struct;
 use consensus::BWConsensus;
 use primitives::SafeModeStatus;
 use sp_std::collections::btree_set::BTreeSet;
@@ -56,8 +56,7 @@ type BlockHash = u64;
 type ElectionProperties = BTreeSet<u16>;
 type ElectionCount = u16;
 
-struct MockBlockProcessorDefinition;
-type Types = TypesFor<MockBlockProcessorDefinition>;
+define_empty_struct! { struct Types; }
 
 impl Hook<HookTypeFor<Types, RulesHook>> for Types {
 	fn run(
@@ -127,7 +126,7 @@ register_checks! {
 			assert_eq!(post.unsynchronised_state.elections.ongoing.len(), n as usize, "Number of open elections should be {}", n);
 		},
 		rules_hook_called_n_times_for_age_zero(pre, post, n: usize) {
-			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
+			let count = |state: &ElectoralSystemState<StatemachineElectoralSystem<Types>>| {
 				state.unsynchronised_state.block_processor.rules.call_history.iter().filter(|(age, _data, _event)| age.contains(&0)).count()
 			};
 			assert_eq!(count(post) - count(pre), n, "execute PreWitness event should have been called {} times in this `on_finalize`!", n);
@@ -145,14 +144,14 @@ register_checks! {
 			assert_eq!(reorged_events, expected_reorged_events, "Wrong reorged events in block processor");
 		},
 		emitted_prewitness_events(pre, post, events: Vec<(ChainBlockNumber, Vec<u8>)>) {
-			let get_events = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>| {
+			let get_events = |state: &ElectoralSystemState<StatemachineElectoralSystem<Types>>| {
 				state.unsynchronised_state.block_processor.execute.call_history.iter().flatten().cloned().collect::<Vec<_>>()
 			};
 			let actual_events = get_events(post).into_iter().skip(get_events(pre).len()).collect::<Vec<_>>();
 			assert_eq!(actual_events, events.into_iter().flat_map(|(block_num, values)| { values.into_iter().map(move |value| (block_num, value)) }).collect::<Vec<_>>(), "emitted prewitness events not correct!");
 		},
 		open_elections_type_is(_pre, post, param: Vec<(ChainBlockNumber, BWElectionType<Types>)>) {
-			let get_election = |state: &ElectoralSystemState<StatemachineElectoralSystem<TypesFor<MockBlockProcessorDefinition>>>, n: ChainBlockNumber| {
+			let get_election = |state: &ElectoralSystemState<StatemachineElectoralSystem<Types>>, n: ChainBlockNumber| {
 				let election = state.unsynchronised_state.elections.ongoing.get(&n);
 				assert!(election.is_some(), "No election present for block {:?}", n);
 				election.unwrap().clone()
