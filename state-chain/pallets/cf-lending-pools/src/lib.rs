@@ -576,6 +576,8 @@ pub mod pallet {
 		LiquidationsDisabled,
 		/// LP still has funds present in the lending pool
 		LendingFundsRemaining,
+		/// The account still has funds in boost pools.
+		BoostedFundsRemaining,
 	}
 
 	#[pallet::hooks]
@@ -1085,6 +1087,13 @@ impl<T: Config> DeregistrationCheck for PoolsDeregistrationCheck<T> {
 	type Error = Error<T>;
 
 	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		for asset in Asset::all() {
+			ensure!(
+				Pallet::<T>::boost_pool_account_balance(account_id, asset).is_zero(),
+				Error::<T>::BoostedFundsRemaining
+			);
+		}
+
 		for (_, lending_pool) in GeneralLendingPools::<T>::iter() {
 			ensure!(
 				!lending_pool.lender_shares.contains_key(account_id),

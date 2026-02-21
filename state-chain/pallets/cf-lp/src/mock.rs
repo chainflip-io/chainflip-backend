@@ -25,7 +25,7 @@ use cf_traits::{
 		egress_handler::MockEgressHandler, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
-	AccountRoleRegistry, BalanceApi, BoostBalancesApi, MinimumDeposit,
+	AccountRoleRegistry, BalanceApi, MinimumDeposit,
 };
 use frame_support::{assert_ok, derive_impl, parameter_types};
 use frame_system as system;
@@ -129,7 +129,6 @@ impl_mock_chainflip!(Test);
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
-	pub static BoostBalance: AssetAmount = Default::default();
 }
 
 impl_mock_runtime_safe_mode!(liquidity_provider: PalletSafeMode);
@@ -143,32 +142,8 @@ impl crate::Config for Test {
 	type BalanceApi = MockBalanceApi;
 	#[cfg(feature = "runtime-benchmarks")]
 	type FeePayment = cf_traits::mocks::fee_payment::MockFeePayment<Self>;
-	type BoostBalancesApi = MockIngressEgressBoostApi;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
 	type MinimumDeposit = MockMinimumDepositProvider;
-}
-
-pub struct MockIngressEgressBoostApi;
-impl BoostBalancesApi for MockIngressEgressBoostApi {
-	type AccountId = AccountId;
-
-	fn boost_pool_account_balance(_who: &Self::AccountId, _asset: Asset) -> AssetAmount {
-		BoostBalance::get()
-	}
-}
-
-impl MockIngressEgressBoostApi {
-	pub fn set_boost_funds(amount: AssetAmount) -> Result<(), ()> {
-		BoostBalance::set(amount);
-		Ok(())
-	}
-	pub fn remove_boost_funds(amount: AssetAmount) -> Result<(), ()> {
-		if amount > BoostBalance::get() {
-			return Err(());
-		}
-		BoostBalance::set(amount - BoostBalance::get());
-		Ok(())
-	}
 }
 
 pub const LP_ACCOUNT: AccountId = 1;

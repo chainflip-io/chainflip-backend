@@ -26,8 +26,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
-	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	LpOrdersWeightsProvider, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use sp_runtime::Saturating;
 
@@ -479,6 +479,8 @@ pub mod pallet {
 		InvalidCloseOrderAt,
 		/// The range order size is invalid.
 		InvalidSize,
+		/// The account still has open orders.
+		OpenOrdersRemaining,
 	}
 
 	#[pallet::event]
@@ -2477,6 +2479,25 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<_, DispatchError>(())
 		});
+	}
+}
+
+pub struct OpenOrdersDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for OpenOrdersDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			<Pallet<T> as PoolApi>::pools().iter().all(|asset_pair| {
+				<Pallet<T> as PoolApi>::open_order_count(account_id, asset_pair).unwrap_or_default() ==
+					0
+			}),
+			Error::<T>::OpenOrdersRemaining
+		);
+
+		Ok(())
 	}
 }
 
