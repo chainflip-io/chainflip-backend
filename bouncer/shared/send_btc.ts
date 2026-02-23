@@ -1,9 +1,8 @@
 import Client from 'bitcoin-core';
 import * as bitcoinjs from 'bitcoinjs-lib';
 import * as ecc from 'tiny-secp256k1';
-import { sleep } from 'shared/utils';
+import { sleep, btcClientMutex } from 'shared/utils';
 import { Logger, throwError } from 'shared/utils/logger';
-import { btcClientMutex } from 'shared/accounts';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 

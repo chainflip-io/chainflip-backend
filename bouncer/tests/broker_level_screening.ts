@@ -3,6 +3,7 @@ import { Chain, InternalAsset } from '@chainflip/cli';
 import Web3 from 'web3';
 import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
+  btcClientMutex,
   newAssetAddress,
   sleep,
   chainGasAsset,
@@ -40,7 +41,6 @@ import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
 import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
 import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
-import { btcClientMutex } from 'shared/accounts';
 import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
 import { arbitrumIngressEgressTransactionRejectedByBroker } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
 

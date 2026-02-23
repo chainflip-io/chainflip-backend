@@ -48,6 +48,7 @@ import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
+import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
   cfChainsAddressForeignChainAddress,
@@ -59,12 +60,16 @@ import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Err, Ok, Result } from 'shared/utils/result';
-import { cfMutex } from 'shared/accounts';
 import { HexString } from '@polkadot/util/types';
 import bitcoin from 'bitcoinjs-lib';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
+
+export const cfMutex = new KeyedMutex();
+export const ethNonceMutex = new Mutex();
+export const arbNonceMutex = new Mutex();
+export const btcClientMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
@@ -710,22 +715,6 @@ export function doBtcAddressesMatch(
   return btcEventAddress.__kind === btcAddrType && btcEventAddress.value === hashHex;
 }
 
-export function toBtcEventAddresses(
-  btcAddress: string,
-  btcAddrType: ExtendedBtcAddressType,
-): z.infer<typeof cfChainsBtcScriptPubkey> {
-  if (btcAddrType === 'Taproot') {
-    // Decode the Bench32 address and convert from Buffer to hex
-    const { data } = bitcoin.address.fromBech32(btcAddress);
-    const taprootHex = ('0x' + Buffer.from(data).toString('hex')) as HexString;
-    return { __kind: 'Taproot', value: taprootHex };
-  }
-
-  const decoded = bitcoin.address.fromBase58Check(btcAddress);
-  const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
-  return { __kind: btcAddrType, value: hashHex };
-}
-
 // Takes an address from index events and checks whether it matches an input chain address to
 // For Eth, Arb, Sol nad hub it expects a HexString
 export function doAddressesMatch(
@@ -757,54 +746,6 @@ export function doAddressesMatch(
         eventAddress.__kind === 'Btc' &&
         doBtcAddressesMatch(eventAddress.value, address, btcAddrType)
       );
-    }
-    default:
-      throw new Error(`Unsupported chain: ${chain}`);
-  }
-}
-
-export function toEventAddress(
-  chain: Chain,
-  address: string,
-  btcAddressType?: ExtendedBtcAddressType,
-): z.infer<typeof cfChainsAddressForeignChainAddress> {
-  const isHexAddress = (addr: string): boolean => {
-    const addrLowerCase = addr.toLowerCase();
-    return addrLowerCase.startsWith('0x');
-  };
-  const validateHexString = (addr: string): HexString => {
-    const addrLowerCase = addr.toLowerCase();
-    if (!/^0x[a-f0-9]+$/.test(addrLowerCase)) {
-      throw new Error(`Invalid hex address: ${addr}`);
-    }
-    return addrLowerCase as HexString;
-  };
-
-  const shortChain = shortChainFromChain(chain);
-
-  switch (shortChain) {
-    case 'Eth':
-    case 'Arb': {
-      const hexAddress = validateHexString(address);
-      return { __kind: shortChain, value: hexAddress };
-    }
-    case 'Sol': {
-      const hexAddress = isHexAddress(address)
-        ? validateHexString(address)
-        : // eslint-disable-next-line @typescript-eslint/no-use-before-define
-          (decodeSolAddress(address) as HexString);
-      return { __kind: shortChain, value: hexAddress };
-    }
-    case 'Hub': {
-      const hexAddress = isHexAddress(address)
-        ? validateHexString(address)
-        : // eslint-disable-next-line @typescript-eslint/no-use-before-define
-          (decodeDotAddressForContract(address) as HexString);
-      return { __kind: shortChain, value: hexAddress };
-    }
-    case 'Btc': {
-      const btcAddrType = btcAddressType ?? 'P2PKH';
-      return { __kind: 'Btc', value: toBtcEventAddresses(address, btcAddrType) };
     }
     default:
       throw new Error(`Unsupported chain: ${chain}`);

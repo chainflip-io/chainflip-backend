@@ -1,4 +1,5 @@
 import {
+  cfMutex,
   createStateChainKeypair,
   isValidHexHash,
   sleep,
@@ -25,7 +26,6 @@ import {
   highestBlock,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
-import { cfMutex } from 'shared/accounts';
 
 export class ChainflipIO<Requirements> {
   /**

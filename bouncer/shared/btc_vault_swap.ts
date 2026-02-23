@@ -4,6 +4,7 @@ import {
   Asset,
   assetDecimals,
   Assets,
+  cfMutex,
   chainFromAsset,
   Chains,
   decodeDotAddressForContract,
@@ -15,7 +16,6 @@ import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistration } from 'generated/events/swapping/affiliateRegistration';
 import { swappingPrivateBrokerChannelOpened } from 'generated/events/swapping/privateBrokerChannelOpened';
-import { cfMutex } from 'shared/accounts';
 
 interface BtcVaultSwapDetails {
   chain: string;

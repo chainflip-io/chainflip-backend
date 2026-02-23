@@ -1,5 +1,7 @@
 import Web3 from 'web3';
 import {
+  arbNonceMutex,
+  ethNonceMutex,
   Chain,
   amountToFineAmount,
   getEvmEndpoint,
@@ -8,7 +10,6 @@ import {
   getContractAddress,
 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
-import { arbNonceMutex, ethNonceMutex } from 'shared/accounts';
 
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Ethereum: undefined,
