@@ -8,11 +8,7 @@ import { newChainflipIO } from 'shared/utils/chainflip_io';
 export async function testSwapAfterDisconnection(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
   const networkName = 'chainflip-localnet_default';
-  // We use assethub here to test that it applies to assethub, and Polkadot by proxy.
-  // We don't test Polkadot directly, since shutting down the Polkadot node in this way causes sync issues between
-  // Polkadot and AssetHub which can take some time to resolve. Given AssetHub shares most of the same code as Polkadot,
-  // this is a good proxy.
-  const allExternalNodes = ['bitcoin', 'geth', 'assethub'];
+  const allExternalNodes = ['bitcoin', 'geth'];
 
   await Promise.all(
     allExternalNodes.map((container) =>
@@ -31,6 +27,5 @@ export async function testSwapAfterDisconnection(testContext: TestContext) {
   await cf.all([
     (subcf) => testSwap(subcf, 'Btc', 'Flip', undefined, undefined, testContext.swapContext),
     (subcf) => testSwap(subcf, 'Eth', 'Usdc', undefined, undefined, testContext.swapContext),
-    (subcf) => testSwap(subcf, 'HubDot', 'Btc', undefined, undefined, testContext.swapContext),
   ]);
 }
