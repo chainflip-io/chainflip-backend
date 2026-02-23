@@ -19,6 +19,7 @@ use cf_primitives::{AccountId, ChannelId};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{Chainflip, Hook};
 use cf_utilities::{cargo_fmt_ignore, define_empty_struct, derive_common_traits, impls};
+use codec::DecodeWithMemTracking;
 use core::ops::RangeInclusive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_broadcast::{TransactionConfirmation, TransactionOutIdToBroadcastId};
