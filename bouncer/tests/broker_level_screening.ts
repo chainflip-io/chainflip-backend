@@ -47,7 +47,6 @@ import {
 import {
   arbitrumIngressEgressTransactionRejectedByBroker
 } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
-import { HexString } from '@polkadot/util/types';
 
 const brokerUri = '//BROKER_1';
 
@@ -262,15 +261,13 @@ async function waitForEvmTransactionRejection<A = []>(
       transactionRejected: {
         name: 'EthereumIngressEgress.TransactionRejectedByBroker',
         schema: ethereumIngressEgressTransactionRejectedByBroker.refine(
-          (event) => event.txId.txHashes && event.txId.txHashes.includes(txHash as HexString),
+          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
         ),
       },
       depositFinalized: {
         name: 'EthereumIngressEgress.DepositFinalized',
         schema: ethereumIngressEgressDepositFinalised.refine(
-          (event) =>
-            event.depositDetails.txHashes &&
-            event.depositDetails.txHashes.includes(txHash as HexString),
+          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
       },
     });
@@ -279,7 +276,7 @@ async function waitForEvmTransactionRejection<A = []>(
       transactionRejected: {
         name: 'ArbitrumIngressEgress.TransactionRejectedByBroker',
         schema: arbitrumIngressEgressTransactionRejectedByBroker.refine(
-          (event) => event.txId.txHashes && event.txId.txHashes.includes(txHash as HexString),
+          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
         ),
       },
       depositFinalized: {
@@ -287,7 +284,7 @@ async function waitForEvmTransactionRejection<A = []>(
         schema: arbitrumIngressEgressDepositFinalised.refine(
           (event) =>
             event.depositDetails.txHashes &&
-            event.depositDetails.txHashes.includes(txHash as HexString),
+            event.depositDetails.txHashes[0] === txHash,
         ),
       },
     });
@@ -744,9 +741,12 @@ export async function doTestBrokerLevelScreening<A = []>(
   cf: ChainflipIO<A>,
   testBoostedDeposits: boolean = false,
 ) {
-
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
+  // test rejection of LP deposits and vault swaps:
+  //  - this requires the rejecting broker to be whitelisted
+  //  - for bitcoin vault swaps a private channel has to be opened
+  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
 
   // NOTE: We currently don't test the following assets:
   // - Flip: we don't test Flip rejections because they are currently disabled in the
@@ -773,15 +773,8 @@ export async function doTestBrokerLevelScreening<A = []>(
       (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
       (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
       (subcf) => testBitcoin(subcf, false),
-      ...(testBoostedDeposits
-        ? [(subcf: ChainflipIO<A>) => testBitcoin(subcf, true)]
-        : []),
+      ...(testBoostedDeposits ? [(subcf: ChainflipIO<A>) => testBitcoin(subcf, true)] : []),
     ]);
-
-  // test rejection of LP deposits and vault swaps:
-  //  - this requires the rejecting broker to be whitelisted
-  //  - for bitcoin vault swaps a private channel has to be opened
-  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
 
   const lpDeposits = (parentCf: ChainflipIO<A>) =>
     parentCf.all([
@@ -802,7 +795,16 @@ export async function doTestBrokerLevelScreening<A = []>(
       (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     ]);
 
-  await cf.all([swapDeposits, lpDeposits]);
+  // Launch swapDeposits first, wait sometime, then launch lpDeposits.
+  // This will reduce contention, to not end up in situations where the deposit
+  // monitor is slow in flagging transactions
+  await sleep(10000);
+  cf.info('Starting broker level screening swapDeposits tests...');
+  const swapDepositsPromise = cf.withChildLogger('swapDeposits').all([swapDeposits]);
+  await sleep(20000);
+  cf.info('Starting broker level screening lpDeposits tests...');
+  const lpDepositsPromise = cf.withChildLogger('lpDeposits').all([lpDeposits]);
+  await Promise.all([lpDepositsPromise, swapDepositsPromise]);
 
   await setMockmode(previousMockmode);
 }
@@ -812,10 +814,6 @@ export async function testBrokerLevelScreening(
   testBoostedDeposits: boolean = false,
 ) {
   const cf = await newChainflipIO(testContext.logger, []);
-
-  // Waiting deliberately to delay the start of the test to not end up in situations where the deposit
-  // monitor is slow in flagging transactions
-  await sleep(50000);
 
   await doTestBrokerLevelScreening(cf, testBoostedDeposits);
 }

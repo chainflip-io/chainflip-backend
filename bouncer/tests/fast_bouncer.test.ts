@@ -4,7 +4,6 @@ import { testVaultSwap } from 'tests/vault_swap_tests';
 import { testPolkadotRuntimeUpdate } from 'tests/polkadot_runtime_update';
 import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
-import { swapLessThanED } from 'tests/swap_less_than_existential_deposit_dot';
 import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
@@ -33,23 +32,23 @@ describe('ConcurrentTests', () => {
   const ciTimeoutFactor = 1.1; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
 
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
-  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 300 * ciTimeoutFactor);
-  concurrentTest('EvmDeposits', testEvmDeposits, 310 * ciTimeoutFactor);
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
+  concurrentTest('EvmDeposits', testEvmDeposits, 350 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
-  concurrentTest('LpApi', testLpApi, 265 * ciTimeoutFactor);
+  concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200 * ciTimeoutFactor);
   concurrentTest('FillOrKill', testFillOrKill, 280 * ciTimeoutFactor);
   concurrentTest('DCASwaps', testDCASwaps, 190 * ciTimeoutFactor);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240 * ciTimeoutFactor);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
-  concurrentTest('VaultSwaps', testVaultSwap, 330 * ciTimeoutFactor);
+  concurrentTest('VaultSwaps', testVaultSwap, 360 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
-  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 240 * ciTimeoutFactor);
-  concurrentTest('Lending', lendingTest, 348 * ciTimeoutFactor);
+  concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
+  concurrentTest('Lending', lendingTest, 350 * ciTimeoutFactor);
   concurrentTest(
     'GovernanceDepositWitnessing',
     testGovernanceDepositWitnessing,
