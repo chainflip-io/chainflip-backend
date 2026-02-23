@@ -30,7 +30,6 @@ import {
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { AccountRole, setupAccount } from '../shared/setup_account';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
 export async function stopBoosting(
@@ -146,57 +145,47 @@ async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
   // Boost can fail if there is not enough liquidity in the boost pool, in which case it will emit an
   // InsufficientBoostLiquidity event. If the asset is not boosted, we will get a DepositFinalized event
   // instead.
-  // const firstEvent = await cf.stepUntilOneEventOf({
-  //   boosted: {
-  //     name: `${chainFromAsset(asset)}IngressEgress.DepositBoosted`,
-  //     schema: bitcoinIngressEgressDepositBoosted.refine(
-  //       (event) =>
-  //         event.channelId === BigInt(swapRequest.channelId) &&
-  //         doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
-  //     ),
-  //   },
-  //   insufficientLiquidity: {
-  //     name: `${chainFromAsset(asset)}IngressEgress.InsufficientBoostLiquidity`,
-  //     schema: bitcoinIngressEgressDepositBoosted.refine(
-  //       (event) =>
-  //         event.channelId === BigInt(swapRequest.channelId) &&
-  //         doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
-  //     ),
-  //   },
-  //   finalized: {
-  //     name: `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
-  //     schema: bitcoinIngressEgressDepositFinalised.refine(
-  //       (event) =>
-  //         event.channelId === BigInt(swapRequest.channelId) &&
-  //         doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
-  //     ),
-  //   },
-  // });
-  //
-  // if (firstEvent.key !== 'boosted') {
-  //   throwError(
-  //     cf.logger,
-  //     new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent)}`),
-  //   );
-  // }
+  const firstEvent = await cf.stepUntilOneEventOf({
+    boosted: {
+      name: `${chainFromAsset(asset)}IngressEgress.DepositBoosted`,
+      schema: bitcoinIngressEgressDepositBoosted.refine(
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
+      ),
+    },
+    insufficientLiquidity: {
+      name: `${chainFromAsset(asset)}IngressEgress.InsufficientBoostLiquidity`,
+      schema: bitcoinIngressEgressDepositBoosted.refine(
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
+      ),
+    },
+    finalized: {
+      name: `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
+      schema: bitcoinIngressEgressDepositFinalised.refine(
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
+      ),
+    },
+  });
 
-  await cf.stepUntilEvent(
-    `${chainFromAsset(asset)}IngressEgress.DepositBoosted`,
-    bitcoinIngressEgressDepositBoosted.refine(
-      (event) =>
-        event.channelId === BigInt(swapRequest.channelId) &&
-        event.asset === asset &&
-        doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
-    ),
-  );
+  if (firstEvent.key !== 'boosted') {
+    throw new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent)}`);
+  }
 
   // Check that the swap was finalized after being boosted
-  // await cf.stepOneBlock();
   await cf.stepUntilEvent(
     `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
     bitcoinIngressEgressDepositFinalised.refine(
       (event) =>
         event.channelId === BigInt(swapRequest.channelId) &&
+        event.asset === asset &&
         doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
     ),
   );

@@ -41,12 +41,8 @@ import { assetBalancesAccountCredited } from 'generated/events/assetBalances/acc
 import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
 import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
 import { btcClientMutex } from 'shared/accounts';
-import {
-  ethereumIngressEgressTransactionRejectedByBroker
-} from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
-import {
-  arbitrumIngressEgressTransactionRejectedByBroker
-} from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
+import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
+import { arbitrumIngressEgressTransactionRejectedByBroker } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
 
 const brokerUri = '//BROKER_1';
 
@@ -249,7 +245,6 @@ async function brokerLevelScreeningTestBtcVaultSwap<A extends WithBrokerAccount>
   await reportFunction(txId);
 }
 
-
 async function waitForEvmTransactionRejection<A = []>(
   cf: ChainflipIO<A>,
   chain: Chain,
@@ -282,9 +277,7 @@ async function waitForEvmTransactionRejection<A = []>(
       depositFinalized: {
         name: 'ArbitrumIngressEgress.DepositFinalized',
         schema: arbitrumIngressEgressDepositFinalised.refine(
-          (event) =>
-            event.depositDetails.txHashes &&
-            event.depositDetails.txHashes[0] === txHash,
+          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
       },
     });
@@ -633,7 +626,6 @@ export async function testBitcoinInner<A = []>(
   doBoost: boolean,
   // ): Promise<((cf: ChainflipIO<A>) => Promise<void>)[]> {
 ) {
-
   // we have to setup a separate wallet in order to not taint our main wallet, otherwise
   // the deposit monitor will possibly reject transactions created by other tests, due
   // to ancestor screening. This has been a source of bouncer flakiness in the past.
@@ -704,10 +696,7 @@ export async function testBitcoinInner<A = []>(
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
-export async function testBitcoin<A = []>(
-  parentCf: ChainflipIO<A>,
-  doBoost: boolean,
-) {
+export async function testBitcoin<A = []>(parentCf: ChainflipIO<A>, doBoost: boolean) {
   const cf = parentCf.withChildLogger('BrokerLevelScreening_testBitcoin');
   await testBitcoinInner(cf, doBoost);
 }
@@ -733,9 +722,6 @@ async function testBitcoinVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
 
   cf.info(`Bitcoin vault swap was rejected and refunded 👍.`);
 }
-
-
-
 
 export async function doTestBrokerLevelScreening<A = []>(
   cf: ChainflipIO<A>,

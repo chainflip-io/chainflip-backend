@@ -302,7 +302,7 @@ export class ChainflipIO<Requirements> {
     this.lastIoBlockHeight += n;
   }
 
-  currentBlockHeight() : number {
+  currentBlockHeight(): number {
     return this.lastIoBlockHeight;
   }
 

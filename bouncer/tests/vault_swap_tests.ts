@@ -1,11 +1,6 @@
 import assert from 'assert';
 import { InternalAsset as Asset } from '@chainflip/cli';
-import {
-  Assets,
-  defaultAssetAmounts,
-  newAssetAddress,
-  sleep,
-} from 'shared/utils';
+import { Assets, defaultAssetAmounts, newAssetAddress, sleep } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
 import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
 import { AccountRole, setupAccount } from 'shared/setup_account';
@@ -14,7 +9,8 @@ import { prepareSwap } from 'shared/swapping';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import {
-  ChainflipIO, FullAccount,
+  ChainflipIO,
+  FullAccount,
   fullAccountFromUri,
   newChainflipIO,
 } from 'shared/utils/chainflip_io';
@@ -79,7 +75,6 @@ async function testWithdrawCollectedAffiliateFees<A = []>(
   affiliateAccountId: string,
   withdrawAddress: string,
 ) {
-
   const cf = parentCf.with({ account: brokerAccount });
 
   const balanceObserveTimeout = 60;
@@ -211,8 +206,7 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
 
   await cf.stepUntilEvent(
     'BitcoinIngressEgress.DepositFinalised',
-    bitcoinIngressEgressDepositFinalised.refine(
-      (event) => event.action.__kind === 'Unrefundable'),
+    bitcoinIngressEgressDepositFinalised.refine((event) => event.action.__kind === 'Unrefundable'),
   );
 
   cf.info('Invalid BTC vault swap ingressed ✅.');
@@ -237,8 +231,6 @@ export async function testVaultSwap(testContext: TestContext) {
     (subcf) => testFeeCollection(subcf, Assets.Sol, testContext.swapContext),
     (subcf) => testFeeCollectionWithdrawal(subcf, Assets.Btc, testContext.swapContext),
     (subcf) => testRefundVaultSwap(subcf),
-    (subcf) => testInvalidBtcVaultSwap(subcf)
+    (subcf) => testInvalidBtcVaultSwap(subcf),
   ]);
-
-
 }

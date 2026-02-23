@@ -16,12 +16,8 @@ import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
-import {
-  solanaIngressEgressTransactionRejectedByBroker
-} from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
-import {
-  solanaIngressEgressDepositFinalised
-} from 'generated/events/solanaIngressEgress/depositFinalised';
+import { solanaIngressEgressTransactionRejectedByBroker } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
+import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngressEgress/depositFinalised';
 
 export async function testSol<A = []>(
   parentCf: ChainflipIO<A>,

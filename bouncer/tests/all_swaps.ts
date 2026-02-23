@@ -88,30 +88,26 @@ export function testAllSwaps(timeoutPerSwap: number) {
     AssetsWithoutAssethubAndDot.sort()
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-        // TODO: remove Just for testing
-        // if (sourceAsset === 'Usdc' && chainFromAsset(destAsset) === 'Solana') {
-          // Regular swaps
-          appendSwap(sourceAsset, destAsset, testSwap);
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+        if (vaultSwapSupportedChains.includes(sourceChain)) {
+          // Vault Swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-          const sourceChain = chainFromAsset(sourceAsset);
-          const destChain = chainFromAsset(destAsset);
-          if (vaultSwapSupportedChains.includes(sourceChain)) {
-            // Vault Swaps
-            appendSwap(sourceAsset, destAsset, testVaultSwap);
-
-            // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-            if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-              // CCM Vault swaps
-              appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-            }
+          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+            // CCM Vault swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
           }
+        }
 
-          if (ccmSupportedChains.includes(destChain)) {
-            // CCM swaps
-            appendSwap(sourceAsset, destAsset, testSwap, true);
-          }
-       // }
+        if (ccmSupportedChains.includes(destChain)) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, true);
+        }
       });
   });
 
@@ -129,7 +125,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
 }
 
 export async function testSwapsToAssethub(testContext: TestContext) {
-  // we run three swaps to assethub in sequence. Otherweise there can be nonce issues,
+  // we run three swaps to assethub in sequence. Otherwise, there can be nonce issues,
   // which caused bouncer flakiness in the past.
   for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
     const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });

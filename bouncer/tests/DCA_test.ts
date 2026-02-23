@@ -129,7 +129,7 @@ async function testDCASwap<A = []>(
   cf.debug(`Chunk 1/${numberOfChunks} complete`);
 
   // Find the remaining chunks
-  for (let i= 2; i <= numberOfChunks; i++) {
+  for (let i = 2; i <= numberOfChunks; i++) {
     // Exactly step chunkIntervalBlocks. This also checks that the chunk interval is correctly observed.
     await cf.stepNBlocks(chunkIntervalBlocks);
     await cf.stepUntilEvent(

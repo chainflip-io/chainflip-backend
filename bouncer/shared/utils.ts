@@ -718,7 +718,7 @@ export function toBtcEventAddresses(
     // Decode the Bench32 address and convert from Buffer to hex
     const { data } = bitcoin.address.fromBech32(btcAddress);
     const taprootHex = ('0x' + Buffer.from(data).toString('hex')) as HexString;
-    return { __kind: 'Taproot', value: taprootHex};
+    return { __kind: 'Taproot', value: taprootHex };
   }
 
   const decoded = bitcoin.address.fromBase58Check(btcAddress);
@@ -768,11 +768,10 @@ export function toEventAddress(
   address: string,
   btcAddressType?: ExtendedBtcAddressType,
 ): z.infer<typeof cfChainsAddressForeignChainAddress> {
-
   const isHexAddress = (addr: string): boolean => {
     const addrLowerCase = addr.toLowerCase();
     return addrLowerCase.startsWith('0x');
-  }
+  };
   const validateHexString = (addr: string): HexString => {
     const addrLowerCase = addr.toLowerCase();
     if (!/^0x[a-f0-9]+$/.test(addrLowerCase)) {

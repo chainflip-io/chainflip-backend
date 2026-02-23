@@ -84,10 +84,10 @@ export async function requestNewSwap<A = []>(
         : event.channelMetadata === undefined;
 
       const dcaParamsMatches = dcaParams
-      ? event.dcaParameters !== undefined &&
-        event.dcaParameters?.numberOfChunks === dcaParams.numberOfChunks &&
-        event.dcaParameters?.chunkInterval === dcaParams.chunkIntervalBlocks
-      : event.dcaParameters === undefined;
+        ? event.dcaParameters !== undefined &&
+          event.dcaParameters?.numberOfChunks === dcaParams.numberOfChunks &&
+          event.dcaParameters?.chunkInterval === dcaParams.chunkIntervalBlocks
+        : event.dcaParameters === undefined;
 
       return eventMatches && ccmMetadataMatches && dcaParamsMatches;
     }),
@@ -162,7 +162,8 @@ export async function doPerformSwap<A = []>(
     `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted if CCM swap.`,
   );
 
-  const swapEgressScheduled = cf.stepUntilEvent(
+  const swapEgressScheduled = cf
+    .stepUntilEvent(
       'Swapping.SwapEgressScheduled',
       swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
     )
@@ -263,7 +264,6 @@ export async function prepareVaultSwapSource<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
 ): Promise<VaultSwapSource> {
-
   const srcChain = chainFromAsset(sourceAsset);
   let vaultSwapSource: VaultSwapSource;
 
@@ -281,7 +281,7 @@ export async function prepareVaultSwapSource<A = []>(
       sourceAddress: decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58()),
     };
   } else {
-    throw Error('Unsupported vault swap source chain')
+    throw Error('Unsupported vault swap source chain');
   }
 
   return vaultSwapSource;
@@ -446,13 +446,15 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
       `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted if CCM swap.`,
     );
 
-    const swapEgressScheduled = cf.stepUntilEvent(
-      'Swapping.SwapEgressScheduled',
-      swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
-    ).then(({ egressId, amount: egressAmount }) => {
-      swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
-      cf.debug(`Egress ID: ${egressId}, Egress amount: ${egressAmount}.`);
-    });
+    const swapEgressScheduled = cf
+      .stepUntilEvent(
+        'Swapping.SwapEgressScheduled',
+        swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
+      )
+      .then(({ egressId, amount: egressAmount }) => {
+        swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
+        cf.debug(`Egress ID: ${egressId}, Egress amount: ${egressAmount}.`);
+      });
 
     const [newBalance] = await Promise.all([
       observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),

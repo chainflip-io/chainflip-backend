@@ -66,9 +66,11 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+  cf.debug('Creating evm wallet ...');
   const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset));
 
   if (erc20Assets.includes(sourceAsset)) {
+    cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
     // Doing effectively infinite approvals to make sure it doesn't fail.
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     await approveEvmTokenVault(

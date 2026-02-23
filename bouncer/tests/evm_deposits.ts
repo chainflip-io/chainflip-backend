@@ -20,7 +20,8 @@ import {
   decodeFlipAddressForContract,
   getChainContractId,
   getAssetContractId,
-  checkTransactionInMatches, checkRequestTypeMatches,
+  checkTransactionInMatches,
+  checkRequestTypeMatches,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -28,12 +29,11 @@ import { send } from 'shared/send';
 
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger, throwError } from 'shared/utils/logger';
 import { newEvmAddress } from 'shared/new_evm_address';
 import { brokerApiEndpoint } from 'shared/json_rpc';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
-import { SwapContext } from '../shared/utils/swap_context';
+import { SwapContext } from 'shared/utils/swap_context';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import assert from 'assert';
 
@@ -135,8 +135,6 @@ async function testTxMultipleVaultSwaps<A = []>(
     )
     .encodeABI();
 
-  await cf.stepUntilLatestBlock();
-
   const receipt = await signAndSendTxEvm(
     cf.logger,
     chainFromAsset(sourceAsset),
@@ -213,9 +211,7 @@ async function testDoubleDeposit<A = []>(
   await swapRequestedHandle;
 }
 
-async function testEvmLegacyCfParametersVaultSwap<A = []>(
-  parentCf: ChainflipIO<A>,
-) {
+async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   const cf = parentCf.withChildLogger('testEvmLegacyCfParametersVaultSwap');
 
   const sourceAsset = 'ArbEth';
@@ -338,9 +334,6 @@ async function testEncodeCfParameters<A = []>(
       cfParameters,
     )
     .encodeABI();
-
-  // Move cf to the latest SC block
-  await cf.stepUntilLatestBlock()
 
   const receipt = await signAndSendTxEvm(
     cf.logger,
