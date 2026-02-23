@@ -864,16 +864,23 @@ fn boost_account_balance() {
 #[test]
 fn deregistration_check_requires_no_lending_storage_keys() {
 	new_test_ext().execute_with(|| {
-		let mut core_pool = CoreLendingPool::default();
-		core_pool.add_funds(LP, 1);
-		CorePools::<Test>::insert(Asset::Eth, CorePoolId(0), core_pool);
+		const BOOST_AMOUNT: AssetAmount = 1;
+
+		setup();
+		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Eth, BOOST_AMOUNT);
+		assert_ok!(LendingPools::add_boost_funds(
+			RuntimeOrigin::signed(LP),
+			Asset::Eth,
+			BOOST_AMOUNT,
+			TIER_5_BPS
+		));
 
 		assert_noop!(
 			PoolsDeregistrationCheck::<Test>::check(&LP),
 			Error::<Test>::BoostedFundsRemaining
 		);
 
-		CorePools::<Test>::remove(Asset::Eth, CorePoolId(0));
+		assert_ok!(LendingPools::stop_boosting(RuntimeOrigin::signed(LP), Asset::Eth, TIER_5_BPS));
 
 		let mut lending_pool = LendingPool::new();
 		lending_pool.add_funds(&LP, 1);
