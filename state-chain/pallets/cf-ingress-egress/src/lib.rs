@@ -3520,24 +3520,36 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 							amount,
 						);
 
-					// Handle any action required from the CCM additional data.
-					T::CcmAdditionalDataHandler::handle_ccm_additional_data(
-						ccm_additional_data.clone(),
-					);
+					if amount_after_fees >=
+						EgressDustLimit::<T, I>::get(asset).unique_saturated_into() ||
+						// We always want to benchmark the success case.
+						cfg!(all(feature = "runtime-benchmarks", not(test)))
+					{
+						// Handle any action required from the CCM additional data.
+						T::CcmAdditionalDataHandler::handle_ccm_additional_data(
+							ccm_additional_data.clone(),
+						);
 
-					ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-						egress_id,
-						asset,
-						amount: amount_after_fees,
-						destination_address: destination_address.clone(),
-						message,
-						ccm_additional_data,
-						source_chain,
-						source_address,
-						gas_budget,
-					});
+						ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+							egress_id,
+							asset,
+							amount: amount_after_fees,
+							destination_address: destination_address.clone(),
+							message,
+							ccm_additional_data,
+							source_chain,
+							source_address,
+							gas_budget,
+						});
 
-					Ok(ScheduledEgressDetails::new(*id_counter, amount_after_fees, fees_withheld))
+						Ok(ScheduledEgressDetails::new(
+							*id_counter,
+							amount_after_fees,
+							fees_withheld,
+						))
+					} else {
+						Err(Error::<T, I>::BelowEgressDustLimit)
+					}
 				},
 				None => {
 					let AmountAndFeesWithheld { amount_after_fees, fees_withheld } =

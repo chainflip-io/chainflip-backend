@@ -22,6 +22,7 @@ import {
   newAssetAddress,
   getContractAddress,
   createStateChainKeypair,
+  isEvmAsset,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -275,7 +276,7 @@ export async function executeVaultSwap(
     logger.trace('Executing EVM vault swap');
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(logger, sourceAsset);
+    const wallet = await createEvmWalletAndFund(logger, sourceAsset, amount);
     sourceAddress = wallet.address.toLowerCase();
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
@@ -397,11 +398,16 @@ export async function performVaultSwap<A = []>(
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
       : Promise.resolve();
 
-    const [newBalance] = await Promise.all([
-      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
-      ccmEventEmitted,
-    ]);
-    cf.trace(`Swap success! New balance: ${newBalance}!`);
+    const balanceIncreaseHandle =
+      messageMetadata && isEvmAsset(destAsset)
+        ? // EVM CCM Swap outputs are sent to the contract address, so we avoid trying to detect the increase
+          // to avoid cross-talk between tests.
+          Promise.resolve(undefined)
+        : observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance);
+
+    const [newBalance] = await Promise.all([balanceIncreaseHandle, ccmEventEmitted]);
+
+    cf.debug(`Swap success!${newBalance !== undefined ? ` New balance: ${newBalance}` : ''}!`);
 
     if (sourceAsset === 'Sol') {
       // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.

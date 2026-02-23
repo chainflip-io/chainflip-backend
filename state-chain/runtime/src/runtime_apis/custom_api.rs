@@ -350,6 +350,9 @@ decl_runtime_apis!(
 			nonce_or_account: NonceOrAccount,
 			encoding: EncodingType,
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
+		#[changed_in(16)]
+		fn cf_default_oracle_price_protection();
+		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.
 		#[changed_in(16)]

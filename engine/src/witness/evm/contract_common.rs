@@ -31,11 +31,14 @@ use pallet_cf_elections::electoral_systems::{
 use std::{
 	collections::{HashMap, HashSet},
 	fmt::Debug,
+	sync::Arc,
 };
 
 use super::{super::common::chain_source::Header, vault::VaultEvents};
 use anyhow::{anyhow, ensure, Result};
 use sp_core::{H160, H256, U256};
+
+// ----- generic event definitions ------
 
 /// Type for storing common (i.e. tx_hash) and specific event information
 #[derive(Debug, PartialEq, Eq)]
@@ -70,6 +73,37 @@ impl<EventParameters: Debug + ethers::contract::EthLogDecode> Event<EventParamet
 		})
 	}
 }
+
+pub trait EvmEventType<Data: std::fmt::Debug>: Sync + Send {
+	fn parse_log(&self, log: Log) -> Result<Event<Data>>;
+}
+
+#[derive_where::derive_where(Default; )]
+pub struct EvmEventTypeCarrier<Event, TargetData> {
+	_phantom: std::marker::PhantomData<(Event, TargetData)>,
+}
+
+pub fn evm_event_type<
+	ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData> + 'static,
+	TargetData: std::fmt::Debug + Sync + Send + 'static,
+>() -> Arc<dyn EvmEventType<TargetData>> {
+	let event_carrier: EvmEventTypeCarrier<ParseData, TargetData> = Default::default();
+	Arc::new(event_carrier)
+}
+
+impl<
+		ParseData: ethers::contract::EthLogDecode + std::fmt::Debug + Into<TargetData>,
+		TargetData: std::fmt::Debug + Sync + Send,
+	> EvmEventType<TargetData> for EvmEventTypeCarrier<ParseData, TargetData>
+{
+	fn parse_log(&self, log: Log) -> Result<Event<TargetData>> {
+		let Event { tx_hash, log_index, event_parameters } =
+			Event::<ParseData>::new_from_unparsed_logs(log)?;
+		Ok(Event { tx_hash, log_index, event_parameters: event_parameters.into() })
+	}
+}
+
+// ----- implementation ------
 
 pub async fn events_at_block_deprecated<Chain, EventParameters, EvmRpcClient>(
 	header: Header<u64, H256, Bloom>,
@@ -222,41 +256,66 @@ where
 		.collect::<HashMap<H160, _>>())
 }
 
-pub async fn events_at_block<Chain, EventParameters, CT: ChainTypes, EvmCachingClient>(
-	data: Option<Bloom>,
-	block_number: CT::ChainBlockNumber,
-	block_hash: H256,
+pub async fn evm_events_at_block_range<Data: std::fmt::Debug, C: ChainTypes>(
+	client: &impl EvmRetryRpcApiWithResult,
+	event_type: Arc<dyn EvmEventType<Data>>,
 	contract_address: H160,
-	eth_rpc: &EvmCachingClient,
-) -> Result<Vec<Event<EventParameters>>>
-where
-	Chain: cf_chains::Chain<ChainBlockNumber = u64>,
-	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EvmCachingClient: EvmRetryRpcApiWithResult,
-{
-	if Chain::WITNESS_PERIOD == 1 {
-		let mut contract_bloom = Bloom::default();
-		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
-		let data = data.ok_or(anyhow::anyhow!(
-			"We should always have a bloom for chains with WITNESS_PERIOD==1"
-		))?;
-		// if we have logs for this block, fetch them.
-		if data.contains_bloom(&contract_bloom) {
-			eth_rpc.get_logs(block_hash, contract_address).await?
-		} else {
-			// we know there won't be interesting logs, so don't fetch for events
-			vec![]
-		}
+	block_range: C::ChainBlockNumber,
+) -> Result<Vec<Event<Data>>> {
+	Ok(client
+		.get_logs_range(block_range.into_range_inclusive(), contract_address)
+		.await?
+		.into_iter()
+		.filter_map(|unparsed_log| -> Option<Event<Data>> {
+			event_type
+				.parse_log(unparsed_log)
+				.map_err(|err| {
+					tracing::error!(
+						"event for contract {} could not be decoded in block range {:?}. Error: {err}",
+						contract_address, block_range
+					)
+				})
+				.ok()
+		})
+		.collect())
+}
+
+pub async fn evm_events_at_block<Data: std::fmt::Debug>(
+	client: &impl EvmRetryRpcApiWithResult,
+	event_type: Arc<dyn EvmEventType<Data>>,
+	contract_address: H160,
+	block_hash: H256,
+	bloom: Option<Bloom>,
+) -> Result<Vec<Event<Data>>> {
+	let bloom = bloom.ok_or(anyhow::anyhow!(
+		"We should always have a bloom for chains with WITNESS_PERIOD==1"
+	))?;
+
+	let mut contract_bloom = Bloom::default();
+	contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
+
+	// if we have logs for this block, fetch them.
+	let logs = if bloom.contains_bloom(&contract_bloom) {
+		client.get_logs(block_hash, contract_address).await?
 	} else {
-		eth_rpc
-			.get_logs_range(block_number.into_range_inclusive(), contract_address)
-			.await?
-	}
-	.into_iter()
-	.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-	})
-	.collect::<anyhow::Result<Vec<_>>>()
+		// we know there won't be interesting logs, so don't fetch for events
+		vec![]
+	};
+	Ok(logs
+		.into_iter()
+		.filter_map(|unparsed_log| -> Option<Event<Data>> {
+			event_type
+				.parse_log(unparsed_log)
+				.map_err(|err| {
+					tracing::error!(
+						"event for contract {} could not be decoded in block {:?}. Error: {err}",
+						contract_address,
+						block_hash
+					)
+				})
+				.ok()
+		})
+		.collect())
 }
 
 /// Trait for deposit channel witnesser configuration
@@ -346,23 +405,34 @@ where
 			undeployed_addresses,
 		),
 		async {
-			Ok::<_, anyhow::Error>(
-				events_at_block::<Chain, VaultEvents, CT, _>(
-					block.bloom,
-					block_height,
-					block.hash,
-					vault_address,
+			let events = if Chain::WITNESS_PERIOD == 1 {
+				evm_events_at_block::<VaultEvents>(
 					client,
+					evm_event_type::<VaultEvents, VaultEvents>(),
+					vault_address,
+					block.hash,
+					block.bloom,
 				)
 				.await?
-				.into_iter()
-				.filter_map(|event| match event.event_parameters {
-					VaultEvents::FetchedNativeFilter(inner_event)
-						if eth_addresses.contains(&inner_event.sender) =>
-						Some((inner_event, event.tx_hash)),
-					_ => None,
-				})
-				.collect::<Vec<_>>(),
+			} else {
+				evm_events_at_block_range::<VaultEvents, CT>(
+					client,
+					evm_event_type::<VaultEvents, VaultEvents>(),
+					vault_address,
+					block_height,
+				)
+				.await?
+			};
+			Ok::<_, anyhow::Error>(
+				events
+					.into_iter()
+					.filter_map(|event| match event.event_parameters {
+						VaultEvents::FetchedNativeFilter(inner_event)
+							if eth_addresses.contains(&inner_event.sender) =>
+							Some((inner_event, event.tx_hash)),
+						_ => None,
+					})
+					.collect::<Vec<_>>(),
 			)
 		},
 	)?;

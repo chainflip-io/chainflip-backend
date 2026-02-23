@@ -1409,7 +1409,7 @@ pub trait PriceFeedApi {
 	fn get_price(asset: Asset) -> Option<OraclePrice>;
 	/// Get the relative price of asset1 in terms of asset2.
 	///
-	/// If assset1 price rises or asset2 price drops, the relative price increases.
+	/// If asset1 price rises or asset2 price drops, the relative price increases.
 	/// If asset1 price drops or asset2 price rises, the relative price decreases.
 	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
 		if let (Some(price_1), Some(price_2)) = (Self::get_price(asset1), Self::get_price(asset2)) {

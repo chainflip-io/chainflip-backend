@@ -28,7 +28,7 @@ import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import { ISubmittableResult } from '@polkadot/types/types';
-import { base58Decode, base58Encode, randomAsHex } from 'polkadot/util-crypto';
+import { base58Decode, base58Encode } from 'polkadot/util-crypto';
 import { newDotAddress } from 'shared/new_dot_address';
 import { BtcAddressType, newBtcAddress } from 'shared/new_btc_address';
 import { getBalance } from 'shared/get_balance';
@@ -58,6 +58,7 @@ import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Err, Ok, Result } from 'shared/utils/result';
+import { randomBytes } from 'crypto';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -292,7 +293,7 @@ export function defaultAssetAmounts(asset: Asset): string {
   switch (asset) {
     case 'Btc':
     case 'Wbtc':
-      return '0.05';
+      return '0.1';
     case 'Eth':
     case 'ArbEth':
       return '5';
@@ -717,6 +718,14 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error(`Unsupported asset: ${asset}`);
 }
 
+export function isEvmChain(chain: Chain): boolean {
+  return evmChains.includes(chain);
+}
+
+export function isEvmAsset(asset: Asset): boolean {
+  return isEvmChain(chainFromAsset(asset));
+}
+
 export function stateChainAssetFromAsset(asset: Asset): AssetAndChain {
   if (isSDKAsset(asset)) {
     return {
@@ -745,7 +754,7 @@ export async function newAssetAddress(
     }
     return getContractAddress(chain, 'CFTESTER');
   }
-  return newAddress(asset, seed ?? randomAsHex(32), type);
+  return newAddress(asset, seed ?? randomBytes(32).toString('hex'), type);
 }
 
 export function getEvmEndpoint(chain: Chain): string {
@@ -1461,13 +1470,17 @@ export async function createEvmWallet(chain?: Chain): Promise<HDNodeWallet> {
   return wallet;
 }
 
-export async function createEvmWalletAndFund(logger: Logger, asset: Asset): Promise<HDNodeWallet> {
+export async function createEvmWalletAndFund(
+  logger: Logger,
+  asset: Asset,
+  amount?: string,
+): Promise<HDNodeWallet> {
   const chain = chainFromAsset(asset);
   const wallet = await createEvmWallet(chain);
 
   await Promise.all([
     send(logger, chainGasAsset(chain) as SDKAsset, wallet.address),
-    send(logger, asset, wallet.address),
+    send(logger, asset, wallet.address, amount),
   ]);
   return wallet;
 }

@@ -533,20 +533,22 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 }
 fn reduce_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
-	mul_div_floor(
+	mul_div_floor_checked(
 		input,
 		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 		U256::from(ONE_IN_HUNDREDTH_PIPS),
 	)
+	.unwrap_or(U256::zero())
 }
 
 fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
-	mul_div_floor(
+	mul_div_floor_checked(
 		input,
 		U256::from(ONE_IN_HUNDREDTH_PIPS),
 		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 	)
+	.unwrap_or(U256::MAX)
 }
 
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(

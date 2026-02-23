@@ -2021,6 +2021,12 @@ impl_runtime_apis! {
 			Ok((encoded_data, transaction_metadata))
 		}
 
+		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>{
+			AssetMap::from_fn(|asset| {
+				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(asset)
+			})
+		}
+
 		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}

@@ -1,0 +1,160 @@
+name: Debug CI Failure
+
+on:
+  workflow_dispatch:
+    inputs:
+      failed_run_id:
+        description: "Failed workflow run ID (from the URL: /actions/runs/<this>)"
+        required: true
+        type: string
+      artifact_suffix:
+        description: "Artifact name suffix (e.g. -upgrade-test, -post-check, -turbo)"
+        required: false
+        type: string
+        default: "-upgrade-test"
+      additional_context:
+        description: "Optional extra context or hypothesis for the debugger"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: indexer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Download and load indexer database
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          SUFFIX="${{ inputs.artifact_suffix }}"
+          RUN_ID="${{ inputs.failed_run_id }}"
+
+          echo "Downloading indexer dump from run $RUN_ID (suffix: '$SUFFIX')"
+          gh run download "$RUN_ID" \
+            --name "indexer-pgsql-dump${SUFFIX}" \
+            --dir /tmp/debug/indexer-dump
+
+          DUMP_FILE=$(find /tmp/debug/indexer-dump -type f | head -1)
+          echo "Loading dump from: $DUMP_FILE"
+          psql -h localhost -U postgres -d indexer < "$DUMP_FILE" 2>&1 | tail -5
+
+          echo "=== Database loaded. Top event types: ==="
+          psql -h localhost -U postgres -d indexer \
+            -c "SELECT name, COUNT(*) FROM event GROUP BY name ORDER BY count DESC LIMIT 5"
+
+      - name: Run Claude Code debugger
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
+          prompt: |
+            You are debugging a CI test failure for the chainflip-backend project.
+
+            ## Context
+
+            - Failed run: https://github.com/${{ github.repository }}/actions/runs/${{ inputs.failed_run_id }}
+            - Artifact suffix: ${{ inputs.artifact_suffix }}
+            - Additional context from the person who triggered this: ${{ inputs.additional_context }}
+
+            ## Available data
+
+            1. **Indexer Postgres DB** — pre-loaded at localhost:5432 (user: postgres, password: postgres, db: indexer).
+               Query with: `psql -h localhost -U postgres -d indexer -c "..."`
+               The `event` table contains all on-chain events with columns: id, name, block_id, args (JSON).
+
+            2. **CI logs and artifacts** — use `gh` to pull whatever you need on demand:
+               - List jobs: `gh run view ${{ inputs.failed_run_id }} --json jobs --jq '.jobs[] | {databaseId, name, conclusion}'`
+               - Get job logs: `gh run view ${{ inputs.failed_run_id }} --log --job <job_database_id>`
+               - List artifacts: `gh api repos/${{ github.repository }}/actions/runs/${{ inputs.failed_run_id }}/artifacts --jq '.artifacts[] | {name, id}'`
+               - Download artifact: `gh run download ${{ inputs.failed_run_id }} --name <artifact-name> --dir /tmp/debug/<dirname>`
+               Bouncer logs artifact is named `bouncer-logs${{ inputs.artifact_suffix }}`.
+               Chain explorer artifact is named `chain-explorer${{ inputs.artifact_suffix }}` (only exists on failure).
+
+            ## Debugging principles
+
+            - **No conclusions without evidence.** Do not speculate about root causes.
+              Every claim must be backed by a specific log line, DB query result, or event.
+            - **Trace backward to root cause.** When you find where an error occurs, ask
+              "what caused this?" and keep tracing back until you reach the original trigger.
+              Fix proposals should address the root cause, not the symptom.
+            - **One hypothesis at a time.** Form a specific hypothesis ("X failed because Y"),
+              then test it with a targeted query or log search. If disproved, form a new one.
+            - **Check for multiple failures.** The first error you find may not be the only one,
+              and may not be the root cause. Look for earlier errors that may have cascaded.
+
+            ## Debugging procedure
+
+            1. **Identify what failed**: List the jobs, find the failed one, pull its logs.
+               Search for error messages, assertion failures, timeouts, or panics.
+               Read error messages carefully — they often contain the exact answer.
+            2. **Gather context**: Download bouncer logs and any other relevant artifacts.
+               Read the logs around the failure to understand what the test was doing.
+               Look at timestamps to establish a timeline of events.
+            3. **Investigate root cause**: Use the indexer database, logs, and source code
+               to understand why the failure occurred. Trace the chain of events backward
+               from the error to find the original trigger. Don't stop at the first cause —
+               ask "but why did THAT happen?" until you reach something actionable.
+            4. **Produce diagnosis**: Output a clear summary with:
+               - Which test failed and the error message
+               - Root cause — what actually went wrong
+               - Evidence — the key events/logs that prove the root cause
+               - Recommendation — code bug, infra issue, or flaky test, and what to fix
+
+            Be concise. Focus on evidence, not speculation.
+
+            ## Reference
+
+            ### Addresses and Hash formats
+
+            The same data might be stored or displayed in different ways in different sources. In some cases, conversion
+            might be necessary to accurately trace data flow through the system. For example:
+            - Logs might contain an EVM address with an all-lowercase hex string, while the same address appears 
+            in the database in mixed upper-lower-case format.
+            - For bitcoin, addresses might be in the standard format of bitcoin addresses (BECH32 etc.) or in the 
+            internal state-chain representation. 
+            - Bitcoin transactions might be referenced in reversed byte order in some logs or DB fields.
+
+            ### Swap lifecycle events
+
+            If the failure involves a swap, you can trace its lifecycle through these events
+            in the indexer database (linked by `swapRequestId` in the args JSON):
+
+            `SwapRequested` → `SwapScheduled` → `SwapExecuted` → `SwapEgressScheduled` → `CcmBroadcastRequested` or `BatchBroadcastRequested` → `BroadcastSuccess`
+
+            Key failure events to check for:
+            - `Swapping.SwapEgressIgnored` / `Swapping.RefundEgressIgnored` — output too small to cover gas
+            - Missing `BroadcastSuccess` — signing or broadcast infrastructure failure
+            - `DepositFailed` — deposit rejected or not witnessed
+
+            The bouncer logs contain the vault swap transaction hash, which you can search
+            in event args to find the corresponding `swapRequestId`.
+
+            ## After diagnosis: capture learnings
+
+            If this debugging session reveals a failure pattern that is NOT already documented
+            in the "Reference" sections above, include a "Suggested learnings" section in your
+            output with the proposed additions to this workflow file's reference sections.
+            Format it as a ready-to-apply diff so a human can easily turn it into a PR.

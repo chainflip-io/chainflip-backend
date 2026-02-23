@@ -853,6 +853,12 @@ export const palletCfSwappingPalletConfigUpdate = z.discriminatedUnion('__kind',
     asset: cfPrimitivesChainsAssetsAnyAsset,
     rate: z.number().nullish(),
   }),
+  z.object({
+    __kind: z.literal('SetDefaultOraclePriceSlippageProtectionForAsset'),
+    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
+    quoteAsset: cfPrimitivesChainsAssetsAnyAsset,
+    bps: z.number().nullish(),
+  }),
 ]);
 
 export const cfChainsEvmDepositDetails = z.object({ txHashes: z.array(hexString).nullish() });
@@ -1287,7 +1293,7 @@ export const cfTraitsLiquidityIncreaseOrDecreaseU128 = z.discriminatedUnion('__k
   z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
 ]);
 
-export const palletCfPoolsAssetPair = z.object({ assets: cfAmmCommonPoolPairsMap });
+export const cfAmmCommonAssetPair = z.object({ assets: cfAmmCommonPoolPairsMap });
 
 export const palletCfPoolsCloseOrder = z.discriminatedUnion('__kind', [
   z.object({

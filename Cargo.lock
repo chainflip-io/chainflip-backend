@@ -2153,6 +2153,7 @@ dependencies = [
  "chrono",
  "clap",
  "config",
+ "derive-where",
  "ed25519-dalek",
  "engine-p2p",
  "engine-sc-client",
