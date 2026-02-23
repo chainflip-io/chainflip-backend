@@ -189,6 +189,7 @@ derive_common_traits!(
 		BlockHeight { submit_hash: bool },
 	}
 );
+
 derive_common_traits! {
 	#[derive(GenericTypeInfo)]
 	#[expand_name_with(scale_info::prelude::format!("{}{}", T::Chain::NAME, T::BWNAME))]
