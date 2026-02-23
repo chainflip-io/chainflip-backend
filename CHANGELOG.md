@@ -2,7 +2,104 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.0.6] - 2025-12-22
+## [2.1.0] - 2026-02-23
+
+### Features
+
+- Default oracle price protection ([#6400](https://github.com/chainflip-io/chainflip-backend/issues/6400))
+- Upgrade polkadot-sdk ([#6342](https://github.com/chainflip-io/chainflip-backend/issues/6342))
+- Add deregistration check for lending pools ([#6426](https://github.com/chainflip-io/chainflip-backend/issues/6426))
+- Remove callbacks ([#6414](https://github.com/chainflip-io/chainflip-backend/issues/6414))
+- Add RPC to replace Ingress-Egress tracker ([#6354](https://github.com/chainflip-io/chainflip-backend/issues/6354))
+- Migrate vault_swap_tests to chainflip io ([#6419](https://github.com/chainflip-io/chainflip-backend/issues/6419))
+- Invalidate liveness elections on epoch change ([#6406](https://github.com/chainflip-io/chainflip-backend/issues/6406))
+- Add `block_height` to `Deployed` status ([#6391](https://github.com/chainflip-io/chainflip-backend/issues/6391))
+- Add Wbtc, ArbUsdt and SolUsdt assets ([#6299](https://github.com/chainflip-io/chainflip-backend/issues/6299))
+- Add lp ema stats ([#6245](https://github.com/chainflip-io/chainflip-backend/issues/6245))
+- Localnet defaults to most recent build ([#6389](https://github.com/chainflip-io/chainflip-backend/issues/6389))
+- Use processedUpTo for eth/arb ([#6380](https://github.com/chainflip-io/chainflip-backend/issues/6380))
+- LPP per leg with no fees ([#6376](https://github.com/chainflip-io/chainflip-backend/issues/6376))
+- Ethereum elections ([#6257](https://github.com/chainflip-io/chainflip-backend/issues/6257))
+- Lending and boost minimum update amounts ([#6355](https://github.com/chainflip-io/chainflip-backend/issues/6355))
+- Parallelism-aware logging in ChainflipIO ([#6364](https://github.com/chainflip-io/chainflip-backend/issues/6364))
+- Bound redeem address for broker ([#6353](https://github.com/chainflip-io/chainflip-backend/issues/6353))
+- Always sweep when debiting LPs ([#6347](https://github.com/chainflip-io/chainflip-backend/issues/6347))
+- Add swap-request-id to liquidation events ([#6348](https://github.com/chainflip-io/chainflip-backend/issues/6348))
+- Run turbo chainflip node in separate CI bouncer run ([#6344](https://github.com/chainflip-io/chainflip-backend/issues/6344))
+- Limit order fees cleanup ([#6334](https://github.com/chainflip-io/chainflip-backend/issues/6334))
+- Use ChainflipIO for swapping tests (`observeSwapRequested`) ([#6340](https://github.com/chainflip-io/chainflip-backend/issues/6340))
+- Use ChainflipIO for swapping tests (`requestNewSwap`) ([#6339](https://github.com/chainflip-io/chainflip-backend/issues/6339))
+- New "find event" functionality in bouncer using indexer + `ChainflipIO` ([#6296](https://github.com/chainflip-io/chainflip-backend/issues/6296))
+- Build bitcoin image with various speeds for localnet ([#6333](https://github.com/chainflip-io/chainflip-backend/issues/6333))
+- Cherry-pick latest from release branch ([#6329](https://github.com/chainflip-io/chainflip-backend/issues/6329))
+- Fee/gas estimation uses oracle with hard coded price fallback ([#6300](https://github.com/chainflip-io/chainflip-backend/issues/6300))
+- Enforce min delegation amount ([#6319](https://github.com/chainflip-io/chainflip-backend/issues/6319))
+- Cf_lending_pools to expose owed_to_network ([#6316](https://github.com/chainflip-io/chainflip-backend/issues/6316))
+- Add loan_id to a variant of CollateralAdded ([#6317](https://github.com/chainflip-io/chainflip-backend/issues/6317))
+- Explicit governance threshold ([#6290](https://github.com/chainflip-io/chainflip-backend/issues/6290))
+- Add `turbo` feature flag to chainflip state-chain ([#6309](https://github.com/chainflip-io/chainflip-backend/issues/6309))
+- Add price status to rpc ([#6318](https://github.com/chainflip-io/chainflip-backend/issues/6318))
+- Cherry pick release branch changes from 2.0.0 to 2.0.2 to main ([#6306](https://github.com/chainflip-io/chainflip-backend/issues/6306))
+- Reorganise runtime configs and better runtime api version handling ([#6289](https://github.com/chainflip-io/chainflip-backend/issues/6289))
+
+### Fixes
+
+- Add transactional attribute to purge_account_balance ([#6420](https://github.com/chainflip-io/chainflip-backend/issues/6420))
+- Simulated swap price estimation ([#6421](https://github.com/chainflip-io/chainflip-backend/issues/6421))
+- Disable fee withdrawal test in `vault_swap_tests.ts`. ([#6422](https://github.com/chainflip-io/chainflip-backend/issues/6422))
+- Interest rate includes network fee in cf_lending_pools rpc ([#6415](https://github.com/chainflip-io/chainflip-backend/issues/6415))
+- Apply safe mode migration ([#6394](https://github.com/chainflip-io/chainflip-backend/issues/6394))
+- Validator-deregistration ([#6386](https://github.com/chainflip-io/chainflip-backend/issues/6386))
+- Move fees vec to swap request ([#6384](https://github.com/chainflip-io/chainflip-backend/issues/6384))
+- EIP712 ([#6375](https://github.com/chainflip-io/chainflip-backend/issues/6375))
+- Amm-math test flag with mocks ([#6374](https://github.com/chainflip-io/chainflip-backend/issues/6374))
+- Correctly read number of pools in a pre migration check ([#6377](https://github.com/chainflip-io/chainflip-backend/issues/6377))
+- Correctly reschedule fee swaps ([#6363](https://github.com/chainflip-io/chainflip-backend/issues/6363))
+- ExecWithLog checks error code ([#6328](https://github.com/chainflip-io/chainflip-backend/issues/6328))
+- Handle reorg into empty headers correctly ([#6325](https://github.com/chainflip-io/chainflip-backend/issues/6325)) ([#6326](https://github.com/chainflip-io/chainflip-backend/issues/6326))
+- Validator apy rpc takes delegation into account ([#6321](https://github.com/chainflip-io/chainflip-backend/issues/6321))
+- Special case for range order fees ([#6307](https://github.com/chainflip-io/chainflip-backend/issues/6307))
+- Configurable max retry duration for engine's retrier client ([#6292](https://github.com/chainflip-io/chainflip-backend/issues/6292))
+- Nonces only in static accounts SIMD-0242 ([#6287](https://github.com/chainflip-io/chainflip-backend/issues/6287))
+
+## [2.0.12] - 2026-02-13
+
+### Fixes
+
+- Stricter limits on scheduled order updates.
+
+## [2.0.11] - 2026-02-10
+
+### Fixes
+
+- Do dust check on CCM egress.
+
+## [2.0.10] - 2026-02-09
+
+### Fixes
+
+- Fix overflow bug in AMM.
+
+## [2.0.9] - 2026-02-04
+
+### Fixes
+
+- Fix Assethub signature extraction during egress witnessing.
+
+## [2.0.8] - 2026-02-03
+
+### Fixes
+
+- Update Assethub Metadata
+
+## [2.0.7] - 2026-01-29
+
+### Fixes
+
+- EIP712 Ledger compatibility fix ([#6375](https://github.com/chainflip-io/chainflip-backend/issues/6375))
+- Correctly reschedule fee swaps ([#6363](https://github.com/chainflip-io/chainflip-backend/issues/6363))
+
+## [2.0.6] - 2026-01-05
 
 ### Fixes
 
