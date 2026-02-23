@@ -296,7 +296,7 @@ async function waitForEvmTransactionRejection<A = []>(
   }
 
   if (resultEvent.key === 'depositFinalized') {
-    cf.warn(
+    throw new Error(
       `Failed to reject ${chain} tx ${txHash}. The transaction was ingressed instead of being rejected.
        It might be because the deposit monitor was late in reporting the tx and the transaction ended up being swapped instead`,
     );
@@ -812,5 +812,10 @@ export async function testBrokerLevelScreening(
   testBoostedDeposits: boolean = false,
 ) {
   const cf = await newChainflipIO(testContext.logger, []);
+
+  // Waiting deliberately to delay the start of the test to not end up in situations where the deposit
+  // monitor is slow in flagging transactions
+  await sleep(50000);
+
   await doTestBrokerLevelScreening(cf, testBoostedDeposits);
 }

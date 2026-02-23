@@ -126,17 +126,17 @@ async function testDCASwap<A = []>(
     `Swapping.SwapExecuted`,
     swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
   );
-  cf.debug(`Chunk 1/${numberOfChunks} complete. cf.block= ${cf.currentBlockHeight()}`);
+  cf.debug(`Chunk 1/${numberOfChunks} complete`);
 
   // Find the remaining chunks
-  for (let i = 2; i <= numberOfChunks; i++) {
+  for (let i= 2; i <= numberOfChunks; i++) {
     // Exactly step chunkIntervalBlocks. This also checks that the chunk interval is correctly observed.
     await cf.stepNBlocks(chunkIntervalBlocks);
     await cf.stepUntilEvent(
       `Swapping.SwapExecuted`,
       swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
     );
-    cf.debug(`Chunk ${i}/${numberOfChunks} complete. cf.block= ${cf.currentBlockHeight()}`);
+    cf.debug(`Chunk ${i}/${numberOfChunks} complete`);
   }
 
   // Wait for SwapRequestCompleted, usually it appears at the same block of the last chunk.

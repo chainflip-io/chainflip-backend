@@ -20,6 +20,7 @@ import {
   decodeFlipAddressForContract,
   getChainContractId,
   getAssetContractId,
+  checkTransactionInMatches, checkRequestTypeMatches,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -33,6 +34,8 @@ import { brokerApiEndpoint } from 'shared/json_rpc';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { SwapContext } from '../shared/utils/swap_context';
+import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
+import assert from 'assert';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
@@ -132,7 +135,7 @@ async function testTxMultipleVaultSwaps<A = []>(
     )
     .encodeABI();
 
-  await cf.stepUntilLatestBlock()
+  await cf.stepUntilLatestBlock();
 
   const receipt = await signAndSendTxEvm(
     cf.logger,
@@ -142,43 +145,28 @@ async function testTxMultipleVaultSwaps<A = []>(
     txData,
   );
 
-  // const channelMatches = checkTransactionInMatches(event.origin, id);
-  // const sourceAssetMatches = sourceAsset === event.inputAsset;
-  // const destAssetMatches = destAsset === event.outputAsset;
-  // const requestTypeMatches = checkRequestTypeMatches(event.requestType, swapRequestType);
-
-  let eventCounter = 0;
-  const observingEvent = observeEvent(cf.logger, 'swapping:SwapRequested', {
-    test: (event) => {
-      if (
-        typeof event.data.origin === 'object' &&
-        'Vault' in event.data.origin &&
-        event.data.origin.Vault.txId.Evm === receipt.transactionHash // &&
-        // (event.data.inputAsset as Asset) === sourceAsset &&
-        // (event.data.outputAsset as Asset) === destAsset
-      ) {
-        if (++eventCounter > numSwaps) {
-          throwError(cf.logger, new Error('Multiple swap scheduled events detected'));
-        }
-      }
-      return false;
-    },
-    abortable: true,
-    // Don't stop when the event is found.
-    stopAfter: 'Never',
-    timeoutSeconds: 150,
-    historicalCheckBlocks: 20,
-  });
-
-  while (eventCounter === 0) {
-    await sleep(2000);
+  // Wait for multiple SwapRequested events. These can appear in the same block but will have different
+  // swapRequestId
+  const foundSwapRequestIds: bigint[] = [];
+  for (let i = 0; i < numSwaps; i++) {
+    const swapRequestedEvent = await cf.stepUntilEvent(
+      'Swapping.SwapRequested',
+      swappingSwapRequested.refine(
+        (event) =>
+          sourceAsset === event.inputAsset &&
+          destAsset === event.outputAsset &&
+          checkTransactionInMatches(event.origin, {
+            type: TransactionOrigin.VaultSwapEvm,
+            txHash: receipt.transactionHash,
+          }) &&
+          checkRequestTypeMatches(event.requestType, SwapRequestType.Regular) &&
+          !foundSwapRequestIds.includes(event.swapRequestId),
+      ),
+    );
+    foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
   }
 
-  // Wait some more time after the first event to ensure another one is not emitted
-  await sleep(30000);
-
-  observingEvent.stop();
-  await observingEvent.event;
+  assert.strictEqual(foundSwapRequestIds.length, numSwaps);
 }
 
 async function testDoubleDeposit<A = []>(

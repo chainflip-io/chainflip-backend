@@ -600,14 +600,14 @@ export type TransactionOriginId =
   | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
   | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
-function checkRequestTypeMatches(
+export function checkRequestTypeMatches(
   actual: z.infer<typeof cfTraitsSwappingSwapRequestTypeGeneric>,
   expected: SwapRequestType,
 ) {
   return actual.__kind === expected;
 }
 
-function checkTransactionInMatches(
+export function checkTransactionInMatches(
   actual: z.infer<typeof cfChainsSwapOrigin>,
   expected: TransactionOriginId,
 ): boolean {

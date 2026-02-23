@@ -101,7 +101,7 @@ export async function testSol<A = []>(
   });
 
   if (resultEvent.key === 'depositFinalized') {
-    cf.warn(
+    throw new Error(
       `Failed to reject Solana tx ${txHash}. The transaction was ingressed instead of being rejected.
        It might be because the deposit monitor was late in reporting the tx and the transaction ended up being swapped instead`,
     );

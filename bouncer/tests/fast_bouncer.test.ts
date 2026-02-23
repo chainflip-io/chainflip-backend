@@ -30,7 +30,7 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
   const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
-  const ciTimeoutFactor = 1.4; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
+  const ciTimeoutFactor = 1.1; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
 
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 300 * ciTimeoutFactor);
@@ -43,7 +43,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('DCASwaps', testDCASwaps, 190 * ciTimeoutFactor);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 240 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 340 * ciTimeoutFactor);
+  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
   concurrentTest('VaultSwaps', testVaultSwap, 330 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
