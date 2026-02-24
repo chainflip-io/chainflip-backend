@@ -2,6 +2,17 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
+export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.solanaIngressEgress.updatePalletConfig([
+        {
+          SetIngressDelaySolana: { delayBlocks: 10 },
+        },
+      ]),
+  });
+}
+
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up elections');
 
@@ -63,4 +74,8 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
   } else {
     cf.info('Ignoring Oracle elections setup as genericElections pallet is not available.');
   }
+}
+
+export async function setupWitnessing<A>(cf: ChainflipIO<A>) {
+  await cf.all([setupIngressEgressPallet, setupElections]);
 }
