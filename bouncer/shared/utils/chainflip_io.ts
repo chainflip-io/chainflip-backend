@@ -142,7 +142,7 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'Finalized', release);
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
@@ -304,15 +304,6 @@ export class ChainflipIO<Requirements> {
 
   currentBlockHeight(): number {
     return this.lastIoBlockHeight;
-  }
-
-  async stepUntilLatestBlock() {
-    await using chainflipApi = await getChainflipApi();
-    const signedBlock = await chainflipApi.rpc.chain.getBlock();
-    const latestBlockNumber = Number(signedBlock.block.header.number);
-    if (this.lastIoBlockHeight < latestBlockNumber) {
-      this.lastIoBlockHeight = latestBlockNumber;
-    }
   }
 
   /**
@@ -508,8 +499,8 @@ export class ChainflipIO<Requirements> {
     };
 
     // start printing messages, but don't await this promise
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    messagePrinter();
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    messagePrinter().catch(() => {});
 
     const result = await promise;
 
