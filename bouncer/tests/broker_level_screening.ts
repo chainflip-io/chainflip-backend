@@ -35,6 +35,7 @@ import {
   fullAccountFromUri,
   newChainflipIO,
   WithBrokerAccount,
+  WithLpAccount,
 } from 'shared/utils/chainflip_io';
 import { testSol, testSolVaultSwap } from 'tests/broker_level_screening/sol';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
@@ -447,16 +448,16 @@ async function testEvmVaultSwap<A = []>(
   cf.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 
-async function testEvmLiquidityDeposit<A = []>(
+async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   // setup access to chainflip api and lp
   await using chainflip = await getChainflipApi();
-  const cf = parentCf
-    .with({ account: fullAccountFromUri('//LP_1', 'LP') })
-    .withChildLogger(`${sourceAsset}_BrokerLevelScreening_testEvmLiquidityDeposit`);
+  const cf = parentCf.withChildLogger(
+    `${sourceAsset}_BrokerLevelScreening_testEvmLiquidityDeposit`,
+  );
   const lp = cf.requirements.account.keypair;
 
   const chain = chainFromAsset(sourceAsset);
@@ -723,17 +724,10 @@ async function testBitcoinVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.info(`Bitcoin vault swap was rejected and refunded 👍.`);
 }
 
-export async function doTestBrokerLevelScreening<A = []>(
+export async function doTestSwapDeposits<A = []>(
   cf: ChainflipIO<A>,
   testBoostedDeposits: boolean = false,
 ) {
-  await ensureHealth();
-  const previousMockmode = (await setMockmode('Manual')).previous;
-  // test rejection of LP deposits and vault swaps:
-  //  - this requires the rejecting broker to be whitelisted
-  //  - for bitcoin vault swaps a private channel has to be opened
-  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
-
   // NOTE: We currently don't test the following assets:
   // - Flip: we don't test Flip rejections because they are currently disabled in the
   //         deposit monitor, since Elliptic doesn't provide Flip analysis.
@@ -749,50 +743,43 @@ export async function doTestBrokerLevelScreening<A = []>(
   //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.
 
   // test rejection of swaps by the responsible broker
-  const swapDeposits = (parentCf: ChainflipIO<A>) =>
-    parentCf.all([
-      (subcf) => testSol(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testSol(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testSol(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvm(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testBitcoin(subcf, false),
-      ...(testBoostedDeposits ? [(subcf: ChainflipIO<A>) => testBitcoin(subcf, true)] : []),
-    ]);
+  await cf.all([
+    (subcf) => testSol(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSol(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSol(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testBitcoin(subcf, false),
+    ...(testBoostedDeposits ? [(subcf: ChainflipIO<A>) => testBitcoin(subcf, true)] : []),
+  ]);
+}
 
-  const lpDeposits = (parentCf: ChainflipIO<A>) =>
-    parentCf.all([
-      // --- LP deposits ---
-      (subcf) => testEvmLiquidityDeposit(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
+  const cf = parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') });
 
-      // --- vault swaps ---
-      // testBitcoinVaultSwap(testContext),
-      (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testEvmVaultSwap(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testSolVaultSwap(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testSolVaultSwap(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-      (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    ]);
+  await cf.all([
+    // --- LP deposits ---
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
+}
 
-  // Launch swapDeposits first, wait sometime, then launch lpDeposits.
-  // This will reduce contention, to not end up in situations where the deposit
-  // monitor is slow in flagging transactions
-  await sleep(10000);
-  cf.info('Starting broker level screening swapDeposits tests...');
-  const swapDepositsPromise = cf.withChildLogger('swapDeposits').all([swapDeposits]);
-  await sleep(20000);
-  cf.info('Starting broker level screening lpDeposits tests...');
-  const lpDepositsPromise = cf.withChildLogger('lpDeposits').all([lpDeposits]);
-  await Promise.all([lpDepositsPromise, swapDepositsPromise]);
-
-  await setMockmode(previousMockmode);
+export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
+  await cf.all([
+    // --- vault swaps ---
+    // testBitcoinVaultSwap(testContext),
+    (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
 }
 
 export async function testBrokerLevelScreening(
@@ -801,5 +788,22 @@ export async function testBrokerLevelScreening(
 ) {
   const cf = await newChainflipIO(testContext.logger, []);
 
-  await doTestBrokerLevelScreening(cf, testBoostedDeposits);
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
+  // test rejection of LP deposits and vault swaps:
+  //  - this requires the rejecting broker to be whitelisted
+  //  - for bitcoin vault swaps a private channel has to be opened
+  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
+
+  // Delay the start of the test to reduce contention, to not end up in situations where the deposit
+  // monitor is slow in flagging transactions
+  await sleep(25000);
+
+  await cf.all([
+    (subcf) => doTestLpDeposits(subcf),
+    (subcf) => doTestVaultSwaps(subcf),
+    (subcf) => doTestSwapDeposits(subcf, testBoostedDeposits),
+  ]);
+
+  await setMockmode(previousMockmode);
 }
