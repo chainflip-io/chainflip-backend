@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.0.13] - 2026-02-24
+
+### Fixes
+
+- Correct parsing of TransferTokenFailedFilter assets on Arbitrum.
+
 ## [2.0.12] - 2026-02-13
 
 ### Fixes
