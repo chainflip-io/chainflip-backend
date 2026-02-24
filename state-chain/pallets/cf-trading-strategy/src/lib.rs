@@ -30,7 +30,7 @@ mod tests;
 #[macro_use]
 extern crate proptest;
 
-use cf_amm::common::LimitOrder;
+use cf_amm::common::{FullyScopedLimitOrder, LimitOrder};
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -221,7 +221,9 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_amm::common::{AssetPair, FullyScopedLimitOrder};
 	use cf_traits::PriceFeedApi;
+	use frame_support::sp_runtime::SaturatedConversion;
 
 	use super::*;
 
@@ -316,18 +318,21 @@ pub mod pallet {
 			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
 			// Cache of orders per asset to avoid redundant reads
-			let mut order_cache: BTreeMap<Asset, Vec<LimitOrder<T::AccountId>>> = BTreeMap::new();
-			let fetch_orders_for_strategies = Strategies::<T>::iter()
-				.filter_map(|(_, strategy_id, strategy)| {
-					if matches!(strategy, TradingStrategy::OracleTracking { .. }) ||
-						matches!(strategy, TradingStrategy::InventoryBased { .. })
-					{
-						Some(strategy_id)
-					} else {
-						None
-					}
-				})
-				.collect::<BTreeSet<_>>();
+			let mut order_cache: BTreeMap<Asset, Vec<FullyScopedLimitOrder<T::AccountId>>> =
+				BTreeMap::new();
+			let mut fetch_orders_for_strategies = BTreeMap::new();
+			Strategies::<T>::iter().for_each(|(_, strategy_id, strategy)| match strategy {
+				TradingStrategy::InventoryBased { base_asset, .. } |
+				TradingStrategy::OracleTracking { base_asset, .. } => {
+					AssetPair::new(base_asset, STABLE_ASSET).map(|asset_pair| {
+						fetch_orders_for_strategies
+							.entry(asset_pair)
+							.or_insert_with(BTreeSet::new)
+							.insert(strategy_id.clone())
+					});
+				},
+				_ => (),
+			});
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
@@ -432,10 +437,22 @@ pub mod pallet {
 							Some(orders) => orders,
 							None => {
 								weight_used += T::DbWeight::get().reads(1);
+								let Some(asset_pair) = AssetPair::new(base_asset, STABLE_ASSET)
+								else {
+									log_or_panic!(
+										"Failed to create asset pair for assets {:?}/{:?} for strategy {:?}",
+										base_asset,
+										STABLE_ASSET,
+										strategy_id
+									);
+									continue;
+								};
 								match T::PoolApi::limit_orders(
 									base_asset,
 									STABLE_ASSET,
-									&fetch_orders_for_strategies,
+									&fetch_orders_for_strategies
+										.get(&asset_pair)
+										.unwrap_or(&BTreeSet::new()),
 								) {
 									Ok(pool_orders) =>
 										order_cache.entry(base_asset).or_insert(pool_orders),
@@ -452,16 +469,28 @@ pub mod pallet {
 						};
 						let existing_orders: Vec<_> = pool_orders
 							.iter()
-							.filter(|order| order.account_id == strategy_id)
+							.filter(|scope| scope.order.lp == strategy_id)
 							.collect();
 
 						let orders_total_quote = existing_orders
 							.iter()
-							.map(|order| if order.side == Side::Buy { order.amount } else { 0 })
+							.map(|scope| {
+								if scope.side == Side::Buy {
+									scope.order.sell_amount.saturated_into()
+								} else {
+									0
+								}
+							})
 							.sum();
 						let orders_total_base = existing_orders
 							.iter()
-							.map(|order| if order.side == Side::Sell { order.amount } else { 0 })
+							.map(|scope| {
+								if scope.side == Side::Sell {
+									scope.order.sell_amount.saturated_into()
+								} else {
+									0
+								}
+							})
 							.sum();
 
 						// Get the free balance
@@ -504,10 +533,10 @@ pub mod pallet {
 							if matches!(strategy, TradingStrategy::OracleTracking { .. }) {
 								existing_orders
 									.iter()
-									.map(|order| (order.tick, order.side))
+									.map(|scope| (scope.order.tick, scope.side))
 									.collect::<BTreeSet<_>>() != new_orders
 									.iter()
-									.map(|order| (order.tick, order.side))
+									.map(|scope| (scope.order.tick, scope.side))
 									.collect::<BTreeSet<_>>()
 							} else {
 								false
@@ -544,8 +573,11 @@ pub mod pallet {
 
 							// Create the new desired orders
 							new_orders.into_iter().for_each(
-								|LimitOrder {
-								     base_asset, side, order_id, tick, amount, ..
+								|FullyScopedLimitOrder {
+								     base_asset,
+								     side,
+								     order: LimitOrder { id, tick, sell_amount, .. },
+								     ..
 								 }| {
 									weight_used += limit_order_update_weight;
 									let _result = T::PoolApi::update_limit_order(
@@ -553,9 +585,9 @@ pub mod pallet {
 										base_asset,
 										STABLE_ASSET,
 										side,
-										order_id,
+										id.saturated_into(),
 										Some(tick),
-										IncreaseOrDecrease::Increase(amount),
+										IncreaseOrDecrease::Increase(sell_amount.saturated_into()),
 									);
 								},
 							);
@@ -851,11 +883,11 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 	account_id: AccountId,
 	base_asset: Asset,
 	quote_asset: Asset,
-) -> Vec<LimitOrder<AccountId>> {
+) -> Vec<FullyScopedLimitOrder<AccountId>> {
 	if total == 0 {
 		return Vec::new();
 	}
-	let mut orders: BTreeMap<Tick, LimitOrder<AccountId>> = BTreeMap::new();
+	let mut orders: BTreeMap<Tick, FullyScopedLimitOrder<AccountId>> = BTreeMap::new();
 	let half_total = total / 2;
 
 	// Simple order logic:
@@ -865,14 +897,18 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 		let average_tick = average_tick(min_tick, max_tick, round_up);
 		orders.insert(
 			average_tick,
-			LimitOrder {
-				account_id: account_id.clone(),
+			FullyScopedLimitOrder {
 				base_asset,
 				quote_asset,
 				side,
-				order_id: STRATEGY_ORDER_ID_1,
-				tick: average_tick,
-				amount: half_total,
+				order: LimitOrder {
+					lp: account_id.clone(),
+					id: STRATEGY_ORDER_ID_1.into(),
+					tick: average_tick,
+					sell_amount: half_total.into(),
+					original_sell_amount: half_total.into(),
+					fees_earned: Default::default(),
+				},
 			},
 		);
 		amount.saturating_sub(half_total)
@@ -891,15 +927,19 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 		// order.
 		orders
 			.entry(dynamic_tick)
-			.and_modify(|order| order.amount += remaining_amount)
-			.or_insert(LimitOrder {
-				account_id: account_id.clone(),
+			.and_modify(|scope| scope.order.sell_amount += remaining_amount.into())
+			.or_insert(FullyScopedLimitOrder {
 				base_asset,
 				quote_asset,
 				side,
-				order_id: STRATEGY_ORDER_ID_0,
-				tick: dynamic_tick,
-				amount: remaining_amount,
+				order: LimitOrder {
+					lp: account_id.clone(),
+					id: STRATEGY_ORDER_ID_0.into(),
+					tick: dynamic_tick,
+					sell_amount: remaining_amount.into(),
+					original_sell_amount: remaining_amount.into(),
+					fees_earned: Default::default(),
+				},
 			});
 	}
 

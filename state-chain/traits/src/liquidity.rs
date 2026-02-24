@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use cf_amm::common::LimitOrder;
+use cf_amm::common::FullyScopedLimitOrder;
 pub use cf_amm::common::{PoolPairsMap, Side};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_amm::math::Price;
@@ -130,7 +130,7 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<LimitOrder<Self::AccountId>>, DispatchError>;
+	) -> Result<Vec<FullyScopedLimitOrder<Self::AccountId>>, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 

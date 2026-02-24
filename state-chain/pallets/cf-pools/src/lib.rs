@@ -16,7 +16,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{AssetPair, PoolPairsMap, Side},
+	common::{AssetPair, FullyScopedLimitOrder, LimitOrder, PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
@@ -1132,32 +1132,24 @@ impl<T: Config> PoolApi for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<cf_amm::common::LimitOrder<Self::AccountId>>, DispatchError> {
+	) -> Result<Vec<FullyScopedLimitOrder<Self::AccountId>>, DispatchError> {
 		let pool_orders = Self::pool_orders(base_asset, quote_asset, accounts, true);
 		pool_orders.map(|pool| {
 			pool.limit_orders
 				.asks
 				.iter()
 				.cloned()
-				.map(|order| cf_amm::common::LimitOrder {
+				.map(|order| FullyScopedLimitOrder {
 					base_asset,
 					quote_asset,
-					account_id: order.lp,
 					side: Side::Sell,
-					order_id: order.id.saturated_into(),
-					tick: order.tick,
-					amount: order.sell_amount.saturated_into(),
+					order,
 				})
-				.chain(pool.limit_orders.bids.iter().cloned().map(|order| {
-					cf_amm::common::LimitOrder {
-						base_asset,
-						quote_asset,
-						account_id: order.lp,
-						side: Side::Buy,
-						order_id: order.id.saturated_into(),
-						tick: order.tick,
-						amount: order.sell_amount.saturated_into(),
-					}
+				.chain(pool.limit_orders.bids.iter().cloned().map(|order| FullyScopedLimitOrder {
+					base_asset,
+					quote_asset,
+					side: Side::Buy,
+					order,
 				}))
 				.collect()
 		})
@@ -1306,28 +1298,6 @@ pub struct PoolInfo {
 	Deserialize,
 )]
 #[serde(bound = "")]
-pub struct LimitOrder<T: Config> {
-	pub lp: T::AccountId,
-	pub id: Amount, // TODO: Intro type alias
-	pub tick: Tick,
-	pub sell_amount: Amount,
-	pub fees_earned: Amount,
-	pub original_sell_amount: Amount,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Serialize,
-	Deserialize,
-)]
-#[serde(bound = "")]
 pub struct RangeOrder<T: Config> {
 	pub lp: T::AccountId,
 	pub id: Amount,
@@ -1351,7 +1321,7 @@ pub struct RangeOrder<T: Config> {
 #[serde(bound = "")]
 pub struct PoolOrders<T: Config> {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AskBidMap<Vec<LimitOrder<T>>>,
+	pub limit_orders: AskBidMap<Vec<LimitOrder<T::AccountId>>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
 	pub range_orders: Vec<RangeOrder<T>>,

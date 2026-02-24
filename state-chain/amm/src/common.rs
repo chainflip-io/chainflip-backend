@@ -24,15 +24,44 @@ use sp_core::{U256, U512};
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
-#[derive(Debug, PartialEq, Eq)]
+// #[derive(Debug, PartialEq, Eq)]
+// pub struct LimitOrder<AccountId> {
+// 	pub base_asset: Asset,
+// 	pub quote_asset: Asset,
+// 	pub account_id: AccountId,
+// 	pub side: Side,
+// 	pub order_id: OrderId,
+// 	pub tick: Tick,
+// 	pub amount: AssetAmount,
+// }
+
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct LimitOrder<AccountId> {
+	pub lp: AccountId,
+	pub id: Amount, // TODO: Intro type alias
+	pub tick: Tick,
+	pub sell_amount: Amount,
+	pub fees_earned: Amount,
+	pub original_sell_amount: Amount,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct FullyScopedLimitOrder<AccountId> {
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
-	pub account_id: AccountId,
 	pub side: Side,
-	pub order_id: OrderId,
-	pub tick: Tick,
-	pub amount: AssetAmount,
+	pub order: LimitOrder<AccountId>,
 }
 
 #[derive(Debug)]
