@@ -7,15 +7,13 @@ use crate::electoral_systems::{
 	},
 	state_machine::{
 		consensus::{ConsensusMechanism, SuccessThreshold},
-		core::TypesFor,
 		state_machine::AbstractApi,
 	},
 };
 use cf_traits::hook_test_utils::EmptyHook;
+use cf_utilities::define_empty_struct;
 
-struct BlockHeightWitnesserDefinition;
-
-type BHTypes = TypesFor<BlockHeightWitnesserDefinition>;
+define_empty_struct! { struct BHTypes; }
 
 impl ChainTypes for BHTypes {
 	type ChainBlockNumber = u64;

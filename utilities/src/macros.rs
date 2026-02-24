@@ -50,12 +50,14 @@ macro_rules! define_empty_struct {
 		[$name:ident $(: $path:path)?, $($rest:tt)*]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name $(:$path)?, ]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
@@ -63,12 +65,14 @@ macro_rules! define_empty_struct {
 		[$name:ident: $l:lifetime, $($rest:tt)*]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name:$l, ]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
@@ -77,17 +81,18 @@ macro_rules! define_empty_struct {
 	( [$name:ident $(: $path:path)? >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name $(:$path)?, >; ] $($rest)* }};
 	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
-
 	// the main branch
 	(
 		[>;]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::derive_common_traits!{
-			#[derive(TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
+			$(#[$meta])*
 			$vis struct $struct_name<$($names_and_bounds)*>
 			(
 				sp_std::marker::PhantomData
@@ -105,13 +110,40 @@ macro_rules! define_empty_struct {
 			}
 		}
 	};
+	// This is a special case handling structs without type parameters
 	(
-		$vis:vis struct $struct_name:ident<$($rest:tt)*
+		$(#[$meta:meta])* $vis:vis struct $struct_name:ident;
+	) => {
+		cf_utilities::derive_common_traits!{
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(PartialOrd, Ord)]
+			$(#[$meta])*
+			$vis struct $struct_name {}
+		}
+		#[cfg(test)]
+		impl proptest::prelude::Arbitrary for $struct_name {
+			type Parameters = ();
+			type Strategy = impl proptest::prelude::Strategy<Value = Self> + Clone + Sync + Send;
+			fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+				proptest::prelude::Just(Default::default())
+			}
+		}
+		impl cf_traits::Validate for $struct_name {
+			type Error = ();
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				Ok(())
+			}
+		}
+	};
+	// This is the entry point for structs with type parameters
+	(
+		$(#[$meta:meta])* $vis:vis struct $struct_name:ident<$($rest:tt)*
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[]
 			[]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
