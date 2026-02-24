@@ -25,7 +25,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressString, ForeignChainAddressHumanreadable, ToHumanreadableAddress},
-	eth::Address as EthereumAddress,
+	evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
 use cf_node_client::events_decoder;
@@ -110,6 +110,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod ingress_egress_tracker;
 pub mod lp;
 pub mod monitoring;
 pub mod order_fills;
@@ -254,7 +255,7 @@ pub enum RpcAccountInfo {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		btc_vault_deposit_address: Option<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
-		bound_fee_withdrawal_address: Option<EthereumAddress>,
+		bound_fee_withdrawal_address: Option<EvmAddress>,
 	},
 	LiquidityProvider {
 		refund_addresses: BTreeMap<ForeignChain, Option<ForeignChainAddressHumanreadable>>,
@@ -295,6 +296,7 @@ impl From<account_info_before_api_v7::RpcAccountInfo> for RpcAccountInfoWrapper 
 				},
 				role_specific: RpcAccountInfo::Unregistered {},
 			},
+			#[expect(deprecated)]
 			OldRpcAccountInfo::Broker {
 				flip_balance,
 				bond,
@@ -420,9 +422,9 @@ pub mod account_info_before_api_v7 {
 			is_qualified: bool,
 			is_online: bool,
 			is_bidding: bool,
-			bound_redeem_address: Option<EthereumAddress>,
+			bound_redeem_address: Option<EvmAddress>,
 			apy_bp: Option<u32>,
-			restricted_balances: BTreeMap<EthereumAddress, NumberOrHex>,
+			restricted_balances: BTreeMap<EvmAddress, NumberOrHex>,
 			estimated_redeemable_balance: NumberOrHex,
 		},
 	}
@@ -511,9 +513,9 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 	pub apy_bp: Option<u32>,
-	pub restricted_balances: BTreeMap<EthereumAddress, u128>,
+	pub restricted_balances: BTreeMap<EvmAddress, u128>,
 	pub estimated_redeemable_balance: NumberOrHex,
 }
 
@@ -658,6 +660,7 @@ pub struct SwappingEnvironment {
 	max_swap_request_duration_blocks: u32,
 	minimum_chunk_size: any::AssetMap<NumberOrHex>,
 	network_fees: NetworkFees,
+	default_oracle_price_protection: any::AssetMap<Option<BasisPoints>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -810,6 +813,12 @@ mod boost_pool_rpc {
 type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
+
+pub(crate) use ingress_egress_tracker::convert_raw_witnessed_events;
+pub use ingress_egress_tracker::{
+	BroadcastWitnessInfo, DepositDetails, RpcDepositWitnessInfo, RpcTransactionId,
+	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
+};
 
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
@@ -1342,7 +1351,7 @@ pub trait CustomApi {
 	#[method(name = "evm_calldata")]
 	fn cf_evm_calldata(
 		&self,
-		caller: EthereumAddress,
+		caller: EvmAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails>;
@@ -1374,6 +1383,14 @@ pub trait CustomApi {
 		compact_reply: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<ControlledVaultAddresses>;
+	/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+	/// from the block witnesser election's unsynchronized state.
+	#[method(name = "ingress_egress_events")]
+	fn cf_ingress_egress_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse>;
 }
 
 /// An RPC extension for the state chain node.
@@ -1667,6 +1684,7 @@ where
 	) -> RpcResult<pallet_cf_pools::before_v13::PoolInfo> {
 		flatten_into_error(self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 13 {
+				#[expect(deprecated)]
 				api.cf_pool_info_before_version_13(hash, base_asset, quote_asset)
 			} else {
 				api.cf_pool_info(hash, base_asset, quote_asset).map(|info| info.map(Into::into))
@@ -1982,6 +2000,7 @@ where
 								reputation_points,
 								keyholder_epochs,
 								is_current_authority,
+								#[expect(deprecated)]
 								is_current_backup,
 								is_qualified,
 								is_online,
@@ -2030,6 +2049,7 @@ where
 			reputation_points: account_info.reputation_points,
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
+			#[expect(deprecated)]
 			is_current_backup: account_info.is_current_backup,
 			is_qualified: account_info.is_qualified,
 			is_online: account_info.is_online,
@@ -2215,6 +2235,7 @@ where
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
+				#[expect(deprecated)]
 				network_fee_hundredth_pips: api
 					.cf_network_fees(hash)?
 					.regular_network_fee
@@ -2227,6 +2248,7 @@ where
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
 				network_fees: api.cf_network_fees(hash)?,
+				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
 			})
 		})
 	}
@@ -2712,7 +2734,7 @@ where
 
 	fn cf_evm_calldata(
 		&self,
-		caller: EthereumAddress,
+		caller: EvmAddress,
 		call: state_chain_runtime::chainflip::ethereum_sc_calls::EthereumSCApi<NumberOrHex>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<EvmCallDetails> {
@@ -3001,6 +3023,24 @@ where
 				api.cf_oracle_prices(hash, base_and_quote_asset).map_err(CfApiError::from)?
 			})
 		})
+	}
+	fn cf_ingress_egress_events(
+		&self,
+		chain: ForeignChain,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcWitnessedEventsResponse> {
+		let hash = self.rpc_backend.unwrap_or_best(at);
+		let raw = self
+			.rpc_backend
+			.with_runtime_api(Some(hash), |api, hash| api.cf_ingress_egress_events(hash, chain))?
+			.map_err(CfApiError::from)?;
+		let network = self
+			.rpc_backend
+			.with_runtime_api(Some(hash), |api, hash| api.cf_network_environment(hash))?;
+
+		let storage_query = StorageQueryApi::new(&self.rpc_backend.client);
+		storage_query
+			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
 	}
 }
 

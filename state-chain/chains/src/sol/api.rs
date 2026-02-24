@@ -19,7 +19,7 @@ use crate::{
 	RejectError, SetGovKeyWithAggKeyError, TransferForRejection,
 };
 use cf_runtime_utilities::log_or_panic;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use core::marker::PhantomData;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
@@ -45,19 +45,19 @@ use crate::{
 	TransferFallbackError,
 };
 
-use cf_primitives::{EgressId, ForeignChain, GasAmount};
+use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ComputePrice;
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct DurableNonce;
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct AllNonceAccounts;
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct ApiEnvironment;
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentAggKey;
-#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, DecodeWithMemTracking, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CurrentOnChainKey;
 
 pub type DurableNonceAndAccount = (SolAddress, SolHash);
@@ -66,6 +66,7 @@ pub type DurableNonceAndAccount = (SolAddress, SolHash);
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	PartialEq,
 	RuntimeDebug,
 	TypeInfo,
@@ -147,7 +148,7 @@ pub trait RecoverDurableNonce {
 }
 
 /// Errors that can arise when building Solana Transactions.
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug)]
 pub enum SolanaTransactionBuildingError {
 	CannotLookupApiEnvironment,
 	CannotLookupCurrentAggKey,
@@ -176,7 +177,16 @@ impl From<SolanaTransactionBuildingError> for AllBatchError {
 }
 
 /// Indicates the purpose of the Solana Api call.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub enum SolanaTransactionType {
 	BatchFetch,
 	Transfer,
@@ -195,7 +205,16 @@ pub enum SolanaTransactionType {
 }
 
 /// The Solana Api call. Contains a call_type and the actual Transaction itself.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub struct SolanaApi<Environment: 'static> {
 	pub call_type: SolanaTransactionType,
@@ -213,6 +232,7 @@ pub struct SolanaApi<Environment: 'static> {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -393,7 +413,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		ccm_additional_data: VersionedSolanaCcmAdditionalData,
 	) -> Result<Self, SolanaTransactionBuildingError> {
@@ -724,7 +744,7 @@ impl<Env: 'static + SolanaEnvironment> ExecutexSwapAndCall<Solana> for SolanaApi
 		transfer_param: TransferAssetParams<Solana>,
 		source_chain: cf_primitives::ForeignChain,
 		_source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -995,6 +1015,7 @@ impl<Environment: 'static + SolanaEnvironment> RejectCall<Solana> for SolanaApi<
 	Clone,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Ord,
 	PartialOrd,

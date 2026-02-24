@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_chains::{
-	evm::{EvmCrypto, EvmTransactionMetadata, SchnorrVerificationComponents, TransactionFee},
+	evm::{
+		Address as EvmAddress, EvmChain, EvmCrypto, EvmTransactionMetadata,
+		SchnorrVerificationComponents, TransactionFee,
+	},
 	instances::ChainInstanceFor,
 	Chain,
 };
@@ -25,7 +28,7 @@ use ethers::{
 	types::{Bloom, TransactionReceipt},
 };
 use futures_core::Future;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use tracing::{info, trace};
 
 use super::{
@@ -37,7 +40,10 @@ use super::{
 };
 use crate::{
 	evm::retry_rpc::EvmRetryRpcApi,
-	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
+	witness::{
+		common::{RuntimeCallHasChain, RuntimeHasChain},
+		evm::EvmTransactionClient,
+	},
 };
 use num_traits::Zero;
 
@@ -50,71 +56,37 @@ impl Key {
 	/// Equivalent to secp256k1::PublicKey.serialize()
 	pub fn serialize(&self) -> [u8; 33] {
 		let mut bytes: [u8; 33] = [0; 33];
-		self.pub_key_x.to_big_endian(&mut bytes[1..]);
 		bytes[0] = match self.pub_key_y_parity.is_zero() {
 			true => 2,
 			false => 3,
 		};
+		bytes[1..33].copy_from_slice(&self.pub_key_x.to_big_endian());
 		bytes
 	}
 }
 
 use anyhow::Result;
 
-use crate::evm::{
-	cached_rpc::{EvmCachingClient, EvmRetryRpcApiWithResult},
-	rpc::EvmRpcSigningClient,
-};
-use pallet_cf_broadcast::{
-	SignerIdFor, TransactionFeeFor, TransactionMetadataFor, TransactionOutIdFor, TransactionRefFor,
-};
-use pallet_cf_vaults::{AggKeyFor, ChainBlockNumberFor, TransactionInIdFor};
-use state_chain_runtime::{chainflip::witnessing::ethereum_elections::KeyManagerEvent, Runtime};
+use pallet_cf_broadcast::TransactionConfirmation;
+use pallet_cf_vaults::VaultKeyRotatedExternally;
+use state_chain_runtime::chainflip::witnessing::pallet_hooks::{self, EvmKeyManagerEvent};
 
-use super::contract_common::Event as ContractEvent;
+use crate::evm::event::Event;
 
 ////////////////////////////////////////////////////////
 // Elections code
 
-/// Configuration trait for chain-specific key manager event handling.
-pub trait KeyManagerEventConfig {
-	type Chain: Chain<
-		ChainAccount = H160,
-		ChainCrypto = cf_chains::evm::EvmCrypto,
-		ChainBlockNumber = u64,
-		TransactionFee = TransactionFee,
-		TransactionMetadata = EvmTransactionMetadata,
-		TransactionRef = H256,
-	>;
-	type Instance: 'static;
-
-	fn client(&self) -> &EvmCachingClient<EvmRpcSigningClient>;
-}
-
-pub type KeyManagerEventResult<I> = KeyManagerEvent<
-	AggKeyFor<Runtime, I>,
-	ChainBlockNumberFor<Runtime, I>,
-	TransactionInIdFor<Runtime, I>,
-	TransactionOutIdFor<Runtime, I>,
-	SignerIdFor<Runtime, I>,
-	TransactionFeeFor<Runtime, I>,
-	TransactionMetadataFor<Runtime, I>,
-	TransactionRefFor<Runtime, I>,
->;
-
-pub async fn handle_key_manager_events<Config>(
-	config: &Config,
-	events: Vec<ContractEvent<KeyManagerEvents>>,
+pub async fn handle_key_manager_events<
+	T: pallet_hooks::Config<I, TargetChain: EvmChain>,
+	I: 'static,
+>(
+	client: &impl EvmTransactionClient,
+	events: Vec<Event<KeyManagerEvents>>,
 	block_height: u64,
-) -> Result<Vec<KeyManagerEventResult<Config::Instance>>>
-where
-	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
-		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
-{
+) -> Result<Vec<EvmKeyManagerEvent<T, I>>> {
 	Ok(futures::future::try_join_all(events.into_iter().map(|event| {
-		handle_key_manager_event::<Config>(
-			config,
+		handle_key_manager_event::<T, I>(
+			client,
 			event.event_parameters,
 			event.tx_hash,
 			block_height,
@@ -126,28 +98,23 @@ where
 	.collect())
 }
 
-async fn handle_key_manager_event<Config>(
-	config: &Config,
+async fn handle_key_manager_event<T: pallet_hooks::Config<I, TargetChain: EvmChain>, I: 'static>(
+	client: &impl EvmTransactionClient,
 	event: KeyManagerEvents,
 	tx_hash: H256,
 	block_height: u64,
-) -> Result<Option<KeyManagerEventResult<Config::Instance>>>
-where
-	Config: KeyManagerEventConfig,
-	Runtime: pallet_cf_vaults::Config<Config::Instance, TargetChain = Config::Chain>
-		+ pallet_cf_broadcast::Config<Config::Instance, TargetChain = Config::Chain>,
-{
+) -> Result<Option<EvmKeyManagerEvent<T, I>>> {
 	Ok(Some(match event {
 		KeyManagerEvents::AggKeySetByGovKeyFilter(AggKeySetByGovKeyFilter {
 			new_agg_key, ..
-		}) => KeyManagerEventResult::<Config::Instance>::AggKeySetByGovKey {
+		}) => EvmKeyManagerEvent::AggKeySetByGovKey(VaultKeyRotatedExternally {
 			new_public_key: cf_chains::evm::AggKey::from_pubkey_compressed(new_agg_key.serialize()),
 			block_number: block_height,
 			tx_id: tx_hash,
-		},
+		}),
 		KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter { sig_data, .. }) => {
 			let TransactionReceipt { gas_used, effective_gas_price, from, to, .. } =
-				config.client().transaction_receipt(tx_hash).await?;
+				client.transaction_receipt(tx_hash).await?;
 
 			let gas_used = gas_used
 				.ok_or_else(|| {
@@ -165,7 +132,7 @@ where
 				.try_into()
 				.map_err(anyhow::Error::msg)?;
 
-			let transaction = config.client().get_transaction(tx_hash).await?;
+			let transaction = client.get_transaction(tx_hash).await?;
 			let tx_metadata = EvmTransactionMetadata {
 				contract: to.expect("To have a contract"),
 				max_fee_per_gas: transaction.max_fee_per_gas,
@@ -173,19 +140,19 @@ where
 				gas_limit: Some(transaction.gas),
 			};
 
-			KeyManagerEventResult::<Config::Instance>::SignatureAccepted {
+			EvmKeyManagerEvent::SignatureAccepted(TransactionConfirmation {
 				tx_out_id: SchnorrVerificationComponents {
-					s: sig_data.sig.into(),
+					s: sig_data.sig.to_big_endian(),
 					k_times_g_address: sig_data.k_times_g_address.into(),
 				},
 				signer_id: from,
 				tx_fee: TransactionFee { effective_gas_price, gas_used },
 				tx_metadata,
 				transaction_ref: transaction.hash,
-			}
+			})
 		},
-		KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message }) =>
-			KeyManagerEventResult::<Config::Instance>::GovernanceAction { call_hash: message },
+		KeyManagerEvents::GovernanceActionFilter(GovernanceActionFilter { message: call_hash }) =>
+			EvmKeyManagerEvent::SetWhitelistedCallHash(call_hash),
 		_ => return Ok(None),
 	}))
 }
@@ -199,14 +166,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		self,
 		process_call: ProcessCall,
 		eth_rpc: EvmRpcClient,
-		contract_address: H160,
+		contract_address: EvmAddress,
 	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		// These are the types for EVM chains, so this adapter can be shared by all EVM chains.
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
 		Inner::Chain: Chain<
 			ChainCrypto = EvmCrypto,
-			ChainAccount = H160,
+			ChainAccount = EvmAddress,
 			TransactionFee = TransactionFee,
 			TransactionMetadata = EvmTransactionMetadata,
 			TransactionRef = H256,
@@ -248,7 +215,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								new_agg_key.serialize(),
 							),
 							block_number: header.index,
-							tx_id: event.tx_hash,
+							tx_id: H256(event.tx_hash.0),
 						}
 						.into(),
 						KeyManagerEvents::SignatureAcceptedFilter(SignatureAcceptedFilter {
@@ -289,10 +256,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 								ChainInstanceFor<Inner::Chain>,
 							>::transaction_succeeded {
 								tx_out_id: SchnorrVerificationComponents {
-									s: sig_data.sig.into(),
+									s: sig_data.sig.to_big_endian(),
 									k_times_g_address: sig_data.k_times_g_address.into(),
 								},
-								signer_id: from,
+								signer_id: from.0.into(),
 								tx_fee: TransactionFee { effective_gas_price, gas_used },
 								tx_metadata,
 								transaction_ref: transaction.hash,
@@ -322,14 +289,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 #[cfg(test)]
 mod tests {
-
+	use super::*;
 	use std::{path::PathBuf, str::FromStr};
 
 	use cf_chains::{Chain, Ethereum};
 	use cf_primitives::AccountRole;
 	use cf_utilities::task_scope::task_scope;
 	use futures_util::FutureExt;
-	use sp_core::{H160, U256};
+	use sp_core::U256;
 
 	use super::super::source::EvmSource;
 
@@ -388,7 +355,7 @@ mod tests {
 							println!("Witnessed call: {:?}", call);
 						},
 						retry_client,
-						H160::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
+						EvmAddress::from_str("a16e02e87b7454126e5e10d957a927a7f5b5d2be").unwrap(),
 					)
 					.spawn(scope);
 

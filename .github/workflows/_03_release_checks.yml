@@ -67,9 +67,41 @@ jobs:
         shell: bash
         run: ./ci/scripts/check_runtime_spec_version.sh berghain
 
+  check-tag-on-legit-branch:
+    runs-on: namespace-profile-default
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Check tag points to a commit on the release branch 🔍
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          COMMIT="${{ github.sha }}"
+
+          # Acceptable release branches for a tag like 2.0.9:
+          #   release/2.0   (major.minor)
+          #   release/2.0.9 (exact patch)
+          MAJOR_MINOR=$(echo "$TAG" | sed 's/\.[^.]*$//')
+          BRANCHES=("release/${MAJOR_MINOR}" "release/${TAG}")
+
+          for BRANCH in "${BRANCHES[@]}"; do
+            git fetch origin "${BRANCH}" 2>/dev/null || true
+            if git merge-base --is-ancestor "$COMMIT" "origin/${BRANCH}" 2>/dev/null; then
+              echo "Tag ${TAG} points to a commit on ${BRANCH}"
+              exit 0
+            fi
+          done
+
+          echo "Tagged commit (${COMMIT}) is not reachable from release/${MAJOR_MINOR} or release/${TAG}."
+          echo "Tags must be created from commits on the corresponding release/X.Y or release/X.Y.Z branch."
+          exit 1
+
   notify-discord-on-failure:
     runs-on: namespace-profile-default
-    needs: [check-version, check-changelog, check-runtime-spec-version]
+    needs: [check-version, check-changelog, check-runtime-spec-version, check-tag-on-legit-branch]
     if: failure()
     steps:
       - name: Notify on failed bouncer 📢

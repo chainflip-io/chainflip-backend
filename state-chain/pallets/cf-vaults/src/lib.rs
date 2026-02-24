@@ -18,15 +18,17 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{Chain, ChainCrypto, SetAggKeyWithAggKey};
+use cf_chains::{instances::PalletInstanceAlias, Chain, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
 	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex,
 	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
+use cf_utilities::derive_common_traits_no_bounds;
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
+use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use sp_std::prelude::*;
 
@@ -57,7 +59,17 @@ pub type ThresholdSignatureFor<T, I = ()> =
 	<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::ThresholdSignature;
 
 /// The current status of a vault rotation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebugNoBound, EnumVariant)]
+#[derive(
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	RuntimeDebugNoBound,
+	EnumVariant,
+)]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultActivationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
@@ -85,10 +97,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config<I: 'static = ()>: ChainflipWithTargetChain<I> {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<<Self::TargetChain as Chain>::ChainCrypto>;
 
@@ -165,11 +173,15 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			_tx_id: TransactionInIdFor<T, I>,
+			tx_id: TransactionInIdFor<T, I>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::inner_vault_key_rotated_externally(new_public_key, block_number);
+			Self::inner_vault_key_rotated_externally(VaultKeyRotatedExternally {
+				new_public_key,
+				block_number,
+				tx_id,
+			});
 
 			Ok(())
 		}
@@ -219,6 +231,17 @@ pub mod pallet {
 	}
 }
 
+derive_common_traits_no_bounds! {
+	#[derive_where(PartialOrd, Ord; )]
+	#[derive(GenericTypeInfo)]
+	#[expand_name_with(<T::TargetChain as PalletInstanceAlias>::TYPE_INFO_SUFFIX)]
+	pub struct VaultKeyRotatedExternally<T: Config<I>, I: 'static> {
+		pub new_public_key: AggKeyFor<T, I>,
+		pub block_number: ChainBlockNumberFor<T, I>,
+		pub tx_id: TransactionInIdFor<T, I>
+	}
+}
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn activate_new_key_for_chain(block_number: ChainBlockNumberFor<T, I>) {
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
@@ -230,8 +253,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn inner_vault_key_rotated_externally(
-		new_public_key: AggKeyFor<T, I>,
-		block_number: ChainBlockNumberFor<T, I>,
+		VaultKeyRotatedExternally { new_public_key, block_number, tx_id: _ }: VaultKeyRotatedExternally<T, I>,
 	) {
 		Self::activate_new_key_for_chain(block_number);
 

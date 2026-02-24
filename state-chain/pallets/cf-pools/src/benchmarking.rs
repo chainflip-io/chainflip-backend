@@ -291,7 +291,7 @@ mod benchmarks {
 
 		for (i, asset) in Asset::all().filter(|asset| *asset != STABLE_ASSET).enumerate() {
 			let asset_pair =
-				AssetPair::try_new::<T>(asset, STABLE_ASSET).expect("Asset Pair must succeed");
+				asset_pair_try_from::<T>(asset, STABLE_ASSET).expect("Asset Pair must succeed");
 			if (i as u32) < n {
 				assert_eq!(MaximumPriceImpact::<T>::get(asset_pair), Some(LIMIT));
 			} else {

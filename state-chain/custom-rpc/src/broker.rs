@@ -20,7 +20,7 @@ use crate::{
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
 };
-pub use cf_chains::eth::Address as EthereumAddress;
+pub use cf_chains::evm::Address as EvmAddress;
 use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
@@ -43,8 +43,8 @@ use sc_client_api::{
 	blockchain::HeaderMetadata, Backend, BlockBackend, BlockchainEvents, ExecutorProvider,
 	HeaderBackend, StorageProvider,
 };
-use sc_transaction_pool::FullPool;
-use sc_transaction_pool_api::{TransactionStatus, TxIndex};
+use sc_transaction_pool::TransactionPoolWrapper;
+use sc_transaction_pool_api::{TransactionStatus, TransactionStatusStreamFor, TxIndex};
 use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
@@ -55,7 +55,7 @@ use state_chain_runtime::{
 	},
 	AccountId, Hash, Nonce, RuntimeCall,
 };
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 pub mod broker_crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -116,7 +116,7 @@ where
 		client: Arc<C>,
 		backend: Arc<BE>,
 		executor: Arc<dyn sp_core::traits::SpawnNamed>,
-		pool: Arc<FullPool<B, C>>,
+		pool: Arc<TransactionPoolWrapper<B, C>>,
 		pair: sp_core::sr25519::Pair,
 	) -> Self {
 		Self {
@@ -250,29 +250,29 @@ where
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
-		let mut status_stream = self
-			.signed_pool_client
-			.submit_watch(
-				RuntimeCall::from(
-					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
-						source_asset,
-						destination_asset,
-						destination_address: destination_address
-							.try_parse_to_encoded_address(destination_asset.into())?,
-						broker_commission,
-						channel_metadata,
-						boost_fee: boost_fee.unwrap_or_default(),
-						affiliate_fees: affiliate_fees.unwrap_or_default(),
-						refund_parameters: refund_parameters.try_map_address(|addr| {
-							addr.try_parse_to_encoded_address(source_asset.into())
-						})?,
-						dca_parameters,
-					},
-				),
-				true,
-			)
-			.await
-			.map_err(CfApiError::from)?;
+		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
+			self.signed_pool_client
+				.submit_watch(
+					RuntimeCall::from(
+						pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
+							source_asset,
+							destination_asset,
+							destination_address: destination_address
+								.try_parse_to_encoded_address(destination_asset.into())?,
+							broker_commission,
+							channel_metadata,
+							boost_fee: boost_fee.unwrap_or_default(),
+							affiliate_fees: affiliate_fees.unwrap_or_default(),
+							refund_parameters: refund_parameters.try_map_address(|addr| {
+								addr.try_parse_to_encoded_address(source_asset.into())
+							})?,
+							dca_parameters,
+						},
+					),
+					true,
+				)
+				.await
+				.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
 		let pre_allocated_channels = get_preallocated_channels(
@@ -561,10 +561,7 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	async fn register_affiliate(
-		&self,
-		withdrawal_address: EthereumAddress,
-	) -> RpcResult<AccountId32> {
+	async fn register_affiliate(&self, withdrawal_address: EvmAddress) -> RpcResult<AccountId32> {
 		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(
@@ -669,23 +666,23 @@ where
 		boost_fee: Option<BasisPoints>,
 		refund_address: AddressString,
 	) -> RpcResult<AccountCreationDepositAddress> {
-		let mut status_stream = self
-			.signed_pool_client
-			.submit_watch(
-				RuntimeCall::from(
-					pallet_cf_swapping::Call::request_account_creation_deposit_address {
-						signature_data,
-						transaction_metadata,
-						asset,
-						boost_fee: boost_fee.unwrap_or_default(),
-						refund_address: refund_address
-							.try_parse_to_encoded_address(asset.into())?,
-					},
-				),
-				true,
-			)
-			.await
-			.map_err(CfApiError::from)?;
+		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
+			self.signed_pool_client
+				.submit_watch(
+					RuntimeCall::from(
+						pallet_cf_swapping::Call::request_account_creation_deposit_address {
+							signature_data,
+							transaction_metadata,
+							asset,
+							boost_fee: boost_fee.unwrap_or_default(),
+							refund_address: refund_address
+								.try_parse_to_encoded_address(asset.into())?,
+						},
+					),
+					true,
+				)
+				.await
+				.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
 		let pre_allocated_channels = get_preallocated_channels(
@@ -715,7 +712,7 @@ where
 		Err(CfApiError::from(PoolClientError::UnexpectedEndOfStream))?
 	}
 
-	async fn bind_fee_withdrawal_address(&self, address: EthereumAddress) -> RpcResult<H256> {
+	async fn bind_fee_withdrawal_address(&self, address: EvmAddress) -> RpcResult<H256> {
 		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
 			.submit_watch_dynamic(

@@ -228,7 +228,7 @@ fn cannot_double_redeem() {
 			<Error<Test>>::PendingRedemption
 		);
 
-		assert_ok!(Funding::redeemed(ALICE, amount_a1));
+		assert_ok!(Funding::redeemed(ALICE, amount_a1, Default::default()));
 		assert!(PendingRedemptions::<Test>::get(&ALICE).is_none());
 
 		// Should now be able to redeem the rest.
@@ -239,7 +239,11 @@ fn cannot_double_redeem() {
 			Default::default()
 		));
 
-		assert_ok!(Funding::redeemed(ALICE, amount_a2 - RedemptionTax::<Test>::get(),));
+		assert_ok!(Funding::redeemed(
+			ALICE,
+			amount_a2 - RedemptionTax::<Test>::get(),
+			Default::default()
+		));
 		assert!(PendingRedemptions::<Test>::get(&ALICE).is_none());
 
 		// Remaining amount should be zero
@@ -278,10 +282,13 @@ fn redemption_cannot_occur_without_funding_first() {
 		assert_eq!(MockFundingBroadcaster::get_pending_api_calls().len(), 1);
 
 		// Invalid Redeemed Event from Ethereum: wrong account.
-		assert_noop!(Funding::redeemed(BOB, FUNDING_AMOUNT), <Error<Test>>::NoPendingRedemption);
+		assert_noop!(
+			Funding::redeemed(BOB, FUNDING_AMOUNT, Default::default()),
+			<Error<Test>>::NoPendingRedemption
+		);
 
 		// Valid Redeemed Event from Ethereum.
-		assert_ok!(Funding::redeemed(ALICE, REDEEMED_AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, REDEEMED_AMOUNT, Default::default()));
 
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -302,7 +309,11 @@ fn redemption_cannot_occur_without_funding_first() {
 				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
-			RuntimeEvent::Funding(Event::RedemptionSettled(ALICE, REDEEMED_AMOUNT))
+			RuntimeEvent::Funding(Event::RedemptionSettled {
+				account_id: ALICE,
+				amount: REDEEMED_AMOUNT,
+				tx_hash: _
+			})
 		);
 	});
 }
@@ -358,7 +369,7 @@ fn cannot_redeem_bond() {
 		));
 
 		// Even if she redeems, the remaining 100 are blocked
-		assert_ok!(Funding::redeemed(ALICE, AMOUNT - BOND));
+		assert_ok!(Funding::redeemed(ALICE, AMOUNT - BOND, Default::default()));
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -500,7 +511,7 @@ fn redemption_expiry_removes_redemption() {
 			RESTRICTED_AMOUNT - REDEMPTION_TAX - TO_REDEEM
 		);
 
-		assert_ok!(Funding::redemption_expired(ALICE));
+		assert_ok!(Funding::redemption_expired(ALICE, Default::default()));
 
 		// Tax was paid, rest is returned.
 		assert_eq!(Flip::total_balance_of(&ALICE), TOTAL_FUNDS - REDEMPTION_TAX);
@@ -510,7 +521,10 @@ fn redemption_expiry_removes_redemption() {
 			RESTRICTED_AMOUNT - REDEMPTION_TAX
 		);
 
-		assert_noop!(Funding::redeemed(ALICE, TOTAL_FUNDS), Error::<Test>::NoPendingRedemption);
+		assert_noop!(
+			Funding::redeemed(ALICE, TOTAL_FUNDS, Default::default()),
+			Error::<Test>::NoPendingRedemption
+		);
 
 		// Success, can request redemption again since the last one expired.
 		// Note that restricted balance is REDEMPTION_TAX less after refund, so adjust the
@@ -554,7 +568,7 @@ fn restore_restricted_balance_when_redemption_expires() {
 			// Restricted funds and total balance should have been reduced.
 			assert!(Flip::total_balance_of(&ALICE) < TOTAL_FUNDS);
 
-			assert_ok!(Funding::redemption_expired(ALICE,));
+			assert_ok!(Funding::redemption_expired(ALICE, Default::default()));
 
 			let (total_funds, restricted_amount) = if redeem_amount == RedemptionAmount::Max {
 				(TOTAL_FUNDS, RESTRICTED_AMOUNT)
@@ -686,7 +700,7 @@ fn restricted_funds_pay_redemption_tax() {
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, REDEEM_AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, REDEEM_AMOUNT, Default::default()));
 		assert_eq!(
 			*RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
 			RESTRICTED_AMOUNT - REDEEM_AMOUNT - REDEMPTION_TAX
@@ -751,7 +765,7 @@ fn vesting_contracts_test_case() {
 			UNRESTRICTED_ADDRESS,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, 50));
+		assert_ok!(Funding::redeemed(ALICE, 50, Default::default()));
 		// Try to redeem 100 from contract 1
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -759,7 +773,7 @@ fn vesting_contracts_test_case() {
 			VESTING_CONTRACT_1,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, 100));
+		assert_ok!(Funding::redeemed(ALICE, 100, Default::default()));
 		// Try to redeem 400 from contract 2
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -767,7 +781,7 @@ fn vesting_contracts_test_case() {
 			VESTING_CONTRACT_2,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, 400));
+		assert_ok!(Funding::redeemed(ALICE, 400, Default::default()));
 	});
 }
 
@@ -898,7 +912,7 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 			RESTRICTED_ADDRESS,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, AMOUNT, Default::default()));
 		// Redeem to an unrestricted address should fail because the account has a redeem address.
 		assert_noop!(
 			Funding::redeem(
@@ -964,7 +978,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			REDEEM_ADDRESS,
 			Some(EXECUTOR_ADDRESS)
 		));
-		assert_ok!(Funding::redeemed(ALICE, AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, AMOUNT, Default::default()));
 		// Redeem using restricted address should complete even with wrong executor and bound redeem
 		// address
 		assert_ok!(Funding::redeem(
@@ -973,7 +987,7 @@ fn redeem_funds_to_restricted_address_overrides_bound_and_executor_restrictions(
 			RESTRICTED_ADDRESS,
 			Some(RANDOM_ADDRESS)
 		));
-		assert_ok!(Funding::redeemed(ALICE, AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, AMOUNT, Default::default()));
 	});
 }
 
@@ -1642,7 +1656,7 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 			RESTRICTED_ADDRESS_1,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, REDEEM_AMOUNT));
+		assert_ok!(Funding::redeemed(ALICE, REDEEM_AMOUNT, Default::default()));
 		assert_eq!(
 			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1),
 			Some(&(RESTRICTED_AMOUNT - REDEEM_AMOUNT - REDEMPTION_TAX))
@@ -1653,7 +1667,7 @@ fn can_redeem_if_balance_lower_than_restricted_funds() {
 			RESTRICTED_ADDRESS_1,
 			Default::default()
 		));
-		assert_ok!(Funding::redeemed(ALICE, 80));
+		assert_ok!(Funding::redeemed(ALICE, 80, Default::default()));
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -1741,6 +1755,7 @@ fn account_references_must_be_zero_for_full_redeem() {
 		assert_ok!(Funding::redeemed(
 			ALICE,
 			FUNDING_AMOUNT,
+			Default::default()
 		),);
 
 		assert_eq!(

@@ -132,7 +132,6 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 const OPERATOR_SETTINGS: OperatorSettings =
 	OperatorSettings { fee_bps: 2500, delegation_acceptance: DelegationAcceptance::Allow };
 
-#[expect(clippy::multiple_bound_locations)]
 #[benchmarks(where T: RuntimeConfig)]
 mod benchmarks {
 	use super::*;
@@ -224,7 +223,7 @@ mod benchmarks {
 		let last_slot = 1_000u64;
 
 		SystemPallet::<T>::initialize(
-			&1u32.into(),
+			&(frame_system::Pallet::<T>::current_block_number() + One::one()),
 			&SystemPallet::<T>::parent_hash(),
 			&Digest { logs: vec![DigestItem::PreRuntime(*b"aura", last_slot.encode())] },
 		);
@@ -233,7 +232,7 @@ mod benchmarks {
 
 		let expected_slot = last_slot + 1;
 		SystemPallet::<T>::initialize(
-			&1u32.into(),
+			&(frame_system::Pallet::<T>::current_block_number() + One::one()),
 			&SystemPallet::<T>::parent_hash(),
 			&Digest {
 				logs: vec![DigestItem::PreRuntime(*b"aura", (expected_slot + m as u64).encode())],

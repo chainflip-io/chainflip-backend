@@ -10,7 +10,6 @@ import {
   TransactionOrigin,
 } from 'shared/utils';
 import { send } from 'shared/send';
-import { observeEvents } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';

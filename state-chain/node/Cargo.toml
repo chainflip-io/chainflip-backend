@@ -87,18 +87,24 @@ sc-rpc-spec-v2 = { workspace = true, default-features = true }
 frame-benchmarking = { workspace = true, default-features = true }
 frame-benchmarking-cli = { workspace = true, default-features = true }
 
+# This is a transitive dependency of of frame-benchmarking-cli. We need to specify it here
+# so that we can correctly activate the "try-runtime" feature for it.
+pallet-staking = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509", default-features = false, optional = true }
+
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
 
 [features]
 default = []
 runtime-benchmarks = [
-	"state-chain-runtime/runtime-benchmarks",
+	"cf-chains/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-benchmarking-cli/runtime-benchmarks",
-	"cf-chains/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-transaction-payment/runtime-benchmarks",
+	"sc-service/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"state-chain-runtime/runtime-benchmarks",
 ]
 try-runtime = [
 	"state-chain-runtime/try-runtime",
@@ -106,6 +112,7 @@ try-runtime = [
 	"pallet-transaction-payment/try-runtime",
 	"sp-runtime/try-runtime",
 	"cf-chains/try-runtime",
+	"pallet-staking/try-runtime",
 ]
 
 [package.metadata.deb]

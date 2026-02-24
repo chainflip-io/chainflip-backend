@@ -16,7 +16,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::{AssetPair, PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
@@ -82,6 +82,7 @@ pub const MAX_ORDERS_DELETE: u32 = 100;
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -93,63 +94,6 @@ pub enum CloseOrder {
 	Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderId },
 	Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderId },
 }
-// TODO Add custom serialize/deserialize and encode/decode implementations that preserve canonical
-// nature.
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Hash,
-	PartialOrd,
-	Ord,
-)]
-pub struct AssetPair {
-	assets: PoolPairsMap<Asset>,
-}
-impl AssetPair {
-	pub fn new(base_asset: Asset, quote_asset: Asset) -> Option<Self> {
-		Some(AssetPair {
-			assets: match (base_asset, quote_asset) {
-				(STABLE_ASSET, STABLE_ASSET) => None,
-				(_unstable_asset, STABLE_ASSET) =>
-					Some(PoolPairsMap { base: base_asset, quote: quote_asset }),
-				_ => None,
-			}?,
-		})
-	}
-
-	pub fn try_new<T: Config>(base_asset: Asset, quote_asset: Asset) -> Result<Self, Error<T>> {
-		Self::new(base_asset, quote_asset).ok_or(Error::<T>::PoolDoesNotExist)
-	}
-
-	pub fn from_swap(from: Asset, to: Asset) -> Option<(Self, Side)> {
-		#[expect(clippy::manual_map)]
-		if let Some(asset_pair) = Self::new(from, to) {
-			Some((asset_pair, Side::Sell))
-		} else if let Some(asset_pair) = Self::new(to, from) {
-			Some((asset_pair, Side::Buy))
-		} else {
-			None
-		}
-	}
-
-	pub fn to_swap(base_asset: Asset, quote_asset: Asset, side: Side) -> (Asset, Asset) {
-		match side {
-			Side::Buy => (quote_asset, base_asset),
-			Side::Sell => (base_asset, quote_asset),
-		}
-	}
-
-	pub fn assets(&self) -> PoolPairsMap<Asset> {
-		self.assets
-	}
-}
 
 #[derive(
 	Copy,
@@ -158,6 +102,7 @@ impl AssetPair {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -185,7 +130,7 @@ impl<T> AskBidMap<T> {
 	}
 }
 
-#[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(T))]
 struct LimitOrderUpdate<T: Config> {
 	pub lp: T::AccountId,
@@ -196,7 +141,7 @@ struct LimitOrderUpdate<T: Config> {
 	pub details: LimitOrderUpdateDetails<BlockNumberFor<T>>,
 }
 
-#[derive(Clone, Encode, DebugNoBound, Decode, TypeInfo, PartialEq, Eq)]
+#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
 enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
 	Update { option_tick: Option<Tick>, amount_change: IncreaseOrDecrease<AssetAmount> },
 	Set { option_tick: Option<Tick>, sell_amount: AssetAmount, close_order_at: Option<BlockNumber> },
@@ -323,7 +268,17 @@ impl<T: Config> LimitOrderUpdate<T> {
 	}
 }
 
-#[derive(Clone, RuntimeDebugNoBound, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Clone,
+	RuntimeDebugNoBound,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
@@ -340,7 +295,7 @@ pub mod pallet {
 
 	use super::*;
 
-	#[derive(Clone, DebugNoBound, Encode, Decode, TypeInfo, PartialEq)]
+	#[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq)]
 	#[scale_info(skip_type_params(T))]
 	pub struct Pool<T: Config> {
 		/// A cache of all the range orders that exist in the pool. This must be kept up to date
@@ -363,6 +318,7 @@ pub mod pallet {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		PartialEq,
@@ -395,6 +351,7 @@ pub mod pallet {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		PartialEq,
@@ -410,9 +367,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// The event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// Access to the account balances.
 		type LpBalance: BalanceApi<AccountId = Self::AccountId>;
 
@@ -944,7 +898,7 @@ pub mod pallet {
 				PoolState::<(T::AccountId, OrderId)>::validate_fees(fee_hundredth_pips),
 				Error::<T>::InvalidFeeAmount
 			);
-			let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+			let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 			Self::try_mutate_pool(asset_pair, |_asset_pair: &AssetPair, pool| {
 				pool.pool_state
 					.set_range_order_fees(fee_hundredth_pips)
@@ -985,7 +939,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			for (asset, ticks) in limits {
-				let asset_pair = AssetPair::try_new::<T>(asset, STABLE_ASSET)?;
+				let asset_pair = asset_pair_try_from::<T>(asset, STABLE_ASSET)?;
 				MaximumPriceImpact::<T>::set(asset_pair, ticks);
 				Self::deposit_event(Event::<T>::PriceImpactLimitSet { asset_pair, limit: ticks });
 			}
@@ -1007,7 +961,7 @@ pub mod pallet {
 			for order in orders {
 				match order {
 					CloseOrder::Limit { base_asset, quote_asset, side, id } => {
-						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match pool.limit_orders_cache[side.to_sold_pair()]
 								.get(lp)
@@ -1035,7 +989,7 @@ pub mod pallet {
 						})?;
 					},
 					CloseOrder::Range { base_asset, quote_asset, id } => {
-						let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+						let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 						Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 							match pool
 								.range_orders_cache
@@ -1284,6 +1238,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	Debug,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 	PartialEq,
@@ -1303,7 +1258,18 @@ pub struct PoolInfo {
 	pub limit_total_swap_inputs: PoolPairsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct LimitOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1314,7 +1280,18 @@ pub struct LimitOrder<T: Config> {
 	pub original_sell_amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct RangeOrder<T: Config> {
 	pub lp: T::AccountId,
@@ -1324,7 +1301,18 @@ pub struct RangeOrder<T: Config> {
 	pub fees_earned: PoolPairsMap<Amount>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 #[serde(bound = "")]
 pub struct PoolOrders<T: Config> {
 	/// Limit orders are groups by which asset they are selling.
@@ -1334,20 +1322,53 @@ pub struct PoolOrders<T: Config> {
 	pub range_orders: Vec<RangeOrder<T>>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct LimitOrderLiquidity {
 	pub tick: Tick,
 	pub amount: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct RangeOrderLiquidity {
 	pub tick: Tick,
 	pub liquidity: Amount, /* TODO: Change (Using Amount as it is U256 so we get the right
 	                        * serialization) */
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct PoolLiquidity {
 	/// An ordered lists of the amount of assets available at each tick, if a tick contains zero
 	/// liquidity it will not be included in the list. Note limit order liquidity is split by which
@@ -1360,7 +1381,18 @@ pub struct PoolLiquidity {
 	pub range_orders: Vec<RangeOrderLiquidity>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct UnidirectionalSubPoolDepth {
 	/// The current sqrt price in this sub pool, in the given direction of swaps.
 	pub price: Option<SqrtPrice>,
@@ -1368,7 +1400,18 @@ pub struct UnidirectionalSubPoolDepth {
 	pub depth: Amount,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct UnidirectionalPoolDepth {
 	/// The depth of the limit order pool.
 	pub limit_orders: UnidirectionalSubPoolDepth,
@@ -1376,19 +1419,52 @@ pub struct UnidirectionalPoolDepth {
 	pub range_orders: UnidirectionalSubPoolDepth,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolOrder {
 	pub amount: Amount,
 	pub sqrt_price: SqrtPrice,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolOrderbook {
 	pub bids: Vec<PoolOrder>,
 	pub asks: Vec<PoolOrder>,
 }
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
 pub struct PoolPriceV1 {
 	pub price: Price,
 	pub sqrt_price: SqrtPrice,
@@ -1397,7 +1473,18 @@ pub struct PoolPriceV1 {
 
 pub type PoolPriceV2 = PoolPrice<SqrtPrice>;
 
-#[derive(Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub struct PoolPrice<P> {
 	pub sell: Option<P>,
 	pub buy: Option<P>,
@@ -1425,7 +1512,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		use cf_amm::NewError;
 
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		Pools::<T>::try_mutate(asset_pair, |maybe_pool| {
 			ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 
@@ -1605,7 +1692,7 @@ impl<T: Config> Pallet<T> {
 		option_tick: Option<Tick>,
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 			let tick = match (
@@ -1934,7 +2021,7 @@ impl<T: Config> Pallet<T> {
 		tick: Tick,
 		sell_amount: Amount,
 	) -> Result<(), DispatchError> {
-		Self::try_mutate_pool(AssetPair::try_new::<T>(base_asset, quote_asset)?, |_, pool| {
+		Self::try_mutate_pool(asset_pair_try_from::<T>(base_asset, quote_asset)?, |_, pool| {
 			Self::collect_and_mint_limit_order_with_dispatch_error(
 				pool,
 				account_id,
@@ -1985,7 +2072,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		f: F,
 	) -> Result<R, DispatchError> {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(lp)?;
 		Self::try_mutate_pool(asset_pair, f)
 	}
@@ -2002,7 +2089,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 	) -> Result<PoolPrice<PoolPriceV1>, DispatchError> {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolPrice {
 			sell: pool
@@ -2022,7 +2109,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		tick_range: Range<Tick>,
 	) -> Result<PoolPairsMap<Amount>, DispatchError> {
-		let pool_state = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+		let pool_state = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?
 			.pool_state;
 
@@ -2042,7 +2129,7 @@ impl<T: Config> Pallet<T> {
 	) -> Result<PoolOrderbook, DispatchError> {
 		let orders = orders.clamp(1, 16384);
 
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		let pool_state =
 			Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?.pool_state;
 
@@ -2111,7 +2198,7 @@ impl<T: Config> Pallet<T> {
 		quote_asset: any::Asset,
 		tick_range: Range<Tick>,
 	) -> Result<AskBidMap<UnidirectionalPoolDepth>, DispatchError> {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		let mut pool = Pools::<T>::get(asset_pair).ok_or(Error::<T>::PoolDoesNotExist)?;
 
 		let limit_orders =
@@ -2143,7 +2230,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 	) -> Result<PoolInfo, DispatchError> {
-		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolInfo {
 			range_order_fee_hundredth_pips: pool.pool_state.range_order_fee(),
@@ -2157,7 +2244,7 @@ impl<T: Config> Pallet<T> {
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
 	) -> Result<PoolLiquidity, DispatchError> {
-		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		Ok(PoolLiquidity {
 			limit_orders: AskBidMap::from_fn(|order| {
@@ -2183,7 +2270,7 @@ impl<T: Config> Pallet<T> {
 		option_lp: Option<T::AccountId>,
 		filled_orders: bool,
 	) -> Result<PoolOrders<T>, DispatchError> {
-		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
@@ -2267,7 +2354,7 @@ impl<T: Config> Pallet<T> {
 		tick_range: Range<Tick>,
 		liquidity: Liquidity,
 	) -> Result<PoolPairsMap<Amount>, DispatchError> {
-		let pool = Pools::<T>::get(AssetPair::try_new::<T>(base_asset, quote_asset)?)
+		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
 		pool.pool_state
 			.range_order_liquidity_value(tick_range, liquidity)
@@ -2425,7 +2512,7 @@ impl<T: Config> cf_traits::PoolPriceProvider for Pallet<T> {
 impl<T: Config> cf_traits::PoolOrdersManager for Pallet<T> {
 	/// Cancels all limit orders and range orders in a pool.
 	fn cancel_all_pool_orders(base_asset: Asset, quote_asset: Asset) -> sp_runtime::DispatchResult {
-		let asset_pair = AssetPair::try_new::<T>(base_asset, quote_asset)?;
+		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 			for (sold_pair, limit_orders_map) in pool.clone().limit_orders_cache.into_iter() {
@@ -2468,4 +2555,11 @@ impl<T: Config> cf_traits::PoolOrdersManager for Pallet<T> {
 
 		Ok(())
 	}
+}
+
+fn asset_pair_try_from<T: Config>(
+	base_asset: any::Asset,
+	quote_asset: any::Asset,
+) -> Result<AssetPair, DispatchError> {
+	Ok(AssetPair::new(base_asset, quote_asset).ok_or(Error::<T>::PoolDoesNotExist)?)
 }

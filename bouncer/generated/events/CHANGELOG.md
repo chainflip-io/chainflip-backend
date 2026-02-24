@@ -29,6 +29,7 @@ New or removed pallets:
   GenericElections: added
   Governance: added
   Grandpa: added
+  Historical: added
   LendingPools: added
   LiquidityPools: added
   LiquidityProvider: added

@@ -1,17 +1,40 @@
+pub mod __external {
+	pub use codec;
+	pub use serde::{Deserialize, Serialize};
+}
+
 /// Adds #[derive] statements for commonly used traits. These are currently: Debug, Clone,
 /// PartialEq, Eq, Encode, Decode, Serialize, Deserialize
 #[macro_export]
 macro_rules! derive_common_traits {
 	($($Definition:tt)*) => {
 		#[derive(
-			Debug, Clone, PartialEq, Eq, Encode, Decode,
+			Debug, Clone, PartialEq, Eq, $crate::__external::codec::Encode, $crate::__external::codec::Decode, $crate::__external::codec::DecodeWithMemTracking,
 		)]
-		#[derive(Deserialize, Serialize)]
+		#[derive($crate::__external::Deserialize, $crate::__external::Serialize)]
 		#[serde(bound(deserialize = "", serialize = ""))]
 		$($Definition)*
 	};
 }
 pub use derive_common_traits;
+
+/// Adds #[derive] statements for commonly used traits, *without* adding bounds on eventual type
+/// parameters. The implemented traits are: Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize,
+/// Deserialize.
+#[macro_export]
+macro_rules! derive_common_traits_no_bounds {
+	($($Definition:tt)*) => {
+		#[derive_where::derive_where(
+			Debug, Clone, PartialEq, Eq;
+		)]
+		#[derive($crate::__external::codec::Encode, $crate::__external::codec::Decode, $crate::__external::codec::DecodeWithMemTracking)]
+		#[codec(encode_bound())]
+		#[derive($crate::__external::Deserialize, $crate::__external::Serialize)]
+		#[serde(bound(deserialize = "", serialize = ""))]
+		$($Definition)*
+	};
+}
+pub use derive_common_traits_no_bounds;
 
 /// Adds #[derive] statements for commonly used traits, including `Validate`. Automatically
 /// generates the body of the struct, containing just a PhantomData with all type variables.
@@ -27,12 +50,14 @@ macro_rules! define_empty_struct {
 		[$name:ident $(: $path:path)?, $($rest:tt)*]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name $(:$path)?, ]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
@@ -40,12 +65,14 @@ macro_rules! define_empty_struct {
 		[$name:ident: $l:lifetime, $($rest:tt)*]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[$($names)* $name, ]
 			[$($names_and_bounds)* $name:$l, ]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
@@ -54,17 +81,18 @@ macro_rules! define_empty_struct {
 	( [$name:ident $(: $path:path)? >;]  $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name $(:$path)?, >; ] $($rest)* }};
 	( [$name:ident: $l:lifetime >;] $($rest:tt)* ) => { cf_utilities::define_empty_struct!{ [ $name:$l, >; ] $($rest)* }};
 
-
 	// the main branch
 	(
 		[>;]
 		[$($names:tt)*]
 		[$($names_and_bounds:tt)*]
+		$(#[$meta:meta])*
 		$vis:vis struct $struct_name:ident
 	) => {
 		cf_utilities::derive_common_traits!{
-			#[derive(TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
 			#[scale_info(skip_type_params(T, I))]
+			$(#[$meta])*
 			$vis struct $struct_name<$($names_and_bounds)*>
 			(
 				sp_std::marker::PhantomData
@@ -82,13 +110,40 @@ macro_rules! define_empty_struct {
 			}
 		}
 	};
+	// This is a special case handling structs without type parameters
 	(
-		$vis:vis struct $struct_name:ident<$($rest:tt)*
+		$(#[$meta:meta])* $vis:vis struct $struct_name:ident;
+	) => {
+		cf_utilities::derive_common_traits!{
+			#[derive(scale_info::TypeInfo, frame_support::DefaultNoBound)]
+			#[derive(PartialOrd, Ord)]
+			$(#[$meta])*
+			$vis struct $struct_name {}
+		}
+		#[cfg(test)]
+		impl proptest::prelude::Arbitrary for $struct_name {
+			type Parameters = ();
+			type Strategy = impl proptest::prelude::Strategy<Value = Self> + Clone + Sync + Send;
+			fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+				proptest::prelude::Just(Default::default())
+			}
+		}
+		impl cf_traits::Validate for $struct_name {
+			type Error = ();
+			fn is_valid(&self) -> Result<(), Self::Error> {
+				Ok(())
+			}
+		}
+	};
+	// This is the entry point for structs with type parameters
+	(
+		$(#[$meta:meta])* $vis:vis struct $struct_name:ident<$($rest:tt)*
 	) => {
 		cf_utilities::define_empty_struct!{
 			[$($rest)*]
 			[]
 			[]
+			$(#[$meta])*
 			$vis struct $struct_name
 		}
 	};
@@ -96,6 +151,8 @@ macro_rules! define_empty_struct {
 pub use define_empty_struct;
 
 /// Syntax sugar for implementing multiple traits for a single type.
+/// All attributes (e.g. `#[doc]`, `#[async_trait::async_trait]`, etc.) placed
+/// before a trait block are forwarded to the generated `impl` item.
 ///
 /// Example use:
 ///
@@ -107,17 +164,18 @@ pub use define_empty_struct;
 ///     Copy {
 ///         ...
 ///     }
-///     Default {
+///     #[async_trait::async_trait]
+///     SomeAsyncTrait {
 ///         ...
 ///     }
 /// }
 pub macro impls {
 	// trait implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
+	$(#[$meta:meta])* $($trait:ty)?  $(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
-        $(#[doc = $doc_text])?
+        $(#[$meta])*
         impl$(<$($bounds)*>)? $($trait for)? $name
 		$(where $($trait_bounds)*)?
 		{
@@ -130,6 +188,8 @@ pub macro impls {
 }
 
 /// Syntax sugar for implementing multiple hooks for a single type.
+/// All attributes placed before a hook block are forwarded to the generated
+/// `impl` item.
 ///
 /// Example use:
 ///
@@ -149,15 +209,15 @@ pub macro impls {
 pub macro hook_impls {
 	// hook implementation
     (for $name:ty $(where ($($bounds:tt)*))? :
-	$(#[doc = $doc_text:tt])? fn(&mut self, $args:tt: $input_ty:ty) -> $output_ty:ty
+	$(#[$meta:meta])* fn(&mut $self:ident, $args:tt: $input_ty:ty) -> $output_ty:ty
 	$(where ($($trait_bounds:tt)*))? {$($trait_impl:tt)*}
 	$($rest:tt)*
 	) => {
-        $(#[doc = $doc_text])?
+        $(#[$meta])*
         impl$(<$($bounds)*>)? cf_traits::Hook<($input_ty, $output_ty)> for $name
 		$(where $($trait_bounds)*)?
 		{
-			fn run(&mut self, $args: $input_ty) -> $output_ty {
+			fn run(&mut $self, $args: $input_ty) -> $output_ty {
             	$($trait_impl)*
 			}
         }

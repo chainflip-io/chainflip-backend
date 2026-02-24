@@ -50,9 +50,7 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
 	fn process_channel_deposit_full_witness() -> Weight;
-	fn finalise_ingress(a: u32, ) -> Weight;
 	fn vault_transfer_failed() -> Weight;
-	fn ccm_broadcast_failed() -> Weight;
 	fn vault_swap_request() -> Weight;
 	fn boost_finalised() -> Weight;
 	fn mark_transaction_for_rejection() -> Weight;
@@ -96,20 +94,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(42_188_000, 6619)
 			.saturating_add(T::DbWeight::get().reads(9_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `a` is `[1, 100]`.
-	fn finalise_ingress(a: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `395`
-		//  Estimated: `3860`
-		// Minimum execution time: 1_776_000 picoseconds.
-		Weight::from_parts(6_577_103, 3860)
-			// Standard Error: 6_179
-			.saturating_add(Weight::from_parts(2_381_049, 0).saturating_mul(a.into()))
-			.saturating_add(T::DbWeight::get().reads(1_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -159,19 +143,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(108_059_000, 12781)
 			.saturating_add(T::DbWeight::get().reads(20_u64))
 			.saturating_add(T::DbWeight::get().writes(10_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::FailedForeignChainCalls` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::FailedForeignChainCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ccm_broadcast_failed() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `476`
-		//  Estimated: `3941`
-		// Minimum execution time: 16_148_000 picoseconds.
-		Weight::from_parts(16_543_000, 3941)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::IngressDelayBlocks` (r:1 w:0)
 	/// Proof: `EthereumIngressEgress::IngressDelayBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -280,20 +251,6 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(9_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}
-	/// Storage: `EthereumIngressEgress::DepositChannelLookup` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::DepositChannelLookup` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// The range of component `a` is `[1, 100]`.
-	fn finalise_ingress(a: u32, ) -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `395`
-		//  Estimated: `3860`
-		// Minimum execution time: 1_776_000 picoseconds.
-		Weight::from_parts(6_577_103, 3860)
-			// Standard Error: 6_179
-			.saturating_add(Weight::from_parts(2_381_049, 0).saturating_mul(a.into()))
-			.saturating_add(ParityDbWeight::get().reads(1_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
 	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	/// Storage: `Environment::EthereumVaultAddress` (r:1 w:0)
@@ -342,19 +299,6 @@ impl WeightInfo for () {
 		Weight::from_parts(108_059_000, 12781)
 			.saturating_add(ParityDbWeight::get().reads(20_u64))
 			.saturating_add(ParityDbWeight::get().writes(10_u64))
-	}
-	/// Storage: `Validator::CurrentEpoch` (r:1 w:0)
-	/// Proof: `Validator::CurrentEpoch` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `EthereumIngressEgress::FailedForeignChainCalls` (r:1 w:1)
-	/// Proof: `EthereumIngressEgress::FailedForeignChainCalls` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn ccm_broadcast_failed() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `476`
-		//  Estimated: `3941`
-		// Minimum execution time: 16_148_000 picoseconds.
-		Weight::from_parts(16_543_000, 3941)
-			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
 	}
 	/// Storage: `EthereumIngressEgress::IngressDelayBlocks` (r:1 w:0)
 	/// Proof: `EthereumIngressEgress::IngressDelayBlocks` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)

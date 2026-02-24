@@ -35,14 +35,16 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 350 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200 * ciTimeoutFactor);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
   concurrentTest('FillOrKill', testFillOrKill, 280 * ciTimeoutFactor);
   concurrentTest('DCASwaps', testDCASwaps, 190 * ciTimeoutFactor);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
-  concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
+  if (!process.env.SKIP_BLS_TESTS) {
+    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
+  }
   concurrentTest('VaultSwaps', testVaultSwap, 360 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);

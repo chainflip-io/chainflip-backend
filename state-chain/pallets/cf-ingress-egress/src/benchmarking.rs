@@ -19,15 +19,15 @@
 use super::*;
 use crate::{BoostStatus, DisabledEgressAssets};
 use cf_chains::{
-	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
-	CcmChannelMetadataUnchecked, ChannelRefundParametersForChain, DepositChannel,
+	benchmarking_value::BenchmarkValue, CcmChannelMetadataUnchecked,
+	ChannelRefundParametersForChain, DepositChannel,
 };
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::v2::*;
 use frame_support::{
 	assert_ok,
-	traits::{OnNewAccount, OriginTrait, UnfilteredDispatchable},
+	traits::{OnNewAccount, UnfilteredDispatchable},
 };
 
 pub(crate) type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::ChainBlockNumber;
@@ -101,47 +101,6 @@ mod benchmarks {
 		}
 	}
 	#[benchmark]
-	fn finalise_ingress(a: Linear<1, 100>) {
-		let mut addresses = vec![];
-		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
-		for _ in 1..a {
-			let deposit_address =
-				<TargetChainOf<T, I> as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
-			let source_asset: <TargetChainOf<T, I> as Chain>::ChainAsset =
-				BenchmarkValue::benchmark_value();
-			let block_number = TargetChainBlockNumber::<T, I>::benchmark_value();
-			let mut channel = DepositChannelDetails::<T, I> {
-				owner: account("doogle", 0, 0),
-				opened_at: block_number,
-				expires_at: block_number,
-				deposit_channel:
-					DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
-						1,
-						source_asset,
-					)
-					.unwrap(),
-				action:
-					ChannelAction::<T::AccountId, TargetChainAccount<T, I>>::LiquidityProvision {
-						lp_account: account("doogle", 0, 0),
-						refund_address: ForeignChainAddress::benchmark_value(),
-						additional_action: None,
-					},
-				boost_fee: 0,
-				boost_status: BoostStatus::NotBoosted,
-				is_marked_for_rejection: false,
-			};
-			channel.deposit_channel.state.on_fetch_scheduled();
-			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), channel);
-			addresses.push(deposit_address);
-		}
-
-		#[block]
-		{
-			assert_ok!(Pallet::<T, I>::finalise_ingress(origin, addresses));
-		}
-	}
-
-	#[benchmark]
 	fn vault_transfer_failed() {
 		let epoch = T::EpochInfo::epoch_index();
 		let origin = T::EnsureWitnessedAtCurrentEpoch::try_successful_origin().unwrap();
@@ -160,26 +119,6 @@ mod benchmarks {
 		}
 
 		assert_eq!(FailedForeignChainCalls::<T, I>::get(epoch).len(), 1);
-	}
-
-	#[benchmark]
-	fn ccm_broadcast_failed() {
-		#[block]
-		{
-			assert_ok!(Pallet::<T, I>::ccm_broadcast_failed(
-				OriginTrait::root(),
-				Default::default()
-			));
-		}
-
-		let current_epoch = T::EpochInfo::epoch_index();
-		assert_eq!(
-			FailedForeignChainCalls::<T, I>::get(current_epoch),
-			vec![FailedForeignChainCall {
-				broadcast_id: Default::default(),
-				original_epoch: current_epoch
-			}]
-		);
 	}
 
 	fn prewitness_deposit<T: pallet::Config<I>, I>(
@@ -334,13 +273,7 @@ mod benchmarks {
 	#[test]
 	fn benchmark_works() {
 		new_test_ext().execute_with(|| {
-			_ccm_broadcast_failed::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
 			_vault_transfer_failed::<Test, Instance1>(true);
-		});
-		new_test_ext().execute_with(|| {
-			_finalise_ingress::<Test, Instance1>(100, true);
 		});
 		new_test_ext().execute_with(|| {
 			_process_channel_deposit_full_witness::<Test, Instance1>(true);

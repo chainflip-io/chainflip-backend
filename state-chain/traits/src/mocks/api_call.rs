@@ -21,8 +21,8 @@ use cf_chains::{
 	ForeignChainAddress, RejectCall, RejectError, TransferAssetParams, TransferFallback,
 	TransferFallbackError, TransferForRejection,
 };
-use cf_primitives::{chains::assets, EgressId, ForeignChain, GasAmount};
-use codec::{Decode, Encode};
+use cf_primitives::{chains::assets, AssetAmount, EgressId, ForeignChain};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	parameter_types, sp_runtime::DispatchError, CloneNoBound, DebugNoBound, PartialEqNoBound,
 };
@@ -35,7 +35,7 @@ pub const ETHEREUM_USDC_ADDRESS: [u8; 20] = [0x45; 20];
 pub const ETHEREUM_USDT_ADDRESS: [u8; 20] = [0xba; 20];
 pub const ETHEREUM_WBTC_ADDRESS: [u8; 20] = [0xba; 20];
 
-#[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq)]
 pub struct MockEvmEnvironment;
 
 impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::ChainAccount>
@@ -52,7 +52,16 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub enum MockEthereumApiCall<MockEvmEnvironment> {
 	AllBatch(MockEthAllBatch<MockEvmEnvironment>),
 	ExecutexSwapAndCall(MockEthExecutexSwapAndCall<MockEvmEnvironment>),
@@ -99,7 +108,17 @@ impl ApiCall<EvmCrypto> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Default,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthAllBatch<MockEvmEnvironment> {
 	pub nonce: <Ethereum as Chain>::ReplayProtection,
 	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -158,13 +177,22 @@ impl cf_chains::ConsolidateCall<Ethereum> for MockEthereumApiCall<MockEvmEnviron
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthExecutexSwapAndCall<MockEvmEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
 	transfer_param: TransferAssetParams<Ethereum>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: GasAmount,
+	gas_budget: AssetAmount,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockEvmEnvironment>,
 }
@@ -174,7 +202,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -194,7 +222,16 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockEthTransferFallback<MockEvmEnvironment> {
 	nonce: <Ethereum as Chain>::ReplayProtection,
 	transfer_param: TransferAssetParams<Ethereum>,
@@ -217,7 +254,7 @@ impl TransferFallback<Ethereum> for MockEthereumApiCall<MockEvmEnvironment> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Eq, PartialEq)]
 pub struct MockBtcEnvironment;
 
 impl ChainEnvironment<<Bitcoin as Chain>::ChainAsset, <Bitcoin as Chain>::ChainAccount>
@@ -228,7 +265,16 @@ impl ChainEnvironment<<Bitcoin as Chain>::ChainAsset, <Bitcoin as Chain>::ChainA
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub enum MockBitcoinApiCall<MockBtcEnvironment> {
 	AllBatch(MockBtcAllBatch<MockBtcEnvironment>),
 	ExecutexSwapAndCall(MockBtcExecutexSwapAndCall<MockBtcEnvironment>),
@@ -283,7 +329,16 @@ impl cf_chains::ConsolidateCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironme
 		}
 	}
 }
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockBtcTransferFallback<MockBtcEnvironment> {
 	_phantom: PhantomData<MockBtcEnvironment>,
 }
@@ -296,12 +351,21 @@ impl TransferFallback<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockBtcExecutexSwapAndCall<MockBtcEnvironment> {
 	transfer_param: TransferAssetParams<Bitcoin>,
 	source_chain: ForeignChain,
 	source_address: Option<ForeignChainAddress>,
-	gas_budget: GasAmount,
+	gas_budget: AssetAmount,
 	message: Vec<u8>,
 	_phantom: PhantomData<MockBtcEnvironment>,
 }
@@ -311,7 +375,7 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 		transfer_param: TransferAssetParams<Bitcoin>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -330,7 +394,17 @@ impl ExecutexSwapAndCall<Bitcoin> for MockBitcoinApiCall<MockBtcEnvironment> {
 	}
 }
 
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	Default,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 pub struct MockBtcAllBatch<MockBtcEnvironment> {
 	pub fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 	pub transfer_params: Vec<TransferAssetParams<Bitcoin>>,

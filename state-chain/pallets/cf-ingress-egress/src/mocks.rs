@@ -66,8 +66,7 @@ impl frame_system::Config for Test {
 	type Block = Block;
 }
 
-pub type MockEgressBroadcasterEth =
-	MockBroadcaster<(MockEthereumApiCall<MockEvmEnvironment>, RuntimeCall)>;
+pub type MockEgressBroadcasterEth = MockBroadcaster<MockEthereumApiCall<MockEvmEnvironment>>;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
@@ -91,8 +90,7 @@ impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	}
 }
 
-pub type MockEgressBroadcasterBtc =
-	MockBroadcaster<(MockBitcoinApiCall<MockBtcEnvironment>, RuntimeCall)>;
+pub type MockEgressBroadcasterBtc = MockBroadcaster<MockBitcoinApiCall<MockBtcEnvironment>>;
 
 impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	fn generate_address(
@@ -121,7 +119,6 @@ impl ChainflipWithTargetChain<Instance1> for Test {
 }
 
 impl Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
@@ -156,7 +153,6 @@ impl ChainflipWithTargetChain<Instance2> for Test {
 }
 
 impl Config<Instance2> for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;

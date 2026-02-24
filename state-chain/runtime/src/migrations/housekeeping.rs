@@ -22,6 +22,7 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
 
@@ -30,6 +31,7 @@ pub type Migration = (
 	reap_old_accounts::Migration,
 	// Can be removed once Solana address re-use is activated.
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
+	liveness_election_state::LivenessElectionStateMigration,
 );
 
 pub struct NetworkSpecificHousekeeping;

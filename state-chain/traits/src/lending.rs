@@ -18,7 +18,7 @@ use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
 	SwapRequestId,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchResult;
@@ -41,7 +41,7 @@ pub struct BoostFinalisationOutcome {
 
 /// Allows to specify whether a loan should be repaid in full
 /// or only with a specified amount.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, TypeInfo, Encode, Decode)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking)]
 pub enum RepaymentAmount {
 	/// Full repayment
 	Full,

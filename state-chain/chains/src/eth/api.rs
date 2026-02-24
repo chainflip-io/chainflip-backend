@@ -26,11 +26,12 @@ use crate::{
 	},
 	RejectCall, *,
 };
-use ethabi::{Address, Uint};
+use codec::DecodeWithMemTracking;
 use evm::api::common::*;
 use frame_support::{
 	sp_runtime::DispatchError, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
 };
+use sp_core::H160 as Address;
 use sp_std::marker::PhantomData;
 
 use evm::tokenizable::Tokenizable;
@@ -75,7 +76,16 @@ pub mod register_redemption;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum EthereumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
@@ -209,7 +219,7 @@ where
 		transfer_param: TransferAssetParams<Ethereum>,
 		source_chain: ForeignChain,
 		source_address: Option<ForeignChainAddress>,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
@@ -406,7 +416,7 @@ impl<E: ReplayProtectionProvider<Ethereum> + EvmEnvironmentProvider<Ethereum>> A
 }
 
 impl<E> EthereumApi<E> {
-	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
 }

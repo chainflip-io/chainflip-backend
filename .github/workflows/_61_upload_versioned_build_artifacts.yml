@@ -26,17 +26,6 @@ jobs:
           pattern: chainflip-backend-bin*
           merge-multiple: false
 
-      - name: Download runtime 📥
-        if: inputs.is_release == true
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
-        with:
-          name: chainflip-node-runtime-production
-          path: artifacts
-
-      - name: Debug Artifacts 🐛
-        run: |
-          ls -laR artifacts
-
       - name: Set Version 🔦
         id: version
         run: |
@@ -50,6 +39,18 @@ jobs:
           fi
           echo "Version: $VERSION"
           echo "s3_prefix=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download runtime 📥
+        if: inputs.is_release == true
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: chainflip-node-runtime-production-${{ steps.version.outputs.version }}
+          path: artifacts
+
+      - name: Debug Artifacts 🐛
+        run: |
+          ls -laR artifacts
 
       - name: Compress Artifacts into Zip Files 📦
         run: |

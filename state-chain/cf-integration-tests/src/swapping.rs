@@ -28,6 +28,7 @@ use crate::{
 	witness_call, BROKER,
 };
 use cf_amm::{
+	common::AssetPair,
 	math::{Price, PriceLimits, Tick},
 	range_orders::Liquidity,
 };
@@ -56,10 +57,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, Time},
 };
 use pallet_cf_asset_balances::FreeBalances;
-use pallet_cf_broadcast::{
-	AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls, RequestFailureCallbacks,
-	RequestSuccessCallbacks,
-};
+use pallet_cf_broadcast::{AwaitingBroadcast, BroadcastIdCounter, PendingApiCalls};
 use pallet_cf_ingress_egress::{DepositWitness, FailedForeignChainCall, VaultDepositWitness};
 use pallet_cf_pools::RangeOrderSize;
 use pallet_cf_swapping::{FeeRateAndMinimum, SwapRequestIdCounter, SwapRetryDelay};
@@ -319,7 +317,7 @@ pub fn set_limit_order(
 	tick: Option<Tick>,
 	sell_amount: AssetAmount,
 ) {
-	let (asset_pair, order) = pallet_cf_pools::AssetPair::from_swap(sell_asset, buy_asset).unwrap();
+	let (asset_pair, order) = AssetPair::from_swap(sell_asset, buy_asset).unwrap();
 
 	let sell_balance =
 		pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, sell_asset);
@@ -661,7 +659,7 @@ fn can_process_ccm_via_direct_deposit() {
 fn failed_swaps_are_rolled_back() {
 	let get_pool = |asset| {
 		pallet_cf_pools::pallet::Pools::<Runtime>::get(
-			pallet_cf_pools::AssetPair::new(asset, Asset::Usdc).expect("invalid asset pair"),
+			AssetPair::new(asset, Asset::Usdc).expect("invalid asset pair"),
 		)
 		.expect("pool must exist")
 	};
@@ -884,8 +882,6 @@ fn can_resign_failed_ccm() {
 			);
 
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});
 }
 
@@ -979,8 +975,6 @@ fn can_handle_failed_vault_transfer() {
 			);
 
 			assert!(PendingApiCalls::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestFailureCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
-			assert!(RequestSuccessCallbacks::<Runtime, Instance1>::get(broadcast_id).is_none());
 		});
 }
 

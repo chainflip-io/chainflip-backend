@@ -502,7 +502,6 @@ impl<T: OPTypes> Statemachine for OraclePriceTracker<T> {
 
 #[cfg(test)]
 pub mod tests {
-	use crate::electoral_systems::state_machine::core::TypesFor;
 	use proptest::prelude::{any, Just, Strategy};
 
 	use super::*;
@@ -514,9 +513,7 @@ pub mod tests {
 	};
 	use cf_traits::hook_test_utils::MockHook;
 
-	pub struct Mock;
-	pub(crate) type MockTypes = TypesFor<Mock>;
-
+	define_empty_struct! { pub(crate) struct MockTypes; }
 	impl OPTypes for MockTypes {
 		type StateChainBlockNumber = u32;
 		type Price = ChainlinkPrice;

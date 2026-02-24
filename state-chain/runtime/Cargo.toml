@@ -23,7 +23,6 @@ hex = { workspace = true }
 log = { workspace = true }
 nanorand = { workspace = true, features = ["wyrand"] }
 serde = { workspace = true, features = ["derive", "alloc"] }
-ethabi = { workspace = true }
 ethereum-eip712 = { workspace = true }
 bitvec = { workspace = true }
 paste = { workspace = true }
@@ -96,6 +95,7 @@ sp-inherents = { workspace = true }
 sp-offchain = { workspace = true }
 sp-runtime = { workspace = true, features = ["serde"] }
 sp-session = { workspace = true }
+sp-storage = { workspace = true }
 sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
@@ -164,7 +164,6 @@ std = [
 	"cf-traits/std",
 	"cf-utilities/std",
 	"codec/std",
-	"ethabi/std",
 	"frame-benchmarking?/std",
 	"frame-executive/std",
 	"frame-support/std",

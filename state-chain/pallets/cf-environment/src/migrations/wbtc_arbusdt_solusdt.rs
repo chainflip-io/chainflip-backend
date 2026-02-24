@@ -1,6 +1,6 @@
 use crate::*;
 
-use cf_chains::{eth::Address as EthereumAddress, evm::H256};
+use cf_chains::evm::{Address as EvmAddress, H256};
 use cf_utilities::bs58_array;
 use frame_support::{pallet_prelude::Weight, traits::UncheckedOnRuntimeUpgrade};
 
@@ -45,7 +45,7 @@ pub struct NewAssetsMigration<T>(PhantomData<T>);
 impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🌮 Running migration for Environment pallet: Adding Wbtc to EthereumSupportedAssets ...");
-		let wbtc_address: EthereumAddress = match ChainflipNetworkEnvironment::<T>::get() {
+		let wbtc_address: EvmAddress = match ChainflipNetworkEnvironment::<T>::get() {
 			NetworkEnvironment::Mainnet =>
 				hex_literal::hex!("2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599").into(),
 			NetworkEnvironment::Testnet =>
@@ -56,7 +56,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T>
 		EthereumSupportedAssets::<T>::insert(EthAsset::Wbtc, wbtc_address);
 
 		log::info!("🌮 Running migration for Environment pallet: Adding ArbUsdt to ArbitrumSupportedAssets ...");
-		let arbusdt_address: EthereumAddress = match ChainflipNetworkEnvironment::<T>::get() {
+		let arbusdt_address: EvmAddress = match ChainflipNetworkEnvironment::<T>::get() {
 			NetworkEnvironment::Mainnet =>
 				hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9").into(),
 			NetworkEnvironment::Testnet =>

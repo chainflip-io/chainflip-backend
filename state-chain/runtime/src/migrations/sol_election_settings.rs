@@ -10,7 +10,7 @@ use cf_utilities::bs58_array;
 use frame_support::{
 	migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
 };
-use pallet_cf_elections::UniqueMonotonicIdentifier;
+#[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 
 pub type Migration = (
@@ -155,6 +155,8 @@ impl UncheckedOnRuntimeUpgrade for SolElectionSettingsMigration {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		use pallet_cf_elections::UniqueMonotonicIdentifier;
+
 		let old_settings_entries = Vec::<(
 			UniqueMonotonicIdentifier,
 			old::CompositeElectoralSettings,

@@ -157,7 +157,7 @@ impl Cli {
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,
-		eth_address: EthereumAddress,
+		eth_address: EvmAddress,
 	) {
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(account.clone()),
@@ -637,7 +637,8 @@ pub fn on_contract_event(event: &ContractEvent) {
 			);
 		},
 		ContractEvent::Redeemed { node_id, amount } => {
-			let _ = pallet_cf_funding::Pallet::<Runtime>::redeemed(node_id.clone(), *amount);
+			let _ =
+				pallet_cf_funding::Pallet::<Runtime>::redeemed(node_id.clone(), *amount, TX_HASH);
 		},
 	}
 }

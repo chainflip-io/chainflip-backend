@@ -16,6 +16,8 @@
 
 pub mod types;
 
+pub use types::RawWitnessedEvents;
+
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -25,7 +27,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	self, address::EncodedAddress, assets::any::AssetMap, eth::Address as EthereumAddress,
+	self, address::EncodedAddress, assets::any::AssetMap, evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
@@ -35,7 +37,7 @@ use cf_primitives::{
 	NetworkEnvironment, SemVer,
 };
 use cf_traits::SwapLimits;
-use core::{ops::Range, str};
+use core::ops::Range;
 use frame_support::sp_runtime::AccountId32;
 use pallet_cf_elections::electoral_systems::oracle_price::{
 	chainlink::{OraclePrice, OraclePriceLegacy},
@@ -81,9 +83,9 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
-		fn cf_eth_flip_token_address() -> EthereumAddress;
-		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_key_manager_address() -> EthereumAddress;
+		fn cf_eth_flip_token_address() -> EvmAddress;
+		fn cf_eth_state_chain_gateway_address() -> EvmAddress;
+		fn cf_eth_key_manager_address() -> EvmAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 		fn cf_eth_vault() -> ([u8; 33], u32);
@@ -309,7 +311,7 @@ decl_runtime_apis!(
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
 		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
-			caller: EthereumAddress,
+			caller: EvmAddress,
 			call: crate::chainflip::ethereum_sc_calls::EthereumSCApi<FlipBalance>,
 		) -> Result<EvmCallDetails, DispatchErrorWithMessage>;
 		#[changed_in(11)]
@@ -348,5 +350,15 @@ decl_runtime_apis!(
 			nonce_or_account: NonceOrAccount,
 			encoding: EncodingType,
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
+		#[changed_in(16)]
+		fn cf_default_oracle_price_protection();
+		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
+		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(16)]
+		fn cf_ingress_egress_events();
+		fn cf_ingress_egress_events(
+			chain: ForeignChain,
+		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
 	}
 );

@@ -88,8 +88,9 @@ export async function testDelegate(testContext: TestContext) {
 
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const wallet = await createEvmWalletAndFund(cf.logger, 'Flip');
+  const amountString = defaultAssetAmounts('Flip');
 
-  const amount = amountToFineAmountBigInt(defaultAssetAmounts('Flip'), 'Flip');
+  const amount = amountToFineAmountBigInt(amountString, 'Flip');
 
   cf.info('Registering operator ' + uri + '...');
   const operator = await setupAccount(cf, uri, AccountRole.Operator);

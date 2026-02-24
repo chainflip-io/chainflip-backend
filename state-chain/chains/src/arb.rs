@@ -20,19 +20,21 @@ pub mod api;
 pub mod benchmarking;
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId},
-	ChainWitnessConfig, *,
+	benchmarking_value::BenchmarkValue,
+	eth,
+	evm::{self, DeploymentStatus, EvmFetchId},
+	Chain, ChainWitnessConfig, DepositChannel, FeeEstimationApi, FeeRefundCalculator,
 };
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Arbitrum;
-use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H160, H256},
-	Address, Hash as TxHash, Token, Uint, Word,
+use cf_primitives::{chains::assets, AssetAmount, IngressOrEgress};
+use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
+use frame_support::{
+	sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug},
+	Parameter,
 };
-use frame_support::sp_runtime::{traits::Zero, FixedPointNumber, FixedU64, RuntimeDebug};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
+use sp_runtime::traits::Member;
 use sp_std::{cmp::min, str};
 
 use self::evm::EvmCrypto;
@@ -51,24 +53,24 @@ impl Chain for Arbitrum {
 	const GAS_ASSET: Self::ChainAsset = assets::arb::Asset::ArbEth;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
-	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
+	const BURN_ADDRESS: Self::ChainAccount = evm::Address::zero();
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = ArbitrumTrackedData;
 	type ChainAsset = assets::arb::Asset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::arb::AssetMap<T>;
-	type ChainAccount = eth::Address;
+	type ChainAccount = evm::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
 	type Transaction = evm::Transaction;
 	type TransactionMetadata = evm::EvmTransactionMetadata;
-	type TransactionRef = H256;
+	type TransactionRef = sp_core::H256;
 	type ReplayProtectionParams = Self::ChainAccount;
 	type ReplayProtection = evm::api::EvmReplayProtection;
 }
@@ -81,6 +83,7 @@ impl Chain for Arbitrum {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -124,9 +127,9 @@ impl ArbitrumTrackedData {
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
-	) -> GasAmount {
+	) -> AssetAmount {
 		use crate::arb::fees::*;
 
 		let vault_gas_overhead = if is_native_asset {
@@ -157,7 +160,7 @@ impl ArbitrumTrackedData {
 
 	pub fn calculate_transaction_fee(
 		&self,
-		gas_limit: GasAmount,
+		gas_limit: AssetAmount,
 	) -> <Arbitrum as crate::Chain>::ChainAmount {
 		self.base_fee.saturating_mul(gas_limit)
 	}

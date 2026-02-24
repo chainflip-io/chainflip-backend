@@ -461,7 +461,7 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
       swapEgressScheduled,
       ccmEventEmitted,
     ]);
-    cf.trace(`Swap success! New balance: ${newBalance}!`);
+    cf.debug(`Swap success!${newBalance !== undefined ? ` New balance: ${newBalance}` : ''}!`);
 
     if (sourceAsset === 'Sol') {
       // Native Vault swaps are fetched proactively. SPL-tokens don't need a fetch.

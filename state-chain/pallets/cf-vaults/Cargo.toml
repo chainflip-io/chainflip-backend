@@ -22,8 +22,11 @@ cf-runtime-utilities = { workspace = true, features = ["derive"] }
 cf-traits = { workspace = true }
 cf-utilities = { workspace = true }
 cfe-events = { workspace = true }
+generic-typeinfo-derive = { workspace = true }
 
 log = { workspace = true }
+derive-where = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }

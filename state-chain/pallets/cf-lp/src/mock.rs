@@ -134,7 +134,6 @@ parameter_types! {
 
 impl_mock_runtime_safe_mode!(liquidity_provider: PalletSafeMode);
 impl crate::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type AddressConverter = MockAddressConverter;

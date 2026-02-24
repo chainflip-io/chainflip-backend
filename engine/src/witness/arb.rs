@@ -231,7 +231,7 @@ impl super::evm::vault::IngressCallBuilder for ArbCallBuilder {
 		>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
-			source_asset,
+			source_asset.try_into().expect("source_asset should be arbitrum asset"),
 			deposit_amount,
 			destination_asset,
 			destination_address,
@@ -322,7 +322,7 @@ mod tests {
 						.await;
 
 				let arb_client = {
-					let expected_arb_chain_id = web3::types::U256::from(
+					let expected_arb_chain_id = sp_core::U256::from(
 						state_chain_client
 							.storage_value::<pallet_cf_environment::ArbitrumChainId<state_chain_runtime::Runtime>>(
 								state_chain_client.latest_finalized_block().hash,

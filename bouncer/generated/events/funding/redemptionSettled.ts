@@ -1,4 +1,8 @@
 import { z } from 'zod';
-import { accountId, numberOrHex } from '../common';
+import { accountId, hexString, numberOrHex } from '../common';
 
-export const fundingRedemptionSettled = z.tuple([accountId, numberOrHex]);
+export const fundingRedemptionSettled = z.object({
+  accountId,
+  amount: numberOrHex,
+  txHash: hexString,
+});

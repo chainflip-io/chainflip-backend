@@ -249,7 +249,7 @@ impl super::evm::vault::IngressCallBuilder for EthCallBuilder {
 		>,
 	) -> state_chain_runtime::RuntimeCall {
 		let deposit = vault_deposit_witness!(
-			source_asset,
+			source_asset.try_into().expect("source_asset should be ethereum asset"),
 			deposit_amount,
 			destination_asset,
 			destination_address,

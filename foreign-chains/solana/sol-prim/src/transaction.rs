@@ -19,7 +19,7 @@ use crate::{
 	CompiledKeys, Hash, Instruction, MessageAddressTableLookup, MessageHeader, Pubkey,
 	RawSignature, Signature,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_std::{vec, vec::Vec};
@@ -60,7 +60,7 @@ pub enum Legacy {
 /// which message version is serialized starting from version `0`. If the first
 /// is bit is not set, all bytes are used to encode the legacy `Message`
 /// format.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum VersionedMessage {
 	Legacy(legacy::DeprecatedLegacyMessage),
 	V0(v0::VersionedMessageV0),
@@ -302,7 +302,17 @@ impl<'de> serde::Deserialize<'de> for VersionedMessage {
 // NOTE: Serialization-related changes must be paired with the direct read at sigverify.
 /// An atomic transaction
 #[derive(
-	Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize, Encode, Decode, TypeInfo,
+	Debug,
+	PartialEq,
+	Default,
+	Eq,
+	Clone,
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
 )]
 pub struct VersionedTransaction {
 	/// List of signatures
@@ -406,7 +416,17 @@ pub mod v0 {
 	///
 	/// [`message`]: crate::message
 	#[derive(
-		Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo,
+		Serialize,
+		Deserialize,
+		Default,
+		Debug,
+		PartialEq,
+		Eq,
+		Clone,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
 	)]
 	#[serde(rename_all = "camelCase")]
 	pub struct VersionedMessageV0 {
@@ -620,7 +640,17 @@ pub mod legacy {
 	// NOTE: Serialization-related changes must be paired with the custom serialization
 	// for versioned messages in the `RemainingMessage` struct.
 	#[derive(
-		Encode, Decode, TypeInfo, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Serialize,
+		Deserialize,
+		Default,
+		Debug,
+		PartialEq,
+		Eq,
+		Clone,
 	)]
 	#[serde(rename_all = "camelCase")]
 	pub struct DeprecatedLegacyMessage {
@@ -662,7 +692,17 @@ pub mod legacy {
 	/// transaction's `Message` is both a signer and the expected fee-payer, then
 	/// redundantly specifying the fee-payer is not strictly required.
 	#[derive(
-		Encode, Decode, TypeInfo, Debug, PartialEq, Default, Eq, Clone, Serialize, Deserialize,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		TypeInfo,
+		Debug,
+		PartialEq,
+		Default,
+		Eq,
+		Clone,
+		Serialize,
+		Deserialize,
 	)]
 	pub struct DeprecatedLegacyTransaction {
 		/// A set of signatures of a serialized [`Message`], signed by the first

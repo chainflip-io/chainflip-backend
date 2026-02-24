@@ -19,22 +19,6 @@ impl SignedHundredthBasisPoints {
 	pub const MAX: Self = SignedHundredthBasisPoints(u16::MAX as i32 * 100);
 	pub const MIN: Self = SignedHundredthBasisPoints(-(u16::MAX as i32 * 100));
 
-	/// Checks whether the value of `self` breaches the given limit in
-	/// [SignedBasisPoints]. If the limit is negative, checks whether `self` is less than the limit.
-	/// If the limit is positive, checks whether `self` is greater than the limit.
-	pub fn breaches_limit(&self, limit: SignedBasisPoints) -> bool {
-		if limit.0 == 0 {
-			return self.0 != 0;
-		}
-
-		let limit_in_hundredths = Self::from(limit);
-		if limit_in_hundredths.is_negative() {
-			*self < limit_in_hundredths
-		} else {
-			*self > limit_in_hundredths
-		}
-	}
-
 	/// Rounds towards the worst case (i.e. away from zero) and converts into
 	/// [SignedBasisPoints], clamping to the valid range if necessary.
 	pub fn pessimistic_rounded_into(&self) -> SignedBasisPoints {
@@ -89,27 +73,5 @@ mod tests {
 				.0,
 			SignedBasisPoints::MIN.0
 		);
-	}
-
-	#[test]
-	fn breaches_limit_checks_direction_and_magnitude() {
-		// Positive limit: slippage must not exceed the limit (only checks upward)
-		let pos_limit = SignedBasisPoints(1);
-		assert!(SignedHundredthBasisPoints(101).breaches_limit(pos_limit));
-		assert!(!SignedHundredthBasisPoints(100).breaches_limit(pos_limit));
-		assert!(!SignedHundredthBasisPoints(0).breaches_limit(pos_limit));
-		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(pos_limit));
-
-		// Negative limit: slippage must not go below the limit (only checks downward)
-		let neg_limit = SignedBasisPoints(-1);
-		assert!(SignedHundredthBasisPoints(-101).breaches_limit(neg_limit));
-		assert!(!SignedHundredthBasisPoints(-100).breaches_limit(neg_limit));
-		assert!(!SignedHundredthBasisPoints(0).breaches_limit(neg_limit));
-		assert!(!SignedHundredthBasisPoints(100).breaches_limit(neg_limit));
-
-		// Zero limit: any non-zero slippage is a breach
-		assert!(SignedHundredthBasisPoints(1).breaches_limit(SignedBasisPoints(0)));
-		assert!(SignedHundredthBasisPoints(-1).breaches_limit(SignedBasisPoints(0)));
-		assert!(!SignedHundredthBasisPoints(0).breaches_limit(SignedBasisPoints(0)));
 	}
 }

@@ -18,10 +18,10 @@ use std::collections::HashSet;
 
 use super::*;
 
-use cf_amm::input_amount_from_fee;
+use cf_amm::{common::AssetPair, input_amount_from_fee};
 use cf_primitives::AccountId;
 use cf_rpc_apis::{OrderFilled, OrderFills};
-use pallet_cf_pools::{AssetPair, OrderId, Pool};
+use pallet_cf_pools::{OrderId, Pool};
 use state_chain_runtime::{chainflip::get_header_timestamp, Runtime};
 
 pub(crate) fn order_fills_for_block<C, B, BE>(

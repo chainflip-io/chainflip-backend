@@ -168,6 +168,7 @@ impl ExtBuilder {
 						)
 					})
 					.collect::<Vec<_>>(),
+				non_authority_keys: vec![],
 			},
 			flip: FlipConfig {
 				total_issuance: TOTAL_ISSUANCE,

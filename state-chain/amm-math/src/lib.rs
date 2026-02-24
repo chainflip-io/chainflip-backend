@@ -20,9 +20,9 @@ pub mod test_utilities;
 
 pub use cf_primitives::Tick;
 use cf_primitives::{
-	basis_points::SignedHundredthBasisPoints, Asset, BasisPoints, MAX_BASIS_POINTS,
+	basis_points::SignedHundredthBasisPoints, Asset, BasisPoints, ONE_AS_BASIS_POINTS,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -43,6 +43,7 @@ pub type Amount = U256;
 	TypeInfo,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
 	Deserialize,
@@ -76,7 +77,7 @@ impl SqrtPrice {
 	}
 
 	pub fn from_amounts_bounded(quote: Amount, base: Amount) -> Self {
-		assert!(!quote.is_zero() || !base.is_zero());
+		debug_assert!(!quote.is_zero() || !base.is_zero());
 
 		if base.is_zero() {
 			MAX_SQRT_PRICE
@@ -358,6 +359,7 @@ pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	Default,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	Serialize,
 	Deserialize,
 	TypeInfo,
@@ -397,6 +399,10 @@ impl Price {
 		self.0
 	}
 
+	pub fn one() -> Self {
+		Self(U256::one() << Self::FRACTIONAL_BITS)
+	}
+
 	pub const fn zero() -> Self {
 		Price(U256::zero())
 	}
@@ -420,53 +426,61 @@ impl Price {
 		SqrtPrice::from_amounts_bounded(quote, base).into()
 	}
 
-	pub fn from_amounts(quote: Amount, base: Amount) -> Self {
-		Price(mul_div_floor(quote, U256::one() << Self::FRACTIONAL_BITS, base))
+	/// Returns None if the base amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn from_amounts(quote: Amount, base: Amount) -> Option<Self> {
+		mul_div_floor_checked(quote, U256::one() << Self::FRACTIONAL_BITS, base).map(Price)
 	}
 
 	/// The price obtained by selling `input` amount of asset to receive `output` amount of asset.
 	///
 	/// Higher sell price is better for the seller (more output for the same input).
-	pub fn sell_price(input: Amount, output: Amount) -> Self {
+	///
+	/// Returns None if the output amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn sell_price(input: Amount, output: Amount) -> Option<Self> {
 		Self::from_amounts(output, input)
 	}
 
 	/// The price of buying `output` amount of asset with `input` amount of asset.
 	///
 	/// Higher buy price is worse for the buyer (less output for the same input).
-	pub fn buy_price(input: Amount, output: Amount) -> Self {
+	///
+	/// Returns None if the input amount is zero, or if the resulting price is too high to be
+	/// represented by a valid tick.
+	pub fn buy_price(input: Amount, output: Amount) -> Option<Self> {
 		Self::from_amounts(input, output)
 	}
 
 	/// Compute the price of asset 1 (self) in terms of asset 2 (given).
 	/// Both prices must have the same quote asset (eg. USD).
-	pub fn relative_to(self, price: Price) -> Self {
-		Price(mul_div_floor(self.0, U256::one() << Self::FRACTIONAL_BITS, price.0))
+	pub fn divide_by(self, price: Price) -> Self {
+		Price(mul_div_floor(self.0, Self::one().0, price.0))
+	}
+
+	pub fn multiply_by(self, price: Price) -> Self {
+		Price(mul_div_floor(self.0, price.0, Self::one().0))
 	}
 
 	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_floor(input.into(), self.0, U256::one() << Self::FRACTIONAL_BITS)
+		mul_div_floor(input.into(), self.0, Self::one().0)
 	}
 
 	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_ceil(input.into(), self.0, U256::one() << Self::FRACTIONAL_BITS)
+		mul_div_ceil(input.into(), self.0, Self::one().0)
 	}
 
 	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_floor(output.into(), U256::one() << Self::FRACTIONAL_BITS, self.0)
+		mul_div_floor(output.into(), Self::one().0, self.0)
 	}
 
 	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_ceil(output.into(), U256::one() << Self::FRACTIONAL_BITS, self.0)
+		mul_div_ceil(output.into(), Self::one().0, self.0)
 	}
 
 	/// Given price of asset 1 in terms of asset 2, compute the price of asset 2 in terms of asset 1
 	pub fn invert(self) -> Self {
-		Price(mul_div_floor(
-			U256::one() << Self::FRACTIONAL_BITS,
-			U256::one() << Self::FRACTIONAL_BITS,
-			self.0,
-		))
+		Price(mul_div_floor(Self::one().0, Self::one().0, self.0))
 	}
 
 	/// Converts a `price` to a `tick`. Will return `None` if the price is too high or low to be
@@ -510,8 +524,9 @@ impl Price {
 	}
 
 	pub fn adjust_by_bps(self, bps: BasisPoints, increase: bool) -> Self {
-		let adjusted_bps = if increase { MAX_BASIS_POINTS + bps } else { MAX_BASIS_POINTS - bps };
-		Self(mul_div_floor(self.0, U256::from(adjusted_bps), MAX_BASIS_POINTS))
+		let adjusted_bps =
+			if increase { ONE_AS_BASIS_POINTS + bps } else { ONE_AS_BASIS_POINTS - bps };
+		Self(mul_div_floor(self.0, U256::from(adjusted_bps), ONE_AS_BASIS_POINTS))
 	}
 	/// Calculates the basis points difference from some other price to this one, assuming they
 	/// are both prices of the same base/quote pair.
@@ -520,7 +535,7 @@ impl Price {
 	/// and if the other price is higher than self, the result will be negative.
 	pub fn hundredth_bps_difference_from(&self, other_price: &Price) -> SignedHundredthBasisPoints {
 		let abs_diff = self.0.abs_diff(other_price.0);
-		let max_hundredth_bps = U256::from(100 * MAX_BASIS_POINTS as u32);
+		let max_hundredth_bps = U256::from(100 * ONE_AS_BASIS_POINTS as u32);
 		let abs_diff_bps = mul_div_ceil(abs_diff, max_hundredth_bps, other_price.0);
 		let sign = if self.0 < other_price.0 { -1 } else { 1 };
 		SignedHundredthBasisPoints(abs_diff_bps.saturated_into::<i32>() * sign)
@@ -552,6 +567,7 @@ pub fn is_tick_valid(tick: Tick) -> bool {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Serialize,
 	Deserialize,
@@ -713,7 +729,7 @@ mod test {
 	#[test]
 	fn test_relative_price() {
 		fn relative_price(price_1: U256, price_2: U256) -> U256 {
-			Price(price_1).relative_to(Price(price_2)).0
+			Price(price_1).divide_by(Price(price_2)).0
 		}
 
 		assert_eq!(

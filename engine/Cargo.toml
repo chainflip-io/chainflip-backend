@@ -31,7 +31,6 @@ hex = { workspace = true, default-features = true }
 http = { workspace = true }
 itertools = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["full"] }
-ethbloom = { workspace = true }
 ethers = { workspace = true, features = ["rustls"] }
 lazy_static = { workspace = true }
 num-traits = { workspace = true }
@@ -54,6 +53,7 @@ pin-project = { workspace = true }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tracing = { workspace = true }
+derive-where = { workspace = true }
 
 # Local deps
 cf-chains = { workspace = true, default-features = true }
@@ -116,7 +116,6 @@ rocksdb = { workspace = true, features = ["lz4"] }
 mockall = { workspace = true, features = ["nightly"], optional = true }
 
 [dev-dependencies]
-ethereum = { workspace = true, default-features = true }
 mockall = { workspace = true, features = ["nightly"] }
 multisig = { workspace = true, features = ["test"] }
 rlp = { workspace = true, default-features = true }

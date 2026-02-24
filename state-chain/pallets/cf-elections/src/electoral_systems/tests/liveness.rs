@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_primitives::EpochIndex;
 use sp_std::collections::btree_set::BTreeSet;
 
 use super::mocks::*;
@@ -128,6 +129,7 @@ fn on_finalize() {
 	const INIT_BLOCK: BlockNumber = 100;
 	const BLOCKS_BETWEEN_CHECKS: BlockNumber = 10;
 	const INIT_CHAIN_TRACKING_BLOCK: ChainBlockNumber = 1000;
+	const INIT_EPOCH: EpochIndex = 3;
 
 	let correct_voters: BTreeSet<_> = (0..50).collect();
 	let non_voters: BTreeSet<_> = (60..70).collect();
@@ -136,7 +138,7 @@ fn on_finalize() {
 		.with_electoral_settings(BLOCKS_BETWEEN_CHECKS)
 		.build()
 		.test_on_finalize(
-			&(INIT_BLOCK, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| assert_eq!(MockHook::called(), 0, "Hook should not have been called!"),
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
@@ -149,7 +151,7 @@ fn on_finalize() {
 		)
 		.test_on_finalize(
 			// check duration has not yet elapsed, so no change
-			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS - 1, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS - 1, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
@@ -157,7 +159,7 @@ fn on_finalize() {
 			],
 		)
 		.test_on_finalize(
-			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
@@ -167,7 +169,7 @@ fn on_finalize() {
 		.test_on_finalize(
 			// we should have reset to the hook not being called, and there's still just one
 			// election
-			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS + 1, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS + 1, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
@@ -178,7 +180,7 @@ fn on_finalize() {
 		.test_on_finalize(
 			// we should have reset to the hook not being called, and there's still just one
 			// election
-			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 2, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 2, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
@@ -187,15 +189,41 @@ fn on_finalize() {
 		)
 		.expect_consensus(
 			generate_votes(correct_voters.clone(), BTreeSet::default(), non_voters.clone()),
-			Some(non_voters),
+			Some(non_voters.clone()),
 		)
 		// we have votes now and expect nodes to be punished by having the hook called again.
 		.test_on_finalize(
-			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 3, INIT_CHAIN_TRACKING_BLOCK),
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 3, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH),
 			|_| {},
 			vec![
 				Check::<SimpleLiveness>::only_one_election(),
 				Check::<SimpleLiveness>::hook_called_n_times(2),
+			],
+		)
+		.expect_consensus(
+			generate_votes(correct_voters.clone(), BTreeSet::default(), non_voters.clone()),
+			Some(non_voters.clone()),
+		)
+		// No Hook called, we switch to the new epoch
+		.test_on_finalize(
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 4, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH + 1),
+			|_| {},
+			vec![
+				Check::<SimpleLiveness>::only_one_election(),
+				Check::<SimpleLiveness>::hook_called_n_times(2),
+			],
+		)
+		.expect_consensus(
+			generate_votes(correct_voters, BTreeSet::default(), non_voters.clone()),
+			Some(non_voters),
+		)
+		// Hook called correctly for the new epoch
+		.test_on_finalize(
+			&(INIT_BLOCK + BLOCKS_BETWEEN_CHECKS * 5, INIT_CHAIN_TRACKING_BLOCK, INIT_EPOCH + 1),
+			|_| {},
+			vec![
+				Check::<SimpleLiveness>::only_one_election(),
+				Check::<SimpleLiveness>::hook_called_n_times(3),
 			],
 		);
 }

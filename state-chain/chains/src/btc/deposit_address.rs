@@ -23,16 +23,17 @@ use super::*;
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
 	RuntimeDebug,
 	PartialEq,
 	Eq,
-	serde::Serialize,
-	serde::Deserialize,
 	Ord,
 	PartialOrd,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub struct TapscriptPath {
 	pub salt: u32,
@@ -56,16 +57,17 @@ impl TapscriptPath {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Clone,
 	RuntimeDebug,
 	PartialEq,
 	Eq,
-	serde::Serialize,
-	serde::Deserialize,
 	Ord,
 	PartialOrd,
+	serde::Serialize,
+	serde::Deserialize,
 )]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],

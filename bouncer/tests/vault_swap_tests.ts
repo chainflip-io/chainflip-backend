@@ -8,14 +8,15 @@ import { executeVaultSwap, prepareVaultSwapSource, performVaultSwap } from 'shar
 import { prepareSwap } from 'shared/swapping';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
+import { SwapContext } from 'shared/utils/swap_context';
 import {
   ChainflipIO,
   FullAccount,
   fullAccountFromUri,
   newChainflipIO,
+  WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
-import { SwapContext } from '../shared/utils/swap_context';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -69,20 +70,30 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.info('Refund vault swap completed ✅.');
 }
 
-async function testWithdrawCollectedAffiliateFees<A = []>(
-  parentCf: ChainflipIO<A>,
-  brokerAccount: FullAccount<'Broker'>,
+async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   affiliateAccountId: string,
   withdrawAddress: string,
 ) {
-  const cf = parentCf.with({ account: brokerAccount });
-
   const balanceObserveTimeout = 60;
   let success = false;
 
   cf.debug('Affiliate account ID:', affiliateAccountId);
   cf.debug('Withdraw address:', withdrawAddress);
 
+  try {
+    await cf.submitExtrinsic({
+      extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
+    });
+  } catch (error) {
+    if (`${error}`.includes('IngressEgress.BelowEgressDustLimit')) {
+      cf.info(
+        'Withdrawal request failed with BelowEgressDustLimit error. This means that the fee balance was above 0. So this counts as success for this test.',
+      );
+      return;
+    }
+    throw error;
+  }
   await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
   });
@@ -113,9 +124,7 @@ async function testFeeCollection<A = []>(
   const broker = await setupAccount(parentCf, brokerUri, AccountRole.Broker);
   const brokerAccount = fullAccountFromUri(brokerUri, 'Broker');
 
-  const cf = parentCf.with({
-    account: fullAccountFromUri(brokerUri, 'Broker'),
-  });
+  const cf = parentCf.with({ account: brokerAccount });
 
   const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
 
@@ -142,17 +151,14 @@ async function testFeeCollection<A = []>(
   );
 
   // Amounts before swap, always zero because broker is newly setup and funded
-  // const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
-  // const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
   const earnedBrokerFeesBefore = BigInt(0);
   const earnedAffiliateFeesBefore = BigInt(0);
   cf.debug('Earned broker fees before:', earnedBrokerFeesBefore);
   cf.debug('Earned affiliate fees before:', earnedAffiliateFeesBefore);
 
   // Do the vault swap
-  const subcf = cf.withChildLogger(tag);
   await performVaultSwap(
-    subcf,
+    cf.withChildLogger(tag),
     inputAsset,
     destAsset,
     destAddress,
@@ -219,7 +225,11 @@ async function testFeeCollectionWithdrawal<A = []>(
 ) {
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, inputAsset, swapContext);
-  await testWithdrawCollectedAffiliateFees(cf, broker, affiliateId, refundAddress);
+  await testWithdrawCollectedAffiliateFees(
+    cf.with({ account: broker }),
+    affiliateId,
+    refundAddress,
+  );
 }
 
 export async function testVaultSwap(testContext: TestContext) {

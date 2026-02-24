@@ -21,7 +21,7 @@ mod tests;
 use core::convert::Infallible;
 
 use cf_amm_math::{mul_div_floor, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
 	SetFeesError, Side, SwapDirection, ONE_IN_HUNDREDTH_PIPS,
@@ -37,7 +37,15 @@ pub mod range_orders;
 pub use cf_amm_math as math;
 
 #[derive(
-	Clone, Debug, TypeInfo, Encode, Decode, serde::Serialize, serde::Deserialize, PartialEq,
+	Clone,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	serde::Serialize,
+	serde::Deserialize,
+	PartialEq,
 )]
 pub struct PoolState<LiquidityProvider: Ord> {
 	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
@@ -525,20 +533,22 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 }
 fn reduce_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
-	mul_div_floor(
+	mul_div_floor_checked(
 		input,
 		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 		U256::from(ONE_IN_HUNDREDTH_PIPS),
 	)
+	.unwrap_or(U256::zero())
 }
 
 fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	// This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
-	mul_div_floor(
+	mul_div_floor_checked(
 		input,
 		U256::from(ONE_IN_HUNDREDTH_PIPS),
 		U256::from(ONE_IN_HUNDREDTH_PIPS - fee_hundredth_pips),
 	)
+	.unwrap_or(U256::MAX)
 }
 
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(

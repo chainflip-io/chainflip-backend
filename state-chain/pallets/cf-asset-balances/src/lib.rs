@@ -46,7 +46,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum ExternalOwner {
 	Vault,
 	AggKey,
@@ -91,10 +91,6 @@ pub mod pallet {
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
-		/// Because we want to emit events when there is a config change during
-		/// an runtime upgrade.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// Handles egress for all chains.
 		type EgressHandler: EgressApi<AnyChain>;
 
@@ -352,7 +348,18 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug, Serialize, Deserialize)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+	RuntimeDebug,
+	Serialize,
+	Deserialize,
+)]
 pub enum VaultImbalance<A> {
 	/// There are more withheld assets than what is owed.
 	Surplus(A),

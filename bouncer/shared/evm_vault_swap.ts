@@ -67,7 +67,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
   cf.debug('Creating evm wallet ...');
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset));
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset, amount));
 
   if (erc20Assets.includes(sourceAsset)) {
     cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
@@ -102,7 +102,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     refund_parameters: refundParams,
   };
 
-  cf.trace('Requesting vault swap parameter encoding');
+  cf.debug('Requesting vault swap parameter encoding');
   const vaultSwapDetails = (await chainflip.rpc(
     `cf_request_swap_parameter_encoding`,
     cf.requirements.account.keypair.address,
@@ -137,7 +137,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
   };
 
-  cf.trace('Signing and Sending EVM vault swap transaction');
+  cf.debug('Signing and Sending EVM vault swap transaction');
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 

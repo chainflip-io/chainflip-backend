@@ -24,7 +24,7 @@ export const frameSupportDispatchDispatchClass = simpleEnum(['Normal', 'Operatio
 
 export const frameSupportDispatchPays = simpleEnum(['Yes', 'No']);
 
-export const frameSupportDispatchDispatchInfo = z.object({
+export const frameSystemDispatchEventInfo = z.object({
   weight: spWeightsWeightV2Weight,
   class: frameSupportDispatchDispatchClass,
   paysFee: frameSupportDispatchPays,
@@ -49,6 +49,23 @@ export const spArithmeticArithmeticError = simpleEnum(['Underflow', 'Overflow', 
 
 export const spRuntimeTransactionalError = simpleEnum(['LimitReached', 'NoLayer']);
 
+export const spRuntimeProvingTrieTrieError = simpleEnum([
+  'InvalidStateRoot',
+  'IncompleteDatabase',
+  'ValueAtIncompleteKey',
+  'DecoderError',
+  'InvalidHash',
+  'DuplicateKey',
+  'ExtraneousNode',
+  'ExtraneousValue',
+  'ExtraneousHashReference',
+  'InvalidChildReference',
+  'ValueMismatch',
+  'IncompleteProof',
+  'RootMismatch',
+  'DecodeError',
+]);
+
 export const spRuntimeDispatchError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Other') }),
   z.object({ __kind: z.literal('CannotLookup') }),
@@ -64,6 +81,7 @@ export const spRuntimeDispatchError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Corruption') }),
   z.object({ __kind: z.literal('Unavailable') }),
   z.object({ __kind: z.literal('RootNotAllowed') }),
+  z.object({ __kind: z.literal('Trie'), value: spRuntimeProvingTrieTrieError }),
 ]);
 
 export const accountId = z
@@ -835,6 +853,12 @@ export const palletCfSwappingPalletConfigUpdate = z.discriminatedUnion('__kind',
     asset: cfPrimitivesChainsAssetsAnyAsset,
     rate: z.number().nullish(),
   }),
+  z.object({
+    __kind: z.literal('SetDefaultOraclePriceSlippageProtectionForAsset'),
+    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
+    quoteAsset: cfPrimitivesChainsAssetsAnyAsset,
+    bps: z.number().nullish(),
+  }),
 ]);
 
 export const cfChainsEvmDepositDetails = z.object({ txHashes: z.array(hexString).nullish() });
@@ -1269,7 +1293,7 @@ export const cfTraitsLiquidityIncreaseOrDecreaseU128 = z.discriminatedUnion('__k
   z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
 ]);
 
-export const palletCfPoolsAssetPair = z.object({ assets: cfAmmCommonPoolPairsMap });
+export const cfAmmCommonAssetPair = z.object({ assets: cfAmmCommonPoolPairsMap });
 
 export const palletCfPoolsCloseOrder = z.discriminatedUnion('__kind', [
   z.object({

@@ -27,6 +27,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 n-functor = { workspace = true }
+derive-where = { workspace = true }
 
 # ==== Parity deps ====
 codec = { workspace = true, features = ["derive"] }

@@ -22,7 +22,7 @@ pub trait Hook<T: HookType>: Validate {
 pub mod hook_test_utils {
 	use super::*;
 	use cf_utilities::impls;
-	use codec::MaxEncodedLen;
+	use codec::{DecodeWithMemTracking, MaxEncodedLen};
 	#[cfg(feature = "test")]
 	use proptest_derive::Arbitrary;
 
@@ -35,6 +35,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,
@@ -115,6 +116,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,
@@ -182,6 +184,7 @@ pub mod hook_test_utils {
 		Debug,
 		Encode,
 		Decode,
+		DecodeWithMemTracking,
 		TypeInfo,
 		MaxEncodedLen,
 		Serialize,

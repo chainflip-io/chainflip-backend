@@ -80,6 +80,7 @@ pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
 )]
@@ -99,7 +100,6 @@ impl From<PalletOffence> for AllOffences {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;

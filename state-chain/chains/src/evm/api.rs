@@ -15,17 +15,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	eth::Address as EvmAddress,
-	evm::{EvmCrypto, SchnorrVerificationComponents},
-	*,
+	evm::{Address, AggKey, EvmCrypto, SchnorrVerificationComponents},
+	AllBatchError, Chain, ChainCrypto, FetchAssetParams, TransferAssetParams,
 };
+use cf_primitives::AssetAmount;
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use common::*;
-use ethabi::{Address, ParamType, Token, Uint};
-use evm::AggKey;
+use ethabi::{ParamType, Token, Uint};
 use frame_support::{
 	sp_runtime::traits::{Hash, Keccak256},
 	traits::Defensive,
 };
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_core::{RuntimeDebug, U256};
+use sp_std::{vec, vec::Vec};
 
 use super::{tokenizable::Tokenizable, EvmFetchId};
 
@@ -41,7 +45,19 @@ pub mod vault_swaps;
 
 pub use vault_swaps::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
+#[derive(
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Default,
+)]
 pub struct EvmReplayProtection {
 	pub nonce: u64,
 	pub chain_id: EvmChainId,
@@ -53,9 +69,9 @@ impl Tokenizable for EvmReplayProtection {
 	fn tokenize(self) -> Token {
 		Token::FixedArray(vec![
 			Token::Uint(Uint::from(self.nonce)),
-			Token::Address(self.contract_address),
+			Token::Address(ethabi::ethereum_types::H160(self.contract_address.0)),
 			Token::Uint(Uint::from(self.chain_id)),
-			Token::Address(self.key_manager_address),
+			Token::Address(ethabi::ethereum_types::H160(self.key_manager_address.0)),
 		])
 	}
 
@@ -74,6 +90,7 @@ impl Tokenizable for EvmReplayProtection {
 #[derive(
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	TypeInfo,
 	Copy,
 	Clone,
@@ -86,10 +103,10 @@ impl Tokenizable for EvmReplayProtection {
 )]
 pub struct SigData {
 	/// The Schnorr signature.
-	pub sig: Uint,
+	pub sig: U256,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
 	/// nonce to prevent replay attacks.
-	pub nonce: Uint,
+	pub nonce: U256,
 	/// The address value derived from the random nonce value `k`. Also known as
 	/// `nonceTimesGeneratorAddress`.
 	///
@@ -101,9 +118,9 @@ pub struct SigData {
 
 impl SigData {
 	/// Add the actual signature. This method does no verification.
-	pub fn new(nonce: impl Into<Uint>, schnorr: &SchnorrVerificationComponents) -> Self {
+	pub fn new(nonce: impl Into<U256>, schnorr: &SchnorrVerificationComponents) -> Self {
 		Self {
-			sig: schnorr.s.into(),
+			sig: U256::from_big_endian(&schnorr.s[..]),
 			nonce: nonce.into(),
 			k_times_g_address: schnorr.k_times_g_address.into(),
 		}
@@ -186,12 +203,22 @@ pub trait EvmCall {
 				.collect::<Vec<_>>(),
 		))
 	}
-	fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		None
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+)]
 pub struct EvmTransactionBuilder<C> {
 	pub signer_and_sig_data: Option<(AggKey, SigData)>,
 	pub replay_protection: EvmReplayProtection,
@@ -211,7 +238,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.replay_protection.chain_id
 	}
 
-	pub fn ccm_transfer_data(&self) -> Option<(GasAmount, usize, Address)> {
+	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		self.call.ccm_transfer_data()
 	}
 
@@ -263,7 +290,7 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 			"`transaction_out_id` is only requested for signed transactions.",
 		);
 		SchnorrVerificationComponents {
-			s: sig_data.sig.into(),
+			s: sig_data.sig.to_big_endian(),
 			k_times_g_address: sig_data.k_times_g_address.into(),
 		}
 	}
@@ -281,8 +308,8 @@ pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) ->
 }
 
 pub fn evm_all_batch_builder<
-	C: Chain<DepositFetchId = EvmFetchId, ChainAccount = EvmAddress, ChainAmount = u128>,
-	F: Fn(<C as Chain>::ChainAsset) -> Option<EvmAddress>,
+	C: Chain<DepositFetchId = EvmFetchId, ChainAccount = Address, ChainAmount = u128>,
+	F: Fn(<C as Chain>::ChainAsset) -> Option<Address>,
 >(
 	fetch_params: Vec<FetchAssetParams<C>>,
 	transfer_params: Vec<TransferAssetParams<C>>,
@@ -338,9 +365,9 @@ pub fn evm_all_batch_builder<
 
 /// Provides the environment data for ethereum-like chains.
 pub trait EvmEnvironmentProvider<C: Chain> {
-	fn token_address(asset: <C as Chain>::ChainAsset) -> Option<EvmAddress>;
-	fn key_manager_address() -> EvmAddress;
-	fn vault_address() -> EvmAddress;
+	fn token_address(asset: <C as Chain>::ChainAsset) -> Option<Address>;
+	fn key_manager_address() -> Address;
+	fn vault_address() -> Address;
 	fn chain_id() -> EvmChainId;
 	fn next_nonce() -> u64;
 }
@@ -348,7 +375,7 @@ pub trait EvmEnvironmentProvider<C: Chain> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use evm::AggKey;
+	use crate::evm::AggKey;
 
 	#[test]
 	fn test_evm_transaction_builder() {
