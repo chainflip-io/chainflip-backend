@@ -1869,18 +1869,12 @@ mod scheduled_updates {
 					));
 				}
 
-				assert_eq!(
-					ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)),
-					3
-				);
+				assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 3);
 			})
 			.then_process_blocks_until_block(DISPATCH_AT)
 			.then_execute_with(|_| {
 				// Count should be cleaned up (removed from storage) after all updates dispatched
-				assert_eq!(
-					ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)),
-					0
-				);
+				assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 0);
 				// Storage entry should be removed entirely (ValueQuery default)
 				assert!(!ScheduledLimitOrderUpdateCount::<Test>::contains_key((
 					ALICE,
@@ -1921,10 +1915,7 @@ mod scheduled_updates {
 				));
 			}
 
-			assert_eq!(
-				ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, CLOSE_ORDER_AT)),
-				12
-			);
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, CLOSE_ORDER_AT)), 12);
 
 			// The 13th close_order_at for the same block should fail
 			assert_noop!(
