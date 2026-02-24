@@ -668,6 +668,9 @@ export async function observeSwapRequested<A = []>(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
+  cf.debug(
+    `Observing SwapRequested sourceAsset: ${sourceAsset} -> destAsset: ${destAsset} transaction id: ${JSON.stringify(id)} swapRequestType: ${swapRequestType}`,
+  );
   return cf.stepUntilEvent(
     'Swapping.SwapRequested',
     swappingSwapRequested.refine((event) => {
@@ -1245,9 +1248,9 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      // logger.trace(`Extrinsic status: ${status.toString()}`);
+       logger.debug(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
-        // logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
+         logger.debug(`Extrinsic error: ${dispatchError.toString()}`);
         try {
           dispatchErrorHandler({ dispatchError });
         } catch (error) {

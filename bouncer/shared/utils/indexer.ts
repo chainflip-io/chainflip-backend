@@ -133,6 +133,10 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       include: {
         block: true,
       },
+      orderBy: [
+        { block: { height: 'asc' } },
+        { id: 'asc' },
+      ],
     });
 
     if (matchingEvents) {
