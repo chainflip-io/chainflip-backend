@@ -64,6 +64,7 @@ async function testSuccessiveDepositEvm<A = []>(
     cf.withChildLogger(`[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`),
     swapParams,
   );
+  cf.info('Success');
 }
 
 async function testNoDuplicateWitnessing<A = []>(
@@ -102,6 +103,8 @@ async function testNoDuplicateWitnessing<A = []>(
   await sleep(60000);
 
   await observingSwapScheduled.stop();
+
+  cf.info('Success');
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
@@ -149,54 +152,34 @@ async function testTxMultipleVaultSwaps<A = []>(
     txHash: receipt.transactionHash,
   };
 
-  const firstSwapRequestedEvent = await observeSwapRequested(
-    cf,
-    sourceAsset,
-    destAsset,
-    txOrigin,
-    SwapRequestType.Regular,
-  );
-
-  await cf.stepUntilEvent(
-    'Swapping.SwapRequested',
-    swappingSwapRequested.refine(
-      (event) =>
-        sourceAsset === event.inputAsset &&
-        destAsset === event.outputAsset &&
-        checkTransactionInMatches(event.origin, txOrigin) &&
-        checkRequestTypeMatches(event.requestType, SwapRequestType.Regular) &&
-        event.swapRequestId !== firstSwapRequestedEvent.swapRequestId,
-    ),
-  );
-
-  // TODO find out why this doesn't work
   // Wait for multiple SwapRequested events. These can appear in the same block but will have different
   // swapRequestId
-  // const foundSwapRequestIds: bigint[] = [];
-  // for (let i = 0; i < numSwaps; i++) {
-  //   const swapRequestedEvent = await cf.stepUntilEvent(
-  //     'Swapping.SwapRequested',
-  //     swappingSwapRequested.refine((event) => {
-  //       const channelMatches = checkTransactionInMatches(event.origin, txOrigin);
-  //       const sourceAssetMatches = sourceAsset === event.inputAsset;
-  //       const destAssetMatches = destAsset === event.outputAsset;
-  //       const requestTypeMatches = checkRequestTypeMatches(
-  //         event.requestType,
-  //         SwapRequestType.Regular,
-  //       );
-  //       const differentSwapReqId = !foundSwapRequestIds.includes(event.swapRequestId);
-  //       return (
-  //         channelMatches &&
-  //         sourceAssetMatches &&
-  //         destAssetMatches &&
-  //         requestTypeMatches &&
-  //         differentSwapReqId
-  //       );
-  //     }),
-  //   );
-  //   foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
-  // }
-  // assert.strictEqual(foundSwapRequestIds.length, numSwaps);
+  const foundSwapRequestIds: bigint[] = [];
+  for (let i = 0; i < numSwaps; i++) {
+    const swapRequestedEvent = await cf.stepUntilEvent(
+      'Swapping.SwapRequested',
+      swappingSwapRequested.refine((event) => {
+        const channelMatches = checkTransactionInMatches(event.origin, txOrigin);
+        const sourceAssetMatches = sourceAsset === event.inputAsset;
+        const destAssetMatches = destAsset === event.outputAsset;
+        const requestTypeMatches = checkRequestTypeMatches(
+          event.requestType,
+          SwapRequestType.Regular,
+        );
+        const differentSwapReqId = !foundSwapRequestIds.includes(event.swapRequestId);
+        return (
+          channelMatches &&
+          sourceAssetMatches &&
+          destAssetMatches &&
+          requestTypeMatches &&
+          differentSwapReqId
+        );
+      }),
+    );
+    foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
+  }
+  assert.strictEqual(foundSwapRequestIds.length, numSwaps);
+  cf.info(`Success found ${foundSwapRequestIds.length} SwapRequested events`);
 }
 
 async function testDoubleDeposit<A = []>(
@@ -216,22 +199,8 @@ async function testDoubleDeposit<A = []>(
   const cf = parentCf.withChildLogger(`${tag} testDoubleDeposit`);
   const swapParams = await requestNewSwap(cf, sourceAsset, destAsset, destAddress);
 
-  {
-    const swapRequestedHandle = observeSwapRequested(
-      cf,
-      sourceAsset,
-      destAsset,
-      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
-      SwapRequestType.Regular,
-    );
-
-    await send(cf.logger, sourceAsset, swapParams.depositAddress);
-    await swapRequestedHandle;
-  }
-
-  // Do another deposit. Regardless of the fetch having been broadcasted or not, another swap
-  // should be scheduled when we deposit again.
-  const swapRequestedHandle = observeSwapRequested(
+  await send(cf.logger, sourceAsset, swapParams.depositAddress);
+  await observeSwapRequested(
     cf,
     sourceAsset,
     destAsset,
@@ -239,8 +208,19 @@ async function testDoubleDeposit<A = []>(
     SwapRequestType.Regular,
   );
 
+  // Do another deposit. Regardless if the fetch has been broadcasted or not, another swap
+  // should be scheduled when we deposit again.
   await send(cf.logger, sourceAsset, swapParams.depositAddress);
-  await swapRequestedHandle;
+
+  await observeSwapRequested(
+    cf,
+    sourceAsset,
+    destAsset,
+    { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+    SwapRequestType.Regular,
+  );
+
+  cf.info('Success');
 }
 
 async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
@@ -318,6 +298,7 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
       : Promise.resolve();
 
     await Promise.all([depositFinalisedEvent, unknownBrokerEvent]);
+    cf.info('Success');
   }
 }
 
