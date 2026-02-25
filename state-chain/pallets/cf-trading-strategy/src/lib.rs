@@ -30,13 +30,14 @@ mod tests;
 #[macro_use]
 extern crate proptest;
 
-use cf_amm::common::LimitOrder;
+use cf_amm::common::StrategyLimitOrder;
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
-	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, PoolApi, Side,
+	IncreaseOrDecrease, LpOrdersWeightsProvider, LpRegistration, PoolApi, PriceFeedApi, Side,
 };
+
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::One, FixedU64, Permill},
@@ -200,6 +201,10 @@ impl TradingStrategy {
 
 				if let TradingStrategy::OracleTracking { quote_asset, .. } = self {
 					ensure!(*quote_asset == STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+					ensure!(
+						T::PriceFeedApi::get_relative_price(*base_asset, *quote_asset).is_some(),
+						Error::<T>::InvalidAssetsForStrategy
+					);
 				}
 			},
 		}
@@ -221,7 +226,7 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_traits::PriceFeedApi;
+	use cf_amm::common::AssetPair;
 
 	use super::*;
 
@@ -316,18 +321,21 @@ pub mod pallet {
 			let limit_order_update_weight = T::LpOrdersWeights::update_limit_order_weight();
 
 			// Cache of orders per asset to avoid redundant reads
-			let mut order_cache: BTreeMap<Asset, Vec<LimitOrder<T::AccountId>>> = BTreeMap::new();
-			let fetch_orders_for_strategies = Strategies::<T>::iter()
-				.filter_map(|(_, strategy_id, strategy)| {
-					if matches!(strategy, TradingStrategy::OracleTracking { .. }) ||
-						matches!(strategy, TradingStrategy::InventoryBased { .. })
-					{
-						Some(strategy_id)
-					} else {
-						None
-					}
-				})
-				.collect::<BTreeSet<_>>();
+			let mut order_cache: BTreeMap<Asset, Vec<StrategyLimitOrder<T::AccountId>>> =
+				BTreeMap::new();
+			let mut fetch_orders_for_strategies = BTreeMap::new();
+			Strategies::<T>::iter().for_each(|(_, strategy_id, strategy)| match strategy {
+				TradingStrategy::InventoryBased { base_asset, .. } |
+				TradingStrategy::OracleTracking { base_asset, .. } => {
+					AssetPair::new(base_asset, STABLE_ASSET).map(|asset_pair| {
+						fetch_orders_for_strategies
+							.entry(asset_pair)
+							.or_insert_with(BTreeSet::new)
+							.insert(strategy_id.clone())
+					});
+				},
+				_ => (),
+			});
 
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
 				match strategy {
@@ -431,11 +439,23 @@ pub mod pallet {
 						let pool_orders = match order_cache.get(&base_asset) {
 							Some(orders) => orders,
 							None => {
+								let Some(asset_pair) = AssetPair::new(base_asset, STABLE_ASSET)
+								else {
+									log_or_panic!(
+										"Failed to create asset pair {:?}/{:?} for strategy {:?}, skipping",
+										base_asset,
+										STABLE_ASSET,
+										strategy_id
+									);
+									continue;
+								};
 								weight_used += T::DbWeight::get().reads(1);
 								match T::PoolApi::limit_orders(
 									base_asset,
 									STABLE_ASSET,
-									&fetch_orders_for_strategies,
+									&fetch_orders_for_strategies
+										.get(&asset_pair)
+										.unwrap_or(&BTreeSet::new()),
 								) {
 									Ok(pool_orders) =>
 										order_cache.entry(base_asset).or_insert(pool_orders),
@@ -455,6 +475,7 @@ pub mod pallet {
 							.filter(|order| order.account_id == strategy_id)
 							.collect();
 
+						// This relies on autosweeping for limit orders
 						let orders_total_quote = existing_orders
 							.iter()
 							.map(|order| if order.side == Side::Buy { order.amount } else { 0 })
@@ -544,8 +565,13 @@ pub mod pallet {
 
 							// Create the new desired orders
 							new_orders.into_iter().for_each(
-								|LimitOrder {
-								     base_asset, side, order_id, tick, amount, ..
+								|StrategyLimitOrder {
+								     base_asset,
+								     side,
+								     order_id,
+								     tick,
+								     amount,
+								     ..
 								 }| {
 									weight_used += limit_order_update_weight;
 									let _result = T::PoolApi::update_limit_order(
@@ -851,11 +877,11 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 	account_id: AccountId,
 	base_asset: Asset,
 	quote_asset: Asset,
-) -> Vec<LimitOrder<AccountId>> {
+) -> Vec<StrategyLimitOrder<AccountId>> {
 	if total == 0 {
 		return Vec::new();
 	}
-	let mut orders: BTreeMap<Tick, LimitOrder<AccountId>> = BTreeMap::new();
+	let mut orders: BTreeMap<Tick, StrategyLimitOrder<AccountId>> = BTreeMap::new();
 	let half_total = total / 2;
 
 	// Simple order logic:
@@ -865,7 +891,7 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 		let average_tick = average_tick(min_tick, max_tick, round_up);
 		orders.insert(
 			average_tick,
-			LimitOrder {
+			StrategyLimitOrder {
 				account_id: account_id.clone(),
 				base_asset,
 				quote_asset,
@@ -892,7 +918,7 @@ fn inventory_based_strategy_logic<AccountId: Clone>(
 		orders
 			.entry(dynamic_tick)
 			.and_modify(|order| order.amount += remaining_amount)
-			.or_insert(LimitOrder {
+			.or_insert(StrategyLimitOrder {
 				account_id: account_id.clone(),
 				base_asset,
 				quote_asset,

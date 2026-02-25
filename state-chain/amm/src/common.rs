@@ -25,7 +25,7 @@ pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct LimitOrder<AccountId> {
+pub struct StrategyLimitOrder<AccountId> {
 	pub base_asset: Asset,
 	pub quote_asset: Asset,
 	pub account_id: AccountId,

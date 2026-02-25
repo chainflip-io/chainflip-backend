@@ -20,6 +20,7 @@ use cf_traits::{
 	mocks::{
 		balance_api::{MockBalance, MockLpRegistration},
 		pool_api::MockPoolApi,
+		price_feed_api::MockPriceFeedApi,
 	},
 	BalanceApi, SetSafeMode, Side,
 };
@@ -294,7 +295,7 @@ fn automated_strategy_basic_usage() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -303,7 +304,7 @@ fn automated_strategy_basic_usage() {
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -363,7 +364,7 @@ fn automated_strategy_basic_usage() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -372,7 +373,7 @@ fn automated_strategy_basic_usage() {
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -460,7 +461,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -469,7 +470,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 						tick: BUY_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -533,6 +534,9 @@ fn strategy_deployment_validation() {
 
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
+
+		MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+		MockPriceFeedApi::set_price_usd(STABLE_ASSET, 1);
 
 		MinimumDeploymentAmountForStrategy::<Test>::set(BTreeMap::from_iter([
 			(BASE_ASSET, MIN_BASE_AMOUNT),
@@ -662,7 +666,7 @@ fn strategy_deployment_validation() {
 				Error::<Test>::InvalidTick
 			);
 		}
-		// Inventory based strategy
+		// Inventory based strategy & oracle
 		{
 			// Invalid tick ranges
 			for (min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick) in
@@ -677,6 +681,21 @@ fn strategy_deployment_validation() {
 							min_sell_tick,
 							max_sell_tick,
 							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::OracleTracking {
+							min_buy_offset_tick: min_buy_tick,
+							max_buy_offset_tick: max_buy_tick,
+							min_sell_offset_tick: min_sell_tick,
+							max_sell_offset_tick: max_sell_tick,
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET
 						},
 						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 					),
@@ -742,6 +761,23 @@ fn strategy_deployment_validation() {
 					Error::<Test>::InvalidTick
 				);
 			}
+
+			// Non oracle asset should fail for OracleTracking strategy
+			assert_err!(
+				TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: -1,
+						max_buy_offset_tick: 0,
+						min_sell_offset_tick: 0,
+						max_sell_offset_tick: 1,
+						base_asset: Asset::Flip,
+						quote_asset: STABLE_ASSET,
+					},
+					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+				),
+				Error::<Test>::InvalidAssetsForStrategy
+			);
 		}
 	});
 }
@@ -1082,28 +1118,28 @@ mod inventory_based_strategy {
 			assert!(
 				!base
 					.iter()
-					.any(|LimitOrder { tick, .. }| *tick < min_sell_tick || *tick > max_sell_tick),
+					.any(|StrategyLimitOrder { tick, .. }| *tick < min_sell_tick || *tick > max_sell_tick),
 			);
 			assert!(
 				!quote
 					.iter()
-					.any(|LimitOrder { tick, .. }| *tick < min_buy_tick || *tick > max_buy_tick),
+					.any(|StrategyLimitOrder { tick, .. }| *tick < min_buy_tick || *tick > max_buy_tick),
 			);
 
 			// Sanity check the amount in orders
 			assert_eq!(
 				base_amount,
-				base.iter().map(|LimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
+				base.iter().map(|StrategyLimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
 			);
 			assert_eq!(
 				quote_amount,
-				quote.iter().map(|LimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
+				quote.iter().map(|StrategyLimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
 			);
 			assert!(
-				!base.iter().any(|LimitOrder { amount, .. }| *amount == 0),
+				!base.iter().any(|StrategyLimitOrder { amount, .. }| *amount == 0),
 			);
 			assert!(
-				!quote.iter().any(|LimitOrder { amount, .. }| *amount == 0),
+				!quote.iter().any(|StrategyLimitOrder { amount, .. }| *amount == 0),
 			);
 		}
 	}
@@ -1296,7 +1332,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1305,7 +1341,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1329,7 +1365,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1338,7 +1374,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1361,7 +1397,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1370,7 +1406,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT + THRESHOLD
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1387,7 +1423,6 @@ mod inventory_based_strategy {
 
 mod oracle_strategy {
 	use cf_amm_math::Price;
-	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 	use super::*;
 
@@ -1445,7 +1480,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1454,7 +1489,7 @@ mod oracle_strategy {
 							tick: AVERAGE_BUY_OFFSET_TICK,
 							amount: AMOUNT
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1476,7 +1511,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1485,7 +1520,7 @@ mod oracle_strategy {
 							tick: EXPECTED_BUY_TICK,
 							amount: AMOUNT
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1512,7 +1547,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1521,7 +1556,7 @@ mod oracle_strategy {
 							tick: EXPECTED_BUY_TICK,
 							amount: AMOUNT
 						},
-						LimitOrder {
+						StrategyLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,

@@ -16,7 +16,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{AssetPair, PoolPairsMap, Side},
+	common::{AssetPair, PoolPairsMap, Side, StrategyLimitOrder},
 	limit_orders::{self, Collected, PositionInfo},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
@@ -1132,14 +1132,14 @@ impl<T: Config> PoolApi for Pallet<T> {
 		base_asset: Asset,
 		quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<cf_amm::common::LimitOrder<Self::AccountId>>, DispatchError> {
+	) -> Result<Vec<StrategyLimitOrder<Self::AccountId>>, DispatchError> {
 		let pool_orders = Self::pool_orders(base_asset, quote_asset, accounts, true);
 		pool_orders.map(|pool| {
 			pool.limit_orders
 				.asks
 				.iter()
 				.cloned()
-				.map(|order| cf_amm::common::LimitOrder {
+				.map(|order| StrategyLimitOrder {
 					base_asset,
 					quote_asset,
 					account_id: order.lp,
@@ -1148,16 +1148,14 @@ impl<T: Config> PoolApi for Pallet<T> {
 					tick: order.tick,
 					amount: order.sell_amount.saturated_into(),
 				})
-				.chain(pool.limit_orders.bids.iter().cloned().map(|order| {
-					cf_amm::common::LimitOrder {
-						base_asset,
-						quote_asset,
-						account_id: order.lp,
-						side: Side::Buy,
-						order_id: order.id.saturated_into(),
-						tick: order.tick,
-						amount: order.sell_amount.saturated_into(),
-					}
+				.chain(pool.limit_orders.bids.iter().cloned().map(|order| StrategyLimitOrder {
+					base_asset,
+					quote_asset,
+					account_id: order.lp,
+					side: Side::Buy,
+					order_id: order.id.saturated_into(),
+					tick: order.tick,
+					amount: order.sell_amount.saturated_into(),
 				}))
 				.collect()
 		})
@@ -2365,7 +2363,15 @@ impl<T: Config> Pallet<T> {
 				},
 			)),
 			range_orders: cf_utilities::conditional::conditional(
-				!accounts.is_empty(),
+				accounts.is_empty(),
+				|()| {
+					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
+						orders.iter().map({
+							let lp = lp.clone();
+							move |(id, range)| (lp.clone(), *id, range.clone())
+						})
+					})
+				},
 				|()| {
 					accounts.iter().flat_map(|lp| {
 						pool.range_orders_cache
@@ -2373,14 +2379,6 @@ impl<T: Config> Pallet<T> {
 							.into_iter()
 							.flatten()
 							.map(|(id, range)| (lp.clone(), *id, range.clone()))
-					})
-				},
-				|()| {
-					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
-						orders.iter().map({
-							let lp = lp.clone();
-							move |(id, range)| (lp.clone(), *id, range.clone())
-						})
 					})
 				},
 			)

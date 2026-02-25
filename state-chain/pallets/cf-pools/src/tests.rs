@@ -1721,7 +1721,7 @@ fn test_get_limit_orders() {
 			LiquidityPools::limit_orders(ASSET, STABLE_ASSET, &BTreeSet::from([ALICE])).unwrap();
 		assert_eq!(
 			orders,
-			vec![cf_amm::common::LimitOrder {
+			vec![cf_amm::common::StrategyLimitOrder {
 				base_asset: ASSET,
 				quote_asset: STABLE_ASSET,
 				account_id: ALICE,

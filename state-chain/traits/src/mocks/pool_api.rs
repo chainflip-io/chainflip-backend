@@ -7,7 +7,7 @@ use sp_std::{
 };
 
 use cf_amm::{
-	common::{LimitOrder, PoolPairsMap, Side},
+	common::{PoolPairsMap, Side, StrategyLimitOrder},
 	math::Tick,
 };
 use cf_chains::assets::any::AssetMap;
@@ -44,7 +44,7 @@ impl<AccountId> MockPoolApi<AccountId>
 where
 	AccountId: Decode + Encode + Ord,
 {
-	pub fn get_limit_orders() -> Vec<LimitOrder<AccountId>> {
+	pub fn get_limit_orders() -> Vec<StrategyLimitOrder<AccountId>> {
 		Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
 			.unwrap_or_default()
 			.into_iter()
@@ -53,7 +53,7 @@ where
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
 				)| {
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset,
 						quote_asset: STABLE_ASSET,
 						account_id,
@@ -107,7 +107,7 @@ where
 		base_asset: Asset,
 		_quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<LimitOrder<Self::AccountId>>, DispatchError> {
+	) -> Result<Vec<StrategyLimitOrder<Self::AccountId>>, DispatchError> {
 		Ok(Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
 			.unwrap_or_default()
 			.into_iter()
@@ -116,7 +116,7 @@ where
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
 				)| {
-					LimitOrder {
+					StrategyLimitOrder {
 						base_asset,
 						quote_asset: STABLE_ASSET,
 						account_id,
