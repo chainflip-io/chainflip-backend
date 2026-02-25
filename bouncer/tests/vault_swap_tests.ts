@@ -94,9 +94,6 @@ async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
     }
     throw error;
   }
-  await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.swapping.affiliateWithdrawalRequest(affiliateAccountId),
-  });
 
   cf.info('Withdrawal request sent!');
   cf.debug('Waiting for balance change... Observing address:', withdrawAddress);
@@ -124,17 +121,19 @@ async function testFeeCollection<A = []>(
   const broker = await setupAccount(parentCf, brokerUri, AccountRole.Broker);
   const brokerAccount = fullAccountFromUri(brokerUri, 'Broker');
 
-  const cf = parentCf.with({ account: brokerAccount });
+  const cf = parentCf
+    .with({ account: brokerAccount })
+    .withChildLogger(`${brokerUri}_testFeeCollection`);
 
-  const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const refundAddress = await newAssetAddress('Eth', undefined);
 
   cf.debug('Registering affiliate');
 
   const { affiliateId, shortId } = await registerAffiliate(cf, refundAddress);
 
-  cf.debug('Broker:', broker.address);
-  cf.debug('Affiliate:', affiliateId);
-  cf.debug('Short ID:', shortId);
+  cf.debug(`Broker ${broker.address}`);
+  cf.debug(`Affiliate: ${affiliateId}`);
+  cf.debug(`Short ID: ${shortId}`);
 
   // Setup
   const feeAsset = Assets.Usdc;
@@ -150,11 +149,11 @@ async function testFeeCollection<A = []>(
     swapContext,
   );
 
-  // Amounts before swap, always zero because broker is newly setup and funded
+  // Amounts before swap, always zero because the broker is newly set up and funded
   const earnedBrokerFeesBefore = BigInt(0);
   const earnedAffiliateFeesBefore = BigInt(0);
-  cf.debug('Earned broker fees before:', earnedBrokerFeesBefore);
-  cf.debug('Earned affiliate fees before:', earnedAffiliateFeesBefore);
+  cf.debug(`Earned broker fees before: ${earnedBrokerFeesBefore}`);
+  cf.debug(`Earned affiliate fees before: ${earnedAffiliateFeesBefore}`);
 
   // Do the vault swap
   await performVaultSwap(
@@ -175,8 +174,8 @@ async function testFeeCollection<A = []>(
   // Check that both the broker and affiliate earned fees
   const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
   const earnedAffiliateFeesAfter = await getEarnedBrokerFees(cf.logger, affiliateId);
-  cf.debug('Earned broker fees after:', earnedBrokerFeesAfter);
-  cf.debug('Earned affiliate fees after:', earnedAffiliateFeesAfter);
+  cf.debug(`Earned broker fees after: ${earnedBrokerFeesAfter}`);
+  cf.debug(`Earned affiliate fees after: ${earnedAffiliateFeesAfter}`);
   assert(
     earnedBrokerFeesAfter > earnedBrokerFeesBefore,
     `No increase in earned broker fees after ${tag}(${inputAsset} -> ${destAsset}) vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
@@ -226,7 +225,9 @@ async function testFeeCollectionWithdrawal<A = []>(
   // Test the affiliate withdrawal functionality
   const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, inputAsset, swapContext);
   await testWithdrawCollectedAffiliateFees(
-    cf.with({ account: broker }),
+    cf
+      .with({ account: broker })
+      .withChildLogger(`${broker.uri}_testWithdrawCollectedAffiliateFees`),
     affiliateId,
     refundAddress,
   );

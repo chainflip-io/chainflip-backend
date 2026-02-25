@@ -11,7 +11,7 @@ export async function limitOrder<A extends WithLpAccount>(
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
 
-  cf.info('Setting up ' + ccy + ' limit order');
+  cf.debug('Setting up ' + ccy + ' limit order');
 
   await cf.submitExtrinsic({
     extrinsic: (api) =>
@@ -27,5 +27,5 @@ export async function limitOrder<A extends WithLpAccount>(
       ),
   });
 
-  cf.info(`Limit order for ${ccy} with ID ${orderId} set successfully`);
+  cf.debug(`Limit order for ${ccy} with ID ${orderId} set successfully`);
 }

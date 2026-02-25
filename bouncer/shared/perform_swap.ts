@@ -148,16 +148,19 @@ export async function doPerformSwap<A = []>(
 
   swapContext?.updateStatus(cf.logger, SwapStatus.Funded);
 
-  const swapRequestedEvent = await swapRequestedHandle;
-  const swapRequestId = swapRequestedEvent.swapRequestId;
+  const swapRequestId = (await swapRequestedHandle).swapRequestId;
+
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapScheduled);
-  cf.debug(`Swap requested with SwapRequestedEvent: ${swapRequestedEvent}`);
+
+  cf.debug(`Swap requested with ID: ${swapRequestId}`);
 
   await cf.stepUntilEvent(
     'Swapping.SwapRequestCompleted',
     swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
   );
+
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapCompleted);
+
   cf.debug(
     `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted if CCM swap.`,
   );
@@ -432,7 +435,9 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
       transactionId,
       SwapRequestType.Regular,
     );
-    cf.debug(`Observed Swapping.SwapRequested event ${JSON.stringify(swapRequestedEvent)}`);
+    cf.debug(
+      `Observed Swapping.SwapRequested event with swapRequestId ${swapRequestedEvent.swapRequestId}`,
+    );
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
     const swapRequestId = swapRequestedEvent.swapRequestId;

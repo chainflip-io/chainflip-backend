@@ -21,7 +21,7 @@ export async function rangeOrder<A extends WithLpAccount>(
   const currentSqrtPrice = currentPools!.poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
 
-  cf.info('Setting up ' + ccy + ' range order');
+  cf.debug('Setting up ' + ccy + ' range order');
 
   await cf.submitExtrinsic({
     extrinsic: (api) =>
@@ -30,5 +30,5 @@ export async function rangeOrder<A extends WithLpAccount>(
       }),
   });
 
-  cf.info(`Range order for ${ccy} with amount ${amount} successfully set up`);
+  cf.debug(`Range order for ${ccy} with amount ${amount} successfully set up`);
 }

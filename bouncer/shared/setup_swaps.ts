@@ -1,8 +1,8 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
-import { depositLiquidity, registerLiquidityRefundAddressForAsset } from 'shared/deposit_liquidity';
+import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
-import { Asset, chainGasAsset } from 'shared/utils';
+import { Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 export const deposits = new Map<Asset, number>([
@@ -80,22 +80,22 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     parentCf
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
       .all([
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Ethereum')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Bitcoin')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Arbitrum')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Solana')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Assethub')),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
       ]);
 
   const lpApiRefundAddresses = (parentCf: ChainflipIO<A>) =>
     parentCf
       .with({ account: fullAccountFromUri('//LP_API', 'LP') })
       .all([
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Ethereum')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Bitcoin')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Arbitrum')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Solana')),
-        (subcf) => registerLiquidityRefundAddressForAsset(subcf, chainGasAsset('Assethub')),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
+        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
       ]);
 
   cf.info('Registering refund addresses');
