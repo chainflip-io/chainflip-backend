@@ -5,6 +5,7 @@ import {
   assetDecimals,
   Assets,
   decodeDotAddressForContract,
+  decodeDispatchError,
   newAssetAddress,
   observeBalanceIncrease,
   observeCcmReceived,
@@ -15,14 +16,17 @@ import {
 import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingRefundEgressScheduled } from 'generated/events/swapping/refundEgressScheduled';
+import { swappingRefundEgressIgnored } from 'generated/events/swapping/refundEgressIgnored';
+import { throwError } from 'shared/utils/logger';
 
-/// Do a swap with unrealistic minimum price so it gets refunded.
+/// Do a swap with an unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund<A = []>(
   parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
@@ -150,17 +154,29 @@ async function testMinPriceRefund<A = []>(
     );
   }
 
-  const swapRequestId = Number(swapRequestedEvent.swapRequestId);
+  const swapRequestId = swapRequestedEvent.swapRequestId;
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+  const resultEvent = await cf.stepUntilOneEventOf({
+    refundEgressScheduled: {
+      name: 'Swapping.RefundEgressScheduled',
+      schema: swappingRefundEgressScheduled.refine(
+        (event) => event.swapRequestId === swapRequestId,
+      ),
+    },
+    refundEgressIgnored: {
+      name: 'Swapping.RefundEgressIgnored',
+      schema: swappingRefundEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
+    },
+  });
+
+  if (resultEvent.key === 'refundEgressIgnored') {
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
+    throwError(cf.logger, new Error(`Refund Egress was ignored reason: ${reason}`));
+  }
 
   // Wait for the refund to be scheduled and executed
   await Promise.all([
-    observeRefundEgress,
     observeBalanceIncrease(cf.logger, sourceAsset, refundAddress, refundBalanceBefore),
     ccmEventEmitted,
   ]);
@@ -191,7 +207,10 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
   const chainState = response.chainStates.arbitrum.price;
   for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
     if (feed.priceStatus !== 'UpToDate') {
-      throw new Error(`Price status for arbitrum.${asset} is not UpToDate: ${feed.priceStatus}`);
+      throwError(
+        cf.logger,
+        new Error(`Price status for arbitrum.${asset} is not UpToDate: ${feed.priceStatus}`),
+      );
     }
   }
 
@@ -205,6 +224,9 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
 export async function testFillOrKill(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
+
+  // Make sure the amounts are big enough to cover for the CCM gas budget, which can be significant (especially for Ethereum)
+  // and eats into the refund amount before it's compared to dust limits otherwise, BelowEgressDustLimit errors can occur.
   await cf.all([
     (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500),
     (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1),
