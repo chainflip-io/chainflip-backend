@@ -55,6 +55,7 @@ import {
   cfChainsBtcScriptPubkey,
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
+  spRuntimeDispatchError,
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
@@ -899,7 +900,7 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 300,
+  timeoutSeconds = 200,
 ): Promise<number> {
   const initialBalance = oldBalance
     ? Number(oldBalance)
@@ -1295,6 +1296,20 @@ export function decodeModuleError(module: any, api: any): string {
   };
   const { docs, name, section } = api.registry.findMetaError(errorIndex);
   return `${section}.${name}: ${docs}`;
+}
+
+export function decodeDispatchError(
+  reason: z.infer<typeof spRuntimeDispatchError>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  api: any,
+): string {
+  if (reason.__kind === 'Module') {
+    return decodeModuleError(reason.value, api);
+  }
+  if ('value' in reason) {
+    return `${reason.__kind}(${reason.value})`;
+  }
+  return reason.__kind;
 }
 
 export function isValidHexHash(hash: string): boolean {
