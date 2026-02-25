@@ -24,23 +24,24 @@ use std::sync::LazyLock;
 
 use super::*;
 use crate::{
-	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
+	mock::{RuntimeEvent, *},
 };
 use cf_amm_math::Price;
 use cf_chains::{
-	self,
+	self, AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
+	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
 	evm::H256,
-	AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
+	AccountRoleRegistry, AssetConverter, Chainflip, INITIAL_FLIP_FUNDING, SetSafeMode,
+	SwapExecutionProgress,
 	mocks::{
 		address_converter::MockAddressConverter,
 		balance_api::MockBalance,
@@ -50,8 +51,6 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
-	INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -61,6 +60,7 @@ use frame_support::{
 
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
+use sp_runtime::SaturatedConversion;
 use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 100_000u128;
@@ -69,7 +69,7 @@ const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 const INIT_BLOCK: u64 = 1;
 const BROKER_FEE_BPS: u16 = 10;
 const INPUT_ASSET: Asset = Asset::Usdc;
-const OUTPUT_ASSET: Asset = Asset::Eth;
+const OUTPUT_ASSET: Asset = Asset::Usdt;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
@@ -174,41 +174,41 @@ fn create_test_swap(
 // Returns some test data
 fn generate_test_swaps() -> Vec<TestSwapParams> {
 	vec![
-		// asset -> USDC
+		// asset -> USDC (1-leg, cross-decimal)
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Usdc,
-			input_amount: 100,
+			input_amount: 100 * 10u128.pow(18),
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
 		},
-		// USDC -> asset
+		// Another asset -> USDC (1-leg, cross-decimal)
 		TestSwapParams {
 			input_asset: Asset::Eth,
 			output_asset: Asset::Usdc,
-			input_amount: 40,
+			input_amount: 40 * 10u128.pow(18),
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
 			is_ccm: false,
 		},
-		// Both assets are on the Eth chain
+		// 2-leg swap, same decimals (Flip -> Eth via USDC)
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Eth,
-			input_amount: 500,
+			input_amount: 500 * 10u128.pow(18),
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
 		},
-		// Cross chain
+		// 2-leg cross-chain cross-decimal (Flip -> Dot, 18->10 dec)
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Dot,
-			input_amount: 600,
+			input_amount: 600 * 10u128.pow(18),
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
@@ -316,6 +316,18 @@ fn swap_with_custom_broker_fee(
 	);
 }
 
+/// Compute expected single-leg mock swap output for any asset pair.
+/// Must be called inside test externalities (reads SwapRate).
+fn mock_swap_output(from: Asset, to: Asset, input: AssetAmount) -> AssetAmount {
+	let asset = if from == STABLE_ASSET { to } else { from };
+	let price = Price::from_usd(asset, SwapRate::get());
+	if price.is_zero() {
+		return 0;
+	}
+	let rate = if from == STABLE_ASSET { price.invert() } else { price };
+	rate.output_amount_floor(input).saturated_into()
+}
+
 #[track_caller]
 fn get_scheduled_swap_block(swap_id: SwapId) -> Option<BlockNumberFor<Test>> {
 	ScheduledSwaps::<Test>::get().get(&swap_id).map(|swap| swap.execute_at)
@@ -350,17 +362,19 @@ fn process_all_swaps() {
 		let mut expected = swaps
 			.iter()
 			.map(|swap| {
-				let output_amount = if swap.input_asset == Asset::Usdc {
+				let output_amount = if swap.input_asset == STABLE_ASSET {
 					let fee = swap.input_amount * BROKER_FEE_BPS as u128 / 10_000;
-					(swap.input_amount - fee) * DEFAULT_SWAP_RATE
-				} else if swap.output_asset == Asset::Usdc {
-					let output_before_fee = swap.input_amount * DEFAULT_SWAP_RATE;
+					mock_swap_output(STABLE_ASSET, swap.output_asset, swap.input_amount - fee)
+				} else if swap.output_asset == STABLE_ASSET {
+					let output_before_fee =
+						mock_swap_output(swap.input_asset, STABLE_ASSET, swap.input_amount);
 					let fee = output_before_fee * BROKER_FEE_BPS as u128 / 10_000;
 					output_before_fee - fee
 				} else {
-					let intermediate_amount = swap.input_amount * DEFAULT_SWAP_RATE;
-					let fee = intermediate_amount * BROKER_FEE_BPS as u128 / 10_000;
-					(intermediate_amount - fee) * DEFAULT_SWAP_RATE
+					let intermediate =
+						mock_swap_output(swap.input_asset, STABLE_ASSET, swap.input_amount);
+					let fee = intermediate * BROKER_FEE_BPS as u128 / 10_000;
+					mock_swap_output(STABLE_ASSET, swap.output_asset, intermediate - fee)
 				};
 
 				MockEgressParameter::<AnyChain>::Swap {
@@ -374,8 +388,22 @@ fn process_all_swaps() {
 		expected.sort();
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		egresses.sort();
-		for (input, output) in iter::zip(expected, egresses) {
-			assert_eq!(input, output);
+		assert_eq!(expected.len(), egresses.len());
+		for (expected, actual) in iter::zip(expected, egresses) {
+			match (&expected, &actual) {
+				(
+					MockEgressParameter::Swap { amount: expected_amount, .. },
+					MockEgressParameter::Swap { amount: actual_amount, .. },
+				) => {
+					// Allow 1 bps tolerance for fixed-point rounding in cross-decimal swaps
+					let tolerance = (*expected_amount / 10_000).max(1);
+					assert!(
+						expected_amount.abs_diff(*actual_amount) <= tolerance,
+						"Amount mismatch (tolerance {tolerance}): expected {expected_amount}, got {actual_amount}"
+					);
+				},
+				_ => assert_eq!(expected, actual),
+			}
 		}
 	});
 }
@@ -409,7 +437,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 
 #[test]
 fn affiliates_with_0_bps_and_swap_id_are_getting_emitted_in_events() {
-	const AMOUNT: AssetAmount = 500;
+	const AMOUNT: AssetAmount = 500 * 10u128.pow(18);
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
@@ -569,7 +597,7 @@ fn swap_by_deposit_happy_path() {
 #[test]
 fn process_all_into_stable_swaps_first() {
 	const SWAP_EXECUTION_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-	const AMOUNT: AssetAmount = 1_000_000;
+	const AMOUNT: AssetAmount = 10u128.pow(18);
 	new_test_ext().execute_with(|| {
 		const NETWORK_FEE_RATE: Permill = Permill::from_parts(100);
 		const NETWORK_FEE: FeeRateAndMinimum =
@@ -658,25 +686,36 @@ fn process_all_into_stable_swaps_first() {
 		Swapping::on_finalize(SWAP_EXECUTION_BLOCK);
 		assert_swaps_queue_is_empty();
 
-		let network_fee_amount = NETWORK_FEE_RATE * AMOUNT;
-		let usdc_amount_swapped_after_fee: AssetAmount =
-			(AMOUNT - network_fee_amount) * DEFAULT_SWAP_RATE;
-		let usdc_amount_deposited_after_fee: AssetAmount = AMOUNT - network_fee_amount;
+		// Non-USDC inputs produce different USDC intermediates (before network fee):
+		let flip_usdc_raw = mock_swap_output(Asset::Flip, STABLE_ASSET, AMOUNT);
+		let btc_usdc_raw = mock_swap_output(Asset::Btc, STABLE_ASSET, AMOUNT);
+		let dot_usdc_raw = mock_swap_output(Asset::Dot, STABLE_ASSET, AMOUNT);
+
+		// Network fee is taken on each intermediate USDC amount:
+		let flip_usdc = flip_usdc_raw - NETWORK_FEE_RATE * flip_usdc_raw;
+		let btc_usdc = btc_usdc_raw - NETWORK_FEE_RATE * btc_usdc_raw;
+		let dot_usdc = dot_usdc_raw - NETWORK_FEE_RATE * dot_usdc_raw;
+		// Swap 4 (Usdc→Eth): USDC is input, fee taken directly on AMOUNT
+		let usdc_direct = AMOUNT - NETWORK_FEE_RATE * AMOUNT;
+		let total_usdc = flip_usdc + btc_usdc + dot_usdc + usdc_direct;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
+		// into-stable legs execute first (sorted by swap ID), then one combined from-stable leg
 		assert_eq!(
 			Swaps::get(),
 			vec![
 				(Asset::Flip, Asset::Usdc, AMOUNT),
 				(Asset::Dot, Asset::Usdc, AMOUNT),
 				(Asset::Btc, Asset::Usdc, AMOUNT),
-				(
-					Asset::Usdc,
-					Asset::Eth,
-					usdc_amount_swapped_after_fee * 3 + usdc_amount_deposited_after_fee
-				),
+				(Asset::Usdc, Asset::Eth, total_usdc),
 			]
 		);
+
+		// Each swap request produces a different amount of Eth:
+		let eth_from_flip = mock_swap_output(STABLE_ASSET, Asset::Eth, flip_usdc);
+		let eth_from_btc = mock_swap_output(STABLE_ASSET, Asset::Eth, btc_usdc);
+		let eth_from_dot = mock_swap_output(STABLE_ASSET, Asset::Eth, dot_usdc);
+		let eth_from_usdc = mock_swap_output(STABLE_ASSET, Asset::Eth, usdc_direct);
 
 		assert_event_sequence!(
 			Test,
@@ -686,7 +725,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+			}) if amount == eth_from_flip,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -694,7 +733,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+			}) if amount == eth_from_btc,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(3), .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -702,7 +741,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+			}) if amount == eth_from_dot,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -710,7 +749,7 @@ fn process_all_into_stable_swaps_first() {
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount,
 				..
-			}) if amount == usdc_amount_deposited_after_fee * DEFAULT_SWAP_RATE,
+			}) if amount == eth_from_usdc,
 			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
 		);
 	});
@@ -750,7 +789,7 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 			);
 
 			// Change the swap rate so swap output will be 0
-			SwapRate::set(0.0001f64);
+			SwapRate::set(0);
 			System::reset_events();
 		})
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
@@ -787,7 +826,7 @@ fn can_handle_swaps_with_zero_outputs() {
 			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 1, bounded_vec![]);
 
 			// Change the swap rate so swap output will be 0
-			SwapRate::set(0.01f64);
+			SwapRate::set(0);
 		})
 		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
@@ -1222,7 +1261,7 @@ fn deposit_address_ready_event_contains_correct_parameters() {
 #[test]
 fn test_get_scheduled_swap_legs() {
 	new_test_ext().execute_with(|| {
-		const INIT_AMOUNT: AssetAmount = 1000;
+		const INIT_AMOUNT: AssetAmount = 10u128.pow(18);
 		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 		ScheduledSwaps::<Test>::mutate(|swaps| {
@@ -1235,12 +1274,13 @@ fn test_get_scheduled_swap_legs() {
 			]);
 		});
 
-		SwapRate::set(2f64);
-		// The amount of USDC in the middle of swap (5):
-		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
+		SwapRate::set(2);
+		// Eth→USDC intermediate for swap 5: Eth(18-dec)→USDC(6-dec) at rate=2
+		// = INIT_AMOUNT * 2 / 10^12 = 10^18 * 2 / 10^12 = 2_000_000
+		let intermediate_amount = mock_swap_output(Asset::Eth, STABLE_ASSET, INIT_AMOUNT);
 
 		// The test is more useful when these aren't equal:
-		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
+		assert_ne!(INIT_AMOUNT, intermediate_amount);
 
 		assert_eq!(
 			Swapping::get_scheduled_swap_legs(Asset::Flip),
@@ -1297,7 +1337,7 @@ fn test_get_scheduled_swap_legs() {
 						base_asset: Asset::Flip,
 						quote_asset: Asset::Usdc,
 						side: Side::Buy,
-						amount: INTERMEDIATE_AMOUNT,
+						amount: intermediate_amount,
 						source_asset: Some(Asset::Eth),
 						source_amount: Some(INIT_AMOUNT),
 						remaining_chunks: 0,
@@ -1326,7 +1366,7 @@ fn test_get_scheduled_swap_legs_fallback() {
 
 		// Setting the swap rate to something different from the price so that if the fallback is
 		// not used, it will give a different result, avoiding a false positive.
-		SwapRate::set(PRICE.checked_add(1).unwrap() as f64);
+		SwapRate::set((PRICE.checked_add(1).unwrap()).saturated_into());
 
 		// The swap simulation must fail for it to use the fallback price estimation
 		MockSwappingApi::set_swaps_should_fail(true);
@@ -1384,7 +1424,7 @@ fn test_get_scheduled_swap_legs_for_dca() {
 		const NUMBER_OF_CHUNKS: u32 = 3;
 		const CHUNK_INTERVAL: u32 = 10;
 		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		SwapRate::set(1_f64);
+		SwapRate::set(1);
 
 		let dca_params =
 			DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: CHUNK_INTERVAL };
@@ -1396,6 +1436,9 @@ fn test_get_scheduled_swap_legs_for_dca() {
 			)]);
 		});
 
+		// Flip(18-dec)→USDC(6-dec) at rate=1: INIT_AMOUNT * 1 / 10^12 = 10^21 / 10^12 = 10^9
+		let intermediate_usdc = mock_swap_output(Asset::Flip, STABLE_ASSET, INIT_AMOUNT);
+
 		assert_eq!(
 			Swapping::get_scheduled_swap_legs(Asset::Eth),
 			vec![(
@@ -1405,7 +1448,7 @@ fn test_get_scheduled_swap_legs_for_dca() {
 					base_asset: Asset::Eth,
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
-					amount: INIT_AMOUNT,
+					amount: intermediate_usdc,
 					source_asset: Some(Asset::Flip),
 					source_amount: Some(INIT_AMOUNT),
 					// This is the first chunk, so there are 2 remaining
@@ -1481,7 +1524,7 @@ fn broker_deregistration_checks_private_channels() {
 #[test]
 fn can_handle_input_and_output_being_the_same_asset() {
 	const ASSET: Asset = Asset::Eth;
-	const AMOUNT: AssetAmount = 1_000_000;
+	const AMOUNT: AssetAmount = 10u128.pow(18);
 	const NETWORK_FEE_RATE: Permill = Permill::from_parts(100);
 	const NETWORK_FEE: FeeRateAndMinimum = FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 };
 
@@ -1512,10 +1555,12 @@ fn can_handle_input_and_output_being_the_same_asset() {
 		})
 		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
-			let network_fee_amount = NETWORK_FEE_RATE * AMOUNT * DEFAULT_SWAP_RATE;
-			// Its still a 2 leg swap, so the swap rate is applied twice.
-			let output_amount: AssetAmount =
-				((AMOUNT * DEFAULT_SWAP_RATE) - network_fee_amount) * DEFAULT_SWAP_RATE;
+			// Eth→Eth is still a 2-leg swap via USDC:
+			// Eth→USDC intermediate, then fee taken, then USDC→Eth
+			let intermediate = mock_swap_output(ASSET, STABLE_ASSET, AMOUNT);
+			let network_fee_amount = NETWORK_FEE_RATE * intermediate;
+			let output_amount =
+				mock_swap_output(STABLE_ASSET, ASSET, intermediate - network_fee_amount);
 
 			assert_event_sequence!(
 				Test,
@@ -1693,14 +1738,19 @@ mod swap_batching {
 					}
 				};
 
-				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
+				// swap1: Flip→Eth (cross-decimal 2-leg), swap2: Usdc→Eth (1-leg from stable)
+				// swap1 Flip→USDC intermediate at rate=2: 10^18 * 2 / 10^12 = 2_000_000 USDC
+				// After 1% network fee: 1_980_000 USDC → USDC→Eth: ~9.9e17 Eth
+				// swap2 Usdc→Eth at rate=2: after 1% fee on 150_000:
+				//   network fee = 1500 USDC, output = 148_500 * 10^12/2 = 7.425e16 Eth
+				// Set Eth liquidity to allow swap2 (~7.5e16) but not swap1 (~9.9e17)
+				let swap1 = swap(Asset::Flip, Asset::Eth, 10u128.pow(18));
 				let swap2 = swap(Asset::Usdc, Asset::Eth, 150_000);
 
 				insert_swaps(&[swap1, swap2]);
 
-				// This amount of liquidity would only be enough for one of the swaps
-				// (USDC liquidity is not set is thus will not be checked):
-				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
+				// 10^17 Eth is enough for swap2 (~7.5e16) but not swap1 (~9.9e17):
+				MockSwappingApi::add_liquidity(Asset::Eth, 10u128.pow(17));
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
@@ -1720,10 +1770,11 @@ mod swap_batching {
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
 				// from swap 2):
+				// swap2: Usdc→Eth, network fee taken on 150_000 USDC input = 1% = 1500
 				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500);
 
-				// Adding some more liquidity to make the other swap succeed:
-				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
+				// Adding enough Eth liquidity to make swap1 succeed (~9.9e17 needed):
+				MockSwappingApi::add_liquidity(Asset::Eth, 10u128.pow(18));
 			})
 			.then_process_blocks_until_block(SWAP_RESCHEDULED_BLOCK)
 			.then_execute_with(|_| {
@@ -1732,7 +1783,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 2000);
+				// swap1: Flip→USDC gives 2_000_000 USDC intermediate, 1% network fee = 20_000
+				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 20_000);
 			});
 	}
 
@@ -1762,8 +1814,12 @@ mod swap_batching {
 					}
 				};
 
+				// swap1: Btc→Eth (needs Btc→USDC first, then USDC→Eth)
+				// swap2: Eth→Usdc (needs Eth→USDC directly)
+				// Both swaps need USDC in the intermediate/output step.
+				// Setting USDC liquidity to 0 makes all to-USDC legs fail.
 				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
-				let swap2 = swap(Asset::Eth, Asset::Usdc, 150_000);
+				let swap2 = swap(Asset::Eth, Asset::Usdc, 10u128.pow(18));
 
 				insert_swaps(&[swap1, swap2]);
 
@@ -1789,22 +1845,20 @@ mod swap_batching {
 #[cfg(test)]
 mod internal_swaps {
 
-	use cf_traits::{mocks::balance_api::MockBalance, SwapOutputActionEncoded};
+	use cf_traits::{SwapOutputActionEncoded, mocks::balance_api::MockBalance};
 
 	use super::*;
 
-	const INPUT_ASSET: Asset = Asset::Eth;
-	const OUTPUT_ASSET: Asset = Asset::Flip;
+	const INPUT_ASSET: Asset = Asset::Usdc;
+	const OUTPUT_ASSET: Asset = Asset::Eth;
 
 	const INPUT_AMOUNT: AssetAmount = 1000;
 
 	#[test]
 	fn swap_into_internal_balance() {
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
 
-		let min_price = Price::from_usd_fine_amount(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE);
+		let min_price = Price::from_usd_fine_amount(DEFAULT_SWAP_RATE).invert();
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1839,6 +1893,9 @@ mod internal_swaps {
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
+				// Usdc(6-dec) → Eth(18-dec) at rate=2: 1000 * 10^18 / (2*10^6) = 5e14
+				let expected_output = mock_swap_output(INPUT_ASSET, OUTPUT_ASSET, INPUT_AMOUNT);
+
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::Swapping(Event::SwapExecuted {
@@ -1849,8 +1906,9 @@ mod internal_swaps {
 						swap_request_id: SWAP_REQUEST_ID,
 						account_id: LP_ACCOUNT,
 						asset: OUTPUT_ASSET,
-						amount: EXPECTED_OUTPUT_AMOUNT,
-					}),
+						amount,
+						..
+					}) if amount == expected_output,
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
 						reason: SwapRequestCompletionReason::Executed
@@ -1858,10 +1916,7 @@ mod internal_swaps {
 				);
 
 				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET), 0);
-				assert_eq!(
-					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
-					EXPECTED_OUTPUT_AMOUNT
-				);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), expected_output);
 			});
 	}
 
@@ -1870,18 +1925,14 @@ mod internal_swaps {
 		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const MIN_NETWORK_FEE: u128 = 10;
-		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
+		const INITIAL_RATE: u32 = (DEFAULT_SWAP_RATE * 2) as u32; // 4
+		const NEW_SWAP_RATE: u32 = 10; // Higher rate = less output
 		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 
-		// We require the internal swap minimum network fee to be non-zero for the refund fee to
-		// work, so this must be taken into account in the min_price calculation.
-		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
-		// charged instead.
-		let min_price = Price::from_usd_fine_amount(
-			(DEFAULT_SWAP_RATE as f64 *
-				DEFAULT_SWAP_RATE as f64 *
-				(((CHUNK_AMOUNT - MIN_NETWORK_FEE) as f64) / CHUNK_AMOUNT as f64)) as u128,
-		);
+		// USDC→Eth at rate=4: output/USDC = 10^18/(4*10^6) = 2.5e11 per USDC atom
+		// USDC→Eth at rate=10: output/USDC = 10^18/(10*10^6) = 10^11 per USDC atom
+		// min_price at 1.5e11 sits between → chunk 1 passes, chunk 2 fails.
+		let min_price = Price::from_amounts_bounded(150_000_000_000u128.into(), 1u128.into());
 
 		new_test_ext()
 			.execute_with(|| {
@@ -1893,6 +1944,7 @@ mod internal_swaps {
 				});
 				// Set price for refund fee calculation
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
+				SwapRate::set(INITIAL_RATE);
 
 				Swapping::init_internal_swap_request(
 					INPUT_ASSET,
@@ -1935,12 +1987,15 @@ mod internal_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
-				// Small rounding error due to price calculation
-				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE + 1;
-				// Only one chunk is expected to be swapped:
-				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-					(CHUNK_AMOUNT * DEFAULT_SWAP_RATE - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE;
+				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE;
 				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT - REFUND_FEE;
+				// USDC→Eth at INITIAL_RATE=4: (500-10) USDC → Eth
+				// Chunk 1 executed at INITIAL_RATE, but SwapRate was changed to NEW_SWAP_RATE,
+				// so temporarily restore it for computing expected output:
+				SwapRate::set(INITIAL_RATE);
+				let expected_output =
+					mock_swap_output(INPUT_ASSET, OUTPUT_ASSET, CHUNK_AMOUNT - MIN_NETWORK_FEE);
+				SwapRate::set(NEW_SWAP_RATE);
 
 				assert_event_sequence!(
 					Test,
@@ -1969,8 +2024,9 @@ mod internal_swaps {
 						swap_request_id: SWAP_REQUEST_ID,
 						account_id: LP_ACCOUNT,
 						asset: OUTPUT_ASSET,
-						amount: EXPECTED_OUTPUT_AMOUNT
-					}),
+						amount,
+						..
+					}) if amount == expected_output,
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
 						reason: SwapRequestCompletionReason::Expired
@@ -1981,10 +2037,7 @@ mod internal_swaps {
 					MockBalance::get_balance(&LP_ACCOUNT, INPUT_ASSET),
 					EXPECTED_REFUND_AMOUNT
 				);
-				assert_eq!(
-					MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET),
-					EXPECTED_OUTPUT_AMOUNT
-				);
+				assert_eq!(MockBalance::get_balance(&LP_ACCOUNT, OUTPUT_ASSET), expected_output);
 			});
 	}
 }
@@ -1992,7 +2045,7 @@ mod internal_swaps {
 #[cfg(test)]
 mod credit_flip_and_transfer {
 
-	use cf_traits::{mocks::balance_api::MockBalance, AccountInfo, SwapOutputActionEncoded};
+	use cf_traits::{AccountInfo, SwapOutputActionEncoded, mocks::balance_api::MockBalance};
 
 	use super::*;
 
@@ -2005,8 +2058,8 @@ mod credit_flip_and_transfer {
 	#[test]
 	fn swap_into_flip_to_credit() {
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-			INPUT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+		// Eth(18-dec) -> USDC(6-dec) -> Flip(18-dec): rates cancel out for same-decimal assets
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT;
 
 		new_test_ext()
 			.execute_with(|| {
@@ -2071,8 +2124,9 @@ mod credit_flip_and_transfer {
 	#[test]
 	fn swap_into_flip_to_credit_not_enough_output() {
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-			INPUT_AMOUNT2 * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+		// 1000 Eth_smallest -> USDC -> Flip: with rate=2, cross-decimal conversion loses
+		// precision due to floor division: 1000 Eth_atoms -> 0 USDC_atoms -> 0 Flip_atoms
+		const EXPECTED_OUTPUT_AMOUNT: AssetAmount = 0;
 
 		new_test_ext()
 			.execute_with(|| {
@@ -2500,7 +2554,7 @@ mod lending_liquidation_swaps {
 					Swapping::abort_swap_request(SWAP_REQUEST_ID),
 					Some(SwapExecutionProgress {
 						remaining_input_amount: CHUNK_AMOUNT,
-						accumulated_output_amount: CHUNK_AMOUNT * DEFAULT_SWAP_RATE
+						accumulated_output_amount: CHUNK_AMOUNT / DEFAULT_SWAP_RATE
 					})
 				);
 
@@ -2554,12 +2608,13 @@ mod lending_liquidation_swaps {
 			.then_execute_with(|_| {
 				// Check that upon completion liquidation swap calls into the lending
 				// pallet through LendingSystemApi:
+				// With new mock: USDC→USDT gives output = input / rate
 				assert_eq!(
 					MockLendingSystemApi::get_liquidation_swap_outcome(SWAP_REQUEST_ID),
 					Some(LiquidationSwapOutcome {
 						borrower_id: BORROWER_ID,
 						loan_id: LOAN_ID,
-						output_amount: FEE_AMOUNT * DEFAULT_SWAP_RATE
+						output_amount: FEE_AMOUNT / DEFAULT_SWAP_RATE
 					})
 				)
 			});

@@ -89,7 +89,7 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 			input_amount,
 			output_amount,
 			..
-		}) if *input_amount == chunk_amount_after_fee && *output_amount == chunk_amount_after_fee * DEFAULT_SWAP_RATE
+		}) if *input_amount == chunk_amount_after_fee && *output_amount == chunk_amount_after_fee / DEFAULT_SWAP_RATE
 	);
 
 	// Second chunk should be scheduled 2 blocks after the first is executed:
@@ -111,7 +111,7 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 			remaining_input_amount: INPUT_AMOUNT - (chunk_amount * 2),
 			remaining_chunks: number_of_chunks - 2,
 			chunk_interval: CHUNK_INTERVAL,
-			accumulated_output_amount: chunk_amount_after_fee * DEFAULT_SWAP_RATE,
+			accumulated_output_amount: chunk_amount_after_fee / DEFAULT_SWAP_RATE,
 		}
 	);
 }
@@ -148,7 +148,7 @@ fn dca_happy_path(is_ccm: bool) {
 	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE / DEFAULT_SWAP_RATE;
 
 	const TOTAL_OUTPUT_AMOUNT: AssetAmount = CHUNK_OUTPUT * 2;
 
@@ -203,7 +203,7 @@ fn dca_single_chunk(is_ccm: bool) {
 
 	const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const INPUT_AMOUNT_AFTER_FEE: AssetAmount = INPUT_AMOUNT - BROKER_FEE;
-	const EGRESS_AMOUNT: AssetAmount = INPUT_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+	const EGRESS_AMOUNT: AssetAmount = INPUT_AMOUNT_AFTER_FEE / DEFAULT_SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -271,7 +271,7 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					// Allow for exactly 1 retry
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
 					// This ensures the swap is refunded:
-					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
+					min_output: INPUT_AMOUNT / DEFAULT_SWAP_RATE + 1,
 				}),
 				is_ccm,
 			);
@@ -353,7 +353,7 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
 	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE / DEFAULT_SWAP_RATE;
 
 	const REFUND_FEE: AssetAmount = 10;
 	// The test will be set up as to execute one chunk only and refund the rest
@@ -367,7 +367,9 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 				Some(TestRefundParams {
 					// Allow for one retry for good measure:
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					min_output: INPUT_AMOUNT,
+					// With new mock: USDC→USDT gives input/rate, so total output ≈ INPUT_AMOUNT/2
+					// Set min_output to allow first chunk but fail on bad rate for second chunk
+					min_output: INPUT_AMOUNT / 2 - CHUNK_OUTPUT,
 				}),
 				is_ccm,
 			);
@@ -378,7 +380,8 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 		})
 		.then_execute_at_block(CHUNK_2_BLOCK, |_| {
 			// Adjusting the swap rate, so that the second chunk fails due to FoK:
-			SwapRate::set(0.5);
+			// With new mock: higher rate = less output for USDC→USDT
+			SwapRate::set(3);
 		})
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
@@ -417,7 +420,7 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
 			if is_ccm {
-				ccm::assert_ccm_egressed(Asset::Eth, CHUNK_OUTPUT, GAS_BUDGET);
+				ccm::assert_ccm_egressed(OUTPUT_ASSET, CHUNK_OUTPUT, GAS_BUDGET);
 			}
 
 			assert_event_sequence!(
@@ -473,7 +476,7 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
 	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE / DEFAULT_SWAP_RATE;
 
 	const TOTAL_OUTPUT: AssetAmount = CHUNK_OUTPUT * 2;
 
@@ -484,14 +487,15 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				CHUNK_INTERVAL,
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					min_output: CHUNK_OUTPUT,
+					min_output: TOTAL_OUTPUT,
 				}),
 				is_ccm,
 			);
 		})
 		.then_execute_at_block(CHUNK_1_BLOCK, |_| {
 			// Adjusting the swap rate, so that the first chunk fails at first
-			SwapRate::set(0.5);
+			// With new mock: higher rate = less output for USDC→USDT
+			SwapRate::set(3);
 		})
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
@@ -517,7 +521,7 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 		})
 		.then_execute_at_block(CHUNK_1_RETRY_BLOCK, |_| {
 			// Set the price back to normal, so that the fist chunk is successful
-			SwapRate::set(DEFAULT_SWAP_RATE as f64);
+			SwapRate::set(DEFAULT_SWAP_RATE_USD);
 		})
 		.then_execute_with(|_| {
 			assert_event_sequence!(
@@ -594,9 +598,9 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 	const INPUT_AMOUNT: AssetAmount = 1;
 	const NUMBER_OF_CHUNKS: u32 = 3;
 	const ZERO_CHUNK_AMOUNT: AssetAmount = 0;
-	// Even though the chunk size is 0, the end output should still the full amount * swap rate.
+	// Even though the chunk size is 0, the end output should still the full amount / swap rate.
 	// Note that the broker fee is 0 in this case because the input is too small.
-	const OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
+	const OUTPUT_AMOUNT: AssetAmount = INPUT_AMOUNT / DEFAULT_SWAP_RATE;
 
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + CHUNK_INTERVAL as u64;
@@ -943,7 +947,7 @@ fn dca_with_one_block_interval_fok() {
 	const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
 	const CHUNK_BROKER_FEE: AssetAmount = CHUNK_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
-	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
+	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE / DEFAULT_SWAP_RATE;
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + ONE_BLOCK_CHUNK_INTERVAL as u64;
 	const CHUNK_2_RESCHEDULED_AT_BLOCK: u64 =
@@ -1045,7 +1049,7 @@ fn dca_with_one_block_interval_fok() {
 			assert!(get_scheduled_swap_block(SwapId(4)).is_none());
 
 			// Change the swap rate so the second chunk fails
-			SwapRate::set((DEFAULT_SWAP_RATE / 10) as f64);
+			SwapRate::set(0);
 		})
 		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
@@ -1133,7 +1137,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 
 	const CHUNK_BROKER_FEE: AssetAmount = 10;
 	const CHUNK_1_OUTPUT: AssetAmount =
-		(CHUNK_AMOUNT - CHUNK_BROKER_FEE - NETWORK_FEE_MINIMUM) * DEFAULT_SWAP_RATE;
+		(CHUNK_AMOUNT - CHUNK_BROKER_FEE - NETWORK_FEE_MINIMUM) / DEFAULT_SWAP_RATE;
 	const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + ONE_BLOCK_CHUNK_INTERVAL as u64;
 	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + ONE_BLOCK_CHUNK_INTERVAL as u64;

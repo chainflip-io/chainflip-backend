@@ -17,6 +17,7 @@
 use core::cell::Cell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
+use cf_amm_math::Price;
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, ChainflipNetwork, ChannelId, STABLE_ASSET};
 #[cfg(feature = "runtime-benchmarks")]
@@ -34,7 +35,7 @@ use cf_traits::{
 };
 use frame_support::{derive_impl, pallet_prelude::DispatchError, parameter_types, weights::Weight};
 use sp_core::ConstU32;
-use sp_runtime::BoundedBTreeMap;
+use sp_runtime::{BoundedBTreeMap, SaturatedConversion};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -56,10 +57,11 @@ impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
 // NOTE: the use of u128 lets us avoid type conversions in tests:
 pub const DEFAULT_SWAP_RATE: u128 = 2;
+pub const DEFAULT_SWAP_RATE_USD: u32 = DEFAULT_SWAP_RATE as u32;
 
 parameter_types! {
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
-	pub static SwapRate: f64 = DEFAULT_SWAP_RATE as f64;
+	pub static SwapRate: u32 = DEFAULT_SWAP_RATE_USD;
 	pub storage Liquidity: BoundedBTreeMap<Asset, AssetAmount, ConstU32<100>> = Default::default();
 	pub storage NextChannelId: u64 = 0;
 }
@@ -112,7 +114,14 @@ impl SwappingApi for MockSwappingApi {
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
 
-		let output_amount = (input_amount as f64 * SwapRate::get()) as AssetAmount;
+		let asset = if from == STABLE_ASSET { to } else { from };
+		let price = Price::from_usd(asset, SwapRate::get()); // asset_atoms → USDC_atoms
+		if price.is_zero() {
+			return Ok(0);
+		}
+		// Use price in the correct direction: asset→USDC directly, USDC→asset inverted.
+		let swap_rate = if from == STABLE_ASSET { price.invert() } else { price };
+		let output_amount = swap_rate.output_amount_floor(input_amount).saturated_into();
 
 		let mut liquidity = Liquidity::get();
 

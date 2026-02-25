@@ -105,7 +105,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			let request_ccm = generate_ccm_channel();
 
 			let ccm_deposit_metadata = generate_ccm_deposit()
-				.to_checked(Asset::Eth, EVM_OUTPUT_ADDRESS.clone())
+				.to_checked(Asset::Usdt, EVM_OUTPUT_ADDRESS.clone())
 				.unwrap();
 
 			let refund_params = ChannelRefundParametersUncheckedEncoded {
@@ -119,8 +119,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 			// Can process CCM via Swap deposit
 			assert_ok!(Swapping::request_swap_deposit_address_with_affiliates(
 				RuntimeOrigin::signed(BROKER),
-				Asset::Dot,
-				Asset::Eth,
+				Asset::ArbUsdc,
+				Asset::Usdt,
 				MockAddressConverter::to_encoded_address((*EVM_OUTPUT_ADDRESS).clone()),
 				0,
 				Some(request_ccm),
@@ -131,9 +131,9 @@ fn can_process_ccms_via_swap_deposit_address() {
 			));
 
 			Swapping::init_swap_request(
-				Asset::Dot,
+				Asset::ArbUsdc,
 				DEPOSIT_AMOUNT,
-				Asset::Eth,
+				Asset::Usdt,
 				SwapRequestType::Regular {
 					output_action: SwapOutputAction::Egress {
 						ccm_deposit_metadata: Some(ccm_deposit_metadata.clone()),
@@ -157,8 +157,8 @@ fn can_process_ccms_via_swap_deposit_address() {
 					Swap::new(
 						1.into(),
 						1.into(),
-						Asset::Dot,
-						Asset::Eth,
+						Asset::ArbUsdc,
+						Asset::Usdt,
 						DEPOSIT_AMOUNT,
 						None,
 						PRINCIPAL_SWAP_BLOCK
@@ -169,11 +169,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			// CCM is scheduled for egress
-			assert_ccm_egressed(
-				Asset::Eth,
-				DEPOSIT_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
-				GAS_BUDGET,
-			);
+			assert_ccm_egressed(Asset::Usdt, DEPOSIT_AMOUNT, GAS_BUDGET);
 
 			assert_has_matching_event!(
 				Test,
@@ -188,8 +184,8 @@ fn ccm_principal_swap_only() {
 	const SWAP_AMOUNT: AssetAmount = 10_000;
 
 	// Gas asset is Eth, so no gas swap is necessary
-	const INPUT_ASSET: Asset = Asset::Eth;
-	const OUTPUT_ASSET: Asset = Asset::Flip;
+	const INPUT_ASSET: Asset = Asset::Usdc;
+	const OUTPUT_ASSET: Asset = Asset::Usdt;
 	new_test_ext()
 		.execute_with(|| {
 			init_ccm_swap_request(INPUT_ASSET, OUTPUT_ASSET, SWAP_AMOUNT);
@@ -230,11 +226,7 @@ fn ccm_principal_swap_only() {
 
 			assert_eq!(SwapRequests::<Test>::get(SWAP_REQUEST_ID), None);
 
-			assert_ccm_egressed(
-				OUTPUT_ASSET,
-				SWAP_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE,
-				GAS_BUDGET,
-			);
+			assert_ccm_egressed(OUTPUT_ASSET, SWAP_AMOUNT / DEFAULT_SWAP_RATE, GAS_BUDGET);
 
 			assert_eq!(CollectedRejectedFunds::<Test>::get(INPUT_ASSET), 0);
 			assert_eq!(CollectedRejectedFunds::<Test>::get(OUTPUT_ASSET), 0);
