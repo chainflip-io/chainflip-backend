@@ -28,7 +28,7 @@ import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
 import { send } from 'shared/send';
 
-import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
+import { observeBadEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { newEvmAddress } from 'shared/new_evm_address';
 import { brokerApiEndpoint } from 'shared/json_rpc';
@@ -37,6 +37,8 @@ import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { SwapContext } from 'shared/utils/swap_context';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import assert from 'assert';
+import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
+import { arbitrumIngressEgressUnknownBroker } from 'generated/events/arbitrumIngressEgress/unknownBroker';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfEvmVaultAbi = await getEvmVaultAbi();
@@ -64,7 +66,8 @@ async function testSuccessiveDepositEvm<A = []>(
     cf.withChildLogger(`[${sourceAsset}->${destAsset} EvmDepositTestSecondDeposit]`),
     swapParams,
   );
-  cf.info('Success');
+
+  cf.debug('Success');
 }
 
 async function testNoDuplicateWitnessing<A = []>(
@@ -104,7 +107,7 @@ async function testNoDuplicateWitnessing<A = []>(
 
   await observingSwapScheduled.stop();
 
-  cf.info('Success');
+  cf.debug('Success');
 }
 
 // Not supporting Btc to avoid adding more unnecessary complexity with address encoding.
@@ -155,7 +158,7 @@ async function testTxMultipleVaultSwaps<A = []>(
   // Wait for multiple SwapRequested events. These can appear in the same block but will have different
   // swapRequestId
   const foundSwapRequestIds: bigint[] = [];
-  for (let i = 0; i < numSwaps; i++) {
+  for (let i = 1; i <= numSwaps; i++) {
     const swapRequestedEvent = await cf.stepUntilEvent(
       'Swapping.SwapRequested',
       swappingSwapRequested.refine((event) => {
@@ -175,6 +178,9 @@ async function testTxMultipleVaultSwaps<A = []>(
           differentSwapReqId
         );
       }),
+    );
+    cf.debug(
+      `Found SwapRequested event ${i} : ${JSON.stringify(swapRequestedEvent)}  cf.block= ${cf.currentBlockHeight()}`,
     );
     foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
   }
@@ -220,7 +226,7 @@ async function testDoubleDeposit<A = []>(
     SwapRequestType.Regular,
   );
 
-  cf.info('Success');
+  cf.debug('Success');
 }
 
 async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
@@ -273,32 +279,45 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
     const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
-    cf.info(`Vault swap transaction sent with hash: ${receipt.transactionHash}`);
+    const subcf = cf.withChildLogger(
+      `${vaultSwapDetails.chain}_${vaultSwapDetails.broker ?? ''} testEvmLegacyCfParametersVaultSwap`,
+    );
 
-    const depositFinalisedEvent = observeEvent(
-      cf.logger,
-      `${chainFromAsset(sourceAsset).toLowerCase()}IngressEgress:DepositFinalised`,
-      {
-        test: (event) =>
-          event.data.originType === 'Vault' &&
-          event.data.depositDetails.txHashes[0] === receipt.transactionHash,
-      },
-    ).event;
+    subcf.debug(`Vault swap transaction sent with hash: ${receipt.transactionHash}`);
 
     // The swap will be refunded because the mainnet broker doesn't match the testnet broker
     // but the swap is observed correctly.
-    const unknownBrokerEvent = vaultSwapDetails.broker
-      ? observeEvent(
-          cf.logger,
-          `${chainFromAsset(sourceAsset).toLowerCase()}IngressEgress:UnknownBroker`,
-          {
-            test: (event) => event.data.brokerId === vaultSwapDetails.broker,
-          },
-        ).event
-      : Promise.resolve();
+    if (vaultSwapDetails.broker) {
+      await subcf.stepUntilAllEventsOf({
+        depositFinalized: {
+          name: 'ArbitrumIngressEgress.DepositFinalised',
+          schema: arbitrumIngressEgressDepositFinalised.refine(
+            (event) =>
+              event.depositDetails.txHashes &&
+              event.depositDetails.txHashes[0] === receipt.transactionHash &&
+              event.originType === 'Vault',
+          ),
+        },
+        unknownBroker: {
+          name: 'ArbitrumIngressEgress.UnknownBroker',
+          schema: arbitrumIngressEgressUnknownBroker.refine(
+            (event) => event.brokerId === vaultSwapDetails.broker,
+          ),
+        },
+      });
+    } else {
+      await subcf.stepUntilEvent(
+        'ArbitrumIngressEgress.DepositFinalised',
+        arbitrumIngressEgressDepositFinalised.refine(
+          (event) =>
+            event.depositDetails.txHashes &&
+            event.depositDetails.txHashes[0] === receipt.transactionHash &&
+            event.originType === 'Vault',
+        ),
+      );
+    }
 
-    await Promise.all([depositFinalisedEvent, unknownBrokerEvent]);
-    cf.info('Success');
+    cf.debug('Success');
   }
 }
 
@@ -356,7 +375,7 @@ async function testEncodeCfParameters<A = []>(
     txData,
   );
 
-  cf.debug(`Vault swap transaction receipt: ${JSON.stringify(receipt)}`);
+  cf.debug(`Vault swap transaction hash: ${receipt.transactionHash}`);
 
   await observeSwapRequested(
     cf,
@@ -366,7 +385,7 @@ async function testEncodeCfParameters<A = []>(
     SwapRequestType.Regular,
   );
 
-  cf.info('Success');
+  cf.debug('Success');
 }
 
 export async function dotestEvmDeposits<A = []>(
