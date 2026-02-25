@@ -210,7 +210,7 @@ mod benchmarks {
 			Some(100),
 			1_000,
 			None,
-			Some(BlockNumberFor::<T>::from(100u32)),
+			Some(BlockNumberFor::<T>::from(10u32)),
 		);
 	}
 
