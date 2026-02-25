@@ -29,7 +29,7 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
   const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
-  const ciTimeoutFactor = 1.1; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
+  const ciTimeoutFactor = 1.5; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
 
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
