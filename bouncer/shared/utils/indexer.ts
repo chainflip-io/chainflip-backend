@@ -168,7 +168,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
     }
 
     // we wait two additional CF blocks to be indexed before we error out in case we couldn't find the event(s) we were looking for
-    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 2) {
+    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 4) {
       throw new Error(
         `Did not find any of the events in ${JSON.stringify(Object.values(descriptions).map((v) => v.name))} in block range ${timing.startFromBlock}..${timing.endBeforeBlock}`,
       );
