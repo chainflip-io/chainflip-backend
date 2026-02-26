@@ -160,7 +160,7 @@ Always keep a `PlaceholderMigration<VERSION, Pallet<T>>` pointing at the current
 ### `cf-utilities` (`utilities/`)
 
 - `derive_common_traits!` / `derive_common_traits_no_bounds!`: derive Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize in one macro
-- `define_empty_struct!`: creates PhantomData-based structs with standard derives (replaces the older `TypesFor<>` pattern)
+- `define_empty_struct!`: creates PhantomData-based structs with standard derives
 - `assert_ok!`, `assert_err!`, `assert_matches!`, `assert_panics!` test helpers
 - `impls!` / `hook_impls!`: syntax sugar for implementing multiple traits/election hooks for one type
 - `task_scope`, `cached_stream`, `spmc` and other async utilities (std-only)
