@@ -1258,9 +1258,9 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.debug(`Extrinsic status: ${status.toString()}`);
+      // logger.debug(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
-        logger.debug(`Extrinsic error: ${dispatchError.toString()}`);
+        // logger.debug(`Extrinsic error: ${dispatchError.toString()}`);
         try {
           dispatchErrorHandler({ dispatchError });
         } catch (error) {

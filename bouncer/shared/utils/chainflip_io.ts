@@ -142,7 +142,7 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'Finalized', release);
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
@@ -176,7 +176,7 @@ export class ChainflipIO<Requirements> {
           },
           {
             startFromBlock: this.lastIoBlockHeight,
-            endBeforeBlock: this.lastIoBlockHeight + 1,
+            endBeforeBlock: this.lastIoBlockHeight + 2,
           },
         );
         this.debug(
