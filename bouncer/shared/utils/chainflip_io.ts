@@ -176,7 +176,7 @@ export class ChainflipIO<Requirements> {
           },
           {
             startFromBlock: this.lastIoBlockHeight,
-            endBeforeBlock: this.lastIoBlockHeight + 2,
+            endBeforeBlock: this.lastIoBlockHeight + 3,
           },
         );
         this.debug(
@@ -355,7 +355,7 @@ export class ChainflipIO<Requirements> {
         { event: { name, schema: schema ?? z.any() } },
         {
           startFromBlock: this.lastIoBlockHeight,
-          endBeforeBlock: this.lastIoBlockHeight + 2,
+          endBeforeBlock: this.lastIoBlockHeight + 3,
         },
       );
 
