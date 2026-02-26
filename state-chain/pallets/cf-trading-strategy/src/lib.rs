@@ -453,7 +453,7 @@ pub mod pallet {
 								match T::PoolApi::limit_orders(
 									base_asset,
 									STABLE_ASSET,
-									&fetch_orders_for_strategies
+									fetch_orders_for_strategies
 										.get(&asset_pair)
 										.unwrap_or(&BTreeSet::new()),
 								) {
