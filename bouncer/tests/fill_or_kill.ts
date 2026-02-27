@@ -122,7 +122,7 @@ async function testMinPriceRefund<A = []>(
     subcf.debug(
       `Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`,
     );
-    const source = await prepareVaultSwapSource(subcf, sourceAsset);
+    const source = await prepareVaultSwapSource(subcf, sourceAsset, amount.toString());
 
     ccmEventEmitted = refundParameters.refundCcmMetadata
       ? observeCcmReceived(

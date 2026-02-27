@@ -39,7 +39,7 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   };
 
   cf.info('Sending vault swap...');
-  const source = await prepareVaultSwapSource(cf, inputAsset);
+  const source = await prepareVaultSwapSource(cf, inputAsset, depositAmount);
   await executeVaultSwap(
     cf,
     source,

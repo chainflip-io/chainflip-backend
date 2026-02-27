@@ -81,7 +81,7 @@ async function testDCASwap<A = []>(
     );
   } else {
     const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
-    const source = await prepareVaultSwapSource(subcf, inputAsset);
+    const source = await prepareVaultSwapSource(subcf, inputAsset, amount.toString());
     const { transactionId } = await executeVaultSwap(
       subcf,
       source,

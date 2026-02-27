@@ -273,6 +273,7 @@ export type VaultSwapSource =
 export async function prepareVaultSwapSource<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
+  amount?: string,
 ): Promise<VaultSwapSource> {
   const srcChain = chainFromAsset(sourceAsset);
   let vaultSwapSource: VaultSwapSource;
@@ -280,7 +281,7 @@ export async function prepareVaultSwapSource<A = []>(
   if (evmChains.includes(srcChain)) {
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
+    const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset, amount);
     vaultSwapSource = { chain: 'Evm', wallet, sourceAddress: wallet.address.toLowerCase() };
   } else if (srcChain === 'Bitcoin') {
     // Unused for now
@@ -408,7 +409,7 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
   );
 
   try {
-    const vaultSwapSource = await prepareVaultSwapSource(cf, sourceAsset);
+    const vaultSwapSource = await prepareVaultSwapSource(cf, sourceAsset, amount);
 
     // Start observing ccmEventEmitted before initiating the vault swap
     const ccmEventEmitted = messageMetadata
