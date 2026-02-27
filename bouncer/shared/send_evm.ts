@@ -15,7 +15,11 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Arbitrum: undefined,
 };
 
-export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<number> {
+export async function getNextEvmNonce(
+  logger: Logger,
+  chain: Chain,
+  forceRefetch = false,
+): Promise<number> {
   let mutex;
   switch (chain) {
     case 'Ethereum':
@@ -29,7 +33,7 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
   }
 
   return mutex.runExclusive(async () => {
-    if (nextEvmNonce[chain] === undefined) {
+    if (nextEvmNonce[chain] === undefined || forceRefetch) {
       const web3 = getWeb3(chain);
       const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
       const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
@@ -94,8 +98,7 @@ export async function signAndSendTxEvm(
       // and re-sign with the corrected nonce.
       if (isNonceError(error)) {
         logger.warn(`${chain} nonce error, re-fetching nonce. Error: ${error}`);
-        nextEvmNonce[chain as 'Ethereum' | 'Arbitrum'] = undefined;
-        nonce = await getNextEvmNonce(logger, chain);
+        nonce = await getNextEvmNonce(logger, chain, true);
         signedTx = await web3.eth.accounts.signTransaction(
           { to, data, gas, nonce, value },
           whalePrivKey,
