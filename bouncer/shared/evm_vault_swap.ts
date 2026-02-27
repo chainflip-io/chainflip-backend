@@ -2,7 +2,6 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
-import Web3 from 'web3';
 import {
   getContractAddress,
   amountToFineAmount,
@@ -13,7 +12,7 @@ import {
   createEvmWalletAndFund,
   newAssetAddress,
   decodeDotAddressForContract,
-  getEvmEndpoint,
+  getWeb3,
   Chains,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
@@ -129,7 +128,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     },
   )) as unknown as EvmVaultSwapDetails;
 
-  const web3 = new Web3(getEvmEndpoint(srcChain));
+  const web3 = getWeb3(srcChain);
   const tx = {
     to: vaultSwapDetails.to,
     data: vaultSwapDetails.calldata,

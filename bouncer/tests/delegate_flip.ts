@@ -1,4 +1,3 @@
-import Web3 from 'web3';
 import { randomBytes } from 'crypto';
 import { HDNodeWallet } from 'ethers';
 import {
@@ -8,7 +7,7 @@ import {
   defaultAssetAmounts,
   externalChainToScAccount,
   getContractAddress,
-  getEvmEndpoint,
+  getWeb3,
   hexPubkeyToFlipAddress,
   newAddress,
 } from 'shared/utils';
@@ -58,7 +57,7 @@ async function encodeAndSendDelegationApiCall(
     gas: 100000,
   };
 
-  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const web3 = getWeb3('Ethereum');
   const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
 
@@ -192,7 +191,7 @@ export async function testDelegate(testContext: TestContext) {
 
 export async function testCcmSwapFundAccount(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
-  const web3 = new Web3(getEvmEndpoint('Ethereum'));
+  const web3 = getWeb3('Ethereum');
   const scUtilsAddress = getContractAddress('Ethereum', 'SC_UTILS');
   const scAddress = await newStatechainAddress(randomBytes(32).toString('hex'));
 

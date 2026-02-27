@@ -1,4 +1,3 @@
-import Web3 from 'web3';
 import { InternalAsset as Asset, broker } from '@chainflip/cli';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
@@ -10,7 +9,7 @@ import {
   decodeDotAddressForContract,
   defaultAssetAmounts,
   chainFromAsset,
-  getEvmEndpoint,
+  getWeb3,
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
@@ -119,7 +118,7 @@ async function testTxMultipleVaultSwaps<A = []>(
   const { destAddress, tag } = await prepareSwap(parentCf.logger, sourceAsset, destAsset);
   const cf = parentCf.withChildLogger(`${tag} testTxMultipleVaultSwaps`);
 
-  const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
+  const web3 = getWeb3(chainFromAsset(sourceAsset));
 
   const cfTesterAddress = getContractAddress(chainFromAsset(sourceAsset), 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,7 +234,7 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
   const sourceAsset = 'ArbEth';
   const srcChain = 'Arbitrum';
   const evmWallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
-  const web3 = new Web3(getEvmEndpoint(srcChain));
+  const web3 = getWeb3(srcChain);
 
   // Hardcoded payload obtained encoding a Vault Swap with the old Encoding
   const vaultSwapDetailsArray = [
@@ -326,7 +325,7 @@ async function testEncodeCfParameters<A = []>(
   sourceAsset: Asset,
   destAsset: Asset,
 ) {
-  const web3 = new Web3(getEvmEndpoint(chainFromAsset(sourceAsset)));
+  const web3 = getWeb3(chainFromAsset(sourceAsset));
   const cfVaultAddress = getContractAddress(chainFromAsset(sourceAsset), 'VAULT');
   const cfVaultContract = new web3.eth.Contract(cfEvmVaultAbi, cfVaultAddress);
 

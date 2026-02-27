@@ -1,7 +1,6 @@
-import Web3 from 'web3';
 import { Chain } from '@chainflip/cli';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { amountToFineAmount, getEvmEndpoint } from 'shared/utils';
+import { amountToFineAmount, getWeb3 } from 'shared/utils';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { Logger } from 'shared/utils/logger';
 
@@ -14,7 +13,7 @@ export async function sendErc20(
   contractAddress: string,
   amount: string,
 ) {
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,11 +1,10 @@
-import Web3 from 'web3';
 import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
   EgressId,
-  getEvmEndpoint,
+  getWeb3,
   getEvmWhaleKeypair,
   getSolConnection,
   observeCcmReceived,
@@ -235,7 +234,7 @@ async function testGasLimitSwapToEvm<A = []>(
   }
 
   const destChain = chainFromAsset(destAsset);
-  const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
+  const web3 = getWeb3(chainFromAsset(destAsset));
 
   if (destChain !== 'Arbitrum' && destChain !== 'Ethereum') {
     throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);

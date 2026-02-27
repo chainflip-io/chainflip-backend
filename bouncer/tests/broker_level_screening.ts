@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { Chain, InternalAsset } from '@chainflip/cli';
-import Web3 from 'web3';
 import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
   btcClientMutex,
@@ -8,7 +7,7 @@ import {
   sleep,
   chainGasAsset,
   isWithinOnePercent,
-  getEvmEndpoint,
+  getWeb3,
   chainFromAsset,
   observeBalanceIncrease,
   observeCcmReceived,
@@ -154,7 +153,7 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
   }
 
   const MAX_RETRIES = 100;
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   let contractDeployed = false;
   for (let i = 0; i < MAX_RETRIES; i++) {
     const bytecode = await web3.eth.getCode(depositAddress);

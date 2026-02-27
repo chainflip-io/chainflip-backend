@@ -7,11 +7,10 @@
 // For example: ./commands/setup_vaults.ts
 
 import { AddressOrPair } from '@polkadot/api/types';
-import Web3 from 'web3';
 import {
   getBtcClient,
   handleSubstrateError,
-  getEvmEndpoint,
+  getWeb3,
   getSolConnection,
   deferredPromise,
   runWithTimeout,
@@ -123,7 +122,7 @@ async function createAssetHubVault(
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
-  const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
+  const arbClient = getWeb3('Arbitrum');
   const solClient = getSolConnection();
 
   await using assethub = await getAssethubApi();

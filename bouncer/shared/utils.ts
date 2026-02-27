@@ -851,6 +851,16 @@ export function getEvmEndpoint(chain: Chain): string {
   }
 }
 
+const web3Instances: Partial<Record<string, Web3>> = {};
+
+export function getWeb3(chain: Chain): Web3 {
+  const endpoint = getEvmEndpoint(chain);
+  if (!web3Instances[endpoint]) {
+    web3Instances[endpoint] = new Web3(endpoint);
+  }
+  return web3Instances[endpoint]!;
+}
+
 export function getSolConnection(): Connection {
   return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://0.0.0.0:8899', {
     commitment: 'confirmed',
@@ -933,8 +943,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     if (balance === 0) {
       const chain = chainFromAsset(asset);
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
-        const web3 = new Web3(getEvmEndpoint(chain));
-        if ((await web3.eth.getCode(address)) === '0x') {
+        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
           throw new Error('EVM address has no bytecode');
         }
       }
@@ -963,7 +972,7 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<ContractEvent | undefined> {
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);

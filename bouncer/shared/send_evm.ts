@@ -1,10 +1,9 @@
-import Web3 from 'web3';
 import {
   arbNonceMutex,
   ethNonceMutex,
   Chain,
   amountToFineAmount,
-  getEvmEndpoint,
+  getWeb3,
   getEvmWhaleKeypair,
   assetDecimals,
   getContractAddress,
@@ -31,7 +30,7 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
 
   return mutex.runExclusive(async () => {
     if (nextEvmNonce[chain] === undefined) {
-      const web3 = new Web3(getEvmEndpoint(chain));
+      const web3 = getWeb3(chain);
       const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
       const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
@@ -42,6 +41,20 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
   });
 }
 
+function isEvmRevert(error: unknown): boolean {
+  const msg = String(error);
+  return (
+    msg.includes('Transaction has been reverted by the EVM') ||
+    msg.includes('execution reverted') ||
+    msg.includes('revert')
+  );
+}
+
+function isNonceError(error: unknown): boolean {
+  const msg = String(error);
+  return msg.includes('nonce too low') || msg.includes('nonce too high');
+}
+
 export async function signAndSendTxEvm(
   logger: Logger,
   chain: Chain,
@@ -50,27 +63,46 @@ export async function signAndSendTxEvm(
   data?: string,
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
 ) {
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
 
-  const nonce = await getNextEvmNonce(logger, chain);
-  const tx = { to, data, gas, nonce, value };
-
-  const signedTx = await web3.eth.accounts.signTransaction(tx, whalePrivKey);
-
-  let receipt;
   const numberRetries = 10;
+  let receipt;
 
-  // Retry mechanism as we expect all transactions to succeed.
+  // Fetch nonce and sign outside the loop; re-sign only if we get a nonce error.
+  let nonce = await getNextEvmNonce(logger, chain);
+  let signedTx = await web3.eth.accounts.signTransaction(
+    { to, data, gas, nonce, value },
+    whalePrivKey,
+  );
+
   for (let i = 0; i < numberRetries; i++) {
     try {
       receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
       break;
     } catch (error) {
+      // EVM reverts are deterministic — retrying the same tx will always fail.
+      if (isEvmRevert(error)) {
+        throw new Error(`${chain} transaction reverted by EVM: ${error}`);
+      }
+
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+
+      // On nonce errors, reset the counter so getNextEvmNonce re-fetches from chain
+      // and re-sign with the corrected nonce.
+      if (isNonceError(error)) {
+        logger.warn(`${chain} nonce error, re-fetching nonce. Error: ${error}`);
+        nextEvmNonce[chain as 'Ethereum' | 'Arbitrum'] = undefined;
+        nonce = await getNextEvmNonce(logger, chain);
+        signedTx = await web3.eth.accounts.signTransaction(
+          { to, data, gas, nonce, value },
+          whalePrivKey,
+        );
+      } else {
+        logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+      }
     }
   }
   if (!receipt) {
@@ -102,7 +134,7 @@ export async function sendEvmNative(
 const EVM_BASE_GAS_LIMIT = 21000;
 
 export async function estimateCcmCfTesterGas(destChain: Chain, message: string) {
-  const web3 = new Web3(getEvmEndpoint(destChain));
+  const web3 = getWeb3(destChain);
   const cfTester = getContractAddress(destChain, 'CFTESTER');
   const vault = getContractAddress(destChain, 'VAULT');
   const messageLength = message.slice(2).length / 2;
