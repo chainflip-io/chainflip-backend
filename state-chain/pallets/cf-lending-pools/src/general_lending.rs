@@ -666,15 +666,16 @@ impl<T: Config> LoanAccount<T> {
 		// Gather collateral from supply side of liquidity pools if available:
 		for asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>().iter() {
 			GeneralLendingPools::<T>::mutate(asset, |pool| {
-				let pool = pool.as_mut().expect("Using keys read just above");
-				// Remove as much as possible:
-				if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
-					pool.remove_funds(&self.borrower_id, None)
-				{
-					collateral_to_liquidate
-						.entry(*asset)
-						.or_default()
-						.saturating_accrue(withdrawn_amount);
+				if let Some(pool) = pool.as_mut() {
+					// Remove as much as possible:
+					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
+						pool.remove_funds(&self.borrower_id, None)
+					{
+						collateral_to_liquidate
+							.entry(*asset)
+							.or_default()
+							.saturating_accrue(withdrawn_amount);
+					}
 				}
 			});
 		}
@@ -724,6 +725,11 @@ impl<T: Config> LoanAccount<T> {
 		liquidation_type: LiquidationType,
 		price_cache: &OraclePriceCache<T>,
 	) -> Result<(), Error<T>> {
+		if self.liquidation_status != LiquidationStatus::NoLiquidation {
+			log_or_panic!("Account {:?} is already in a liquidation state", borrower_id);
+			fail!(Error::<T>::InternalInvariantViolation);
+		}
+
 		if collateral.is_empty() {
 			// Collateral may not be immediately available (e.g. a lending pool
 			// we supplied into may have 100% utilisation). In this case there is nothing to do
@@ -732,11 +738,6 @@ impl<T: Config> LoanAccount<T> {
 		}
 
 		let config = LendingConfig::<T>::get();
-
-		if self.liquidation_status != LiquidationStatus::NoLiquidation {
-			log_or_panic!("Account {:?} is already in a liquidation state", borrower_id);
-			fail!(Error::<T>::InternalInvariantViolation);
-		}
 
 		let mut liquidation_swaps = BTreeMap::new();
 
@@ -1599,6 +1600,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 	}
 }
 
+#[transactional]
 pub fn remove_lender_funds<T: Config>(
 	lender_id: T::AccountId,
 	asset: Asset,
@@ -1635,11 +1637,16 @@ pub fn remove_lender_funds<T: Config>(
 
 		// Adjust the amount taking into account how much we are limited by LTV
 		let amount = match (amount, ltv_surplus_asset) {
-			(None, None) => None,
-			(None, Some(ltv_surplus)) => Some(ltv_surplus),
-			(Some(amount), None) => Some(amount),
 			(Some(amount), Some(ltv_surplus)) => Some(core::cmp::min(amount, ltv_surplus)),
+			_ => ltv_surplus_asset.or(amount),
 		};
+
+		if let Some(amount) = amount {
+			ensure!(
+				price_cache.usd_value_of(asset, amount)? >= config.minimum_supply_amount_usd,
+				Error::<T>::InsufficientLtvHeadroom
+			);
+		}
 
 		let WithdrawnAndRemainingAmounts { withdrawn_amount, remaining_amount } =
 			pool.remove_funds(&lender_id, amount).map_err(Error::<T>::from)?;

@@ -5737,7 +5737,6 @@ mod supply_as_collateral {
 					SWAPPED_PRINCIPAL_1,
 				);
 
-				// Should the account remain in liquidation?
 				assert_eq!(get_account().liquidation_status, LiquidationStatus::NoLiquidation);
 
 				// The loan should *not* be settled:

@@ -576,6 +576,8 @@ pub mod pallet {
 		LiquidationsDisabled,
 		/// LP still has funds present in the lending pool
 		LendingFundsRemaining,
+		/// Can't removed funds due to LTV check
+		InsufficientLtvHeadroom,
 	}
 
 	#[pallet::hooks]
