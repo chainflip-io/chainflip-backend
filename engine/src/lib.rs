@@ -28,6 +28,7 @@ pub mod p2p;
 pub mod retrier;
 pub mod settings;
 pub mod state_chain_observer;
+mod state_chain_reserved_peers;
 pub mod witness;
 
 // Blockchains
@@ -195,6 +196,18 @@ async fn run_main(
 			.context("Failed to start p2p")?;
 
 			scope.spawn(p2p_fut);
+
+			let (authorities_updated_sender, authorities_updated_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			let state_chain_client_for_reserved_peers = state_chain_client.clone();
+			scope.spawn(async move {
+				state_chain_reserved_peers::start(
+					state_chain_client_for_reserved_peers,
+					authorities_updated_receiver,
+				)
+				.await?;
+				Ok(())
+			});
 
 			// Use the ceremony id counters from before the initial block so the SCO can process the
 			// events from the initial block.
@@ -367,6 +380,7 @@ async fn run_main(
 				dot_multisig_client,
 				btc_multisig_client,
 				sol_multisig_client,
+				authorities_updated_sender,
 			));
 
 			p2p_ready_receiver.await.unwrap();

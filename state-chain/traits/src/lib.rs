@@ -568,6 +568,8 @@ pub trait CfePeerRegistration<T: Chainflip> {
 	);
 
 	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey);
+
+	fn authorities_updated(_epoch_index: EpochIndex, _authorities: Vec<T::ValidatorId>) {}
 }
 
 pub trait CfeBroadcastRequest<T: Chainflip, C: Chain> {

@@ -29,7 +29,7 @@ use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 
-use sp_std::collections::btree_set::BTreeSet;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(C))]
@@ -87,4 +87,5 @@ pub enum CfeEvent<ValidatorId> {
 	SolKeygenRequest(KeygenRequest<ValidatorId>),
 	SolTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Solana>),
 	HubTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Assethub>),
+	AuthoritiesUpdated { epoch_index: EpochIndex, authorities: Vec<ValidatorId> },
 }

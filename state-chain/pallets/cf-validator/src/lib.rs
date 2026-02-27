@@ -279,6 +279,12 @@ pub mod pallet {
 	pub type AccountPeerMapping<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, (Ed25519PublicKey, Port, Ipv6Addr)>;
 
+	/// Substrate P2P address (port + IP) for each validator, used to add them as reserved peers.
+	/// The libp2p PeerId is derived from the Ed25519 key stored in `AccountPeerMapping`.
+	#[pallet::storage]
+	pub type NodeP2pAddress<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, (Port, Ipv6Addr)>;
+
 	/// Ed25519 public keys (aka peer ids) that are associated with account ids. (We keep track
 	/// of them to ensure they don't somehow get reused between different account ids.)
 	#[pallet::storage]
@@ -1364,6 +1370,30 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Register the external Substrate P2P address (port + IP) of the co-located
+		/// substrate node. Other validators read this to construct reserved-peer multiaddrs.
+		///
+		/// The dispatch origin of this function must be signed.
+		#[pallet::call_index(20)]
+		#[pallet::weight((T::ValidatorWeightInfo::register_peer_id(), DispatchClass::Operational))]
+		pub fn register_node_p2p_address(
+			origin: OriginFor<T>,
+			port: Port,
+			ip_address: Ipv6Addr,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+
+			if let Some((existing_port, existing_ip)) = NodeP2pAddress::<T>::get(&account_id) {
+				if (existing_port, existing_ip) == (port, ip_address) {
+					return Ok(())
+				}
+			}
+
+			NodeP2pAddress::<T>::insert(&account_id, (port, ip_address));
+
+			Ok(())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -1530,6 +1560,7 @@ impl<T: Config> Pallet<T> {
 		);
 
 		Self::initialise_new_epoch(new_epoch, &new_authorities, bond);
+		T::CfePeerRegistration::authorities_updated(new_epoch, new_authorities.clone());
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 		T::EpochTransitionHandler::on_new_epoch(new_epoch);

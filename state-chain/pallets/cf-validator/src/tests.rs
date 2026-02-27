@@ -1620,6 +1620,25 @@ fn should_expire_all_previous_epochs() {
 	});
 }
 
+#[test]
+fn emits_authorities_updated_cfe_event_on_epoch_transition() {
+	new_test_ext().execute_with(|| {
+		const ID: u64 = 1;
+		const BOND: u128 = 100;
+
+		ValidatorPallet::transition_to_next_epoch(vec![ID], BOND);
+		let current_epoch = ValidatorPallet::current_epoch();
+
+		assert_eq!(
+			MockCfeInterface::take_events(),
+			vec![MockCfeEvent::AuthoritiesUpdated {
+				epoch_index: current_epoch,
+				authorities: vec![ID],
+			}]
+		);
+	});
+}
+
 #[cfg(test)]
 mod operator {
 	use cf_test_utilities::assert_has_event;

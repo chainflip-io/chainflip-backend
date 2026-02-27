@@ -58,6 +58,8 @@ async fn start_sc_observer<BlockStream: StreamApi<FINALIZED>>(
 	sc_block_stream: BlockStream,
 	eth_rpc: MockEvmRetryRpcClient,
 ) {
+	let (authorities_updated_sender, _authorities_updated_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -70,6 +72,7 @@ async fn start_sc_observer<BlockStream: StreamApi<FINALIZED>>(
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
+		authorities_updated_sender,
 	)
 	.await
 	.unwrap_err();
@@ -764,6 +767,8 @@ async fn run_the_sc_observer() {
 			.await
 			.unwrap();
 
+			let (authorities_updated_sender, _authorities_updated_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -776,6 +781,7 @@ async fn run_the_sc_observer() {
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
+				authorities_updated_sender,
 			)
 			.await
 			.unwrap_err();

@@ -45,7 +45,7 @@ use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
 	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetryRpcApi, evm::retry_rpc::EvmRetrySigningRpcApi,
-	sol::retry_rpc::SolRetryRpcApi,
+	sol::retry_rpc::SolRetryRpcApi, state_chain_reserved_peers::AuthoritiesUpdated,
 };
 use cf_utilities::task_scope::{task_scope, Scope};
 use engine_sc_client::{
@@ -62,6 +62,7 @@ use multisig::{
 	eth::EvmCryptoScheme, polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
 	SignatureToThresholdSignature,
 };
+use tokio::sync::mpsc::UnboundedSender;
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -254,6 +255,7 @@ pub async fn start<
 	dot_multisig_client: PolkadotMultisigClient,
 	btc_multisig_client: BitcoinMultisigClient,
 	sol_multisig_client: SolMultisigClient,
+	authorities_updated_sender: UnboundedSender<AuthoritiesUpdated>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StreamApi<FINALIZED>,
@@ -533,11 +535,20 @@ where
                                             })
                                         }
                                     }
-                                    CfeEvent::PeerIdRegistered { .. } |
-                                    CfeEvent::PeerIdDeregistered { .. } => {
-                                        // p2p registration is handled in the p2p module.
-                                        // Matching here to log the event due to the match_event macro.
-                                    }
+									CfeEvent::PeerIdRegistered { .. } |
+									CfeEvent::PeerIdDeregistered { .. } => {
+										// p2p registration is handled in the p2p module.
+										// Matching here to log the event due to the match_event macro.
+									}
+									CfeEvent::AuthoritiesUpdated { epoch_index, authorities } => {
+										if let Err(error) = authorities_updated_sender.send(AuthoritiesUpdated {
+											block_hash: current_block.hash,
+											epoch_index,
+											authorities,
+										}) {
+											warn!("Failed to forward authority update event to reserved-peer controller: {error}");
+										}
+									}
                                     CfeEvent::SolThresholdSignatureRequest(req) => {
                                         handle_signing_request::<_, _, _, SolanaInstance>(
                                             scope,

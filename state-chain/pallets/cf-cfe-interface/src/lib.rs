@@ -176,4 +176,11 @@ impl<T: Config> CfePeerRegistration<T> for Pallet<T> {
 	fn peer_deregistered(account_id: T::ValidatorId, pubkey: Ed25519PublicKey) {
 		CfeEvents::<T>::append(CfeEvent::<T>::PeerIdDeregistered { account_id, pubkey })
 	}
+
+	fn authorities_updated(
+		epoch_index: cf_primitives::EpochIndex,
+		authorities: Vec<T::ValidatorId>,
+	) {
+		CfeEvents::<T>::append(CfeEvent::<T>::AuthoritiesUpdated { epoch_index, authorities })
+	}
 }

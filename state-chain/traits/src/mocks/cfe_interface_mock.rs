@@ -42,6 +42,10 @@ pub enum MockCfeEvent<ValidatorId> {
 		account_id: ValidatorId,
 		pubkey: cf_primitives::Ed25519PublicKey,
 	},
+	AuthoritiesUpdated {
+		epoch_index: cf_primitives::EpochIndex,
+		authorities: Vec<ValidatorId>,
+	},
 }
 
 const STORAGE_KEY: &[u8] = b"MockCfeInterface::Events";
@@ -85,6 +89,13 @@ impl<T: Chainflip> CfePeerRegistration<T> for MockCfeInterface {
 		pubkey: cf_primitives::Ed25519PublicKey,
 	) {
 		Self::append_event(MockCfeEvent::PeerIdDeregistered { account_id, pubkey });
+	}
+
+	fn authorities_updated(
+		epoch_index: cf_primitives::EpochIndex,
+		authorities: Vec<<T as Chainflip>::ValidatorId>,
+	) {
+		Self::append_event(MockCfeEvent::AuthoritiesUpdated { epoch_index, authorities });
 	}
 }
 

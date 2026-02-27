@@ -2171,6 +2171,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonrpsee",
  "lazy_static",
+ "libp2p-identity",
  "mockall",
  "multisig",
  "num-traits",
