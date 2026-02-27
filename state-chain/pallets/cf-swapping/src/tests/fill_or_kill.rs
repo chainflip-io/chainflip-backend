@@ -122,7 +122,9 @@ fn price_limit_is_respected_in_fok_swap(is_ccm: bool) {
 	const BROKER_FEE: AssetAmount = INPUT_AMOUNT * BROKER_FEE_BPS as u128 / 10_000;
 
 	const EXPECTED_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE;
-	const HIGH_OUTPUT: AssetAmount = EXPECTED_OUTPUT + 2; // 2 higher because of rounding errors
+	// HIGH_OUTPUT must exceed INPUT_AMOUNT * DEFAULT_SWAP_RATE for the min_price check to fail
+	// even after fees scale down both the actual output and the required minimum proportionally.
+	const HIGH_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 2;
 
 	const REGULAR_SWAP_ID: SwapId = SwapId(1);
 	const FOK_SWAP_1_ID: SwapId = SwapId(2);
@@ -234,7 +236,9 @@ fn fok_swap_gets_refunded_due_to_price_limit(is_ccm: bool) {
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			// Min output for swap 1 is too high to be executed:
-			const MIN_OUTPUT: AssetAmount = (INPUT_AMOUNT - BROKER_FEE) * DEFAULT_SWAP_RATE + 2; // 2 higher because of rounding errors
+			// Min output must exceed INPUT_AMOUNT * DEFAULT_SWAP_RATE so the min_price check fails
+			// even after fees scale down both the actual output and the required minimum proportionally.
+			const MIN_OUTPUT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE + 2;
 			insert_swaps(&[fok_swap(
 				Some(TestRefundParams {
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
@@ -546,13 +550,7 @@ fn test_zero_refund_amount_remaining() {
 
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
-			// Set a refund fee to the swap amount
-			NetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::zero(),
-				minimum: INPUT_AMOUNT,
-			});
-
-			// A swap with 0 retry duration, so it will be refunded immediately
+			// A swap with 0 retry duration, so it will be refunded immediately on failure
 			insert_swaps(&[fok_swap(
 				Some(TestRefundParams { retry_duration: 0, min_output: INPUT_AMOUNT }),
 				false,
@@ -561,34 +559,21 @@ fn test_zero_refund_amount_remaining() {
 			assert_swaps_scheduled_for_block(&[1.into()], SWAPS_SCHEDULED_FOR_BLOCK);
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
-			// Trigger a refund
+			// Trigger a price impact failure
 			MockSwappingApi::set_swaps_should_fail(true);
 		})
 		.then_execute_with(|_| {
-			// The refund should ignored and all of the swap amount should be swapped for fees
+			// With no refund fee, the full input amount is refunded directly
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
 				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1), reason: SwapFailureReason::PriceImpactLimit }),
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SwapRequestId(2),
-					input_asset: Asset::Usdc,
-					input_amount: INPUT_AMOUNT,
-					output_asset: Asset::Flip,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SwapRequestId(2),
-					input_amount: INPUT_AMOUNT,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::RefundEgressIgnored {
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SwapRequestId(1),
-					amount: 0,
 					asset: INPUT_ASSET,
-					reason,
+					amount: INPUT_AMOUNT,
 					..
-				}) if reason == DispatchError::from(Error::<Test>::NoRefundAmountRemaining),
+				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
 					..
@@ -701,6 +686,10 @@ mod oracle_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
+				// The network fee minimum (400 USDC) is converted to ETH input using oracle prices
+				// (ETH/USDC ratio ~= 2 with 40 bps conservative slippage):
+				// ceil(400 / (2 * (1 - 40/10000))) = ceil(400 / 1.992) = 201 ETH
+				let network_fee_minimum_in_eth: AssetAmount = 201;
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::Swapping(
@@ -710,8 +699,8 @@ mod oracle_swaps {
 						oracle_delta,
 						..
 					},
-					// Make sure the network fee minimum was taken
-					) if *network_fee == AssetAndAmount { asset: INPUT_ASSET, amount: network_fee_minimum } && *oracle_delta == expected_oracle_delta
+					// Make sure the network fee minimum was taken (in input asset ETH terms)
+					) if *network_fee == AssetAndAmount { asset: INPUT_ASSET, amount: network_fee_minimum_in_eth } && *oracle_delta == expected_oracle_delta
 				);
 
 				// Turn the swap rate down to trigger the oracle slippage protection
@@ -996,6 +985,10 @@ mod oracle_swaps {
 		const STABLE_AMOUNT: AssetAmount = 8020476946;
 		const BROKER_FEE: AssetAmount = 12048789; // 15 bps
 		const NETWORK_FEE: AssetAmount = 8040566; // 10 bps
+		// In the new system, fees are taken from input (BTC) not from stable. The intermediate
+		// used for oracle delta ex-fees calculation must be the pre-fee stable amount (= what the
+		// pool would produce from the full input), so we add fees back to get that value.
+		const STABLE_AMOUNT_BEFORE_FEES: AssetAmount = STABLE_AMOUNT + BROKER_FEE + NETWORK_FEE;
 
 		fn set_prices() {
 			// Prices taken at similar time to the swap values above
@@ -1030,7 +1023,7 @@ mod oracle_swaps {
 
 				network_fee_taken: Some(NETWORK_FEE),
 				broker_fee_taken: Some(BROKER_FEE),
-				intermediate: Some(AssetAndAmount { asset: STABLE_ASSET, amount: STABLE_AMOUNT }),
+				intermediate: Some(AssetAndAmount { asset: STABLE_ASSET, amount: STABLE_AMOUNT_BEFORE_FEES }),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,

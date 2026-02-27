@@ -38,6 +38,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	BASIS_POINTS_PER_MILLION,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -350,17 +351,17 @@ fn process_all_swaps() {
 		let mut expected = swaps
 			.iter()
 			.map(|swap| {
-				let output_amount = if swap.input_asset == Asset::Usdc {
-					let fee = swap.input_amount * BROKER_FEE_BPS as u128 / 10_000;
+				// Fees are now taken from the input asset before the pool swap.
+				// Use Permill to match the NearestPrefDown rounding used in take_broker_fees.
+				let fee = Permill::from_parts(BROKER_FEE_BPS as u32 * BASIS_POINTS_PER_MILLION) *
+					swap.input_amount;
+				let output_amount = if swap.output_asset == Asset::Usdc {
 					(swap.input_amount - fee) * DEFAULT_SWAP_RATE
-				} else if swap.output_asset == Asset::Usdc {
-					let output_before_fee = swap.input_amount * DEFAULT_SWAP_RATE;
-					let fee = output_before_fee * BROKER_FEE_BPS as u128 / 10_000;
-					output_before_fee - fee
+				} else if swap.input_asset == Asset::Usdc {
+					(swap.input_amount - fee) * DEFAULT_SWAP_RATE
 				} else {
-					let intermediate_amount = swap.input_amount * DEFAULT_SWAP_RATE;
-					let fee = intermediate_amount * BROKER_FEE_BPS as u128 / 10_000;
-					(intermediate_amount - fee) * DEFAULT_SWAP_RATE
+					// Two-leg swap: input -> USDC -> output
+					(swap.input_amount - fee) * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE
 				};
 
 				MockEgressParameter::<AnyChain>::Swap {
@@ -664,12 +665,13 @@ fn process_all_into_stable_swaps_first() {
 		let usdc_amount_deposited_after_fee: AssetAmount = AMOUNT - network_fee_amount;
 
 		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
+		// Fees are now taken from input before the pool swap, so pool sees reduced input amounts.
 		assert_eq!(
 			Swaps::get(),
 			vec![
-				(Asset::Flip, Asset::Usdc, AMOUNT),
-				(Asset::Dot, Asset::Usdc, AMOUNT),
-				(Asset::Btc, Asset::Usdc, AMOUNT),
+				(Asset::Flip, Asset::Usdc, AMOUNT - network_fee_amount),
+				(Asset::Dot, Asset::Usdc, AMOUNT - network_fee_amount),
+				(Asset::Btc, Asset::Usdc, AMOUNT - network_fee_amount),
 				(
 					Asset::Usdc,
 					Asset::Eth,
@@ -1718,8 +1720,8 @@ mod swap_batching {
 
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
-				// from swap 2):
-				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Eth), 1500);
+				// from swap 2, which has USDC as input asset):
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 1500);
 
 				// Adding some more liquidity to make the other swap succeed:
 				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
@@ -1731,7 +1733,9 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Eth), 1500 + 2000);
+				// Swap 1 (Btc->Eth) also succeeded on retry: fee taken from Btc input
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 1500);
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Btc), 1000);
 			});
 	}
 
@@ -1934,28 +1938,18 @@ mod internal_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
-				// Small rounding error due to price calculation
-				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE + 1;
-				// Only one chunk is expected to be swapped:
+				// Fees are now taken from input (not from stable), so output from chunk 1:
+				// post-fee input = CHUNK_AMOUNT - MIN_NETWORK_FEE, then two legs at DEFAULT_SWAP_RATE
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-					(CHUNK_AMOUNT * DEFAULT_SWAP_RATE - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE;
-				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT - REFUND_FEE;
+					(CHUNK_AMOUNT - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+				// Chunk 2 is refunded in full - no refund fee is taken in the new system
+				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT;
 
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::Swapping(Event::SwapAborted {
 						swap_id: SwapId(2),
 						reason: SwapFailureReason::MinPriceViolation
-					}),
-					RuntimeEvent::Swapping(Event::SwapRequested {
-						request_type: SwapRequestTypeEncoded::NetworkFee,
-						input_amount: REFUND_FEE,
-						..
-					}),
-					RuntimeEvent::Swapping(Event::SwapScheduled {
-						swap_type: SwapType::NetworkFee,
-						input_amount: REFUND_FEE,
-						..
 					}),
 					RuntimeEvent::Swapping(Event::RefundedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,

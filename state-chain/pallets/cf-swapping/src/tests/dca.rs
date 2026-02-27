@@ -89,7 +89,7 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 			input: AssetAndAmount { asset: INPUT_ASSET, amount: input_amount },
 			output: AssetAndAmount { asset: OUTPUT_ASSET, amount: output_amount },
 			..
-		}) if *input_amount == chunk_amount_after_fee && *output_amount == chunk_amount_after_fee * DEFAULT_SWAP_RATE
+		}) if *input_amount == chunk_amount && *output_amount == chunk_amount_after_fee * DEFAULT_SWAP_RATE
 	);
 
 	// Second chunk should be scheduled 2 blocks after the first is executed:
@@ -169,7 +169,7 @@ fn dca_happy_path(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT },
 					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
 					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_BROKER_FEE },
 					..
@@ -217,7 +217,7 @@ fn dca_single_chunk(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input: AssetAndAmount { asset: INPUT_ASSET, amount: INPUT_AMOUNT_AFTER_FEE },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: INPUT_AMOUNT },
 					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: EGRESS_AMOUNT },
 					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: BROKER_FEE },
 					..
@@ -524,7 +524,7 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT },
 					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
 					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_BROKER_FEE },
 					..
@@ -559,7 +559,7 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT },
 					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
 					..
 				}),
