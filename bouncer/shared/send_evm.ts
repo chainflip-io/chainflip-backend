@@ -45,17 +45,28 @@ export async function getNextEvmNonce(
   });
 }
 
-function isEvmRevert(error: unknown): boolean {
-  const msg = String(error);
+// web3.js errors are sometimes plain objects { reason: Error, ... } rather than
+// Error instances, so we extract the message from wherever it lives.
+function extractWeb3ErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const e = error as Record<string, unknown>;
+    if (typeof e.message === 'string') return e.message;
+    if (e.reason instanceof Error) return e.reason.message;
+    if (typeof e.reason === 'string') return e.reason;
+  }
+  return String(error);
+}
+
+function isEvmRevertError(error: unknown): boolean {
+  const msg = extractWeb3ErrorMessage(error);
   return (
-    msg.includes('Transaction has been reverted by the EVM') ||
-    msg.includes('execution reverted') ||
-    msg.includes('revert')
+    msg.includes('Transaction has been reverted by the EVM') || msg.includes('execution reverted')
   );
 }
 
 function isNonceError(error: unknown): boolean {
-  const msg = String(error);
+  const msg = extractWeb3ErrorMessage(error);
   return msg.includes('nonce too low') || msg.includes('nonce too high');
 }
 
@@ -86,7 +97,7 @@ export async function signAndSendTxEvm(
       break;
     } catch (error) {
       // EVM reverts are deterministic — retrying the same tx will always fail.
-      if (isEvmRevert(error)) {
+      if (isEvmRevertError(error)) {
         throw new Error(`${chain} transaction reverted by EVM: ${error}`);
       }
 
