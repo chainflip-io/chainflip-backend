@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use cf_primitives::AssetAndAmount;
 use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 
 use super::*;
@@ -89,24 +90,24 @@ fn test_buy_back_flip() {
 		const NETWORK_FEE_AMOUNT: AssetAmount = 100;
 
 		// Get some network fees, just like we did a swap.
-		CollectedNetworkFee::<Test>::set(NETWORK_FEE_AMOUNT);
+		CollectedNetworkFee::<Test>::insert(STABLE_ASSET, NETWORK_FEE_AMOUNT);
 
 		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
 		// not panic.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
 		Swapping::on_initialize(1);
-		assert_eq!(NETWORK_FEE_AMOUNT, CollectedNetworkFee::<Test>::get());
+		assert_eq!(NETWORK_FEE_AMOUNT, CollectedNetworkFee::<Test>::get(STABLE_ASSET));
 
 		// Set a non-zero buy interval
 		FlipBuyInterval::<Test>::set(INTERVAL);
 
 		// Nothing is bought if we're not at the interval.
 		Swapping::on_initialize(INTERVAL * 3 - 1);
-		assert_eq!(NETWORK_FEE_AMOUNT, CollectedNetworkFee::<Test>::get());
+		assert_eq!(NETWORK_FEE_AMOUNT, CollectedNetworkFee::<Test>::get(STABLE_ASSET));
 
 		// If we're at an interval, we should buy flip.
 		Swapping::on_initialize(INTERVAL * 3);
-		assert_eq!(0, CollectedNetworkFee::<Test>::get());
+		assert_eq!(0, CollectedNetworkFee::<Test>::get(STABLE_ASSET));
 
 		// Note that the network fee will not be charged in this case:
 		assert_eq!(
@@ -126,34 +127,49 @@ fn test_buy_back_flip() {
 	});
 }
 
+// This test covers:
+// - The internal network fee is not used for normal swaps
+// - The custom network fee is applied if set for an asset
+// - The network fee minimum is correct for oracle assets
+// - The network fee minimum is correct for non-oracle assets (using swap simulation)
 #[test]
 fn normal_swap_uses_correct_network_fee() {
 	const AMOUNT: AssetAmount = 10000;
 	const SMALL_AMOUNT: AssetAmount = 500;
 	const NETWORK_FEE: Permill = Permill::from_percent(10);
-	const MINIMUM_NETWORK_FEE: AssetAmount = 100;
+	const NETWORK_FEE_FOR_BTC: Permill = Permill::from_percent(15);
+	const BTC_PRICE_USD: u32 = 4;
+	const MINIMUM_NETWORK_FEE_USDC: AssetAmount = 400;
+	// Btc will use the oracle to calculate the minimum fee. This means a small oracle slippage will be a added to the minimum.
+	const MINIMUM_NETWORK_FEE_BTC: AssetAmount = (MINIMUM_NETWORK_FEE_USDC / BTC_PRICE_USD as AssetAmount) + 1;
+	// Flip will use the swap simulation to calculate the minimum fee
+	const MINIMUM_NETWORK_FEE_FLIP: AssetAmount = MINIMUM_NETWORK_FEE_USDC / DEFAULT_SWAP_RATE;
 
 	new_test_ext()
 		.execute_with(|| {
 			// Set both network fees to different values
 			NetworkFee::<Test>::set(FeeRateAndMinimum {
 				rate: NETWORK_FEE,
-				minimum: MINIMUM_NETWORK_FEE,
+				minimum: MINIMUM_NETWORK_FEE_USDC,
 			});
 			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
 				rate: Permill::zero(),
 				minimum: 0,
 			});
+			// Setting a different network fee for BTC to make sure the correct one is applied for each asset
+			NetworkFeeForAsset::<Test>::insert(Asset::Btc, NETWORK_FEE_FOR_BTC);
 
-			// Set a swap rate of 1 to make it easier
-			SwapRate::set(1_f64);
+			// Set the price oracle so the minimum can be calculated
+			MockPriceFeedApi::set_price_usd_fine(Asset::Btc, BTC_PRICE_USD.into());
+			MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Btc), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
 
-			fn init_swap(amount: AssetAmount) {
+			fn init_swap(asset: Asset, amount: AssetAmount) {
 				Swapping::init_swap_request(
-					Asset::Flip,
+					asset,
 					amount,
 					Asset::Eth,
 					SwapRequestType::Regular {
@@ -171,34 +187,59 @@ fn normal_swap_uses_correct_network_fee() {
 					},
 				);
 			}
-			// Swap with network fee
-			init_swap(AMOUNT);
-			// Swap that will be charged the minimum network fee
-			init_swap(SMALL_AMOUNT);
+			
+			// Swap with normal network fee (no minimum applied)
+			init_swap(Asset::Btc, AMOUNT);
+			init_swap(Asset::Flip, AMOUNT);
+			// Swap with swap simulation network fee minimum (Flip)
+			init_swap(Asset::Flip, SMALL_AMOUNT);
+			// Swap with oracle network fee minimum (Btc)
+			init_swap(Asset::Btc, SMALL_AMOUNT);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: AMOUNT,
+					input: AssetAndAmount{ asset: Asset::Btc, amount: AMOUNT },
 					..
-				}) if *network_fee == NETWORK_FEE * AMOUNT,
+				}) if *network_fee == AssetAndAmount { asset: Asset::Btc, amount: NETWORK_FEE_FOR_BTC * AMOUNT },
 			);
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: SMALL_AMOUNT,
+					input: AssetAndAmount{ asset: Asset::Flip, amount: AMOUNT },
 					..
-				}) if *network_fee == MINIMUM_NETWORK_FEE,
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE * AMOUNT },
 			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input: AssetAndAmount{ asset: Asset::Btc, amount: SMALL_AMOUNT },
+					..
+				}) if *network_fee == AssetAndAmount { asset: Asset::Btc, amount: MINIMUM_NETWORK_FEE_BTC },
+			);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee,
+					input: AssetAndAmount{ asset: Asset::Flip, amount: SMALL_AMOUNT },
+					..
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: MINIMUM_NETWORK_FEE_FLIP },
+			);
+
 
 			// Check that the network fee is actually collected
 			assert_eq!(
-				CollectedNetworkFee::<Test>::get(),
-				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE
+				CollectedNetworkFee::<Test>::get(Asset::Btc),
+				(NETWORK_FEE_FOR_BTC * AMOUNT) + MINIMUM_NETWORK_FEE_BTC
+			);
+			assert_eq!(
+				CollectedNetworkFee::<Test>::get(Asset::Flip),
+				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE_FLIP
 			);
 		});
 }
@@ -223,7 +264,7 @@ fn internal_swap_uses_correct_network_fee() {
 			SwapRate::set(1_f64);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
 
 			fn init_swap(amount: AssetAmount) {
 				Swapping::init_swap_request(
@@ -244,28 +285,28 @@ fn internal_swap_uses_correct_network_fee() {
 			// Swap that will be charged the minimum network fee
 			init_swap(SMALL_AMOUNT);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: AMOUNT,
+					input: AssetAndAmount { asset: Asset::Flip, amount: AMOUNT },
 					..
-				}) if *network_fee == NETWORK_FEE * AMOUNT,
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE * AMOUNT },
 			);
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: SMALL_AMOUNT,
+					input: AssetAndAmount { asset: Asset::Flip, amount: SMALL_AMOUNT },
 					..
-				}) if *network_fee == MINIMUM_NETWORK_FEE,
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: MINIMUM_NETWORK_FEE },
 			);
 
 			// Check that the network fee is actually collected
 			assert_eq!(
-				CollectedNetworkFee::<Test>::get(),
+				CollectedNetworkFee::<Test>::get(Asset::Flip),
 				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE
 			);
 		});
@@ -295,7 +336,7 @@ fn no_network_fee_minimum_for_gas_swaps() {
 			SwapRate::set(1_f64);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
 
 			Swapping::init_swap_request(
 				Asset::Flip,
@@ -314,13 +355,13 @@ fn no_network_fee_minimum_for_gas_swaps() {
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					network_fee,
-					input_amount: AMOUNT,
+					input: AssetAndAmount { asset: Asset::Flip, amount: AMOUNT },
 					..
-				}) if *network_fee == NETWORK_FEE * AMOUNT,
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE * AMOUNT },
 			);
 
 			// Check that the network fee is actually collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE * AMOUNT);
+			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), NETWORK_FEE * AMOUNT);
 		});
 }
 
@@ -388,14 +429,14 @@ fn test_network_fee_calculation() {
 		minimum_network_fee: AssetAmount,
 		chunk_amount: AssetAmount,
 		accumulated_fee: AssetAmount,
-		accumulated_stable_amount: AssetAmount,
+		processed_asset_amount: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
 		let FeeTaken { remaining_amount, fee } = NetworkFeeTracker {
 			network_fee: FeeRateAndMinimum {
 				minimum: minimum_network_fee,
 				rate: Permill::from_percent(network_fee_percent),
 			},
-			accumulated_stable_amount,
+			processed_asset_amount,
 			accumulated_fee,
 		}
 		.take_fee(chunk_amount);
@@ -713,7 +754,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 fn network_fee_swap_gets_burnt() {
 	const INPUT_ASSET: Asset = Asset::Usdc;
 	const OUTPUT_ASSET: Asset = Asset::Flip;
-	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	const AMOUNT: AssetAmount = 100;
 
@@ -740,7 +780,7 @@ fn network_fee_swap_gets_burnt() {
 
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapScheduled { .. }),);
 		})
-		.then_process_blocks_until_block(SWAP_BLOCK)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			assert_eq!(FlipToBurn::<Test>::get(), (AMOUNT * DEFAULT_SWAP_RATE).try_into().unwrap());
 			assert_swaps_queue_is_empty();
@@ -751,8 +791,6 @@ fn network_fee_swap_gets_burnt() {
 
 #[test]
 fn transaction_fees_are_collected() {
-	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
 	const INPUT_ASSET: Asset = Asset::Flip;
 	const OUTPUT_ASSET: Asset = Asset::Eth;
 	const AMOUNT: AssetAmount = 100;
@@ -794,7 +832,7 @@ fn transaction_fees_are_collected() {
 				0
 			);
 		})
-		.then_process_blocks_until_block(SWAP_BLOCK)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			assert_eq!(
 				MockIngressEgressFeeHandler::<Ethereum>::withheld_assets(
@@ -840,62 +878,9 @@ fn swap_broker_fee_calculated_correctly() {
 				}
 			});
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), total_fees);
-		});
-}
-#[test]
-fn input_amount_excludes_network_fee() {
-	const AMOUNT: AssetAmount = 1_000;
-	const FROM_ASSET: Asset = Asset::Usdc;
-	const TO_ASSET: Asset = Asset::Flip;
-	let output_address: ForeignChainAddress = ForeignChainAddress::Eth(Default::default());
-	const NETWORK_FEE: Permill = Permill::from_percent(1);
-
-	new_test_ext()
-		.execute_with(|| {
-			NetworkFee::<Test>::set(FeeRateAndMinimum { rate: NETWORK_FEE, minimum: 0 });
-
-			swap_with_custom_broker_fee(FROM_ASSET, TO_ASSET, AMOUNT, bounded_vec![]);
-
-			<Pallet<Test> as SwapRequestHandler>::init_swap_request(
-				FROM_ASSET,
-				AMOUNT,
-				TO_ASSET,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::Egress {
-						ccm_deposit_metadata: None,
-						output_address: output_address.clone(),
-					},
-				},
-				bounded_vec![],
-				None,
-				None,
-				SwapOrigin::Vault {
-					tx_id: TransactionInIdForAnyChain::Evm(H256::default()),
-					broker_id: Some(BROKER),
-				},
-			);
-		})
-		.then_process_blocks_until(|_| System::block_number() == 3)
-		.then_execute_with(|_| {
-			let network_fee = NETWORK_FEE * AMOUNT;
-			let expected_input_amount = AMOUNT - network_fee;
-
-			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 1.into(),
-				swap_id: 1.into(),
-				input_asset: FROM_ASSET,
-				output_asset: TO_ASSET,
-				network_fee,
-				broker_fee: 0,
-				input_amount: expected_input_amount,
-				output_amount: expected_input_amount * DEFAULT_SWAP_RATE,
-				intermediate_amount: None,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
-			}));
 		});
 }
 
@@ -934,7 +919,6 @@ fn withdraw_broker_fees() {
 #[test]
 fn expect_earned_fees_to_be_recorded() {
 	const INPUT_AMOUNT: AssetAmount = 10_000;
-	const INTERMEDIATE_AMOUNT: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 
 	const NETWORK_FEE_PERCENT: u32 = 1;
 
@@ -945,23 +929,24 @@ fn expect_earned_fees_to_be_recorded() {
 	const BOB_FEE_BPS: u16 = 100;
 
 	// Expected values:
-	const NETWORK_FEE_1: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const NETWORK_FEE_1: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
 	const ALICE_FEE_1: AssetAmount =
-		(INTERMEDIATE_AMOUNT - NETWORK_FEE_1) * ALICE_FEE_BPS as u128 / 10_000;
+		(INPUT_AMOUNT - NETWORK_FEE_1) * ALICE_FEE_BPS as u128 / 10_000;
 
 	// This swap starts with USDC, so the fees are deducted from the input amount:
 	const NETWORK_FEE_2: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
 	const ALICE_FEE_2: AssetAmount =
 		(INPUT_AMOUNT - NETWORK_FEE_2) * ALICE_FEE_BPS as u128 / 10_000;
 
-	const NETWORK_FEE_3: AssetAmount = INTERMEDIATE_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
+	const NETWORK_FEE_3: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
 	const ALICE_FEE_3: AssetAmount =
-		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * ALICE_FEE_BPS as u128 / 10_000;
+		(INPUT_AMOUNT - NETWORK_FEE_3) * ALICE_FEE_BPS as u128 / 10_000;
 	const BOB_FEE_1: AssetAmount =
-		(INTERMEDIATE_AMOUNT - NETWORK_FEE_3) * BOB_FEE_BPS as u128 / 10_000;
+		(INPUT_AMOUNT - NETWORK_FEE_3) * BOB_FEE_BPS as u128 / 10_000;
 
 	new_test_ext()
 		.execute_with(|| {
+			
 			NetworkFee::<Test>::set(FeeRateAndMinimum {
 				rate: Permill::from_percent(NETWORK_FEE_PERCENT),
 				minimum: 0,
@@ -973,23 +958,21 @@ fn expect_earned_fees_to_be_recorded() {
 				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
 			);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
-			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 1.into(),
-				swap_id: 1.into(),
-				network_fee: NETWORK_FEE_1,
-				broker_fee: ALICE_FEE_1,
-				input_amount: INPUT_AMOUNT,
-				input_asset: Asset::Flip,
-				output_asset: Asset::Usdc,
-				output_amount: INTERMEDIATE_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1,
-				intermediate_amount: None,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
+			const EXPECTED_OUTPUT_AMOUNT: AssetAmount = (INPUT_AMOUNT - NETWORK_FEE_1 - ALICE_FEE_1) * DEFAULT_SWAP_RATE ;
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				network_fee: AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE_1 },
+				broker_fee: AssetAndAmount { asset: Asset::Flip, amount: ALICE_FEE_1 },
+				input: AssetAndAmount { asset: Asset::Flip, amount: INPUT_AMOUNT },
+				output: AssetAndAmount { asset: Asset::Usdc, amount: EXPECTED_OUTPUT_AMOUNT },
+				intermediate: None,
+				..
 			}));
 
-			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1);
+			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Flip), ALICE_FEE_1);
 		})
 		.execute_with(|| {
 			swap_with_custom_broker_fee(
@@ -999,29 +982,26 @@ fn expect_earned_fees_to_be_recorded() {
 				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
 			);
 		})
-		.then_process_blocks_until_block(5u32)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
-			const AMOUNT_AFTER_FEES: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2;
-			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 2.into(),
-				swap_id: 2.into(),
-				network_fee: NETWORK_FEE_2,
-				broker_fee: ALICE_FEE_2,
-				input_amount: AMOUNT_AFTER_FEES,
-				input_asset: Asset::Usdc,
-				output_asset: Asset::Flip,
-				output_amount: AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
-				intermediate_amount: None,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
-			}));
+			const EXPECTED_OUTPUT_AMOUNT: AssetAmount = (INPUT_AMOUNT - NETWORK_FEE_2 - ALICE_FEE_2) * DEFAULT_SWAP_RATE;
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+					network_fee: AssetAndAmount { asset: Asset::Usdc, amount: NETWORK_FEE_2 },
+					broker_fee: AssetAndAmount { asset: Asset::Usdc, amount: ALICE_FEE_2 },
+					input: AssetAndAmount { asset: Asset::Usdc, amount: INPUT_AMOUNT },
+					output: AssetAndAmount { asset: Asset::Flip, amount: EXPECTED_OUTPUT_AMOUNT },
+					intermediate: None,
+					..
+				}));
 
-			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1 + ALICE_FEE_2);
+			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_2);
 		})
 		.execute_with(|| {
 			swap_with_custom_broker_fee(
-				Asset::ArbEth,
 				Asset::Flip,
+				Asset::ArbEth,
 				INPUT_AMOUNT,
 				bounded_vec![
 					Beneficiary { account: ALICE, bps: ALICE_FEE_BPS },
@@ -1029,37 +1009,35 @@ fn expect_earned_fees_to_be_recorded() {
 				],
 			);
 		})
-		.then_process_blocks_until_block(7u32)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			const TOTAL_BROKER_FEES: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
-			const INTERMEDIATE_AMOUNT_AFTER_FEES: AssetAmount =
-				INTERMEDIATE_AMOUNT - NETWORK_FEE_3 - TOTAL_BROKER_FEES;
+			const INTERMEDIATE_AMOUNT: AssetAmount =
+				(INPUT_AMOUNT - NETWORK_FEE_3 - TOTAL_BROKER_FEES) * DEFAULT_SWAP_RATE;
+			const EXPECTED_OUTPUT_AMOUNT: AssetAmount = INTERMEDIATE_AMOUNT * DEFAULT_SWAP_RATE;
 
-			System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-				swap_request_id: 3.into(),
-				swap_id: 3.into(),
-				network_fee: NETWORK_FEE_3,
-				broker_fee: TOTAL_BROKER_FEES,
-				input_amount: INPUT_AMOUNT,
-				input_asset: Asset::ArbEth,
-				output_asset: Asset::Flip,
-				output_amount: INTERMEDIATE_AMOUNT_AFTER_FEES * DEFAULT_SWAP_RATE,
-				intermediate_amount: Some(INTERMEDIATE_AMOUNT_AFTER_FEES),
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
+				network_fee: AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE_3 },
+				broker_fee: AssetAndAmount { asset: Asset::Flip, amount: TOTAL_BROKER_FEES },
+				input: AssetAndAmount { asset: Asset::Flip, amount: INPUT_AMOUNT },
+				output: AssetAndAmount { asset: Asset::ArbEth, amount: EXPECTED_OUTPUT_AMOUNT },
+				intermediate: Some(AssetAndAmount { asset: STABLE_ASSET, amount: INTERMEDIATE_AMOUNT }),
+				..
 			}));
 
 			assert_eq!(
-				get_broker_balance::<Test>(&ALICE, Asset::Usdc),
-				ALICE_FEE_1 + ALICE_FEE_2 + ALICE_FEE_3
+				get_broker_balance::<Test>(&ALICE, Asset::Flip),
+				ALICE_FEE_1 + ALICE_FEE_3
 			);
-			assert_eq!(get_broker_balance::<Test>(&BOB, Asset::Usdc), BOB_FEE_1);
+			assert_eq!(get_broker_balance::<Test>(&BOB, Asset::Flip), BOB_FEE_1);
 		});
 }
 
 #[test]
 fn minimum_network_fee_is_enforced_on_dca_swap() {
-	const INPUT_AMOUNT: u128 = 300;
+	const INPUT_AMOUNT: u128 = 3000;
 	const NUMBER_OF_CHUNKS: u32 = 3;
 	const CHUNK_SIZE: u128 = INPUT_AMOUNT / NUMBER_OF_CHUNKS as u128;
 
@@ -1067,15 +1045,18 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 	const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
 	const CHUNK_3_BLOCK: u64 = CHUNK_2_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
-	// We set network fee so that the amount is small enough that the min network fee
-	// will be enforced on the first chunk, but large enough that the rest of the chunks fees will
-	// be above the minimum. And also large enough that the second chunk will only be partially
-	// charged a fee.
+	// Network fee is taken from the input asset (Btc).
+	// With CHUNK_SIZE=1000 and NETWORK_FEE=10%, the per-chunk fee is 100.
+	// MIN_NETWORK_FEE=150 is enforced on the first chunk (150 > 100).
+	// Second chunk: cumulative target for 2000 = max(200, 150) = 200, collected 150, fee = 50.
+	// Third chunk: cumulative target for 3000 = max(300, 150) = 300, collected 200, fee = 100.
 	const NETWORK_FEE: Permill = Permill::from_percent(10);
 	const BROKER_FEE_BPS: u16 = 100;
-	const MIN_NETWORK_FEE: u128 = 30;
-	assert!(MIN_NETWORK_FEE > NETWORK_FEE * CHUNK_SIZE * 2);
-	assert!(MIN_NETWORK_FEE < NETWORK_FEE * CHUNK_SIZE * 4);
+	const MIN_NETWORK_FEE: u128 = 150;
+	// Min network fee is larger than the fee for one chunk
+	assert!(MIN_NETWORK_FEE > NETWORK_FEE * CHUNK_SIZE);
+	// But smaller than the total fee across all chunks
+	assert!(MIN_NETWORK_FEE < NETWORK_FEE * INPUT_AMOUNT);
 
 	new_test_ext()
 		.execute_with(|| {
@@ -1085,10 +1066,13 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 				minimum: MIN_NETWORK_FEE,
 			});
 
+			// Setting the swap rate to 1 so the minimum network fee is easier to calculate. 
+			SwapRate::set(1_f64);
+
 			Swapping::init_swap_request(
-				// Doing a 2 leg swap, swap rate is 2, so output without fees is x4 and network fee
-				// is applied to x2 of input (after first leg).
-				Asset::Btc,
+				// 2 leg swap: Flip -> USDC -> ArbEth, swap rate is DEFAULT_SWAP_RATE per leg.
+				// Fees are now taken from the input asset (Flip).
+				Asset::Flip,
 				INPUT_AMOUNT,
 				Asset::ArbEth,
 				SwapRequestType::Regular {
@@ -1108,104 +1092,72 @@ fn minimum_network_fee_is_enforced_on_dca_swap() {
 		})
 		.then_process_blocks_until_block(CHUNK_1_BLOCK)
 		.then_execute_with(|_| {
+			// First chunk: minimum network fee enforced (150 from input Flip).
+			// Broker fee: 1% of (1000 - 150) = 8.
+			// Swap input after fees: 1000 - 150 - 8 = 842.
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input_amount: CHUNK_SIZE,
-					// The first chunk has the minimum network fee enforced.
-					// With swap rate at 2, output is (100*2-30-2)*2
-					output_amount: 336,
-					network_fee: 30,
-					broker_fee: 2,
+					input: AssetAndAmount { asset: Asset::Flip, amount: CHUNK_SIZE },
+					network_fee,
+					broker_fee,
+					output,
 					..
-				})
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: 150 }
+					&& *broker_fee == AssetAndAmount { asset: Asset::Flip, amount: 8 }
+					&& output.amount == 842
 			);
 		})
 		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
+			// Second chunk: cumulative target = max(200, 150) = 200, collected 150, fee = 50.
+			// Broker fee: 1% of (1000 - 50) = 9.
+			// Swap input: 1000 - 50 - 9 = 941.
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input_amount: CHUNK_SIZE,
-					// The second chunk will only partially be charged the network fee because the
-					// amount that was already charged to the first chunk has covered part of
-					// its fee already.
-					output_amount: 376,
-					network_fee: 10,
-					broker_fee: 2,
+					input: AssetAndAmount { asset: Asset::Flip, amount: CHUNK_SIZE },
+					network_fee,
+					broker_fee,
+					output,
 					..
-				})
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: 50 }
+					&& *broker_fee == AssetAndAmount { asset: Asset::Flip, amount: 9 }
+					&& output.amount == 941
 			);
 		})
 		.then_process_blocks_until_block(CHUNK_3_BLOCK)
 		.then_execute_with(|_| {
+			// Third chunk: cumulative target = max(300, 150) = 300, collected 200, fee = 100.
+			// Broker fee: 1% of (1000 - 100) = 9.
+			// Swap input: 1000 - 100 - 9 = 891.
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(3),
-					input_amount: CHUNK_SIZE,
-					// The rest of the chunks will be charged the normal network fee.
-					output_amount: 356,
-					network_fee: 20,
-					broker_fee: 2,
+					input: AssetAndAmount { asset: Asset::Flip, amount: CHUNK_SIZE },
+					network_fee,
+					broker_fee,
+					output,
 					..
-				})
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: 100 }
+					&& *broker_fee == AssetAndAmount { asset: Asset::Flip, amount: 9 }
+					&& output.amount == 891
 			);
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
-					// The final output should be 4x input amount minus the network fee and broker
-					// fee. 1200 - 11%
-					amount: 1068,
+					amount: 2674, // 891 + 941 + 842
 					..
 				})
 			);
 		});
-}
-
-#[test]
-fn test_refund_fee_calculation() {
-	fn take_refund_fee(
-		amount: AssetAmount,
-		asset: Asset,
-		is_internal_swap: bool,
-	) -> (AssetAmount, AssetAmount) {
-		let FeeTaken { remaining_amount, fee } =
-			Swapping::take_refund_fee(amount, asset, is_internal_swap).unwrap();
-		(remaining_amount, fee)
-	}
-
-	new_test_ext().execute_with(|| {
-		// The regular refund fee is actually just the minimum network fee
-		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::zero(), minimum: 10 });
-
-		// Usdc, no conversion needed, so the refund fee is just 10
-		assert_eq!(take_refund_fee(1000, Asset::Usdc, false), (990, 10));
-		assert_eq!(take_refund_fee(0, Asset::Usdc, false), (0, 0));
-		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
-		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
-
-		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
-		// Note: Using Flip here because it uses swap simulation for conversion instead of
-		// oracle price.
-		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
-		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
-		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));
-
-		// Internal swaps use a different network fee (and therefore refund fee)
-		InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
-			rate: Permill::zero(),
-			minimum: 30,
-		});
-		assert_eq!(take_refund_fee(1000, Asset::Usdc, true), (970, 30));
-		assert_eq!(take_refund_fee(1000, Asset::Flip, true), (985, 15));
-	});
 }
 
 #[test]
@@ -1337,14 +1289,13 @@ fn test_get_network_fee() {
 
 #[test]
 fn test_swap_with_custom_network_fee_for_asset() {
+	const INPUT_AMOUNT: AssetAmount = 1000;
 	const FEE_RATE_FLIP: Permill = Permill::from_percent(10);
 	const FEE_RATE_ETH: Permill = Permill::from_percent(5);
 	const NETWORK_FEE: Permill = Permill::from_percent(1);
 
-	// We expect the higher fee rate to be used.
+	// The higher of the two custom fees is used. Fee is taken from input asset (Flip).
 	let expected_fee = FEE_RATE_FLIP * INPUT_AMOUNT;
-
-	const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -1378,16 +1329,19 @@ fn test_swap_with_custom_network_fee_for_asset() {
 				},
 			);
 		})
-		.then_process_blocks_until_block(SWAP_BLOCK)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
+			// Fee is taken from input (Flip), then the remainder is swapped.
+			// With swap rate 1, output = input - fee.
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
-					input_amount: INPUT_AMOUNT,
-					output_amount,
+					input: AssetAndAmount { asset: Asset::Flip, amount: INPUT_AMOUNT },
 					network_fee,
+					output,
 					..
-				}) if *network_fee == expected_fee && *output_amount == INPUT_AMOUNT - expected_fee
+				}) if *network_fee == AssetAndAmount { asset: Asset::Flip, amount: expected_fee }
+					&& output.amount == INPUT_AMOUNT - expected_fee
 			);
 		});
 }
@@ -1397,11 +1351,11 @@ fn test_network_fee_tracking_when_rescheduled() {
 	const INPUT_ASSET: Asset = Asset::Flip;
 	const OUTPUT_ASSET: Asset = Asset::Usdc;
 	const INPUT_AMOUNT: AssetAmount = 1_000;
-	const RETRY_BLOCK: u64 =
-		INIT_BLOCK + (SWAP_DELAY_BLOCKS + DEFAULT_SWAP_RETRY_DELAY_BLOCKS) as u64;
 	const NETWORK_FEE: Permill = Permill::from_percent(1);
-	// Set a minimum network fee that will be enforced
+	// Set a minimum network fee that will be enforced (taken from input asset)
 	const NETWORK_FEE_MINIMUM: AssetAmount = 100;
+	const BROKER_FEE_BPS: u16 = 50;
+	const EXPECTED_BROKER_FEE: AssetAmount = (INPUT_AMOUNT - NETWORK_FEE_MINIMUM) * BROKER_FEE_BPS as u128 / 10_000;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -1409,6 +1363,9 @@ fn test_network_fee_tracking_when_rescheduled() {
 				rate: NETWORK_FEE,
 				minimum: NETWORK_FEE_MINIMUM,
 			});
+
+			// Set swap rate to 1 to make minimum network fee calculations easier
+			SwapRate::set(1_f64);
 
 			Swapping::init_swap_request(
 				INPUT_ASSET,
@@ -1420,45 +1377,47 @@ fn test_network_fee_tracking_when_rescheduled() {
 						output_address: ForeignChainAddress::Eth(Default::default()),
 					},
 				},
-				vec![Beneficiary { account: BROKER, bps: 10 }].try_into().unwrap(),
+				vec![Beneficiary { account: BROKER, bps: BROKER_FEE_BPS }].try_into().unwrap(),
 				Some(PriceLimitsAndExpiry {
 					expiry_behaviour: ExpiryBehaviour::NoExpiry,
-					// Setting an min price that will trigger a reschedule
-					min_price: Price::from_usd_fine_amount(DEFAULT_SWAP_RATE * 2),
+					// Setting a min price that will trigger a reschedule
+					min_price: Price::from_usd_fine_amount(2),
 					max_oracle_price_slippage: None,
 				}),
 				None,
 				SwapOrigin::Internal,
 			);
 
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), 0);
 		})
-		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
 			// Check that the swap was rescheduled due to price limits
 			assert_has_matching_event!(
 				Test,
-				RuntimeEvent::Swapping(Event::SwapRescheduled { execute_at: RETRY_BLOCK, .. }),
+				RuntimeEvent::Swapping(Event::SwapRescheduled { .. }),
 			);
 
 			// Check that no network fee was taken yet
-			assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), 0);
 
 			// Change the swap rate so that the swap can proceed next try
-			SwapRate::set((DEFAULT_SWAP_RATE * 4) as f64);
+			SwapRate::set(4_f64);
 		})
-		.then_process_blocks_until_block(RETRY_BLOCK)
+		.then_process_blocks(DEFAULT_SWAP_RETRY_DELAY_BLOCKS)
 		.then_execute_with(|_| {
-			// Check that the network fee was still applied correctly after rescheduling
+			// Network fee is taken from input asset (Flip), minimum is enforced
+			const EXPECTED_OUTPUT_AMOUNT: AssetAmount = (INPUT_AMOUNT - NETWORK_FEE_MINIMUM - EXPECTED_BROKER_FEE) * 4;
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::SwapExecuted {
-					input_amount: INPUT_AMOUNT,
-					network_fee,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: INPUT_AMOUNT },
+					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: NETWORK_FEE_MINIMUM } ,
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: EXPECTED_OUTPUT_AMOUNT }, // (3584 - 3168)/4 = 104
 					..
-				}) if *network_fee == NETWORK_FEE_MINIMUM
+				})
 			);
 
-			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		});
 }

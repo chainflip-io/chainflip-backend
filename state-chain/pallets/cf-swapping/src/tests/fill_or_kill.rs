@@ -356,7 +356,7 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 
 			// This ensures that storage from the initial failure was reverted (otherwise
 			// we would see the network fee charged more than once)
-			assert_eq!(CollectedNetworkFee::<Test>::get(), EXPECTED_NETWORK_FEE_AMOUNT);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
 
 			assert_eq!(
 				MockSwappingApi::get_liquidity(&INPUT_ASSET),
@@ -705,13 +705,13 @@ mod oracle_swaps {
 					Test,
 					RuntimeEvent::Swapping(
 						Event::SwapExecuted {
-						input_amount: CHUNK_AMOUNT,
+						input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT },
 						network_fee,
 						oracle_delta,
 						..
 					},
 					// Make sure the network fee minimum was taken
-					) if *network_fee == network_fee_minimum && *oracle_delta == expected_oracle_delta
+					) if *network_fee == AssetAndAmount { asset: INPUT_ASSET, amount: network_fee_minimum } && *oracle_delta == expected_oracle_delta
 				);
 
 				// Turn the swap rate down to trigger the oracle slippage protection
@@ -736,7 +736,7 @@ mod oracle_swaps {
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted { input_amount: CHUNK_AMOUNT, .. })
+					RuntimeEvent::Swapping(Event::SwapExecuted { input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT }, .. })
 				);
 
 				assert_has_matching_event!(
@@ -748,12 +748,8 @@ mod oracle_swaps {
 
 	#[test]
 	fn oracle_swap_ignores_oracle_if_not_supported_or_unavailable() {
-		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
 		new_test_ext()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), INIT_BLOCK);
-
 				// Set the price of one of the assets to None to simulate being unsupported
 				MockPriceFeedApi::set_price(INPUT_ASSET, None);
 				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, DEFAULT_SWAP_RATE);
@@ -773,7 +769,7 @@ mod oracle_swaps {
 					LP_ACCOUNT,
 				);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -807,7 +803,7 @@ mod oracle_swaps {
 					LP_ACCOUNT,
 				);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -925,7 +921,7 @@ mod oracle_swaps {
 					SwapOrigin::OnChainAccount(0_u64),
 				);
 			})
-			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -977,7 +973,7 @@ mod oracle_swaps {
 					SwapOrigin::OnChainAccount(0_u64),
 				);
 			})
-			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -1034,7 +1030,7 @@ mod oracle_swaps {
 
 				network_fee_taken: Some(NETWORK_FEE),
 				broker_fee_taken: Some(BROKER_FEE),
-				stable_amount: Some(STABLE_AMOUNT),
+				intermediate: Some(AssetAndAmount { asset: STABLE_ASSET, amount: STABLE_AMOUNT }),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
@@ -1178,8 +1174,6 @@ mod oracle_swaps {
 	/// supported asset.
 	#[test]
 	fn single_sided_oracle_swap() {
-		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64; // TODO JAMIE: can we factor this out? .then_process_blocks(
-
 		const INPUT_ASSET: Asset = Asset::Eth;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_PROTECTION_BPS: BasisPoints = 100;
@@ -1239,7 +1233,7 @@ mod oracle_swaps {
 				// Set the swap rate so the swap will fail
 				SwapRate::set(0.1);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,

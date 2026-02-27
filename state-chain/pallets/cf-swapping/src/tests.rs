@@ -761,13 +761,11 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_request_id: SwapRequestId(1),
 					swap_id: SwapId(1),
-					network_fee: 0,
-					broker_fee: 0,
-					input_amount: PRINCIPAL_AMOUNT,
-					input_asset: INPUT_ASSET,
-					output_asset: OUTPUT_ASSET,
-					output_amount: ZERO_AMOUNT,
-					intermediate_amount: None,
+					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: 0 },
+					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: 0 },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: PRINCIPAL_AMOUNT },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: ZERO_AMOUNT },
+					intermediate: None,
 					oracle_delta: None,
 					oracle_delta_ex_fees: None,
 				}),
@@ -797,8 +795,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(1),
-					output_asset: Asset::Eth,
-					output_amount: 0,
+					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
@@ -811,8 +808,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(2),
-					output_asset: Asset::Eth,
-					output_amount: 0,
+					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
@@ -1595,7 +1591,8 @@ mod swap_batching {
 				swap: self.clone(),
 				network_fee_taken: None,
 				broker_fee_taken: None,
-				stable_amount,
+				intermediate: stable_amount
+					.map(|amount| AssetAndAmount { asset: self.from, amount }),
 				final_output: None,
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
@@ -1722,7 +1719,7 @@ mod swap_batching {
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
 				// from swap 2):
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500);
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Eth), 1500);
 
 				// Adding some more liquidity to make the other swap succeed:
 				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
@@ -1734,7 +1731,7 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 2000);
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Eth), 1500 + 2000);
 			});
 	}
 
@@ -1783,7 +1780,7 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 0);
 			});
 	}
 }
@@ -1965,7 +1962,6 @@ mod internal_swaps {
 						account_id: LP_ACCOUNT,
 						asset: INPUT_ASSET,
 						amount: EXPECTED_REFUND_AMOUNT,
-						refund_fee: REFUND_FEE,
 					}),
 					RuntimeEvent::Swapping(Event::CreditedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,

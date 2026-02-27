@@ -67,6 +67,7 @@ std = [
 	"serde/std",
 	"cf-runtime-utilities/std",
 	"itertools/use_std",
+	"pallet-cf-environment/std",
 ]
 runtime-benchmarks = [
 	"cf-chains/runtime-benchmarks",

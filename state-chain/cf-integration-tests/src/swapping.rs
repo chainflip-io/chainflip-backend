@@ -43,8 +43,9 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{
-	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	chains, AccountId, AccountRole, Asset, AssetAmount, AssetAndAmount, AuthorityCount,
+	Beneficiary, DcaParameters, EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -215,8 +216,8 @@ pub fn do_eth_swap(
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_request_id: executed_swap_request_id,
-					input_amount,
-					output_amount,
+					input: AssetAndAmount { asset: _, amount: input_amount },
+					output: AssetAndAmount { asset: _, amount: output_amount },
 					..
 				},
 			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
@@ -249,8 +250,8 @@ pub fn do_eth_swap(
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_request_id: executed_swap_request_id,
-					input_amount,
-					output_amount,
+					input: AssetAndAmount { asset: _, amount: input_amount },
+					output: AssetAndAmount { asset: _, amount: output_amount },
 					..
 				},
 			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),

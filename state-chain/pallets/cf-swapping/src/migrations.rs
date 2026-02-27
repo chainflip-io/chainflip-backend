@@ -21,16 +21,16 @@ use frame_support::migrations::VersionedMigration;
 
 mod reschedule_stuck_swaps;
 mod set_default_oracle_price_protection;
-mod swap_fee_migration;
+//mod swap_fee_migration;
 
 pub type PalletMigration<T> = (
-	VersionedMigration<
-		13,
-		14,
-		swap_fee_migration::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
+	// VersionedMigration<
+	// 	13,
+	// 	14,
+	// 	swap_fee_migration::Migration<T>,
+	// 	Pallet<T>,
+	// 	<T as frame_system::Config>::DbWeight,
+	// >,
 	VersionedMigration<
 		14,
 		15,
