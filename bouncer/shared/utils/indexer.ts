@@ -53,13 +53,18 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
 
 // ------------ Querying for block height --------------
 
+// Make sure to use the events table to query for the highest block
+// to avoid any races between indexing blocks and indexing events operations
 export const highestBlock = async (): Promise<number> => {
-  const result = await prisma.block.findFirst({
+  const result = await prisma.event.findFirst({
     orderBy: {
-      height: 'desc',
+      block: { height: 'desc' },
+    },
+    include: {
+      block: true,
     },
   });
-  return result?.height ?? 0;
+  return result?.block.height ?? 0;
 };
 
 // ------------ Querying for transaction hashes --------------
@@ -168,7 +173,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
     }
 
     // we wait two additional CF blocks to be indexed before we error out in case we couldn't find the event(s) we were looking for
-    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 4) {
+    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 2) {
       throw new Error(
         `Did not find any of the events in ${JSON.stringify(Object.values(descriptions).map((v) => v.name))} in block range ${timing.startFromBlock}..${timing.endBeforeBlock}`,
       );
