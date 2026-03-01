@@ -112,14 +112,6 @@ async function testDCASwap<A = []>(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
-  // Find the `SwapExecuted` events for this swap.
-  // const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
-  // const observeSwapExecutedEvents = await observeEvents(cf.logger, `swapping:SwapExecuted`, {
-  //   test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-  //   historicalCheckBlocks,
-  //   stopAfter: { blocks: historicalCheckBlocks },
-  // }).events;
-
   // Find the `SwapExecuted` event of the first chunk
   await cf.stepUntilEvent(
     `Swapping.SwapExecuted`,
@@ -143,23 +135,6 @@ async function testDCASwap<A = []>(
     `Swapping.SwapRequestCompleted`,
     swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
   );
-
-  // Check that there were the correct number of SwapExecuted events, one for each chunk.
-  // assert.strictEqual(
-  //   observeSwapExecutedEvents.length,
-  //   numberOfChunks,
-  //   `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${observeSwapExecutedEvents.length}`,
-  // );
-  //
-  // // Check the chunk interval of all chunks
-  // for (let i = 1; i < numberOfChunks; i++) {
-  //   const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
-  //   assert.strictEqual(
-  //     interval,
-  //     chunkIntervalBlocks,
-  //     `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
-  //   );
-  // }
 
   cf.debug(`Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`);
 
