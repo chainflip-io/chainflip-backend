@@ -25,7 +25,6 @@ import { TestContext } from 'shared/utils/test_context';
 import { getIsoTime, globalLogger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
@@ -578,7 +577,7 @@ async function testEvmLiquidityDeposit<A extends WithLpAccount>(
 }
 
 // Sets the ingress_egress broker whitelist to the given `broker`.
-async function setWhitelistedBroker(brokerAddress: Uint8Array) {
+async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: Uint8Array) {
   const BTC_WHITELIST_PREFIX = '3ed3ce16dbc61ca64eaac5a96e809a8f6b8fb02fc586c9dab2385ea1690a7db6';
   const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
   const ARB_WHITELIST_PREFIX = '3d3491b8c14ff78a5176bc3b6ebe516f6b8fb02fc586c9dab2385ea1690a7db6';
@@ -600,17 +599,18 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
     ARB_WHITELIST_PREFIX,
     SOL_WHITELIST_PREFIX,
   ]) {
-    await submitGovernanceExtrinsic((api) =>
-      api.tx.governance.callAsSudo(
-        api.tx.system.setStorage([
-          [
-            decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
-            // Empty, we just need to insert the key.
-            '',
-          ],
-        ]),
-      ),
-    );
+    await cf.submitGovernance({
+      extrinsic: (api) =>
+        api.tx.governance.callAsSudo(
+          api.tx.system.setStorage([
+            [
+              decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+              // Empty, we just need to insert the key.
+              '',
+            ],
+          ]),
+        ),
+    });
   }
 }
 
@@ -789,11 +789,12 @@ export async function testBrokerLevelScreening(
 
   await ensureHealth();
   const previousMockmode = (await setMockmode('Manual')).previous;
+
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
   cf.debug('Whitelisting the broker api broker');
-  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
+  await setWhitelistedBroker(cf, fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
 
   // Delay the start of the test to reduce contention, to not end up in situations where the deposit
   // monitor is slow in flagging transactions
