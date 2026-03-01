@@ -117,6 +117,31 @@ export enum SenderType {
   Vault,
 }
 
+async function waitForEgressScheduled<A = []>(
+  cf: ChainflipIO<A>,
+  swapRequestId: bigint,
+  swapContext?: SwapContext,
+): Promise<void> {
+  const resultEvent = await cf.stepUntilOneEventOf({
+    egressScheduled: {
+      name: 'Swapping.SwapEgressScheduled',
+      schema: swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
+    },
+    egressIgnored: {
+      name: 'Swapping.SwapEgressIgnored',
+      schema: swappingSwapEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
+    },
+  });
+
+  if (resultEvent.key === 'egressIgnored') {
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
+    throwError(cf.logger, new Error(`Swap Egress was ignored reason: ${reason}`));
+  } else {
+    swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
+    cf.debug(`Egress ID: ${resultEvent.data.egressId}, Egress amount: ${resultEvent.data.amount}.`);
+  }
+}
+
 // Note: if using the swap context, the logger must contain the tag
 export async function doPerformSwap<A = []>(
   cf: ChainflipIO<A>,
@@ -164,24 +189,7 @@ export async function doPerformSwap<A = []>(
     `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted (if CCM swap).`,
   );
 
-  const resultEvent = await cf.stepUntilOneEventOf({
-    egressScheduled: {
-      name: 'Swapping.SwapEgressScheduled',
-      schema: swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
-    },
-    egressIgnored: {
-      name: 'Swapping.SwapEgressIgnored',
-      schema: swappingSwapEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
-    },
-  });
-
-  if (resultEvent.key === 'egressIgnored') {
-    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
-    throwError(cf.logger, new Error(`Swap Egress was ignored reason: ${reason}`));
-  } else {
-    swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
-    cf.debug(`Egress ID: ${resultEvent.data.egressId}, Egress amount: ${resultEvent.data.amount}.`);
-  }
+  await waitForEgressScheduled(cf, swapRequestId, swapContext);
 
   try {
     const [newBalance] = await Promise.all([
@@ -461,19 +469,10 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
       `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted if CCM swap.`,
     );
 
-    const swapEgressScheduled = cf
-      .stepUntilEvent(
-        'Swapping.SwapEgressScheduled',
-        swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
-      )
-      .then(({ egressId, amount: egressAmount }) => {
-        swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
-        cf.debug(`Egress ID: ${egressId}, Egress amount: ${egressAmount}.`);
-      });
+    await waitForEgressScheduled(cf, swapRequestId, swapContext);
 
     const [newBalance] = await Promise.all([
       observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
-      swapEgressScheduled,
       ccmEventEmitted,
     ]);
     cf.debug(`Swap success!${newBalance !== undefined ? ` New balance: ${newBalance}` : ''}!`);
