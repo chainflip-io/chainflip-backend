@@ -61,15 +61,15 @@ async function setupNewAssets<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
 
   await parentCf.all([lpApiDeposits, lp1Deposits]);
 
-  const lp1Cf = parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') });
+  parentCf.info('Lp1 deposits for WBTC, ArbUsdt, SolUsdt set');
 
-  lp1Cf.info('Lp1 deposits for WBTC, ArbUsdt, SolUsdt set');
-
-  await Promise.all([
-    rangeOrder(lp1Cf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
-    rangeOrder(lp1Cf, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
-    rangeOrder(lp1Cf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
-  ]);
+  await parentCf
+    .with({ account: fullAccountFromUri('//LP_1', 'LP') })
+    .all([
+      (subcf) => rangeOrder(subcf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
+      (subcf) => rangeOrder(subcf, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
+      (subcf) => rangeOrder(subcf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
+    ]);
 
   parentCf.info('Range orders for WBTC, ArbUsdt, SolUsdt set');
 

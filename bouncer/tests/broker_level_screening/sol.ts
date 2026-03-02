@@ -164,12 +164,14 @@ export async function testSolVaultSwap<A = []>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
 
+  // Currently this event cannot be decoded correctly, so we don't wait for it,
+  // just wait for the funds to arrive at the refund address
   // await cf.stepUntilEvent(
   //   'SolanaIngressEgress.TransactionRejectedByBroker',
   //   solanaIngressEgressTransactionRejectedByBroker.refine(
   //     (event) =>
   //       event.txId.__kind === 'VaultSwapAccount' &&
-  //       event.txId.value[0] === decodeSolAddress(receipt.accountAddress.toString()),
+  //       event.txId.value[0] === decodeSolAddress(receipt.accountAddress.toString()), // fix decoding
   //   ),
   // );
 

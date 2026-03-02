@@ -4,8 +4,6 @@ import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, Keyring } from '@polkadot/api';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
@@ -37,12 +35,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import {
-  DisposableApiPromise,
-  getChainflipApi,
-  observeBadEvent,
-  observeEvent,
-} from 'shared/utils/substrate';
+import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -60,7 +53,6 @@ import {
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
-import { Err, Ok, Result } from 'shared/utils/result';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
 import bitcoin from 'bitcoinjs-lib';
@@ -1267,15 +1259,12 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      // logger.debug(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
-        // logger.debug(`Extrinsic error: ${dispatchError.toString()}`);
         try {
           dispatchErrorHandler({ dispatchError });
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
-          // throwError(logger, err);
         }
         return;
       }
@@ -1291,7 +1280,6 @@ export function waitForExt(
         logger.warn(`Extrinsic failed: ${status.toString()}`);
         const error = new Error(`Extrinsic failed with status: ${status.toString()}`);
         reject(error);
-        // throwError(logger, error);
       }
     },
   };
@@ -1384,89 +1372,6 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
-}
-
-export function extractExtrinsicResult(
-  chainflipApi: DisposableApiPromise,
-  extrinsicResult: ISubmittableResult,
-): Result<ISubmittableResult, string> {
-  if (extrinsicResult.dispatchError) {
-    let error;
-    if (extrinsicResult.dispatchError.isModule) {
-      const { docs, name, section } = chainflipApi.registry.findMetaError(
-        extrinsicResult.dispatchError.asModule,
-      );
-      error = section + '.' + name + ': ' + docs;
-    } else {
-      error = extrinsicResult.dispatchError.toString();
-    }
-    return Err(`Extrinsic failed: ${error}`);
-  }
-  return Ok(extrinsicResult);
-}
-
-export async function toExtrinsicResult(
-  chainflipApi: DisposableApiPromise,
-  extrinsicResultPromise: Promise<ISubmittableResult>,
-): Promise<Result<ISubmittableResult, string>> {
-  try {
-    const result = await extrinsicResultPromise;
-    return extractExtrinsicResult(chainflipApi, result);
-  } catch (err) {
-    return Err(`${err}`);
-  }
-}
-
-/// Submits an extrinsic and waits for it to be included in a block.
-/// Returning the extrinsic result or throwing the dispatchError.
-export async function submitChainflipExtrinsic(
-  account: KeyringPair,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsic: any,
-  errorOnFail = true,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  await using chainflipApi = await getChainflipApi();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let extrinsicResult: any;
-  const nonce = await chainflipApi.rpc.system.accountNextIndex(account.address);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await extrinsic.signAndSend(account, { nonce }, (arg: any) => {
-    if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
-      extrinsicResult = arg;
-    }
-  });
-  while (!extrinsicResult) {
-    await sleep(100);
-  }
-  if (errorOnFail) {
-    const extracted = extractExtrinsicResult(chainflipApi, extrinsicResult);
-    if (!extracted.ok) {
-      throw new Error(extracted.error);
-    }
-  }
-  return extrinsicResult;
-}
-
-export class ChainflipExtrinsicSubmitter {
-  private keyringPair: KeyringPair;
-
-  private mutex: Mutex;
-
-  constructor(keyringPair: KeyringPair, mutex: Mutex = new Mutex()) {
-    this.keyringPair = keyringPair;
-    this.mutex = mutex;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async submit(extrinsic: any, errorOnFail: boolean = true) {
-    let extrinsicResult;
-    await this.mutex.runExclusive(async () => {
-      extrinsicResult = await submitChainflipExtrinsic(this.keyringPair, extrinsic, errorOnFail);
-    });
-    return extrinsicResult;
-  }
 }
 
 /// Calculate the fee using the given bps. Used for broker & boost fee calculation.

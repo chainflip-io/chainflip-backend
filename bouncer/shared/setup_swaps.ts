@@ -76,30 +76,21 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     ),
   );
 
-  const lp1RefundAddresses = (parentCf: ChainflipIO<A>) =>
-    parentCf
-      .with({ account: fullAccountFromUri('//LP_1', 'LP') })
-      .all([
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
-      ]);
-
-  const lpApiRefundAddresses = (parentCf: ChainflipIO<A>) =>
-    parentCf
-      .with({ account: fullAccountFromUri('//LP_API', 'LP') })
-      .all([
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
-        (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
-      ]);
-
   cf.info('Registering refund addresses');
-  await cf.all([lp1RefundAddresses, lpApiRefundAddresses]);
+  await cf.all(
+    ['//LP_1', '//LP_API'].map(
+      (uri) => (parentCf) =>
+        parentCf
+          .with({ account: fullAccountFromUri(uri as `//${string}`, 'LP') })
+          .all([
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
+          ]),
+    ),
+  );
 
   const lp1Deposits = (parentCf: ChainflipIO<A>) =>
     parentCf

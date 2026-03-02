@@ -176,7 +176,6 @@ async function main(): Promise<void> {
 
   const createAssethubProxy = async () => {
     // Wait for the assethub vault Promise to resolve
-    // const hubVaultAddress = await createAssetHubVault(cf.logger, assethub);
     const hubVaultAddress = await assetHubVaultCreateHandle;
 
     cf.info('Rotating Proxy and Funding Accounts on Assethub');

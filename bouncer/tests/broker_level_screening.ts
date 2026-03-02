@@ -696,7 +696,6 @@ export async function testBitcoin<A = []>(
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
-/* eslint-disable  @typescript-eslint/no-unused-vars */
 async function testBitcoinVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
 
@@ -770,7 +769,7 @@ export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
 export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
   await cf.all([
     // --- vault swaps ---
-    // testBitcoinVaultSwap(testContext),
+    (subcf) => testBitcoinVaultSwap(subcf),
     (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),

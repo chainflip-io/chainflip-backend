@@ -1,11 +1,4 @@
-import {
-  cfMutex,
-  createStateChainKeypair,
-  isValidHexHash,
-  sleep,
-  toExtrinsicResult,
-  waitForExt,
-} from 'shared/utils';
+import { cfMutex, createStateChainKeypair, isValidHexHash, sleep, waitForExt } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
@@ -26,6 +19,33 @@ import {
   highestBlock,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
+import { ISubmittableResult } from '@polkadot/types/types';
+import { Err, Ok, Result } from 'shared/utils/result';
+
+async function toExtrinsicResult(
+  chainflipApi: DisposableApiPromise,
+  extrinsicResultPromise: Promise<ISubmittableResult>,
+): Promise<Result<ISubmittableResult, string>> {
+  try {
+    const extrinsicResult = await extrinsicResultPromise;
+
+    if (extrinsicResult.dispatchError) {
+      let error;
+      if (extrinsicResult.dispatchError.isModule) {
+        const { docs, name, section } = chainflipApi.registry.findMetaError(
+          extrinsicResult.dispatchError.asModule,
+        );
+        error = section + '.' + name + ': ' + docs;
+      } else {
+        error = extrinsicResult.dispatchError.toString();
+      }
+      return Err(`Extrinsic failed: ${error}`);
+    }
+    return Ok(extrinsicResult);
+  } catch (err) {
+    return Err(`${err}`);
+  }
+}
 
 export class ChainflipIO<Requirements> {
   /**
