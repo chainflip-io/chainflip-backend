@@ -559,7 +559,7 @@ where
 		.await
 		.expect("Failed to get Sc Utils contract address from SC");
 
-	let supported_asset_address_and_event_type = [
+	let supported_asset_address_and_event_type: HashMap<_, _> = [
 		(EthAsset::Usdc, EvmEventSource::new::<UsdcEvents>(usdc_contract_address)),
 		(EthAsset::Usdt, EvmEventSource::new::<UsdtEvents>(usdt_contract_address)),
 		(EthAsset::Flip, EvmEventSource::new::<FlipEvents>(flip_contract_address)),
@@ -574,60 +574,72 @@ where
 		EvmEventSource::new::<StateChainGatewayEvents>(state_chain_gateway_address);
 	let sc_utils_event_source = EvmEventSource::new::<ScUtilsEvents>(sc_utils_address);
 
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<EthereumElectoralSystemRunner, _>::new((
-						EvmVoter { client: client.clone(), _phantom: Default::default() },
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EvmDepositChannelWitnessingConfig {
-								address_checker_address,
-								vault_contract: vault_event_source.clone(),
-								supported_assets: supported_asset_address_and_event_type,
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							VaultDepositWitnessingConfig {
-								vault: vault_event_source,
-								supported_assets: supported_erc20_tokens.clone(),
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source },
-						),
-						EthereumFeeVoter { client: client.clone() },
-						EthereumLivenessVoter { client: client.clone() },
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EthereumStateChainGatewayWitnessingConfig {
-								state_chain_gateway: sc_gateway_event_source,
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EthereumScUtilsWitnessingConfig {
-								sc_utils: sc_utils_event_source,
-								supported_assets: supported_erc20_tokens,
-							},
-						),
-					)),
-					Some(client.cache_invalidation_senders),
-					"Ethereum",
-				)
-				.continuously_vote()
-				.await;
+	scope.spawn_with_restart("eth_witnessing", move || {
+		let client = client.clone();
+		let state_chain_client = state_chain_client.clone();
+		let vault_event_source = vault_event_source.clone();
+		let key_manager_event_source = key_manager_event_source.clone();
+		let sc_gateway_event_source = sc_gateway_event_source.clone();
+		let sc_utils_event_source = sc_utils_event_source.clone();
+		let supported_asset_address_and_event_type = supported_asset_address_and_event_type.clone();
+		let supported_erc20_tokens = supported_erc20_tokens.clone();
+		async move {
+			task_scope::task_scope(|scope| {
+				async {
+					crate::elections::Voter::new(
+						scope,
+						state_chain_client,
+						CompositeVoter::<EthereumElectoralSystemRunner, _>::new((
+							EvmVoter { client: client.clone(), _phantom: Default::default() },
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EvmDepositChannelWitnessingConfig {
+									address_checker_address,
+									vault_contract: vault_event_source.clone(),
+									supported_assets: supported_asset_address_and_event_type,
+								},
+							),
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								VaultDepositWitnessingConfig {
+									vault: vault_event_source,
+									supported_assets: supported_erc20_tokens.clone(),
+								},
+							),
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EvmKeyManagerWitnessingConfig {
+									key_manager: key_manager_event_source,
+								},
+							),
+							EthereumFeeVoter { client: client.clone() },
+							EthereumLivenessVoter { client: client.clone() },
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EthereumStateChainGatewayWitnessingConfig {
+									state_chain_gateway: sc_gateway_event_source,
+								},
+							),
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EthereumScUtilsWitnessingConfig {
+									sc_utils: sc_utils_event_source,
+									supported_assets: supported_erc20_tokens,
+								},
+							),
+						)),
+						Some(client.cache_invalidation_senders),
+						"Ethereum",
+					)
+					.continuously_vote()
+					.await;
 
-				Ok(())
-			}
-			.boxed()
-		})
-		.await
+					Ok(())
+				}
+				.boxed()
+			})
+			.await
+		}
 	});
 
 	Ok(())

@@ -463,6 +463,12 @@ build_counter_vec!(
 	"Count all the bad p2p msgs received by the engine and labels them by the reason they got discarded",
 	["reason"]
 );
+build_counter_vec!(
+	TASK_RESTARTS,
+	"cfe_task_restarts",
+	"Count the number of task restarts due to errors or panics",
+	["task_name"]
+);
 build_counter_vec_struct!(
 	CEREMONY_PROCESSED_MSG,
 	CeremonyProcessedMsg,
