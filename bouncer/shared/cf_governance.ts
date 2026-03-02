@@ -23,7 +23,7 @@ export async function submitExistingGovernanceExtrinsic(
   logger.debug(`Submitting governance extrinsic`);
 
   const release = await cfMutex.acquire(snowWhiteUri);
-  const { promise, waiter } = waitForExt(api, logger, 'InBlock', release);
+  const { promise, waiter } = waitForExt(api, logger, 'Finalized', release);
 
   const nonce = (await api.rpc.system.accountNextIndex(snowWhite.address)) as unknown as number;
   const unsub = await api.tx.governance
