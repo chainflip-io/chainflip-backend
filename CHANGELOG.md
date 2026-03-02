@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.1] - 2026-03-02
+
+- Fix an issue with light RPC mode.
+
 ## [2.1.0] - 2026-02-23
 
 ### Features

@@ -1,7 +1,7 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
 name = "chainflip-lp-api"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 license = "Apache-2.0"
 
@@ -35,7 +35,7 @@ pallet-cf-pools = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 custom-rpc = { workspace = true }
 sc-rpc = { workspace = true, default-features = true }
-cf-amm-math = { workspace = true}
+cf-amm-math = { workspace = true }
 
 # Local
 chainflip-api = { workspace = true }
