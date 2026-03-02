@@ -35,10 +35,12 @@ function createTestFunction(
   name: string,
   timeoutSeconds: number,
   testFunction: (context: TestContext) => Promise<void>,
+  startDelaySeconds: number = 0,
 ) {
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
+
     context.testContext.logger.info(`🧪 Starting test ${name}`);
 
     // Check whether we currently have a tag, if we don't have one,
@@ -47,6 +49,13 @@ function createTestFunction(
 
     // Run the test with the test context
     const start = Date.now();
+
+    if (startDelaySeconds > 0) {
+      context.testContext.logger.info(
+        `⌛ Delaying launch of test ${name} by ${startDelaySeconds}s`,
+      );
+      await sleep(startDelaySeconds * 1000);
+    }
     await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch(async (error) => {
       // We must catch the error here to be able to log it
       context.testContext.error(error);
@@ -85,12 +94,13 @@ export function concurrentTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
+  startDelaySeconds: number = 0,
   // Only affects the being able to run via the`run_test` command.
   excludeFromList: boolean = false,
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, timeoutSeconds, testFunction),
+    createTestFunction(name, timeoutSeconds, testFunction, startDelaySeconds),
     // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
     // the timeout here is a fallback and should never trigger:
     (timeoutSeconds + 5) * 1000,

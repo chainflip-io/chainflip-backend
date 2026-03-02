@@ -796,10 +796,6 @@ export async function testBrokerLevelScreening(
   cf.debug('Whitelisting the broker api broker');
   await setWhitelistedBroker(cf, fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
 
-  // Delay the start of the test to reduce contention, to not end up in situations where the deposit
-  // monitor is slow in flagging transactions
-  await sleep(25000);
-
   cf.debug('Launching broker level screening tests...');
   await cf.all([
     (subcf) => doTestLpDeposits(subcf),

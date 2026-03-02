@@ -120,7 +120,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   });
 
   for (const swap of allSwaps) {
-    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, true);
+    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
   }
 }
 

@@ -29,28 +29,33 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
   const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
-  const ciTimeoutFactor = 1.6; // Adjustment factor for CI, since all timeouts are set by running on Mac M4
+  // Mac dev machines are faster; CI is slower (non-Mac machines)
+  const ciTimeoutFactor = process.platform === 'darwin' ? 1.1 : 1.6;
 
+  // Launch all tests in parallel. This will create a lot of contention for the first few blocks.
+  // The concurrentTest function can be called with startDelaySeconds parameter that will delay the start of the
+  // test to reduce contention, for example, the BrokerLevelScreeningTest is delayed to not end up
+  // in situations where the deposit monitor is slow in flagging transactions.
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
-  concurrentTest('EvmDeposits', testEvmDeposits, 350 * ciTimeoutFactor);
+  concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
-  concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
-  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 200 * ciTimeoutFactor);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 340 * ciTimeoutFactor);
-  concurrentTest('FillOrKill', testFillOrKill, 280 * ciTimeoutFactor);
-  concurrentTest('DCASwaps', testDCASwaps, 190 * ciTimeoutFactor);
+  concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor, 20);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor, 20);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 350 * ciTimeoutFactor, 10);
+  concurrentTest('FillOrKill', testFillOrKill, 260 * ciTimeoutFactor, 10);
+  concurrentTest('DCASwaps', testDCASwaps, 230 * ciTimeoutFactor, 30);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   if (!process.env.SKIP_BLS_TESTS) {
-    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
+    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor, 25);
   }
-  concurrentTest('VaultSwaps', testVaultSwap, 360 * ciTimeoutFactor);
-  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 200 * ciTimeoutFactor);
+  concurrentTest('VaultSwaps', testVaultSwap, 340 * ciTimeoutFactor);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor, 40);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
-  concurrentTest('Lending', lendingTest, 350 * ciTimeoutFactor);
+  concurrentTest('Lending', lendingTest, 360 * ciTimeoutFactor);
   concurrentTest(
     'GovernanceDepositWitnessing',
     testGovernanceDepositWitnessing,
