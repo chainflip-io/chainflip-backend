@@ -621,7 +621,7 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
 // 1. No boost and early tx report -> tx is reported early and the swap is refunded.
 // 2. Boost and early tx report -> tx is reported early and the swap is refunded.
 // 3. Boost and late tx report -> tx is reported late and the swap is not refunded.
-export async function testBitcoinInner<A = []>(
+export async function testBitcoin<A = []>(
   cf: ChainflipIO<A>,
   doBoost: boolean,
   // ): Promise<((cf: ChainflipIO<A>) => Promise<void>)[]> {
@@ -696,11 +696,6 @@ export async function testBitcoinInner<A = []>(
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
-export async function testBitcoin<A = []>(parentCf: ChainflipIO<A>, doBoost: boolean) {
-  const cf = parentCf.withChildLogger('BrokerLevelScreening_testBitcoin');
-  await testBitcoinInner(cf, doBoost);
-}
-
 /* eslint-disable  @typescript-eslint/no-unused-vars */
 async function testBitcoinVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
@@ -750,8 +745,13 @@ export async function doTestSwapDeposits<A = []>(
     (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (subcf) => testBitcoin(subcf, false),
-    ...(testBoostedDeposits ? [(subcf: ChainflipIO<A>) => testBitcoin(subcf, true)] : []),
+    (subcf) => testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin'), false),
+    ...(testBoostedDeposits
+      ? [
+          (subcf: ChainflipIO<A>) =>
+            testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin_boost'), true),
+        ]
+      : []),
   ]);
 }
 
