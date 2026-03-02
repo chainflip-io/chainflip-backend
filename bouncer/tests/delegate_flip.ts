@@ -17,7 +17,7 @@ import {
 import { getIsoTime, Logger } from 'shared/utils/logger';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
