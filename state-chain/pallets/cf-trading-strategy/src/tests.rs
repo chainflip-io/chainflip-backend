@@ -1569,4 +1569,52 @@ mod oracle_strategy {
 				);
 			});
 	}
+
+	#[test]
+	fn stale_price_closes_open_orders() {
+		const MIN_BUY_OFFSET_TICK: Tick = -10;
+		const MAX_BUY_OFFSET_TICK: Tick = -6;
+		const MIN_SELL_OFFSET_TICK: Tick = 6;
+		const MAX_SELL_OFFSET_TICK: Tick = 10;
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(QUOTE_ASSET, 1);
+
+				// Use equal amounts so the strategy produces exactly one order per side
+				let initial_amounts: BTreeMap<_, _> =
+					[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, BASE_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockBalance::credit_account(&LP, asset, amount);
+				}
+
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: MIN_BUY_OFFSET_TICK,
+						max_buy_offset_tick: MAX_BUY_OFFSET_TICK,
+						min_sell_offset_tick: MIN_SELL_OFFSET_TICK,
+						max_sell_offset_tick: MAX_SELL_OFFSET_TICK,
+						base_asset: BASE_ASSET,
+						quote_asset: QUOTE_ASSET,
+					},
+					initial_amounts,
+				));
+			})
+			.then_execute_at_next_block(|_| {
+				// The strategy should have open limit orders at this point
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+
+				// Mark the base asset price as stale
+				MockPriceFeedApi::set_stale(BASE_ASSET, true);
+			})
+			.then_execute_at_next_block(|_| {
+				// The stale price should have caused all open orders to be cancelled
+				assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
+			});
+	}
 }

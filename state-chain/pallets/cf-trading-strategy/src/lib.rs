@@ -413,26 +413,31 @@ pub mod pallet {
 						// the oracle price.
 						let relative_tick = match strategy {
 							TradingStrategy::InventoryBased { .. } => Tick::from(0),
-							TradingStrategy::OracleTracking { .. } => {
+							TradingStrategy::OracleTracking { base_asset, .. } => {
 								weight_used += T::DbWeight::get().reads(1);
-								if let Some(oracle_tick) =
-									T::PriceFeedApi::get_relative_price(base_asset, STABLE_ASSET)
-										.and_then(|oracle| oracle.price.into_tick())
-								{
+								let oracle_tick_opt =
+									match T::PriceFeedApi::get_relative_price(base_asset, STABLE_ASSET) {
+										None => {
+											log_or_panic!(
+												"Failed to get oracle price for asset {:?}, skipping strategy {:?}",
+												base_asset,
+												strategy_id
+											);
+											None
+										},
+										Some(oracle) if oracle.stale => None,
+										Some(oracle) => oracle.price.into_tick(),
+									};
+								if let Some(oracle_tick) = oracle_tick_opt {
 									oracle_tick
 								} else {
-									log_or_panic!(
-											"Failed to get oracle price for asset {:?}, skipping strategy {:?}",
-											base_asset,
-											strategy_id
-										);
+									// stale or unavailable price, cancel orders and skip to the
+									// next strategy.
+									let _res = T::PoolApi::cancel_all_limit_orders(&strategy_id);
 									continue;
 								}
 							},
-							_ => {
-								log_or_panic!("Unreachable due to match above");
-								continue;
-							},
+							_ => unreachable!("Unreachable due to match above"),
 						};
 
 						// Get the existing open orders for the strategy
