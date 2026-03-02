@@ -10,6 +10,9 @@ import {
   getWeb3,
   hexPubkeyToFlipAddress,
   newAddress,
+  observeSwapRequested,
+  SwapRequestType,
+  TransactionOrigin,
 } from 'shared/utils';
 import { getIsoTime, Logger } from 'shared/utils/logger';
 import { approveErc20 } from 'shared/approve_erc20';
@@ -22,6 +25,11 @@ import { AccountRole, setupAccount } from 'shared/setup_account';
 import z from 'zod';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { TestContext } from 'shared/utils/test_context';
+import { fundingFunded } from 'generated/events/funding/funded';
+import { fundingSCCallExecuted } from '../generated/events/funding/sCCallExecuted';
+import { validatorDelegated } from '../generated/events/validator/delegated';
+import { validatorUndelegated } from '../generated/events/validator/undelegated';
+import { fundingRedemptionRequested } from '../generated/events/funding/redemptionRequested';
 
 const evmCallDetails = z.object({
   calldata: z.string(),
@@ -108,34 +116,35 @@ export async function testDelegate(testContext: TestContext) {
   });
   cf.info('Delegate flip transaction sent ' + delegateTxHash);
 
-  const fundEvent = observeEvent(cf.logger, 'funding:Funded', {
-    test: (event) => {
-      const txMatch = event.data.source?.EthTransaction?.txHash === delegateTxHash;
-      const amountMatch = event.data.fundsAdded.replace(/,/g, '') === amount.toString();
-      const accountIdMatch = externalChainToScAccount(wallet.address) === event.data.accountId;
-      return txMatch && amountMatch && accountIdMatch;
+  await cf.stepUntilAllEventsOf({
+    funding: {
+      name: 'Funding.Funded',
+      schema: fundingFunded.refine(
+        (event) =>
+          event.accountId === externalChainToScAccount(wallet.address) &&
+          event.source.__kind === 'EthTransaction' &&
+          event.source.txHash === delegateTxHash &&
+          event.fundsAdded === amount,
+      ),
     },
-    historicalCheckBlocks: 10,
-  }).event;
-  let scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
-    test: (event) => {
-      const txMatch = event.data.ethTxHash === delegateTxHash;
-      const operatorMatch =
-        event.data.scCall.Delegation.call.Delegate.operator === operator.address;
-      return txMatch && operatorMatch;
+    scCallExecuted: {
+      name: 'Funding.SCCallExecuted',
+      schema: fundingSCCallExecuted.refine(
+        (event) =>
+          event.ethTxHash === delegateTxHash &&
+          event.scCall.call.__kind === 'Delegate' &&
+          event.scCall.call.operator === operator.address,
+      ),
     },
-    historicalCheckBlocks: 10,
-  }).event;
-  const delegatedEvent = observeEvent(cf.logger, 'validator:Delegated', {
-    test: (event) => {
-      cf.debug('Delegated event data: ' + JSON.stringify(event.data));
-      const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
-      const operatorMatch = event.data.operator === operator.address;
-      return delegatorMatch && operatorMatch;
+    validatorDelegated: {
+      name: 'Validator.Delegated',
+      schema: validatorDelegated.refine(
+        (event) =>
+          event.delegator === externalChainToScAccount(wallet.address) &&
+          event.operator === operator.address,
+      ),
     },
-    historicalCheckBlocks: 10,
-  }).event;
-  await Promise.all([fundEvent, scCallExecutedEvent, delegatedEvent]);
+  });
 
   cf.info('Undelegating Flip from operator ' + operator.address + '...');
   const undelegateTxHash = await encodeAndSendDelegationApiCall(cf.logger, wallet, {
@@ -143,17 +152,23 @@ export async function testDelegate(testContext: TestContext) {
   });
   cf.info('Undelegate flip transaction sent ' + undelegateTxHash);
 
-  scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
-    test: (event) => event.data.ethTxHash === undelegateTxHash,
-  }).event;
-  const undelegatedEvent = observeEvent(cf.logger, 'validator:Undelegated', {
-    test: (event) => {
-      const delegatorMatch = event.data.delegator === externalChainToScAccount(wallet.address);
-      const operatorMatch = event.data.operator === operator.address;
-      return delegatorMatch && operatorMatch;
+  await cf.stepUntilAllEventsOf({
+    scCallExecuted: {
+      name: 'Funding.SCCallExecuted',
+      schema: fundingSCCallExecuted.refine(
+        (event) =>
+          event.ethTxHash === undelegateTxHash && event.scCall.call.__kind === 'Undelegate',
+      ),
     },
-  }).event;
-  await Promise.all([scCallExecutedEvent, undelegatedEvent]);
+    validatorDelegated: {
+      name: 'Validator.Undelegated',
+      schema: validatorUndelegated.refine(
+        (event) =>
+          event.delegator === externalChainToScAccount(wallet.address) &&
+          event.operator === operator.address,
+      ),
+    },
+  });
 
   await using chainflip = await getChainflipApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
@@ -173,17 +188,22 @@ export async function testDelegate(testContext: TestContext) {
     });
     cf.info('Redeem request transaction sent ' + redeemTxHash);
 
-    scCallExecutedEvent = observeEvent(cf.logger, 'funding:SCCallExecuted', {
-      test: (event) => event.data.ethTxHash === redeemTxHash,
-    }).event;
-    const redeemEvent = observeEvent(cf.logger, 'funding:RedemptionRequested', {
-      test: (event) => {
-        const accountMatch = event.data.accountId === externalChainToScAccount(wallet.address);
-        const amountMatch = event.data.amount.replace(/,/g, '') === redeemAmount.toString();
-        return accountMatch && amountMatch;
+    await cf.stepUntilAllEventsOf({
+      scCallExecuted: {
+        name: 'Funding.SCCallExecuted',
+        schema: fundingSCCallExecuted.refine(
+          (event) => event.ethTxHash === redeemTxHash && event.scCall.call.__kind === 'Redeem',
+        ),
       },
-    }).event;
-    await Promise.all([scCallExecutedEvent, redeemEvent]);
+      validatorDelegated: {
+        name: 'Funding.RedemptionRequested',
+        schema: fundingRedemptionRequested.refine(
+          (event) =>
+            event.accountId === externalChainToScAccount(wallet.address) &&
+            event.amount === redeemAmount,
+        ),
+      },
+    });
   }
 
   cf.info('Delegation test completed successfully!');
@@ -199,9 +219,6 @@ export async function testCcmSwapFundAccount(testContext: TestContext) {
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
-  const fundEvent = observeEvent(cf.logger, 'funding:Funded', {
-    test: (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
-  }).event;
 
   const ccmMessage = web3.eth.abi.encodeParameters(['address', 'bytes'], [scUtilsAddress, pubkey]);
   const ccmMetadata = await newCcmMetadata('Flip', ccmMessage);
@@ -211,6 +228,23 @@ export async function testCcmSwapFundAccount(testContext: TestContext) {
   const swapParams = await requestNewSwap(cf, 'Btc', 'Flip', scUtilsAddress, ccmMetadata);
 
   await send(cf.logger, 'Btc', swapParams.depositAddress);
-  await fundEvent;
+
+  await observeSwapRequested(
+    cf,
+    'Btc',
+    'Flip',
+    { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+    SwapRequestType.Regular,
+  );
+
+  await cf.stepUntilEvent(
+    'Funding.Funded',
+    fundingFunded.refine(
+      (event) =>
+        event.accountId === hexPubkeyToFlipAddress(pubkey) &&
+        event.source.__kind === 'EthTransaction',
+    ),
+  );
+
   cf.info('Funding event witnessed succesfully!');
 }
