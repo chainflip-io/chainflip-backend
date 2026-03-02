@@ -227,6 +227,7 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_amm::common::AssetPair;
+	use frame_support::sp_runtime::SaturatedConversion;
 
 	use super::*;
 
@@ -408,6 +409,12 @@ pub mod pallet {
 							break;
 						}
 
+						let quote_asset = match strategy {
+							TradingStrategy::InventoryBased { .. } => STABLE_ASSET,
+							TradingStrategy::OracleTracking { quote_asset, .. } => quote_asset,
+							_ => unreachable!("Unreachable due to match above"),
+						};
+
 						// Calculate the relative tick. For the normal inventory based strategy, the
 						// relative tick is always 0, but for the oracle tracking strategy, we use
 						// the oracle price.
@@ -415,19 +422,21 @@ pub mod pallet {
 							TradingStrategy::InventoryBased { .. } => Tick::from(0),
 							TradingStrategy::OracleTracking { base_asset, .. } => {
 								weight_used += T::DbWeight::get().reads(1);
-								let oracle_tick_opt =
-									match T::PriceFeedApi::get_relative_price(base_asset, STABLE_ASSET) {
-										None => {
-											log_or_panic!(
+								let oracle_tick_opt = match T::PriceFeedApi::get_relative_price(
+									base_asset,
+									quote_asset,
+								) {
+									None => {
+										log_or_panic!(
 												"Failed to get oracle price for asset {:?}, skipping strategy {:?}",
 												base_asset,
 												strategy_id
 											);
-											None
-										},
-										Some(oracle) if oracle.stale => None,
-										Some(oracle) => oracle.price.into_tick(),
-									};
+										None
+									},
+									Some(oracle) if oracle.stale => None,
+									Some(oracle) => oracle.price.into_tick(),
+								};
 								if let Some(oracle_tick) = oracle_tick_opt {
 									oracle_tick
 								} else {
@@ -444,7 +453,7 @@ pub mod pallet {
 						let pool_orders = match order_cache.get(&base_asset) {
 							Some(orders) => orders,
 							None => {
-								let Some(asset_pair) = AssetPair::new(base_asset, STABLE_ASSET)
+								let Some(asset_pair) = AssetPair::new(base_asset, quote_asset)
 								else {
 									log_or_panic!(
 										"Failed to create asset pair {:?}/{:?} for strategy {:?}, skipping",
@@ -491,7 +500,7 @@ pub mod pallet {
 							.sum();
 
 						// Get the free balance
-						let quote_balance = T::BalanceApi::get_balance(&strategy_id, STABLE_ASSET);
+						let quote_balance = T::BalanceApi::get_balance(&strategy_id, quote_asset);
 						let base_balance = T::BalanceApi::get_balance(&strategy_id, base_asset);
 						let total_quote = quote_balance.saturating_add(orders_total_quote);
 						let total_base = base_balance.saturating_add(orders_total_base);
@@ -507,7 +516,7 @@ pub mod pallet {
 							Side::Buy,
 							strategy_id.clone(),
 							base_asset,
-							STABLE_ASSET,
+							quote_asset,
 						)
 						.into_iter()
 						.chain(
@@ -519,7 +528,7 @@ pub mod pallet {
 								Side::Sell,
 								strategy_id.clone(),
 								base_asset,
-								STABLE_ASSET,
+								quote_asset,
 							)
 							.into_iter(),
 						)
@@ -545,10 +554,7 @@ pub mod pallet {
 							1,
 						);
 						let quote_threshold = core::cmp::max(
-							order_update_thresholds
-								.get(&STABLE_ASSET)
-								.copied()
-								.unwrap_or(u128::MAX),
+							order_update_thresholds.get(&quote_asset).copied().unwrap_or(u128::MAX),
 							1,
 						);
 
@@ -582,7 +588,7 @@ pub mod pallet {
 									let _result = T::PoolApi::update_limit_order(
 										&strategy_id,
 										base_asset,
-										STABLE_ASSET,
+										quote_asset,
 										side,
 										order_id,
 										Some(tick),
