@@ -51,10 +51,10 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   await using chainflip = await getChainflipApi();
 
   // Acquire mutex and check if broker already has private channel
-  const release = await cfMutex.acquire(broker.uri);
+  const releasePrivateBtcChannelMutex = await cfMutex.acquire(`${broker.uri}_PrivateBtcChannel`);
   const existingPrivateChannel = await getExistingPrivateBtcChannel(broker.keypair.address);
-  release();
   if (existingPrivateChannel) {
+    releasePrivateBtcChannelMutex();
     return existingPrivateChannel;
   }
 
@@ -96,6 +96,8 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
       throw Error(`Unexpected error private Btc channel should exists for broker: ${broker.uri}`);
     }
     throw err;
+  } finally {
+    releasePrivateBtcChannelMutex();
   }
 }
 

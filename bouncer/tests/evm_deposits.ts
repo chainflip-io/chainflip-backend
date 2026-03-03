@@ -179,9 +179,7 @@ async function testTxMultipleVaultSwaps<A = []>(
         );
       }),
     );
-    cf.debug(
-      `Found SwapRequested event ${i} : ${JSON.stringify(swapRequestedEvent)}  cf.block= ${cf.currentBlockHeight()}`,
-    );
+    cf.debug(`Found SwapRequested event ${i} : ${JSON.stringify(swapRequestedEvent)}`);
     foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
   }
   assert.strictEqual(foundSwapRequestIds.length, numSwaps - 1); // TODO rever back to numSwaps once the deduplication ingress issue is fixed

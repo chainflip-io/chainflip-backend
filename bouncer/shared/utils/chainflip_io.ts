@@ -322,10 +322,6 @@ export class ChainflipIO<Requirements> {
     this.lastIoBlockHeight += n;
   }
 
-  currentBlockHeight(): number {
-    return this.lastIoBlockHeight;
-  }
-
   /**
    * Advance the current chainflip block height until an event
    * is found that matches the provided name and schema.
