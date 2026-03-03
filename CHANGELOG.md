@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.2] - 2026-03-03
+
+- fix: switch to deposit channel origin for `account_creation_deposit_channels` ([#6452](https://github.com/chainflip-io/chainflip-backend/issues/6452))
+
 ## [2.1.1] - 2026-03-02
 
 - Fix an issue with light RPC mode.
