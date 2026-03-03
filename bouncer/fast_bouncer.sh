@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+echo "FD limits: soft=$(ulimit -Sn), hard=$(ulimit -Hn)"
 ./commands/observe_block.ts 5
 ./setup_for_test.sh
 NODE_COUNT=$1 LOCALNET=$LOCALNET pnpm vitest --maxConcurrency=1000 --hideSkippedTests run -t "ConcurrentTests"
