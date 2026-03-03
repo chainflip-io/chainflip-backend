@@ -269,10 +269,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores thresholds used to determine whether a trading strategy for a given asset
-	/// has enough funds in "free balance" to make it worthwhile updating/creating a limit order
-	/// with them. Note that we use store map as a single value since it is often more convenient to
-	/// read multiple assets at once (and this map is small).
+	/// Stores thresholds in fine USD terms, used to determine whether a trading strategy for a
+	/// given asset has enough funds in "free balance" to make it worthwhile updating/creating a
+	/// limit order with them. Note that we use store map as a single value since it is often more
+	/// convenient to read multiple assets at once (and this map is small).
 	/// An asset that is not in this map is disabled from being updated.
 	#[pallet::storage]
 	pub type LimitOrderUpdateThresholds<T: Config> = StorageValue<
@@ -409,9 +409,10 @@ pub mod pallet {
 							break;
 						}
 
-						let quote_asset = match strategy {
-							TradingStrategy::InventoryBased { .. } => STABLE_ASSET,
-							TradingStrategy::OracleTracking { quote_asset, .. } => quote_asset,
+						let (quote_asset, convert_to_usd) = match strategy {
+							TradingStrategy::InventoryBased { .. } => (STABLE_ASSET, false),
+							TradingStrategy::OracleTracking { quote_asset, .. } =>
+								(quote_asset, true),
 							_ => unreachable!("Unreachable due to match above"),
 						};
 
@@ -500,11 +501,55 @@ pub mod pallet {
 							.sum();
 
 						// Get the free balance
-						let quote_balance = T::BalanceApi::get_balance(&strategy_id, quote_asset);
-						let base_balance = T::BalanceApi::get_balance(&strategy_id, base_asset);
-						let total_quote = quote_balance.saturating_add(orders_total_quote);
-						let total_base = base_balance.saturating_add(orders_total_base);
+						let quote_balance_asset =
+							T::BalanceApi::get_balance(&strategy_id, quote_asset);
+						let base_balance_asset =
+							T::BalanceApi::get_balance(&strategy_id, base_asset);
+						let total_quote_asset =
+							quote_balance_asset.saturating_add(orders_total_quote);
+						let total_base_asset = base_balance_asset.saturating_add(orders_total_base);
 						weight_used += T::DbWeight::get().reads(2);
+
+						// Minimum threshold of 1 to prevent updating with 0 amounts
+						let base_threshold = core::cmp::max(
+							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
+							1,
+						);
+						let quote_threshold = core::cmp::max(
+							order_update_thresholds.get(&quote_asset).copied().unwrap_or(u128::MAX),
+							1,
+						);
+
+						let (update_due_to_balance, total_quote, total_base) = if convert_to_usd {
+							// Convert to usd amounts so we can compare the assets.
+							let usd_amount = |asset, amount, default| {
+								T::PriceFeedApi::get_price(asset)
+									.map(|oracle| {
+										oracle.price.output_amount_ceil(amount).saturated_into()
+									})
+									.unwrap_or(default)
+							};
+
+							let quote_balance_usd = usd_amount(quote_asset, quote_balance_asset, 0);
+							let base_balance_usd = usd_amount(base_asset, base_balance_asset, 0);
+							let total_quote_usd = usd_amount(quote_asset, total_quote_asset, 0);
+							let total_base_usd = usd_amount(base_asset, total_base_asset, 0);
+
+							let quote_threshold_usd =
+								usd_amount(quote_asset, quote_threshold, u128::MAX);
+							let base_threshold_usd =
+								usd_amount(base_asset, base_threshold, u128::MAX);
+
+							let update_due_to_balance = quote_balance_usd + base_balance_usd >=
+								base_threshold_usd.min(quote_threshold_usd);
+							(update_due_to_balance, total_quote_usd, total_base_usd)
+						} else {
+							// For the inventory based strategy, we require both assets to be
+							// equivalent (have the same number of decimals).
+							let update_due_to_balance = quote_balance_asset + base_balance_asset >=
+								base_threshold.min(quote_threshold);
+							(update_due_to_balance, total_quote_asset, total_base_asset)
+						};
 
 						// Use the balance of assets to calculate the desired limit orders
 						let total = total_quote.saturating_add(total_base);
@@ -548,21 +593,7 @@ pub mod pallet {
 								false
 							};
 
-						// Minimum threshold of 1 to prevent updating with 0 amounts
-						let base_threshold = core::cmp::max(
-							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
-							1,
-						);
-						let quote_threshold = core::cmp::max(
-							order_update_thresholds.get(&quote_asset).copied().unwrap_or(u128::MAX),
-							1,
-						);
-
-						// Wait until the total amount in the free balance is large enough or the
-						// ticks have changed to trigger an update of all orders.
-						if quote_balance + base_balance >= base_threshold.min(quote_threshold) ||
-							ticks_need_update
-						{
+						if update_due_to_balance || ticks_need_update {
 							// Close all open orders for the strategy
 							if let Err(e) = T::PoolApi::cancel_all_limit_orders(&strategy_id) {
 								log_or_panic!(
@@ -575,6 +606,8 @@ pub mod pallet {
 							weight_used += limit_order_update_weight * 3;
 
 							// Create the new desired orders
+							let mut remaining_base_amount = total_base_asset;
+							let mut remaining_quote_amount = total_quote_asset;
 							new_orders.into_iter().for_each(
 								|StrategyLimitOrder {
 								     base_asset,
@@ -584,6 +617,30 @@ pub mod pallet {
 								     amount,
 								     ..
 								 }| {
+									// Convert USD amounts back to native asset amounts
+									// for order placement. Tracking remaining amounts to avoid
+									// placing orders with more than the available balance.
+									let amount = if convert_to_usd {
+										let (asset, remaining) = if side == Side::Sell {
+											(base_asset, &mut remaining_base_amount)
+										} else {
+											(quote_asset, &mut remaining_quote_amount)
+										};
+										let amount = T::PriceFeedApi::get_price(asset)
+											.map(|oracle| {
+												oracle
+													.price
+													.input_amount_floor(amount)
+													.saturated_into()
+											})
+											.unwrap_or(amount)
+											.min(*remaining);
+										*remaining = remaining.saturating_sub(amount);
+										amount
+									} else {
+										amount
+									};
+
 									weight_used += limit_order_update_weight;
 									let _result = T::PoolApi::update_limit_order(
 										&strategy_id,

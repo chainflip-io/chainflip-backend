@@ -1516,7 +1516,7 @@ mod oracle_strategy {
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
 							side: Side::Buy,
-							order_id: STRATEGY_ORDER_ID_1,
+							order_id: STRATEGY_ORDER_ID_0,
 							tick: EXPECTED_BUY_TICK,
 							amount: AMOUNT
 						},
@@ -1615,6 +1615,243 @@ mod oracle_strategy {
 			.then_execute_at_next_block(|_| {
 				// The stale price should have caused all open orders to be cancelled
 				assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
+			});
+	}
+
+	/// Tests that the oracle strategy produces correct ticks and amounts when
+	/// the base and quote assets have different numbers of decimals.
+	/// Uses Btc (8 decimals) as base and Usdc (6 decimals) as quote.
+	#[test]
+	fn different_decimals_correct_ticks_and_amounts() {
+		const BTC: Asset = Asset::Btc;
+		const USDC: Asset = Asset::Usdc;
+		const MIN_BUY_OFFSET_TICK: Tick = -10;
+		const MAX_BUY_OFFSET_TICK: Tick = -6;
+		const MIN_SELL_OFFSET_TICK: Tick = 6;
+		const MAX_SELL_OFFSET_TICK: Tick = 10;
+		const AVERAGE_BUY_OFFSET_TICK: Tick = -8;
+		const AVERAGE_SELL_OFFSET_TICK: Tick = 8;
+
+		// 1.0001^(-23028) = e^(-23028 × 0.000099995) = e^(-2.302685) ≈ 0.09999 < 0.1 ✓
+		// 1.0001^(-23027) = e^(-23027 × 0.000099995) = e^(-2.302585) ≈ 0.10000 > 0.1 ✓
+		// So 1.0001^(-23028) < 0.1 ≤ 1.0001^(-23027) → tick = -23028
+		const ORACLE_TICK: Tick = -23_028;
+
+		const BTC_AMOUNT: AssetAmount = 1_000_000_000; // 10 BTC with 8 decimals
+		const USDC_AMOUNT: AssetAmount = 100_000_000; // 100 USDC with 6 decimals
+
+		// $101/BTC: 1% price increase
+		let new_oracle_price = Price::from_usd_cents(BTC, 10_10);
+		const NEW_ORACLE_TICK: Tick = -22_928;
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				// Setting the prices so that the initial amounts will be the same in USD value.
+				MockPriceFeedApi::set_price_usd(BTC, 10);
+				MockPriceFeedApi::set_price_usd(USDC, 1);
+
+				// We must manually create the strategy here because non-stable strategies are not
+				// supported.
+				let strategy = TradingStrategy::OracleTracking {
+					min_buy_offset_tick: MIN_BUY_OFFSET_TICK,
+					max_buy_offset_tick: MAX_BUY_OFFSET_TICK,
+					min_sell_offset_tick: MIN_SELL_OFFSET_TICK,
+					max_sell_offset_tick: MAX_SELL_OFFSET_TICK,
+					base_asset: BTC,
+					quote_asset: USDC,
+				};
+				let strategy_id = derive_strategy_id::<Test>(&LP);
+				Strategies::<Test>::insert(LP, strategy_id, strategy);
+				let initial_amounts: BTreeMap<_, _> =
+					[(BTC, BTC_AMOUNT), (USDC, USDC_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockBalance::credit_account(&strategy_id, asset, amount);
+				}
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// Initially we have a lot less btc but its usd value is the same as the USDC
+				// amount, so the strategy should be at average tick (balanced) + the oracle offset.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_BUY_OFFSET_TICK + ORACLE_TICK,
+							amount: USDC_AMOUNT
+						},
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_OFFSET_TICK + ORACLE_TICK,
+							amount: BTC_AMOUNT
+						}
+					]
+				);
+
+				// Change BTC price from $100 to $101 (1% increase).
+				// Despite different decimals (8 vs 6), the oracle tick should
+				// shift by the same amount as a same-decimal 1% increase.
+				MockPriceFeedApi::set_price(BTC, Some(new_oracle_price));
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// After the price change, orders should have shifted by the oracle tick. But still
+				// just 2 balanced orders.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: AVERAGE_BUY_OFFSET_TICK + NEW_ORACLE_TICK,
+							amount: USDC_AMOUNT
+						},
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_OFFSET_TICK + NEW_ORACLE_TICK,
+							amount: BTC_AMOUNT
+						}
+					]
+				);
+
+				// Add more BTC funds
+				MockBalance::credit_account(&strategy_id, BTC, BTC_AMOUNT);
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// More aggressive ticks because we unbalanced the strategy
+				let expected_buy_tick = AVERAGE_BUY_OFFSET_TICK + NEW_ORACLE_TICK - 1;
+				let expected_sell_tick = AVERAGE_SELL_OFFSET_TICK + NEW_ORACLE_TICK - 1;
+				// Now the orders are unbalanced but the shift should still be proportional due to
+				// the decimals being accounted for in the logic.
+				// $100 on one side and $202 on the other side.
+				// (100 + (20 * 10.1)) /2 = 151 // half total in usd
+				// 20 - (151 / 10.1) = 5.049504950495049 BTC on the aggressive sell order
+				let expected_aggressive_sell_amount = 504950495;
+
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: expected_buy_tick,
+							amount: USDC_AMOUNT
+						},
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: expected_sell_tick,
+							amount: expected_aggressive_sell_amount
+						},
+						StrategyLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_OFFSET_TICK + NEW_ORACLE_TICK,
+							// The rest of the BTC is in the non-aggressive sell order.
+							// Rounding error of 1 due to usd conversion.
+							amount: BTC_AMOUNT * 2 - expected_aggressive_sell_amount - 1
+						}
+					]
+				);
+			});
+	}
+
+	/// Tests that the update threshold works correctly when base and quote
+	/// assets have different decimals. The threshold comparison should happen
+	/// in USD-normalized terms.
+	#[test]
+	fn different_decimals_update_threshold() {
+		// Use Btc (8 decimals) as base and Usdc (6 decimals) as quote.
+		const BTC: Asset = Asset::Btc;
+		const USDC: Asset = cf_primitives::STABLE_ASSET;
+		const BTC_AMOUNT: AssetAmount = 1_000_000_000;
+		const USDC_AMOUNT: AssetAmount = 100_000_000;
+		const THRESHOLD_USD: AssetAmount = 100_000_000; // $100 with 6 decimals
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				MockPriceFeedApi::set_price_usd(BTC, 10);
+				MockPriceFeedApi::set_price_usd(USDC, 1);
+
+				// Set the update thresholds in USD terms
+				LimitOrderUpdateThresholds::<Test>::set(BTreeMap::from_iter([
+					(BTC, THRESHOLD_USD),
+					(USDC, THRESHOLD_USD),
+				]));
+
+				// We must manually create the strategy here because non-stable strategies are not
+				// supported.
+				let strategy = TradingStrategy::OracleTracking {
+					min_buy_offset_tick: -1,
+					max_buy_offset_tick: 0,
+					min_sell_offset_tick: 0,
+					max_sell_offset_tick: 1,
+					base_asset: BTC,
+					quote_asset: USDC,
+				};
+				let strategy_id = derive_strategy_id::<Test>(&LP);
+				Strategies::<Test>::insert(LP, strategy_id, strategy);
+				let initial_amounts: BTreeMap<_, _> =
+					[(BTC, BTC_AMOUNT), (USDC, USDC_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockBalance::credit_account(&strategy_id, asset, amount);
+				}
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The strategy should have created two limit orders
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+
+				//$90 worth of BTC (below the $100 threshold)
+				MockBalance::credit_account(&strategy_id, BTC, 900_000_000);
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The strategy should not have added the new balance to the order yet.
+				let orders = MockPoolApi::<AccountId>::get_limit_orders();
+				assert_eq!(orders.len(), 2);
+				assert_eq!(orders[0].amount, USDC_AMOUNT);
+				assert_eq!(orders[1].amount, BTC_AMOUNT);
+
+				// Add $1 more to reach the threshold
+				MockBalance::credit_account(&strategy_id, BTC, 10_000_000);
+			})
+			.then_execute_at_next_block(|_| {
+				// The limit orders should now be created
+				let orders = MockPoolApi::<AccountId>::get_limit_orders();
+				assert_eq!(orders.len(), 2);
+				assert_eq!(orders[0].amount, USDC_AMOUNT);
+				assert_eq!(orders[1].amount, BTC_AMOUNT * 2);
 			});
 	}
 }
