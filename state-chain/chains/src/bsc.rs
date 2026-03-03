@@ -23,9 +23,9 @@ use crate::{
 	evm::{DeploymentStatus, EvmFetchId},
 	ChainWitnessConfig, *,
 };
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bsc;
-use codec::{Decode, Encode, MaxEncodedLen};
+use cf_primitives::{chains::assets, AssetAmount};
+use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H160, H256},
 	Address, Hash as TxHash, Token, Uint, Word,
@@ -55,14 +55,14 @@ impl Chain for Bsc {
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;
-	type ChainAmount = EthAmount;
+	type ChainAmount = AssetAmount;
 	type TransactionFee = evm::TransactionFee;
 	type TrackedData = BscTrackedData;
 	type ChainAsset = assets::bsc::Asset;
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::bsc::AssetMap<T>;
-	type ChainAccount = eth::Address;
+	type ChainAccount = evm::Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
@@ -81,6 +81,7 @@ impl Chain for Bsc {
 	Eq,
 	Encode,
 	Decode,
+	DecodeWithMemTracking,
 	MaxEncodedLen,
 	TypeInfo,
 	Serialize,
@@ -110,9 +111,9 @@ impl BscTrackedData {
 	pub fn calculate_ccm_gas_limit(
 		&self,
 		is_native_asset: bool,
-		gas_budget: GasAmount,
+		gas_budget: AssetAmount,
 		message_length: usize,
-	) -> GasAmount {
+	) -> AssetAmount {
 		use crate::bsc::fees::*;
 
 		let vault_gas_overhead = if is_native_asset {
@@ -128,7 +129,7 @@ impl BscTrackedData {
 
 	pub fn calculate_transaction_fee(
 		&self,
-		gas_limit: GasAmount,
+		gas_limit: AssetAmount,
 	) -> <Bsc as crate::Chain>::ChainAmount {
 		self.base_fee.saturating_mul(gas_limit)
 	}

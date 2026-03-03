@@ -344,7 +344,7 @@ async fn run_main(
 			};
 
 			let bsc_client = {
-				let expected_bsc_chain_id = web3::types::U256::from(
+				let expected_bsc_chain_id = U256::from(
 					state_chain_client
 						.storage_value::<pallet_cf_environment::BscChainId<state_chain_runtime::Runtime>>(
 							state_chain_client.latest_finalized_block().hash,

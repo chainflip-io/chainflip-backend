@@ -287,7 +287,6 @@ impl pallet_cf_vaults::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance7> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type SetAggKeyWithAggKey = BscApi<EvmEnvironment>;
 	type Broadcaster = BscBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -479,7 +478,6 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
@@ -986,10 +984,8 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_broadcast::Config<Instance7> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
-	type BroadcastCallable = RuntimeCall;
 	type Offence = chainflip::Offence;
 	type ApiCall = BscApi<EvmEnvironment>;
 	type ThresholdSigner = EvmThresholdSigner;
@@ -999,7 +995,7 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type OnBroadcastSuccess = pallet_cf_ingress_egress::Pallet<Runtime, BscInstance>;
+	type BroadcastOutcomeHandler = pallet_cf_ingress_egress::Pallet<Runtime, BscInstance>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type SafeMode = RuntimeSafeMode;
 	type SafeModeBlockMargin = ConstU32<10>;
@@ -1049,7 +1045,6 @@ impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_chain_tracking::Config<Instance7> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bsc;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
@@ -1106,7 +1101,6 @@ impl pallet_cf_elections::Config<Instance4> for Runtime {
 
 impl pallet_cf_elections::Config<Instance7> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Bsc as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
-	type RuntimeEvent = RuntimeEvent;
 	type ElectoralSystemRunner = chainflip::witnessing::bsc_elections::BscElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
 	type ElectoralSystemConfiguration =
