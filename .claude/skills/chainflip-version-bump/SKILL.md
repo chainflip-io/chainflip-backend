@@ -23,8 +23,8 @@ Reference commits: `b4ae1f3e2b` (2.0->2.1), and the 2.1->2.2 bump done in this r
 
 Split into two commits:
 
-1. **Version bumps** - Cargo.toml versions, runtime `spec_version`, engine old/new versions, `Cargo.lock` (steps 1-3, 6)
-2. **Migration cleanup** - Remove old VersionedMigrations, clean up pallet migrations, delete migration files (steps 4-5)
+1. **Version bumps** - Cargo.toml versions, runtime `spec_version`, engine old/new versions, `Cargo.lock` (steps 1-3, 7)
+2. **Migration cleanup & CI cleanup** - Remove old VersionedMigrations, clean up pallet migrations, delete migration files, remove temporary CI workarounds (steps 4-6)
 
 ## Step-by-Step Process
 
@@ -153,20 +153,30 @@ Search for all pallets with VersionedMigration:
 grep -r 'VersionedMigration' state-chain/pallets/*/src/migrations.rs
 ```
 
-### 6. Update Cargo.lock
+### 6. Clean Up Temporary CI Workarounds
+
+Check GitHub Actions workflows for temporary changes marked for removal after the previous release:
+
+```bash
+grep -rn 'TODO.*temporary\|TODO.*[Rr]emove after\|TODO.*workaround' .github/workflows/
+```
+
+These are typically `sed` commands, extra steps, or patched values that were needed to bridge compatibility between versions during upgrade tests. Remove any that reference the version you're bumping *from* (e.g. "Remove after 2.1 is released" when bumping from 2.1 to 2.2).
+
+### 7. Update Cargo.lock
 
 ```bash
 cargo generate-lockfile
 ```
 
-### 7. Verify Compilation
+### 8. Verify Compilation
 
 ```bash
 cargo check -p state-chain-runtime
 cargo check -p engine-runner
 ```
 
-### 8. Test with try-runtime
+### 9. Test with try-runtime
 
 You need a snapshot from a chain running the **previous** version (the one whose migrations you just cleaned up). Check mainnet first; if the previous version isn't on mainnet yet, fall back to testnet (Sisyphos).
 
