@@ -47,6 +47,14 @@ services:
       - "/tmp/chainflip/data/l1keystore:/keystore"
       - "/tmp/chainflip/data/config:/config"
 
+  bsc:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/bsc:test-bsc-node-6-${NODE_COUNT}
+    container_name: bsc-node
+    platform: linux/amd64
+    ports:
+      - "8645:8545"
+      - "30311:30311"
+
   sequencer:
     image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     user: root
@@ -123,14 +131,7 @@ services:
       - 9947:9944
       - 30433:30333
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json;'",
-          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
-          "http://localhost:9947",
-        ]
+      test: [ "CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''', "http://localhost:9947" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -163,14 +164,7 @@ services:
       - 9948:9944
       - 30434:30333
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json;'",
-          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
-          "http://localhost:9948",
-        ]
+      test: [ "CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''', "http://localhost:9948" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -206,14 +200,7 @@ services:
       - 9955:9944
       - 40333:30333
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json;'",
-          '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''',
-          "http://localhost:9955",
-        ]
+      test: [ "CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", '-d ''{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params" : [0]}''', "http://localhost:9955" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -231,15 +218,7 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 5s
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "--user flip:flip",
-          "-H 'Content-Type: text/plain;'",
-          '-d ''{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}''',
-          "http://127.0.0.1:8332",
-        ]
+      test: [ "CMD-SHELL", "curl", "--user flip:flip", "-H 'Content-Type: text/plain;'", '-d ''{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}''', "http://127.0.0.1:8332" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -349,12 +328,4 @@ services:
     restart: on-failure
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command:
-      [
-        "-e",
-        "ws://host.docker.internal:9944",
-        "--out",
-        "postgres://postgres:postgres@postgres:5432/squid_archive",
-        "--finalized-blocks",
-        "false",
-      ]
+    command: [ "-e", "ws://host.docker.internal:9944", "--out", "postgres://postgres:postgres@postgres:5432/squid_archive", "--finalized-blocks", "false" ]
