@@ -360,9 +360,11 @@ macro_rules! assets {
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
 			}
 			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 			pub struct AssetMap<T> {
 				$(
 					#[serde(rename = $chain_json)]
+					#[serde(default)]
 					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
 				)*
 			}
@@ -570,9 +572,11 @@ macro_rules! assets {
 				}
 
 				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 				pub struct AssetMap<T> {
 					$(
 						#[serde(rename = $asset_json)]
+						#[serde(default)]
 						pub $asset_member: T,
 					)+
 				}

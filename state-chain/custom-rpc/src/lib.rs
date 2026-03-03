@@ -1627,8 +1627,6 @@ where
 				})
 				.collect()
 		}],
-		cf_free_balances(account_id: state_chain_runtime::AccountId) -> AssetMap<U256> [map: |asset_map| asset_map.map(Into::into)],
-		cf_lp_total_balances(account_id: state_chain_runtime::AccountId) -> any::AssetMap<U256> [map: |asset_map| asset_map.map(Into::into)],
 		cf_penalties() -> Vec<(Offence, RpcPenalty)> [map: |penalties| {
 			penalties
 				.into_iter()
@@ -1674,6 +1672,38 @@ where
 			retry_duration: BlockNumber,
 			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> (),
+	}
+
+	fn cf_free_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<AssetMap<U256>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+			} else {
+				api.cf_free_balances(hash, account_id)
+			}
+			.map(|balances| balances.map(Into::into))
+		})
+	}
+
+	fn cf_lp_total_balances(
+		&self,
+		account_id: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<AssetMap<U256>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+			} else {
+				api.cf_lp_total_balances(hash, account_id)
+			}
+			.map(|balances| balances.map(Into::into))
+		})
 	}
 
 	fn cf_pool_info(
@@ -1894,16 +1924,21 @@ where
 				let role = api
 					.cf_account_role(hash, account_id.clone())?
 					.unwrap_or(AccountRole::Unregistered);
-				let common_items = api
-					.cf_common_account_info(hash, &account_id)?
-					.try_map_balances(TryInto::try_into)
-					.map_err(|_| {
-						CfApiError::ErrorObject(ErrorObject::owned(
-							ErrorCode::InternalError.code(),
-							"Unable to convert balances.",
-							None::<()>,
-						))
-					})?;
+
+				let common_items = if api_version < 17 {
+					#[expect(deprecated)]
+					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+				} else {
+					api.cf_common_account_info(hash, &account_id)?
+				}
+				.try_map_balances(TryInto::try_into)
+				.map_err(|_| {
+					CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::InternalError.code(),
+						"Unable to convert balances.",
+						None::<()>,
+					))
+				})?;
 
 				Ok(RpcAccountInfoWrapper {
 					common_items,
