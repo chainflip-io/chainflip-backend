@@ -193,6 +193,10 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_9::LiquidityProviderInfo;
+		#[changed_in(16)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_16::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
@@ -304,7 +308,11 @@ decl_runtime_apis!(
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
+		#[changed_in(16)]
+		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
+		#[changed_in(16)]
+		fn cf_network_fees() -> before_version_16::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(12)]
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;

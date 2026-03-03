@@ -231,3 +231,71 @@ impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCom
 		}
 	}
 }
+
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
+pub struct LiquidityProviderInfo {
+	pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
+	pub balances: Vec<(Asset, AssetAmount)>,
+	pub earned_fees: AssetMap<AssetAmount>,
+	pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
+	pub lending_positions: Vec<LendingPosition<AssetAmount>>,
+	pub collateral_balances: Vec<(Asset, AssetAmount)>,
+}
+
+impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
+	fn from(value: LiquidityProviderInfo) -> Self {
+		Self {
+			refund_addresses: value.refund_addresses,
+			balances: value.balances,
+			earned_fees: value.earned_fees.into(),
+			boost_balances: value.boost_balances.into(),
+			lending_positions: value.lending_positions,
+			collateral_balances: value.collateral_balances,
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct TradingStrategyLimits {
+	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
+	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
+}
+
+impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
+	fn from(value: TradingStrategyLimits) -> Self {
+		Self {
+			minimum_deployment_amount: value.minimum_deployment_amount.into(),
+			minimum_added_funds_amount: value.minimum_added_funds_amount.into(),
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFeeDetails {
+	pub standard_rate_and_minimum: FeeRateAndMinimum,
+	pub rates: AssetMap<Permill>,
+}
+
+impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
+	fn from(value: NetworkFeeDetails) -> Self {
+		Self {
+			standard_rate_and_minimum: value.standard_rate_and_minimum,
+			rates: value.rates.into(),
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct NetworkFees {
+	pub regular_network_fee: NetworkFeeDetails,
+	pub internal_swap_network_fee: NetworkFeeDetails,
+}
+
+impl From<NetworkFees> for super::NetworkFees {
+	fn from(value: NetworkFees) -> Self {
+		Self {
+			regular_network_fee: value.regular_network_fee.into(),
+			internal_swap_network_fee: value.internal_swap_network_fee.into(),
+		}
+	}
+}

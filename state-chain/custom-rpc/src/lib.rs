@@ -1649,7 +1649,6 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
-		cf_trading_strategy_limits() -> TradingStrategyLimits,
 		cf_lending_config() -> RpcLendingConfig,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
@@ -1680,7 +1679,7 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<AssetMap<U256>> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			if version < 17 {
+			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
 			} else {
@@ -1696,13 +1695,27 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<AssetMap<U256>> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			if version < 17 {
+			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
 			.map(|balances| balances.map(Into::into))
+		})
+	}
+
+	fn cf_trading_strategy_limits(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<TradingStrategyLimits> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 16 {
+				#[expect(deprecated)]
+				api.cf_trading_strategy_limits_before_version_16(hash).map(Into::into)
+			} else {
+				api.cf_trading_strategy_limits(hash)
+			}
 		})
 	}
 
@@ -1925,7 +1938,7 @@ where
 					.cf_account_role(hash, account_id.clone())?
 					.unwrap_or(AccountRole::Unregistered);
 
-				let common_items = if api_version < 17 {
+				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
 				} else {
@@ -2264,15 +2277,20 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwappingEnvironment> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			let swap_limits = api.cf_swap_limits(hash)?;
+			let network_fees = if version < 16 {
+				#[expect(deprecated)]
+				api.cf_network_fees_before_version_16(hash)?.into()
+			} else {
+				api.cf_network_fees(hash)?
+			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
-				network_fee_hundredth_pips: api
-					.cf_network_fees(hash)?
+				network_fee_hundredth_pips: network_fees
 					.regular_network_fee
 					.standard_rate_and_minimum
 					.rate,
@@ -2282,7 +2300,7 @@ where
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
-				network_fees: api.cf_network_fees(hash)?,
+				network_fees,
 				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
 			})
 		})
