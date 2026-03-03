@@ -460,10 +460,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 	}
 }
 
-#[allow(unused_imports)]
-use frame_support::migrations::VersionedMigration;
-#[allow(clippy::allow_attributes)]
-#[allow(unused_macros)]
+#[expect(unused_macros)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -475,7 +472,7 @@ macro_rules! instanced_migrations {
 	) => {
 		(
 			$(
-				VersionedMigration<
+				frame_support::migrations::VersionedMigration<
 					$from,
 					$to,
 					$migration<Runtime, $include>,
@@ -484,7 +481,7 @@ macro_rules! instanced_migrations {
 				>,
 			)+
 			$(
-				VersionedMigration<
+				frame_support::migrations::VersionedMigration<
 					$from,
 					$to,
 					NoopMigration,
