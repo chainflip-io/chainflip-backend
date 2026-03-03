@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.4] - 2026-03-03
+
+- fix: RPC backwards compatibility for cf_liquidity_provider_info and cf_free_balances.
+
 ## [2.1.3] - 2026-03-03
 
 - fix: Better RPC backwards compatibility for account_info and related RPCs.
