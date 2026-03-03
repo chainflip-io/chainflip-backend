@@ -1887,7 +1887,9 @@ where
 			if api_version < 7 {
 				use account_info_before_api_v7::RpcAccountInfo as RpcAccountInfoLegacy;
 				let balance = api.cf_account_flip_balance(hash, &account_id)?;
-				let asset_balances = api.cf_free_balances(hash, account_id.clone())?;
+				#[expect(deprecated)]
+				let asset_balances: AssetMap<_> =
+					api.cf_free_balances_before_version_16(hash, account_id.clone())?.into();
 
 				Ok::<_, CfApiError>(RpcAccountInfoWrapper::from(
 					match api
@@ -1999,6 +2001,13 @@ where
 								..
 							} = if api_version < 9 {
 								api.cf_liquidity_provider_info_before_version_9(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else if api_version < 16 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_16(
 									hash,
 									account_id.clone(),
 								)?
