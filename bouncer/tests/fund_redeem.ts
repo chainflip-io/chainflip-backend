@@ -84,9 +84,8 @@ async function main<A = []>(cf: ChainflipIO<A>, providedSeed?: string) {
   );
   cf.debug('Redeem exact amount success!');
 
-  // Verify max redemption (full amount minus tax)
-  // const expectedRedeemAllAmount = fundAmount - redemptionTaxAmount;
-  const expectedRedeemAllAmount = fundAmount; // TODO find out why redemption-tax is not applied for MAX
+  // Verify max redemption, no redemption tax is applied since the account doesn't have any bonded funds.
+  const expectedRedeemAllAmount = fundAmount;
   assert(
     redeemedAll >= expectedRedeemAllAmount - gasErrorMargin &&
       redeemedAll <= expectedRedeemAllAmount,

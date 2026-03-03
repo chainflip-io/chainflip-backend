@@ -123,7 +123,7 @@ async function testDCASwap<A = []>(
   for (let i = 2; i <= numberOfChunks; i++) {
     // Exactly step chunkIntervalBlocks. This also checks that the chunk interval is correctly observed.
     await cf.stepNBlocks(chunkIntervalBlocks);
-    await cf.stepUntilEvent(
+    await cf.expectEvent(
       `Swapping.SwapExecuted`,
       swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
     );

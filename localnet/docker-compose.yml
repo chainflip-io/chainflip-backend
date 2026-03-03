@@ -343,7 +343,7 @@ services:
       - "${INDEXER_DB_PORT:-5432}:5432"
 
   indexer:
-    image: ghcr.io/chainflip-io/squid-sdk/substrate-ingest@sha256:23ebfcd57aa652a82bb9e0efed67a89fb04ab0c1b74c9e6b46790b9cc08faf12
+    image: ghcr.io/chainflip-io/squid-sdk/substrate-ingest:latest
     depends_on:
       - postgres
     restart: on-failure

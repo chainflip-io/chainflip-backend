@@ -343,7 +343,6 @@ async function testEvm<A = []>(
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
-    // await observeEvent(cf.logger, 'ethereumIngressEgress:DepositFinalised').event;
     await cf.stepUntilEvent(
       'EthereumIngressEgress.DepositFinalised',
       ethereumIngressEgressDepositFinalised.refine(
