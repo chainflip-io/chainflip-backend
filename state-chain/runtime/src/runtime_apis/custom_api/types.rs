@@ -684,6 +684,7 @@ pub struct RpcLendingConfig {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
+#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
