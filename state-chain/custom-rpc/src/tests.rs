@@ -39,10 +39,9 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets::{any, arb, btc, dot, eth, hub},
+	chains::assets::{any, arb, bsc, btc, dot, eth, hub},
 	ApiWaitForResult, AssetAndAmount, Beneficiary, DcaParameters, PrewitnessedDepositId,
-	FLIPPERINOS_PER_FLIP,	chains::assets::{any, arb, bsc, btc, dot, eth, hub},
-	ApiWaitForResult, AssetAndAmount, Beneficiary, PrewitnessedDepositId, FLIPPERINOS_PER_FLIP
+	FLIPPERINOS_PER_FLIP,
 };
 
 use state_chain_runtime::{
@@ -261,6 +260,7 @@ fn test_environment_serialization() {
 				btc: btc::AssetMap { btc: Some(55) },
 				dot: dot::AssetMap { dot: None },
 				arb: arb::AssetMap { eth: Some(55), usdc: Some(25), usdt: Some(25) },
+				bsc: bsc::AssetMap { bnb: Some(55), usdt: Some(25) },
 				sol: sol::AssetMap { sol: Some(55), usdc: Some(25), usdt: Some(25) },
 				hub: hub::AssetMap { dot: None, usdc: Some(25), usdt: Some(25) },
 			},
