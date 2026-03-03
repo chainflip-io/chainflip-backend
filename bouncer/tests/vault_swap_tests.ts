@@ -149,9 +149,9 @@ async function testFeeCollection<A = []>(
     swapContext,
   );
 
-  // Amounts before swap, always zero because the broker is newly set up and funded
-  const earnedBrokerFeesBefore = BigInt(0);
-  const earnedAffiliateFeesBefore = BigInt(0);
+  // Amounts before swap
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
+  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
   cf.debug(`Earned broker fees before: ${earnedBrokerFeesBefore}`);
   cf.debug(`Earned affiliate fees before: ${earnedAffiliateFeesBefore}`);
 
