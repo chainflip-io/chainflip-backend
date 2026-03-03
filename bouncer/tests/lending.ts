@@ -248,14 +248,17 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
 
   // Set lending config and whitelist
   cf.debug(`Setting interest payment interval to 1 block and threshold to 1 usd`);
-  await submitGovernanceExtrinsic((api) =>
+  const configGovCall = submitGovernanceExtrinsic((api) =>
     api.tx.lendingPools.updatePalletConfig([
       { SetInterestPaymentIntervalBlocks: 1 },
       { SetInterestCollectionThresholdUsd: 1 },
     ]),
   );
   cf.debug(`Disabling lending pool whitelist`);
-  await submitGovernanceExtrinsic((api) => api.tx.lendingPools.updateWhitelist('SetAllowAll'));
+  const whitelistGovCall = submitGovernanceExtrinsic((api) =>
+    api.tx.lendingPools.updateWhitelist('SetAllowAll'),
+  );
+  await Promise.all([configGovCall, whitelistGovCall]);
 
   // Run test
   await lendingTestForAsset(cf, Assets.Eth, 35, Assets.Btc, 1.8);

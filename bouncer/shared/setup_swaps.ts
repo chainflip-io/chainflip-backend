@@ -143,8 +143,6 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
       .all([
         (subcf) => rangeOrder(subcf, 'Eth', deposits.get('Eth')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'Btc', deposits.get('Btc')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Eth', deposits.get('Eth')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'Btc', deposits.get('Btc')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'Flip', deposits.get('Flip')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'Usdt', deposits.get('Usdt')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
