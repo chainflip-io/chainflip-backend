@@ -45,7 +45,7 @@ use sp_std::collections::btree_set::BTreeSet;
 
 use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, AssethubInstance, AssethubVault,
-	BitcoinInstance, Environment, EthereumInstance, Funding, LiquidityProvider,
+	BitcoinInstance, BscInstance, Environment, EthereumInstance, Funding, LiquidityProvider,
 	PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
 	SolanaInstance, Validator, Weight,
 };
@@ -291,6 +291,16 @@ impl Engine {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(
 								pallet_cf_environment::Call::witness_initialize_arbitrum_vault {
+									block_number: 1,
+								},
+							),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
+					RuntimeEvent::BscVault(pallet_cf_vaults::Event::<_, BscInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_bsc_vault {
 									block_number: 1,
 								},
 							),
@@ -760,6 +770,8 @@ impl Network {
 					witness_broadcast!(EthereumInstance, broadcast_id, EVM_FEE,),
 				CfeEvent::ArbTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
 					witness_broadcast!(ArbitrumInstance, broadcast_id, EVM_FEE,),
+				CfeEvent::BscTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(BscInstance, broadcast_id, EVM_FEE,),
 				CfeEvent::SolTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
 					witness_broadcast!(SolanaInstance, broadcast_id, 1_000u64, {
 						// Manually recover the used Durable Nonces
@@ -940,6 +952,7 @@ pub fn witness_all_outstanding_broadcasts() {
 
 	witness_all_broadcasts!(EthereumInstance, EVM_FEE);
 	witness_all_broadcasts!(ArbitrumInstance, EVM_FEE);
+	witness_all_broadcasts!(BscInstance, EVM_FEE);
 	witness_all_broadcasts!(SolanaInstance, 1_000u64, {
 		// Manually recover the used Durable Nonces
 		if let Some((nonce, hash)) =

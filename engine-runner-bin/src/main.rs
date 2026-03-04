@@ -148,6 +148,12 @@ mod tests {
 			"--arb.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
 			"--arb.rpc.ws_endpoint=ws://localhost:8545".to_string(),
 			"--arb.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
+			// Bsc
+			format!("--bsc.private_key_file={some_file}"),
+			"--bsc.rpc.http_endpoint=http://localhost:8549".to_string(),
+			"--bsc.backup_rpc.http_endpoint=http://localhost:8550".to_string(),
+			"--bsc.rpc.ws_endpoint=ws://localhost:8549".to_string(),
+			"--bsc.backup_rpc.ws_endpoint=ws://localhost:8550".to_string(),
 			// Dot
 			"--dot.rpc.ws_endpoint=ws://localhost:8545".to_string(),
 			"--dot.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),

@@ -189,6 +189,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type ArbitrumVaultKeyWitnessedHandler = ArbitrumVault;
+	type BscVaultKeyWitnessedHandler = BscVault;
 	type SolanaVaultKeyWitnessedHandler = SolanaVault;
 	type AssethubVaultKeyWitnessedHandler = AssethubVault;
 	type SolanaNonceWatch = SolanaNonceTrackingTrigger;

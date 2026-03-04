@@ -108,7 +108,7 @@ pub mod pallet {
 	use crate::submit_runtime_call::{validate_metadata, ChainflipExtrinsic};
 
 	use super::*;
-	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
+	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum, Bsc};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
@@ -127,6 +127,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for BSC
+		type BscVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bsc>;
 		/// On new key witnessed handler for Solana
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 		/// On new key witnessed handler for Assethub
@@ -422,6 +424,8 @@ pub mod pallet {
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
+		/// BSC Initialized: contract addresses have been set, first key activated
+		BscInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded {
 			utxos: Vec<Utxo>,
@@ -579,6 +583,26 @@ pub mod pallet {
 			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::SolanaInitialized);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(T::WeightInfo::witness_initialize_bsc_vault())]
+		pub fn witness_initialize_bsc_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for BSC
+			T::BscVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::BscInitialized);
 
 			Ok(())
 		}

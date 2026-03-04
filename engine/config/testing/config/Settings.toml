@@ -25,6 +25,10 @@ basic_auth_password = "password"
 ws_endpoint = "ws://localhost:8548"
 http_endpoint = "http://localhost:8547"
 
+[bsc.rpc]
+ws_endpoint = "ws://localhost:8550"
+http_endpoint = "http://localhost:8549"
+
 [sol.rpc]
 ws_endpoint = "ws://localhost:8899"
 http_endpoint = "http://localhost:8899"

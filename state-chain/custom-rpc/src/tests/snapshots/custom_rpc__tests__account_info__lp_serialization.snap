@@ -33,6 +33,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0xba43b7400",
       "USDT": "0x1e8480",
       "USDC": "0x2dc6c0"
+    },
+    "Bsc": {
+      "BNB": "0xa",
+      "USDT": "0x28"
     }
   },
   "bond": 0,
@@ -73,6 +77,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0x12a05f200",
       "USDT": "0x7a120",
       "USDC": "0xf4240"
+    },
+    "Bsc": {
+      "BNB": "0xa",
+      "USDT": "0x28"
     }
   },
   "boost_balances": {
@@ -118,6 +126,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": [],
       "USDT": [],
       "USDC": []
+    },
+    "Bsc": {
+      "BNB": [],
+      "USDT": []
     }
   },
   "lending_positions": [
