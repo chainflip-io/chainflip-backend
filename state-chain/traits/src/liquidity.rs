@@ -1,3 +1,4 @@
+use cf_amm::common::{AskBidMap, LimitOrder};
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +14,6 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-use cf_amm::common::StrategyLimitOrder;
 pub use cf_amm::common::{PoolPairsMap, Side};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_amm::math::Price;
@@ -130,7 +130,7 @@ pub trait PoolApi {
 		base_asset: Asset,
 		quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<StrategyLimitOrder<Self::AccountId>>, DispatchError>;
+	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 

@@ -30,7 +30,6 @@ mod tests;
 #[macro_use]
 extern crate proptest;
 
-use cf_amm::common::StrategyLimitOrder;
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -60,6 +59,17 @@ const STRATEGY_ORDER_ID_0: OrderId = 0;
 const STRATEGY_ORDER_ID_1: OrderId = 1;
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct StrategyLimitOrder<AccountId> {
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub account_id: AccountId,
+	pub side: Side,
+	pub order_id: OrderId,
+	pub tick: Tick,
+	pub amount: AssetAmount,
+}
 
 #[derive(
 	Clone,
@@ -269,10 +279,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores thresholds in fine USD terms, used to determine whether a trading strategy for a
-	/// given asset has enough funds in "free balance" to make it worthwhile updating/creating a
-	/// limit order with them. Note that we use store map as a single value since it is often more
-	/// convenient to read multiple assets at once (and this map is small).
+	/// Stores thresholds in terms of the asset amount, used to determine whether a trading strategy
+	/// for a given asset has enough funds in "free balance" to make it worthwhile
+	/// updating/creating a limit order with them. Note that we use store map as a single value
+	/// since it is often more convenient to read multiple assets at once (and this map is small).
 	/// An asset that is not in this map is disabled from being updated.
 	#[pallet::storage]
 	pub type LimitOrderUpdateThresholds<T: Config> = StorageValue<
@@ -472,8 +482,20 @@ pub mod pallet {
 										.get(&asset_pair)
 										.unwrap_or(&BTreeSet::new()),
 								) {
-									Ok(pool_orders) =>
-										order_cache.entry(base_asset).or_insert(pool_orders),
+									Ok(pool_orders) => order_cache.entry(base_asset).or_insert(
+										pool_orders
+											.into_iter()
+											.map(|(side, order)| StrategyLimitOrder {
+												base_asset,
+												quote_asset,
+												account_id: order.lp,
+												side,
+												order_id: order.id.saturated_into(),
+												tick: order.tick,
+												amount: order.sell_amount.saturated_into(),
+											})
+											.collect(),
+									),
 									Err(e) => {
 										log_or_panic!(
 											"Failed to get limit orders for asset {:?}: {:?}",

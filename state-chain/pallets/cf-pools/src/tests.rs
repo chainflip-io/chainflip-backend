@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{self as pallet_cf_pools, mock::*, *};
-use cf_amm::{common::Side, math::Tick};
+use cf_amm::{
+	common::{AskBidMap, LimitOrder, Side},
+	math::Tick,
+};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
@@ -598,7 +601,7 @@ fn can_get_all_pool_orders() {
 
 		assert_eq!(
 			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BTreeSet::new(), false),
-			Ok(PoolOrders::<Test> {
+			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![
 						LimitOrder {
@@ -1721,15 +1724,17 @@ fn test_get_limit_orders() {
 			LiquidityPools::limit_orders(ASSET, STABLE_ASSET, &BTreeSet::from([ALICE])).unwrap();
 		assert_eq!(
 			orders,
-			vec![cf_amm::common::StrategyLimitOrder {
-				base_asset: ASSET,
-				quote_asset: STABLE_ASSET,
-				account_id: ALICE,
-				side: Side::Sell,
-				order_id: 0,
-				tick: 0,
-				amount: AMOUNT,
-			}]
+			AskBidMap {
+				asks: vec![LimitOrder {
+					lp: ALICE,
+					id: 0.into(),
+					tick: 0,
+					sell_amount: AMOUNT.into(),
+					fees_earned: 0.into(),
+					original_sell_amount: AMOUNT.into(),
+				}],
+				bids: vec![],
+			}
 		);
 	});
 }

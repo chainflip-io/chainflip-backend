@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_amm_math::*;
-use cf_primitives::{Asset, AssetAmount, OrderId, STABLE_ASSET};
+use cf_primitives::{Asset, STABLE_ASSET};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -24,15 +24,75 @@ use sp_core::{U256, U512};
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1_000_000;
 pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct StrategyLimitOrder<AccountId> {
-	pub base_asset: Asset,
-	pub quote_asset: Asset,
-	pub account_id: AccountId,
-	pub side: Side,
-	pub order_id: OrderId,
+#[derive(
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
+pub struct LimitOrder<AccountId> {
+	pub lp: AccountId,
+	pub id: Amount, // TODO: Intro type alias
 	pub tick: Tick,
-	pub amount: AssetAmount,
+	pub sell_amount: Amount,
+	pub fees_earned: Amount,
+	pub original_sell_amount: Amount,
+}
+
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialEq,
+	Eq,
+	Deserialize,
+	Serialize,
+)]
+pub struct AskBidMap<S> {
+	pub asks: S,
+	pub bids: S,
+}
+impl<T> AskBidMap<T> {
+	/// Takes a map from an asset to details regarding selling that asset, and returns a map from
+	/// ask/bid to the details associated with the asks or the bids
+	pub fn from_sell_map(map: PoolPairsMap<T>) -> Self {
+		Self { asks: map.base, bids: map.quote }
+	}
+
+	pub fn from_fn<F: FnMut(Side) -> T>(mut f: F) -> Self {
+		Self::from_sell_map(PoolPairsMap { base: f(Side::Sell), quote: f(Side::Buy) })
+	}
+
+	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
+		AskBidMap { asks: f(self.asks), bids: f(self.bids) }
+	}
+}
+
+impl<T> IntoIterator for AskBidMap<sp_std::vec::Vec<T>> {
+	type Item = (Side, T);
+	type IntoIter = sp_std::iter::Chain<
+		sp_std::iter::Map<sp_std::vec::IntoIter<T>, fn(T) -> (Side, T)>,
+		sp_std::iter::Map<sp_std::vec::IntoIter<T>, fn(T) -> (Side, T)>,
+	>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.asks
+			.into_iter()
+			.map((|x| (Side::Sell, x)) as fn(T) -> (Side, T))
+			.chain(self.bids.into_iter().map((|x| (Side::Buy, x)) as fn(T) -> (Side, T)))
+	}
 }
 
 #[derive(Debug)]

@@ -7,7 +7,7 @@ use sp_std::{
 };
 
 use cf_amm::{
-	common::{PoolPairsMap, Side, StrategyLimitOrder},
+	common::{AskBidMap, LimitOrder, PoolPairsMap, Side},
 	math::Tick,
 };
 use cf_chains::assets::any::AssetMap;
@@ -40,11 +40,22 @@ impl<AccountId> MockPallet for MockPoolApi<AccountId> {
 
 const LIMIT_ORDERS: &[u8] = b"LIMIT_ORDERS";
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct MockLimitOrder<AccountId> {
+	pub base_asset: Asset,
+	pub quote_asset: Asset,
+	pub account_id: AccountId,
+	pub side: Side,
+	pub order_id: OrderId,
+	pub tick: Tick,
+	pub amount: AssetAmount,
+}
+
 impl<AccountId> MockPoolApi<AccountId>
 where
 	AccountId: Decode + Encode + Ord,
 {
-	pub fn get_limit_orders() -> Vec<StrategyLimitOrder<AccountId>> {
+	pub fn get_limit_orders() -> Vec<MockLimitOrder<AccountId>> {
 		Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
 			.unwrap_or_default()
 			.into_iter()
@@ -53,7 +64,7 @@ where
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
 				)| {
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset,
 						quote_asset: STABLE_ASSET,
 						account_id,
@@ -107,28 +118,34 @@ where
 		base_asset: Asset,
 		_quote_asset: Asset,
 		accounts: &BTreeSet<Self::AccountId>,
-	) -> Result<Vec<StrategyLimitOrder<Self::AccountId>>, DispatchError> {
-		Ok(Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
+	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError> {
+		let mut asks = Vec::new();
+		let mut bids = Vec::new();
+		for (
+			MockLimitOrderStorageKey { account_id, side, order_id, .. },
+			TickAndAmount { tick, amount },
+		) in Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
 			.unwrap_or_default()
 			.into_iter()
-			.map(
-				|(
-					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
-					TickAndAmount { tick, amount },
-				)| {
-					StrategyLimitOrder {
-						base_asset,
-						quote_asset: STABLE_ASSET,
-						account_id,
-						side,
-						order_id,
-						tick,
-						amount,
-					}
+			.filter(
+				|(MockLimitOrderStorageKey { base_asset: order_base_asset, account_id, .. }, _)| {
+					accounts.contains(account_id) && order_base_asset == &base_asset
 				},
-			)
-			.filter(|order| order.base_asset == base_asset && accounts.contains(&order.account_id))
-			.collect())
+			) {
+			let order = LimitOrder {
+				lp: account_id,
+				id: order_id.into(),
+				tick,
+				sell_amount: amount.into(),
+				fees_earned: 0.into(),
+				original_sell_amount: amount.into(),
+			};
+			match side {
+				Side::Sell => asks.push(order),
+				Side::Buy => bids.push(order),
+			}
+		}
+		Ok(AskBidMap { asks, bids })
 	}
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {

@@ -19,7 +19,7 @@ use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{
 		balance_api::{MockBalance, MockLpRegistration},
-		pool_api::MockPoolApi,
+		pool_api::{MockLimitOrder, MockPoolApi},
 		price_feed_api::MockPriceFeedApi,
 	},
 	BalanceApi, SetSafeMode, Side,
@@ -295,7 +295,7 @@ fn automated_strategy_basic_usage() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -304,7 +304,7 @@ fn automated_strategy_basic_usage() {
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -364,7 +364,7 @@ fn automated_strategy_basic_usage() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -373,7 +373,7 @@ fn automated_strategy_basic_usage() {
 						tick: -SPREAD_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -461,7 +461,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 			assert_eq!(
 				MockPoolApi::get_limit_orders(),
 				vec![
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -470,7 +470,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 						tick: BUY_TICK,
 						amount: QUOTE_AMOUNT
 					},
-					StrategyLimitOrder {
+					MockLimitOrder {
 						base_asset: BASE_ASSET,
 						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
@@ -1332,7 +1332,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1341,7 +1341,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1365,7 +1365,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1374,7 +1374,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1397,7 +1397,7 @@ mod inventory_based_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1406,7 +1406,7 @@ mod inventory_based_strategy {
 							tick: -5,
 							amount: STARTING_AMOUNT + THRESHOLD
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
@@ -1480,7 +1480,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1489,7 +1489,7 @@ mod oracle_strategy {
 							tick: AVERAGE_BUY_OFFSET_TICK,
 							amount: AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1511,7 +1511,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1520,7 +1520,7 @@ mod oracle_strategy {
 							tick: EXPECTED_BUY_TICK,
 							amount: AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1547,7 +1547,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1556,7 +1556,7 @@ mod oracle_strategy {
 							tick: EXPECTED_BUY_TICK,
 							amount: AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BASE_ASSET,
 							quote_asset: QUOTE_ASSET,
 							account_id: strategy_id,
@@ -1677,7 +1677,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1686,7 +1686,7 @@ mod oracle_strategy {
 							tick: AVERAGE_BUY_OFFSET_TICK + ORACLE_TICK,
 							amount: USDC_AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1711,7 +1711,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1720,7 +1720,7 @@ mod oracle_strategy {
 							tick: AVERAGE_BUY_OFFSET_TICK + NEW_ORACLE_TICK,
 							amount: USDC_AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1751,7 +1751,7 @@ mod oracle_strategy {
 				assert_eq!(
 					MockPoolApi::get_limit_orders(),
 					vec![
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1760,7 +1760,7 @@ mod oracle_strategy {
 							tick: expected_buy_tick,
 							amount: USDC_AMOUNT
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1769,7 +1769,7 @@ mod oracle_strategy {
 							tick: expected_sell_tick,
 							amount: expected_aggressive_sell_amount
 						},
-						StrategyLimitOrder {
+						MockLimitOrder {
 							base_asset: BTC,
 							quote_asset: USDC,
 							account_id: strategy_id,
@@ -1795,7 +1795,11 @@ mod oracle_strategy {
 		const USDC: Asset = cf_primitives::STABLE_ASSET;
 		const BTC_AMOUNT: AssetAmount = 1_000_000_000;
 		const USDC_AMOUNT: AssetAmount = 100_000_000;
-		const THRESHOLD_USD: AssetAmount = 100_000_000; // $100 with 6 decimals
+
+		// We set the BTC threshold very high so that the USDC threshold will be used instead to
+		// trigger the update
+		const THRESHOLD_BTC: AssetAmount = 1_000_000_000_000; // $100000 of BTC
+		const THRESHOLD_USDC: AssetAmount = 100_000_000; // $100
 
 		new_test_ext()
 			.then_execute_at_next_block(|_| {
@@ -1804,19 +1808,19 @@ mod oracle_strategy {
 				MockPriceFeedApi::set_price_usd(BTC, 10);
 				MockPriceFeedApi::set_price_usd(USDC, 1);
 
-				// Set the update thresholds in USD terms
+				// Set the update thresholds
 				LimitOrderUpdateThresholds::<Test>::set(BTreeMap::from_iter([
-					(BTC, THRESHOLD_USD),
-					(USDC, THRESHOLD_USD),
+					(BTC, THRESHOLD_BTC),
+					(USDC, THRESHOLD_USDC),
 				]));
 
 				// We must manually create the strategy here because non-stable strategies are not
 				// supported.
 				let strategy = TradingStrategy::OracleTracking {
-					min_buy_offset_tick: -1,
+					min_buy_offset_tick: 0,
 					max_buy_offset_tick: 0,
 					min_sell_offset_tick: 0,
-					max_sell_offset_tick: 1,
+					max_sell_offset_tick: 0,
 					base_asset: BTC,
 					quote_asset: USDC,
 				};
@@ -1833,7 +1837,7 @@ mod oracle_strategy {
 				// The strategy should have created two limit orders
 				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
 
-				//$90 worth of BTC (below the $100 threshold)
+				// We add $90 worth of BTC, which is below the $100 threshold
 				MockBalance::credit_account(&strategy_id, BTC, 900_000_000);
 			})
 			.then_execute_at_next_block(|strategy_id| {
@@ -1843,8 +1847,8 @@ mod oracle_strategy {
 				assert_eq!(orders[0].amount, USDC_AMOUNT);
 				assert_eq!(orders[1].amount, BTC_AMOUNT);
 
-				// Add $1 more to reach the threshold
-				MockBalance::credit_account(&strategy_id, BTC, 10_000_000);
+				// Add $10 more of BTC to reach the $100 threshold
+				MockBalance::credit_account(&strategy_id, BTC, 100_000_000);
 			})
 			.then_execute_at_next_block(|_| {
 				// The limit orders should now be created

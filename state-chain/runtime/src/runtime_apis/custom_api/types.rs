@@ -43,7 +43,7 @@ pub use pallet_cf_lending_pools::{
 	RpcLendingPool, RpcLoanAccount,
 };
 pub use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, FeeRateAndMinimum};

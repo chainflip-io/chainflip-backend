@@ -327,6 +327,7 @@ fn oracle_strategy_basic_usage() {
 					&BTreeSet::from([strategy_id.clone()]),
 				)
 				.unwrap()
+				.asks
 				.len(),
 				2
 			);
