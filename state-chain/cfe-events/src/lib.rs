@@ -81,11 +81,11 @@ pub enum CfeEvent<ValidatorId> {
 	DotTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Polkadot>),
 	BtcTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bitcoin>),
 	ArbTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Arbitrum>),
-	BscTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bsc>),
 	PeerIdRegistered { account_id: ValidatorId, pubkey: Ed25519PublicKey, port: Port, ip: Ipv6Addr },
 	PeerIdDeregistered { account_id: ValidatorId, pubkey: Ed25519PublicKey },
 	SolThresholdSignatureRequest(ThresholdSignatureRequest<ValidatorId, SolanaCrypto>),
 	SolKeygenRequest(KeygenRequest<ValidatorId>),
 	SolTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Solana>),
 	HubTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Assethub>),
+	BscTxBroadcastRequest(TxBroadcastRequest<ValidatorId, Bsc>),
 }

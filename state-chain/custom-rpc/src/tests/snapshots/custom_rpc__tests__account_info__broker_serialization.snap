@@ -33,6 +33,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0x0",
       "USDT": "0x0",
       "USDC": "0x0"
+    },
+    "Bsc": {
+      "BNB": "0x0",
+      "USDT": "0x0"
     }
   },
   "bond": "0x8ac7230489e80000",
@@ -70,6 +74,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0x77359400",
       "USDT": "0xc350",
       "USDC": "0x186a0"
+    },
+    "Bsc": {
+      "BNB": "0x429d069189e0000",
+      "USDT": "0x58d15e176280000"
     }
   },
   "affiliates": [

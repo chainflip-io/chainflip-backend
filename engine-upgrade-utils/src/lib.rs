@@ -35,7 +35,8 @@ pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 // Sometimes we need to remove arguments that are valid for the new version but not for the old
 // version.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	args
+	// BSC is new in 2.1.0 and not supported by the old 2.0.13 engine.
+	args.into_iter().filter(|arg| !arg.starts_with("--bsc.")).collect()
 }
 
 pub use std::ffi::c_char;
