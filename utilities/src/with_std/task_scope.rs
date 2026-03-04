@@ -505,7 +505,6 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		#[cfg(test)]
 		const HEALTHY_DURATION: Duration = Duration::from_millis(50);
 
-
 		self.spawn_weak(async move {
 			let mut backoff = INITIAL_BACKOFF;
 
@@ -1027,8 +1026,7 @@ mod tests {
 					async move {
 						let n = attempt.fetch_add(1, Ordering::Relaxed);
 						if n < 2 {
-							let tmp: Option<u32> = None;
-							tmp.unwrap();
+							panic!("attempt {n} panicked")
 						}
 						futures::future::pending::<Result<(), anyhow::Error>>().await
 					}
