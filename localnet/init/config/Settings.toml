@@ -62,6 +62,15 @@ http_endpoint = "http://localhost:8547"
 #ws_endpoint = "ws://localhost:8548"
 #http_endpoint = "http://localhost:8547"
 
+[bsc.rpc]
+ws_endpoint = "ws://localhost:8645"
+http_endpoint = "http://localhost:8645"
+
+# optional
+#[bsc.backup_rpc]
+#ws_endpoint = "ws://localhost:8645"
+#http_endpoint = "http://localhost:8645"
+
 [sol.rpc]
 http_endpoint = "http://localhost:8899"
 
