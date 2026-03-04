@@ -899,6 +899,11 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
+		pub bsc_usdt_address: EvmAddress,
+		pub bsc_key_manager_address: EvmAddress,
+		pub bsc_vault_address: EvmAddress,
+		pub bsc_address_checker_address: EvmAddress,
+		pub bsc_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
@@ -938,6 +943,12 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arb_usdc_address);
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
+
+			BscKeyManagerAddress::<T>::set(self.bsc_key_manager_address);
+			BscVaultAddress::<T>::set(self.bsc_vault_address);
+			BscAddressCheckerAddress::<T>::set(self.bsc_address_checker_address);
+			BscSupportedAssets::<T>::insert(BscAsset::BscUsdt, self.bsc_usdt_address);
+			BscChainId::<T>::set(self.bsc_chain_id);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());

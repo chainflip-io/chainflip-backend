@@ -128,6 +128,11 @@ pub struct StateChainEnvironment {
 	arb_usdt_token_address: [u8; 20],
 	arb_address_checker_address: [u8; 20],
 	arbitrum_chain_id: u64,
+	bsc_key_manager_address: [u8; 20],
+	bsc_vault_address: [u8; 20],
+	bsc_usdt_token_address: [u8; 20],
+	bsc_address_checker_address: [u8; 20],
+	bsc_chain_id: u64,
 	ethereum_deployment_block: u64,
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
@@ -188,9 +193,14 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(clean_hex_address, ETH_SC_UTILS_ADDRESS, eth_sc_utils_address);
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
+	from_env_var!(clean_hex_address, BSC_KEY_MANAGER_ADDRESS, bsc_key_manager_address);
+	from_env_var!(clean_hex_address, BSC_VAULT_ADDRESS, bsc_vault_address);
+	from_env_var!(clean_hex_address, BSC_USDT_TOKEN_ADDRESS, bsc_usdt_token_address);
+	from_env_var!(clean_hex_address, BSC_ADDRESS_CHECKER, bsc_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
+	from_env_var!(FromStr::from_str, BSC_CHAIN_ID, bsc_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
@@ -294,6 +304,11 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
+		bsc_key_manager_address,
+		bsc_vault_address,
+		bsc_usdt_token_address,
+		bsc_address_checker_address,
+		bsc_chain_id,
 		eth_init_agg_key,
 		sol_init_agg_key,
 		ethereum_deployment_block,
@@ -381,6 +396,11 @@ pub fn inner_cf_development_chain_spec(
 		arb_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
+		bsc_key_manager_address,
+		bsc_vault_address,
+		bsc_usdt_token_address,
+		bsc_address_checker_address,
+		bsc_chain_id,
 		eth_init_agg_key,
 		sol_init_agg_key,
 		ethereum_deployment_block,
@@ -437,6 +457,11 @@ pub fn inner_cf_development_chain_spec(
 				arb_usdt_address: arb_usdt_token_address.into(),
 				ethereum_chain_id,
 				arbitrum_chain_id,
+				bsc_key_manager_address: bsc_key_manager_address.into(),
+				bsc_vault_address: bsc_vault_address.into(),
+				bsc_address_checker_address: bsc_address_checker_address.into(),
+				bsc_usdt_address: bsc_usdt_token_address.into(),
+				bsc_chain_id,
 				polkadot_genesis_hash: dot_genesis_hash,
 				polkadot_vault_account_id: dot_vault_account_id,
 				assethub_genesis_hash: hub_genesis_hash,
@@ -559,6 +584,11 @@ macro_rules! network_spec {
 					arb_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
+					bsc_key_manager_address,
+					bsc_vault_address,
+					bsc_usdt_token_address,
+					bsc_address_checker_address,
+					bsc_chain_id,
 					eth_init_agg_key,
 					sol_init_agg_key,
 					ethereum_deployment_block,
@@ -645,6 +675,11 @@ macro_rules! network_spec {
 							arb_usdt_address: arb_usdt_token_address.into(),
 							ethereum_chain_id,
 							arbitrum_chain_id,
+							bsc_key_manager_address: bsc_key_manager_address.into(),
+							bsc_vault_address: bsc_vault_address.into(),
+							bsc_address_checker_address: bsc_address_checker_address.into(),
+							bsc_usdt_address: bsc_usdt_token_address.into(),
+							bsc_chain_id,
 							polkadot_genesis_hash: dot_genesis_hash,
 							polkadot_vault_account_id: dot_vault_account_id.clone(),
 							assethub_genesis_hash: hub_genesis_hash,
