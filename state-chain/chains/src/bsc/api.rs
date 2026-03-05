@@ -25,11 +25,20 @@ use evm::api::{all_batch, set_agg_key_with_agg_key};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
-use codec::DecodeWithMemTracking;
 use self::evm::{api::transfer_fallback, Address, EvmCrypto};
+use codec::DecodeWithMemTracking;
 
 /// Chainflip api calls available on BSC.
-#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[derive(
+	CloneNoBound,
+	DebugNoBound,
+	PartialEqNoBound,
+	EqNoBound,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+)]
 #[scale_info(skip_type_params(Environment))]
 pub enum BscApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EvmTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),

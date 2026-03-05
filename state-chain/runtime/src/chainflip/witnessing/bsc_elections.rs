@@ -78,9 +78,7 @@ pub const BSC_MAINNET_SAFETY_BUFFER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum BscElectoralEvents {
-	ReorgDetected {
-		reorged_blocks: RangeInclusive<<BscChain as ChainTypes>::ChainBlockNumber>,
-	},
+	ReorgDetected { reorged_blocks: RangeInclusive<<BscChain as ChainTypes>::ChainBlockNumber> },
 }
 
 // ------------------------ block height tracking ---------------------------
@@ -356,19 +354,11 @@ impl
 		>(key_manager_identifiers, &chain_progress.clone())?;
 
 		BscFeeTracking::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BscFeeTracking,
-				RunnerStorageAccess<Runtime, BscInstance>,
-			>,
+			DerivedElectoralAccess<_, BscFeeTracking, RunnerStorageAccess<Runtime, BscInstance>>,
 		>(fee_identifiers, &current_sc_block_number)?;
 
 		BscLiveness::on_finalize::<
-			DerivedElectoralAccess<
-				_,
-				BscLiveness,
-				RunnerStorageAccess<Runtime, BscInstance>,
-			>,
+			DerivedElectoralAccess<_, BscLiveness, RunnerStorageAccess<Runtime, BscInstance>>,
 		>(
 			liveness_identifiers,
 			&(
