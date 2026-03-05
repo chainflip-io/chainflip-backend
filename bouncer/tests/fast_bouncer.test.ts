@@ -42,7 +42,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor,);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor);
   concurrentTest('FillOrKill', testFillOrKill, 300 * ciTimeoutFactor);
   concurrentTest('DCASwaps', testDCASwaps, 240 * ciTimeoutFactor);
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
