@@ -78,7 +78,9 @@ pub const ETHEREUM_MAINNET_SAFETY_BUFFER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum EthereumElectoralEvents {
-	ReorgDetected { reorged_blocks: RangeInclusive<<EthereumChain as ChainTypes>::ChainBlockNumber> },
+	ReorgDetected {
+		reorged_blocks: RangeInclusive<<EthereumChain as ChainTypes>::ChainBlockNumber>,
+	},
 }
 
 // ------------------------ block height tracking ---------------------------

@@ -25,9 +25,7 @@ use crate::{
 		arb_elections::EvmBlockRangeQuery,
 		common::{block_height_witnesser::witness_headers, block_witnesser::GenericBwVoter},
 		evm::{
-			erc20_deposits::usdt::UsdtEvents,
-			key_manager::KeyManagerEvents,
-			vault::VaultEvents,
+			erc20_deposits::usdt::UsdtEvents, key_manager::KeyManagerEvents, vault::VaultEvents,
 			EvmDepositChannelWitnessingConfig, EvmKeyManagerWitnessingConfig, EvmVoter,
 			VaultDepositWitnessingConfig,
 		},
@@ -48,8 +46,8 @@ use pallet_cf_elections::{ElectoralSystemTypes, VoteOf};
 use sp_core::H160;
 use state_chain_runtime::{
 	chainflip::witnessing::bsc_elections::{
-		BscBlockHeightWitnesserES, BscChain, BscElectoralSystemRunner, BscFeeTracking,
-		BscLiveness, BSC_MAINNET_SAFETY_BUFFER,
+		BscBlockHeightWitnesserES, BscChain, BscElectoralSystemRunner, BscFeeTracking, BscLiveness,
+		BSC_MAINNET_SAFETY_BUFFER,
 	},
 	BscInstance,
 };
