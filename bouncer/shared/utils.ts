@@ -325,7 +325,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
-      return '500';
+      return '1000';
     case 'Sol':
       return '100';
     default:

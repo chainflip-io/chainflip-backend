@@ -40,18 +40,18 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
-  concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor, 20);
-  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor, 20);
-  concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor, 10);
-  concurrentTest('FillOrKill', testFillOrKill, 300 * ciTimeoutFactor, 50);
-  concurrentTest('DCASwaps', testDCASwaps, 240 * ciTimeoutFactor, 30);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor, 40);
+  concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
+  concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor);
+  concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor,);
+  concurrentTest('FillOrKill', testFillOrKill, 300 * ciTimeoutFactor);
+  concurrentTest('DCASwaps', testDCASwaps, 240 * ciTimeoutFactor);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   if (!process.env.SKIP_BLS_TESTS) {
-    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor, 25);
+    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
   }
   concurrentTest('VaultSwaps', testVaultSwap, 340 * ciTimeoutFactor);
-  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor, 40);
+  concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor);
   concurrentTest('DelegateFlip', testDelegate, 325 * ciTimeoutFactor);
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
