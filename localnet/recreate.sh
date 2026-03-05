@@ -23,11 +23,9 @@ if [ -z "$NODE_COUNT" ] || [ -z "$BINARY_ROOT_PATH" ]; then
   if [ "$USE_DEFAULTS" = true ]; then
     export BINARY_ROOT_PATH="./target/debug"
     export NODE_COUNT="1-node"
-    export START_TRACKER="NO"
     echo "No settings file found. Using default values:"
     echo "BINARY_ROOT_PATH: $BINARY_ROOT_PATH"
     echo "NODE_COUNT: $NODE_COUNT"
-    echo "START_TRACKER: $START_TRACKER"
   else
     echo "❌ Error: no settings file found. Use -d to create one with defaults, or you can create one using the create/manage scripts."
     exit 1

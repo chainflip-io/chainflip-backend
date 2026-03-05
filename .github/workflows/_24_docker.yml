@@ -81,7 +81,6 @@ jobs:
           - chainflip-broker-api
           - chainflip-lp-api
           - generate-genesis-keys
-          - chainflip-ingress-egress-tracker
           - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
@@ -118,7 +117,6 @@ jobs:
             type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},prefix=${{ inputs.network }}-,enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=raw,value=${{ needs.get-version-from-branch-name.outputs.version }},enable=${{ needs.get-version-from-branch-name.outputs.version != '0.0.0' }}
             type=ref,event=pr
-            type=raw,value=${{ github.sha }},prefix=iet-,enable=${{ matrix.target == 'chainflip-ingress-egress-tracker' && github.ref_name == 'main' }}
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d

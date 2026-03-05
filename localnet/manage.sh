@@ -72,11 +72,6 @@ get-workflow() {
     fi
     export BINARY_ROOT_PATH
 
-    echo "❓ Do you want to start ingress-egress-tracker? (Type y or leave empty)"
-    read -p "(default: NO) " START_TRACKER
-    echo
-    export START_TRACKER=${START_TRACKER:-"NO"}
-
     echo "🏎️ Do you want to run localnet chains in turbo mode? (Type y or leave empty)"
     read -p "(default: NO) " TURBO_MODE
     echo
