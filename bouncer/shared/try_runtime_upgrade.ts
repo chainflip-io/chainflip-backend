@@ -99,7 +99,7 @@ export async function tryRuntimeUpgrade(
   } else if (block === 'last-n') {
     // Each try-runtime process is CPU-bound (wasm execution) so capping parallelism to the number
     // of logical CPUs avoids resource contention and OOM on memory-constrained CI runners.
-    const BATCH_SIZE = os.cpus().length * 2;
+    const BATCH_SIZE = os.cpus().length;
     logger.info(`Running migrations for the last ${lastN} blocks in batches of ${BATCH_SIZE}.`);
 
     // Fetch all block hashes sequentially and organise into batches
