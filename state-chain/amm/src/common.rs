@@ -329,6 +329,14 @@ impl AssetPair {
 	pub fn assets(&self) -> PoolPairsMap<Asset> {
 		self.assets
 	}
+
+	pub fn base(&self) -> Asset {
+		self.assets.base
+	}
+
+	pub fn quote(&self) -> Asset {
+		self.assets.quote
+	}
 }
 
 /// A marker type to represent a swap that buys asset Quote, and sells asset Base

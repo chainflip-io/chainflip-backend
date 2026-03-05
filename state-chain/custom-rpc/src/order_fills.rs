@@ -119,8 +119,8 @@ fn order_fills_for_pool<'a>(
 					} else {
 						Some(OrderFilled::LimitOrder {
 							lp,
-							base_asset: asset_pair.assets().base,
-							quote_asset: asset_pair.assets().quote,
+							base_asset: asset_pair.base(),
+							quote_asset: asset_pair.quote(),
 							side,
 							id: id.into(),
 							tick,
@@ -162,8 +162,8 @@ fn order_fills_for_pool<'a>(
 				} else {
 					Some(OrderFilled::RangeOrder {
 						lp: lp.clone(),
-						base_asset: asset_pair.assets().base,
-						quote_asset: asset_pair.assets().quote,
+						base_asset: asset_pair.base(),
+						quote_asset: asset_pair.quote(),
 						id: id.into(),
 						bought_amounts: fees.map(|amount| {
 							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()

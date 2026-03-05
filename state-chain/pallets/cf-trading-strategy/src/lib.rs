@@ -30,6 +30,7 @@ mod tests;
 #[macro_use]
 extern crate proptest;
 
+use cf_amm::common::AssetPair;
 use cf_primitives::{Asset, AssetAmount, OrderId, StablecoinDefaults, Tick, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -44,7 +45,10 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::*, WeightInfo as SystemWeightInfo};
 use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	collections::{
+		btree_map::{self, BTreeMap},
+		btree_set::BTreeSet,
+	},
 	vec::Vec,
 };
 use weights::WeightInfo;
@@ -142,15 +146,47 @@ impl TradingStrategy {
 			Err(Error::<T>::InvalidAssetsForStrategy)
 		}
 	}
+
 	pub fn supported_assets(&self) -> BTreeSet<Asset> {
 		match self {
 			TradingStrategy::TickZeroCentered { base_asset, .. } |
 			TradingStrategy::SimpleBuySell { base_asset, .. } |
-			TradingStrategy::InventoryBased { base_asset, .. } |
-			TradingStrategy::OracleTracking { base_asset, .. } =>
+			TradingStrategy::InventoryBased { base_asset, .. } =>
 				BTreeSet::from_iter([*base_asset, STABLE_ASSET]),
+			TradingStrategy::OracleTracking { base_asset, quote_asset, .. } =>
+				BTreeSet::from_iter([*base_asset, *quote_asset]),
 		}
 	}
+
+	/// Returns the asset pair this strategy operates on.
+	pub fn asset_pair(&self) -> Option<AssetPair> {
+		match self {
+			TradingStrategy::TickZeroCentered { base_asset, .. } |
+			TradingStrategy::SimpleBuySell { base_asset, .. } |
+			TradingStrategy::InventoryBased { base_asset, .. } => AssetPair::new(*base_asset, STABLE_ASSET),
+			TradingStrategy::OracleTracking { base_asset, quote_asset, .. } =>
+				AssetPair::new(*base_asset, *quote_asset),
+		}
+	}
+
+	/// Whether this strategy needs existing pool orders fetched before execution.
+	fn needs_order_prefetch(&self) -> bool {
+		matches!(
+			self,
+			TradingStrategy::InventoryBased { .. } | TradingStrategy::OracleTracking { .. }
+		)
+	}
+
+	/// Upper-bound weight estimate for one execution of this strategy.
+	fn max_weight_estimate(&self, limit_order_update_weight: Weight) -> Weight {
+		match self {
+			TradingStrategy::TickZeroCentered { .. } | TradingStrategy::SimpleBuySell { .. } =>
+				limit_order_update_weight * 2,
+			TradingStrategy::InventoryBased { .. } | TradingStrategy::OracleTracking { .. } =>
+				limit_order_update_weight * 4,
+		}
+	}
+
 	fn validate_params<T: Config>(&self) -> Result<(), Error<T>> {
 		match self {
 			TradingStrategy::TickZeroCentered { spread_tick, base_asset } => {
@@ -176,46 +212,35 @@ impl TradingStrategy {
 				min_sell_tick,
 				max_sell_tick,
 				base_asset,
-			} |
-			TradingStrategy::OracleTracking {
-				min_buy_offset_tick: min_buy_tick,
-				max_buy_offset_tick: max_buy_tick,
-				min_sell_offset_tick: min_sell_tick,
-				max_sell_offset_tick: max_sell_tick,
-				base_asset,
-				..
 			} => {
-				let average_buy_tick = average_tick(
+				validate_inventory_tick_ranges::<T>(
 					*min_buy_tick,
 					*max_buy_tick,
-					false, // round down
-				);
-				let average_sell_tick = average_tick(
 					*min_sell_tick,
 					*max_sell_tick,
-					true, // round up
-				);
-
-				if min_buy_tick > max_buy_tick ||
-					min_sell_tick > max_sell_tick ||
-					min_sell_tick < &average_buy_tick ||
-					max_buy_tick > &average_sell_tick ||
-					*max_buy_tick > cf_amm_math::MAX_TICK ||
-					*max_sell_tick > cf_amm_math::MAX_TICK ||
-					*min_buy_tick < cf_amm_math::MIN_TICK ||
-					*min_sell_tick < cf_amm_math::MIN_TICK
-				{
-					return Err(Error::<T>::InvalidTick)
-				}
+				)?;
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-
-				if let TradingStrategy::OracleTracking { quote_asset, .. } = self {
-					ensure!(*quote_asset == STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
-					ensure!(
-						T::PriceFeedApi::get_relative_price(*base_asset, *quote_asset).is_some(),
-						Error::<T>::InvalidAssetsForStrategy
-					);
-				}
+			},
+			TradingStrategy::OracleTracking {
+				min_buy_offset_tick,
+				max_buy_offset_tick,
+				min_sell_offset_tick,
+				max_sell_offset_tick,
+				base_asset,
+				quote_asset,
+			} => {
+				validate_inventory_tick_ranges::<T>(
+					*min_buy_offset_tick,
+					*max_buy_offset_tick,
+					*min_sell_offset_tick,
+					*max_sell_offset_tick,
+				)?;
+				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				ensure!(*quote_asset == STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
+				ensure!(
+					T::PriceFeedApi::get_relative_price(*base_asset, *quote_asset).is_some(),
+					Error::<T>::InvalidAssetsForStrategy
+				);
 			},
 		}
 		Ok(())
@@ -236,7 +261,6 @@ fn derive_strategy_id<T: Config>(lp: &T::AccountId) -> T::AccountId {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_amm::common::AssetPair;
 	use frame_support::sp_runtime::SaturatedConversion;
 
 	use super::*;
@@ -334,351 +358,97 @@ pub mod pallet {
 			// Cache of orders per asset to avoid redundant reads
 			let mut order_cache: BTreeMap<Asset, Vec<StrategyLimitOrder<T::AccountId>>> =
 				BTreeMap::new();
-			let mut fetch_orders_for_strategies = BTreeMap::new();
-			Strategies::<T>::iter().for_each(|(_, strategy_id, strategy)| match strategy {
-				TradingStrategy::InventoryBased { base_asset, .. } |
-				TradingStrategy::OracleTracking { base_asset, .. } => {
-					AssetPair::new(base_asset, STABLE_ASSET).map(|asset_pair| {
+
+			// Pass 1: collect strategy accounts per asset pair so we can batch pool order queries.
+			let mut fetch_orders_for_strategies: BTreeMap<AssetPair, BTreeSet<T::AccountId>> =
+				BTreeMap::new();
+			Strategies::<T>::iter().for_each(|(_, strategy_id, strategy)| {
+				if strategy.needs_order_prefetch() {
+					if let Some(asset_pair) = strategy.asset_pair() {
 						fetch_orders_for_strategies
 							.entry(asset_pair)
 							.or_insert_with(BTreeSet::new)
-							.insert(strategy_id.clone())
-					});
-				},
-				_ => (),
+							.insert(strategy_id);
+					}
+				}
 			});
 
+			// Pass 2: execute each strategy.
 			for (_, strategy_id, strategy) in Strategies::<T>::iter() {
-				match strategy {
-					TradingStrategy::TickZeroCentered { base_asset, .. } |
-					TradingStrategy::SimpleBuySell { base_asset, .. } => {
-						let new_weight_estimate =
-							weight_used.saturating_add(limit_order_update_weight * 2);
+				let new_weight_estimate = weight_used
+					.saturating_add(strategy.max_weight_estimate(limit_order_update_weight));
+				if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
+					break;
+				}
 
-						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
-							break;
-						}
-						let (buy_tick, sell_tick) = match strategy {
-							TradingStrategy::TickZeroCentered { spread_tick, .. } =>
-								(-spread_tick, spread_tick),
-							TradingStrategy::SimpleBuySell { buy_tick, sell_tick, .. } =>
-								(buy_tick, sell_tick),
-							_ => unreachable!("Unreachable due to match above"),
-						};
-						for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
-							let sell_asset =
-								if side == Side::Buy { STABLE_ASSET } else { base_asset };
-
-							weight_used += T::DbWeight::get().reads(1);
-							let balance = T::BalanceApi::get_balance(&strategy_id, sell_asset);
-
-							// Minimum threshold of 1 to prevent updating with 0 amounts
-							let threshold = core::cmp::max(
-								order_update_thresholds
-									.get(&sell_asset)
-									.copied()
-									.unwrap_or(u128::MAX),
-								1,
-							);
-
-							if balance >= threshold {
-								weight_used += limit_order_update_weight;
-
-								// We expect this to fail if the pool does not exist
-								let _result = T::PoolApi::update_limit_order(
-									&strategy_id,
-									base_asset,
-									STABLE_ASSET,
-									side,
-									STRATEGY_ORDER_ID_0,
-									Some(tick),
-									IncreaseOrDecrease::Increase(balance),
-								);
-							}
-						}
-					},
-					TradingStrategy::InventoryBased {
-						min_buy_tick,
-						max_buy_tick,
-						min_sell_tick,
-						max_sell_tick,
-						base_asset,
-					} |
-					TradingStrategy::OracleTracking {
-						min_buy_offset_tick: min_buy_tick,
-						max_buy_offset_tick: max_buy_tick,
-						min_sell_offset_tick: min_sell_tick,
-						max_sell_offset_tick: max_sell_tick,
-						base_asset,
-						..
-					} => {
-						let new_weight_estimate =
-							weight_used.saturating_add(limit_order_update_weight * 4);
-
-						if remaining_weight.checked_sub(&new_weight_estimate).is_none() {
-							break;
-						}
-
-						let (quote_asset, convert_to_usd) = match strategy {
-							TradingStrategy::InventoryBased { .. } => (STABLE_ASSET, false),
-							TradingStrategy::OracleTracking { quote_asset, .. } =>
-								(quote_asset, true),
-							_ => unreachable!("Unreachable due to match above"),
-						};
-
-						// Calculate the relative tick. For the normal inventory based strategy, the
-						// relative tick is always 0, but for the oracle tracking strategy, we use
-						// the oracle price.
-						let relative_tick = match strategy {
-							TradingStrategy::InventoryBased { .. } => Tick::from(0),
-							TradingStrategy::OracleTracking { base_asset, .. } => {
-								weight_used += T::DbWeight::get().reads(1);
-								let oracle_tick_opt = match T::PriceFeedApi::get_relative_price(
-									base_asset,
-									quote_asset,
-								) {
-									None => {
-										log_or_panic!(
-												"Failed to get oracle price for asset {:?}, skipping strategy {:?}",
-												base_asset,
-												strategy_id
-											);
-										None
-									},
-									Some(oracle) if oracle.stale => None,
-									Some(oracle) => oracle.price.into_tick(),
-								};
-								if let Some(oracle_tick) = oracle_tick_opt {
-									oracle_tick
-								} else {
-									// stale or unavailable price, cancel orders and skip to the
-									// next strategy.
-									let _res = T::PoolApi::cancel_all_limit_orders(&strategy_id);
-									continue;
-								}
-							},
-							_ => unreachable!("Unreachable due to match above"),
-						};
-
-						// Get the existing open orders for the strategy
-						let pool_orders = match order_cache.get(&base_asset) {
-							Some(orders) => orders,
-							None => {
-								let Some(asset_pair) = AssetPair::new(base_asset, quote_asset)
-								else {
-									log_or_panic!(
-										"Failed to create asset pair {:?}/{:?} for strategy {:?}, skipping",
-										base_asset,
-										STABLE_ASSET,
-										strategy_id
-									);
-									continue;
-								};
-								weight_used += T::DbWeight::get().reads(1);
-								match T::PoolApi::limit_orders(
-									base_asset,
-									STABLE_ASSET,
-									fetch_orders_for_strategies
-										.get(&asset_pair)
-										.unwrap_or(&BTreeSet::new()),
-								) {
-									Ok(pool_orders) => order_cache.entry(base_asset).or_insert(
-										pool_orders
-											.into_iter()
-											.map(|(side, order)| StrategyLimitOrder {
-												base_asset,
-												quote_asset,
-												account_id: order.lp,
-												side,
-												order_id: order.id.saturated_into(),
-												tick: order.tick,
-												amount: order.sell_amount.saturated_into(),
-											})
-											.collect(),
-									),
-									Err(e) => {
-										log_or_panic!(
-											"Failed to get limit orders for asset {:?}: {:?}",
-											base_asset,
-											e
-										);
-										continue;
-									},
-								}
-							},
-						};
-						let existing_orders: Vec<_> = pool_orders
-							.iter()
-							.filter(|order| order.account_id == strategy_id)
-							.collect();
-
-						// This relies on autosweeping for limit orders
-						let orders_total_quote = existing_orders
-							.iter()
-							.map(|order| if order.side == Side::Buy { order.amount } else { 0 })
-							.sum();
-						let orders_total_base = existing_orders
-							.iter()
-							.map(|order| if order.side == Side::Sell { order.amount } else { 0 })
-							.sum();
-
-						// Get the free balance
-						let quote_balance_asset =
-							T::BalanceApi::get_balance(&strategy_id, quote_asset);
-						let base_balance_asset =
-							T::BalanceApi::get_balance(&strategy_id, base_asset);
-						let total_quote_asset =
-							quote_balance_asset.saturating_add(orders_total_quote);
-						let total_base_asset = base_balance_asset.saturating_add(orders_total_base);
-						weight_used += T::DbWeight::get().reads(2);
-
-						// Minimum threshold of 1 to prevent updating with 0 amounts
-						let base_threshold = core::cmp::max(
-							order_update_thresholds.get(&base_asset).copied().unwrap_or(u128::MAX),
-							1,
+				// Populate the order cache for strategies that require existing pool orders.
+				let existing_orders: Vec<&StrategyLimitOrder<T::AccountId>> = if strategy
+					.needs_order_prefetch()
+				{
+					let Some(asset_pair) = strategy.asset_pair() else {
+						log_or_panic!(
+							"Failed to determine asset pair for strategy {:?}, skipping",
+							strategy_id
 						);
-						let quote_threshold = core::cmp::max(
-							order_update_thresholds.get(&quote_asset).copied().unwrap_or(u128::MAX),
-							1,
-						);
-
-						let (update_due_to_balance, total_quote, total_base) = if convert_to_usd {
-							// Convert to usd amounts so we can compare the assets.
-							let usd_value_of = |asset, amount, default| {
-								T::PriceFeedApi::get_price(asset)
-									.map(|oracle| {
-										oracle.price.output_amount_ceil(amount).saturated_into()
-									})
-									.unwrap_or(default)
-							};
-
-							let quote_balance_usd =
-								usd_value_of(quote_asset, quote_balance_asset, 0);
-							let base_balance_usd = usd_value_of(base_asset, base_balance_asset, 0);
-							let total_quote_usd = usd_value_of(quote_asset, total_quote_asset, 0);
-							let total_base_usd = usd_value_of(base_asset, total_base_asset, 0);
-
-							let quote_threshold_usd =
-								usd_value_of(quote_asset, quote_threshold, u128::MAX);
-							let base_threshold_usd =
-								usd_value_of(base_asset, base_threshold, u128::MAX);
-
-							let update_due_to_balance = quote_balance_usd + base_balance_usd >=
-								base_threshold_usd.min(quote_threshold_usd);
-							(update_due_to_balance, total_quote_usd, total_base_usd)
-						} else {
-							// For the inventory based strategy, we require both assets to be
-							// equivalent (have the same number of decimals).
-							let update_due_to_balance = quote_balance_asset + base_balance_asset >=
-								base_threshold.min(quote_threshold);
-							(update_due_to_balance, total_quote_asset, total_base_asset)
-						};
-
-						// Use the balance of assets to calculate the desired limit orders
-						let total = total_quote.saturating_add(total_base);
-						let new_orders: Vec<_> = inventory_based_strategy_logic(
-							total_quote,
-							total,
-							relative_tick + min_buy_tick,
-							relative_tick + max_buy_tick,
-							Side::Buy,
-							strategy_id.clone(),
+						continue;
+					};
+					let base_asset = asset_pair.base();
+					let quote_asset = asset_pair.quote();
+					if let btree_map::Entry::Vacant(entry) = order_cache.entry(base_asset) {
+						weight_used += T::DbWeight::get().reads(1);
+						match T::PoolApi::limit_orders(
 							base_asset,
 							quote_asset,
-						)
-						.into_iter()
-						.chain(
-							inventory_based_strategy_logic(
-								total_base,
-								total,
-								relative_tick + min_sell_tick,
-								relative_tick + max_sell_tick,
-								Side::Sell,
-								strategy_id.clone(),
-								base_asset,
-								quote_asset,
-							)
-							.into_iter(),
-						)
-						.collect();
-
-						// Check if the ticks changed to justify updating the orders.
-						let ticks_need_update =
-							if matches!(strategy, TradingStrategy::OracleTracking { .. }) {
-								existing_orders
-									.iter()
-									.map(|order| (order.tick, order.side))
-									.collect::<BTreeSet<_>>() != new_orders
-									.iter()
-									.map(|order| (order.tick, order.side))
-									.collect::<BTreeSet<_>>()
-							} else {
-								false
-							};
-
-						if update_due_to_balance || ticks_need_update {
-							// Close all open orders for the strategy
-							if let Err(e) = T::PoolApi::cancel_all_limit_orders(&strategy_id) {
+							fetch_orders_for_strategies
+								.get(&asset_pair)
+								.unwrap_or(&BTreeSet::new()),
+						) {
+							Ok(pool_orders) => {
+								entry.insert(
+									pool_orders
+										.into_iter()
+										.map(|(side, order)| StrategyLimitOrder {
+											base_asset,
+											quote_asset,
+											account_id: order.lp,
+											side,
+											order_id: order.id.saturated_into(),
+											tick: order.tick,
+											amount: order.sell_amount.saturated_into(),
+										})
+										.collect(),
+								);
+							},
+							Err(e) => {
 								log_or_panic!(
-									"Failed to cancel all limit orders for strategy {:?}: {:?}",
-									strategy_id,
+									"Failed to get limit orders for asset {:?}: {:?}",
+									base_asset,
 									e
 								);
 								continue;
-							}
-							weight_used += limit_order_update_weight * 3;
-
-							// Create the new desired orders
-							let mut remaining_base_amount = total_base_asset;
-							let mut remaining_quote_amount = total_quote_asset;
-							new_orders.into_iter().for_each(
-								|StrategyLimitOrder {
-								     base_asset,
-								     side,
-								     order_id,
-								     tick,
-								     amount,
-								     ..
-								 }| {
-									// Convert USD amounts back to native asset amounts
-									// for order placement. Tracking remaining amounts to avoid
-									// placing orders with more than the available balance.
-									let amount = if convert_to_usd {
-										let (asset, remaining) = if side == Side::Sell {
-											(base_asset, &mut remaining_base_amount)
-										} else {
-											(quote_asset, &mut remaining_quote_amount)
-										};
-										let amount = T::PriceFeedApi::get_price(asset)
-											.map(|oracle| {
-												oracle
-													.price
-													.input_amount_floor(amount)
-													.saturated_into()
-											})
-											.unwrap_or(amount)
-											.min(*remaining);
-										*remaining = remaining.saturating_sub(amount);
-										amount
-									} else {
-										amount
-									};
-
-									weight_used += limit_order_update_weight;
-									let _result = T::PoolApi::update_limit_order(
-										&strategy_id,
-										base_asset,
-										quote_asset,
-										side,
-										order_id,
-										Some(tick),
-										IncreaseOrDecrease::Increase(amount),
-									);
-								},
-							);
+							},
 						}
-					},
-				}
+					}
+
+					// Grab the orders for this strategy.
+					order_cache
+						.get(&asset_pair.base())
+						.map(|orders| {
+							orders.iter().filter(|order| order.account_id == strategy_id).collect()
+						})
+						.unwrap_or_default()
+				} else {
+					Default::default()
+				};
+
+				Self::execute_strategy(
+					&strategy,
+					&strategy_id,
+					&existing_orders,
+					&order_update_thresholds,
+					limit_order_update_weight,
+					&mut weight_used,
+				);
 			}
 
 			weight_used
@@ -937,6 +707,390 @@ impl<T: Config> Pallet<T> {
 			}) >= FixedU64::one(),
 		)
 	}
+
+	/// Dispatch execution to the appropriate per-strategy function.
+	fn execute_strategy(
+		strategy: &TradingStrategy,
+		strategy_id: &T::AccountId,
+		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
+		thresholds: &BTreeMap<Asset, AssetAmount>,
+		limit_order_update_weight: Weight,
+		weight_used: &mut Weight,
+	) {
+		match strategy {
+			TradingStrategy::TickZeroCentered { spread_tick, base_asset } =>
+				Self::execute_simple_order(
+					*base_asset,
+					-spread_tick,
+					*spread_tick,
+					strategy_id,
+					thresholds,
+					limit_order_update_weight,
+					weight_used,
+				),
+			TradingStrategy::SimpleBuySell { buy_tick, sell_tick, base_asset } =>
+				Self::execute_simple_order(
+					*base_asset,
+					*buy_tick,
+					*sell_tick,
+					strategy_id,
+					thresholds,
+					limit_order_update_weight,
+					weight_used,
+				),
+			TradingStrategy::InventoryBased {
+				min_buy_tick,
+				max_buy_tick,
+				min_sell_tick,
+				max_sell_tick,
+				base_asset,
+			} => Self::execute_inventory_based(
+				*base_asset,
+				*min_buy_tick,
+				*max_buy_tick,
+				*min_sell_tick,
+				*max_sell_tick,
+				strategy_id,
+				existing_orders,
+				thresholds,
+				limit_order_update_weight,
+				weight_used,
+			),
+			TradingStrategy::OracleTracking {
+				min_buy_offset_tick,
+				max_buy_offset_tick,
+				min_sell_offset_tick,
+				max_sell_offset_tick,
+				base_asset,
+				quote_asset,
+			} => Self::execute_oracle_tracking(
+				*base_asset,
+				*quote_asset,
+				*min_buy_offset_tick,
+				*max_buy_offset_tick,
+				*min_sell_offset_tick,
+				*max_sell_offset_tick,
+				strategy_id,
+				existing_orders,
+				thresholds,
+				limit_order_update_weight,
+				weight_used,
+			),
+		}
+	}
+
+	/// Execute a simple fixed-tick strategy (TickZeroCentered or SimpleBuySell).
+	///
+	/// For each side, if the free balance exceeds the threshold, place or update a single limit
+	/// order at the given tick with the full free balance.
+	fn execute_simple_order(
+		base_asset: Asset,
+		buy_tick: Tick,
+		sell_tick: Tick,
+		strategy_id: &T::AccountId,
+		thresholds: &BTreeMap<Asset, AssetAmount>,
+		limit_order_update_weight: Weight,
+		weight_used: &mut Weight,
+	) {
+		for (side, tick) in [(Side::Buy, buy_tick), (Side::Sell, sell_tick)] {
+			let sell_asset = if side == Side::Buy { STABLE_ASSET } else { base_asset };
+
+			*weight_used += T::DbWeight::get().reads(1);
+			let balance = T::BalanceApi::get_balance(strategy_id, sell_asset);
+
+			// Minimum threshold of 1 to prevent updating with 0 amounts
+			let threshold =
+				core::cmp::max(thresholds.get(&sell_asset).copied().unwrap_or(u128::MAX), 1);
+
+			if balance >= threshold {
+				*weight_used += limit_order_update_weight;
+
+				// We expect this to fail if the pool does not exist
+				let _result = T::PoolApi::update_limit_order(
+					strategy_id,
+					base_asset,
+					STABLE_ASSET,
+					side,
+					STRATEGY_ORDER_ID_0,
+					Some(tick),
+					IncreaseOrDecrease::Increase(balance),
+				);
+			}
+		}
+	}
+
+	/// Execute the InventoryBased strategy.
+	///
+	/// Uses fixed ticks (no oracle offset) and native asset amounts (no USD conversion).
+	fn execute_inventory_based(
+		base_asset: Asset,
+		min_buy_tick: Tick,
+		max_buy_tick: Tick,
+		min_sell_tick: Tick,
+		max_sell_tick: Tick,
+		strategy_id: &T::AccountId,
+		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
+		thresholds: &BTreeMap<Asset, AssetAmount>,
+		limit_order_update_weight: Weight,
+		weight_used: &mut Weight,
+	) {
+		Self::execute_with_inventory_logic(
+			base_asset,
+			STABLE_ASSET,
+			min_buy_tick,
+			max_buy_tick,
+			min_sell_tick,
+			max_sell_tick,
+			Tick::from(0), // no oracle offset
+			false,         // no USD conversion
+			false,         // ticks are fixed, no need to check for tick changes
+			strategy_id,
+			existing_orders,
+			thresholds,
+			limit_order_update_weight,
+			weight_used,
+		);
+	}
+
+	/// Execute the OracleTracking strategy.
+	///
+	/// Fetches the current oracle price to use as a tick offset, then delegates to the shared
+	/// inventory logic with USD conversion and tick-change detection enabled. Cancels all open
+	/// orders and returns early if the oracle price is stale or unavailable.
+	fn execute_oracle_tracking(
+		base_asset: Asset,
+		quote_asset: Asset,
+		min_buy_offset_tick: Tick,
+		max_buy_offset_tick: Tick,
+		min_sell_offset_tick: Tick,
+		max_sell_offset_tick: Tick,
+		strategy_id: &T::AccountId,
+		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
+		thresholds: &BTreeMap<Asset, AssetAmount>,
+		limit_order_update_weight: Weight,
+		weight_used: &mut Weight,
+	) {
+		*weight_used += T::DbWeight::get().reads(1);
+		let oracle_tick_opt = match T::PriceFeedApi::get_relative_price(base_asset, quote_asset) {
+			None => {
+				log_or_panic!(
+					"Failed to get oracle price for asset {:?}, skipping strategy {:?}",
+					base_asset,
+					strategy_id
+				);
+				None
+			},
+			Some(oracle) if oracle.stale => None,
+			Some(oracle) => oracle.price.into_tick(),
+		};
+
+		let relative_tick = match oracle_tick_opt {
+			Some(tick) => tick,
+			None => {
+				// Stale or unavailable price: cancel all open orders and skip.
+				let _res = T::PoolApi::cancel_all_limit_orders(strategy_id);
+				return;
+			},
+		};
+
+		Self::execute_with_inventory_logic(
+			base_asset,
+			quote_asset,
+			min_buy_offset_tick,
+			max_buy_offset_tick,
+			min_sell_offset_tick,
+			max_sell_offset_tick,
+			relative_tick,
+			true, // convert balances to USD for cross-asset comparison
+			true, // update orders when oracle price moves the ticks
+			strategy_id,
+			existing_orders,
+			thresholds,
+			limit_order_update_weight,
+			weight_used,
+		);
+	}
+
+	/// Shared execution core for InventoryBased and OracleTracking strategies.
+	///
+	/// Determines whether orders need updating (due to free balance exceeding the threshold, or
+	/// because `check_tick_changes` is set and the oracle has moved the ticks), cancels existing
+	/// orders, and places new ones according to the inventory-based logic.
+	fn execute_with_inventory_logic(
+		base_asset: Asset,
+		quote_asset: Asset,
+		min_buy_tick: Tick,
+		max_buy_tick: Tick,
+		min_sell_tick: Tick,
+		max_sell_tick: Tick,
+		relative_tick: Tick,
+		convert_to_usd: bool,
+		check_tick_changes: bool,
+		strategy_id: &T::AccountId,
+		existing_orders: &[&StrategyLimitOrder<T::AccountId>],
+		thresholds: &BTreeMap<Asset, AssetAmount>,
+		limit_order_update_weight: Weight,
+		weight_used: &mut Weight,
+	) {
+		use frame_support::sp_runtime::SaturatedConversion;
+
+		// This relies on autosweeping for limit orders
+		let orders_total_quote: AssetAmount = existing_orders
+			.iter()
+			.map(|order| if order.side == Side::Buy { order.amount } else { 0 })
+			.sum();
+		let orders_total_base: AssetAmount = existing_orders
+			.iter()
+			.map(|order| if order.side == Side::Sell { order.amount } else { 0 })
+			.sum();
+
+		// Get the free balance
+		let quote_balance_asset = T::BalanceApi::get_balance(strategy_id, quote_asset);
+		let base_balance_asset = T::BalanceApi::get_balance(strategy_id, base_asset);
+		let total_quote_asset = quote_balance_asset.saturating_add(orders_total_quote);
+		let total_base_asset = base_balance_asset.saturating_add(orders_total_base);
+		*weight_used += T::DbWeight::get().reads(2);
+
+		// Minimum threshold of 1 to prevent updating with 0 amounts
+		let base_threshold =
+			core::cmp::max(thresholds.get(&base_asset).copied().unwrap_or(u128::MAX), 1);
+		let quote_threshold =
+			core::cmp::max(thresholds.get(&quote_asset).copied().unwrap_or(u128::MAX), 1);
+
+		let (update_due_to_balance, total_quote, total_base) = if convert_to_usd {
+			// Convert to USD amounts so we can compare assets with different decimals.
+			let usd_value_of = |asset, amount, default| {
+				T::PriceFeedApi::get_price(asset)
+					.map(|oracle| oracle.price.output_amount_ceil(amount).saturated_into())
+					.unwrap_or(default)
+			};
+
+			let quote_balance_usd = usd_value_of(quote_asset, quote_balance_asset, 0);
+			let base_balance_usd = usd_value_of(base_asset, base_balance_asset, 0);
+			let total_quote_usd = usd_value_of(quote_asset, total_quote_asset, 0);
+			let total_base_usd = usd_value_of(base_asset, total_base_asset, 0);
+
+			let quote_threshold_usd = usd_value_of(quote_asset, quote_threshold, u128::MAX);
+			let base_threshold_usd = usd_value_of(base_asset, base_threshold, u128::MAX);
+
+			let update_due_to_balance =
+				quote_balance_usd + base_balance_usd >= base_threshold_usd.min(quote_threshold_usd);
+			(update_due_to_balance, total_quote_usd, total_base_usd)
+		} else {
+			// For the inventory based strategy, we require both assets to be
+			// equivalent (have the same number of decimals).
+			let update_due_to_balance =
+				quote_balance_asset + base_balance_asset >= base_threshold.min(quote_threshold);
+			(update_due_to_balance, total_quote_asset, total_base_asset)
+		};
+
+		// Use the balance of assets to calculate the desired limit orders
+		let total = total_quote.saturating_add(total_base);
+		let new_orders: Vec<_> = inventory_based_strategy_logic(
+			total_quote,
+			total,
+			relative_tick + min_buy_tick,
+			relative_tick + max_buy_tick,
+			Side::Buy,
+			strategy_id.clone(),
+			base_asset,
+			quote_asset,
+		)
+		.into_iter()
+		.chain(inventory_based_strategy_logic(
+			total_base,
+			total,
+			relative_tick + min_sell_tick,
+			relative_tick + max_sell_tick,
+			Side::Sell,
+			strategy_id.clone(),
+			base_asset,
+			quote_asset,
+		))
+		.collect();
+
+		// Check if the ticks changed to justify updating the orders.
+		let ticks_need_update = check_tick_changes && {
+			existing_orders
+				.iter()
+				.map(|order| (order.tick, order.side))
+				.collect::<BTreeSet<_>>() !=
+				new_orders.iter().map(|order| (order.tick, order.side)).collect::<BTreeSet<_>>()
+		};
+
+		if update_due_to_balance || ticks_need_update {
+			// Close all open orders for the strategy
+			if let Err(e) = T::PoolApi::cancel_all_limit_orders(strategy_id) {
+				log_or_panic!(
+					"Failed to cancel all limit orders for strategy {:?}: {:?}",
+					strategy_id,
+					e
+				);
+				return;
+			}
+			*weight_used += limit_order_update_weight * 3;
+
+			// Create the new desired orders
+			let mut remaining_base_amount = total_base_asset;
+			let mut remaining_quote_amount = total_quote_asset;
+			new_orders.into_iter().for_each(
+				|StrategyLimitOrder { base_asset, side, order_id, tick, amount, .. }| {
+					// Convert USD amounts back to native asset amounts for order placement.
+					// Track remaining amounts to avoid placing orders beyond available balance.
+					let amount = if convert_to_usd {
+						let (asset, remaining) = if side == Side::Sell {
+							(base_asset, &mut remaining_base_amount)
+						} else {
+							(quote_asset, &mut remaining_quote_amount)
+						};
+						let amount = T::PriceFeedApi::get_price(asset)
+							.map(|oracle| oracle.price.input_amount_floor(amount).saturated_into())
+							.unwrap_or(amount)
+							.min(*remaining);
+						*remaining = remaining.saturating_sub(amount);
+						amount
+					} else {
+						amount
+					};
+
+					*weight_used += limit_order_update_weight;
+					let _result = T::PoolApi::update_limit_order(
+						strategy_id,
+						base_asset,
+						quote_asset,
+						side,
+						order_id,
+						Some(tick),
+						IncreaseOrDecrease::Increase(amount),
+					);
+				},
+			);
+		}
+	}
+}
+
+/// Validates the four tick-range parameters shared by InventoryBased and OracleTracking.
+fn validate_inventory_tick_ranges<T: Config>(
+	min_buy_tick: Tick,
+	max_buy_tick: Tick,
+	min_sell_tick: Tick,
+	max_sell_tick: Tick,
+) -> Result<(), Error<T>> {
+	let average_buy_tick = average_tick(min_buy_tick, max_buy_tick, false /* round down */);
+	let average_sell_tick = average_tick(min_sell_tick, max_sell_tick, true /* round up */);
+
+	if min_buy_tick > max_buy_tick ||
+		min_sell_tick > max_sell_tick ||
+		min_sell_tick < average_buy_tick ||
+		max_buy_tick > average_sell_tick ||
+		max_buy_tick > cf_amm_math::MAX_TICK ||
+		max_sell_tick > cf_amm_math::MAX_TICK ||
+		min_buy_tick < cf_amm_math::MIN_TICK ||
+		min_sell_tick < cf_amm_math::MIN_TICK
+	{
+		return Err(Error::<T>::InvalidTick)
+	}
+	Ok(())
 }
 
 /// Logic for one side of the inventory-based strategy.

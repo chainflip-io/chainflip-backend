@@ -1940,8 +1940,8 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				id,
 				tick_range,
 				size_change: {
@@ -2385,8 +2385,8 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || bought_amount != Default::default() {
 			Self::deposit_event(Event::<T>::LimitOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				side: order,
 				id,
 				tick,

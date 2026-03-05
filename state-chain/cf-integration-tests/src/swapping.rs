@@ -314,8 +314,8 @@ pub fn set_limit_order(
 	let buy_balance = pallet_cf_asset_balances::FreeBalances::<Runtime>::get(account_id, buy_asset);
 	assert_ok!(LiquidityPools::set_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
-		asset_pair.assets().base,
-		asset_pair.assets().quote,
+		asset_pair.base(),
+		asset_pair.quote(),
 		order,
 		id,
 		tick,
