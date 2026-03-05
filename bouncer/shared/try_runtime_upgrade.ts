@@ -96,14 +96,17 @@ export async function tryRuntimeUpgrade(
     }
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    logger.info(`Running migrations for the last ${lastN} blocks.`);
+    const BATCH_SIZE = Math.ceil(lastN / 2);
+    logger.info(`Running migrations for the last ${lastN} blocks in batches of ${BATCH_SIZE}.`);
 
-    // Fetch all block hashes first
-    const blockHashes: string[] = [];
+    // Fetch all block hashes sequentially and organise into batches
+    const batches: string[][] = [];
     let nextHash = await httpApi.rpc.chain.getBlockHash();
     for (let i = 0; i < lastN; i++) {
+      const batchIndex = Math.floor(i / BATCH_SIZE);
+      if (batches[batchIndex] === undefined) batches[batchIndex] = [];
       const currentHash = nextHash;
-      blockHashes.push(currentHash.toString());
+      batches[batchIndex].push(currentHash.toString());
       const header = await retryRpcCall(() => httpApi.rpc.chain.getHeader(currentHash), {
         maxAttempts: 10,
         timeoutMs: 20000,
@@ -112,23 +115,21 @@ export async function tryRuntimeUpgrade(
       nextHash = header.parentHash;
     }
 
-    logger.info(
-      `Fetched ${blockHashes.length} block hashes, running try-runtime commands in parallel.`,
-    );
+    // Run batches serially, commands within each batch in parallel
+    for (const batch of batches) {
+      const results = await Promise.all(
+        batch.map(async (hash) => {
+          const blockLogger = loggerChild(logger, `block_${hash}`);
+          blockLogger.info('Running try-runtime for block: ', hash);
+          const success = await tryRuntimeCommand(runtimePath, hash, networkUrl, blockLogger);
+          return { hash, success };
+        }),
+      );
 
-    // Run all try-runtime commands in parallel
-    const results = await Promise.all(
-      blockHashes.map(async (hash) => {
-        const blockLogger = loggerChild(logger, `block_${hash}`);
-        blockLogger.info('Running try-runtime for block: ', hash);
-        const success = await tryRuntimeCommand(runtimePath, hash, networkUrl, blockLogger);
-        return { hash, success };
-      }),
-    );
-
-    const failed = results.filter((r) => !r.success);
-    if (failed.length > 0) {
-      throw new Error(`Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')}`);
+      const failed = results.filter((r) => !r.success);
+      if (failed.length > 0) {
+        throw new Error(`Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')}`);
+      }
     }
   } else if (block === 'latest') {
     const success = await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
