@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { sleep } from 'shared/utils';
+import { globalLogger, type Logger } from 'shared/utils/logger';
 
 export const DEFAULT_LOG_ROOT = 'chainflip/logs/';
 
@@ -19,6 +20,7 @@ export async function execWithLog(
   args: string[],
   commandAlias: string,
   additionalEnv: Record<string, string> = {},
+  logger: Logger = globalLogger,
 ): Promise<boolean> {
   try {
     // --- prepare log file ---
@@ -34,18 +36,18 @@ export async function execWithLog(
 
     ls.stdout.on('data', async (data) => {
       await file.write(data.toString());
-      console.log(data.toString());
+      logger.info(data.toString());
     });
 
     ls.stderr.on('data', async (data) => {
       await file.write(data.toString());
-      console.log(data.toString());
+      logger.info(data.toString());
     });
 
     ls.on('exit', (code) => {
       running = false;
       exitCode = code ?? 0;
-      console.log('child process exited with code ' + (code?.toString() ?? 'null'));
+      logger.info('child process exited with code ' + (code?.toString() ?? 'null'));
     });
 
     // --- wait for process to exit ---
@@ -54,14 +56,14 @@ export async function execWithLog(
     }
 
     if (exitCode !== 0) {
-      console.error(`${commandAlias} failed (exit code: ${exitCode})`);
+      logger.error(`${commandAlias} failed (exit code: ${exitCode})`);
       return false;
     }
 
-    console.debug(`${commandAlias} succeeded`);
+    logger.debug(`${commandAlias} succeeded`);
     return true;
   } catch (e) {
-    console.error(`${commandAlias} failed: ${e}`);
+    logger.error(`${commandAlias} failed: ${e}`);
     return false;
   }
 }
@@ -71,6 +73,7 @@ export async function execWithRustLog(
   args: string[],
   logFileName: string,
   logLevel: string | undefined = 'info',
+  logger: Logger = globalLogger,
 ): Promise<boolean> {
-  return execWithLog(command, args, logFileName, { RUST_LOG: logLevel });
+  return execWithLog(command, args, logFileName, { RUST_LOG: logLevel }, logger);
 }

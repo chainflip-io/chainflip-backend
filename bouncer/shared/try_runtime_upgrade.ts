@@ -7,20 +7,25 @@ import { compileBinaries } from 'shared/utils/compile_binaries';
 import { mkTmpDir, execWithRustLog } from 'shared/utils/exec_with_log';
 import { CHAINFLIP_HTTP_ENDPOINT } from 'shared/utils/substrate';
 import { retryRpcCall } from 'shared/utils';
-import { globalLogger as logger } from 'shared/utils/logger';
+import { globalLogger as logger, loggerChild, type Logger } from 'shared/utils/logger';
 
-async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
+async function createSnapshotFile(
+  networkUrl: string,
+  blockHash: string,
+  childLogger: Logger,
+): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotFolder = await mkTmpDir('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
-  logger.info('Writing snapshot to: ', snapshotOutputPath);
+  childLogger.info('Writing snapshot to: ', snapshotOutputPath);
 
   return execWithRustLog(
     `try-runtime`,
     `create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`.split(' '),
     `create-snapshot-${blockHash}`,
     'info,runtime::executive=debug',
+    childLogger,
   );
 }
 
@@ -28,6 +33,7 @@ async function tryRuntimeCommand(
   runtimePath: string,
   blockHash: 'latest' | string,
   networkUrl: string,
+  childLogger: Logger = logger,
 ): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
@@ -47,9 +53,10 @@ async function tryRuntimeCommand(
 --uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,
     'info,runtime::executive=debug',
+    childLogger,
   );
   if (!success) {
-    await createSnapshotFile(networkUrl, blockHash);
+    await createSnapshotFile(networkUrl, blockHash, childLogger);
   }
   return success;
 }
@@ -90,31 +97,38 @@ export async function tryRuntimeUpgrade(
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
     logger.info(`Running migrations for the last ${lastN} blocks.`);
-    let blocksProcessed = 0;
 
+    // Fetch all block hashes first
+    const blockHashes: string[] = [];
     let nextHash = await httpApi.rpc.chain.getBlockHash();
-
-    while (blocksProcessed < lastN) {
-      logger.info('Running try-runtime for block: ', nextHash.toString());
-
-      const success = await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
-
-      if (!success) {
-        throw new Error('Migration failed for block: ' + nextHash.toString());
-      }
-
+    for (let i = 0; i < lastN; i++) {
       const currentHash = nextHash;
-      const currentBlockHeader = await retryRpcCall(
-        () => httpApi.rpc.chain.getHeader(currentHash),
-        {
-          maxAttempts: 10,
-          timeoutMs: 20000,
-          operation: `get block header at ${currentHash}`,
-        },
-      );
-      nextHash = currentBlockHeader.parentHash;
+      blockHashes.push(currentHash.toString());
+      const header = await retryRpcCall(() => httpApi.rpc.chain.getHeader(currentHash), {
+        maxAttempts: 10,
+        timeoutMs: 20000,
+        operation: `get block header at ${currentHash}`,
+      });
+      nextHash = header.parentHash;
+    }
 
-      blocksProcessed++;
+    logger.info(
+      `Fetched ${blockHashes.length} block hashes, running try-runtime commands in parallel.`,
+    );
+
+    // Run all try-runtime commands in parallel
+    const results = await Promise.all(
+      blockHashes.map(async (hash) => {
+        const blockLogger = loggerChild(logger, `block_${hash}`);
+        blockLogger.info('Running try-runtime for block: ', hash);
+        const success = await tryRuntimeCommand(runtimePath, hash, networkUrl, blockLogger);
+        return { hash, success };
+      }),
+    );
+
+    const failed = results.filter((r) => !r.success);
+    if (failed.length > 0) {
+      throw new Error(`Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')}`);
     }
   } else if (block === 'latest') {
     const success = await tryRuntimeCommand(runtimePath, 'latest', networkUrl);
