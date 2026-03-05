@@ -1,6 +1,7 @@
 // This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
+import os from 'os';
 import path from 'path';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
 import { compileBinaries } from 'shared/utils/compile_binaries';
@@ -96,7 +97,9 @@ export async function tryRuntimeUpgrade(
     }
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    const BATCH_SIZE = Math.ceil(lastN / 2);
+    // Each try-runtime process is CPU-bound (wasm execution) so capping parallelism to the number
+    // of logical CPUs avoids resource contention and OOM on memory-constrained CI runners.
+    const BATCH_SIZE = os.cpus().length * 2;
     logger.info(`Running migrations for the last ${lastN} blocks in batches of ${BATCH_SIZE}.`);
 
     // Fetch all block hashes sequentially and organise into batches
