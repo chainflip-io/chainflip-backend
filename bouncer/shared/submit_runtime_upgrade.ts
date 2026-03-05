@@ -1,18 +1,21 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { decodeModuleError } from 'shared/utils';
+import { decodeDispatchError } from 'shared/utils';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { Logger } from 'shared/utils/logger';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { throwError } from 'shared/utils/logger';
+import { systemCodeUpdated } from 'generated/events/system/codeUpdated';
+import { governanceFailedExecution } from 'generated/events/governance/failedExecution';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
 }
 
 // By default we don't want to restrict that any of the nodes need to be upgraded.
-export async function submitRuntimeUpgradeWithRestrictions(
-  logger: Logger,
+export async function submitRuntimeUpgradeWithRestrictions<A = []>(
+  cf: ChainflipIO<A>,
   wasmPath: string,
   semverRestriction?: Record<string, number>,
   percentNodesUpgraded = 0,
@@ -22,12 +25,10 @@ export async function submitRuntimeUpgradeWithRestrictions(
   const wasmStats = await fs.stat(wasmPath);
   const runtimeWasm = await readRuntimeWasmFromFile(wasmPath);
 
-  await using chainflip = await getChainflipApi();
-
   const networkUrl = process.env.CF_NODE_ENDPOINT ?? 'ws://localhost:9944';
 
   if (tryRuntime) {
-    logger.info('Running try-runtime before submitting the runtime upgrade.');
+    cf.info('Running try-runtime before submitting the runtime upgrade.');
     await tryRuntimeUpgrade('last-n', networkUrl, wasmPath);
   }
 
@@ -38,38 +39,43 @@ export async function submitRuntimeUpgradeWithRestrictions(
     versionPercentRestriction = undefined;
   }
 
-  logger.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
+  cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
 
-  logger.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
+  cf.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
+  const resultEvent = await cf.stepUntilOneEventOf({
+    codeUpdated: {
+      name: 'System.CodeUpdated',
+      schema: systemCodeUpdated,
+    },
+    failedExecution: {
+      name: 'Governance.FailedExecution',
+      schema: governanceFailedExecution,
+    },
+  });
 
-  const event = await Promise.race([
-    observeEvent(logger, 'system:CodeUpdated').event,
-    observeEvent(logger, 'governance:FailedExecution').event,
-  ]);
-
-  if (event.name.method === 'FailedExecution') {
-    const error = decodeModuleError(event.data[0].Module, chainflip);
-    throw Error(`Runtime upgrade failed: ${error}`);
+  if (resultEvent.key === 'failedExecution') {
+    const reason = decodeDispatchError(resultEvent.data, await getChainflipApi());
+    throwError(cf.logger, new Error(`Runtime upgrade failed: ${reason}`));
   }
 
-  logger.info('Runtime upgrade completed.');
+  cf.info('Runtime upgrade completed.');
 }
 
-export async function submitRuntimeUpgradeWasmPath(logger: Logger, wasmPath: string) {
-  await submitRuntimeUpgradeWithRestrictions(logger, wasmPath);
+export async function submitRuntimeUpgradeWasmPath<A = []>(cf: ChainflipIO<A>, wasmPath: string) {
+  await submitRuntimeUpgradeWithRestrictions(cf, wasmPath);
 }
 
 // Restrictions not provided.
-export async function submitRuntimeUpgrade(
-  logger: Logger,
+export async function submitRuntimeUpgrade<A = []>(
+  cf: ChainflipIO<A>,
   projectRoot: string,
   tryRuntime = false,
 ) {
   await submitRuntimeUpgradeWithRestrictions(
-    logger,
+    cf,
     `${projectRoot}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
     undefined,
     0,
