@@ -100,7 +100,9 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for NewAssetsMigration<T>
 
 		log::info!("🌮 Environment pallet migration completed: Added Wbtc, ArbUsdt and SolUsdt");
 
-		Weight::zero()
+		// Weight::zero()
+		// TODO: REMOVE just for testing
+		panic!("Fake panic just to test try-runtime upgrade failure in ci");
 	}
 
 	#[cfg(feature = "try-runtime")]
