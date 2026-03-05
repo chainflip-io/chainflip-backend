@@ -1792,7 +1792,7 @@ mod oracle_strategy {
 	fn different_decimals_update_threshold() {
 		// Use Btc (8 decimals) as base and Usdc (6 decimals) as quote.
 		const BTC: Asset = Asset::Btc;
-		const USDC: Asset = cf_primitives::STABLE_ASSET;
+		const USDC: Asset = Asset::Usdc;
 		const BTC_AMOUNT: AssetAmount = 1_000_000_000;
 		const USDC_AMOUNT: AssetAmount = 100_000_000;
 
@@ -1839,9 +1839,13 @@ mod oracle_strategy {
 
 				// We add $90 worth of BTC, which is below the $100 threshold
 				MockBalance::credit_account(&strategy_id, BTC, 900_000_000);
+				assert_eq!(MockBalance::get_balance(&strategy_id, BTC), 900_000_000);
+
+				strategy_id
 			})
 			.then_execute_at_next_block(|strategy_id| {
 				// The strategy should not have added the new balance to the order yet.
+				assert_eq!(MockBalance::get_balance(&strategy_id, BTC), 900_000_000);
 				let orders = MockPoolApi::<AccountId>::get_limit_orders();
 				assert_eq!(orders.len(), 2);
 				assert_eq!(orders[0].amount, USDC_AMOUNT);
@@ -1849,9 +1853,19 @@ mod oracle_strategy {
 
 				// Add $10 more of BTC to reach the $100 threshold
 				MockBalance::credit_account(&strategy_id, BTC, 100_000_000);
+				assert_eq!(
+					MockPriceFeedApi::get_price(BTC)
+						.unwrap()
+						.price
+						.output_amount_ceil(MockBalance::get_balance(&strategy_id, BTC)),
+					MockPriceFeedApi::get_price(USDC)
+						.unwrap()
+						.price
+						.output_amount_ceil(THRESHOLD_USDC)
+				);
 			})
 			.then_execute_at_next_block(|_| {
-				// The limit orders should now be created
+				// The limit orders should now be updated with the new balance.
 				let orders = MockPoolApi::<AccountId>::get_limit_orders();
 				assert_eq!(orders.len(), 2);
 				assert_eq!(orders[0].amount, USDC_AMOUNT);

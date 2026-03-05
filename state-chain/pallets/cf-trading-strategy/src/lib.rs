@@ -544,7 +544,7 @@ pub mod pallet {
 
 						let (update_due_to_balance, total_quote, total_base) = if convert_to_usd {
 							// Convert to usd amounts so we can compare the assets.
-							let usd_amount = |asset, amount, default| {
+							let usd_value_of = |asset, amount, default| {
 								T::PriceFeedApi::get_price(asset)
 									.map(|oracle| {
 										oracle.price.output_amount_ceil(amount).saturated_into()
@@ -552,15 +552,16 @@ pub mod pallet {
 									.unwrap_or(default)
 							};
 
-							let quote_balance_usd = usd_amount(quote_asset, quote_balance_asset, 0);
-							let base_balance_usd = usd_amount(base_asset, base_balance_asset, 0);
-							let total_quote_usd = usd_amount(quote_asset, total_quote_asset, 0);
-							let total_base_usd = usd_amount(base_asset, total_base_asset, 0);
+							let quote_balance_usd =
+								usd_value_of(quote_asset, quote_balance_asset, 0);
+							let base_balance_usd = usd_value_of(base_asset, base_balance_asset, 0);
+							let total_quote_usd = usd_value_of(quote_asset, total_quote_asset, 0);
+							let total_base_usd = usd_value_of(base_asset, total_base_asset, 0);
 
 							let quote_threshold_usd =
-								usd_amount(quote_asset, quote_threshold, u128::MAX);
+								usd_value_of(quote_asset, quote_threshold, u128::MAX);
 							let base_threshold_usd =
-								usd_amount(base_asset, base_threshold, u128::MAX);
+								usd_value_of(base_asset, base_threshold, u128::MAX);
 
 							let update_due_to_balance = quote_balance_usd + base_balance_usd >=
 								base_threshold_usd.min(quote_threshold_usd);
