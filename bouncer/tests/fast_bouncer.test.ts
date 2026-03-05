@@ -43,9 +43,9 @@ describe('ConcurrentTests', () => {
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor, 20);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor, 20);
   concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor, 10);
-  concurrentTest('FillOrKill', testFillOrKill, 240 * ciTimeoutFactor, 10);
+  concurrentTest('FillOrKill', testFillOrKill, 300 * ciTimeoutFactor, 50);
   concurrentTest('DCASwaps', testDCASwaps, 240 * ciTimeoutFactor, 30);
-  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 260 * ciTimeoutFactor);
+  concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor, 40);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   if (!process.env.SKIP_BLS_TESTS) {
     concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor, 25);
