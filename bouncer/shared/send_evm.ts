@@ -80,19 +80,19 @@ export async function signAndSendTxEvm(
   value?: string,
   data?: string,
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
+  options: {
+    privateKey?: string;
+  } = {},
 ) {
   const web3 = getWeb3(chain);
-  const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
+  const privkey = options.privateKey ?? getEvmWhaleKeypair('Ethereum').privkey;
 
   const numberRetries = 10;
   let receipt;
 
   // Fetch nonce and sign outside the loop; re-sign only if we get a nonce error.
   let nonce = await getNextEvmNonce(logger, chain);
-  let signedTx = await web3.eth.accounts.signTransaction(
-    { to, data, gas, nonce, value },
-    whalePrivKey,
-  );
+  let signedTx = await web3.eth.accounts.signTransaction({ to, data, gas, nonce, value }, privkey);
 
   for (let i = 0; i < numberRetries; i++) {
     try {
@@ -115,7 +115,7 @@ export async function signAndSendTxEvm(
         nonce = await getNextEvmNonce(logger, chain, true);
         signedTx = await web3.eth.accounts.signTransaction(
           { to, data, gas, nonce, value },
-          whalePrivKey,
+          privkey,
         );
       } else {
         logger.error(`${chain} Retrying transaction. Found error: ${error}`);

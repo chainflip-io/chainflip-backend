@@ -26,6 +26,7 @@ import z from 'zod';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { TestContext } from 'shared/utils/test_context';
 import { fundingFunded } from 'generated/events/funding/funded';
+import { signAndSendTxEvm } from 'shared/send_evm';
 import { fundingSCCallExecuted } from '../generated/events/funding/sCCallExecuted';
 import { validatorDelegated } from '../generated/events/validator/delegated';
 import { validatorUndelegated } from '../generated/events/validator/undelegated';
@@ -65,9 +66,9 @@ async function encodeAndSendDelegationApiCall(
     gas: 100000,
   };
 
-  const web3 = getWeb3('Ethereum');
-  const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
-  const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+  const receipt = await signAndSendTxEvm(logger, 'Ethereum', tx.to, tx.value, tx.data, tx.gas, {
+    privateKey: evmWallet.privateKey,
+  });
 
   return receipt.transactionHash;
 }
