@@ -859,6 +859,20 @@ lazy_static::lazy_static! {
 }
 
 fn failed_keygen_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+	AuctionParameters::<Test>::put(SetSizeParameters {
+		min_size: MIN_AUTHORITY_SIZE,
+		max_size: CANDIDATES.count() as u32,
+		max_expansion: CANDIDATES.count() as u32,
+	});
+	ActiveBidder::<Test>::set(Default::default());
+
+	for candidate in CANDIDATES {
+		MockFlip::credit_funds(&candidate, 100);
+		ActiveBidder::<Test>::mutate(|bidders| {
+			bidders.insert(candidate);
+		});
+	}
+
 	CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
 	CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 		RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
@@ -891,16 +905,23 @@ mod keygen {
 	}
 
 	#[test]
-	fn abort_on_keygen_failure_if_too_many_banned() {
+	fn aborts_if_reauction_still_cannot_meet_min_size() {
 		new_test_ext().execute_with(|| {
-			// Not enough unbanned nodes left after this failure, so we should abort
+			// Re-auction runs, but with too many banned candidates we still abort.
 			failed_keygen_with_offenders(CANDIDATES.take(*MAX_ALLOWED_KEYGEN_OFFENDERS + 1));
-			assert_rotation_aborted();
+			assert_rotation_phase_matches!(RotationPhase::Idle);
+			assert_eq!(<Test as Config>::KeyRotator::status(), AsyncResult::Void);
+			assert!(System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			}));
+			assert!(System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::RotationAborted))
+			}));
 		});
 	}
 
 	#[test]
-	fn rotation_aborts_if_candidates_below_min_percentage() {
+	fn rotation_aborts_if_reauction_cannot_recover_after_large_failure() {
 		new_test_ext().execute_with(|| {
 			// Ban half of the candidates:
 			let failing_count = CANDIDATES.count() / 2;
@@ -909,8 +930,8 @@ mod keygen {
 			// We still have enough candidates according to auction resolver parameters:
 			assert!(remaining_count > MIN_AUTHORITY_SIZE as usize);
 
-			// But the rotation should be aborted since authority count would drop too much
-			// compared to the previous set:
+			// Without a re-auction, authority count would drop too much compared to the previous
+			// set:
 			assert!(
 				remaining_count <
 					(Percent::one() - DEFAULT_MAX_AUTHORITY_SET_CONTRACTION) *
@@ -918,7 +939,14 @@ mod keygen {
 			);
 
 			failed_keygen_with_offenders(CANDIDATES.take(failing_count));
-			assert_rotation_aborted();
+			assert_rotation_phase_matches!(RotationPhase::Idle);
+			assert_eq!(<Test as Config>::KeyRotator::status(), AsyncResult::Void);
+			assert!(System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
+			}));
+			assert!(System::events().iter().any(|record| {
+				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::RotationAborted))
+			}));
 		});
 	}
 }
@@ -929,6 +957,20 @@ mod key_handover {
 	use super::*;
 
 	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+		AuctionParameters::<Test>::put(SetSizeParameters {
+			min_size: MIN_AUTHORITY_SIZE,
+			max_size: CANDIDATES.count() as u32,
+			max_expansion: CANDIDATES.count() as u32,
+		});
+		ActiveBidder::<Test>::set(Default::default());
+
+		for candidate in CANDIDATES {
+			MockFlip::credit_funds(&candidate, 100);
+			ActiveBidder::<Test>::mutate(|bidders| {
+				bidders.insert(candidate);
+			});
+		}
+
 		CurrentAuthorities::<Test>::set(AUTHORITIES.collect());
 		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
 			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
@@ -3615,7 +3657,7 @@ mod keygen_failure_with_delegation {
 	}
 
 	#[test]
-	fn independent_validator_failure_does_not_trigger_reauction() {
+	fn independent_validator_failure_triggers_reauction() {
 		new_test_ext().execute_with(|| {
 			// Setup independent validators (no operator) using add_bids
 			set_default_test_bids();
@@ -3628,22 +3670,33 @@ mod keygen_failure_with_delegation {
 			// Get current phase to verify keygen started
 			let phase = CurrentRotationPhase::<Test>::get();
 			assert!(matches!(phase, RotationPhase::KeygensInProgress(..)));
+			let next_epoch = CurrentEpoch::<Test>::get() + 1;
+			assert_eq!(DelegationSnapshots::<Test>::iter_prefix(next_epoch).count(), 0);
 
 			// Simulate keygen failure with independent validator
 			MockKeyRotatorA::failed([independent_validator]);
 			System::reset_events();
 			Pallet::<Test>::on_initialize(1);
 
-			// Should NOT emit AuctionCompleted (no re-auction for independent validators)
-			// The rotation should just proceed with retry (or abort depending on min size)
+			// Should emit AuctionCompleted (re-auction happened)
 			let auction_completed_emitted = System::events().iter().any(|record| {
 				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
 			});
 
 			assert!(
-				!auction_completed_emitted,
-				"AuctionCompleted should not be emitted for independent validator failure"
+				auction_completed_emitted,
+				"AuctionCompleted should be emitted for independent validator failure"
 			);
+			assert_eq!(DelegationSnapshots::<Test>::iter_prefix(next_epoch).count(), 0);
+
+			if let RotationPhase::KeygensInProgress(state) = CurrentRotationPhase::<Test>::get() {
+				assert!(
+					!state.primary_candidates.contains(&independent_validator),
+					"banned independent validator should be excluded from primary candidates"
+				);
+			} else {
+				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
+			}
 		});
 	}
 
