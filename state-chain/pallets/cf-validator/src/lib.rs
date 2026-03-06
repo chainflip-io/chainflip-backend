@@ -82,6 +82,15 @@ type AuctionOutcomeWithDelegators<T> = (
 	>,
 );
 
+type ReauctionResult<T> = (
+	AuctionOutcome<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
+	BTreeMap<
+		<T as frame_system::Config>::AccountId,
+		DelegationSnapshot<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
+	>,
+	bool,
+);
+
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 )]
@@ -1856,7 +1865,7 @@ impl<T: Config> Pallet<T> {
 		let (mut rotation_state, reauction) =
 			Self::maybe_reauction_after_ban(rotation_state, offenders, context)?;
 
-		if let Some(((new_outcome, new_snapshots), snapshots_changed)) = reauction {
+		if let Some((new_outcome, new_snapshots, snapshots_changed)) = reauction {
 			let new_outcome = new_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
 			log::info!(
 				target: "cf-validator",
@@ -1922,10 +1931,7 @@ impl<T: Config> Pallet<T> {
 		mut rotation_state: RuntimeRotationState<T>,
 		offenders: &BTreeSet<ValidatorIdOf<T>>,
 		context: &'static str,
-	) -> Result<
-		(RuntimeRotationState<T>, Option<(AuctionOutcomeWithDelegators<T>, bool)>),
-		RotationError,
-	> {
+	) -> Result<(RuntimeRotationState<T>, Option<ReauctionResult<T>>), RotationError> {
 		rotation_state.ban(offenders.clone());
 		let mut delegation_snapshots: BTreeMap<
 			T::AccountId,
@@ -1949,7 +1955,7 @@ impl<T: Config> Pallet<T> {
 			.map(|(new_outcome, new_snapshots)| {
 				let snapshots_changed =
 					snapshots_modified || new_snapshots != snapshots_before_reauction;
-				(rotation_state, Some(((new_outcome, new_snapshots), snapshots_changed)))
+				(rotation_state, Some((new_outcome, new_snapshots, snapshots_changed)))
 			})
 			.map_err(|error| RotationError::ReauctionFailed { context, error })
 	}
