@@ -85,19 +85,25 @@ pub struct BscFeeVoter {
 impl VoterApi<BscFeeTracking> for BscFeeVoter {
 	async fn vote(
 		&self,
-		_settings: <BscFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
+		settings: <BscFeeTracking as ElectoralSystemTypes>::ElectoralSettings,
 		_properties: <BscFeeTracking as ElectoralSystemTypes>::ElectionProperties,
 	) -> std::result::Result<Option<VoteOf<BscFeeTracking>>, anyhow::Error> {
+		let (fee_history_window, priority_fee_percentile) = settings;
+
 		let best_block_number = self.client.get_block_number().await?;
 		let fee_history = self
 			.client
-			.fee_history(1u64.into(), best_block_number.low_u64().into(), vec![])
+			.fee_history(
+				fee_history_window.into(),
+				best_block_number.low_u64().into(),
+				vec![priority_fee_percentile as f64],
+			)
 			.await?;
 
 		Ok(Some(BscTrackedData {
-			base_fee: (*context!(fee_history.base_fee_per_gas.last())?)
+			priority_fee: context!(fee_history.reward.into_iter().flatten().min())?
 				.try_into()
-				.expect("Base fee should fit u128"),
+				.expect("Priority fee should fit u128"),
 		}))
 	}
 }

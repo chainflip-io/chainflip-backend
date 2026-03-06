@@ -91,7 +91,7 @@ impl Chain for Bsc {
 )]
 #[codec(mel_bound())]
 pub struct BscTrackedData {
-	pub base_fee: <Bsc as Chain>::ChainAmount,
+	pub priority_fee: <Bsc as Chain>::ChainAmount,
 }
 
 impl Default for BscTrackedData {
@@ -99,13 +99,18 @@ impl Default for BscTrackedData {
 	fn default() -> Self {
 		frame_support::print("You should not use the default chain tracking, as it's meaningless.");
 
-		BscTrackedData { base_fee: Default::default() }
+		BscTrackedData { priority_fee: Default::default() }
 	}
 }
 
 impl BscTrackedData {
-	pub fn max_fee_per_gas(&self, base_fee_multiplier: FixedU64) -> <Bsc as Chain>::ChainAmount {
-		base_fee_multiplier.saturating_mul_int(self.base_fee)
+	pub fn max_fee_per_gas(
+		&self,
+		priority_fee_multiplier: FixedU64,
+	) -> <Bsc as Chain>::ChainAmount {
+		// the priority fee has to be non zero and ideally above a certain threshold otherwise the
+		// tx will likely be rejected by the validator
+		priority_fee_multiplier.saturating_mul_int(self.priority_fee).max(20_000_000_000)
 	}
 
 	pub fn calculate_ccm_gas_limit(
@@ -131,7 +136,7 @@ impl BscTrackedData {
 		&self,
 		gas_limit: AssetAmount,
 	) -> <Bsc as crate::Chain>::ChainAmount {
-		self.base_fee.saturating_mul(gas_limit)
+		self.priority_fee.saturating_mul(gas_limit)
 	}
 }
 

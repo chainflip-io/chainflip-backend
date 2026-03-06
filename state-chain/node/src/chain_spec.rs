@@ -1070,10 +1070,7 @@ fn testnet_genesis(
 		bsc_chain_tracking: state_chain_runtime::BscChainTrackingConfig {
 			init_chain_state: ChainState::<Bsc> {
 				block_height: 0,
-				tracked_data: BscTrackedData {
-					// todo: revisit this
-					base_fee: 1000000000u32.into(),
-				},
+				tracked_data: BscTrackedData { priority_fee: 10_000_000_000u64.into() },
 			},
 		},
 		// Channel lifetimes are set to ~2 hours at average block times.
