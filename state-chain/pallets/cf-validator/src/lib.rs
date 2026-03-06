@@ -176,15 +176,6 @@ enum RotationError {
 	DecodeWithMemTracking,
 	TypeInfo,
 	MaxEncodedLen,
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	TypeInfo,
-	MaxEncodedLen,
 )]
 pub enum PalletOffence {
 	MissedAuthorshipSlot,
