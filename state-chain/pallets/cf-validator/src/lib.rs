@@ -1856,7 +1856,7 @@ impl<T: Config> Pallet<T> {
 		let (mut rotation_state, reauction) =
 			Self::maybe_reauction_after_ban(rotation_state, offenders, context)?;
 
-		if let Some((new_outcome, new_snapshots)) = reauction {
+		if let Some(((new_outcome, new_snapshots), snapshots_changed)) = reauction {
 			let new_outcome = new_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
 			log::info!(
 				target: "cf-validator",
@@ -1864,7 +1864,9 @@ impl<T: Config> Pallet<T> {
 				context,
 				new_outcome.bond
 			);
-			Self::persist_reauction_snapshots(rotation_state.new_epoch_index, new_snapshots);
+			if snapshots_changed {
+				Self::persist_reauction_snapshots(rotation_state.new_epoch_index, new_snapshots);
+			}
 			Self::deposit_event(Event::AuctionCompleted(
 				new_outcome.winners.clone(),
 				new_outcome.bond,
@@ -1920,8 +1922,10 @@ impl<T: Config> Pallet<T> {
 		mut rotation_state: RuntimeRotationState<T>,
 		offenders: &BTreeSet<ValidatorIdOf<T>>,
 		context: &'static str,
-	) -> Result<(RuntimeRotationState<T>, Option<AuctionOutcomeWithDelegators<T>>), RotationError>
-	{
+	) -> Result<
+		(RuntimeRotationState<T>, Option<(AuctionOutcomeWithDelegators<T>, bool)>),
+		RotationError,
+	> {
 		rotation_state.ban(offenders.clone());
 		let mut delegation_snapshots: BTreeMap<
 			T::AccountId,
@@ -1933,16 +1937,31 @@ impl<T: Config> Pallet<T> {
 			rotation_state.new_epoch_index,
 			&mut delegation_snapshots,
 		);
+		let has_banned_independent_candidates =
+			Self::has_banned_independent_primary_candidates(&rotation_state, offenders);
 
-		if !snapshots_modified {
+		if !snapshots_modified && !has_banned_independent_candidates {
 			return Ok((rotation_state, None))
 		}
 
+		let snapshots_before_reauction = delegation_snapshots.clone();
 		Self::re_resolve_auction_after_ban(&rotation_state.banned, delegation_snapshots)
 			.map(|(new_outcome, new_snapshots)| {
-				(rotation_state, Some((new_outcome, new_snapshots)))
+				let snapshots_changed =
+					snapshots_modified || new_snapshots != snapshots_before_reauction;
+				(rotation_state, Some(((new_outcome, new_snapshots), snapshots_changed)))
 			})
 			.map_err(|error| RotationError::ReauctionFailed { context, error })
+	}
+
+	fn has_banned_independent_primary_candidates(
+		rotation_state: &RuntimeRotationState<T>,
+		offenders: &BTreeSet<ValidatorIdOf<T>>,
+	) -> bool {
+		offenders.iter().any(|validator_id| {
+			rotation_state.primary_candidates.contains(validator_id) &&
+				!OperatorChoice::<T>::contains_key(validator_id.into_ref())
+		})
 	}
 
 	/// Re-resolves the auction after banning nodes.
@@ -2326,7 +2345,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 		let genesis_authorities = Self::current_authorities();
 		if !genesis_authorities.is_empty() {
 			frame_support::print(
-				"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
+				"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet.",
 			);
 		};
 		Some(genesis_authorities.into_iter().collect())
