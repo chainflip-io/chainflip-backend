@@ -53,6 +53,43 @@ jobs:
         with:
           cache: rust
 
+      - name: Debug cache state 🔍
+        run: |
+          echo "=== Environment ==="
+          echo "HOME=$HOME"
+          echo "CARGO_HOME=${CARGO_HOME:-<unset, defaults to $HOME/.cargo>}"
+          echo "RUSTUP_HOME=$RUSTUP_HOME"
+          echo "PATH=$PATH"
+          echo ""
+          echo "=== Cargo home resolution ==="
+          cargo_home="${CARGO_HOME:-$HOME/.cargo}"
+          echo "Effective CARGO_HOME: $cargo_home"
+          echo ""
+          echo "=== Registry contents ==="
+          echo "ls $cargo_home/registry/:"
+          ls -la "$cargo_home/registry/" 2>&1 || echo "(does not exist)"
+          echo ""
+          echo "ls $cargo_home/registry/cache/:"
+          ls "$cargo_home/registry/cache/" 2>&1 | head -20 || echo "(empty or does not exist)"
+          echo ""
+          echo "=== Git contents ==="
+          echo "ls $cargo_home/git/:"
+          ls -la "$cargo_home/git/" 2>&1 || echo "(does not exist)"
+          echo ""
+          echo "=== Target contents ==="
+          echo "ls ./target/:"
+          ls -la ./target/ 2>&1 | head -20 || echo "(does not exist)"
+          echo ""
+          echo "=== Mount info ==="
+          mount | grep -E "cache|cargo|target" || echo "(no relevant mounts found)"
+          echo ""
+          echo "=== Cache volume ==="
+          echo "ls /cache/:"
+          ls -la /cache/ 2>&1 | head -20 || echo "(does not exist)"
+          echo ""
+          echo "=== Disk usage ==="
+          du -sh "$cargo_home/registry" "$cargo_home/git" ./target /cache 2>/dev/null || true
+
       # This is a workaround for the issue with Git ownership that prevents cargo from executing git commands to get commit hash for `--version`
       - name: Configure Git 🛠️
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
