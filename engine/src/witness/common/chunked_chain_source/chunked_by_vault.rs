@@ -19,8 +19,6 @@ pub mod continuous;
 pub mod deposit_addresses;
 pub mod egress_items;
 pub mod monitored_items;
-pub mod private_deposit_channels;
-
 use cf_chains::{Chain, ChainCrypto};
 use futures_util::StreamExt;
 

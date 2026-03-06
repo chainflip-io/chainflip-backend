@@ -93,9 +93,6 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 	Some(pubkey)
 }
 
-pub(super) type BtcIngressEgressCall =
-	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
-
 type VaultDepositWitness =
 	pallet_cf_ingress_egress::VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>;
 

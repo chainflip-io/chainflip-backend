@@ -14,36 +14,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-	super::common::{
-		chain_source::ChainClient,
-		chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
-	},
-	contract_common::events_at_block_deprecated,
-};
-use crate::evm::{event::Event, retry_rpc::EvmRetryRpcApi};
+use crate::evm::event::Event;
 use anyhow::{anyhow, Result};
 use codec::Decode;
-use ethers::types::Bloom;
-use futures_core::Future;
 use itertools::Itertools;
 use sp_core::Get;
 use std::{collections::HashMap, fmt::Debug};
 
 use cf_chains::{
-	address::{EncodedAddress, IntoForeignChainAddress},
+	address::EncodedAddress,
 	cf_parameters::VaultSwapParametersV1,
-	evm::{Address as EvmAddress, DepositDetails, EvmChain, H256},
-	CcmChannelMetadata, CcmDepositMetadata, CcmDepositMetadataUnchecked, Chain,
-	ForeignChainAddress,
+	evm::{DepositDetails, EvmChain, H256},
+	CcmChannelMetadata, CcmDepositMetadata, Chain,
 };
-use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
+use cf_primitives::{AssetAmount, ForeignChain};
 use ethers::prelude::*;
 use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
-use state_chain_runtime::{
-	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, EthereumInstance, Runtime,
-	RuntimeCall,
-};
+use state_chain_runtime::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
@@ -62,188 +49,6 @@ where
 			)
 		})
 		.map_err(|e| anyhow!(e))
-}
-
-pub fn call_from_event<
-	C: cf_chains::Chain<ChainAccount = EvmAddress, ChainBlockNumber = u64>,
-	CallBuilder: IngressCallBuilder<Chain = C>,
->(
-	block_height: u64,
-	event: Event<VaultEvents>,
-	// can be different for different EVM chains
-	native_asset: Asset,
-	source_chain: ForeignChain,
-	supported_assets: &HashMap<EvmAddress, Asset>,
-) -> Result<Option<RuntimeCall>>
-where
-	EvmAddress: IntoForeignChainAddress<C>,
-{
-	fn try_into_encoded_address(chain: ForeignChain, bytes: Vec<u8>) -> Result<EncodedAddress> {
-		EncodedAddress::from_chain_bytes(chain, bytes)
-			.map_err(|e| anyhow!("Failed to convert into EncodedAddress: {e}"))
-	}
-
-	fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
-		from: Primitive,
-	) -> Result<CfType>
-	where
-		<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
-	{
-		from.try_into().map_err(|err| {
-			anyhow!("Failed to convert into {:?}: {err}", std::any::type_name::<CfType>(),)
-		})
-	}
-
-	Ok(match event.event_parameters {
-		VaultEvents::SwapNativeFilter(SwapNativeFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			amount,
-			sender: _,
-			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-			Some(CallBuilder::vault_swap_request(
-				block_height,
-				native_asset,
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				None,
-				event.tx_hash,
-				vault_swap_parameters,
-			))
-		},
-		VaultEvents::SwapTokenFilter(SwapTokenFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			src_token,
-			amount,
-			sender: _,
-			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ()) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-			Some(CallBuilder::vault_swap_request(
-				block_height,
-				*(supported_assets
-					.get(&src_token)
-					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				None,
-				event.tx_hash,
-				vault_swap_parameters,
-			))
-		},
-		VaultEvents::XcallNativeFilter(XcallNativeFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			amount,
-			sender,
-			message,
-			gas_amount,
-			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-			Some(CallBuilder::vault_swap_request(
-				block_height,
-				native_asset,
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				Some(CcmDepositMetadata {
-					source_chain,
-					source_address: Some(sender.into_foreign_chain_address()),
-					channel_metadata: CcmChannelMetadata {
-						message: message
-							.to_vec()
-							.try_into()
-							.map_err(|_| anyhow!("Failed to deposit CCM: `message` too long."))?,
-						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
-					},
-				}),
-				event.tx_hash,
-				vault_swap_parameters,
-			))
-		},
-		VaultEvents::XcallTokenFilter(XcallTokenFilter {
-			dst_chain,
-			dst_address,
-			dst_token,
-			src_token,
-			amount,
-			sender,
-			message,
-			gas_amount,
-			cf_parameters,
-		}) => {
-			let (vault_swap_parameters, ccm_additional_data) =
-				decode_cf_parameters(&cf_parameters[..], block_height)?;
-
-			Some(CallBuilder::vault_swap_request(
-				block_height,
-				*(supported_assets
-					.get(&src_token)
-					.ok_or(anyhow!("Source token {src_token:?} not found"))?),
-				try_into_primitive(amount)?,
-				try_into_primitive(dst_token)?,
-				try_into_encoded_address(try_into_primitive(dst_chain)?, dst_address.to_vec())?,
-				Some(CcmDepositMetadata {
-					source_chain,
-					source_address: Some(sender.into_foreign_chain_address()),
-					channel_metadata: CcmChannelMetadata {
-						message: message
-							.to_vec()
-							.try_into()
-							.map_err(|_| anyhow!("Failed to deposit CCM. Message too long."))?,
-						gas_budget: try_into_primitive(gas_amount)?,
-						ccm_additional_data,
-					},
-				}),
-				event.tx_hash,
-				vault_swap_parameters,
-			))
-		},
-		VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
-			recipient,
-			amount,
-		}) => Some(CallBuilder::vault_transfer_failed(
-			native_asset
-				.try_into()
-				.unwrap_or_else(|_| panic!("Native asset must be supported by the chain.")),
-			try_into_primitive::<_, AssetAmount>(amount)?
-				.try_into()
-				.unwrap_or_else(|_| panic!("Amount must be supported by the chain.")),
-			recipient,
-		)),
-		VaultEvents::TransferTokenFailedFilter(TransferTokenFailedFilter {
-			recipient,
-			amount,
-			token,
-			reason: _,
-		}) => Some(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::<
-			Runtime,
-			EthereumInstance,
-		>::vault_transfer_failed {
-			asset: (*(supported_assets.get(&token).ok_or(anyhow!("Asset {token:?} not found"))?))
-				.try_into()
-				.expect("Asset translated from EthereumAddress must be supported by the chain."),
-			amount: try_into_primitive(amount)?,
-			destination_address: recipient.0.into(),
-		})),
-		_ => None,
-	})
 }
 
 macro_rules! vault_deposit_witness {
@@ -271,103 +76,6 @@ macro_rules! vault_deposit_witness {
 		}
 	}
 }
-
-pub(crate) use vault_deposit_witness;
-
-pub trait IngressCallBuilder {
-	type Chain: cf_chains::Chain<ChainAccount = EvmAddress>;
-
-	fn vault_swap_request(
-		block_height: <Self::Chain as cf_chains::Chain>::ChainBlockNumber,
-		source_asset: Asset,
-		deposit_amount: cf_primitives::AssetAmount,
-		destination_asset: Asset,
-		destination_address: EncodedAddress,
-		deposit_metadata: Option<CcmDepositMetadataUnchecked<ForeignChainAddress>>,
-		tx_hash: H256,
-		vault_swap_parameters: VaultSwapParametersV1<
-			<Self::Chain as cf_chains::Chain>::ChainAccount,
-		>,
-	) -> state_chain_runtime::RuntimeCall;
-
-	fn vault_transfer_failed(
-		asset: <Self::Chain as cf_chains::Chain>::ChainAsset,
-		amount: <Self::Chain as cf_chains::Chain>::ChainAmount,
-		destination_address: <Self::Chain as cf_chains::Chain>::ChainAccount,
-	) -> state_chain_runtime::RuntimeCall;
-}
-
-impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub fn vault_witnessing<
-		CallBuilder: IngressCallBuilder<Chain = Inner::Chain>,
-		EvmRpcClient: EvmRetryRpcApi + ChainClient + Clone,
-		ProcessCall,
-		ProcessingFut,
-	>(
-		self,
-		process_call: ProcessCall,
-		eth_rpc: EvmRpcClient,
-		contract_address: EvmAddress,
-		native_asset: Asset,
-		source_chain: ForeignChain,
-		supported_assets: HashMap<EvmAddress, Asset>,
-	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
-	where
-		Inner::Chain: cf_chains::Chain<
-			ChainAmount = u128,
-			DepositDetails = DepositDetails,
-			ChainAccount = EvmAddress,
-		>,
-		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom>,
-		EvmAddress: IntoForeignChainAddress<Inner::Chain>,
-		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-			+ Send
-			+ Sync
-			+ Clone
-			+ 'static,
-		ProcessingFut: Future<Output = ()> + Send + 'static,
-	{
-		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
-			assert!(<Inner::Chain as Chain>::is_block_witness_root(header.index));
-
-			let process_call = process_call.clone();
-			let eth_rpc = eth_rpc.clone();
-			let supported_assets = supported_assets.clone();
-			let mut process_calls = vec![];
-			async move {
-				for event in events_at_block_deprecated::<Inner::Chain, VaultEvents, _>(
-					header,
-					contract_address,
-					&eth_rpc,
-				)
-				.await?
-				{
-					match call_from_event::<Inner::Chain, CallBuilder>(
-						header.index,
-						event,
-						native_asset,
-						source_chain,
-						&supported_assets,
-					) {
-						Ok(option_call) =>
-							if let Some(call) = option_call {
-								process_calls.push(process_call(call, epoch.index));
-							},
-						Err(message) => {
-							tracing::warn!("Ignoring vault contract event: {message}");
-						},
-					}
-				}
-				futures::future::join_all(process_calls).await;
-
-				Result::Ok(header.data)
-			}
-		})
-	}
-}
-
-////////////////////////////////////////////////////////
-// Elections code
 
 fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 	from: Primitive,

@@ -15,59 +15,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	evm::{
-		cached_rpc::AddressCheckerRetryRpcApiWithResult, event::Event, retry_rpc::EvmRetryRpcApi,
-		rpc::address_checker::AddressState,
-	},
+	evm::{cached_rpc::AddressCheckerRetryRpcApiWithResult, rpc::address_checker::AddressState},
 	witness::evm::{
 		EvmAddressStateClient, EvmBlockQuery, EvmDepositChannelWitnessingConfig, EvmEventClient,
 	},
 };
 use cf_chains::{evm::EvmChain, DepositChannel};
-use ethers::{abi::ethereum_types::BloomInput, types::Bloom};
 use futures::try_join;
 use pallet_cf_elections::electoral_systems::block_height_witnesser::ChainTypes;
 use std::collections::{HashMap, HashSet};
 
-use super::{super::common::chain_source::Header, vault::VaultEvents};
+use super::vault::VaultEvents;
 use anyhow::{ensure, Result};
 use sp_core::{H160, H256};
-
-// ----- implementation ------
-
-pub async fn events_at_block_deprecated<Chain, EventParameters, EvmRpcClient>(
-	header: Header<u64, H256, Bloom>,
-	contract_address: ethers::abi::Address,
-	eth_rpc: &EvmRpcClient,
-) -> Result<Vec<Event<EventParameters>>>
-where
-	Chain: cf_chains::Chain<ChainBlockNumber = u64>,
-	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	EvmRpcClient: EvmRetryRpcApi,
-{
-	assert!(Chain::is_block_witness_root(header.index));
-	if Chain::WITNESS_PERIOD == 1 {
-		let mut contract_bloom = Bloom::default();
-		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
-
-		// if we have logs for this block, fetch them.
-		if header.data.contains_bloom(&contract_bloom) {
-			eth_rpc.get_logs(header.hash, contract_address).await
-		} else {
-			// we know there won't be interesting logs, so don't fetch for events
-			vec![]
-		}
-	} else {
-		eth_rpc
-			.get_logs_range(Chain::block_witness_range(header.index), contract_address)
-			.await
-	}
-	.into_iter()
-	.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-		Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-	})
-	.collect::<anyhow::Result<Vec<_>>>()
-}
 
 pub async fn address_states<EvmCachingClient>(
 	eth_rpc: &EvmCachingClient,
