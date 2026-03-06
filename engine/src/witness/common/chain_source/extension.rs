@@ -27,8 +27,8 @@ use crate::witness::common::{
 };
 
 use super::{
-	aliases, and_then::AndThen, lag_safety::LagSafety, logging::Logging, shared::SharedSource,
-	strictly_monotonic::StrictlyMonotonic, then::Then, ChainSource, Header,
+	aliases, logging::Logging, shared::SharedSource, strictly_monotonic::StrictlyMonotonic,
+	then::Then, ChainSource, Header,
 };
 
 #[async_trait::async_trait]
@@ -42,32 +42,6 @@ pub trait ChainSourceExt: ChainSource {
 		F: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> Fut + Send + Sync + Clone,
 	{
 		Then::new(self, f)
-	}
-
-	/// Map the data of each header when the data is a Result::Ok with an async closure.
-	fn and_then<Input, Output, Error, Fut, F>(self, f: F) -> AndThen<Self, F>
-	where
-		Self: Sized + ChainSource<Data = Result<Input, Error>>,
-		Input: aliases::Data,
-		Output: aliases::Data,
-		Error: aliases::Data,
-		Fut: Future<Output = Result<Output, Error>> + Send,
-		F: Fn(Header<Self::Index, Self::Hash, Input>) -> Fut + Send + Sync + Clone,
-	{
-		AndThen::new(self, f)
-	}
-
-	/// Apply some safety margin to the chain source, such that the chain source will lag behind by
-	/// a set margin. This is specifically for chains that don't offer deterministic finality, such
-	/// as Ethereum or Bitcoin.
-	fn lag_safety(
-		self,
-		margin: <<Self as ExternalChainSource>::Chain as cf_chains::Chain>::ChainBlockNumber,
-	) -> LagSafety<Self>
-	where
-		Self: ExternalChainSource + Sized,
-	{
-		LagSafety::new(self, margin)
 	}
 
 	/// Allows sharing an underlying chain source between multiple consumers. This ensures that work

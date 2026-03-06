@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod and_then;
 pub mod chunked_by_time;
 pub mod chunked_by_vault;
 pub mod latest_then;
