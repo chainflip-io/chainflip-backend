@@ -18,7 +18,6 @@ pub mod contract_common;
 pub mod erc20_deposits;
 pub mod evm_deposits;
 pub mod key_manager;
-pub mod source;
 pub mod vault;
 
 use anyhow::Result;
