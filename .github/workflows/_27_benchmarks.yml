@@ -18,6 +18,7 @@ jobs:
       env:
         NSC_CACHE_PATH: "/cache"
         RUSTUP_HOME: "/root/.rustup"
+        CARGO_HOME: "/github/home/.cargo"
       volumes:
         - /cache:/cache
       options: --cap-add=SYS_ADMIN
