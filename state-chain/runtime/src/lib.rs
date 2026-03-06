@@ -98,7 +98,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_01_00,
+	spec_version: 2_02_00,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -397,11 +397,9 @@ type AllMigrations = (
 	// DO NOT REMOVE `VersionUpdate`. THIS IS REQUIRED TO UPDATE THE VERSION FOR THE CFEs EVERY
 	// UPGRADE
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
-	migrations::sol_election_settings::Migration,
-	migrations::migrate_broadcast_callbacks::Migration,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV2_1,
+	MigrationsForV2_2,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -462,9 +460,7 @@ impl frame_support::traits::UncheckedOnRuntimeUpgrade for NoopMigration {
 	}
 }
 
-use frame_support::migrations::VersionedMigration;
-#[allow(clippy::allow_attributes)]
-#[allow(unused_macros)]
+#[expect(unused_macros)]
 macro_rules! instanced_migrations {
 	(
 		module: $module:ident,
@@ -476,7 +472,7 @@ macro_rules! instanced_migrations {
 	) => {
 		(
 			$(
-				VersionedMigration<
+				frame_support::migrations::VersionedMigration<
 					$from,
 					$to,
 					$migration<Runtime, $include>,
@@ -485,7 +481,7 @@ macro_rules! instanced_migrations {
 				>,
 			)+
 			$(
-				VersionedMigration<
+				frame_support::migrations::VersionedMigration<
 					$from,
 					$to,
 					NoopMigration,
@@ -498,24 +494,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-use pallet_cf_ingress_egress::migrations::channel_status_migration::Migration as ChannelStatusMigration;
-type MigrationsForV2_1 = (
-	migrations::ethereum_elections::Migration,
-	migrations::arbitrum_elections::Migration,
-	migrations::safe_mode::SafeModeMigration,
-	instanced_migrations! {
-		module: pallet_cf_ingress_egress,
-		migration: ChannelStatusMigration,
-		from: 29,
-		to: 30,
-		include_instances: [EthereumInstance, ArbitrumInstance],
-		exclude_instances: [PolkadotInstance, BitcoinInstance, SolanaInstance, AssethubInstance],
-	},
-	pallet_session::migrations::v1::MigrateV0ToV1<
-		Runtime,
-		pallet_session::migrations::v1::InitOffenceSeverity<Runtime>,
-	>,
-);
+type MigrationsForV2_2 = ();
 
 #[cfg(test)]
 mod test {
