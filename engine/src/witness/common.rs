@@ -15,9 +15,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod block_height_witnesser;
+pub mod block_witnesser;
 pub mod chain_source;
 pub mod chunked_chain_source;
 pub mod epoch_source;
+pub mod traits;
 
 use cf_chains::{
 	instances::{ChainInstanceAlias, ChainInstanceFor, CryptoInstanceFor},

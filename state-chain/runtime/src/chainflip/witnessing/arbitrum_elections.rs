@@ -2,10 +2,7 @@ use core::ops::RangeInclusive;
 
 use crate::{
 	chainflip::{
-		witnessing::{
-			elections::TypesFor,
-			pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
-		},
+		witnessing::pallet_hooks::{self, EvmKeyManagerEvent, EvmVaultContractEvent},
 		ReportFailedLivenessCheck,
 	},
 	constants::common::LIVENESS_CHECK_DURATION,
@@ -19,7 +16,7 @@ use cf_chains::{
 	Arbitrum, Chain, DepositChannel,
 };
 use cf_traits::{impl_pallet_safe_mode, Chainflip, Hook};
-use cf_utilities::impls;
+use cf_utilities::{define_empty_struct, impls};
 use codec::DecodeWithMemTracking;
 use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_cf_elections::{
@@ -69,8 +66,8 @@ pub type ArbitrumElectoralSystemRunner = CompositeRunner<
 	ArbitrumElectionHooks,
 >;
 
-pub struct ArbitrumChainTag;
-pub type ArbitrumChain = TypesFor<ArbitrumChainTag>;
+define_empty_struct! { pub struct ArbitrumChain; }
+
 impl ChainTypes for ArbitrumChain {
 	type ChainBlockNumber = BlockWitnessRange<Arbitrum>;
 	type ChainBlockHash = evm::H256;
@@ -87,11 +84,12 @@ pub enum ArbitrumElectoralEvents {
 }
 
 // ------------------------ block height tracking ---------------------------
-/// The electoral system for block height tracking
-pub struct ArbitrumBlockHeightWitnesser;
+// The electoral system for block height tracking
+
+define_empty_struct! { pub struct ArbitrumBlockHeightWitnesser; }
 
 impls! {
-	for TypesFor<ArbitrumBlockHeightWitnesser>:
+	for ArbitrumBlockHeightWitnesser:
 
 	// Associating the SM related types to the struct
 	BHWTypes {
@@ -133,14 +131,13 @@ impls! {
 }
 
 /// Generating the state machine-based electoral system
-pub type ArbitrumBlockHeightWitnesserES =
-	StatemachineElectoralSystem<TypesFor<ArbitrumBlockHeightWitnesser>>;
+pub type ArbitrumBlockHeightWitnesserES = StatemachineElectoralSystem<ArbitrumBlockHeightWitnesser>;
 
 // ------------------------ deposit channel witnessing ---------------------------
-/// The electoral system for deposit channel witnessing
-pub struct ArbitrumDepositChannelWitnessing;
+// The electoral system for deposit channel witnessing
+define_empty_struct! { pub struct ArbitrumDepositChannelWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<ArbitrumDepositChannelWitnessing> {
+impl BlockWitnesserInstance for ArbitrumDepositChannelWitnessing {
 	const BWNAME: &'static str = "DepositChannel";
 	type Runtime = Runtime;
 	type Chain = ArbitrumChain;
@@ -180,13 +177,13 @@ impl BlockWitnesserInstance for TypesFor<ArbitrumDepositChannelWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type ArbitrumDepositChannelWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumDepositChannelWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<ArbitrumDepositChannelWitnessing>>;
 
 // ------------------------ vault deposit witnessing ---------------------------
-/// The electoral system for vault deposit witnessing
-pub struct ArbitrumVaultDepositWitnessing;
+// The electoral system for vault deposit witnessing
+define_empty_struct! { pub struct ArbitrumVaultDepositWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<ArbitrumVaultDepositWitnessing> {
+impl BlockWitnesserInstance for ArbitrumVaultDepositWitnessing {
 	const BWNAME: &'static str = "VaultDeposit";
 	type Runtime = Runtime;
 	type Chain = ArbitrumChain;
@@ -217,12 +214,12 @@ impl BlockWitnesserInstance for TypesFor<ArbitrumVaultDepositWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type ArbitrumVaultDepositWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumVaultDepositWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<ArbitrumVaultDepositWitnessing>>;
 
 // ------------------------ Key Manager witnessing ---------------------------
-pub struct ArbitrumKeyManagerWitnessing;
+define_empty_struct! { pub struct ArbitrumKeyManagerWitnessing; }
 
-impl BlockWitnesserInstance for TypesFor<ArbitrumKeyManagerWitnessing> {
+impl BlockWitnesserInstance for ArbitrumKeyManagerWitnessing {
 	const BWNAME: &'static str = "KeyManager";
 	type Runtime = Runtime;
 	type Chain = ArbitrumChain;
@@ -249,7 +246,7 @@ impl BlockWitnesserInstance for TypesFor<ArbitrumKeyManagerWitnessing> {
 
 /// Generating the state machine-based electoral system
 pub type ArbitrumKeyManagerWitnessingES =
-	StatemachineElectoralSystem<GenericBlockWitnesser<TypesFor<ArbitrumKeyManagerWitnessing>>>;
+	StatemachineElectoralSystem<GenericBlockWitnesser<ArbitrumKeyManagerWitnessing>>;
 
 // ------------------------ liveness ---------------------------
 pub type ArbitrumLiveness = Liveness<
@@ -444,7 +441,7 @@ impl_pallet_safe_mode! {
 #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum ElectionTypes {
 	DepositChannels(
-		<TypesFor<ArbitrumDepositChannelWitnessing> as BlockWitnesserInstance>::ElectionProperties,
+		<ArbitrumDepositChannelWitnessing as BlockWitnesserInstance>::ElectionProperties,
 	),
 	Vaults(()),
 	KeyManager(()),

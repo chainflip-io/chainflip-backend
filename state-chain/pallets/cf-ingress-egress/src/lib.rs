@@ -2311,7 +2311,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								BoundedVec::new(),
 								None,
 								None,
-								SwapOrigin::OnChainAccount(lp_account.clone()),
+								origin.into(),
 							);
 							input_amount
 						}

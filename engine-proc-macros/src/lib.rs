@@ -38,9 +38,11 @@ pub fn link_engine_library_version(args: TokenStream, item: TokenStream) -> Toke
 
 	let version = parse_macro_input!(args as syn::LitStr).value();
 
-	if ![OLD_VERSION, NEW_VERSION].contains(&version.as_str()) {
-		panic!("Invalid version. Expected either old new version.")
-	}
+	assert!(
+		[OLD_VERSION, NEW_VERSION].contains(&version.as_str()),
+		"Invalid version. Expected either old or new version, got {}.",
+		version
+	);
 
 	let underscored_version = version.replace('.', "_");
 
