@@ -848,7 +848,9 @@ const web3Instances: Partial<Record<string, Web3>> = {};
 export function getWeb3(chain: Chain): Web3 {
   const endpoint = getEvmEndpoint(chain);
   if (!web3Instances[endpoint]) {
-    web3Instances[endpoint] = new Web3(endpoint);
+    web3Instances[endpoint] = new Web3(
+      new Web3.providers.HttpProvider(endpoint, { keepAlive: false }),
+    );
   }
   return web3Instances[endpoint]!;
 }
