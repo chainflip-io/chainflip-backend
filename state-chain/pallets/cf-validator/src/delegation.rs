@@ -1,5 +1,6 @@
 use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
 use cf_primitives::EpochIndex;
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
@@ -273,11 +274,11 @@ where
 	/// Returns true if the validator was found and moved.
 	pub fn move_validator_to_delegator(&mut self, validator: Account) -> bool {
 		if let Some(bid) = self.validators.remove(&validator) {
-			debug_assert!(
-				self.delegators.insert(validator, bid).is_none(),
-				"Validator being moved to delegator should not already be a delegator"
-			);
-
+			if self.delegators.insert(validator, bid).is_some() {
+				log_or_panic!(
+					"Validator being moved to delegator should not already be a delegator"
+				)
+			}
 			true
 		} else {
 			false
