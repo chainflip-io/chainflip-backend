@@ -17,33 +17,5 @@
 use crate::Pallet;
 
 use cf_runtime_utilities::PlaceholderMigration;
-use frame_support::migrations::VersionedMigration;
 
-mod reschedule_stuck_swaps;
-mod set_default_oracle_price_protection;
-mod swap_fee_migration;
-
-pub type PalletMigration<T> = (
-	VersionedMigration<
-		13,
-		14,
-		swap_fee_migration::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		14,
-		15,
-		reschedule_stuck_swaps::RescheduleStuckSwaps<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	VersionedMigration<
-		15,
-		16,
-		set_default_oracle_price_protection::Migration<T>,
-		Pallet<T>,
-		<T as frame_system::Config>::DbWeight,
-	>,
-	PlaceholderMigration<16, Pallet<T>>,
-);
+pub type PalletMigration<T> = (PlaceholderMigration<16, Pallet<T>>,);
