@@ -31,15 +31,9 @@ export async function approveErc20(
 
   // Use the default whale keypair if no wallet is provided
   if (evmWallet) {
-    const tx = {
-      to: tokenContractAddress,
-      data: txData,
-      value: '0',
-      gas: 100000,
-    };
-
-    const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet!.privateKey);
-    await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    await signAndSendTxEvm(logger, chain, tokenContractAddress, '0', txData, undefined, {
+      privateKey: evmWallet!.privateKey,
+    });
   } else {
     await signAndSendTxEvm(logger, chain, tokenContractAddress, '0', txData);
   }

@@ -233,7 +233,6 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
   const sourceAsset = 'ArbEth';
   const srcChain = 'Arbitrum';
   const evmWallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
-  const web3 = getWeb3(srcChain);
 
   // Hardcoded payload obtained encoding a Vault Swap with the old Encoding
   const vaultSwapDetailsArray = [
@@ -274,8 +273,9 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
       gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
     };
 
-    const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, {
+      privateKey: evmWallet.privateKey,
+    });
 
     const subcf = cf.withChildLogger(
       `${vaultSwapDetails.chain}_${vaultSwapDetails.broker ?? ''} testEvmLegacyCfParametersVaultSwap`,
