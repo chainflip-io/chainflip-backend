@@ -49,7 +49,6 @@ RUN npm install -g pnpm
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 
-
 # Set environment
 # RUSTUP_HOME must be set explicitly (not rely on $HOME) because GitHub
 # Actions overrides $HOME to /github/home when running in a container,
