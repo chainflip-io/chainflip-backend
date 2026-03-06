@@ -1,7 +1,5 @@
 import { execSync } from 'child_process';
 import * as crypto from 'crypto';
-import http from 'http';
-import https from 'https';
 import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
