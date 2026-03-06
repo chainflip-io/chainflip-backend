@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { Assets, defaultAssetAmounts, newAssetAddress, sleep } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
 import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';

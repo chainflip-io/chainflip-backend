@@ -1,4 +1,4 @@
-import { Chain, InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipChain as Chain, ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   newAssetAddress,
   decodeDotAddressForContract,

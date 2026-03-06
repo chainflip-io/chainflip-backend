@@ -1,5 +1,5 @@
 import z from 'zod';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import assert from 'assert';
 import {
   amountToFineAmount,

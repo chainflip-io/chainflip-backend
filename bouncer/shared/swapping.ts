@@ -1,4 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from 'polkadot/util-crypto';

@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import { send } from 'shared/send';
 import { parseAssetString } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';

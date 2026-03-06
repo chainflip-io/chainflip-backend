@@ -1,4 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { HDNodeWallet } from 'ethers';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';

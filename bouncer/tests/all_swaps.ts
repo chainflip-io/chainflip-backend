@@ -1,4 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { SwapParams } from 'shared/perform_swap';
 import { newCcmMetadata, newVaultSwapCcmMetadata, testSwap, testVaultSwap } from 'shared/swapping';
 import { btcAddressTypes } from 'shared/new_btc_address';

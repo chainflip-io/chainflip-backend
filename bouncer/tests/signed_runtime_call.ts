@@ -1,5 +1,5 @@
 import { TestContext } from 'shared/utils/test_context';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   createEvmWallet,
   decodeSolAddress,

@@ -10,7 +10,7 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import {
   parseAssetString,
   runWithTimeoutAndExit,

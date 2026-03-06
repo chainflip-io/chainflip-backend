@@ -8,7 +8,7 @@
 // It will fund liquidity of the given currency and amount
 // For example: ./commands/deposit_liquidity.ts Btc 1.5 '//LP_2'
 
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { globalLogger } from 'shared/utils/logger';

@@ -6,14 +6,12 @@ import Client from 'bitcoin-core';
 import { ApiPromise, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import {
-  Chain as SDKChain,
-  InternalAsset as SDKAsset,
+  ChainflipChain as SDKChain,
+  ChainflipAsset as SDKAsset,
   assetConstants,
   chainConstants,
   chainflipAssets,
   chainflipChains,
-} from '@chainflip/cli';
-import {
   chainContractId,
   assetContractId,
   AssetAndChain,

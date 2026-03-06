@@ -1,4 +1,5 @@
-import { InternalAsset as Asset, broker } from '@chainflip/cli';
+import { broker } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import BigNumber from 'bignumber.js';

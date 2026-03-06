@@ -1,4 +1,4 @@
-import { InternalAsset as Asset, Chain } from '@chainflip/cli';
+import { ChainflipAsset as Asset, ChainflipChain as Chain } from '@chainflip/utils/chainflip';
 import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,

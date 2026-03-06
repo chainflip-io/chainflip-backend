@@ -1,5 +1,5 @@
 #!/usr/bin/env -S pnpm tsx
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import { performSwap } from 'shared/perform_swap';
 import { parseAssetString } from 'shared/utils';
 import { newChainflipIO } from 'shared/utils/chainflip_io';

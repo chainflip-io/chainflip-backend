@@ -1,4 +1,4 @@
-import { Chain } from '@chainflip/cli';
+import { ChainflipChain as Chain } from '@chainflip/utils/chainflip';
 import { assetDecimals, fineAmountToAmount, getWeb3 } from 'shared/utils';
 
 export async function getEvmNativeBalance(chain: Chain, address: string): Promise<string> {

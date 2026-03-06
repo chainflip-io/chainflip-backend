@@ -1,4 +1,4 @@
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import {
   newAssetAddress,
   sleep,

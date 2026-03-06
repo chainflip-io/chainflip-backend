@@ -1,4 +1,4 @@
-import { Chain } from '@chainflip/cli';
+import { ChainflipChain as Chain } from '@chainflip/utils/chainflip';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { amountToFineAmount, getWeb3 } from 'shared/utils';
 import { getErc20abi } from 'shared/contract_interfaces';

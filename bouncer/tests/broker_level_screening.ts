@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Chain, InternalAsset } from '@chainflip/cli';
+import { ChainflipChain as Chain, ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
   btcClientMutex,

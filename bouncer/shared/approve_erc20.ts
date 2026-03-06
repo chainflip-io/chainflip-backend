@@ -1,5 +1,5 @@
 import { HDNodeWallet } from 'ethers';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { amountToFineAmount, chainFromAsset, getWeb3, getContractAddress } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getErc20abi } from 'shared/contract_interfaces';

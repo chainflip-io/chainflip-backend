@@ -1,4 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,

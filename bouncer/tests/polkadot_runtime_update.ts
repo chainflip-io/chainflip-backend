@@ -3,7 +3,7 @@ import path from 'path';
 import assert from 'assert';
 import { execSync } from 'child_process';
 
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { blake2AsU8a } from 'polkadot/util-crypto';
 import { amountToFineAmount, sleep, assetDecimals, Assets } from 'shared/utils';
 import { specVersion, getNetworkRuntimeVersion } from 'shared/utils/spec_version';

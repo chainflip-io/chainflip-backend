@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 
 import {
   decodeDotAddressForContract,

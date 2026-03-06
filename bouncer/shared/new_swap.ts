@@ -1,4 +1,5 @@
-import { InternalAsset as Asset, broker } from '@chainflip/cli';
+import { broker } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   decodeDotAddressForContract,
   stateChainAssetFromAsset,

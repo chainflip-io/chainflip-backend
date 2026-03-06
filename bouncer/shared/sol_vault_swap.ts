@@ -1,6 +1,6 @@
 import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-import { InternalAsset as Asset } from '@chainflip/cli';
+import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   PublicKey,
   sendAndConfirmTransaction,

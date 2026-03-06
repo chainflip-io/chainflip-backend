@@ -5,7 +5,7 @@
 // It will create a zero to infinity range order for the currency and amount given
 // For example: ./commands/range_order.ts Btc 10
 
-import { InternalAsset } from '@chainflip/cli';
+import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import { rangeOrder } from 'shared/range_order';
 import { parseAssetString, runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
