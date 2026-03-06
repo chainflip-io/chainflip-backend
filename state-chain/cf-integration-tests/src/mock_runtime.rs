@@ -304,7 +304,7 @@ impl ExtBuilder {
 			bsc_chain_tracking: BscChainTrackingConfig {
 				init_chain_state: ChainState::<Bsc> {
 					block_height: 0,
-					tracked_data: BscTrackedData { base_fee: 1000000000u32.into() },
+					tracked_data: BscTrackedData { priority_fee: 10000000000u64.into() },
 				},
 			},
 			bitcoin_threshold_signer: Default::default(),

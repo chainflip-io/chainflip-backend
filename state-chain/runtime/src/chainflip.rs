@@ -158,8 +158,8 @@ impl cf_traits::WaivedFees for WaivedFees {
 const ETHEREUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(2, 1);
 /// Arbitrum has smaller variability so we are willing to pay at most 1.5x the base fee.
 const ARBITRUM_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
-/// BSC has relatively stable fees, so we use 1.5x the base fee.
-const BSC_BASE_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
+/// we use same multiplier as arb.
+const BSC_PRIORITY_FEE_MULTIPLIER: FixedU64 = FixedU64::from_rational(3, 2);
 
 pub trait EvmPriorityFee<C: Chain> {
 	fn get_priority_fee(_tracked_data: &C::TrackedData) -> Option<U256> {
@@ -181,9 +181,9 @@ impl EvmPriorityFee<Arbitrum> for ArbTransactionBuilder {
 }
 
 impl EvmPriorityFee<Bsc> for BscTransactionBuilder {
-	// BSC doesn't use priority fees
-	fn get_priority_fee(_tracked_data: &<Bsc as Chain>::TrackedData) -> Option<U256> {
-		Some(U256::from(0))
+	fn get_priority_fee(tracked_data: &<Bsc as Chain>::TrackedData) -> Option<U256> {
+		// we set the max fee and priority fee the same in bsc since base fee is always 0
+		Some(U256::from(tracked_data.max_fee_per_gas(BSC_PRIORITY_FEE_MULTIPLIER)))
 	}
 }
 
@@ -209,7 +209,8 @@ impl_transaction_builder_for_evm_chain!(
 	BscTransactionBuilder,
 	BscApi<EvmEnvironment>,
 	BscChainTracking,
-	BSC_BASE_FEE_MULTIPLIER
+	// we use priority fee multiplier in bsc's case since base fee is anyways always 0 in bsc
+	BSC_PRIORITY_FEE_MULTIPLIER
 );
 
 #[macro_export]

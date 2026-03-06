@@ -256,6 +256,9 @@ pub type BscLiveness = Liveness<
 >;
 
 // ------------------------ fee tracking ---------------------------
+pub const FEE_HISTORY_WINDOW: u64 = 5;
+pub const PRIORITY_FEE_PERCENTILE: u64 = 50;
+
 pub struct BscFeeUpdateHook;
 impl UpdateFeeHook<BscTrackedData> for BscFeeUpdateHook {
 	fn update_fee(fee: BscTrackedData) {
@@ -267,7 +270,7 @@ impl UpdateFeeHook<BscTrackedData> for BscFeeUpdateHook {
 
 pub type BscFeeTracking = UnsafeMedian<
 	BscTrackedData,
-	(),
+	(u64, u64),
 	BscFeeUpdateHook,
 	<Runtime as Chainflip>::ValidatorId,
 	BlockNumberFor<Runtime>,
@@ -415,7 +418,7 @@ pub fn initial_state() -> InitialStateOf<Runtime, BscInstance> {
 			Default::default(),
 			Default::default(),
 			Default::default(),
-			Default::default(),
+			(FEE_HISTORY_WINDOW, PRIORITY_FEE_PERCENTILE),
 			LIVENESS_CHECK_DURATION,
 		),
 		shared_data_reference_lifetime: 8,

@@ -34,7 +34,7 @@ use super::{api::BscApi, BscTrackedData};
 
 impl BenchmarkValue for BscTrackedData {
 	fn benchmark_value() -> Self {
-		Self { base_fee: 5_000_000_000 }
+		Self { priority_fee: 1_000_000_000 }
 	}
 }
 
