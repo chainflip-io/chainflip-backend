@@ -250,20 +250,27 @@ pub mod mockall_utilities {
 	}
 }
 
-#[expect(clippy::literal_string_with_formatting_args)]
-pub fn repository_link() -> Option<impl core::fmt::Display> {
-	core::option_env!("COMMIT_HASH").map(|commit_hash| {
-		lazy_format::lazy_format!(
-			"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
-		)
-	})
+/// Returns a link to the repository at the current commit, if `COMMIT_HASH` is set.
+///
+/// This is a macro (not a function) so that `option_env!("COMMIT_HASH")` is evaluated
+/// at the **call site's** crate, avoiding unnecessary recompilation of the `utilities`
+/// crate (and all its dependents) when only the commit hash changes.
+#[macro_export]
+macro_rules! repository_link {
+	() => {
+		core::option_env!("COMMIT_HASH").map(|commit_hash| {
+			$crate::internal_lazy_format!(
+				"https://github.com/chainflip-io/chainflip-backend/tree/{commit_hash}"
+			)
+		})
+	};
 }
 
 #[macro_export]
 macro_rules! here {
 	() => {
 		cf_utilities::internal_lazy_format!(
-			if let Some(repository_link) = cf_utilities::repository_link() => (
+			if let Some(repository_link) = cf_utilities::repository_link!() => (
 				"{}/{}#L{}#C{}",
 				repository_link,
 				file!(),
