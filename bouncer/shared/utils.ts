@@ -845,23 +845,9 @@ export function getEvmEndpoint(chain: Chain): string {
   }
 }
 
-const web3Instances: Partial<Record<string, Web3>> = {};
-
-// Shared agents cap concurrent EVM connections so excess requests queue in Node.js
-// rather than flooding the node when many tests run in parallel.
-const evmHttpAgent = new http.Agent({ keepAlive: false, maxSockets: 100 });
-const evmHttpsAgent = new https.Agent({ keepAlive: false, maxSockets: 100 });
-
 export function getWeb3(chain: Chain): Web3 {
   const endpoint = getEvmEndpoint(chain);
-  if (!web3Instances[endpoint]) {
-    web3Instances[endpoint] = new Web3(
-      new Web3.providers.HttpProvider(endpoint, {
-        agent: { http: evmHttpAgent, https: evmHttpsAgent, baseUrl: endpoint },
-      }),
-    );
-  }
-  return web3Instances[endpoint]!;
+  return new Web3(endpoint);
 }
 
 export function getSolConnection(): Connection {
