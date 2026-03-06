@@ -16,7 +16,6 @@ jobs:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06-58"
       env:
         RUSTUP_HOME: "/root/.rustup"
-        CARGO_HOME: "/root/.cargo"
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -30,7 +29,6 @@ jobs:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06-58"
       env:
         RUSTUP_HOME: "/root/.rustup"
-        CARGO_HOME: "/root/.cargo"
 
     steps:
       - name: Checkout 🛒
@@ -49,7 +47,6 @@ jobs:
       env:
         NSC_CACHE_PATH: "/cache"
         RUSTUP_HOME: "/root/.rustup"
-        CARGO_HOME: "/root/.cargo"
 
     steps:
       - name: Checkout 🛒
