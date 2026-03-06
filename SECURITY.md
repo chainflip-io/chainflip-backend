@@ -52,6 +52,10 @@ Researchers participating in the Bug Bounty Program must adhere to the following
 3. Do not disclose or publish any information related to vulnerabilities until they have been resolved by Chainflip Labs.
 4. Comply with all applicable laws and regulations.
 
+## AI Submissions
+
+Due to the increased capabilities of frontier AI models, we are seeing an increase in the volume of submissions. Many submissions are clearly AI-written, and often extremely verbose, repetitive and unverified. Reviewing and responding to incorrect claims takes a lot of time away from development. For this reason, before submitting, please ensure that the report is accurate and succinct. The core claims should be clearly laid out along with a clearly-reasoned step by step proof of concept.
+
 ## Confidentiality
 
 Chainflip Labs will treat all bug submissions and communication with researchers as confidential, except when disclosure is required by law. We encourage researchers to maintain confidentiality as well.

@@ -76,6 +76,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check tag points to a commit on the release branch 🔍
+        if: github.ref_type == 'tag'
         shell: bash
         run: |
           TAG="${{ github.ref_name }}"

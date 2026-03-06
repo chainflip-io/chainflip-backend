@@ -35,65 +35,56 @@ tree --no-default-features --depth 1 --edges=features,normal
 
 # Requires `cargo-audit`. Run `cargo install cargo-audit` to install it.
 # The `cf-audit` command is configured to ignore the following advisories:
-# Vulnerabilities:
-# - RUSTSEC-2024-0344: curve25519-dalek is a transitive dependency of `substrate`
-# Unmaintained:
+#
 # - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
-# - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
 # - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
-# - RUSTSEC-2022-0080: This advisory comes from `parity-util-mem`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
-# - RUSTSEC-2024-0336: This advisory comes from rustls, which is a dependency of the `try-runtime-cli` crate.
-# - RUSTSEC-2024-0320: Unmaintained transitive `yaml-rust` dependency of `insta` crate. We only use insta for testing.
-# - RUSTSEC-2024-0370: Unmaintained transitive dependency. Only affects macro generation efficiency.
-# - RUSTSEC-2024-0388: Unmaintained transitive dependency `derivative` used by substrate.
-# - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
-# - RUSTSEC-2024-0421: Transitive dependency `idna` used by libp2p, among others.
-# - RUSTSEC-2025-0009: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
-# - RUSTSEC-2025-0010: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
-# - RUSTSEC-2024-0436: Paste is no longer maintained. This is a pre-processor macro, so not an immediate security concern.
-# - RUSTSEC-2025-0017: The `trust-dns` project has been rebranded to `hickory-dns`. Used by substrate.
 # - RUSTSEC-2023-0091: Low severity, difficult to exploit of wasmtime, dependency of substrate.
+# - RUSTSEC-2024-0320: Unmaintained transitive `yaml-rust` dependency of `insta` crate. We only use insta for testing.
+# - RUSTSEC-2024-0344: curve25519-dalek is a transitive dependency of `substrate`
+# - RUSTSEC-2024-0370: Unmaintained transitive dependency. Only affects macro generation efficiency.
+# - RUSTSEC-2024-0384: Unmaintained transitive dependency `instant` used by substrate.
+# - RUSTSEC-2024-0388: Unmaintained transitive dependency `derivative` used by substrate.
+# - RUSTSEC-2024-0436: Paste is no longer maintained. This is a pre-processor macro, so not an immediate security concern.
 # - RUSTSEC-2024-0438: Wasmtime security issue for Windows devices, so not applicable. Dependency of substrate.
 # - RUSTSEC-2024-0442: Wasmtime jit debugger issue.
+# - RUSTSEC-2025-0009: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
+# - RUSTSEC-2025-0010: Transitive dependency use by rustls 0.20.9, as per the advisory, TLS is unaffected.
 # - RUSTSEC-2025-0055: logging injection vulnerability, requires display of arbitrary user input. Fixing this causes color sequence to be escaped and displayed in logs.
 # - RUSTSEC-2025-0057: fxhash is unmaintained, but we can't remove it because it's used in substrate.
 # - RUSTSEC-2025-0118: Unsound API access to a WebAssembly shared linear memory.
-# - RUSTSEC-2025-0120: Unmaintained JSON crate. Only used for config.
 # - RUSTSEC-2025-0134: Unmaintained rustls-pemfile crate (version 1.0.4 and 2.2.0). Substrate dependency.
 # - RUSTSEC-2025-0141: Unmaintained bincode crate. Wasmtime dependency.
 # - RUSTSEC-2026-0002: Unsoundness in the lru crate. Our immediate dependency is patched, but not the transitive dependency, which is limited to libp2p-identify and smoldot crates.
-# - RUSTSEC-2026-0009: Medium severity, but only exploitable if user-provided strings are parsed into a time format by the `time` dependency.
 # - RUSTSEC-2026-0006: Impact is unlikely and upgrading requires polkadot-sdk bump.
+# - RUSTSEC-2026-0009: Medium severity, but only exploitable if user-provided strings are parsed into a time format by the `time` dependency.
+# - RUSTSEC-2026-0020: Wasmtime memory leak, we don't have any control over the wasmtime version.
+# - RUSTSEC-2026-0021: Wasmtime panic, we don't have any control over the wasmtime version.
+#
 cf-audit = '''
 audit -D unmaintained -D unsound
-	--ignore RUSTSEC-2021-0139
 	--ignore RUSTSEC-2020-0168
 	--ignore RUSTSEC-2022-0061
-	--ignore RUSTSEC-2022-0080
+	--ignore RUSTSEC-2023-0091
 	--ignore RUSTSEC-2024-0320
-	--ignore RUSTSEC-2024-0336
 	--ignore RUSTSEC-2024-0344
 	--ignore RUSTSEC-2024-0370
-	--ignore RUSTSEC-2024-0388
 	--ignore RUSTSEC-2024-0384
-	--ignore RUSTSEC-2024-0421
-	--ignore RUSTSEC-2025-0009
-	--ignore RUSTSEC-2025-0010
+	--ignore RUSTSEC-2024-0388
 	--ignore RUSTSEC-2024-0436
-	--ignore RUSTSEC-2025-0017
-	--ignore RUSTSEC-2023-0091
 	--ignore RUSTSEC-2024-0438
 	--ignore RUSTSEC-2024-0442
+	--ignore RUSTSEC-2025-0009
+	--ignore RUSTSEC-2025-0010
 	--ignore RUSTSEC-2025-0055
 	--ignore RUSTSEC-2025-0057
 	--ignore RUSTSEC-2025-0118
-	--ignore RUSTSEC-2025-0120
 	--ignore RUSTSEC-2025-0134
 	--ignore RUSTSEC-2025-0141
 	--ignore RUSTSEC-2026-0002
-	--ignore RUSTSEC-2026-0007
-	--ignore RUSTSEC-2026-0009
 	--ignore RUSTSEC-2026-0006
+	--ignore RUSTSEC-2026-0009
+	--ignore RUSTSEC-2026-0020
+	--ignore RUSTSEC-2026-0021
 '''
 
 [build]
