@@ -15,9 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use engine_upgrade_utils::{build_helpers::toml_with_package_version, NEW_VERSION};
+use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};
 
 fn main() {
-	substrate_build_script_utils::generate_cargo_keys();
+	generate_cargo_keys();
+	rerun_if_git_head_changed();
+	// Also rerun when Cargo.toml changes (for the version assertion below).
+	println!("cargo:rerun-if-changed=Cargo.toml");
 
 	let (_, version) = toml_with_package_version();
 
