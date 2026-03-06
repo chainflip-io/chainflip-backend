@@ -50,6 +50,12 @@ RUN npm install -g pnpm
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 
 # Set environment
+# RUSTUP_HOME and CARGO_HOME must be set explicitly (not rely on $HOME)
+# because GitHub Actions overrides $HOME to /github/home when running in
+# a container, which would cause rustup to look for toolchains in the
+# wrong location and re-download them on every CI run.
+ENV RUSTUP_HOME="/root/.rustup"
+ENV CARGO_HOME="/root/.cargo"
 ENV PATH="/root/.cargo/bin:/usr/local/cargo/bin/:${PATH}"
 
 # Install sudo and add ci user
