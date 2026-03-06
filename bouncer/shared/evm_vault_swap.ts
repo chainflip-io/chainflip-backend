@@ -12,7 +12,6 @@ import {
   createEvmWalletAndFund,
   newAssetAddress,
   decodeDotAddressForContract,
-  getWeb3,
   Chains,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
@@ -20,6 +19,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
+import { signAndSendTxEvm } from 'shared/send_evm';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -128,7 +128,6 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     },
   )) as unknown as EvmVaultSwapDetails;
 
-  const web3 = getWeb3(srcChain);
   const tx = {
     to: vaultSwapDetails.to,
     data: vaultSwapDetails.calldata,
@@ -137,8 +136,9 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.debug('Signing and Sending EVM vault swap transaction');
-  const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
-  const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+  const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, {
+    privateKey: evmWallet.privateKey,
+  });
 
   return receipt.transactionHash;
 }
