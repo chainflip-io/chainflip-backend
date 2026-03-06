@@ -38,7 +38,10 @@ export async function getNextEvmNonce(
       const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
       const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
-      nextEvmNonce[chain] = txCount;
+      // Only advance forward — never reset backwards into already-assigned nonces.
+      if (nextEvmNonce[chain] === undefined || txCount > nextEvmNonce[chain]) {
+        nextEvmNonce[chain] = txCount;
+      }
     }
     logger.trace(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
     return nextEvmNonce[chain]!++;
