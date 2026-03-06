@@ -326,6 +326,9 @@ pub trait Chain: Member + Parameter + ChainInstanceAlias {
 	/// The burn address for the chain.
 	const BURN_ADDRESS: Self::ChainAccount;
 
+	/// Whether this chain is EVM-compatible. This is used to gate EVM-specific logic.
+	const IS_EVM_CHAIN: bool;
+
 	/// Outputs the root block that witnesses the range of blocks after (not including)
 	/// `block_number`
 	fn checked_block_witness_next(

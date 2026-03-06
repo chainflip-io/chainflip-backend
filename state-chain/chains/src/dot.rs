@@ -388,6 +388,7 @@ impl Chain for Polkadot {
 	const DEPRECATED: bool = true;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::hub::ONE_DOT;
 	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
+	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;
