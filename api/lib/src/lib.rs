@@ -581,6 +581,31 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		)
 	}
 
+	async fn deregister_affiliate(
+		&self,
+		affiliate_account_id: AccountId32,
+	) -> Result<DeregisteredAffiliate> {
+		let events = self
+			.submit_signed_extrinsic_with_dry_run(
+				pallet_cf_swapping::Call::deregister_affiliate { affiliate_account_id },
+			)
+			.await?
+			.until_in_block()
+			.await?
+			.events;
+
+		extract_event!(
+			&events,
+			state_chain_runtime::RuntimeEvent::Swapping,
+			pallet_cf_swapping::Event::AffiliateDeregistration,
+			{ affiliate_account_id, short_id, .. },
+			DeregisteredAffiliate {
+				account_id: affiliate_account_id.clone(),
+				short_id: *short_id,
+			}
+		)
+	}
+
 	async fn affiliate_withdrawal_request(
 		&self,
 		affiliate_account_id: AccountId32,

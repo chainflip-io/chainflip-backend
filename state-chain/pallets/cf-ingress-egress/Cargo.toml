@@ -60,6 +60,7 @@ std = [
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
+	"pallet-cf-swapping/std",
 	"scale-info/std",
 	"sp-runtime/std",
 	"sp-std/std",
@@ -73,6 +74,7 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-cf-swapping/runtime-benchmarks",
 	"pallet-cf-governance/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]

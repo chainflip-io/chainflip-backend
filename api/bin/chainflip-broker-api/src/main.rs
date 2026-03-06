@@ -18,8 +18,9 @@ use cf_chains::CcmChannelMetadataUnchecked;
 use cf_rpc_apis::{
 	broker::{
 		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters,
-		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
-		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
+		DeregisteredAffiliate, GetOpenDepositChannelsQuery, RpcBytes, SignatureData,
+		SwapDepositAddress, TransactionInId, TransactionMetadata, VaultSwapExtraParametersRpc,
+		VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
@@ -262,6 +263,13 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		withdrawal_address: EthereumAddress,
 	) -> RpcResult<AccountId32> {
 		Ok(self.api.broker_api().register_affiliate(withdrawal_address).await?)
+	}
+
+	async fn deregister_affiliate(
+		&self,
+		affiliate_account_id: AccountId32,
+	) -> RpcResult<DeregisteredAffiliate> {
+		Ok(self.api.broker_api().deregister_affiliate(affiliate_account_id).await?)
 	}
 
 	async fn get_affiliates(

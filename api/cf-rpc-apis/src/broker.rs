@@ -111,6 +111,12 @@ pub trait BrokerRpcApi {
 		withdrawal_address: EthereumAddress,
 	) -> RpcResult<AccountId32>;
 
+	#[method(name = "deregister_affiliate", aliases = ["broker_deregisterAffiliate"])]
+	async fn deregister_affiliate(
+		&self,
+		affiliate_account_id: AccountId32,
+	) -> RpcResult<DeregisteredAffiliate>;
+
 	#[method(name = "get_affiliates", aliases = ["broker_getAffiliates"])]
 	async fn get_affiliates(
 		&self,

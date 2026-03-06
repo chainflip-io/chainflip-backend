@@ -2388,6 +2388,142 @@ mod affiliates {
 	}
 
 	#[test]
+	fn deregister_affiliate_success() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			assert!(frame_system::Account::<Test>::contains_key(affiliate_account_id));
+
+			assert_ok!(Swapping::deregister_affiliate(
+				OriginTrait::signed(BROKER),
+				affiliate_account_id,
+			));
+
+			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
+			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
+			assert!(!frame_system::Account::<Test>::contains_key(affiliate_account_id));
+
+			System::assert_has_event(RuntimeEvent::Swapping(
+				Event::<Test>::AffiliateDeregistration {
+					broker_id: BROKER,
+					short_id: SHORT_ID,
+					affiliate_account_id,
+				},
+			));
+		});
+	}
+
+	#[test]
+	fn deregister_affiliate_only_by_associated_broker() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE)
+				.unwrap();
+
+			assert_noop!(
+				Swapping::deregister_affiliate(
+					OriginTrait::signed(ALICE),
+					affiliate_account_id
+				),
+				Error::<Test>::AffiliateNotRegisteredForBroker
+			);
+		});
+	}
+
+	#[test]
+	fn deregister_affiliate_fails_with_outstanding_balance() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			const BALANCE: AssetAmount = 200;
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
+
+			assert_noop!(
+				Swapping::deregister_affiliate(
+					OriginTrait::signed(BROKER),
+					affiliate_account_id
+				),
+				Error::<Test>::AffiliateEarnedFeesNotWithdrawn
+			);
+
+			// After withdrawing, deregistration should succeed
+			MockBalance::try_debit_account(&affiliate_account_id, Asset::Usdc, BALANCE).unwrap();
+
+			assert_ok!(Swapping::deregister_affiliate(
+				OriginTrait::signed(BROKER),
+				affiliate_account_id,
+			));
+		});
+	}
+
+	#[test]
+	fn deregister_affiliate_non_broker_fails() {
+		new_test_ext().execute_with(|| {
+			assert_noop!(
+				Swapping::deregister_affiliate(OriginTrait::signed(ALICE), BROKER),
+				BadOrigin
+			);
+		});
+	}
+
+	#[test]
+	fn deregister_and_reregister_affiliate_reuses_short_id() {
+		new_test_ext().execute_with(|| {
+			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
+			let withdrawal_address: EthereumAddress = Default::default();
+
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			let affiliate_account_id = AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID)
+				.expect("Affiliate must be registered!");
+
+			assert_ok!(Swapping::deregister_affiliate(
+				OriginTrait::signed(BROKER),
+				affiliate_account_id,
+			));
+
+			// Re-registering should reuse the freed short_id slot
+			assert_ok!(Swapping::register_affiliate(
+				OriginTrait::signed(BROKER),
+				withdrawal_address,
+			));
+
+			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_some());
+		});
+	}
+
+	#[test]
 	fn can_not_deregister_broker_if_affiliates_still_have_balance() {
 		new_test_ext().execute_with(|| {
 			const SHORT_ID: AffiliateShortId = AffiliateShortId(0);
