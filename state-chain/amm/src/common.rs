@@ -38,7 +38,7 @@ pub const MAX_LP_FEE: u32 = ONE_IN_HUNDREDTH_PIPS / 2;
 )]
 pub struct LimitOrder<AccountId> {
 	pub lp: AccountId,
-	pub id: Amount, // TODO: Intro type alias
+	pub id: U256,
 	pub tick: Tick,
 	pub sell_amount: Amount,
 	pub fees_earned: Amount,
