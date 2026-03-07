@@ -4,6 +4,8 @@ import { cfMutex, waitForExt } from 'shared/utils';
 import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
+import { findOneEventOfMany } from 'shared/utils/indexer';
+import { governanceProposed } from 'generated/events/governance/proposed';
 
 const snowWhiteUri =
   process.env.SNOWWHITE_URI ??
@@ -30,18 +32,30 @@ export async function submitExistingGovernanceExtrinsic(
     .proposeGovernanceExtrinsic(extrinsic, preAuthorise)
     .signAndSend(snowWhite, { nonce }, waiter);
 
-  const events = (await promise).events;
+  const submitResult = await promise;
   unsub();
 
-  const proposalId = events
-    .find(({ event: { section, method } }) => section === 'governance' && method === 'Proposed')
-    ?.event.data[0].toPrimitive()
-    ?.valueOf();
-  if (typeof proposalId !== 'number') {
-    logger.error(logger, `Failed to find proposal ID in events: ${events}`);
-    throw new Error('Failed to find proposal ID in events');
-  }
+  const txHash = `${submitResult.txHash}`;
+  const txBlockNumber = (
+    await api.rpc.chain.getHeader(submitResult.status.asFinalized)
+  ).number.toNumber();
+  logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);
 
+  // Use the indexer to find the Governance.Proposed event. This avoids
+  // SCALE decoding of submitResult.events which fails at runtime upgrade boundaries.
+  const event = await findOneEventOfMany(
+    logger,
+    {
+      event: {
+        name: 'Governance.Proposed',
+        schema: governanceProposed,
+        txHash,
+      },
+    },
+    { startFromBlock: txBlockNumber },
+  );
+
+  const proposalId = event.data;
   logger.debug(`Governance extrinsic proposal ID: ${proposalId}`);
   return proposalId;
 }
