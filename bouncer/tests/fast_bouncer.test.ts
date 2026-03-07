@@ -49,7 +49,12 @@ describe('ConcurrentTests', () => {
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   if (!process.env.SKIP_BLS_TESTS) {
-    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor, inCi? 0 : 20);
+    concurrentTest(
+      'BrokerLevelScreening',
+      testBrokerLevelScreening,
+      360 * ciTimeoutFactor,
+      inCi ? 0 : 20,
+    );
   }
   concurrentTest('VaultSwaps', testVaultSwap, 340 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor);
