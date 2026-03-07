@@ -29,8 +29,9 @@ describe('ConcurrentTests', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
   const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
-  // Mac dev machines are faster; CI is slower (non-Mac machines)
-  const ciTimeoutFactor = process.platform === 'darwin' ? 1.1 : 1.6;
+  const inCi = !!process.env.GITHUB_ACTIONS;
+  // CI runners are slower, use a larger timeout factor
+  const ciTimeoutFactor = inCi ? 1.6 : 1.1;
 
   // Launch all tests in parallel. This will create a lot of contention for the first few blocks.
   // The concurrentTest function can be called with startDelaySeconds parameter that will delay the start of the
@@ -48,7 +49,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('CancelOrdersBatch', testCancelOrdersBatch, 300 * ciTimeoutFactor);
   concurrentTest('DepositChannelCreation', depositChannelCreation, 50 * ciTimeoutFactor);
   if (!process.env.SKIP_BLS_TESTS) {
-    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor);
+    concurrentTest('BrokerLevelScreening', testBrokerLevelScreening, 360 * ciTimeoutFactor, inCi? 0 : 20);
   }
   concurrentTest('VaultSwaps', testVaultSwap, 340 * ciTimeoutFactor);
   concurrentTest('SpecialBitcoinSwaps', testSpecialBitcoinSwaps, 250 * ciTimeoutFactor);
