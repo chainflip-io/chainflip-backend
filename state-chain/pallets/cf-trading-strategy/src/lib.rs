@@ -978,7 +978,7 @@ impl<T: Config> Pallet<T> {
 			(update_due_to_balance, total_quote_usd, total_base_usd)
 		} else {
 			// For the inventory based strategy, we require both assets to be
-			// equivalent (have the same number of decimals).
+			// equivalent (have similar prices and the same number of decimals).
 			let update_due_to_balance =
 				quote_balance_asset + base_balance_asset >= base_threshold.min(quote_threshold);
 			(update_due_to_balance, total_quote_asset, total_base_asset)
