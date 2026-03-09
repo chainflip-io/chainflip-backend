@@ -42,7 +42,7 @@ export async function fundFlip<A = []>(cf: ChainflipIO<A>, scAddress: string, fl
     flipContractAddress,
   } as const;
   const txOptions = {
-    nonce: await getNextEvmNonce(cf.logger, 'Ethereum'),
+    nonce: await getNextEvmNonce(cf.logger, 'Ethereum', { privkey: whalePrivKey }),
   } as const;
 
   cf.debug('Funding ' + flipAmount + ' Flip to ' + scAddress);
