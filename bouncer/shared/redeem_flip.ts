@@ -90,7 +90,7 @@ export async function redeemFlip(
 
   logger.debug(`Executing redemption`);
 
-  const nonce = await getNextEvmNonce(logger, 'Ethereum');
+  const nonce = await getNextEvmNonce(logger, 'Ethereum', { privkey: whalePrivKey });
 
   const redemptionExecutedHandle = observeEvent(logger, 'funding:RedemptionSettled', {
     test: (event) => event.data.accountId === flipWallet.address,

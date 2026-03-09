@@ -1,3 +1,4 @@
+import { Semaphore } from 'async-mutex';
 import {
   arbNonceMutex,
   ethNonceMutex,
@@ -10,6 +11,12 @@ import {
 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 
+// Cap in-flight EVM transactions per chain to stay under geth's default txpool
+// limit of 64 queued txs per account.
+const MAX_IN_FLIGHT_TXS = 48;
+const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
+const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
+
 const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Ethereum: undefined,
   Arbitrum: undefined,
@@ -18,7 +25,10 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
 export async function getNextEvmNonce(
   logger: Logger,
   chain: Chain,
-  forceRefetch = false,
+  options: {
+    forceRefetch?: boolean,
+    privkey: string,
+  }
 ): Promise<number> {
   let mutex;
   switch (chain) {
@@ -33,15 +43,12 @@ export async function getNextEvmNonce(
   }
 
   return mutex.runExclusive(async () => {
-    if (nextEvmNonce[chain] === undefined || forceRefetch) {
+    if (nextEvmNonce[chain] === undefined || options.forceRefetch) {
       const web3 = getWeb3(chain);
-      const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
-      const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
+      const privkey = options.privkey ?? getEvmWhaleKeypair('Ethereum').privkey;
+      const address = web3.eth.accounts.privateKeyToAccount(privkey).address;
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
-      // Only advance forward — never reset backwards into already-assigned nonces.
-      if (nextEvmNonce[chain] === undefined || txCount > nextEvmNonce[chain]) {
-        nextEvmNonce[chain] = txCount;
-      }
+      nextEvmNonce[chain] = txCount;
     }
     logger.trace(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
     return nextEvmNonce[chain]!++;
@@ -84,58 +91,65 @@ export async function signAndSendTxEvm(
     privateKey?: string;
   } = {},
 ) {
-  const web3 = getWeb3(chain);
-  const privkey = options.privateKey ?? getEvmWhaleKeypair('Ethereum').privkey;
+  const semaphore = chain === 'Arbitrum' ? arbSemaphore : ethSemaphore;
 
-  const numberRetries = 10;
-  let receipt;
+  return semaphore.runExclusive(async () => {
+    const web3 = getWeb3(chain);
+    const privkey = options.privateKey ?? getEvmWhaleKeypair('Ethereum').privkey;
 
-  // Fetch nonce and sign outside the loop; re-sign only if we get a nonce error.
-  let nonce = await getNextEvmNonce(logger, chain);
-  let signedTx = await web3.eth.accounts.signTransaction({ to, data, gas, nonce, value }, privkey);
+    const numberRetries = 10;
+    let receipt;
 
-  for (let i = 0; i < numberRetries; i++) {
-    try {
-      receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
-      break;
-    } catch (error) {
-      // EVM reverts are deterministic — retrying the same tx will always fail.
-      if (isEvmRevertError(error)) {
-        throw new Error(`${chain} transaction reverted by EVM: ${error}`);
-      }
+    // Fetch nonce and sign outside the loop; re-sign only if we get a nonce error.
+    let nonce = await getNextEvmNonce(logger, chain, { privkey });
+    let signedTx = await web3.eth.accounts.signTransaction(
+      { to, data, gas, nonce, value },
+      privkey,
+    );
 
-      if (i === numberRetries - 1) {
-        throw new Error(`${chain} transaction failure: ${error}`);
-      }
+    for (let i = 0; i < numberRetries; i++) {
+      try {
+        receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+        break;
+      } catch (error) {
+        // EVM reverts are deterministic — retrying the same tx will always fail.
+        if (isEvmRevertError(error)) {
+          throw new Error(`${chain} transaction reverted by EVM: ${error}`);
+        }
 
-      // On nonce errors, reset the counter so getNextEvmNonce re-fetches from chain
-      // and re-sign with the corrected nonce.
-      if (isNonceError(error)) {
-        logger.warn(`${chain} nonce error, re-fetching nonce. Error: ${error}`);
-        nonce = await getNextEvmNonce(logger, chain, true);
-        signedTx = await web3.eth.accounts.signTransaction(
-          { to, data, gas, nonce, value },
-          privkey,
-        );
-      } else {
-        logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+        if (i === numberRetries - 1) {
+          throw new Error(`${chain} transaction failure: ${error}`);
+        }
+
+        // On nonce errors, reset the counter so getNextEvmNonce re-fetches from chain
+        // and re-sign with the corrected nonce.
+        if (isNonceError(error)) {
+          logger.warn(`${chain} nonce error, re-fetching nonce. Error: ${error}`);
+          nonce = await getNextEvmNonce(logger, chain, { privkey, forceRefetch: true });
+          signedTx = await web3.eth.accounts.signTransaction(
+            { to, data, gas, nonce, value },
+            privkey,
+          );
+        } else {
+          logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+        }
       }
     }
-  }
-  if (!receipt) {
-    throw new Error('Receipt not found');
-  }
+    if (!receipt) {
+      throw new Error('Receipt not found');
+    }
 
-  logger.debug(
-    'Transaction complete, tx_hash: ' +
-      receipt.transactionHash +
-      ' blockNumber: ' +
-      receipt.blockNumber +
-      ' blockHash: ' +
-      receipt.blockHash,
-  );
+    logger.debug(
+      'Transaction complete, tx_hash: ' +
+        receipt.transactionHash +
+        ' blockNumber: ' +
+        receipt.blockNumber +
+        ' blockHash: ' +
+        receipt.blockHash,
+    );
 
-  return receipt;
+    return receipt;
+  });
 }
 
 export async function sendEvmNative(
