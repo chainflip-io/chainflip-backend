@@ -28,9 +28,9 @@ export async function getNextEvmNonce(
   logger: Logger,
   chain: Chain,
   options: {
-    forceRefetch?: boolean,
-    privkey: string,
-  }
+    forceRefetch?: boolean;
+    privkey: string;
+  },
 ): Promise<number> {
   if (chain !== 'Ethereum' && chain !== 'Arbitrum') {
     throw new Error('Invalid chain');
