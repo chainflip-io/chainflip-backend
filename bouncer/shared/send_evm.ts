@@ -153,6 +153,7 @@ export async function signAndSendTxEvm(
       )}`,
     );
   }
+  logger.debug(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
   logger.debug(
     'Transaction complete, tx_hash: ' +
