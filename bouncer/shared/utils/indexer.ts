@@ -121,9 +121,10 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   );
   const callIds = Object.assign({}, ...callIdsList) as { [x: string]: string | undefined };
 
-  // Wait until at least one event from each extrinsic's block exists in the DB.
+  // Wait until at least one event from each extrinsic block exists in the DB.
   // Any block containing an extrinsic will have at least one event (e.g. system.ExtrinsicSuccess),
-  // so once any event from the block appears all events for that block are committed.
+  // so once any event from the block appears, we know that the block events started to be indexed,
+  // this doesn't guarantee that all events are indexed.
   for (const blockHeight of txBlockHeights) {
     while (
       !(await prisma.event.findFirst({ where: { block: { height: { equals: blockHeight } } } }))

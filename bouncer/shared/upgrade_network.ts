@@ -12,7 +12,6 @@ import { execWithLog } from 'shared/utils/exec_with_log';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
-import { AccountRole, setupAccount } from 'shared/setup_account';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
@@ -174,14 +173,6 @@ async function incompatibleUpgradeNoBuild(
 ) {
   const cf = await newChainflipIO(logger, []);
 
-  // Temporary, while upgrading from 2.0 to 2.1
-  // Because the localnet in 2.1 now uses a new account //BROKER_API,
-  // this account has to be registered + funded before the broker api can start.
-  // But, since we need the broker api to run `setupAccount`, we do this *before* any
-  // of the upgrade procedures, on the old network.
-  await setupAccount(cf, `//BROKER_API`, AccountRole.Broker, '200');
-  // ^ remove this when UPGRADE_FROM is 2.1
-
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
   cf.info('Killing the old engines');
@@ -215,46 +206,6 @@ async function incompatibleUpgradeNoBuild(
 
   // let them shutdown
   await sleep(4000);
-
-  // Temporary, while upgrading from 2.0 to 2.1
-  // Because the localnet in 2.1 now uses a new account //BROKER_API,
-  // the old key for //BROKER_1 that has been in the keystore has to be removed,
-  // before the node is started up again. Otherwise, it will have 2 broker keys
-  // in it's keystore and is going to ignore both of them.
-  console.log('Deleting //BROKER_1 key from keystore.');
-  console.log('Current files in keystore:');
-  try {
-    await execWithLog(
-      'ls',
-      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
-      'ls',
-    );
-  } catch (err) {
-    console.log(`First ls failed with: ${err}`);
-  }
-  console.log('Now deleting key.');
-  try {
-    await execWithLog(
-      'rm',
-      [
-        '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/62726f6b9059e6d854b769a505d01148af212bf8cb7f8469a7153edce8dcaedd9d299125',
-      ],
-      'rm',
-    );
-  } catch (err) {
-    console.log(`rm failed with: ${err}`);
-  }
-  console.log('Files in keystore after deleting key.');
-  try {
-    await execWithLog(
-      'ls',
-      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
-      'ls',
-    );
-  } catch (err) {
-    console.log(`second ls failed with: ${err}`);
-  }
-  // ^ remove this when UPGRADE_FROM is 2.1
 
   cf.info('Old broker and LP-API have crashed since we killed the node.');
 
