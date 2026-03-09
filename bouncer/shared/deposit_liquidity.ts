@@ -13,6 +13,7 @@ import {
   chainGasAsset,
 } from 'shared/utils';
 import { send } from 'shared/send';
+import { warnIfEvmAddressHasNoCode } from 'shared/send_evm';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
@@ -89,6 +90,8 @@ export async function depositLiquidity<A extends WithLpAccount>(
     },
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
+
+  await warnIfEvmAddressHasNoCode(cf.logger, chainFromAsset(ccy), ingressAddress);
 
   cf.info(`Initiating transfer to ${ingressAddress}`);
 

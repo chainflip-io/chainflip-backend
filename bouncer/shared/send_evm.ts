@@ -70,6 +70,23 @@ function isNonceError(error: unknown): boolean {
   return msg.includes('nonce too low') || msg.includes('nonce too high');
 }
 
+export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum') return;
+
+  try {
+    const web3 = getWeb3(chain);
+    const code = await web3.eth.getCode(address);
+    const hasNoCode = !code || code === '0x' || /^0x0+$/.test(code);
+    if (hasNoCode) {
+      logger.warn(
+        `Address ${address} on ${chain} has no contract code (eth_getCode=${code}). Deposit may not be witnessed.`,
+      );
+    }
+  } catch (err) {
+    logger.warn(`Failed to check contract code for address ${address} on ${chain}: ${String(err)}`);
+  }
+}
+
 async function getEvmTxRevertReason(chain: Chain, txHash: string): Promise<string> {
   const web3 = getWeb3(chain);
   const tx = await web3.eth.getTransaction(txHash);
