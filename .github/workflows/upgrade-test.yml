@@ -353,6 +353,23 @@ jobs:
           path: |
             /tmp/chainflip/indexer-pgsql-dump
 
+      - name: Export docker container logs 🐳💾
+        if: inputs.run-job || failure() || cancelled()
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/chainflip/docker-logs
+          for container in $(docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" ps -a --format '{{.Name}}'); do
+            docker logs "$container" > "/tmp/chainflip/docker-logs/${container}.log" 2>&1
+          done
+
+      - name: Upload Docker Container Logs 💾
+        if: inputs.run-job || failure() || cancelled()
+        continue-on-error: true
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: docker-container-logs-upgrade-test
+          path: /tmp/chainflip/docker-logs/
+
       - name: Clean Up docker containers 🧹
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
