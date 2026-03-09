@@ -136,7 +136,9 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.debug('Signing and Sending EVM vault swap transaction');
-  const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, { privateKey: evmWallet.privateKey });
+  const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, {
+    privateKey: evmWallet.privateKey,
+  });
 
   return receipt.transactionHash;
 }
