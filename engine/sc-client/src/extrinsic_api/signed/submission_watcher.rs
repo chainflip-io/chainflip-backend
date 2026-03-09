@@ -44,7 +44,7 @@ use cf_node_client::{error_decoder, signer, ExtrinsicData};
 
 use crate::{
 	base_rpc_api,
-	extrinsic_api::common::invalid_err_obj,
+	extrinsic_api::common::{invalid_err_obj, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY},
 	storage_api::{CheckBlockCompatibility, StorageApi},
 	SUBSTRATE_BEHAVIOUR,
 };
@@ -265,7 +265,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// This occurs when a transaction with the same nonce is in the
 						// transaction pool (and the priority is <= priority of that
 						// existing tx)
-						ClientError::Call(obj) if obj.code() == 1014 => {
+						ClientError::Call(obj) if obj.code() == POOL_TOO_LOW_PRIORITY => {
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
@@ -275,7 +275,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// that this particular extrinsic has already been
 						// submitted. And so we can ignore the error and return
 						// the transaction hash.
-						ClientError::Call(obj) if obj.code() == 1013 => {
+						ClientError::Call(obj) if obj.code() == POOL_ALREADY_IMPORTED => {
 							debug!("Already in pool with tx_hash: {tx_hash:#x}.");
 							break Ok(Ok(tx_hash))
 						},
