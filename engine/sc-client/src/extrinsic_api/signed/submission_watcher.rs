@@ -163,6 +163,7 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: error_decoder::ErrorDecoder,
+	best_nonce: Option<Nonce>,
 }
 
 pub enum SubmissionLogicError {
@@ -200,6 +201,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
+				best_nonce: None,
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -328,12 +330,21 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
-			let nonce =
-				self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
-			match self.submit_extrinsic_at_nonce(request, nonce).await? {
+			let next_nonce = if let Some(best_nonce) = self.best_nonce.as_mut() {
+				*best_nonce += 1;
+				*best_nonce
+			} else {
+				let best_nonce =
+					self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
+				self.best_nonce = Some(best_nonce);
+				best_nonce
+			};
+
+			match self.submit_extrinsic_at_nonce(request, next_nonce).await? {
 				Ok(tx_hash) => break tx_hash,
 				Err(SubmissionLogicError::NonceTooLow | SubmissionLogicError::StateDiscarded) => {
 					// In either of these cases we want to refresh the account nonce and try again.
+					self.best_nonce = None;
 				},
 			}
 		})
