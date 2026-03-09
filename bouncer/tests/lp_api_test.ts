@@ -17,7 +17,7 @@ import {
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { sendEvmNative } from 'shared/send_evm';
+import { sendEvmNative, warnIfEvmAddressHasNoCode } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
@@ -161,6 +161,8 @@ async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
     isValidEthAddress(liquidityDepositAddress),
     `Invalid deposit address: ${liquidityDepositAddress}`,
   );
+
+  await warnIfEvmAddressHasNoCode(cf.logger, chainFromAsset(testAsset), liquidityDepositAddress);
 
   // Send funds to the deposit address and watch for deposit event
   await sendEvmNative(
