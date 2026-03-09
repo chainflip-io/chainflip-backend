@@ -374,6 +374,86 @@ fn can_schedule_deposit_fetch() {
 	});
 }
 
+// When the deposit contract is not yet deployed and a deposit of the wrong asset is witnessed,
+// both a deploy (with the channel's asset for correct CREATE2) and a fetch (for the deposited
+// asset) are scheduled. The deploy goes first; the fetch is deferred until after deployment.
+// Previously, the deploy was incorrectly scheduled with the deposited asset, causing the contract
+// to be deployed at an incorrect address.
+#[test]
+fn cross_asset_deposit_on_undeployed_channel_schedules_deploy_then_fetch() {
+	new_test_ext().execute_with(|| {
+		let (channel_id, deposit_address, ..) =
+			EthereumIngressEgress::request_liquidity_deposit_address(
+				1u64,
+				1u64,
+				EthAsset::Usdc,
+				0,
+				ForeignChainAddress::Eth(Default::default()),
+				None,
+			)
+			.unwrap();
+		let deposit_address: <Ethereum as Chain>::ChainAccount =
+			deposit_address.try_into().unwrap();
+
+		// Witness a USDT deposit on the USDC channel (wrong asset, contract undeployed).
+		assert_ok!(EthereumIngressEgress::process_channel_deposit_full_witness_inner(
+			&DepositWitness {
+				deposit_address,
+				asset: EthAsset::Usdt,
+				amount: 1_000_000,
+				deposit_details: Default::default(),
+			},
+			Default::default(),
+		));
+
+		// Two fetches should be scheduled: a deploy with the channel's asset (USDC)
+		// followed by a fetch for the deposited asset (USDT).
+		let scheduled = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
+		assert_eq!(scheduled.len(), 2);
+		assert_matches!(
+			&scheduled[..],
+			&[
+				FetchOrTransfer::<Ethereum>::Fetch { asset: EthAsset::Usdc, amount: 0, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: EthAsset::Usdt, amount: 1_000_000, .. },
+			]
+		);
+
+		// on_finalize processes the deploy (USDC). The USDT fetch stays queued because
+		// the channel state transitions to Pending after the deploy is extracted.
+		EthereumIngressEgress::on_finalize(1);
+
+		let pending = MockEgressBroadcasterEth::get_pending_api_calls();
+		assert_eq!(pending.len(), 1);
+		let batch = match &pending[0] {
+			MockEthereumApiCall::AllBatch(batch) => batch,
+			other => panic!("Expected AllBatch, got {:?}", other),
+		};
+		assert_eq!(batch.fetch_params.len(), 1);
+		assert_eq!(batch.fetch_params[0].asset, EthAsset::Usdc);
+		assert_eq!(batch.fetch_params[0].deposit_fetch_id, EvmFetchId::DeployAndFetch(channel_id));
+
+		// The USDT fetch remains queued (can_fetch is false while Pending).
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().len(), 1);
+
+		// Simulate the deploy being executed and the channel transitioning to Ready.
+		// There is only one broadcast, so the id is 1. The witness block can be set to some low
+		// value.
+		EthereumIngressEgress::on_broadcast_success(1, 0);
+
+		// The USDT fetch is now ready to be sent.
+		EthereumIngressEgress::on_finalize(1);
+		let pending = MockEgressBroadcasterEth::get_pending_api_calls();
+		// The second pending call is the fetch.
+		assert_eq!(pending.len(), 2);
+		let batch = match &pending[1] {
+			MockEthereumApiCall::AllBatch(batch) => batch,
+			other => panic!("Expected AllBatch, got {:?}", other),
+		};
+		assert_eq!(batch.fetch_params.len(), 1);
+		assert_eq!(batch.fetch_params[0].asset, EthAsset::Usdt);
+	});
+}
+
 #[test]
 fn on_finalize_can_send_batch_all() {
 	new_test_ext().execute_with(|| {
