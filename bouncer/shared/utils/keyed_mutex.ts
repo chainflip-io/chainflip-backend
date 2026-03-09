@@ -1,5 +1,7 @@
 import { Mutex, MutexInterface } from 'async-mutex';
 
+const WAIT_WARNING_INTERVAL_MS = 20_000;
+
 export class KeyedMutex {
   private map = new Map<string, Mutex>();
 
@@ -18,8 +20,16 @@ export class KeyedMutex {
    */
   for(key: string): Mutex {
     const mutex = this.get(key);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
     return new Proxy(mutex, {
       get: (target, prop) => {
+        if (prop === 'acquire') {
+          return () => self.acquire(key);
+        }
+        if (prop === 'runExclusive') {
+          return <T>(callback: MutexInterface.Worker<T>) => self.runExclusive(key, callback);
+        }
         const value = target[prop as keyof Mutex];
         if (typeof value === 'function') {
           return value.bind(target);
@@ -30,11 +40,30 @@ export class KeyedMutex {
   }
 
   acquire(key: string): Promise<MutexInterface.Releaser> {
-    return this.get(key).acquire();
+    const mutex = this.get(key);
+    if (!mutex.isLocked()) {
+      return mutex.acquire();
+    }
+    const timer = setInterval(() => {
+      console.warn(`Still waiting for lock "${key}"...`);
+    }, WAIT_WARNING_INTERVAL_MS);
+    return mutex.acquire().finally(() => clearInterval(timer));
   }
 
   runExclusive<T>(key: string, callback: MutexInterface.Worker<T>): Promise<T> {
-    return this.get(key).runExclusive(callback);
+    const mutex = this.get(key);
+    if (!mutex.isLocked()) {
+      return mutex.runExclusive(callback);
+    }
+    const timer = setInterval(() => {
+      console.warn(`Still waiting for lock "${key}"...`);
+    }, WAIT_WARNING_INTERVAL_MS);
+    return mutex
+      .runExclusive(() => {
+        clearInterval(timer);
+        return callback();
+      })
+      .finally(() => clearInterval(timer));
   }
 
   isLocked(key: string): boolean {
