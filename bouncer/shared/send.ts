@@ -28,6 +28,7 @@ export async function send(
   amount: string = defaultAssetAmounts(asset),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
+  logger.debug(`Sending ${amount} ${asset} to ${address}`);
   switch (asset) {
     case 'Btc':
       return sendBtc(logger, address, amount);

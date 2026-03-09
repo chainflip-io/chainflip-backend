@@ -70,6 +70,29 @@ function isNonceError(error: unknown): boolean {
   return msg.includes('nonce too low') || msg.includes('nonce too high');
 }
 
+async function getEvmTxRevertReason(chain: Chain, txHash: string): Promise<string> {
+  const web3 = getWeb3(chain);
+  const tx = await web3.eth.getTransaction(txHash);
+  if (!tx.to || !tx.from) {
+    return 'transaction details missing: to/from';
+  }
+
+  try {
+    await web3.eth.call(
+      {
+        to: tx.to,
+        from: tx.from,
+        data: tx.input,
+        value: tx.value,
+      },
+      tx.blockNumber as number,
+    );
+    return 'revert reason not available';
+  } catch (err) {
+    return extractWeb3ErrorMessage(err);
+  }
+}
+
 export async function signAndSendTxEvm(
   logger: Logger,
   chain: Chain,
@@ -121,6 +144,14 @@ export async function signAndSendTxEvm(
   }
   if (!receipt) {
     throw new Error('Receipt not found');
+  }
+  if (!receipt.status) {
+    const revertReason = await getEvmTxRevertReason(chain, receipt.transactionHash);
+    logger.warn(
+      `${chain} transaction mined but failed. revertReason=${revertReason} receipt=${JSON.stringify(
+        receipt,
+      )}`,
+    );
   }
 
   logger.debug(
