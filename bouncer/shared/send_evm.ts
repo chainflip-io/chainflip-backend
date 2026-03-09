@@ -1,7 +1,5 @@
 import { Semaphore } from 'async-mutex';
 import {
-  arbNonceMutex,
-  ethNonceMutex,
   Chain,
   amountToFineAmount,
   getWeb3,
@@ -9,6 +7,7 @@ import {
   assetDecimals,
   getContractAddress,
 } from 'shared/utils';
+import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { Logger } from 'shared/utils/logger';
 
 // Cap in-flight EVM transactions per chain to stay under geth's default txpool
@@ -17,10 +16,13 @@ const MAX_IN_FLIGHT_TXS = 48;
 const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 
-const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
-  Ethereum: undefined,
-  Arbitrum: undefined,
-};
+// Nonce tracking and mutex per (chain, account) to avoid cross-account collisions.
+const nonceMutex = new KeyedMutex();
+const nextEvmNonce = new Map<string, number>();
+
+function nonceKey(chain: string, address: string): string {
+  return `${chain}:${address.toLowerCase()}`;
+}
 
 export async function getNextEvmNonce(
   logger: Logger,
@@ -30,28 +32,26 @@ export async function getNextEvmNonce(
     privkey: string,
   }
 ): Promise<number> {
-  let mutex;
-  switch (chain) {
-    case 'Ethereum':
-      mutex = ethNonceMutex;
-      break;
-    case 'Arbitrum':
-      mutex = arbNonceMutex;
-      break;
-    default:
-      throw new Error('Invalid chain');
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum') {
+    throw new Error('Invalid chain');
   }
 
-  return mutex.runExclusive(async () => {
-    if (nextEvmNonce[chain] === undefined || options.forceRefetch) {
-      const web3 = getWeb3(chain);
-      const privkey = options.privkey ?? getEvmWhaleKeypair('Ethereum').privkey;
-      const address = web3.eth.accounts.privateKeyToAccount(privkey).address;
+  const web3 = getWeb3(chain);
+  const address = web3.eth.accounts.privateKeyToAccount(options.privkey).address;
+  const key = nonceKey(chain, address);
+
+  return nonceMutex.for(key).runExclusive(async () => {
+    if (!nextEvmNonce.has(key) || options.forceRefetch) {
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
-      nextEvmNonce[chain] = txCount;
+      // Only advance forward — never reset backwards into already-assigned nonces.
+      if (!nextEvmNonce.has(key) || txCount > nextEvmNonce.get(key)!) {
+        nextEvmNonce.set(key, txCount);
+      }
     }
-    logger.trace(`Nonce for ${chain} is: ${nextEvmNonce[chain]}`);
-    return nextEvmNonce[chain]!++;
+    const nonce = nextEvmNonce.get(key)!;
+    logger.trace(`Nonce for ${chain} (${address}) is: ${nonce}`);
+    nextEvmNonce.set(key, nonce + 1);
+    return nonce;
   });
 }
 
