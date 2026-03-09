@@ -470,7 +470,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
-      0,
+      {},
       true,
     );
   }
@@ -501,7 +501,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
-      0,
+      {},
       true,
     );
   }
@@ -523,7 +523,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
-      0,
+      {},
       true,
     );
   }

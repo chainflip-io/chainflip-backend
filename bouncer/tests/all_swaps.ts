@@ -10,7 +10,7 @@ import {
   vaultSwapSupportedChains,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
-import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
+import { manuallyAddTestToList, concurrentTest, CfSemaphoreTag } from 'shared/utils/vitest';
 import { SwapContext } from 'shared/utils/swap_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
@@ -54,7 +54,11 @@ export async function initiateSwap(
 manuallyAddTestToList('AllSwaps', 'testAllSwaps');
 
 export function testAllSwaps(timeoutPerSwap: number) {
-  const allSwaps: { name: string; test: (context: TestContext) => Promise<void> }[] = [];
+  const allSwaps: {
+    name: string;
+    semaphoreTags: CfSemaphoreTag[];
+    test: (context: TestContext) => Promise<void>;
+  }[] = [];
   let allSwapsCount = 0;
 
   function appendSwap(
@@ -67,6 +71,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
     const swapType = functionCall === testSwap ? 'Swap' : 'VaultSwap';
     allSwaps.push({
       name: `Swap ${allSwapsCount}: ${sourceAsset} to ${destAsset} (${ccmSwap ? 'CCM ' : ''}${swapType})`,
+      semaphoreTags: [chainFromAsset(sourceAsset), chainFromAsset(destAsset)],
       test: async (context) => {
         const cf = await newChainflipIO(context.logger, [] as []);
         await initiateSwap(cf, context, sourceAsset, destAsset, functionCall, ccmSwap);
@@ -120,7 +125,15 @@ export function testAllSwaps(timeoutPerSwap: number) {
   });
 
   for (const swap of allSwaps) {
-    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
+    concurrentTest(
+      `AllSwaps > ${swap.name}`,
+      swap.test,
+      timeoutPerSwap,
+      {
+        semaphoreTags: swap.semaphoreTags,
+      },
+      true,
+    );
   }
 }
 
