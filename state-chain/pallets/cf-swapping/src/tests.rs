@@ -2440,10 +2440,7 @@ mod affiliates {
 				.unwrap();
 
 			assert_noop!(
-				Swapping::deregister_affiliate(
-					OriginTrait::signed(ALICE),
-					affiliate_account_id
-				),
+				Swapping::deregister_affiliate(OriginTrait::signed(ALICE), affiliate_account_id),
 				Error::<Test>::AffiliateNotRegisteredForBroker
 			);
 		});
@@ -2467,10 +2464,7 @@ mod affiliates {
 			MockBalance::credit_account(&affiliate_account_id, Asset::Usdc, BALANCE);
 
 			assert_noop!(
-				Swapping::deregister_affiliate(
-					OriginTrait::signed(BROKER),
-					affiliate_account_id
-				),
+				Swapping::deregister_affiliate(OriginTrait::signed(BROKER), affiliate_account_id),
 				Error::<Test>::AffiliateEarnedFeesNotWithdrawn
 			);
 

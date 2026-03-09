@@ -586,9 +586,9 @@ pub trait BrokerApi: SignedExtrinsicApi + StorageApi + Sized + Send + Sync + 'st
 		affiliate_account_id: AccountId32,
 	) -> Result<DeregisteredAffiliate> {
 		let events = self
-			.submit_signed_extrinsic_with_dry_run(
-				pallet_cf_swapping::Call::deregister_affiliate { affiliate_account_id },
-			)
+			.submit_signed_extrinsic_with_dry_run(pallet_cf_swapping::Call::deregister_affiliate {
+				affiliate_account_id,
+			})
 			.await?
 			.until_in_block()
 			.await?

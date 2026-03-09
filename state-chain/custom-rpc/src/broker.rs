@@ -29,9 +29,9 @@ use cf_primitives::{AffiliateShortId, Affiliates, Asset, BasisPoints, ChannelId}
 use cf_rpc_apis::{
 	broker::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
-		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters,
-		DeregisteredAffiliate, GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress,
-		TransactionInId, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
+		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
+		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
+		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };
