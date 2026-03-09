@@ -43,13 +43,10 @@ export async function getNextEvmNonce(
   return nonceMutex.for(key).runExclusive(async () => {
     if (!nextEvmNonce.has(key) || options.forceRefetch) {
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
-      // Only advance forward — never reset backwards into already-assigned nonces.
-      if (!nextEvmNonce.has(key) || txCount > nextEvmNonce.get(key)!) {
-        nextEvmNonce.set(key, txCount);
-      }
+      nextEvmNonce.set(key, txCount);
     }
     const nonce = nextEvmNonce.get(key)!;
-    logger.trace(`Nonce for ${chain} (${address}) is: ${nonce}`);
+    logger.debug(`Nonce for ${chain} (${address}) is: ${nonce}`);
     nextEvmNonce.set(key, nonce + 1);
     return nonce;
   });

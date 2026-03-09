@@ -19,7 +19,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { signAndSendTxEvm } from './send_evm';
+import { signAndSendTxEvm } from 'shared/send_evm';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -136,7 +136,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.debug('Signing and Sending EVM vault swap transaction');
-  const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas);
+  const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, { privateKey: evmWallet.privateKey });
 
   return receipt.transactionHash;
 }
