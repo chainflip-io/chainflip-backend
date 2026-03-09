@@ -44,6 +44,21 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 		properties: <StatemachineElectoralSystem<GenericBlockWitnesser<I>> as pallet_cf_elections::ElectoralSystemTypes>::ElectionProperties,
 	) -> Result<Option<VoteOf<StatemachineElectoralSystem<GenericBlockWitnesser<I>>>>, anyhow::Error>
 	{
+		tracing::debug!(
+			"BW_{}_{}: voting for election properties {:?}, querying.",
+			I::Chain::NAME,
+			I::BWNAME,
+			properties
+		);
+		let log_block_data = |data: &_| {
+			tracing::debug!(
+				"BW_{}_{}: voting for election properties {:?}, vote is: {:?}",
+				I::Chain::NAME,
+				I::BWNAME,
+				properties,
+				data
+			)
+		};
 		match properties.election_type {
 			EngineElectionType::ByHash(ref hash) => {
 				let query = self
@@ -54,6 +69,7 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 					.client
 					.block_data_from_query(&self.config, &properties.properties, &query)
 					.await?;
+				log_block_data(&data);
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: false } => {
@@ -62,6 +78,7 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 					.client
 					.block_data_from_query(&self.config, &properties.properties, &query)
 					.await?;
+				log_block_data(&data);
 				Ok(Some((data, None)))
 			},
 			EngineElectionType::BlockHeight { submit_hash: true } => {
@@ -77,6 +94,7 @@ impl<I: BlockWitnesserInstance<Chain: ChainTypes>, Client: BlockClientFor<I>>
 					.client
 					.block_data_from_query(&self.config, &properties.properties, &query)
 					.await?;
+				log_block_data(&data);
 				Ok(Some((data, Some(hash))))
 			},
 		}
