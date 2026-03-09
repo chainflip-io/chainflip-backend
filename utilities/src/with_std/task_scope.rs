@@ -478,7 +478,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	/// logged, a metric is incremented, and the task is restarted after a backoff delay. The
 	/// parent scope is never affected by inner task failures.
 	///
-	/// Backoff starts at 30 seconds and doubles up to 5 mins max. If a task runs for more
+	/// Backoff starts at 30 seconds and doubles up to 30 mins max. If a task runs for more
 	/// than 60 seconds before failing, the backoff is reset to the initial value.
 	///
 	/// If the inner future returns `Ok(())` unexpectedly, it is restarted immediately (tasks
@@ -494,7 +494,7 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		#[cfg(not(test))]
 		const INITIAL_BACKOFF: Duration = Duration::from_secs(30);
 		#[cfg(not(test))]
-		const MAX_BACKOFF: Duration = Duration::from_secs(60 * 5);
+		const MAX_BACKOFF: Duration = Duration::from_secs(60 * 30);
 		#[cfg(not(test))]
 		const HEALTHY_DURATION: Duration = Duration::from_secs(60);
 
