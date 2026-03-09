@@ -1,8 +1,28 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
+import { Semaphore } from 'async-mutex';
 import { TestContext } from 'shared/utils/test_context';
 import { runWithTimeout, sleep, testInfoFile } from 'shared/utils';
 import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
+import { Chain } from '@chainflip/cli';
+
+export type CfSemaphoreTag = Chain;
+export type CfTestOptions = {
+  startDelaySeconds?: number;
+  semaphoreTags?: CfSemaphoreTag[];
+};
+
+const MAX_CONCURRENT_PER_TAG = 200;
+const semaphores = new Map<CfSemaphoreTag, Semaphore>();
+
+function getSemaphore(tag: CfSemaphoreTag): Semaphore {
+  let semaphore = semaphores.get(tag);
+  if (!semaphore) {
+    semaphore = new Semaphore(MAX_CONCURRENT_PER_TAG);
+    semaphores.set(tag, semaphore);
+  }
+  return semaphore;
+}
 
 // Write the test name and function name to a file to be used by the `run_test.ts` command
 function writeTestInfoFile(name: string, functionName: string) {
@@ -35,50 +55,73 @@ function createTestFunction(
   name: string,
   timeoutSeconds: number,
   testFunction: (context: TestContext) => Promise<void>,
-  startDelaySeconds: number = 0,
+  options: CfTestOptions = {},
 ) {
   return async (context: { testContext: TestContext }) => {
     // Attach the test name to the logger
     context.testContext.logger = context.testContext.logger.child({ test: name });
 
-    context.testContext.logger.info(`🧪 Starting test ${name}`);
-
     // Check whether we currently have a tag, if we don't have one,
     // we want to later include all the files created by child loggers that had a tag.
     const tagExists = !!context.testContext.logger.bindings().tag;
 
-    // Run the test with the test context
-    const start = Date.now();
-
+    const startDelaySeconds = options.startDelaySeconds ?? 0;
     if (startDelaySeconds > 0) {
       context.testContext.logger.info(
         `⌛ Delaying launch of test ${name} by ${startDelaySeconds}s`,
       );
       await sleep(startDelaySeconds * 1000);
     }
-    await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch(async (error) => {
-      // We must catch the error here to be able to log it
-      context.testContext.error(error);
-
-      // get childLogs if we didn't have a tag. This operation might cause logging,
-      // and thus we want to run it before we get the logs for the test logger below.
-      let childLogs: { tag: string; logs: string }[] = [];
-      if (!tagExists) {
-        childLogs = await getTestLogFilesForTaggedChildren(context.testContext.logger);
+    // Acquire semaphores for all unique tags (sorted to avoid deadlock)
+    const tags = [...new Set(options.semaphoreTags ?? [])].sort();
+    const releasers: (() => void)[] = [];
+    for (const tag of tags) {
+      const semaphore = getSemaphore(tag);
+      if (semaphore.getValue() <= 0) {
+        context.testContext.logger.info(
+          `⌛ Delaying launch of test ${name}, waiting for semaphore ${tag}`,
+        );
       }
+      const [, releaser] = await semaphore.acquire();
+      releasers.push(releaser);
+    }
 
-      // get local logs from file and append them to the error
-      const testLogFileName = getTestLogFile(context.testContext.logger);
-      const logs = readFileSync(testLogFileName);
+    context.testContext.logger.info(`🧪 Starting test ${name}`);
 
-      let fullLogs = `history\n${logs}`;
-      for (const child of childLogs) {
-        fullLogs += `\n\nhistory of child logger (tag: ${child.tag})\n${child.logs}`;
+    // record the start time so we can warn if we're close to the timeout duration
+    const start = Date.now();
+
+    try {
+      await runWithTimeout(testFunction(context.testContext), timeoutSeconds).catch(
+        async (error) => {
+          // We must catch the error here to be able to log it
+          context.testContext.error(error);
+
+          // get childLogs if we didn't have a tag. This operation might cause logging,
+          // and thus we want to run it before we get the logs for the test logger below.
+          let childLogs: { tag: string; logs: string }[] = [];
+          if (!tagExists) {
+            childLogs = await getTestLogFilesForTaggedChildren(context.testContext.logger);
+          }
+
+          // get local logs from file and append them to the error
+          const testLogFileName = getTestLogFile(context.testContext.logger);
+          const logs = readFileSync(testLogFileName);
+
+          let fullLogs = `history\n${logs}`;
+          for (const child of childLogs) {
+            fullLogs += `\n\nhistory of child logger (tag: ${child.tag})\n${child.logs}`;
+          }
+
+          // re-throw error with logs
+          throw new Error(`${error}\n\n${fullLogs}`);
+        },
+      );
+    } finally {
+      for (const releaser of releasers) {
+        releaser();
       }
-
-      // re-throw error with logs
-      throw new Error(`${error}\n\n${fullLogs}`);
-    });
+    }
     const executionTime = (Date.now() - start) / 1000;
     if (executionTime > timeoutSeconds * 0.9) {
       context.testContext.logger.warn(
@@ -94,16 +137,16 @@ export function concurrentTest(
   name: string,
   testFunction: (context: TestContext) => Promise<void>,
   timeoutSeconds: number,
-  startDelaySeconds: number = 0,
+  options: CfTestOptions = {},
   // Only affects the being able to run via the`run_test` command.
   excludeFromList: boolean = false,
 ) {
   it.concurrent<{ testContext: TestContext }>(
     name,
-    createTestFunction(name, timeoutSeconds, testFunction, startDelaySeconds),
+    createTestFunction(name, timeoutSeconds, testFunction, options),
     // we catch the timeout manually inside `createTestFunction` so that we can print the test logs.
     // the timeout here is a fallback and should never trigger:
-    (timeoutSeconds + 5) * 1000,
+    timeoutSeconds * 20 * 1000,
   );
 
   if (!excludeFromList) {
