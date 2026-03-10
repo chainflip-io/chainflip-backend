@@ -72,7 +72,7 @@ impl<
 	fn keys_from_storage_key(storage_key: &StorageKey) -> (Self::Key1, Self::Key2) {
 		let raw_key_without_prefix = &storage_key.0[Self::prefix_hash().len()..];
 		let unhashed1 = Hasher1::reverse(raw_key_without_prefix);
-		let mut cursor = &unhashed1[..];
+		let mut cursor = unhashed1;
 		let key1 = Self::Key1::decode(&mut cursor).unwrap();
 		let key1_encoded_len = unhashed1.len() - cursor.len();
 		let hash1_overhead = raw_key_without_prefix.len() - unhashed1.len();

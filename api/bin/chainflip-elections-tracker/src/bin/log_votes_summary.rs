@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use cf_utilities::task_scope::{self};
 use engine_sc_client::{StateChainClient, base_rpc_api::BaseRpcApi, storage_api::StorageApi};
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use futures_util::FutureExt;
 use pallet_cf_elections::{
 	ElectionIdentifier, ElectoralSystemTypes, SharedDataHash, UniqueMonotonicIdentifier,
@@ -28,9 +28,11 @@ use pallet_cf_elections::{
 };
 use serde::Serialize;
 use state_chain_runtime::{
-	BitcoinInstance, Runtime, SolanaInstance,
+	ArbitrumInstance, BitcoinInstance, EthereumInstance, Runtime, SolanaInstance,
 	chainflip::witnessing::{
+		arbitrum_elections::ArbitrumElectoralSystemRunner,
 		bitcoin_elections::BitcoinElectoralSystemRunner,
+		ethereum_elections::EthereumElectoralSystemRunner,
 		solana_elections::SolanaElectoralSystemRunner,
 	},
 };
@@ -58,9 +60,29 @@ type SolanaBitmapComponent = <SolanaVoteStorageTuple as VoteStorage>::BitmapComp
 type BitcoinIndividualComponent = <BitcoinVoteStorageTuple as VoteStorage>::IndividualComponent;
 type SolanaIndividualComponent = <SolanaVoteStorageTuple as VoteStorage>::IndividualComponent;
 
+type EthereumVoteStorageTuple =
+	<EthereumElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage;
+type EthereumElectionIdentifierExtra =
+	<EthereumElectoralSystemRunner as ElectoralSystemTypes>::ElectionIdentifierExtra;
+type EthereumElectionProperties =
+	<EthereumElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties;
+type EthereumBitmapComponent = <EthereumVoteStorageTuple as VoteStorage>::BitmapComponent;
+type EthereumIndividualComponent = <EthereumVoteStorageTuple as VoteStorage>::IndividualComponent;
+
+type ArbitrumVoteStorageTuple =
+	<ArbitrumElectoralSystemRunner as ElectoralSystemTypes>::VoteStorage;
+type ArbitrumElectionIdentifierExtra =
+	<ArbitrumElectoralSystemRunner as ElectoralSystemTypes>::ElectionIdentifierExtra;
+type ArbitrumElectionProperties =
+	<ArbitrumElectoralSystemRunner as ElectoralSystemTypes>::ElectionProperties;
+type ArbitrumBitmapComponent = <ArbitrumVoteStorageTuple as VoteStorage>::BitmapComponent;
+type ArbitrumIndividualComponent = <ArbitrumVoteStorageTuple as VoteStorage>::IndividualComponent;
+
 // Type aliases for the ElectionBitmapComponents types
 type BitcoinElectionBitmapComponents = ElectionBitmapComponents<Runtime, BitcoinInstance>;
 type SolanaElectionBitmapComponents = ElectionBitmapComponents<Runtime, SolanaInstance>;
+type EthereumElectionBitmapComponents = ElectionBitmapComponents<Runtime, EthereumInstance>;
+type ArbitrumElectionBitmapComponents = ElectionBitmapComponents<Runtime, ArbitrumInstance>;
 
 // ===== Dashboard types (JSON-serializable for the web UI) =====
 
@@ -69,6 +91,8 @@ struct BlockUpdate {
 	block_number: u32,
 	bitcoin: ChainElections,
 	solana: ChainElections,
+	ethereum: ChainElections,
+	arbitrum: ChainElections,
 }
 
 #[derive(Serialize, Clone)]
@@ -202,20 +226,21 @@ async fn handle_ws_client(ws: warp::ws::WebSocket, mut rx: broadcast::Receiver<S
 
 // Helper functions for human-readable election and vote type names
 use pallet_cf_elections::electoral_systems::composite::{
-	tuple_6_impls::CompositeElectionIdentifierExtra as BtcCompositeExtra,
-	tuple_7_impls::CompositeElectionIdentifierExtra as SolCompositeExtra,
+	tuple_6_impls::CompositeElectionIdentifierExtra as Composite6Extra,
+	tuple_7_impls::CompositeElectionIdentifierExtra as Composite7Extra,
+	tuple_8_impls::CompositeElectionIdentifierExtra as Composite8Extra,
 };
 
 fn bitcoin_election_type_name(
 	election_id: &ElectionIdentifier<BitcoinElectionIdentifierExtra>,
 ) -> &'static str {
 	match election_id.extra() {
-		BtcCompositeExtra::A(_) => "BlockHeight",
-		BtcCompositeExtra::B(_) => "DepositChannel",
-		BtcCompositeExtra::C(_) => "VaultDeposit",
-		BtcCompositeExtra::D(_) => "Egress",
-		BtcCompositeExtra::EE(_) => "FeeTracking",
-		BtcCompositeExtra::FF(_) => "Liveness",
+		Composite6Extra::A(_) => "BlockHeight",
+		Composite6Extra::B(_) => "DepositChannel",
+		Composite6Extra::C(_) => "VaultDeposit",
+		Composite6Extra::D(_) => "Egress",
+		Composite6Extra::EE(_) => "FeeTracking",
+		Composite6Extra::FF(_) => "Liveness",
 	}
 }
 
@@ -223,13 +248,41 @@ fn solana_election_type_name(
 	election_id: &ElectionIdentifier<SolanaElectionIdentifierExtra>,
 ) -> &'static str {
 	match election_id.extra() {
-		SolCompositeExtra::A(_) => "BlockHeight",
-		SolCompositeExtra::B(_) => "Ingress",
-		SolCompositeExtra::C(_) => "Nonce",
-		SolCompositeExtra::D(_) => "Egress",
-		SolCompositeExtra::EE(_) => "Liveness",
-		SolCompositeExtra::FF(_) => "VaultSwap",
-		SolCompositeExtra::G(_) => "ALT",
+		Composite7Extra::A(_) => "BlockHeight",
+		Composite7Extra::B(_) => "Ingress",
+		Composite7Extra::C(_) => "Nonce",
+		Composite7Extra::D(_) => "Egress",
+		Composite7Extra::EE(_) => "Liveness",
+		Composite7Extra::FF(_) => "VaultSwap",
+		Composite7Extra::G(_) => "ALT",
+	}
+}
+
+fn ethereum_election_type_name(
+	election_id: &ElectionIdentifier<EthereumElectionIdentifierExtra>,
+) -> &'static str {
+	match election_id.extra() {
+		Composite8Extra::A(_) => "BlockHeight",
+		Composite8Extra::B(_) => "DepositChannel",
+		Composite8Extra::C(_) => "VaultDeposit",
+		Composite8Extra::D(_) => "KeyManager",
+		Composite8Extra::EE(_) => "FeeTracking",
+		Composite8Extra::FF(_) => "Liveness",
+		Composite8Extra::G(_) => "StateChainGateway",
+		Composite8Extra::HH(_) => "ScUtils",
+	}
+}
+
+fn arbitrum_election_type_name(
+	election_id: &ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+) -> &'static str {
+	match election_id.extra() {
+		Composite6Extra::A(_) => "BlockHeight",
+		Composite6Extra::B(_) => "DepositChannel",
+		Composite6Extra::C(_) => "VaultDeposit",
+		Composite6Extra::D(_) => "KeyManager",
+		Composite6Extra::EE(_) => "FeeTracking",
+		Composite6Extra::FF(_) => "Liveness",
 	}
 }
 
@@ -290,6 +343,48 @@ async fn build_block_update(
 				)
 			})?,
 	);
+	let mut ethereum_shared_data_map = client
+		.storage_map::<pallet_cf_elections::SharedData<Runtime, EthereumInstance>, BTreeMap<_, _>>(
+			block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!("Failed to fetch Ethereum shared data at block {}: {:?}", block_number, e)
+		})?;
+	ethereum_shared_data_map.extend(
+		client
+			.storage_map::<pallet_cf_elections::SharedData<Runtime, EthereumInstance>, BTreeMap<_, _>>(
+				last_block_hash,
+			)
+			.await
+			.map_err(|e| {
+				format!(
+					"Failed to fetch Ethereum shared data at block {}: {:?}",
+					previous_block_number, e
+				)
+			})?,
+	);
+	let mut arbitrum_shared_data_map = client
+		.storage_map::<pallet_cf_elections::SharedData<Runtime, ArbitrumInstance>, BTreeMap<_, _>>(
+			block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!("Failed to fetch Arbitrum shared data at block {}: {:?}", block_number, e)
+		})?;
+	arbitrum_shared_data_map.extend(
+		client
+			.storage_map::<pallet_cf_elections::SharedData<Runtime, ArbitrumInstance>, BTreeMap<_, _>>(
+				last_block_hash,
+			)
+			.await
+			.map_err(|e| {
+				format!(
+					"Failed to fetch Arbitrum shared data at block {}: {:?}",
+					previous_block_number, e
+				)
+			})?,
+	);
 
 	// ===== Query ElectionProperties at X-1 (to get all active elections before this block) =====
 	let bitcoin_elections_prev: BTreeMap<
@@ -320,6 +415,34 @@ async fn build_block_update(
 				previous_block_number, e
 			)
 		})?;
+	let ethereum_elections_prev: BTreeMap<
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+		EthereumElectionProperties,
+	> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, EthereumInstance>, _>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Ethereum election properties at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
+	let arbitrum_elections_prev: BTreeMap<
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+		ArbitrumElectionProperties,
+	> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, ArbitrumInstance>, _>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Arbitrum election properties at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
 
 	// ===== Query ElectionProperties at X (to detect completed elections) =====
 	let bitcoin_elections_curr: BTreeMap<
@@ -346,6 +469,34 @@ async fn build_block_update(
 		.await
 		.map_err(|e| {
 			format!("Failed to fetch Solana election properties at block {}: {:?}", block_number, e)
+		})?;
+	let ethereum_elections_curr: BTreeMap<
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+		EthereumElectionProperties,
+	> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, EthereumInstance>, _>(
+			block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Ethereum election properties at block {}: {:?}",
+				block_number, e
+			)
+		})?;
+	let arbitrum_elections_curr: BTreeMap<
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+		ArbitrumElectionProperties,
+	> = client
+		.storage_map::<pallet_cf_elections::ElectionProperties<Runtime, ArbitrumInstance>, _>(
+			block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Arbitrum election properties at block {}: {:?}",
+				block_number, e
+			)
 		})?;
 
 	// ===== Query BitmapComponents at X-1 (existing shared votes) =====
@@ -377,6 +528,34 @@ async fn build_block_update(
 				previous_block_number, e
 			)
 		})?;
+	let ethereum_bitmap_components: BTreeMap<
+		UniqueMonotonicIdentifier,
+		EthereumElectionBitmapComponents,
+	> = client
+		.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, EthereumInstance>, _>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Ethereum bitmap components at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
+	let arbitrum_bitmap_components: BTreeMap<
+		UniqueMonotonicIdentifier,
+		ArbitrumElectionBitmapComponents,
+	> = client
+		.storage_map::<pallet_cf_elections::BitmapComponents<Runtime, ArbitrumInstance>, _>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Arbitrum bitmap components at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
 
 	// ===== Build mapping from UniqueMonotonicIdentifier to full ElectionIdentifier =====
 	let btc_unique_to_election: BTreeMap<
@@ -393,6 +572,20 @@ async fn build_block_update(
 		.keys()
 		.map(|eid| (*eid.unique_monotonic(), *eid))
 		.collect();
+	let eth_unique_to_election: BTreeMap<
+		UniqueMonotonicIdentifier,
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+	> = ethereum_elections_prev
+		.keys()
+		.map(|eid| (*eid.unique_monotonic(), *eid))
+		.collect();
+	let arb_unique_to_election: BTreeMap<
+		UniqueMonotonicIdentifier,
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+	> = arbitrum_elections_prev
+		.keys()
+		.map(|eid| (*eid.unique_monotonic(), *eid))
+		.collect();
 
 	// ===== Build vote summary from storage =====
 	let mut bitcoin_storage_votes: BTreeMap<
@@ -402,6 +595,14 @@ async fn build_block_update(
 	let mut solana_storage_votes: BTreeMap<
 		ElectionIdentifier<SolanaElectionIdentifierExtra>,
 		Vec<(SolanaBitmapComponent, u32)>,
+	> = BTreeMap::new();
+	let mut ethereum_storage_votes: BTreeMap<
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+		Vec<(EthereumBitmapComponent, u32)>,
+	> = BTreeMap::new();
+	let mut arbitrum_storage_votes: BTreeMap<
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+		Vec<(ArbitrumBitmapComponent, u32)>,
 	> = BTreeMap::new();
 
 	for (unique_id, bitmap_data) in &bitcoin_bitmap_components {
@@ -416,6 +617,24 @@ async fn build_block_update(
 	for (unique_id, bitmap_data) in &solana_bitmap_components {
 		if let Some(election_id) = sol_unique_to_election.get(unique_id) {
 			let vote_list = solana_storage_votes.entry(*election_id).or_default();
+			for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
+				let count = bitvec.count_ones() as u32;
+				vote_list.push((bitmap_component.clone(), count));
+			}
+		}
+	}
+	for (unique_id, bitmap_data) in &ethereum_bitmap_components {
+		if let Some(election_id) = eth_unique_to_election.get(unique_id) {
+			let vote_list = ethereum_storage_votes.entry(*election_id).or_default();
+			for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
+				let count = bitvec.count_ones() as u32;
+				vote_list.push((bitmap_component.clone(), count));
+			}
+		}
+	}
+	for (unique_id, bitmap_data) in &arbitrum_bitmap_components {
+		if let Some(election_id) = arb_unique_to_election.get(unique_id) {
+			let vote_list = arbitrum_storage_votes.entry(*election_id).or_default();
 			for (bitmap_component, bitvec) in &bitmap_data.bitmaps {
 				let count = bitvec.count_ones() as u32;
 				vote_list.push((bitmap_component.clone(), count));
@@ -439,6 +658,28 @@ async fn build_block_update(
 				previous_block_number, e
 			)
 		})?;
+	let ethereum_individual_components: Vec<_> = client
+		.storage_double_map::<pallet_cf_elections::IndividualComponents<Runtime, EthereumInstance>, Vec<_>>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Ethereum individual components at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
+	let arbitrum_individual_components: Vec<_> = client
+		.storage_double_map::<pallet_cf_elections::IndividualComponents<Runtime, ArbitrumInstance>, Vec<_>>(
+			last_block_hash,
+		)
+		.await
+		.map_err(|e| {
+			format!(
+				"Failed to fetch Arbitrum individual components at block {}: {:?}",
+				previous_block_number, e
+			)
+		})?;
 
 	let mut bitcoin_individual_votes: BTreeMap<
 		ElectionIdentifier<BitcoinElectionIdentifierExtra>,
@@ -447,6 +688,14 @@ async fn build_block_update(
 	let mut solana_individual_votes: BTreeMap<
 		ElectionIdentifier<SolanaElectionIdentifierExtra>,
 		Vec<(SolanaIndividualComponent, u32)>,
+	> = BTreeMap::new();
+	let mut ethereum_individual_votes: BTreeMap<
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+		Vec<(EthereumIndividualComponent, u32)>,
+	> = BTreeMap::new();
+	let mut arbitrum_individual_votes: BTreeMap<
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+		Vec<(ArbitrumIndividualComponent, u32)>,
 	> = BTreeMap::new();
 
 	for ((unique_id, _validator), (_props, component)) in &bitcoin_individual_components {
@@ -469,6 +718,26 @@ async fn build_block_update(
 			}
 		}
 	}
+	for ((unique_id, _validator), (_props, component)) in &ethereum_individual_components {
+		if let Some(election_id) = eth_unique_to_election.get(unique_id) {
+			let vote_list = ethereum_individual_votes.entry(*election_id).or_default();
+			if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
+				*count += 1;
+			} else {
+				vote_list.push((component.clone(), 1));
+			}
+		}
+	}
+	for ((unique_id, _validator), (_props, component)) in &arbitrum_individual_components {
+		if let Some(election_id) = arb_unique_to_election.get(unique_id) {
+			let vote_list = arbitrum_individual_votes.entry(*election_id).or_default();
+			if let Some((_, count)) = vote_list.iter_mut().find(|(c, _)| c == component) {
+				*count += 1;
+			} else {
+				vote_list.push((component.clone(), 1));
+			}
+		}
+	}
 
 	// ===== Track new votes from extrinsics =====
 	let mut bitcoin_extrinsic_votes: BTreeMap<
@@ -478,6 +747,14 @@ async fn build_block_update(
 	let mut solana_extrinsic_votes: BTreeMap<
 		ElectionIdentifier<SolanaElectionIdentifierExtra>,
 		BTreeMap<<SolanaVoteStorageTuple as VoteStorage>::PartialVote, u32>,
+	> = BTreeMap::new();
+	let mut ethereum_extrinsic_votes: BTreeMap<
+		ElectionIdentifier<EthereumElectionIdentifierExtra>,
+		BTreeMap<<EthereumVoteStorageTuple as VoteStorage>::PartialVote, u32>,
+	> = BTreeMap::new();
+	let mut arbitrum_extrinsic_votes: BTreeMap<
+		ElectionIdentifier<ArbitrumElectionIdentifierExtra>,
+		BTreeMap<<ArbitrumVoteStorageTuple as VoteStorage>::PartialVote, u32>,
 	> = BTreeMap::new();
 	let signed_block = client
 		.base_rpc_client
@@ -563,6 +840,78 @@ async fn build_block_update(
 				},
 				_ => {},
 			},
+			state_chain_runtime::RuntimeCall::EthereumElections(call) => match call {
+				pallet_cf_elections::Call::vote { authority_votes } => {
+					for (election_id, vote) in *authority_votes {
+						match vote {
+							pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(
+								partial,
+							) => {
+								ethereum_extrinsic_votes
+									.entry(election_id)
+									.or_default()
+									.entry(partial.clone())
+									.and_modify(|entry| *entry += 1)
+									.or_insert(1);
+							},
+							pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
+								let partial = <EthereumVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| {
+										let hash = SharedDataHash::of(&shared_data);
+										ethereum_shared_data_map.insert(hash, shared_data);
+										hash
+									});
+								ethereum_extrinsic_votes
+									.entry(election_id)
+									.or_default()
+									.entry(partial.clone())
+									.and_modify(|entry| *entry += 1)
+									.or_insert(1);
+							},
+						}
+					}
+				},
+				pallet_cf_elections::Call::provide_shared_data { shared_data } => {
+					let shared_data_hash = SharedDataHash::of(&shared_data);
+					ethereum_shared_data_map.insert(shared_data_hash, *shared_data);
+				},
+				_ => {},
+			},
+			state_chain_runtime::RuntimeCall::ArbitrumElections(call) => match call {
+				pallet_cf_elections::Call::vote { authority_votes } => {
+					for (election_id, vote) in *authority_votes {
+						match vote {
+							pallet_cf_elections::vote_storage::AuthorityVote::PartialVote(
+								partial,
+							) => {
+								arbitrum_extrinsic_votes
+									.entry(election_id)
+									.or_default()
+									.entry(partial.clone())
+									.and_modify(|entry| *entry += 1)
+									.or_insert(1);
+							},
+							pallet_cf_elections::vote_storage::AuthorityVote::Vote(full_vote) => {
+								let partial = <ArbitrumVoteStorageTuple as VoteStorage>::vote_into_partial_vote(&full_vote, |shared_data| {
+										let hash = SharedDataHash::of(&shared_data);
+										arbitrum_shared_data_map.insert(hash, shared_data);
+										hash
+									});
+								arbitrum_extrinsic_votes
+									.entry(election_id)
+									.or_default()
+									.entry(partial.clone())
+									.and_modify(|entry| *entry += 1)
+									.or_insert(1);
+							},
+						}
+					}
+				},
+				pallet_cf_elections::Call::provide_shared_data { shared_data } => {
+					let shared_data_hash = SharedDataHash::of(&shared_data);
+					arbitrum_shared_data_map.insert(shared_data_hash, *shared_data);
+				},
+				_ => {},
+			},
 			_ => {},
 		}
 	}
@@ -578,11 +927,25 @@ async fn build_block_update(
 		.filter(|eid| !solana_elections_curr.contains_key(eid))
 		.cloned()
 		.collect();
+	let ethereum_completed: Vec<_> = ethereum_elections_prev
+		.keys()
+		.filter(|eid| !ethereum_elections_curr.contains_key(eid))
+		.cloned()
+		.collect();
+	let arbitrum_completed: Vec<_> = arbitrum_elections_prev
+		.keys()
+		.filter(|eid| !arbitrum_elections_curr.contains_key(eid))
+		.cloned()
+		.collect();
 
 	let btc_active = bitcoin_elections_prev.len();
 	let btc_completed_count = bitcoin_completed.len();
 	let sol_active = solana_elections_prev.len();
 	let sol_completed_count = solana_completed.len();
+	let eth_active = ethereum_elections_prev.len();
+	let eth_completed_count = ethereum_completed.len();
+	let arb_active = arbitrum_elections_prev.len();
+	let arb_completed_count = arbitrum_completed.len();
 
 	// ===== Build dashboard update =====
 	let btc_election_summaries: Vec<ElectionSummary> = bitcoin_elections_prev
@@ -697,6 +1060,118 @@ async fn build_block_update(
 		})
 		.collect();
 
+	let eth_election_summaries: Vec<ElectionSummary> = ethereum_elections_prev
+		.iter()
+		.map(|(election_id, props)| {
+			let is_completed = ethereum_completed.contains(election_id);
+			let bitmap_votes = ethereum_storage_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(comp, count)| VoteGroup {
+							component: format_ethereum_bitmap_component(
+								comp,
+								&ethereum_shared_data_map,
+							),
+							count: *count,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			let individual_votes = ethereum_individual_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(comp, count)| VoteGroup {
+							component: format_for_display(&format!("{:?}", comp)),
+							count: *count,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			let extrinsic_votes = ethereum_extrinsic_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(partial, count)| {
+							let detail =
+								format_ethereum_vote_detail(partial, &ethereum_shared_data_map);
+							ExtrinsicVoteGroup { detail, count: *count }
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			ElectionSummary {
+				election_type: ethereum_election_type_name(election_id).to_string(),
+				composite_id: format!("{:?}", election_id.extra()),
+				election_properties: format_for_display(&format!("{:?}", props)),
+				completed: is_completed,
+				bitmap_votes,
+				individual_votes,
+				extrinsic_votes,
+			}
+		})
+		.collect();
+
+	let arb_election_summaries: Vec<ElectionSummary> = arbitrum_elections_prev
+		.iter()
+		.map(|(election_id, props)| {
+			let is_completed = arbitrum_completed.contains(election_id);
+			let bitmap_votes = arbitrum_storage_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(comp, count)| VoteGroup {
+							component: format_arbitrum_bitmap_component(
+								comp,
+								&arbitrum_shared_data_map,
+							),
+							count: *count,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			let individual_votes = arbitrum_individual_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(comp, count)| VoteGroup {
+							component: format_for_display(&format!("{:?}", comp)),
+							count: *count,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			let extrinsic_votes = arbitrum_extrinsic_votes
+				.get(election_id)
+				.map(|votes| {
+					votes
+						.iter()
+						.map(|(partial, count)| {
+							let detail =
+								format_arbitrum_vote_detail(partial, &arbitrum_shared_data_map);
+							ExtrinsicVoteGroup { detail, count: *count }
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			ElectionSummary {
+				election_type: arbitrum_election_type_name(election_id).to_string(),
+				composite_id: format!("{:?}", election_id.extra()),
+				election_properties: format_for_display(&format!("{:?}", props)),
+				completed: is_completed,
+				bitmap_votes,
+				individual_votes,
+				extrinsic_votes,
+			}
+		})
+		.collect();
+
 	Ok(BlockUpdate {
 		block_number,
 		bitcoin: ChainElections {
@@ -708,6 +1183,16 @@ async fn build_block_update(
 			active_count: sol_active,
 			completed_count: sol_completed_count,
 			elections: sol_election_summaries,
+		},
+		ethereum: ChainElections {
+			active_count: eth_active,
+			completed_count: eth_completed_count,
+			elections: eth_election_summaries,
+		},
+		arbitrum: ChainElections {
+			active_count: arb_active,
+			completed_count: arb_completed_count,
+			elections: arb_election_summaries,
 		},
 	})
 }
@@ -775,13 +1260,74 @@ fn print_block_summary(update: &BlockUpdate) {
 		}
 	}
 
+	println!(
+		"\nETHEREUM ELECTIONS ({} active, {} completed this block):",
+		update.ethereum.active_count, update.ethereum.completed_count
+	);
+	for el in &update.ethereum.elections {
+		let status = if el.completed { " [COMPLETED]" } else { "" };
+		println!(
+			"  [{}] {} {}{}",
+			el.election_type, el.composite_id, el.election_properties, status
+		);
+		if !el.bitmap_votes.is_empty() {
+			println!("    Bitmap votes (from storage at block {}):", prev);
+			for v in &el.bitmap_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.individual_votes.is_empty() {
+			println!("    Individual votes (from storage at block {}):", prev);
+			for v in &el.individual_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.extrinsic_votes.is_empty() {
+			println!("    New votes this block:");
+			for v in &el.extrinsic_votes {
+				println!("      {}: {} votes", v.detail, v.count);
+			}
+		}
+	}
+
+	println!(
+		"\nARBITRUM ELECTIONS ({} active, {} completed this block):",
+		update.arbitrum.active_count, update.arbitrum.completed_count
+	);
+	for el in &update.arbitrum.elections {
+		let status = if el.completed { " [COMPLETED]" } else { "" };
+		println!(
+			"  [{}] {} {}{}",
+			el.election_type, el.composite_id, el.election_properties, status
+		);
+		if !el.bitmap_votes.is_empty() {
+			println!("    Bitmap votes (from storage at block {}):", prev);
+			for v in &el.bitmap_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.individual_votes.is_empty() {
+			println!("    Individual votes (from storage at block {}):", prev);
+			for v in &el.individual_votes {
+				println!("      {}: {} votes", v.component, v.count);
+			}
+		}
+		if !el.extrinsic_votes.is_empty() {
+			println!("    New votes this block:");
+			for v in &el.extrinsic_votes {
+				println!("      {}: {} votes", v.detail, v.count);
+			}
+		}
+	}
+
 	println!("\n{}", "=".repeat(80));
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 3)]
 async fn main() {
 	// http://localhost:9944
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://mainnet-archive.chainflip.io".into());
+	// let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://mainnet-archive.chainflip.io".into());
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://perseverance.chainflip.xyz".into());
 
 	loop {
 		observe_elections(rpc_url.clone()).await;
@@ -874,7 +1420,7 @@ async fn observe_elections(rpc_url: String) {
 }
 
 fn strip_composite_prefix(s: &str) -> String {
-	for prefix in ["EE(", "FF(", "A(", "B(", "C(", "D(", "G("] {
+	for prefix in ["EE(", "FF(", "HH(", "A(", "B(", "C(", "D(", "G("] {
 		if s.starts_with(prefix) && s.ends_with(')') {
 			let inner = &s[prefix.len()..s.len() - 1];
 			// Verify parentheses are balanced in the inner content
@@ -1042,5 +1588,69 @@ fn format_solana_vote_detail(
 		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
 		CompositePartialVote::FF(inner) => resolve_shared_data_value(inner, shared_data_map),
 		CompositePartialVote::G(inner) => resolve_shared_data_value(inner, shared_data_map),
+	}
+}
+
+fn format_ethereum_bitmap_component(
+	component: &EthereumBitmapComponent,
+	shared_data_map: &BTreeMap<SharedDataHash, impl std::fmt::Debug>,
+) -> String {
+	use pallet_cf_elections::vote_storage::composite::tuple_8_impls::CompositeBitmapComponent;
+	match component {
+		CompositeBitmapComponent::A(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::B(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::C(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::D(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::EE(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::FF(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::G(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::HH(hash) => resolve_shared_data_value(hash, shared_data_map),
+	}
+}
+
+fn format_arbitrum_bitmap_component(
+	component: &ArbitrumBitmapComponent,
+	shared_data_map: &BTreeMap<SharedDataHash, impl std::fmt::Debug>,
+) -> String {
+	use pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositeBitmapComponent;
+	match component {
+		CompositeBitmapComponent::A(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::B(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::C(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::D(hash) => resolve_shared_data_value(hash, shared_data_map),
+		CompositeBitmapComponent::EE(value) => bytes_to_hex(&format!("{:?}", value)),
+		CompositeBitmapComponent::FF(value) => bytes_to_hex(&format!("{:?}", value)),
+	}
+}
+
+fn format_ethereum_vote_detail(
+	partial: &<EthereumVoteStorageTuple as VoteStorage>::PartialVote,
+	shared_data_map: &BTreeMap<SharedDataHash, impl std::fmt::Debug>,
+) -> String {
+	use pallet_cf_elections::vote_storage::composite::tuple_8_impls::CompositePartialVote;
+	match partial {
+		CompositePartialVote::A(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::B(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::C(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::D(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::FF(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::G(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::HH(inner) => resolve_shared_data_value(inner, shared_data_map),
+	}
+}
+
+fn format_arbitrum_vote_detail(
+	partial: &<ArbitrumVoteStorageTuple as VoteStorage>::PartialVote,
+	shared_data_map: &BTreeMap<SharedDataHash, impl std::fmt::Debug>,
+) -> String {
+	use pallet_cf_elections::vote_storage::composite::tuple_6_impls::CompositePartialVote;
+	match partial {
+		CompositePartialVote::A(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::B(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::C(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::D(inner) => resolve_shared_data_value(inner, shared_data_map),
+		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
+		CompositePartialVote::FF(inner) => bytes_to_hex(&format!("{:?}", inner)),
 	}
 }

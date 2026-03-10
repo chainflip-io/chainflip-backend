@@ -188,6 +188,8 @@
         }
         .chain-header.bitcoin { color: #f7931a; }
         .chain-header.solana { color: #9945ff; }
+        .chain-header.ethereum { color: #627eea; }
+        .chain-header.arbitrum { color: #28a0f0; }
         .chain-stats {
             color: #8b949e;
             font-weight: 400;
@@ -486,6 +488,8 @@
                     <div class="block-header">Block ${data.block_number}</div>
                     ${renderChain('bitcoin', 'Bitcoin', data.bitcoin, blockIndex)}
                     ${renderChain('solana', 'Solana', data.solana, blockIndex)}
+                    ${renderChain('ethereum', 'Ethereum', data.ethereum, blockIndex)}
+                    ${renderChain('arbitrum', 'Arbitrum', data.arbitrum, blockIndex)}
                 </div>
             `;
         }
