@@ -1323,19 +1323,6 @@ fn print_block_summary(update: &BlockUpdate) {
 	println!("\n{}", "=".repeat(80));
 }
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
-async fn main() {
-	// http://localhost:9944
-	// let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://mainnet-archive.chainflip.io".into());
-	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("wss://perseverance.chainflip.xyz".into());
-
-	loop {
-		observe_elections(rpc_url.clone()).await;
-		println!("Election observer stopped. Reconnecting in 3 seconds...");
-		tokio::time::sleep(Duration::from_secs(3)).await;
-	}
-}
-
 async fn observe_elections(rpc_url: String) {
 	let (ws_tx, _) = broadcast::channel::<String>(32);
 
@@ -1652,5 +1639,16 @@ fn format_arbitrum_vote_detail(
 		CompositePartialVote::D(inner) => resolve_shared_data_value(inner, shared_data_map),
 		CompositePartialVote::EE(inner) => bytes_to_hex(&format!("{:?}", inner)),
 		CompositePartialVote::FF(inner) => bytes_to_hex(&format!("{:?}", inner)),
+	}
+}
+
+#[tokio::main(flavor = "multi_thread", worker_threads = 3)]
+async fn main() {
+	let rpc_url = env::var("CF_RPC_NODE").unwrap_or("ws://localhost:9944".into());
+
+	loop {
+		observe_elections(rpc_url.clone()).await;
+		println!("Election observer stopped. Reconnecting in 3 seconds...");
+		tokio::time::sleep(Duration::from_secs(3)).await;
 	}
 }

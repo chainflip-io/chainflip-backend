@@ -11,13 +11,16 @@ There are two configurable environment variables:
 
 ## Script `log_votes_summary`
 In the bin folder there is a script that can be run separately. It subscribes to the stream of new heads and for every block:
- - It summarizes the `vote` extrinsics in the block, providing an overview of the current elections.
+ - It summarizes the `vote` extrinsics in the block and the votes saved on-chain providing an overview of the current elections.
  - For each election it prints a summary of the votes and their count.
  - It serves a live dashboard over HTTP and pushes updates over WebSocket.
 
+### Supported chains
+Bitcoin, Solana, Ethereum, and Arbitrum.
+
 ### Dashboard configuration
 The `log_votes_summary` script supports:
- - `CF_RPC_NODE`: State chain RPC URL. Default: `wss://mainnet-archive.chainflip.io`.
+ - `CF_RPC_NODE`: State chain RPC URL. Default: `ws://localhost:9944`.
  - `DASHBOARD_HOST`: HTTP bind host. Default: `127.0.0.1`.
  - `DASHBOARD_PORT`: HTTP bind port. Default: `8080`.
 
