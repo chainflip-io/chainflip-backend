@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { sleep } from 'shared/utils';
 import prisma from 'shared/utils/prisma_client';
 import { Logger } from 'shared/utils/logger';
+import { JsonValue } from 'generated/prisma/runtime/library';
 
 // ------------ primitives event types ------------
 
@@ -11,7 +12,15 @@ type EventTime = {
   endBeforeBlock?: number;
 };
 
-export type EventDescription = { name: EventName; schema: z.ZodTypeAny; txHash?: string };
+export type EventFilter = {
+  txHash?: string;
+};
+
+export type EventDescription<Schema = z.ZodTypeAny> = {
+  name: EventName;
+  schema?: Schema;
+  additionalFilter?: EventFilter;
+};
 
 export type EventDescriptions = Record<string, EventDescription>;
 
@@ -29,9 +38,9 @@ export type EventQuery = EventDescription | OneOfEventsQuery | AllOfEventsQuery;
 
 // ------------ Result types of event queries  ---------------
 
-export type SingleEventResult<Key, Schema extends z.ZodTypeAny> = {
+export type SingleEventResult<Key, Schema extends z.ZodTypeAny | undefined> = {
   key: Key;
-  data: z.infer<Schema>;
+  data: Schema extends z.ZodTypeAny ? z.infer<Schema> : JsonValue;
   blockHeight: number;
 };
 
@@ -105,8 +114,8 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   // before searching for events, we collect all call ids for events that have an associated txhash
   const callIdsList: { [x: string]: string | undefined }[] = await Promise.all(
     Object.entries(descriptions).map(([key, description]) =>
-      description.txHash
-        ? findTxHash(description.txHash).then((tx) => ({ [key]: tx.callId }))
+      description.additionalFilter?.txHash
+        ? findTxHash(description.additionalFilter.txHash).then((tx) => ({ [key]: tx.callId }))
         : Promise.resolve({ [key]: undefined }),
     ),
   );
@@ -115,7 +124,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   // now we search for all events, and if provided we require
   //  - the block height to be restricted to the ones allowed by `timings`
   //  - the callId that's associated with the event to be the one belonging to the provided `txHash`
-  let foundEventsKeyAndData: { key: string; data: unknown; blockHeight: number }[] = [];
+  let foundEventsKeyAndData: { key: string; data: JsonValue; blockHeight: number }[] = [];
   while (foundEventsKeyAndData.length === 0) {
     const matchingEvents = await prisma.event.findMany({
       where: {
@@ -152,6 +161,10 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
         // Even though we found all events that match the given names, we have to check whether they
         // also match the given schema.
         const parsingResults = schemas.flatMap(({ key, schema }) => {
+          if (!schema) {
+            return [{ key, data: event.args, blockHeight: event.block.height }];
+          }
+
           const r = schema.safeParse(event.args);
           return r.success ? [{ key, data: r.data, blockHeight: event.block.height }] : [];
         });
@@ -182,7 +195,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
     );
   }
 
-  return foundEventsKeyAndData[0];
+  return foundEventsKeyAndData[0] as OneOfEventsResult<Descriptions>;
 };
 
 // ------------ General fix  ---------------

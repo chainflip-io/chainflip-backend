@@ -144,12 +144,12 @@ async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
   const liquidityDepositAddress = rpcResult.response.deposit_address;
 
   cf.ifYouCallThisYouHaveToRefactor_stepToBlockHeight(rpcResult.block_number);
-  const liquidityDepositEvent = await cf.expectEvent(
-    'LiquidityProvider.LiquidityDepositAddressReady',
-    liquidityProviderLiquidityDepositAddressReady.refine(
+  const liquidityDepositEvent = await cf.expectEvent({
+    name: 'LiquidityProvider.LiquidityDepositAddressReady',
+    schema: liquidityProviderLiquidityDepositAddressReady.refine(
       (event) => event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
     ),
-  );
+  });
 
   assert.strictEqual(
     liquidityDepositEvent.depositAddress.address,
