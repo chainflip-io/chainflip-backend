@@ -471,7 +471,7 @@ impl_runtime_apis! {
 				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
-				min_active_bid: Validator::resolve_auction_iteratively()
+				min_active_bid: Validator::resolve_auction_iteratively(&BTreeSet::new())
 					.ok()
 					.map(|(auction_outcome, _)| auction_outcome.bond),
 				rotation_phase: Validator::current_rotation_phase().to_str().to_owned(),
@@ -604,7 +604,7 @@ impl_runtime_apis! {
 			DispatchErrorWithMessage
 		>
 		{
-			let next_auction = Validator::resolve_auction_iteratively()
+			let next_auction = Validator::resolve_auction_iteratively(&BTreeSet::new())
 				.map_err(|e| DispatchErrorWithMessage::from(<pallet_cf_validator::Error<Runtime>>::from(e)))?;
 			let next_set: BTreeSet<AccountId> = next_auction.0.winners.iter().cloned().collect();
 			let current_set: BTreeSet<AccountId> = Validator::current_authorities().into_iter().collect();
@@ -898,7 +898,7 @@ impl_runtime_apis! {
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				min_bid: pallet_cf_validator::MinimumAuctionBid::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size),
-				min_active_bid: Validator::resolve_auction_iteratively()
+				min_active_bid: Validator::resolve_auction_iteratively(&BTreeSet::new())
 				.ok()
 				.map(|(auction_outcome, _)| auction_outcome.bond)
 			}
