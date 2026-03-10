@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.5] - 2026-03-10
+
+- fix: Make safe mode RPC backwards compatible.
+
 ## [2.1.4] - 2026-03-03
 
 - fix: RPC backwards compatibility for cf_liquidity_provider_info and cf_free_balances.
