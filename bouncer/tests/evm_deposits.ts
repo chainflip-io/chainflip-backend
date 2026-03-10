@@ -1,4 +1,4 @@
-import { broker } from '@chainflip/cli';
+import { brokerEncodeCfParameters } from 'shared/broker_rpcs';
 import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
@@ -14,7 +14,6 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
-  stateChainAssetFromAsset,
   amountToFineAmountBigInt,
   createEvmWalletAndFund,
   decodeFlipAddressForContract,
@@ -31,7 +30,6 @@ import { send } from 'shared/send';
 import { observeBadEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { newEvmAddress } from 'shared/new_evm_address';
-import { brokerApiEndpoint } from 'shared/json_rpc';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { SwapContext } from 'shared/utils/swap_context';
@@ -342,19 +340,13 @@ async function testEncodeCfParameters<A = []>(
 
   const amount = amountToFineAmountBigInt(defaultAssetAmounts(sourceAsset), sourceAsset);
 
-  const cfParameters = await broker.requestCfParametersEncoding(
-    {
-      srcAsset: stateChainAssetFromAsset(sourceAsset),
-      destAsset: stateChainAssetFromAsset(destAsset),
-      destAddress,
-      commissionBps: 1,
-      fillOrKillParams,
-      amount: amount.toString(),
-    },
-    {
-      url: brokerApiEndpoint,
-    },
-    'backspin',
+  const cfParameters = await brokerEncodeCfParameters(
+    cf.logger,
+    sourceAsset,
+    destAsset,
+    destAddress,
+    1,
+    fillOrKillParams,
   );
 
   const txData = cfVaultContract.methods
