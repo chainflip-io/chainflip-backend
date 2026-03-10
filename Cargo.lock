@@ -1885,12 +1885,14 @@ dependencies = [
  "pallet-cf-validator",
  "parity-scale-codec",
  "serde",
+ "serde_json",
  "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
  "utilities",
+ "warp",
 ]
 
 [[package]]

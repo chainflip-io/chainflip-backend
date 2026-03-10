@@ -1193,6 +1193,20 @@ pub mod mocks {
 				&self,
 				block_hash: state_chain_runtime::Hash,
 			) -> RpcResult<ReturnedIter>;
+
+			async fn storage_double_map<
+				StorageDoubleMap: storage_api::StorageDoubleMapAssociatedTypes + 'static,
+				ReturnedIter: FromIterator<(
+						(
+							<StorageDoubleMap as storage_api::StorageDoubleMapAssociatedTypes>::Key1,
+							<StorageDoubleMap as storage_api::StorageDoubleMapAssociatedTypes>::Key2,
+						),
+						StorageDoubleMap::Value,
+					)> + 'static,
+			>(
+				&self,
+				block_hash: state_chain_runtime::Hash,
+			) -> RpcResult<ReturnedIter>;
 		}
 	}
 }
