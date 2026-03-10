@@ -1,9 +1,9 @@
 import assert from 'assert';
-import { executeRedemption, getRedemptionDelay } from '@chainflip/cli';
+import { executeRedemption, getRedemptionDelay } from 'shared/utils/chainflip_cli';
 import type { HexString } from '@polkadot/util/types';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from 'shared/send_evm';
-import { getGatewayAbi } from 'shared/contract_interfaces';
+import { getIStateChainGatewayAbi } from 'shared/contract_interfaces';
 import {
   sleep,
   handleSubstrateError,
@@ -30,7 +30,7 @@ function intoFineAmount(amount: RedeemAmount): RedeemAmount {
   return amount;
 }
 
-const gatewayAbi = await getGatewayAbi();
+const gatewayAbi = await getIStateChainGatewayAbi();
 
 export async function redeemFlip(
   logger: Logger,
