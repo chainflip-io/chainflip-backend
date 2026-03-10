@@ -20,11 +20,11 @@ use cf_utilities::context;
 use codec::{Decode, FullCodec};
 use frame_support::{
 	storage::{
-		generator::StorageMap as StorageMapTrait,
+		generator::{StorageDoubleMap as StorageDoubleMapTrait, StorageMap as StorageMapTrait},
 		types::{QueryKindTrait, StorageDoubleMap, StorageMap, StorageValue},
 	},
 	traits::{Get, StorageInstance},
-	ReversibleStorageHasher, StorageHasher,
+	ReversibleStorageHasher,
 };
 use sp_core::storage::StorageKey;
 
@@ -32,19 +32,21 @@ use super::{BlockInfo, RpcResult, CFE_VERSION, SUBSTRATE_BEHAVIOUR};
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
-	type Key1;
-	type Key2;
+	type Key1: FullCodec;
+	type Key2: FullCodec;
 	type Value: FullCodec;
 	type QueryKind: QueryKindTrait<Self::Value, Self::OnEmpty>;
 	type OnEmpty;
 
 	fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey;
+	fn _prefix_hash() -> StorageKey;
+	fn keys_from_storage_key(storage_key: &StorageKey) -> (Self::Key1, Self::Key2);
 }
 impl<
 		Prefix: StorageInstance,
-		Hasher1: StorageHasher,
+		Hasher1: ReversibleStorageHasher,
 		Key1: FullCodec,
-		Hasher2: StorageHasher,
+		Hasher2: ReversibleStorageHasher,
 		Key2: FullCodec,
 		Value: FullCodec,
 		QueryKind: QueryKindTrait<Value, OnEmpty>,
@@ -61,6 +63,24 @@ impl<
 
 	fn _hashed_key_for(key1: &Self::Key1, key2: &Self::Key2) -> StorageKey {
 		StorageKey(Self::hashed_key_for(key1, key2))
+	}
+
+	fn _prefix_hash() -> StorageKey {
+		StorageKey(Self::prefix_hash().to_vec())
+	}
+
+	fn keys_from_storage_key(storage_key: &StorageKey) -> (Self::Key1, Self::Key2) {
+		let raw_key_without_prefix = &storage_key.0[Self::prefix_hash().len()..];
+		let unhashed1 = Hasher1::reverse(raw_key_without_prefix);
+		let mut cursor = &unhashed1[..];
+		let key1 = Self::Key1::decode(&mut cursor).unwrap();
+		let key1_encoded_len = unhashed1.len() - cursor.len();
+		let hash1_overhead = raw_key_without_prefix.len() - unhashed1.len();
+		let key2_start = hash1_overhead + key1_encoded_len;
+		let raw_key2 = &raw_key_without_prefix[key2_start..];
+		let unhashed2 = Hasher2::reverse(raw_key2);
+		let key2 = Self::Key2::decode(&mut &unhashed2[..]).unwrap();
+		(key1, key2)
 	}
 }
 
@@ -185,6 +205,23 @@ pub trait StorageApi {
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<ReturnedIter>;
 
+	/// Gets all the storage pairs ((key1, key2), value) of a StorageDoubleMap.
+	/// NB: Because this is an unbounded operation, it requires the node to have
+	/// the `--rpc-methods=unsafe` enabled.
+	async fn storage_double_map<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(
+				(
+					<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key1,
+					<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key2,
+				),
+				StorageDoubleMap::Value,
+			)> + 'static,
+	>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<ReturnedIter>;
+
 	async fn storage_map_values<StorageMap: StorageMapAssociatedTypes + 'static>(
 		&self,
 		block_hash: state_chain_runtime::Hash,
@@ -292,6 +329,34 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 			})
 			.collect())
 	}
+
+	#[track_caller]
+	async fn storage_double_map<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(
+			(
+				<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key1,
+				<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key2,
+			),
+			StorageDoubleMap::Value,
+		)>,
+	>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<ReturnedIter> {
+		Ok(self
+			.storage_pairs(block_hash, StorageDoubleMap::_prefix_hash())
+			.await?
+			.into_iter()
+			.map(|(storage_key, storage_data)| {
+				(
+					StorageDoubleMap::keys_from_storage_key(&storage_key),
+					context!(StorageDoubleMap::Value::decode(&mut &storage_data.0[..]))
+						.expect(SUBSTRATE_BEHAVIOUR),
+				)
+			})
+			.collect())
+	}
 }
 
 #[async_trait]
@@ -368,6 +433,23 @@ impl<
 	) -> RpcResult<ReturnedIter> {
 		self.base_rpc_client.storage_map::<StorageMap, _>(block_hash).await
 	}
+
+	#[track_caller]
+	async fn storage_double_map<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes + 'static,
+		ReturnedIter: FromIterator<(
+				(
+					<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key1,
+					<StorageDoubleMap as StorageDoubleMapAssociatedTypes>::Key2,
+				),
+				StorageDoubleMap::Value,
+			)> + 'static,
+	>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<ReturnedIter> {
+		self.base_rpc_client.storage_double_map::<StorageDoubleMap, _>(block_hash).await
+	}
 }
 
 #[derive(Debug)]
@@ -423,6 +505,21 @@ mod tests {
 		key == key_from_storage_key
 	}
 
+	fn test_double_map_storage_key_and_back<
+		StorageDoubleMap: StorageDoubleMapAssociatedTypes<Key1 = K1, Key2 = K2>,
+		K1: PartialEq,
+		K2: PartialEq,
+	>(
+		key1: K1,
+		key2: K2,
+	) -> bool {
+		let storage_key = StorageDoubleMap::_hashed_key_for(&key1, &key2);
+		let (key1_from_storage_key, key2_from_storage_key) =
+			StorageDoubleMap::keys_from_storage_key(&storage_key);
+
+		key1 == key1_from_storage_key && key2 == key2_from_storage_key
+	}
+
 	#[storage_alias]
 	type BlakeStorageMap = StorageMap<Test, Blake2_128Concat, H256, ()>;
 
@@ -432,6 +529,13 @@ mod tests {
 	#[storage_alias]
 	type IdentityStorageMap = StorageMap<Test, Identity, Asset, ()>;
 
+	#[storage_alias]
+	type BlakeTwoxStorageDoubleMap =
+		StorageDoubleMap<Test, Blake2_128Concat, H256, Twox64Concat, u32, ()>;
+
+	#[storage_alias]
+	type IdentityStorageDoubleMap = StorageDoubleMap<Test, Identity, Asset, Identity, u32, ()>;
+
 	#[test]
 	fn test_fake_storage_keys() {
 		// Blake2_128Concat
@@ -440,5 +544,18 @@ mod tests {
 		assert!(test_map_storage_key_and_back::<TwoxStorageMap, _>(42));
 
 		assert!(test_map_storage_key_and_back::<IdentityStorageMap, _>(Asset::Eth));
+	}
+
+	#[test]
+	fn test_fake_storage_double_map_keys() {
+		assert!(test_double_map_storage_key_and_back::<BlakeTwoxStorageDoubleMap, _, _>(
+			H256::from([0x1; 32]),
+			42,
+		));
+
+		assert!(test_double_map_storage_key_and_back::<IdentityStorageDoubleMap, _, _>(
+			Asset::Eth,
+			42,
+		));
 	}
 }

@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chainflip Elections Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f1117;
+            color: #c9d1d9;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .header {
+            position: sticky;
+            top: 0;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            z-index: 100;
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f0f6fc;
+            white-space: nowrap;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #f85149;
+        }
+        .status-dot.connected { background: #3fb950; }
+        .status-dot.paused { background: #d29922; }
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button:hover { background: #30363d; }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button:disabled:hover { background: #21262d; }
+        button.active {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: #fff;
+        }
+        .block-info {
+            font-size: 12px;
+            color: #8b949e;
+            white-space: nowrap;
+        }
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-btn {
+            min-width: 30px;
+            padding: 5px 8px;
+            font-weight: 700;
+        }
+        .position-indicator {
+            font-size: 11px;
+            color: #8b949e;
+            min-width: 78px;
+            text-align: right;
+        }
+        .search-controls {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .search-input {
+            width: 120px;
+            background: #0d1117;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 12px;
+            font-family: inherit;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #1f6feb;
+            box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+        }
+        .back-live-btn {
+            background: #1f6feb;
+            border-color: #1f6feb;
+            color: #fff;
+        }
+        .back-live-btn:hover {
+            background: #388bfd;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .error-banner {
+            background: #4a1d1f;
+            border-bottom: 1px solid #f85149;
+            color: #ffd7d5;
+            padding: 8px 20px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .content {
+            padding: 16px 20px;
+            width: 100%;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        .block-section {
+            margin-bottom: 0;
+            min-width: clamp(280px, 24vw, 420px);
+            flex: 1 1 25%;
+        }
+        .block-section.latest-block {
+            min-width: clamp(520px, 48vw, 900px);
+            flex: 2 1 50%;
+        }
+        .content.blocks-2 .block-section {
+            min-width: clamp(300px, 34vw, 540px);
+            flex: 1 1 40%;
+        }
+        .content.blocks-2 .block-section.latest-block {
+            min-width: clamp(500px, 56vw, 980px);
+            flex: 3 1 60%;
+        }
+        .content.blocks-1 .block-section,
+        .content.latest-only .block-section {
+            min-width: min(1080px, calc(100vw - 56px));
+            flex: 1 1 100%;
+        }
+        .block-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f0f6fc;
+            padding: 8px 0;
+            border-bottom: 1px solid #21262d;
+            margin-bottom: 12px;
+        }
+        .chain-section {
+            margin-bottom: 16px;
+        }
+        .chain-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #d2a8ff;
+            padding: 6px 12px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .chain-header.bitcoin { color: #f7931a; }
+        .chain-header.solana { color: #9945ff; }
+        .chain-stats {
+            color: #8b949e;
+            font-weight: 400;
+        }
+        .elections-container {
+            border: 1px solid #30363d;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+        }
+        .election {
+            padding: 8px 12px;
+            border-bottom: 1px solid #21262d;
+        }
+        .election:last-child { border-bottom: none; }
+        .election-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .election-toggle {
+            color: #484f58;
+            font-size: 10px;
+            width: 12px;
+            transition: transform 0.15s;
+        }
+        .election-toggle.open { transform: rotate(90deg); }
+        .election-type {
+            background: #21262d;
+            color: #79c0ff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .election-id {
+            color: #8b949e;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .election-props {
+            color: #c9d1d9;
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 600px;
+            cursor: pointer;
+            transition: max-width 0.2s;
+        }
+        .election-props.expanded {
+            max-width: none;
+            white-space: normal;
+            word-break: break-all;
+            overflow: visible;
+        }
+        .completed-badge {
+            background: #238636;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .election-details {
+            display: none;
+            margin-top: 6px;
+            padding-left: 20px;
+        }
+        .election-details.open { display: block; }
+        .vote-section-label {
+            color: #8b949e;
+            font-size: 11px;
+            font-style: italic;
+            margin-top: 4px;
+            margin-bottom: 2px;
+        }
+        .vote-row {
+            padding: 1px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .vote-component {
+            color: #7ee787;
+            word-break: break-all;
+        }
+        .vote-count {
+            color: #d29922;
+            white-space: nowrap;
+        }
+        .extrinsic-vote .vote-component { color: #79c0ff; }
+        .no-elections {
+            padding: 12px;
+            color: #484f58;
+            font-style: italic;
+        }
+        .overlay-mode {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px 24px;
+            font-size: 14px;
+            color: #d29922;
+            z-index: 200;
+            display: none;
+        }
+        @media (max-width: 1200px) {
+            .search-controls {
+                margin-left: 0;
+                order: 3;
+                width: 100%;
+            }
+            .controls {
+                order: 4;
+                width: 100%;
+            }
+        }
+        @media (max-width: 760px) {
+            .header {
+                gap: 10px;
+                padding: 10px 12px;
+            }
+            .search-input {
+                width: 100px;
+            }
+            .position-indicator {
+                min-width: 0;
+            }
+            .content {
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Chainflip Elections</h1>
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+        <div class="nav-controls">
+            <button class="nav-btn" id="olderBtn" onclick="navigateOlder()">&lt;</button>
+            <span class="block-info" id="blockInfo"></span>
+            <button class="nav-btn" id="newerBtn" onclick="navigateNewer()">&gt;</button>
+            <span class="position-indicator" id="positionIndicator"></span>
+        </div>
+        <div class="search-controls">
+            <input class="search-input" type="number" min="0" id="blockSearch" placeholder="Block #" />
+            <button id="searchBtn" onclick="searchBlock()">Go</button>
+            <button id="backToLiveBtn" class="back-live-btn hidden" onclick="backToLive()">Back to live</button>
+        </div>
+        <div class="controls">
+            <button id="stopBtn" onclick="pauseUpdates()">Stop</button>
+            <button id="resumeBtn" onclick="resumeUpdates()" disabled>Resume</button>
+            <button id="showCompletedBtn" onclick="toggleShowCompleted()">Show Completed on Older Blocks</button>
+            <button onclick="clearDisplay()">Clear</button>
+            <button onclick="toggleMode()">
+                <span id="modeLabel">History</span>
+            </button>
+        </div>
+    </div>
+    <div class="error-banner hidden" id="errorBanner"></div>
+    <div class="overlay-mode" id="pausedOverlay">Paused - buffering updates</div>
+    <div class="content" id="content"></div>
+
+    <script>
+        const MAX_BUFFER_BLOCKS = 10;
+        const VISIBLE_BLOCKS = 3;
+        const U32_MAX = 4294967295;
+
+        let paused = false;
+        let pauseSource = null; // null | manual | history-nav | search
+        let latestOnly = false;
+        let showCompleted = false;
+        let pendingUpdate = null;
+        let historyBlocks = [];
+        let viewOffset = 0; // 0 means latest side of the buffer
+        let mode = 'live'; // live | search
+        let searchBlocks = [];
+        let currentSearchBlockNumber = null;
+        let searchLoading = false;
+        let latestErrorMessage = null;
+        let ws;
+
+        function isSocketOpen() {
+            return ws && ws.readyState === WebSocket.OPEN;
+        }
+
+        function setConnectedStatus() {
+            document.getElementById('statusDot').className = 'status-dot connected';
+            document.getElementById('statusText').textContent = 'Connected';
+        }
+
+        function setPausedStatus() {
+            document.getElementById('statusDot').className = 'status-dot paused';
+            document.getElementById('statusText').textContent = 'Paused';
+        }
+
+        function setDisconnectedStatus() {
+            document.getElementById('statusDot').className = 'status-dot';
+            document.getElementById('statusText').textContent = 'Disconnected';
+        }
+
+        function updatePauseControls() {
+            const stopBtn = document.getElementById('stopBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            stopBtn.disabled = paused;
+            resumeBtn.disabled = !paused || mode === 'search';
+            resumeBtn.classList.toggle('active', paused);
+        }
+
+        function updateSearchControls() {
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = searchLoading;
+            document.getElementById('backToLiveBtn').classList.toggle('hidden', mode !== 'search');
+        }
+
+        function showErrorBanner(message) {
+            latestErrorMessage = message;
+            const banner = document.getElementById('errorBanner');
+            banner.textContent = message;
+            banner.classList.remove('hidden');
+        }
+
+        function clearErrorBanner() {
+            latestErrorMessage = null;
+            const banner = document.getElementById('errorBanner');
+            banner.textContent = '';
+            banner.classList.add('hidden');
+        }
+
+        function reportLiveError(payload) {
+            const blockRef = Number.isInteger(payload.block_number)
+                ? `block ${payload.block_number}`
+                : 'an unknown block';
+            const detail = payload && typeof payload.error === 'string'
+                ? payload.error
+                : 'Unknown query error';
+            showErrorBanner(`Data query failed for ${blockRef}: ${detail}`);
+        }
+
+        function getLiveVisibleCount() {
+            return latestOnly ? 1 : VISIBLE_BLOCKS;
+        }
+
+        function getMaxViewOffset() {
+            return Math.max(0, historyBlocks.length - getLiveVisibleCount());
+        }
+
+        function clampViewOffset() {
+            viewOffset = Math.max(0, Math.min(viewOffset, getMaxViewOffset()));
+        }
+
+        function appendLiveBlock(data) {
+            historyBlocks.unshift(data);
+            if (historyBlocks.length > MAX_BUFFER_BLOCKS) {
+                historyBlocks.length = MAX_BUFFER_BLOCKS;
+            }
+            clampViewOffset();
+        }
+
+        function getVisibleBlocks() {
+            clampViewOffset();
+            return historyBlocks.slice(viewOffset, viewOffset + getLiveVisibleCount());
+        }
+
+        function getCurrentSearchBlock() {
+            if (mode !== 'search' || currentSearchBlockNumber === null) {
+                return null;
+            }
+            return searchBlocks.find(block => block.block_number === currentSearchBlockNumber) || null;
+        }
+
+        function getVisibleSearchBlocks() {
+            if (mode !== 'search' || currentSearchBlockNumber === null) {
+                return [];
+            }
+            const sortedSearch = [...searchBlocks].sort((a, b) => b.block_number - a.block_number);
+            const currentIndex = sortedSearch.findIndex(block => block.block_number === currentSearchBlockNumber);
+            if (currentIndex < 0) {
+                return [];
+            }
+            return sortedSearch.slice(currentIndex, currentIndex + getLiveVisibleCount());
+        }
+
+        function renderBlockHtml(data, blockIndex) {
+            const sectionClass = blockIndex === 0 ? 'block-section latest-block' : 'block-section';
+            return `
+                <div class="${sectionClass}">
+                    <div class="block-header">Block ${data.block_number}</div>
+                    ${renderChain('bitcoin', 'Bitcoin', data.bitcoin, blockIndex)}
+                    ${renderChain('solana', 'Solana', data.solana, blockIndex)}
+                </div>
+            `;
+        }
+
+        function updateNavigationControls() {
+            const olderBtn = document.getElementById('olderBtn');
+            const newerBtn = document.getElementById('newerBtn');
+            const indicator = document.getElementById('positionIndicator');
+
+            if (mode === 'search') {
+                const current = getCurrentSearchBlock();
+                const visibleSearchBlocks = getVisibleSearchBlocks();
+                const currentNumber = current ? current.block_number : null;
+                olderBtn.disabled = searchLoading || currentNumber === null || currentNumber === 0;
+                newerBtn.disabled = searchLoading || currentNumber === null || currentNumber >= U32_MAX;
+                if (!current || visibleSearchBlocks.length === 0) {
+                    indicator.textContent = `0 of ${searchBlocks.length}`;
+                    return;
+                }
+                const sortedSearch = [...searchBlocks].sort((a, b) => b.block_number - a.block_number);
+                const currentIndex = sortedSearch.findIndex(block => block.block_number === current.block_number);
+                const start = currentIndex + 1;
+                const end = Math.min(currentIndex + getLiveVisibleCount(), sortedSearch.length);
+                indicator.textContent = `${start}-${end} of ${sortedSearch.length}`;
+                return;
+            }
+
+            const total = historyBlocks.length;
+            const visibleCount = getLiveVisibleCount();
+            const maxOffset = getMaxViewOffset();
+            olderBtn.disabled = searchLoading || total === 0 || viewOffset >= maxOffset;
+            newerBtn.disabled = searchLoading || viewOffset === 0;
+            if (total === 0) {
+                indicator.textContent = '0 of 0';
+                return;
+            }
+            const start = viewOffset + 1;
+            const end = Math.min(viewOffset + visibleCount, total);
+            indicator.textContent = `${start}-${end} of ${total}`;
+        }
+
+        function renderContent() {
+            const content = document.getElementById('content');
+
+            if (mode === 'search') {
+                const block = getCurrentSearchBlock();
+                const visibleSearchBlocks = getVisibleSearchBlocks();
+                if (!block) {
+                    content.className = 'content';
+                    content.innerHTML = '';
+                    document.getElementById('blockInfo').textContent = 'Search mode';
+                    updateNavigationControls();
+                    updateSearchControls();
+                    updatePauseControls();
+                    return;
+                }
+                document.getElementById('blockInfo').textContent = `Block #${block.block_number}`;
+                if (latestOnly || visibleSearchBlocks.length <= 1) {
+                    content.className = 'content blocks-1';
+                    content.innerHTML = renderBlockHtml(block, 0);
+                } else {
+                    const orderedSearchBlocks = [...visibleSearchBlocks].reverse();
+                    content.className = `content blocks-${orderedSearchBlocks.length}`;
+                    content.innerHTML = orderedSearchBlocks
+                        .map((entry, index) =>
+                            renderBlockHtml(entry, orderedSearchBlocks.length - 1 - index))
+                        .join('');
+                    content.scrollLeft = content.scrollWidth;
+                }
+                updateNavigationControls();
+                updateSearchControls();
+                updatePauseControls();
+                return;
+            }
+
+            const visibleBlocks = getVisibleBlocks();
+            if (!visibleBlocks.length) {
+                content.className = 'content';
+                content.innerHTML = '';
+                document.getElementById('blockInfo').textContent = '';
+                updateNavigationControls();
+                updateSearchControls();
+                updatePauseControls();
+                return;
+            }
+
+            document.getElementById('blockInfo').textContent = `Block #${visibleBlocks[0].block_number}`;
+            if (latestOnly) {
+                content.className = 'content latest-only blocks-1';
+                content.innerHTML = renderBlockHtml(visibleBlocks[0], 0);
+            } else {
+                const orderedBlocks = [...visibleBlocks].reverse();
+                content.className = `content blocks-${orderedBlocks.length}`;
+                content.innerHTML = orderedBlocks
+                    .map((block, index) => renderBlockHtml(block, orderedBlocks.length - 1 - index))
+                    .join('');
+                if (viewOffset === 0) {
+                    content.scrollLeft = content.scrollWidth;
+                }
+            }
+            updateNavigationControls();
+            updateSearchControls();
+            updatePauseControls();
+        }
+
+        function connect() {
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${location.host}/ws`);
+            ws.onopen = () => {
+                if (paused) {
+                    setPausedStatus();
+                } else {
+                    setConnectedStatus();
+                }
+            };
+            ws.onmessage = (event) => {
+                let data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (_error) {
+                    showErrorBanner('Received malformed WebSocket payload from tracker.');
+                    return;
+                }
+
+                if (data && data.type === 'error') {
+                    reportLiveError(data);
+                    return;
+                }
+
+                if (!data || !Number.isInteger(data.block_number)) {
+                    showErrorBanner('Received unexpected WebSocket payload from tracker.');
+                    return;
+                }
+
+                clearErrorBanner();
+                if (paused) {
+                    pendingUpdate = data;
+                    return;
+                }
+                if (mode !== 'live') {
+                    pendingUpdate = data;
+                    return;
+                }
+                appendLiveBlock(data);
+                renderContent();
+            };
+            ws.onclose = () => {
+                if (paused) {
+                    setPausedStatus();
+                } else {
+                    setDisconnectedStatus();
+                }
+                setTimeout(connect, 3000);
+            };
+            ws.onerror = () => ws.close();
+        }
+
+        function pauseUpdates(source = 'manual') {
+            if (paused) {
+                if (source !== 'manual' && pauseSource !== 'manual') {
+                    pauseSource = source;
+                }
+                updatePauseControls();
+                return;
+            }
+            paused = true;
+            pauseSource = source;
+            const overlay = document.getElementById('pausedOverlay');
+            overlay.style.display = 'block';
+            setPausedStatus();
+            updatePauseControls();
+            setTimeout(() => {
+                if (paused) {
+                    overlay.style.display = 'none';
+                }
+            }, 1500);
+        }
+
+        function resumeUpdatesInternal() {
+            if (!paused) return;
+            paused = false;
+            pauseSource = null;
+            const overlay = document.getElementById('pausedOverlay');
+            overlay.style.display = 'none';
+            updatePauseControls();
+
+            if (isSocketOpen()) {
+                setConnectedStatus();
+            } else {
+                setDisconnectedStatus();
+            }
+
+            if (mode === 'live' && pendingUpdate) {
+                appendLiveBlock(pendingUpdate);
+                pendingUpdate = null;
+            }
+            renderContent();
+        }
+
+        function resumeUpdates() {
+            if (mode === 'search') return;
+            resumeUpdatesInternal();
+        }
+
+        function toggleShowCompleted() {
+            showCompleted = !showCompleted;
+            const button = document.getElementById('showCompletedBtn');
+            button.textContent = showCompleted
+                ? 'Hide Completed on Older Blocks'
+                : 'Show Completed on Older Blocks';
+            button.classList.toggle('active', showCompleted);
+            renderContent();
+        }
+
+        function toggleMode() {
+            latestOnly = !latestOnly;
+            document.getElementById('modeLabel').textContent = latestOnly ? 'Latest Only' : 'History';
+            clampViewOffset();
+            renderContent();
+        }
+
+        function clearDisplay() {
+            historyBlocks = [];
+            viewOffset = 0;
+            if (mode === 'search') {
+                searchBlocks = [];
+                currentSearchBlockNumber = null;
+            }
+            pendingUpdate = null;
+            renderContent();
+        }
+
+        function shouldShowCompletedInBlock(blockIndex) {
+            return blockIndex === 0 || showCompleted;
+        }
+
+        function renderChain(cls, name, chain, blockIndex) {
+            const includeCompleted = shouldShowCompletedInBlock(blockIndex);
+            const visibleElections = includeCompleted
+                ? chain.elections
+                : chain.elections.filter(el => !el.completed);
+            if (visibleElections.length === 0) {
+                const emptyMessage = includeCompleted
+                    ? 'No elections in this block'
+                    : 'No active elections in this block';
+                return `
+                    <div class="chain-section">
+                        <div class="chain-header ${cls}">
+                            ${name}
+                            <span class="chain-stats">${chain.active_count} active, ${chain.completed_count} completed</span>
+                        </div>
+                        <div class="elections-container">
+                            <div class="no-elections">${emptyMessage}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            return `
+                <div class="chain-section">
+                    <div class="chain-header ${cls}">
+                        ${name}
+                        <span class="chain-stats">${chain.active_count} active, ${chain.completed_count} completed</span>
+                    </div>
+                    <div class="elections-container">
+                        ${visibleElections.map(el => renderElection(el, blockIndex === 0)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderElection(el, defaultExpanded) {
+            const id = 'el-' + Math.random().toString(36).slice(2);
+            const hasDetails = el.bitmap_votes.length > 0 || el.individual_votes.length > 0 || el.extrinsic_votes.length > 0;
+            const expandedClass = defaultExpanded && hasDetails ? ' open' : '';
+            return `
+                <div class="election">
+                    <div class="election-header" onclick="toggleDetails('${id}')">
+                        ${hasDetails ? `<span class="election-toggle${expandedClass}" id="${id}-toggle">&#9654;</span>` : '<span style="width:12px"></span>'}
+                        <span class="election-type">${el.election_type}</span>
+                        ${el.completed ? '<span class="completed-badge">COMPLETED</span>' : ''}
+                        <span class="election-id">${escapeHtml(el.composite_id)}</span>
+                        <span class="election-props" title="Click to expand" onclick="event.stopPropagation(); this.classList.toggle('expanded')">${escapeHtml(el.election_properties)}</span>
+                    </div>
+                    ${hasDetails ? `<div class="election-details${expandedClass}" id="${id}">
+                        ${renderVotes('Bitmap votes', el.bitmap_votes, '')}
+                        ${renderVotes('Individual votes', el.individual_votes, '')}
+                        ${renderExtrinsicVotes(el.extrinsic_votes)}
+                    </div>` : ''}
+                </div>
+            `;
+        }
+
+        function renderVotes(label, votes, cls) {
+            if (!votes.length) return '';
+            return `
+                <div class="vote-section-label">${label}:</div>
+                ${votes.map(v => `
+                    <div class="vote-row ${cls}">
+                        <span class="vote-component">${escapeHtml(v.component)}</span>
+                        <span class="vote-count">${v.count} votes</span>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function renderExtrinsicVotes(votes) {
+            if (!votes.length) return '';
+            return `
+                <div class="vote-section-label">New votes this block:</div>
+                ${votes.map(v => `
+                    <div class="vote-row extrinsic-vote">
+                        <span class="vote-component">${escapeHtml(v.detail)}</span>
+                        <span class="vote-count">${v.count} votes</span>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        function toggleDetails(id) {
+            const el = document.getElementById(id);
+            const toggle = document.getElementById(id + '-toggle');
+            if (el) {
+                el.classList.toggle('open');
+                if (toggle) toggle.classList.toggle('open');
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function storeSearchBlock(block) {
+            const existing = searchBlocks.findIndex(entry => entry.block_number === block.block_number);
+            if (existing >= 0) {
+                searchBlocks[existing] = block;
+            } else {
+                searchBlocks.push(block);
+            }
+            searchBlocks.sort((a, b) => b.block_number - a.block_number);
+        }
+
+        async function fetchBlock(number) {
+            const response = await fetch(`/api/block/${number}`);
+            let json = null;
+            try {
+                json = await response.json();
+            } catch (_error) {
+                // ignore JSON parse errors and use fallback messages
+            }
+            if (!response.ok) {
+                const message = json && json.error ? json.error : `Block ${number} is unavailable`;
+                throw new Error(message);
+            }
+            return json;
+        }
+
+        async function searchBlock() {
+            const input = document.getElementById('blockSearch');
+            const raw = input.value.trim();
+            if (!raw) return;
+            const blockNumber = Number(raw);
+            if (!Number.isInteger(blockNumber) || blockNumber < 0 || blockNumber > U32_MAX) {
+                alert('Enter a valid non-negative block number.');
+                return;
+            }
+
+            searchLoading = true;
+            updateNavigationControls();
+            updateSearchControls();
+            try {
+                const block = await fetchBlock(blockNumber);
+                clearErrorBanner();
+                pauseUpdates('search');
+                mode = 'search';
+                searchBlocks = [];
+                storeSearchBlock(block);
+                currentSearchBlockNumber = block.block_number;
+                renderContent();
+            } catch (error) {
+                showErrorBanner(`Could not load block ${blockNumber}: ${error.message}`);
+                alert(`Could not load block ${blockNumber}: ${error.message}`);
+            } finally {
+                searchLoading = false;
+                updateNavigationControls();
+                updateSearchControls();
+            }
+        }
+
+        async function navigateOlder() {
+            if (searchLoading) return;
+            if (mode === 'search') {
+                await navigateSearch(-1);
+                return;
+            }
+
+            const maxOffset = getMaxViewOffset();
+            if (viewOffset >= maxOffset) return;
+            if (viewOffset === 0 && !paused) {
+                pauseUpdates('history-nav');
+            }
+            viewOffset += 1;
+            renderContent();
+        }
+
+        async function navigateNewer() {
+            if (searchLoading) return;
+            if (mode === 'search') {
+                await navigateSearch(1);
+                return;
+            }
+
+            if (viewOffset === 0) return;
+            viewOffset -= 1;
+            if (viewOffset === 0 && pauseSource === 'history-nav') {
+                resumeUpdatesInternal();
+                return;
+            }
+            renderContent();
+        }
+
+        async function navigateSearch(delta) {
+            const current = getCurrentSearchBlock();
+            if (!current) return;
+
+            if (delta < 0 && current.block_number === 0) return;
+            if (delta > 0 && current.block_number >= U32_MAX) return;
+
+            const targetNumber = current.block_number + delta;
+            const cached = searchBlocks.find(block => block.block_number === targetNumber);
+            if (cached) {
+                currentSearchBlockNumber = cached.block_number;
+                renderContent();
+                return;
+            }
+
+            searchLoading = true;
+            updateNavigationControls();
+            updateSearchControls();
+            try {
+                const target = await fetchBlock(targetNumber);
+                clearErrorBanner();
+                storeSearchBlock(target);
+                currentSearchBlockNumber = target.block_number;
+                renderContent();
+            } catch (error) {
+                showErrorBanner(`Could not load block ${targetNumber}: ${error.message}`);
+                alert(`Could not load block ${targetNumber}: ${error.message}`);
+            } finally {
+                searchLoading = false;
+                updateNavigationControls();
+                updateSearchControls();
+            }
+        }
+
+        function backToLive() {
+            if (mode !== 'search') return;
+            mode = 'live';
+            searchBlocks = [];
+            currentSearchBlockNumber = null;
+            viewOffset = 0;
+            renderContent();
+
+            if (pauseSource === 'search') {
+                resumeUpdatesInternal();
+            } else {
+                updatePauseControls();
+                updateSearchControls();
+                updateNavigationControls();
+            }
+        }
+
+        document.getElementById('blockSearch').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                searchBlock();
+            }
+        });
+
+        updatePauseControls();
+        updateSearchControls();
+        updateNavigationControls();
+        connect();
+    </script>
+</body>
+</html>
