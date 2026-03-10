@@ -58,6 +58,7 @@ impl Chain for Assethub {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_DOT;
 	const BURN_ADDRESS: Self::ChainAccount = PolkadotAccountId([0; 32]);
+	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = PolkadotCrypto;
 	type ChainBlockNumber = PolkadotBlockNumber;

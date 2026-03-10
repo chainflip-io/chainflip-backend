@@ -67,6 +67,7 @@ impl Chain for Ethereum {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = evm::Address::zero();
+	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = evm::EvmCrypto;
 	type ChainBlockNumber = u64;
