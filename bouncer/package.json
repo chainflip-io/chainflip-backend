@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@chainflip/processor": "2.0.4",
-    "@chainflip/utils": "0.11.2-wbtc-dev.2",
+    "@chainflip/utils": "2.1.4-bsc-dev.1",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
     "@polkadot/api": "16.1.1",
