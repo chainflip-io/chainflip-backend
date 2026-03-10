@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@chainflip/processor':
-        specifier: 2.0.4
-        version: 2.0.4
+        specifier: 2.1.3-bsc-dev.1
+        version: 2.1.3-bsc-dev.1
       '@chainflip/utils':
         specifier: 2.1.4-bsc-dev.1
         version: 2.1.4-bsc-dev.1
@@ -160,11 +160,14 @@ packages:
     resolution: {integrity: sha512-Q/N6JNWvIvPnLDvjlE1OUBLPQHH6l3CltCEsHIujp45zQUSSh8K+gHnaEX45yAT1nyngnINhvWtzN+Nb9D8RAQ==}
     engines: {node: '>=6.9.0'}
 
-  '@chainflip/processor@2.0.4':
-    resolution: {integrity: sha512-uHF1YS4WP1XBBNx+sd0z915/vud+6dESSM8sMQAQvd/W4Y4vSugikY1OwKZCubJkwHJXj9HYjNtIHRx+DgAK8Q==}
+  '@chainflip/processor@2.1.3-bsc-dev.1':
+    resolution: {integrity: sha512-odzJkgIY2Kjc94Vac9CL4YcoPjCNVktZZsyUbfEOG5WJt66cPifAAhspVyHL3x6y1A0+9pC9HJ0fSheBRUXUHA==}
 
-  '@chainflip/utils@0.8.18':
-    resolution: {integrity: sha512-qaKtasZSfCcEICR3Bo6IUabOkBsmldsKmDbGTRr0WBQlUyOA2SNwZRN9EP73ZQofWyI3luRN2tFGS54O3bYazQ==}
+  '@chainflip/rpc@2.1.2-bsc-dev.1':
+    resolution: {integrity: sha512-lkKxXbFNNYNY9KLySf9DTHU6vwGVrjOKTUU8R6CeiGYb0xbLbeK6nV6UyK2vYCNw1AR/H0WOYtfJg9bQgOE2qw==}
+
+  '@chainflip/utils@2.1.2':
+    resolution: {integrity: sha512-ujHjiVRdm5AbN5XotoIlVtN7RMmkR7PnrMW/pGhWg+2Yr6vtKyKas/GSRHrX4VGnm7H1j7xKcSuj9GNag60n5A==}
 
   '@chainflip/utils@2.1.4-bsc-dev.1':
     resolution: {integrity: sha512-7cHXi9d9REDEWrdpsJYlWAug9DDds4BfBMaZqzXeuxdzXcKl8RoVG4dl012NnjU/1DMD2EHg3cC/WEJqa6nbtQ==}
@@ -4203,14 +4206,21 @@ snapshots:
 
   '@babel/runtime@7.28.4': {}
 
-  '@chainflip/processor@2.0.4':
+  '@chainflip/processor@2.1.3-bsc-dev.1':
     dependencies:
-      '@chainflip/utils': 0.8.18
+      '@chainflip/rpc': 2.1.2-bsc-dev.1
+      '@chainflip/utils': 2.1.2
       zod: 3.25.75
 
-  '@chainflip/utils@0.8.18':
+  '@chainflip/rpc@2.1.2-bsc-dev.1':
+    dependencies:
+      '@chainflip/utils': 2.1.4-bsc-dev.1
+      zod: 3.25.75
+
+  '@chainflip/utils@2.1.2':
     dependencies:
       '@date-fns/utc': 2.1.1
+      '@noble/hashes': 2.0.1
       bignumber.js: 9.3.1
       date-fns: 4.1.0
 
