@@ -255,8 +255,6 @@ export function shortChainFromChain(chain: Chain) {
       return 'Arb';
     case 'Bitcoin':
       return 'Btc';
-    case 'Polkadot':
-      return 'Dot';
     case 'Solana':
       return 'Sol';
     case 'Assethub':
@@ -268,8 +266,6 @@ export function shortChainFromChain(chain: Chain) {
 
 export function shortChainFromAsset(asset: Asset) {
   switch (asset) {
-    case 'Dot':
-      return 'Dot';
     case 'Eth':
     case 'Flip':
     case 'Usdc':
@@ -311,7 +307,6 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'Eth':
     case 'ArbEth':
       return '5';
-    case 'Dot':
     case 'HubDot':
       return '50';
     case 'Usdc':
@@ -352,8 +347,6 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Eth;
     case 'Bitcoin':
       return Assets.Btc;
-    case 'Polkadot':
-      return Assets.Dot;
     case 'Arbitrum':
       return Assets.ArbEth;
     case 'Solana':
@@ -442,7 +435,6 @@ export function ingressEgressPalletForChain(chain: Chain) {
   switch (chain) {
     case 'Ethereum':
     case 'Bitcoin':
-    case 'Polkadot':
     case 'Arbitrum':
     case 'Assethub':
     case 'Solana':
@@ -765,7 +757,6 @@ export async function newAddress(
     case Assets.ArbUsdt:
       rawAddress = newEvmAddress(seed);
       break;
-    case Assets.Dot:
     case Assets.HubDot:
     case Assets.HubUsdc:
     case Assets.HubUsdt:

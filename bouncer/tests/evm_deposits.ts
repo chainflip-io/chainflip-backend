@@ -21,7 +21,7 @@ import {
   getAssetContractId,
   checkTransactionInMatches,
   checkRequestTypeMatches,
-  TransactionOriginId,
+  TransactionOriginId, Chains,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -128,7 +128,7 @@ async function testTxMultipleVaultSwaps<A = []>(
   const txData = cfTesterContract.methods
     .multipleContractSwap(
       getChainContractId(chainFromAsset(destAsset)),
-      destAsset === 'Dot' || destAddress === 'Hub'
+      chainFromAsset(destAsset) === Chains.Assethub
         ? decodeDotAddressForContract(destAddress)
         : destAddress,
       getAssetContractId(destAsset),

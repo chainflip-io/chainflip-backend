@@ -130,7 +130,7 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
     broker.address,
     stateChainAssetFromAsset(Assets.Btc),
     stateChainAssetFromAsset(destinationAsset),
-    chainFromAsset(destinationAsset) === Chains.Polkadot
+    chainFromAsset(destinationAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
     brokerFee,
@@ -181,7 +181,7 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
     broker.address,
     stateChainAssetFromAsset(Assets.Btc),
     stateChainAssetFromAsset(destinationAsset),
-    chainFromAsset(destinationAsset) === Chains.Polkadot
+    chainFromAsset(destinationAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress,
     brokerFee,

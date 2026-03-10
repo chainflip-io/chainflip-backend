@@ -19,8 +19,6 @@ function toEncodedAddress(chain: Chain, address: string) {
     case 'Ethereum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Eth: hexToBytes(address) };
-    case 'Polkadot':
-      return { Dot: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Assethub':
       return { Hub: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Solana':

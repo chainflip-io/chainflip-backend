@@ -198,7 +198,7 @@ export async function doPerformSwap<A = []>(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
+    if (chain !== 'Bitcoin' && chain !== 'Assethub') {
       cf.debug(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }

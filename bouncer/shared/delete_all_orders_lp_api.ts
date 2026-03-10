@@ -7,7 +7,7 @@ export async function logLpPoolOrders(logger: Logger, lpAddress: string) {
   await using chainflip = await getChainflipApi();
 
   const allPoolAssets = Object.values(Assets).filter(
-    (asset) => asset !== 'Usdc' && asset !== 'Dot',
+    (asset) => asset !== 'Usdc',
   );
 
   for (const asset of allPoolAssets) {

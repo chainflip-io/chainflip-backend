@@ -16,6 +16,7 @@ import {
   getFreeBalance,
   Assets,
   chainFromAsset,
+  Chains,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -88,9 +89,9 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     seed ?? randomBytes(32).toString('hex'),
   );
   const observeDestinationAddress =
-    inputAsset === Assets.Dot
-      ? decodeDotAddressForContract(destinationAddress)
-      : destinationAddress;
+    chainFromAsset(inputAsset) === Chains.Assethub
+    ? decodeDotAddressForContract(destinationAddress)
+    : destinationAddress;
   cf.debug(`${inputAsset} destinationAddress:`, destinationAddress);
 
   cf.debug(`Running swap ${inputAsset} -> ${destAsset}`);

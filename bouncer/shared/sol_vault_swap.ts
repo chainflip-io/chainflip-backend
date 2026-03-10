@@ -138,7 +138,7 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
     cf.requirements.account.keypair.address,
     stateChainAssetFromAsset(srcAsset),
     stateChainAssetFromAsset(destAsset),
-    chainFromAsset(destAsset) === Chains.Polkadot
+    chainFromAsset(destAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
     brokerCommissionBps,
