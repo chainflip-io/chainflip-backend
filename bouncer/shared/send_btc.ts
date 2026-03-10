@@ -52,7 +52,8 @@ class BtcClient {
       );
 
       const fundingAddress = await this.client.getNewAddress();
-      const hash = await sendBtc(logger, fundingAddress, 200, 1, btcClient);
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const hash = await sendBtc(logger, fundingAddress, 200, 1);
 
       logger.debug(`Funded with 200 btc in tx ${hash}`);
     }
@@ -94,53 +95,11 @@ const btcClients: Record<string, BtcClient> = {
   wallet9: new BtcClient('wallet9', getBtcClient2('wallet9')),
 };
 
-export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
-  await cf.all([
-    (subcf) => setupWallet(subcf, 'wallet1'),
-    (subcf) => setupWallet(subcf, 'wallet2'),
-    (subcf) => setupWallet(subcf, 'wallet3'),
-    (subcf) => setupWallet(subcf, 'wallet4'),
-    (subcf) => setupWallet(subcf, 'wallet5'),
-    (subcf) => setupWallet(subcf, 'wallet6'),
-    (subcf) => setupWallet(subcf, 'wallet7'),
-    (subcf) => setupWallet(subcf, 'wallet8'),
-    (subcf) => setupWallet(subcf, 'wallet9'),
-  ]);
-}
-
-export async function getRandomBtcClient(logger: ILogger): Promise<BtcClient> {
-  const keys = Object.keys(btcClients);
-  if (keys.length === 0) {
-    throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
-  }
-  const chosen = keys[Math.floor(Math.random() * keys.length)];
-  return btcClients[chosen];
-}
-
-export async function setupWallet(logger: ILogger, name: string) {
-  const newClient = await btcClient.runExclusive(logger, async (client) => {
-    const reply: any = await client.createWallet(name, false, false, '');
-    if (!reply.name) {
-      throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
-    }
-    if (reply.name !== name) {
-      throw new Error(
-        `Expected btc wallet to be created with name ${name}, but got name ${reply.name}`,
-      );
-    }
-    logger.info(`Created new wallet: ${reply.name}`);
-    return getBtcClient(reply.name);
-  });
-  const fundingAddress = await newClient.getNewAddress();
-  logger.info(`funding wallet with 200btc to ${fundingAddress}`);
-  await sendBtc(logger, fundingAddress, 200, 1);
-  logger.info(`funding success!`);
-
-  return new BtcClient(name, newClient);
-}
-
 async function assertCanSubmitRawTx(rawTx: string, client: Client) {
-  const check: any = await client.testMempoolAccept([rawTx]);
+  const check = (await client.testMempoolAccept([rawTx])) as {
+    allowed: boolean;
+    'reject-reason'?: string;
+  }[];
   if (!check[0].allowed) {
     throw new Error(`Bitcoin tx failed mempool accept check with '${check[0]['reject-reason']}'`);
   }
@@ -280,6 +239,54 @@ export async function sendBtc(
   return '';
 }
 
+export async function setupWallet(logger: ILogger, name: string) {
+  const newClient = await btcClient.runExclusive(logger, async (client) => {
+    const reply = (await client.createWallet(name, false, false, '')) as {
+      name?: string;
+      warning?: string;
+    };
+    if (!reply.name) {
+      throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
+    }
+    if (reply.name !== name) {
+      throw new Error(
+        `Expected btc wallet to be created with name ${name}, but got name ${reply.name}`,
+      );
+    }
+    logger.info(`Created new wallet: ${reply.name}`);
+    return getBtcClient(reply.name);
+  });
+  const fundingAddress = await newClient.getNewAddress();
+  logger.info(`funding wallet with 200btc to ${fundingAddress}`);
+  await sendBtc(logger, fundingAddress, 200, 1);
+  logger.info(`funding success!`);
+
+  return new BtcClient(name, newClient);
+}
+
+export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
+  await cf.all([
+    (subcf) => setupWallet(subcf, 'wallet1'),
+    (subcf) => setupWallet(subcf, 'wallet2'),
+    (subcf) => setupWallet(subcf, 'wallet3'),
+    (subcf) => setupWallet(subcf, 'wallet4'),
+    (subcf) => setupWallet(subcf, 'wallet5'),
+    (subcf) => setupWallet(subcf, 'wallet6'),
+    (subcf) => setupWallet(subcf, 'wallet7'),
+    (subcf) => setupWallet(subcf, 'wallet8'),
+    (subcf) => setupWallet(subcf, 'wallet9'),
+  ]);
+}
+
+export async function getRandomBtcClient(_logger: ILogger): Promise<BtcClient> {
+  const keys = Object.keys(btcClients);
+  if (keys.length === 0) {
+    throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
+  }
+  const chosen = keys[Math.floor(Math.random() * keys.length)];
+  return btcClients[chosen];
+}
+
 /**
  * Creates a chain of 2 btc transactions (parent & child tx)
  *
@@ -299,16 +306,16 @@ export async function sendBtcTransactionWithParent(
   client = btcClient,
 ): Promise<{ parentTxid: string; childTxid: string }> {
   // Btc client has a limit on the number of concurrent requests
-  const txids = await client.runExclusive(logger, async (client) => {
+  const txids = await client.runExclusive(logger, async (c) => {
     // create a new address in our wallet that we have the keys for
-    const intermediateAddress = await client.getNewAddress();
+    const intermediateAddress = await c.getNewAddress();
 
     // amount to use for the parent tx
     // Note: bitcoin has 8 decimal places
     const parentAmount = (amount * 1.1).toFixed(8);
 
     // send the parent tx
-    const parentTxid = (await client.sendToAddress(
+    const parentTxid = (await c.sendToAddress(
       intermediateAddress,
       parentAmount,
       '',
@@ -323,11 +330,11 @@ export async function sendBtcTransactionWithParent(
 
     // wait for inclusion in a block
     if (parentConfirmations > 0) {
-      await waitForBtcTransaction(logger, parentTxid, parentConfirmations, client);
+      await waitForBtcTransaction(logger, parentTxid, parentConfirmations, c);
     }
 
     // Create a raw transaction for the child tx
-    const childRawTx = await client.createRawTransaction(
+    const childRawTx = await c.createRawTransaction(
       [
         {
           txid: parentTxid as string,
@@ -340,20 +347,20 @@ export async function sendBtcTransactionWithParent(
     );
 
     // Fund the child tx
-    const childFundedTx = (await client.fundRawTransaction(childRawTx, {
-      changeAddress: await client.getNewAddress(),
+    const childFundedTx = (await c.fundRawTransaction(childRawTx, {
+      changeAddress: await c.getNewAddress(),
       feeRate: 0.00001,
       lockUnspents: true,
     })) as { hex: string };
 
     // Sign the child tx
-    const childSignedTx = await client.signRawTransactionWithWallet(childFundedTx.hex);
+    const childSignedTx = await c.signRawTransactionWithWallet(childFundedTx.hex);
 
     // verify
-    await assertCanSubmitRawTx(childSignedTx.hex, client);
+    await assertCanSubmitRawTx(childSignedTx.hex, c);
 
     // Send the signed tx
-    const childTxid = (await client.sendRawTransaction(childSignedTx.hex)) as string;
+    const childTxid = (await c.sendRawTransaction(childSignedTx.hex)) as string;
 
     return { parentTxid, childTxid };
   });
