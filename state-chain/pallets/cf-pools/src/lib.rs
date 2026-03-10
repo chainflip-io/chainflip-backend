@@ -16,14 +16,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{AssetPair, PoolPairsMap, Side},
+	common::{AskBidMap, AssetPair, LimitOrder, PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
 	math::{Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE},
 	range_orders::{self, Liquidity},
 	PoolState,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, STABLE_ASSET};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
@@ -31,8 +31,8 @@ use cf_traits::{
 };
 use sp_runtime::Saturating;
 
+pub use cf_traits::IncreaseOrDecrease;
 use cf_traits::LpRegistration;
-pub use cf_traits::{IncreaseOrDecrease, OrderId};
 use core::ops::Range;
 use frame_support::{
 	pallet_prelude::*,
@@ -46,7 +46,7 @@ use frame_system::{
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_arithmetic::traits::{SaturatedConversion, Zero};
-use sp_std::vec::Vec;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 mod benchmarking;
 pub mod migrations;
@@ -93,41 +93,6 @@ pub const MAX_ORDERS_DELETE: u32 = 100;
 pub enum CloseOrder {
 	Limit { base_asset: any::Asset, quote_asset: any::Asset, side: Side, id: OrderId },
 	Range { base_asset: any::Asset, quote_asset: any::Asset, id: OrderId },
-}
-
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	Default,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	PartialEq,
-	Eq,
-	Deserialize,
-	Serialize,
-)]
-pub struct AskBidMap<S> {
-	pub asks: S,
-	pub bids: S,
-}
-impl<T> AskBidMap<T> {
-	/// Takes a map from an asset to details regarding selling that asset, and returns a map from
-	/// ask/bid to the details associated with the asks or the bids
-	pub fn from_sell_map(map: PoolPairsMap<T>) -> Self {
-		Self { asks: map.base, bids: map.quote }
-	}
-
-	pub fn from_fn<F: FnMut(Side) -> T>(mut f: F) -> Self {
-		Self::from_sell_map(PoolPairsMap { base: f(Side::Sell), quote: f(Side::Buy) })
-	}
-
-	pub fn map<S, F: FnMut(T) -> S>(self, mut f: F) -> AskBidMap<S> {
-		AskBidMap { asks: f(self.asks), bids: f(self.bids) }
-	}
 }
 
 #[derive(Clone, DebugNoBound, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialEq, Eq)]
@@ -1122,10 +1087,19 @@ impl<T: Config> PoolApi for Pallet<T> {
 		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError> {
 		let pool_orders =
-			Self::pool_orders(asset_pair.base, asset_pair.quote, Some(who.clone()), true)?;
+			Self::pool_orders_for_account(asset_pair.base, asset_pair.quote, who, true)?;
 		Ok(pool_orders.limit_orders.asks.len() as u32 +
 			pool_orders.limit_orders.bids.len() as u32 +
 			pool_orders.range_orders.len() as u32)
+	}
+
+	fn limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		accounts: &BTreeSet<Self::AccountId>,
+	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError> {
+		Self::pool_orders(base_asset, quote_asset, accounts, true)
+			.map(|pool| AskBidMap { asks: pool.limit_orders.asks, bids: pool.limit_orders.bids })
 	}
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
@@ -1133,7 +1107,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 
 		for base_asset in Asset::all().filter(|asset| *asset != Asset::Usdc) {
 			let pool_orders =
-				match Self::pool_orders(base_asset, Asset::Usdc, Some(who.clone()), false) {
+				match Self::pool_orders_for_account(base_asset, Asset::Usdc, who, false) {
 					Ok(orders) => orders,
 					Err(_) => continue,
 				};
@@ -1270,31 +1244,8 @@ pub struct PoolInfo {
 	Serialize,
 	Deserialize,
 )]
-#[serde(bound = "")]
-pub struct LimitOrder<T: Config> {
-	pub lp: T::AccountId,
-	pub id: Amount, // TODO: Intro type alias
-	pub tick: Tick,
-	pub sell_amount: Amount,
-	pub fees_earned: Amount,
-	pub original_sell_amount: Amount,
-}
-
-#[derive(
-	Clone,
-	Debug,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	PartialEq,
-	Eq,
-	Serialize,
-	Deserialize,
-)]
-#[serde(bound = "")]
-pub struct RangeOrder<T: Config> {
-	pub lp: T::AccountId,
+pub struct RangeOrder<AccountId> {
+	pub lp: AccountId,
 	pub id: Amount,
 	pub range: Range<Tick>,
 	pub liquidity: Liquidity,
@@ -1313,13 +1264,12 @@ pub struct RangeOrder<T: Config> {
 	Serialize,
 	Deserialize,
 )]
-#[serde(bound = "")]
-pub struct PoolOrders<T: Config> {
+pub struct PoolOrders<AccountId> {
 	/// Limit orders are groups by which asset they are selling.
-	pub limit_orders: AskBidMap<Vec<LimitOrder<T>>>,
+	pub limit_orders: AskBidMap<Vec<LimitOrder<AccountId>>>,
 	/// Range orders can be both buy and/or sell therefore they not split. The current range order
 	/// price determines if they are buy and/or sell.
-	pub range_orders: Vec<RangeOrder<T>>,
+	pub range_orders: Vec<RangeOrder<AccountId>>,
 }
 
 #[derive(
@@ -1990,8 +1940,8 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || collected_fees != Default::default() {
 			Self::deposit_event(Event::<T>::RangeOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				id,
 				tick_range,
 				size_change: {
@@ -2264,37 +2214,51 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns the limit and range orders for a given Liquidity Provider within the given pool.
+	pub fn pool_orders_for_account(
+		base_asset: any::Asset,
+		quote_asset: any::Asset,
+		account: &T::AccountId,
+		filled_orders: bool,
+	) -> Result<PoolOrders<T::AccountId>, DispatchError> {
+		Self::pool_orders(
+			base_asset,
+			quote_asset,
+			&BTreeSet::from([account.clone()]),
+			filled_orders,
+		)
+	}
+
+	/// Returns the limit and range orders for a given Liquidity Providers within the given pool.
+	/// Empty set of accounts will return all orders within the pool.
 	pub fn pool_orders(
 		base_asset: any::Asset,
 		quote_asset: any::Asset,
-		option_lp: Option<T::AccountId>,
+		accounts: &BTreeSet<T::AccountId>,
 		filled_orders: bool,
-	) -> Result<PoolOrders<T>, DispatchError> {
+	) -> Result<PoolOrders<T::AccountId>, DispatchError> {
 		let pool = Pools::<T>::get(asset_pair_try_from::<T>(base_asset, quote_asset)?)
 			.ok_or(Error::<T>::PoolDoesNotExist)?;
-		let option_lp = option_lp.as_ref();
 		Ok(PoolOrders {
 			limit_orders: AskBidMap::from_sell_map(pool.limit_orders_cache.as_ref().map_with_pair(
 				|asset, limit_orders_cache| {
 					cf_utilities::conditional::conditional(
-						option_lp,
-						|lp| {
-							limit_orders_cache
-								.get(lp)
-								.into_iter()
-								.flatten()
-								.map(|(id, tick)| (lp.clone(), *id, *tick))
-						},
+						accounts.is_empty(),
 						|()| {
 							limit_orders_cache.iter().flat_map(move |(lp, orders)| {
-								orders.iter().map({
-									let lp = lp.clone();
-									move |(id, tick)| (lp.clone(), *id, *tick)
-								})
+								orders.iter().map(move |(id, tick)| (lp.clone(), *id, *tick))
+							})
+						},
+						|()| {
+							accounts.iter().flat_map(|lp| {
+								limit_orders_cache
+									.get(lp)
+									.into_iter()
+									.flatten()
+									.map(|(id, tick)| (lp.clone(), *id, *tick))
 							})
 						},
 					)
-					.filter_map(|(lp, id, tick)| {
+					.filter_map(|(lp, id, tick): (T::AccountId, OrderId, Tick)| {
 						let (collected, position_info) = pool
 							.pool_state
 							.limit_order(&(lp.clone(), id), asset.sell_order(), tick)
@@ -2316,14 +2280,7 @@ impl<T: Config> Pallet<T> {
 				},
 			)),
 			range_orders: cf_utilities::conditional::conditional(
-				option_lp,
-				|lp| {
-					pool.range_orders_cache
-						.get(lp)
-						.into_iter()
-						.flatten()
-						.map(|(id, range)| (lp.clone(), *id, range.clone()))
-				},
+				accounts.is_empty(),
 				|()| {
 					pool.range_orders_cache.iter().flat_map(move |(lp, orders)| {
 						orders.iter().map({
@@ -2332,17 +2289,26 @@ impl<T: Config> Pallet<T> {
 						})
 					})
 				},
+				|()| {
+					accounts.iter().flat_map(|lp| {
+						pool.range_orders_cache
+							.get(lp)
+							.into_iter()
+							.flatten()
+							.map(|(id, range)| (lp.clone(), *id, range.clone()))
+					})
+				},
 			)
-			.map(|(lp, id, tick_range)| {
+			.flat_map(|(lp, id, tick_range): (T::AccountId, OrderId, Range<Tick>)| {
 				let (collected, position_info) =
 					pool.pool_state.range_order(&(lp.clone(), id), tick_range.clone()).unwrap();
-				RangeOrder {
+				sp_std::iter::once(RangeOrder {
 					lp: lp.clone(),
 					id: id.into(),
 					range: tick_range.clone(),
 					liquidity: position_info.liquidity,
 					fees_earned: collected.accumulative_fees,
-				}
+				})
 			})
 			.collect(),
 		})
@@ -2419,8 +2385,8 @@ impl<T: Config> Pallet<T> {
 		if !zero_change || bought_amount != Default::default() {
 			Self::deposit_event(Event::<T>::LimitOrderUpdated {
 				lp: lp.clone(),
-				base_asset: asset_pair.assets().base,
-				quote_asset: asset_pair.assets().quote,
+				base_asset: asset_pair.base(),
+				quote_asset: asset_pair.quote(),
 				side: order,
 				id,
 				tick,

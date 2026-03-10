@@ -22,7 +22,7 @@ use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -48,7 +48,7 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
@@ -174,7 +174,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
+		) -> Result<PoolOrders<AccountId32>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
 			quote_asset: Asset,

@@ -19,9 +19,9 @@ use std::collections::HashSet;
 use super::*;
 
 use cf_amm::{common::AssetPair, input_amount_from_fee};
-use cf_primitives::AccountId;
+use cf_primitives::{AccountId, OrderId};
 use cf_rpc_apis::{OrderFilled, OrderFills};
-use pallet_cf_pools::{OrderId, Pool};
+use pallet_cf_pools::Pool;
 use state_chain_runtime::{chainflip::get_header_timestamp, Runtime};
 
 pub(crate) fn order_fills_for_block<C, B, BE>(
@@ -119,8 +119,8 @@ fn order_fills_for_pool<'a>(
 					} else {
 						Some(OrderFilled::LimitOrder {
 							lp,
-							base_asset: asset_pair.assets().base,
-							quote_asset: asset_pair.assets().quote,
+							base_asset: asset_pair.base(),
+							quote_asset: asset_pair.quote(),
 							side,
 							id: id.into(),
 							tick,
@@ -162,8 +162,8 @@ fn order_fills_for_pool<'a>(
 				} else {
 					Some(OrderFilled::RangeOrder {
 						lp: lp.clone(),
-						base_asset: asset_pair.assets().base,
-						quote_asset: asset_pair.assets().quote,
+						base_asset: asset_pair.base(),
+						quote_asset: asset_pair.quote(),
 						id: id.into(),
 						bought_amounts: fees.map(|amount| {
 							input_amount_from_fee(amount, fee_hundredth_pips).unwrap_or_default()

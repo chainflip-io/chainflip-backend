@@ -25,6 +25,7 @@ cf-chains = { workspace = true, optional = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-amm-math = { workspace = true }
+cf-amm = { workspace = true }
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }

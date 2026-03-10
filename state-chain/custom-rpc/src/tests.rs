@@ -4,7 +4,10 @@ pub mod account_info;
 pub mod before_v7;
 pub mod eip712;
 
-use cf_amm::math::{Price, SqrtPrice};
+use cf_amm::{
+	common::LimitOrder,
+	math::{Price, SqrtPrice},
+};
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -15,8 +18,8 @@ use cf_rpc_apis::{
 use codec::Encode;
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
 use pallet_cf_pools::{
-	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
-	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
+	IncreaseOrDecrease, LimitOrderLiquidity, PoolOrder, RangeOrder, RangeOrderLiquidity,
+	UnidirectionalSubPoolDepth,
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
@@ -656,7 +659,7 @@ fn pool_liquidity_serialization() {
 
 #[test]
 fn pool_orders_serialization() {
-	let val = PoolOrders::<Runtime> {
+	let val = PoolOrders {
 		limit_orders: AskBidMap {
 			asks: vec![LimitOrder {
 				lp: ID_1,

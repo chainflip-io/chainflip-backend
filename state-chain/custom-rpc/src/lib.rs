@@ -19,7 +19,7 @@
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::{AskBidMap, PoolPairsMap, Side},
 	math::{Amount as AmmAmount, Tick},
 	range_orders::Liquidity,
 };
@@ -65,7 +65,7 @@ use pallet_cf_lending_pools::{
 	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
 };
 use pallet_cf_pools::{
-	AskBidMap, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
+	PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
 use sc_client_api::{
@@ -1010,7 +1010,7 @@ pub trait CustomApi {
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::AccountId>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
@@ -1815,7 +1815,7 @@ where
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
 		at: Option<Hash>,
-	) -> RpcResult<PoolOrders<state_chain_runtime::Runtime>> {
+	) -> RpcResult<PoolOrders<state_chain_runtime::AccountId>> {
 		flatten_into_error(self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_pool_orders(hash, base_asset, quote_asset, lp, filled_orders.unwrap_or_default())
 		}))

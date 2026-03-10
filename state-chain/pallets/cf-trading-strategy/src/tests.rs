@@ -20,6 +20,7 @@ use cf_traits::{
 	mocks::{
 		balance_api::{MockBalance, MockLpRegistration},
 		pool_api::{MockLimitOrder, MockPoolApi},
+		price_feed_api::MockPriceFeedApi,
 	},
 	BalanceApi, SetSafeMode, Side,
 };
@@ -296,6 +297,7 @@ fn automated_strategy_basic_usage() {
 				vec![
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -304,6 +306,7 @@ fn automated_strategy_basic_usage() {
 					},
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -363,6 +366,7 @@ fn automated_strategy_basic_usage() {
 				vec![
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -371,6 +375,7 @@ fn automated_strategy_basic_usage() {
 					},
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -458,6 +463,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 				vec![
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Buy,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -466,6 +472,7 @@ fn can_create_asymmetric_buy_sell_strategy() {
 					},
 					MockLimitOrder {
 						base_asset: BASE_ASSET,
+						quote_asset: STABLE_ASSET,
 						account_id: strategy_id,
 						side: Side::Sell,
 						order_id: STRATEGY_ORDER_ID_0,
@@ -527,6 +534,9 @@ fn strategy_deployment_validation() {
 
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
+
+		MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+		MockPriceFeedApi::set_price_usd(STABLE_ASSET, 1);
 
 		MinimumDeploymentAmountForStrategy::<Test>::set(BTreeMap::from_iter([
 			(BASE_ASSET, MIN_BASE_AMOUNT),
@@ -656,7 +666,7 @@ fn strategy_deployment_validation() {
 				Error::<Test>::InvalidTick
 			);
 		}
-		// Inventory based strategy
+		// Inventory based strategy & oracle
 		{
 			// Invalid tick ranges
 			for (min_buy_tick, max_buy_tick, min_sell_tick, max_sell_tick) in
@@ -671,6 +681,21 @@ fn strategy_deployment_validation() {
 							min_sell_tick,
 							max_sell_tick,
 							base_asset: BASE_ASSET
+						},
+						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+					),
+					Error::<Test>::InvalidTick
+				);
+				assert_err!(
+					TradingStrategyPallet::deploy_strategy(
+						RuntimeOrigin::signed(LP),
+						TradingStrategy::OracleTracking {
+							min_buy_offset_tick: min_buy_tick,
+							max_buy_offset_tick: max_buy_tick,
+							min_sell_offset_tick: min_sell_tick,
+							max_sell_offset_tick: max_sell_tick,
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET
 						},
 						[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 					),
@@ -736,6 +761,23 @@ fn strategy_deployment_validation() {
 					Error::<Test>::InvalidTick
 				);
 			}
+
+			// Non oracle asset should fail for OracleTracking strategy
+			assert_err!(
+				TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: -1,
+						max_buy_offset_tick: 0,
+						min_sell_offset_tick: 0,
+						max_sell_offset_tick: 1,
+						base_asset: Asset::Flip,
+						quote_asset: STABLE_ASSET,
+					},
+					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+				),
+				Error::<Test>::InvalidAssetsForStrategy
+			);
 		}
 	});
 }
@@ -1066,8 +1108,8 @@ mod inventory_based_strategy {
 			let base_amount = AssetAmount::from(base_amount);
 			let quote_amount = AssetAmount::from(quote_amount);
 
-			let base = inventory_based_strategy_logic(base_amount, base_amount + quote_amount, min_sell_tick, max_sell_tick, Side::Sell);
-			let quote = inventory_based_strategy_logic(quote_amount, base_amount + quote_amount, min_buy_tick, max_buy_tick, Side::Buy);
+			let base = inventory_based_strategy_logic(base_amount, base_amount + quote_amount, min_sell_tick, max_sell_tick, Side::Sell, LP, BASE_ASSET, STABLE_ASSET);
+			let quote = inventory_based_strategy_logic(quote_amount, base_amount + quote_amount, min_buy_tick, max_buy_tick, Side::Buy, LP, BASE_ASSET, STABLE_ASSET);
 
 			assert!(!base.is_empty());
 			assert!(!quote.is_empty());
@@ -1076,28 +1118,28 @@ mod inventory_based_strategy {
 			assert!(
 				!base
 					.iter()
-					.any(|(tick, _)| *tick < min_sell_tick || *tick > max_sell_tick),
+					.any(|StrategyLimitOrder { tick, .. }| *tick < min_sell_tick || *tick > max_sell_tick),
 			);
 			assert!(
 				!quote
 					.iter()
-					.any(|(tick, _)| *tick < min_buy_tick || *tick > max_buy_tick),
+					.any(|StrategyLimitOrder { tick, .. }| *tick < min_buy_tick || *tick > max_buy_tick),
 			);
 
 			// Sanity check the amount in orders
 			assert_eq!(
 				base_amount,
-				base.values().map(|(_, amount)| *amount).sum::<AssetAmount>(),
+				base.iter().map(|StrategyLimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
 			);
 			assert_eq!(
 				quote_amount,
-				quote.values().map(|(_, amount)| *amount).sum::<AssetAmount>(),
+				quote.iter().map(|StrategyLimitOrder { amount, .. }| *amount).sum::<AssetAmount>(),
 			);
 			assert!(
-				!base.values().any(|(_, amount)| *amount == 0),
+				!base.iter().any(|StrategyLimitOrder { amount, .. }| *amount == 0),
 			);
 			assert!(
-				!quote.values().any(|(_, amount)| *amount == 0),
+				!quote.iter().any(|StrategyLimitOrder { amount, .. }| *amount == 0),
 			);
 		}
 	}
@@ -1121,14 +1163,26 @@ mod inventory_based_strategy {
 					min_sell_tick,
 					max_sell_tick,
 					Side::Sell,
-				),
+					LP,
+					BASE_ASSET,
+					STABLE_ASSET,
+				)
+				.iter()
+				.map(|order| (order.tick, (order.order_id, order.amount)))
+				.collect(),
 				quote: inventory_based_strategy_logic(
 					quote_amount,
 					base_amount + quote_amount,
 					min_buy_tick,
 					max_buy_tick,
 					Side::Buy,
-				),
+					LP,
+					BASE_ASSET,
+					STABLE_ASSET,
+				)
+				.iter()
+				.map(|order| (order.tick, (order.order_id, order.amount)))
+				.collect(),
 			};
 			assert_eq!(new_orders, expected_orders,);
 		}
@@ -1280,6 +1334,7 @@ mod inventory_based_strategy {
 					vec![
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
@@ -1288,6 +1343,7 @@ mod inventory_based_strategy {
 						},
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_1,
@@ -1311,6 +1367,7 @@ mod inventory_based_strategy {
 					vec![
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
@@ -1319,6 +1376,7 @@ mod inventory_based_strategy {
 						},
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_1,
@@ -1341,6 +1399,7 @@ mod inventory_based_strategy {
 					vec![
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Buy,
 							order_id: STRATEGY_ORDER_ID_1,
@@ -1349,6 +1408,7 @@ mod inventory_based_strategy {
 						},
 						MockLimitOrder {
 							base_asset: BASE_ASSET,
+							quote_asset: STABLE_ASSET,
 							account_id: strategy_id,
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_0,
@@ -1357,6 +1417,458 @@ mod inventory_based_strategy {
 						},
 					]
 				);
+			});
+	}
+}
+
+mod oracle_strategy {
+	use cf_amm_math::Price;
+
+	use super::*;
+
+	#[test]
+	fn basic_oracle_strategy_usage() {
+		const MIN_BUY_OFFSET_TICK: Tick = -10;
+		const MAX_BUY_OFFSET_TICK: Tick = -6;
+		const MIN_SELL_OFFSET_TICK: Tick = 6;
+		const MAX_SELL_OFFSET_TICK: Tick = 10;
+		const BASE_AMOUNT_TO_ADD: AssetAmount = 1000;
+		const AMOUNT: AssetAmount = BASE_AMOUNT;
+
+		const AVERAGE_BUY_OFFSET_TICK: Tick = -8;
+		const AVERAGE_SELL_OFFSET_TICK: Tick = 8;
+
+		let new_oracle_price = Price::from_usd_cents(BASE_ASSET, 101);
+		const NEW_ORACLE_TICK: Tick = 99;
+		const EXPECTED_NEW_BUY_TICK: Tick = AVERAGE_BUY_OFFSET_TICK + NEW_ORACLE_TICK;
+		const EXPECTED_NEW_SELL_TICK: Tick = AVERAGE_SELL_OFFSET_TICK + NEW_ORACLE_TICK;
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				// Set the starting oracle prices
+				MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(QUOTE_ASSET, 1);
+
+				// Fund the LP. We will use the same amounts for both assets so the initial limit
+				// orders at balanced for easy testing.
+				let initial_amounts: BTreeMap<_, _> =
+					[(BASE_ASSET, AMOUNT), (QUOTE_ASSET, AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockBalance::credit_account(&LP, asset, amount);
+				}
+
+				// Create the strategy
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: MIN_BUY_OFFSET_TICK,
+						max_buy_offset_tick: MAX_BUY_OFFSET_TICK,
+						min_sell_offset_tick: MIN_SELL_OFFSET_TICK,
+						max_sell_offset_tick: MAX_SELL_OFFSET_TICK,
+						base_asset: BASE_ASSET,
+						quote_asset: QUOTE_ASSET,
+					},
+					initial_amounts.clone(),
+				));
+			})
+			.then_execute_at_next_block(|_| {
+				// The strategy should have created two limit orders
+				let (_, strategy_id, _) = Strategies::<Test>::iter().next().unwrap();
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_BUY_OFFSET_TICK,
+							amount: AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_OFFSET_TICK,
+							amount: AMOUNT
+						}
+					]
+				);
+
+				// Now we change the oracle price to trigger an update of the limit orders.
+				MockPriceFeedApi::set_price(BASE_ASSET, Some(new_oracle_price));
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The limit orders should now have been updated with the new ticks
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: EXPECTED_NEW_BUY_TICK,
+							amount: AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: EXPECTED_NEW_SELL_TICK,
+							amount: AMOUNT
+						}
+					]
+				);
+
+				// Now add more funds to trigger another update
+				MockBalance::credit_account(&LP, BASE_ASSET, BASE_AMOUNT_TO_ADD);
+				assert_ok!(TradingStrategyPallet::add_funds_to_strategy(
+					RuntimeOrigin::signed(LP),
+					strategy_id,
+					BTreeMap::from_iter([(BASE_ASSET, BASE_AMOUNT_TO_ADD)])
+				));
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The limit order should now have been updated again with the new amount
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: EXPECTED_NEW_BUY_TICK,
+							amount: AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: EXPECTED_NEW_SELL_TICK,
+							amount: BASE_AMOUNT + BASE_AMOUNT_TO_ADD
+						}
+					]
+				);
+			});
+	}
+
+	#[test]
+	fn stale_price_closes_open_orders() {
+		const MIN_BUY_TICK_OFFSET: Tick = -10;
+		const MAX_BUY_TICK_OFFSET: Tick = -6;
+		const MIN_SELL_TICK_OFFSET: Tick = 6;
+		const MAX_SELL_TICK_OFFSET: Tick = 10;
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(QUOTE_ASSET, 1);
+
+				// Use equal amounts so the strategy produces exactly one order per side
+				let initial_amounts: BTreeMap<_, _> =
+					[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, BASE_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockBalance::credit_account(&LP, asset, amount);
+				}
+
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: MIN_BUY_TICK_OFFSET,
+						max_buy_offset_tick: MAX_BUY_TICK_OFFSET,
+						min_sell_offset_tick: MIN_SELL_TICK_OFFSET,
+						max_sell_offset_tick: MAX_SELL_TICK_OFFSET,
+						base_asset: BASE_ASSET,
+						quote_asset: QUOTE_ASSET,
+					},
+					initial_amounts,
+				));
+			})
+			.then_execute_at_next_block(|_| {
+				// The strategy should have open limit orders at this point
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+
+				// Mark the base asset price as stale
+				MockPriceFeedApi::set_stale(BASE_ASSET, true);
+			})
+			.then_execute_at_next_block(|_| {
+				// The stale price should have caused all open orders to be cancelled
+				assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
+			});
+	}
+
+	/// Tests that the oracle strategy produces correct ticks and amounts when
+	/// the base and quote assets have different numbers of decimals.
+	/// Uses Btc (8 decimals) as base and Usdc (6 decimals) as quote.
+	#[test]
+	fn different_decimals_correct_ticks_and_amounts() {
+		const BTC: Asset = Asset::Btc;
+		const USDC: Asset = Asset::Usdc;
+		const MIN_BUY_TICK_OFFSET: Tick = -10;
+		const MAX_BUY_TICK_OFFSET: Tick = -6;
+		const MIN_SELL_TICK_OFFSET: Tick = 6;
+		const MAX_SELL_TICK_OFFSET: Tick = 10;
+		const AVERAGE_BUY_TICK_OFFSET: Tick = -8;
+		const AVERAGE_SELL_TICK_OFFSET: Tick = 8;
+
+		let btc_price = Price::from_usd(BTC, 10);
+		let usdc_price = Price::from_usd(USDC, 1);
+		let oracle_tick = btc_price.divide_by(usdc_price).into_tick().unwrap();
+
+		const BTC_AMOUNT: AssetAmount = 1_000_000_000; // 10 BTC with 8 decimals
+		const USDC_AMOUNT: AssetAmount = 100_000_000; // 100 USDC with 6 decimals
+
+		// $101/BTC: 1% price increase
+		let new_btc_price = Price::from_usd_cents(BTC, 10_10);
+		let new_oracle_tick = new_btc_price.divide_by(usdc_price).into_tick().unwrap();
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				// Setting the prices so that the initial amounts will be the same in USD value.
+				MockPriceFeedApi::set_price(BTC, Some(btc_price));
+				MockPriceFeedApi::set_price(USDC, Some(usdc_price));
+
+				// We must manually create the strategy here because non-stable strategies are not
+				// supported.
+				let strategy = TradingStrategy::OracleTracking {
+					min_buy_offset_tick: MIN_BUY_TICK_OFFSET,
+					max_buy_offset_tick: MAX_BUY_TICK_OFFSET,
+					min_sell_offset_tick: MIN_SELL_TICK_OFFSET,
+					max_sell_offset_tick: MAX_SELL_TICK_OFFSET,
+					base_asset: BTC,
+					quote_asset: USDC,
+				};
+				let strategy_id = derive_strategy_id::<Test>(&LP);
+				Strategies::<Test>::insert(LP, strategy_id, strategy);
+				let initial_amounts: BTreeMap<_, _> =
+					[(BTC, BTC_AMOUNT), (USDC, USDC_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockBalance::credit_account(&strategy_id, asset, amount);
+				}
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// Initially we have a lot less btc but its usd value is the same as the USDC
+				// amount, so the strategy should be at average tick (balanced) + the oracle offset.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_BUY_TICK_OFFSET + oracle_tick,
+							amount: USDC_AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_TICK_OFFSET + oracle_tick,
+							amount: BTC_AMOUNT
+						}
+					]
+				);
+
+				// Change BTC price from $100 to $101 (1% increase).
+				// Despite different decimals (8 vs 6), the oracle tick should
+				// shift by the same amount as a same-decimal 1% increase.
+				MockPriceFeedApi::set_price(BTC, Some(new_btc_price));
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// After the price change, orders should have shifted by the oracle tick. But still
+				// just 2 balanced orders.
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: AVERAGE_BUY_TICK_OFFSET + new_oracle_tick,
+							amount: USDC_AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_TICK_OFFSET + new_oracle_tick,
+							amount: BTC_AMOUNT
+						}
+					]
+				);
+
+				// Add more BTC funds
+				MockBalance::credit_account(&strategy_id, BTC, BTC_AMOUNT);
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// More aggressive ticks because we unbalanced the strategy
+				let expected_new_buy_tick = AVERAGE_BUY_TICK_OFFSET + new_oracle_tick - 1;
+				let expected_new_sell_tick = AVERAGE_SELL_TICK_OFFSET + new_oracle_tick - 1;
+				// Now the orders are unbalanced but the shift should still be proportional due to
+				// the decimals being accounted for in the logic.
+				// $100 on one side and $202 on the other side.
+				// (100 + (20 * 10.1)) /2 = 151 // half total in usd
+				// 20 - (151 / 10.1) = 5.049504950495049 BTC on the aggressive sell order
+				let expected_aggressive_sell_amount = 504950495;
+
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: expected_new_buy_tick,
+							amount: USDC_AMOUNT
+						},
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_0,
+							tick: expected_new_sell_tick,
+							amount: expected_aggressive_sell_amount
+						},
+						MockLimitOrder {
+							base_asset: BTC,
+							quote_asset: USDC,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_TICK_OFFSET + new_oracle_tick,
+							// The rest of the BTC is in the non-aggressive sell order.
+							// Rounding error of 1 due to usd conversion.
+							amount: BTC_AMOUNT * 2 - expected_aggressive_sell_amount - 1
+						}
+					]
+				);
+			});
+	}
+
+	/// Tests that the update threshold works correctly when base and quote
+	/// assets have different decimals. The threshold comparison should happen
+	/// in USD-normalized terms.
+	#[test]
+	fn different_decimals_update_threshold() {
+		// Use Btc (8 decimals) as base and Usdc (6 decimals) as quote.
+		const BTC: Asset = Asset::Btc;
+		const USDC: Asset = Asset::Usdc;
+		const BTC_AMOUNT: AssetAmount = 1_000_000_000;
+		const USDC_AMOUNT: AssetAmount = 100_000_000;
+
+		// We set the BTC threshold very high so that the USDC threshold will be used instead to
+		// trigger the update
+		const THRESHOLD_BTC: AssetAmount = 1_000_000_000_000; // $100000 of BTC
+		const THRESHOLD_USDC: AssetAmount = 100_000_000; // $100
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				MockPriceFeedApi::set_price_usd(BTC, 10);
+				MockPriceFeedApi::set_price_usd(USDC, 1);
+
+				// Set the update thresholds
+				LimitOrderUpdateThresholds::<Test>::set(BTreeMap::from_iter([
+					(BTC, THRESHOLD_BTC),
+					(USDC, THRESHOLD_USDC),
+				]));
+
+				// We must manually create the strategy here because non-stable strategies are not
+				// supported.
+				let strategy = TradingStrategy::OracleTracking {
+					min_buy_offset_tick: 0,
+					max_buy_offset_tick: 0,
+					min_sell_offset_tick: 0,
+					max_sell_offset_tick: 0,
+					base_asset: BTC,
+					quote_asset: USDC,
+				};
+				let strategy_id = derive_strategy_id::<Test>(&LP);
+				Strategies::<Test>::insert(LP, strategy_id, strategy);
+				let initial_amounts: BTreeMap<_, _> =
+					[(BTC, BTC_AMOUNT), (USDC, USDC_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockBalance::credit_account(&strategy_id, asset, amount);
+				}
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The strategy should have created two limit orders
+				assert_eq!(MockPoolApi::<AccountId>::get_limit_orders().len(), 2);
+
+				// We add $90 worth of BTC, which is below the $100 threshold
+				MockBalance::credit_account(&strategy_id, BTC, 900_000_000);
+				assert_eq!(MockBalance::get_balance(&strategy_id, BTC), 900_000_000);
+
+				strategy_id
+			})
+			.then_execute_at_next_block(|strategy_id| {
+				// The strategy should not have added the new balance to the order yet.
+				assert_eq!(MockBalance::get_balance(&strategy_id, BTC), 900_000_000);
+				let orders = MockPoolApi::<AccountId>::get_limit_orders();
+				assert_eq!(orders.len(), 2);
+				assert_eq!(orders[0].amount, USDC_AMOUNT);
+				assert_eq!(orders[1].amount, BTC_AMOUNT);
+
+				// Add $10 more of BTC to reach the $100 threshold
+				MockBalance::credit_account(&strategy_id, BTC, 100_000_000);
+				assert_eq!(
+					MockPriceFeedApi::get_price(BTC)
+						.unwrap()
+						.price
+						.output_amount_ceil(MockBalance::get_balance(&strategy_id, BTC)),
+					MockPriceFeedApi::get_price(USDC)
+						.unwrap()
+						.price
+						.output_amount_ceil(THRESHOLD_USDC)
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// The limit orders should now be updated with the new balance.
+				let orders = MockPoolApi::<AccountId>::get_limit_orders();
+				assert_eq!(orders.len(), 2);
+				assert_eq!(orders[0].amount, USDC_AMOUNT);
+				assert_eq!(orders[1].amount, BTC_AMOUNT * 2);
 			});
 	}
 }

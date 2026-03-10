@@ -1,13 +1,17 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_amm::math::Price;
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, vec::Vec};
+use sp_std::{
+	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
+	marker::PhantomData,
+	vec::Vec,
+};
 
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::{AskBidMap, LimitOrder, PoolPairsMap, Side},
 	math::Tick,
 };
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount, STABLE_ASSET};
+use cf_primitives::{Asset, AssetAmount, OrderId, STABLE_ASSET};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use frame_support::{
 	sp_runtime::{DispatchError, DispatchResult},
@@ -17,7 +21,7 @@ use scale_info::TypeInfo;
 
 use crate::{
 	mocks::balance_api::MockBalance, BalanceApi, IncreaseOrDecrease, LpOrdersWeightsProvider,
-	OrderId, PoolApi,
+	PoolApi,
 };
 
 use super::{MockPallet, MockPalletStorage};
@@ -30,21 +34,22 @@ struct TickAndAmount {
 	amount: AssetAmount,
 }
 
+impl<AccountId> MockPallet for MockPoolApi<AccountId> {
+	const PREFIX: &'static [u8] = b"MockPoolApi";
+}
+
+const LIMIT_ORDERS: &[u8] = b"LIMIT_ORDERS";
+
 #[derive(Debug, PartialEq, Eq)]
-pub struct MockLimitOrder<AccountId = u64> {
+pub struct MockLimitOrder<AccountId> {
 	pub base_asset: Asset,
+	pub quote_asset: Asset,
 	pub account_id: AccountId,
 	pub side: Side,
 	pub order_id: OrderId,
 	pub tick: Tick,
 	pub amount: AssetAmount,
 }
-
-impl<AccountId> MockPallet for MockPoolApi<AccountId> {
-	const PREFIX: &'static [u8] = b"MockPoolApi";
-}
-
-const LIMIT_ORDERS: &[u8] = b"LIMIT_ORDERS";
 
 impl<AccountId> MockPoolApi<AccountId>
 where
@@ -58,7 +63,17 @@ where
 				|(
 					MockLimitOrderStorageKey { base_asset, account_id, side, order_id },
 					TickAndAmount { tick, amount },
-				)| { MockLimitOrder { base_asset, account_id, side, order_id, tick, amount } },
+				)| {
+					MockLimitOrder {
+						base_asset,
+						quote_asset: STABLE_ASSET,
+						account_id,
+						side,
+						order_id,
+						tick,
+						amount,
+					}
+				},
 			)
 			.collect()
 	}
@@ -97,6 +112,40 @@ where
 			})
 			.count() as u32;
 		Ok(count)
+	}
+
+	fn limit_orders(
+		base_asset: Asset,
+		_quote_asset: Asset,
+		accounts: &BTreeSet<Self::AccountId>,
+	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError> {
+		let mut asks = Vec::new();
+		let mut bids = Vec::new();
+		for (
+			MockLimitOrderStorageKey { account_id, side, order_id, .. },
+			TickAndAmount { tick, amount },
+		) in Self::get_value::<LimitOrderStorage<AccountId>>(LIMIT_ORDERS)
+			.unwrap_or_default()
+			.into_iter()
+			.filter(
+				|(MockLimitOrderStorageKey { base_asset: order_base_asset, account_id, .. }, _)| {
+					accounts.contains(account_id) && order_base_asset == &base_asset
+				},
+			) {
+			let order = LimitOrder {
+				lp: account_id,
+				id: order_id.into(),
+				tick,
+				sell_amount: amount.into(),
+				fees_earned: 0.into(),
+				original_sell_amount: amount.into(),
+			};
+			match side {
+				Side::Sell => asks.push(order),
+				Side::Buy => bids.push(order),
+			}
+		}
+		Ok(AskBidMap { asks, bids })
 	}
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {

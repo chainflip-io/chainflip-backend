@@ -28,7 +28,7 @@ use crate::{
 	*,
 };
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -71,8 +71,8 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
-	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
+	HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
+	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
@@ -994,8 +994,8 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			lp: Option<AccountId>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
-			LiquidityPools::pool_orders(base_asset, quote_asset, lp, filled_orders).map_err(Into::into)
+		) -> Result<PoolOrders<AccountId>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_orders(base_asset, quote_asset, &lp.map(|lp| BTreeSet::from([lp])).unwrap_or_default(), filled_orders).map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
