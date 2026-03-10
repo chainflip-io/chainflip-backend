@@ -2,7 +2,6 @@ import { InternalAsset as Asset } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
-import { warnIfEvmAddressHasNoCode } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import {
   observeBalanceIncrease,
@@ -159,8 +158,6 @@ export async function doPerformSwap<A = []>(
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
-
-  await warnIfEvmAddressHasNoCode(cf.logger, chainFromAsset(sourceAsset), depositAddress);
 
   const txId = await (senderType === SenderType.Address
     ? send(cf.logger, sourceAsset, depositAddress, amount)
