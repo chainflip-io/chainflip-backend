@@ -173,16 +173,16 @@ impl<Chain: EvmSingleBlockChainTypes> EvmEventClient<Chain>
 		EvmEventSource { contract_address, event_type }: &EvmEventSource<Data>,
 		query: Self::BlockQuery,
 	) -> Result<Vec<Event<Data>>> {
-		let mut contract_bloom = Bloom::default();
-		contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
+		// let mut contract_bloom = Bloom::default();
+		// contract_bloom.accrue(BloomInput::Raw(&contract_address.0));
 
 		// if we have logs for this block, fetch them.
-		let logs = if query.bloom.contains_bloom(&contract_bloom) {
-			self.client.get_logs(query.block_hash, *contract_address).await?
-		} else {
-			// we know there won't be interesting logs, so don't fetch for events
-			vec![]
-		};
+		// let logs = if query.bloom.contains_bloom(&contract_bloom) {
+		let logs = self.client.get_logs(query.block_hash, *contract_address).await?;
+		// } else {
+		// 	// we know there won't be interesting logs, so don't fetch for events
+		// 	vec![]
+		// };
 		Ok(logs
 			.into_iter()
 			.filter_map(|unparsed_log| -> Option<Event<Data>> {
