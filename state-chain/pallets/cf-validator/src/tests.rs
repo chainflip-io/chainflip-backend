@@ -2970,7 +2970,8 @@ pub mod auction_optimization {
 				.then_execute_with_checks(|| -> bool {
 					setup_bids(op_1_bids, op_2_bids);
 
-					let single_auction_outcome = ValidatorPallet::run_initial_auction().unwrap().0;
+					let single_auction_outcome =
+						ValidatorPallet::run_initial_auction(&Default::default()).unwrap().0;
 
 					ValidatorPallet::start_authority_rotation();
 
@@ -3697,62 +3698,6 @@ mod keygen_failure_with_delegation {
 			} else {
 				panic!("unexpected rotation phase: {:?}", CurrentRotationPhase::<Test>::get());
 			}
-		});
-	}
-
-	#[test]
-	fn offender_already_delegator_does_not_trigger_reauction() {
-		new_test_ext().execute_with(|| {
-			setup_operator_with_validators();
-
-			ValidatorPallet::start_authority_rotation();
-			let next_epoch = CurrentEpoch::<Test>::get() + 1;
-			let mut snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
-			assert!(snapshot.move_validator_to_delegator(VALIDATOR_1));
-			DelegationSnapshots::<Test>::insert(next_epoch, OPERATOR, snapshot);
-
-			MockKeyRotatorA::failed([VALIDATOR_1]);
-			System::reset_events();
-			Pallet::<Test>::on_initialize(1);
-
-			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
-			assert!(!updated_snapshot.validators.contains_key(&VALIDATOR_1));
-			assert!(updated_snapshot.delegators.contains_key(&VALIDATOR_1));
-
-			let auction_completed_emitted = System::events().iter().any(|record| {
-				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
-			});
-			assert!(
-				!auction_completed_emitted,
-				"AuctionCompleted should not be emitted when offender already moved"
-			);
-		});
-	}
-
-	#[test]
-	fn missing_validator_to_operator_mapping_skips_snapshot_update() {
-		new_test_ext().execute_with(|| {
-			setup_operator_with_validators();
-
-			ValidatorPallet::start_authority_rotation();
-			let next_epoch = CurrentEpoch::<Test>::get() + 1;
-			ValidatorToOperator::<Test>::remove(next_epoch, VALIDATOR_1);
-
-			MockKeyRotatorA::failed([VALIDATOR_1]);
-			System::reset_events();
-			Pallet::<Test>::on_initialize(1);
-
-			let updated_snapshot = DelegationSnapshots::<Test>::get(next_epoch, OPERATOR).unwrap();
-			assert!(updated_snapshot.validators.contains_key(&VALIDATOR_1));
-			assert!(!updated_snapshot.delegators.contains_key(&VALIDATOR_1));
-
-			let auction_completed_emitted = System::events().iter().any(|record| {
-				matches!(record.event, RuntimeEvent::ValidatorPallet(Event::AuctionCompleted(..)))
-			});
-			assert!(
-				!auction_completed_emitted,
-				"AuctionCompleted should not be emitted when validator-to-operator mapping is missing"
-			);
 		});
 	}
 
