@@ -67,8 +67,6 @@ export async function newSwap<A = []>(
         dcaParams,
       );
 
-      cf.info(`broker_request_swap_deposit_address result: ${JSON.stringify(result)}`);
-
       // set current block height to the block where the deposit channel request was accepted,
       // since calls via the broker API are currently not handled by ChainflipIO, we have to
       // manually update the current block height

@@ -1,6 +1,11 @@
 #!/usr/bin/env -S pnpm tsx
 import axios from 'axios';
-import { ChainflipAsset as Asset, AssetSymbol as RpcAsset, ChainflipChain as Chain, getInternalAsset } from '@chainflip/utils/chainflip';
+import {
+  ChainflipAsset as Asset,
+  AssetSymbol as RpcAsset,
+  ChainflipChain as Chain,
+  getInternalAsset,
+} from '@chainflip/utils/chainflip';
 import bitcoin from 'bitcoinjs-lib';
 import { Tapleaf } from 'bitcoinjs-lib/src/types';
 import * as ecc from 'tiny-secp256k1';

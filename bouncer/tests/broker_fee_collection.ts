@@ -90,8 +90,8 @@ async function testBrokerFees<A extends WithBrokerAccount>(
   );
   const observeDestinationAddress =
     chainFromAsset(inputAsset) === Chains.Assethub
-    ? decodeDotAddressForContract(destinationAddress)
-    : destinationAddress;
+      ? decodeDotAddressForContract(destinationAddress)
+      : destinationAddress;
   cf.debug(`${inputAsset} destinationAddress:`, destinationAddress);
 
   cf.debug(`Running swap ${inputAsset} -> ${destAsset}`);

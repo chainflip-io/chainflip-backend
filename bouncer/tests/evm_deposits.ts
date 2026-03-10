@@ -21,7 +21,8 @@ import {
   getAssetContractId,
   checkTransactionInMatches,
   checkRequestTypeMatches,
-  TransactionOriginId, Chains,
+  TransactionOriginId,
+  Chains,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';

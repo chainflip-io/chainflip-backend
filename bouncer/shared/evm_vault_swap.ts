@@ -107,9 +107,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     cf.requirements.account.keypair.address,
     stateChainAssetFromAsset(sourceAsset),
     stateChainAssetFromAsset(destAsset),
-    destChain === Chains.Assethub
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress,
+    destChain === Chains.Assethub ? decodeDotAddressForContract(destAddress) : destAddress,
     brokerCommissionBps,
     extraParameters,
     messageMetadata && {

@@ -6,9 +6,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 export async function logLpPoolOrders(logger: Logger, lpAddress: string) {
   await using chainflip = await getChainflipApi();
 
-  const allPoolAssets = Object.values(Assets).filter(
-    (asset) => asset !== 'Usdc',
-  );
+  const allPoolAssets = Object.values(Assets).filter((asset) => asset !== 'Usdc');
 
   for (const asset of allPoolAssets) {
     const assetAndChain = stateChainAssetFromAsset(asset);

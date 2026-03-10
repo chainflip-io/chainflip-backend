@@ -1,8 +1,5 @@
 import { ethers, Signer, ContractTransactionResponse, Overrides } from 'ethers';
-import {
-  getErc20abi,
-  getStateChainGatewayAbi,
-} from 'shared/contract_interfaces';
+import { getErc20abi, getStateChainGatewayAbi } from 'shared/contract_interfaces';
 
 export type TransactionOptions = {
   gasLimit?: bigint;
