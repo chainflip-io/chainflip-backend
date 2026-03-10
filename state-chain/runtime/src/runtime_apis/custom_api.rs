@@ -234,6 +234,8 @@ decl_runtime_apis!(
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails<AccountId32>>;
+		#[changed_in(16)]
+		fn cf_safe_mode_statuses() -> crate::migrations::safe_mode::old::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;

@@ -1641,7 +1641,6 @@ where
 		}],
 		cf_suspensions() -> RpcSuspensions,
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
-		cf_safe_mode_statuses() -> RuntimeSafeMode,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
@@ -1671,6 +1670,20 @@ where
 			retry_duration: BlockNumber,
 			max_oracle_price_slippage: Option<BasisPoints>,
 		) -> (),
+	}
+
+	fn cf_safe_mode_statuses(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RuntimeSafeMode> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 16 {
+				#[expect(deprecated)]
+				api.cf_safe_mode_statuses_before_version_16(hash).map(Into::into)
+			} else {
+				api.cf_safe_mode_statuses(hash)
+			}
+		})
 	}
 
 	fn cf_free_balances(
@@ -2936,6 +2949,7 @@ where
 	) -> RpcResult<VaultAddresses> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 16 {
+				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
 			} else {
 				api.cf_vault_addresses(hash)
