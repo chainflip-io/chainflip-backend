@@ -113,6 +113,7 @@ impl Chain for MockEthereum {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = crate::eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = u64::MAX;
+	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = MockEthereumChainCrypto;
 

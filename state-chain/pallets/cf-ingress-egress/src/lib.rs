@@ -2888,6 +2888,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		match &origin {
 			DepositOrigin::DepositChannel { deposit_address, channel_id, .. } => {
+				// For EVM chains only:
+				// If the contract is not yet deployed and the deposit is for a different
+				// asset, we need to first deploy the contract using the channel's
+				// configured asset (to get the correct CREATE2 address), before we will be
+				// able to fetch the deposited asset. Deploying with the deposit asset would
+				// cause the contract to be created at the wrong address.
+				if T::TargetChain::IS_EVM_CHAIN {
+					let different_deploy_asset = DepositChannelLookup::<T, I>::get(deposit_address)
+						.and_then(|details| {
+							if details.deposit_channel.state.fetch_completion_action_required() &&
+								details.deposit_channel.asset != asset
+							{
+								Some(details.deposit_channel.asset)
+							} else {
+								None
+							}
+						});
+
+					if let Some(channel_asset) = different_deploy_asset {
+						// Schedule a deploy with the channel's asset to get the contract at the
+						// correct address.
+						ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
+							T::TargetChain,
+						>::Fetch {
+							asset: channel_asset,
+							deposit_address: deposit_address.clone(),
+							deposit_fetch_id: None,
+							// Note, the amount is ignored for deploys.
+							amount: Zero::zero(),
+						});
+					}
+				}
+
 				ScheduledEgressFetchOrTransfer::<T, I>::append(
 					FetchOrTransfer::<T::TargetChain>::Fetch {
 						asset,

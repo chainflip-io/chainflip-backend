@@ -204,6 +204,8 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+          # Disable GovernanceDepositWitnessing test to prevent it from interfering with the post-upgrade bouncer run
+          sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
