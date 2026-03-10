@@ -147,6 +147,7 @@ impl Chain for Solana {
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000_000u64;
 	const BURN_ADDRESS: Self::ChainAccount =
 		const_address("1nc1nerator11111111111111111111111111111111");
+	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = SolanaCrypto;
 	type ChainBlockNumber = SlotNumber;

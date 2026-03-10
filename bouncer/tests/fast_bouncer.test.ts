@@ -21,7 +21,7 @@ import { testDelegate } from 'tests/delegate_flip';
 import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
-// import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
+import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -58,8 +58,7 @@ describe('ConcurrentTests', () => {
   // );
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 180);
   concurrentTest('Lending', lendingTest, 360);
-  // TODO: fix this test and re-enable it.
-  // concurrentTest('GovernanceDepositWitnessing', testGovernanceDepositWitnessing, 300);
+  concurrentTest('GovernanceDepositWitnessing', testGovernanceDepositWitnessing, 300);
 
   // Test this separately because it has a swap to HubDot which causes flakiness when run in
   // parallel with the Assethub tests in `SwapsToAssethub`.
