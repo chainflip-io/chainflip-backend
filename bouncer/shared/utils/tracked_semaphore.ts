@@ -1,37 +1,34 @@
-import { Mutex, MutexInterface } from 'async-mutex';
+import { Semaphore, SemaphoreInterface } from 'async-mutex';
 import { mutexTracker, getCallerFromStack } from 'shared/utils/mutex_tracker';
 
 /**
- * A drop-in replacement for `Mutex` from `async-mutex` that records
+ * A drop-in replacement for `Semaphore` from `async-mutex` that records
  * wait and hold durations to the global MutexTracker.
  */
-export class TrackedMutex {
-  private readonly mutex = new Mutex();
+export class TrackedSemaphore {
+  private readonly semaphore: Semaphore;
 
   private readonly name: string;
 
-  private readonly key?: string;
-
-  constructor(name: string, key?: string) {
+  constructor(name: string, maxConcurrency: number) {
     this.name = name;
-    this.key = key;
+    this.semaphore = new Semaphore(maxConcurrency);
   }
 
-  async runExclusive<T>(callback: MutexInterface.Worker<T>): Promise<T> {
+  async runExclusive<T>(callback: SemaphoreInterface.Worker<T>): Promise<T> {
     const caller = getCallerFromStack();
     const timestamp = new Date().toISOString();
     const waitStart = Date.now();
 
-    return this.mutex.runExclusive(async () => {
+    return this.semaphore.runExclusive(async (value) => {
       const waitTimeMs = Date.now() - waitStart;
       const holdStart = Date.now();
       try {
-        return await callback();
+        return await callback(value);
       } finally {
         mutexTracker.record({
-          kind: 'mutex',
+          kind: 'semaphore',
           mutexName: this.name,
-          key: this.key,
           waitTimeMs,
           holdTimeMs: Date.now() - holdStart,
           caller,
@@ -41,20 +38,19 @@ export class TrackedMutex {
     });
   }
 
-  async acquire(): Promise<MutexInterface.Releaser> {
+  async acquire(): Promise<[number, SemaphoreInterface.Releaser]> {
     const caller = getCallerFromStack();
     const timestamp = new Date().toISOString();
     const waitStart = Date.now();
 
-    const releaser = await this.mutex.acquire();
+    const [value, releaser] = await this.semaphore.acquire();
     const waitTimeMs = Date.now() - waitStart;
     const holdStart = Date.now();
 
-    return () => {
+    const trackedReleaser: SemaphoreInterface.Releaser = () => {
       mutexTracker.record({
-        kind: 'mutex',
+        kind: 'semaphore',
         mutexName: this.name,
-        key: this.key,
         waitTimeMs,
         holdTimeMs: Date.now() - holdStart,
         caller,
@@ -62,21 +58,27 @@ export class TrackedMutex {
       });
       releaser();
     };
+
+    return [value, trackedReleaser];
+  }
+
+  getValue(): number {
+    return this.semaphore.getValue();
   }
 
   isLocked(): boolean {
-    return this.mutex.isLocked();
+    return this.semaphore.isLocked();
   }
 
   waitForUnlock(): Promise<void> {
-    return this.mutex.waitForUnlock();
+    return this.semaphore.waitForUnlock();
   }
 
   cancel(): void {
-    return this.mutex.cancel();
+    return this.semaphore.cancel();
   }
 
   release(): void {
-    return this.mutex.release();
+    return this.semaphore.release();
   }
 }

@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 
+export type RecordKind = 'mutex' | 'semaphore';
+
 export interface MutexRecord {
+  kind: RecordKind;
   mutexName: string;
   key?: string;
   waitTimeMs: number;
@@ -28,6 +31,24 @@ function buildReportPath(): string {
 
 const globalReportPath = buildReportPath();
 
+function formatTable(title: string, records: MutexRecord[]): string {
+  let md = `## ${title}\n\n`;
+  if (records.length === 0) {
+    md += `No significant contention detected (threshold: 15s wait time).\n\n`;
+  } else {
+    md += '| Name | Key | Wait (s) | Hold (s) | Caller | Time |\n';
+    md += '|---|---|---|---|---|---|\n';
+    for (const r of records) {
+      const wait = (r.waitTimeMs / 1000).toFixed(1);
+      const hold = (r.holdTimeMs / 1000).toFixed(1);
+      const key = r.key ?? '—';
+      md += `| ${r.mutexName} | ${key} | ${wait} | ${hold} | ${r.caller} | ${r.timestamp} |\n`;
+    }
+    md += '\n';
+  }
+  return md;
+}
+
 class MutexTrackerSingleton {
   private records: MutexRecord[] = [];
 
@@ -43,20 +64,12 @@ class MutexTrackerSingleton {
 
   writeReportFile(): void {
     const sorted = this.getRecords();
+    const mutexRecords = sorted.filter((r) => r.kind === 'mutex');
+    const semaphoreRecords = sorted.filter((r) => r.kind === 'semaphore');
 
-    let md = '## Mutex Contention Report\n\n';
-    if (sorted.length === 0) {
-      md += 'No significant mutex contention detected (threshold: 15s wait time).\n';
-    } else {
-      md += '| Mutex | Key | Wait (s) | Hold (s) | Caller | Time |\n';
-      md += '|---|---|---|---|---|---|\n';
-      for (const r of sorted) {
-        const wait = (r.waitTimeMs / 1000).toFixed(1);
-        const hold = (r.holdTimeMs / 1000).toFixed(1);
-        const key = r.key ?? '—';
-        md += `| ${r.mutexName} | ${key} | ${wait} | ${hold} | ${r.caller} | ${r.timestamp} |\n`;
-      }
-    }
+    let md = '';
+    md += formatTable('Mutex Contention Report', mutexRecords);
+    md += formatTable('Semaphore Contention Report', semaphoreRecords);
 
     mkdirSync(dirname(globalReportPath), { recursive: true });
     writeFileSync(globalReportPath, md);

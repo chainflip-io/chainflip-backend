@@ -1,11 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterAll, afterEach, beforeEach, it } from 'vitest';
-import { Semaphore } from 'async-mutex';
 import { TestContext } from 'shared/utils/test_context';
 import { runWithTimeout, sleep, testInfoFile } from 'shared/utils';
 import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
 import { Chain } from '@chainflip/cli';
 import { mutexTracker } from 'shared/utils/mutex_tracker';
+import { TrackedSemaphore } from 'shared/utils/tracked_semaphore';
 
 export type CfSemaphoreTag = Chain;
 export type CfTestOptions = {
@@ -14,12 +14,12 @@ export type CfTestOptions = {
 };
 
 const MAX_CONCURRENT_PER_TAG = 200;
-const semaphores = new Map<CfSemaphoreTag, Semaphore>();
+const semaphores = new Map<CfSemaphoreTag, TrackedSemaphore>();
 
-function getSemaphore(tag: CfSemaphoreTag): Semaphore {
+function getSemaphore(tag: CfSemaphoreTag): TrackedSemaphore {
   let semaphore = semaphores.get(tag);
   if (!semaphore) {
-    semaphore = new Semaphore(MAX_CONCURRENT_PER_TAG);
+    semaphore = new TrackedSemaphore(`semaphore(${tag})`, MAX_CONCURRENT_PER_TAG);
     semaphores.set(tag, semaphore);
   }
   return semaphore;
