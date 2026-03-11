@@ -400,13 +400,17 @@ pub fn handle_vault_events<
 	let mut result = Vec::new();
 
 	for event in events {
-		if let Some(mapped) = handle_vault_event::<T, I>(
+		match handle_vault_event::<T, I>(
 			supported_assets,
 			event.event_parameters,
 			event.tx_hash,
 			block_query,
-		)? {
-			result.push(mapped);
+		) {
+			Ok(Some(mapped)) => result.push(mapped),
+			Ok(None) => {},
+			Err(e) => {
+				tracing::warn!("Ignoring vault contract event at {block_query:?}: {e:#}");
+			},
 		}
 	}
 
