@@ -59,12 +59,13 @@ export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
   );
 }
 
-const feeAsset = Assets.Usdc;
-
-export async function getEarnedBrokerFees(logger: Logger, address: string): Promise<bigint> {
-  logger.debug(`Getting earned broker fees for address: ${address}`);
-  // NOTE: All broker fees are collected in USDC
-  return getFreeBalance(address, Assets.Usdc);
+export async function getEarnedBrokerFees(
+  logger: Logger,
+  address: string,
+  asset: Asset,
+): Promise<bigint> {
+  logger.debug(`Getting earned ${asset} broker fees for address: ${address}`);
+  return getFreeBalance(address, asset);
 }
 
 /// Runs a swap, checks that the broker fees are collected,
@@ -78,11 +79,11 @@ async function testBrokerFees<A extends WithBrokerAccount>(
   await using chainflip = await getChainflipApi();
 
   // Check the broker fees before the swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address, inputAsset);
   cf.debug(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
-  const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
+  const destAsset = inputAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
   const destinationAddress = await newAssetAddress(
     destAsset,
     seed ?? randomBytes(32).toString('hex'),
@@ -170,35 +171,38 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     }`,
   );
 
-  // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
+  // Check that the earned broker fees increased in the input asset
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address, inputAsset);
   cf.debug(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
 
-  // Withdraw the broker fees
+  // Withdraw the broker fees (collected in the input asset)
   const withdrawalAddress = await newAssetAddress(
-    feeAsset,
+    inputAsset,
     seed ?? randomBytes(32).toString('hex'),
   );
-  const chain = shortChainFromAsset(feeAsset);
+  const chain = shortChainFromAsset(inputAsset);
   cf.debug(`${chain} withdrawalAddress:`, withdrawalAddress);
-  const balanceBeforeWithdrawal = await getBalance(feeAsset, withdrawalAddress);
+  const balanceBeforeWithdrawal = await getBalance(inputAsset, withdrawalAddress);
   cf.debug(
     `Withdrawing broker fees to ${withdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
 
-  await submitBrokerWithdrawal(cf, feeAsset, {
+  await submitBrokerWithdrawal(cf, inputAsset, {
     [chain]: withdrawalAddress,
   });
 
-  await observeBalanceIncrease(cf.logger, feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
+  await observeBalanceIncrease(cf.logger, inputAsset, withdrawalAddress, balanceBeforeWithdrawal);
 
   // Check that the balance after withdrawal is correct after deducting withdrawal fee
-  const balanceAfterWithdrawal = await getBalance(feeAsset, withdrawalAddress);
+  const balanceAfterWithdrawal = await getBalance(inputAsset, withdrawalAddress);
   cf.debug(`${inputAsset} Balance after withdrawal:`, balanceAfterWithdrawal);
-  const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, feeAsset);
-  const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(balanceBeforeWithdrawal, feeAsset);
+  const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, inputAsset);
+  const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(
+    balanceBeforeWithdrawal,
+    inputAsset,
+  );
   assert(
     balanceAfterWithdrawalBigInt > balanceBeforeWithdrawalBigInt,
     `Balance after withdrawal is less than balance before withdrawal.`,

@@ -150,8 +150,8 @@ async function testFeeCollection<A = []>(
   );
 
   // Amounts before swap
-  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
-  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
+  const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address, inputAsset);
+  const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId, inputAsset);
   cf.debug(`Earned broker fees before: ${earnedBrokerFeesBefore}`);
   cf.debug(`Earned affiliate fees before: ${earnedAffiliateFeesBefore}`);
 
@@ -172,8 +172,8 @@ async function testFeeCollection<A = []>(
   );
 
   // Check that both the broker and affiliate earned fees
-  const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
-  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(cf.logger, affiliateId);
+  const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address, inputAsset);
+  const earnedAffiliateFeesAfter = await getEarnedBrokerFees(cf.logger, affiliateId, inputAsset);
   cf.debug(`Earned broker fees after: ${earnedBrokerFeesAfter}`);
   cf.debug(`Earned affiliate fees after: ${earnedAffiliateFeesAfter}`);
   assert(

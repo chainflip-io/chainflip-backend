@@ -815,6 +815,11 @@ export const palletCfSwappingSwapFailureReason = simpleEnum([
   'LogicError',
 ]);
 
+export const cfPrimitivesAssetAndAmount = z.object({
+  asset: cfPrimitivesChainsAssetsAnyAsset,
+  amount: numberOrHex,
+});
+
 export const cfPrimitivesSwapLeg = simpleEnum(['FromStable', 'ToStable']);
 
 export const palletCfSwappingPalletConfigUpdate = z.discriminatedUnion('__kind', [
