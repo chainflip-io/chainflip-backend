@@ -156,9 +156,9 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          if [ -f /tmp/chainflip/mutex_report.md ]; then
-            cat /tmp/chainflip/mutex_report.md >> $GITHUB_STEP_SUMMARY
-          fi
+          for f in /tmp/chainflip/mutex_report_*.md; do
+            [ -f "$f" ] && cat "$f" >> $GITHUB_STEP_SUMMARY
+          done
 
       - name: Write chain explorer to file 📝
         if: failure()
