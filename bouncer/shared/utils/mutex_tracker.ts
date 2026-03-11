@@ -60,7 +60,7 @@ class MutexTrackerSingleton {
   }
 
   getRecords(): MutexRecord[] {
-    return [...this.records].sort((a, b) => b.waitTimeMs - a.waitTimeMs);
+    return [...this.records].sort((a, b) => b.holdTimeMs - a.holdTimeMs);
   }
 
   writeReportFile(): void {
