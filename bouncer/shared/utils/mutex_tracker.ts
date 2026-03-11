@@ -12,7 +12,21 @@ export interface MutexRecord {
 
 const WAIT_TIME_THRESHOLD_MS = 15_000;
 
-const REPORT_FILE_PATH = '/tmp/chainflip/mutex_report.md';
+const REPORT_DIR = '/tmp/chainflip';
+
+// Build a unique report filename per vitest process.
+// Includes the suite name from `-t` if present, plus a timestamp for uniqueness.
+function buildReportPath(): string {
+  const tIndex = process.argv.indexOf('-t');
+  const suiteName =
+    tIndex !== -1 && tIndex + 1 < process.argv.length
+      ? `_${process.argv[tIndex + 1].replace(/[^a-zA-Z0-9_-]/g, '_')}`
+      : '';
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${REPORT_DIR}/mutex_report${suiteName}_${ts}.md`;
+}
+
+const globalReportPath = buildReportPath();
 
 class MutexTrackerSingleton {
   private records: MutexRecord[] = [];
@@ -27,7 +41,7 @@ class MutexTrackerSingleton {
     return [...this.records].sort((a, b) => b.waitTimeMs - a.waitTimeMs);
   }
 
-  writeReportFile(path: string = REPORT_FILE_PATH): void {
+  writeReportFile(): void {
     const sorted = this.getRecords();
 
     let md = '## Mutex Contention Report\n\n';
@@ -44,8 +58,8 @@ class MutexTrackerSingleton {
       }
     }
 
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, md);
+    mkdirSync(dirname(globalReportPath), { recursive: true });
+    writeFileSync(globalReportPath, md);
   }
 }
 
