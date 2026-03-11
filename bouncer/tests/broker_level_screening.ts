@@ -1,8 +1,7 @@
 import axios from 'axios';
 import { Chain, InternalAsset } from '@chainflip/cli';
-import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
+import { sendBtc, sendBtcTransactionWithParent, setupWallet } from 'shared/send_btc';
 import {
-  btcClientMutex,
   newAssetAddress,
   sleep,
   chainGasAsset,
@@ -12,7 +11,6 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
-  getBtcClient,
   getChainContractId,
   amountToFineAmount,
   assetDecimals,
@@ -628,18 +626,7 @@ export async function testBitcoin<A = []>(
   // we have to setup a separate wallet in order to not taint our main wallet, otherwise
   // the deposit monitor will possibly reject transactions created by other tests, due
   // to ancestor screening. This has been a source of bouncer flakiness in the past.
-  const taintedClient = await btcClientMutex.runExclusive(async () => {
-    const reply: any = await btcClient.createWallet(`tainted-${getIsoTime()}`, false, false, '');
-    if (!reply.name) {
-      throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
-    }
-    cf.debug(`got new wallet for BLS test: ${reply.name}`);
-    return getBtcClient(reply.name);
-  });
-  const fundingAddress = await taintedClient.getNewAddress();
-  cf.debug(`funding tainted wallet with 5btc to ${fundingAddress}`);
-  await sendBtc(cf.logger, fundingAddress, 5, 1);
-  cf.debug(`funding success!`);
+  const taintedClient = await setupWallet(cf, `tainted-${getIsoTime()}`);
 
   // if we don't boost, we wait with our report for 1 block confirmation, otherwise we submit the report directly
   const confirmationsBeforeReport = doBoost ? 0 : 1;
