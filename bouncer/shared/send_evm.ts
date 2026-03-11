@@ -17,7 +17,7 @@ const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 
 // Nonce tracking and mutex per (chain, account) to avoid cross-account collisions.
-const nonceMutex = new KeyedMutex();
+const nonceMutex = new KeyedMutex('nonceMutex');
 const nextEvmNonce = new Map<string, number>();
 
 function nonceKey(chain: string, address: string): string {

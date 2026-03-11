@@ -1,10 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { afterEach, beforeEach, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, it } from 'vitest';
 import { Semaphore } from 'async-mutex';
 import { TestContext } from 'shared/utils/test_context';
 import { runWithTimeout, sleep, testInfoFile } from 'shared/utils';
 import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
 import { Chain } from '@chainflip/cli';
+import { mutexTracker } from 'shared/utils/mutex_tracker';
 
 export type CfSemaphoreTag = Chain;
 export type CfTestOptions = {
@@ -49,6 +50,13 @@ beforeEach<{ testContext: TestContext }>((context) => {
 // Print the SwapContext report after each test finishes
 afterEach<{ testContext: TestContext }>((context) => {
   context.testContext.printReport();
+});
+
+// Write the mutex contention report after all tests in this suite finish.
+// Since mutexTracker is a process-wide singleton, the last suite to finish
+// will produce the complete report.
+afterAll(() => {
+  mutexTracker.writeReportFile();
 });
 
 function createTestFunction(
