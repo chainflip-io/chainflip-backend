@@ -9,20 +9,20 @@ import { globalLogger } from 'shared/utils/logger';
 import { PublicKey } from '@solana/web3.js';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { deposits, price } from 'shared/setup_swaps';
-import { createLpPool } from '../shared/create_lp_pool';
-import { depositLiquidity } from '../shared/deposit_liquidity';
-import { rangeOrder } from '../shared/range_order';
+import { createLpPool } from 'shared/create_lp_pool';
+import { depositLiquidity } from 'shared/deposit_liquidity';
+import { rangeOrder } from 'shared/range_order';
 
-async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
-  cf.info('Setting up swaps for new assets: WBTC, ArbUsdt, SolUsdt');
+async function setupNewAssets<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
+  parentCf.info('Setting up swaps for new assets: WBTC, ArbUsdt, SolUsdt');
 
   await Promise.all([
-    createLpPool(cf.logger, 'Wbtc', price.get('Wbtc')!),
-    createLpPool(cf.logger, 'ArbUsdt', price.get('ArbUsdt')!),
-    createLpPool(cf.logger, 'SolUsdt', price.get('SolUsdt')!),
+    createLpPool(parentCf.logger, 'Wbtc', price.get('Wbtc')!),
+    createLpPool(parentCf.logger, 'ArbUsdt', price.get('ArbUsdt')!),
+    createLpPool(parentCf.logger, 'SolUsdt', price.get('SolUsdt')!),
   ]);
 
-  cf.info('Pools for WBTC, ArbUsdt, SolUsdt set');
+  parentCf.info('Pools for WBTC, ArbUsdt, SolUsdt set');
 
   // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
   // We do this for all assets, not just new ones, because the migration sets default values that
@@ -59,19 +59,21 @@ async function setupNewAssets<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => depositLiquidity(subcf, 'SolUsdt', 1000),
       ]);
 
-  await cf.all([lpApiDeposits, lp1Deposits]);
+  await parentCf.all([lpApiDeposits, lp1Deposits]);
 
-  cf.info('Lp1 deposits for WBTC, ArbUsdt, SolUsdt set');
+  parentCf.info('Lp1 deposits for WBTC, ArbUsdt, SolUsdt set');
 
-  await Promise.all([
-    rangeOrder(cf.logger, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
-    rangeOrder(cf.logger, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
-    rangeOrder(cf.logger, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
-  ]);
+  await parentCf
+    .with({ account: fullAccountFromUri('//LP_1', 'LP') })
+    .all([
+      (subcf) => rangeOrder(subcf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
+      (subcf) => rangeOrder(subcf, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
+      (subcf) => rangeOrder(subcf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
+    ]);
 
-  cf.info('Range orders for WBTC, ArbUsdt, SolUsdt set');
+  parentCf.info('Range orders for WBTC, ArbUsdt, SolUsdt set');
 
-  cf.info('Swaps Setup completed for new assets: WBTC, ArbUsdt, SolUsdt');
+  parentCf.info('Swaps Setup completed for new assets: WBTC, ArbUsdt, SolUsdt');
 }
 
 async function addSolUsdtTokenSupport<A = []>(cf: ChainflipIO<A>): Promise<void> {

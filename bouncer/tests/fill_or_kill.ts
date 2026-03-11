@@ -5,6 +5,7 @@ import {
   assetDecimals,
   Assets,
   decodeDotAddressForContract,
+  decodeDispatchError,
   newAssetAddress,
   observeBalanceIncrease,
   observeCcmReceived,
@@ -12,17 +13,20 @@ import {
   SwapRequestType,
   TransactionOrigin,
 } from 'shared/utils';
-import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
+import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { swappingRefundEgressScheduled } from 'generated/events/swapping/refundEgressScheduled';
+import { swappingRefundEgressIgnored } from 'generated/events/swapping/refundEgressIgnored';
+import { throwError } from 'shared/utils/logger';
 
-/// Do a swap with unrealistic minimum price so it gets refunded.
+/// Do a swap with an unrealistic minimum price so it gets refunded.
 async function testMinPriceRefund<A = []>(
   parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
@@ -31,16 +35,21 @@ async function testMinPriceRefund<A = []>(
   ccmRefund = false,
   oracleSwap = false,
 ) {
+  const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
+
   const vaultText = swapViaVault ? '_vault' : '';
   const ccmRefundText = ccmRefund ? '_ccmRefund' : '';
   const oracleSwapText = oracleSwap ? '_oracleSwap' : '';
   const cf = parentCf.withChildLogger(
-    `FoK_${sourceAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
+    `FoK_${sourceAsset}_${destAsset}_${amount}${vaultText}${ccmRefundText}${oracleSwapText}`,
   );
-  const destAsset = sourceAsset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
 
-  const refundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
-
+  const refundAddress = await newAssetAddress(
+    sourceAsset,
+    randomBytes(32).toString('hex'),
+    undefined,
+    ccmRefund,
+  );
   const destAddress = await newAssetAddress(destAsset, randomBytes(32).toString('hex'));
   cf.debug(`Swap destination address: ${destAddress}`);
   cf.debug(`Refund address: ${refundAddress}`);
@@ -71,11 +80,12 @@ async function testMinPriceRefund<A = []>(
     `Fok swap started from ${sourceAsset} to ${destAsset} with unrealistic min price${swapViaVault ? ' swapViaVault' : ''}${ccmRefund ? ' ccmRefund' : ''}${oracleSwap ? ' oracleSwap' : ''}`,
   );
 
-  let swapRequestedHandle;
+  let swapRequestedEvent;
+  let ccmEventEmitted;
 
   if (!swapViaVault) {
     cf.debug(`Requesting swap from ${sourceAsset} to ${destAsset} with unrealistic min price`);
-    const swapRequest = await requestNewSwap(
+    const swapParams = await requestNewSwap(
       cf,
       sourceAsset,
       destAsset,
@@ -85,23 +95,47 @@ async function testMinPriceRefund<A = []>(
       0, // boostFeeBps
       refundParameters,
     );
-    const depositAddress = swapRequest.depositAddress;
-    swapRequestedHandle = observeSwapRequested(
-      cf,
-      sourceAsset,
-      destAsset,
-      { type: TransactionOrigin.DepositChannel, channelId: swapRequest.channelId },
-      SwapRequestType.Regular,
-    );
+    const depositAddress = swapParams.depositAddress;
+
+    ccmEventEmitted = refundParameters.refundCcmMetadata
+      ? observeCcmReceived(
+          sourceAsset,
+          sourceAsset,
+          refundParameters.refundAddress,
+          refundParameters.refundCcmMetadata,
+        )
+      : Promise.resolve();
 
     // Deposit the asset
     await send(cf.logger, sourceAsset, depositAddress, amount.toString());
     cf.debug(`Sent ${amount} ${sourceAsset} to ${depositAddress}`);
+
+    swapRequestedEvent = await observeSwapRequested(
+      cf,
+      sourceAsset,
+      destAsset,
+      { type: TransactionOrigin.DepositChannel, channelId: swapParams.channelId },
+      SwapRequestType.Regular,
+    );
   } else {
-    cf.debug(`Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`);
+    const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+    subcf.debug(
+      `Swapping via vault from ${sourceAsset} to ${destAsset} with unrealistic min price`,
+    );
+    const source = await prepareVaultSwapSource(subcf, sourceAsset, amount.toString());
+
+    ccmEventEmitted = refundParameters.refundCcmMetadata
+      ? observeCcmReceived(
+          sourceAsset,
+          sourceAsset,
+          refundParameters.refundAddress,
+          refundParameters.refundCcmMetadata,
+        )
+      : Promise.resolve();
+
     const { transactionId } = await executeVaultSwap(
-      cf.logger,
-      '//BROKER_1',
+      subcf,
+      source,
       sourceAsset,
       destAsset,
       destAddress,
@@ -111,7 +145,7 @@ async function testMinPriceRefund<A = []>(
       refundParameters,
     );
 
-    swapRequestedHandle = observeSwapRequested(
+    swapRequestedEvent = await observeSwapRequested(
       cf,
       sourceAsset,
       destAsset,
@@ -120,27 +154,29 @@ async function testMinPriceRefund<A = []>(
     );
   }
 
-  const swapRequestedEvent = await swapRequestedHandle;
-  const swapRequestId = Number(swapRequestedEvent.swapRequestId);
+  const swapRequestId = swapRequestedEvent.swapRequestId;
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
-  const observeRefundEgress = observeEvent(cf.logger, `swapping:RefundEgressScheduled`, {
-    test: (event) => Number(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks: 10,
-  }).event;
+  const resultEvent = await cf.stepUntilOneEventOf({
+    refundEgressScheduled: {
+      name: 'Swapping.RefundEgressScheduled',
+      schema: swappingRefundEgressScheduled.refine(
+        (event) => event.swapRequestId === swapRequestId,
+      ),
+    },
+    refundEgressIgnored: {
+      name: 'Swapping.RefundEgressIgnored',
+      schema: swappingRefundEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
+    },
+  });
 
-  const ccmEventEmitted = refundParameters.refundCcmMetadata
-    ? observeCcmReceived(
-        sourceAsset,
-        sourceAsset,
-        refundParameters.refundAddress,
-        refundParameters.refundCcmMetadata,
-      )
-    : Promise.resolve();
+  if (resultEvent.key === 'refundEgressIgnored') {
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
+    throwError(cf.logger, new Error(`Refund Egress was ignored reason: ${reason}`));
+  }
 
   // Wait for the refund to be scheduled and executed
   await Promise.all([
-    observeRefundEgress,
     observeBalanceIncrease(cf.logger, sourceAsset, refundAddress, refundBalanceBefore),
     ccmEventEmitted,
   ]);
@@ -171,7 +207,10 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
   const chainState = response.chainStates.arbitrum.price;
   for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
     if (feed.priceStatus !== 'UpToDate') {
-      throw new Error(`Price status for arbitrum.${asset} is not UpToDate: ${feed.priceStatus}`);
+      throwError(
+        cf.logger,
+        new Error(`Price status for arbitrum.${asset} is not UpToDate: ${feed.priceStatus}`),
+      );
     }
   }
 
@@ -185,6 +224,9 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
 export async function testFillOrKill(testContext: TestContext) {
   const cf = await newChainflipIO(testContext.logger, []);
+
+  // Make sure the amounts are big enough to cover for the CCM gas budget, which can be significant (especially for Ethereum)
+  // and eats into the refund amount before it's compared to dust limits otherwise, BelowEgressDustLimit errors can occur.
   await cf.all([
     (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500),
     (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1),

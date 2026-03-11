@@ -7,11 +7,10 @@
 // For example: ./commands/setup_vaults.ts
 
 import { AddressOrPair } from '@polkadot/api/types';
-import Web3 from 'web3';
 import {
   getBtcClient,
   handleSubstrateError,
-  getEvmEndpoint,
+  getWeb3,
   getSolConnection,
   deferredPromise,
   runWithTimeout,
@@ -24,7 +23,7 @@ import {
   initializeSolanaPrograms,
   initializeAssethubChain,
 } from 'shared/initialize_new_chains';
-import { globalLogger, loggerChild } from 'shared/utils/logger';
+import { globalLogger, Logger, loggerChild } from 'shared/utils/logger';
 import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
@@ -104,10 +103,26 @@ async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, ke
   await promise;
 }
 
+async function createAssetHubVault(
+  logger: Logger,
+  assethubApi: DisposableApiPromise,
+): Promise<AddressOrPair> {
+  // Step a
+  logger.info('Requesting Assethub Vault creation');
+  const { vaultAddress: hubVaultAddress } = await runWithTimeout(
+    createPolkadotVault(assethubApi),
+    90,
+    logger,
+    'Creating Assethub vault',
+  );
+  logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+  return hubVaultAddress;
+}
+
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
-  const arbClient = new Web3(getEvmEndpoint('Arbitrum'));
+  const arbClient = getWeb3('Arbitrum');
   const solClient = getSolConnection();
 
   await using assethub = await getAssethubApi();
@@ -127,6 +142,8 @@ async function main(): Promise<void> {
   // Step 2
   cf.info('Forcing rotation');
   await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
+
+  const assetHubVaultCreateHandle = createAssetHubVault(cf.logger, assethub);
 
   // Step 3
   cf.info('Waiting for new keys');
@@ -157,23 +174,15 @@ async function main(): Promise<void> {
   // Step 4
   cf.info('Setting up external chains (Arbitrum, Solana, Assethub) with new keys');
 
-  const createAssethubVault = async () => {
-    // Step a
-    cf.info('Requesting Assethub Vault creation');
-    const { vaultAddress: hubVaultAddress } = await runWithTimeout(
-      createPolkadotVault(assethub),
-      90,
-      cf.logger,
-      'Creating Assethub vault',
-    );
-    cf.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+  const createAssethubProxy = async () => {
+    // Wait for the assethub vault Promise to resolve
+    const hubVaultAddress = await assetHubVaultCreateHandle;
 
-    // Step b
+    cf.info('Rotating Proxy and Funding Accounts on Assethub');
     const hubProxyAdded = observeEvent(cf.logger, 'proxy:ProxyAdded', {
       chain: 'assethub',
-      timeoutSeconds: 120,
+      timeoutSeconds: 60,
     }).event;
-    cf.info('Rotating Proxy and Funding Accounts on Assethub');
     const [, hubVaultEvent] = await Promise.all([
       rotateAndFund(assethub, hubVaultAddress, hubKey),
       hubProxyAdded,
@@ -197,12 +206,16 @@ async function main(): Promise<void> {
   };
 
   const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([
-    createAssethubVault(),
+    createAssethubProxy(),
     insertArbitrumKey(),
     insertSolanaKey(),
   ]);
 
   // Step 7
+  cf.info('Setting up price feeds');
+  const updateDefaultPriceFeedsHandle = updateDefaultPriceFeeds(cf.logger);
+
+  // Step 8
   cf.info('Registering Vaults with state chain');
 
   await cf.all([
@@ -232,15 +245,14 @@ async function main(): Promise<void> {
       }),
   ]);
 
-  // Step 8
-  cf.info('Setting up price feeds');
-  await updateDefaultPriceFeeds(cf.logger);
-
   // Confirmation
   cf.info('Waiting for new epoch...');
   await cf.stepUntilEvent('Validator.NewEpoch', validatorNewEpoch);
-
   cf.info('New Epoch');
+
+  // Wait for updateDefaultPriceFeeds Promise to resolve
+  await updateDefaultPriceFeedsHandle;
+
   cf.info('Vault Setup completed');
   process.exit(0);
 }

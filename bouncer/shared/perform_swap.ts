@@ -1,4 +1,5 @@
 import { InternalAsset as Asset } from '@chainflip/cli';
+import { HDNodeWallet } from 'ethers';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
@@ -21,19 +22,19 @@ import {
   defaultAssetAmounts,
   newAssetAddress,
   getContractAddress,
-  createStateChainKeypair,
-  isEvmAsset,
+  decodeDispatchError,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
-import { Logger, throwError } from 'shared/utils/logger';
+import { throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
-import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
+import { swappingSwapEgressIgnored } from 'generated/events/swapping/swapEgressIgnored';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -73,6 +74,7 @@ export async function requestNewSwap<A = []>(
     swappingSwapDepositAddressReady.refine((event) => {
       const eventMatches =
         event.destinationAddress.address.toLowerCase() === destAddress.toLowerCase() &&
+        event.destinationAddress.chain === chainFromAsset(destAsset) &&
         event.destinationAsset === destAsset &&
         event.sourceAsset === sourceAsset;
 
@@ -83,7 +85,13 @@ export async function requestNewSwap<A = []>(
           event.channelMetadata.gasBudget === BigInt(messageMetadata.gasBudget)
         : event.channelMetadata === undefined;
 
-      return eventMatches && ccmMetadataMatches;
+      const dcaParamsMatches = dcaParams
+        ? event.dcaParameters !== undefined &&
+          event.dcaParameters?.numberOfChunks === dcaParams.numberOfChunks &&
+          event.dcaParameters?.chunkInterval === dcaParams.chunkIntervalBlocks
+        : event.dcaParameters === undefined;
+
+      return eventMatches && ccmMetadataMatches && dcaParamsMatches;
     }),
   );
 
@@ -109,6 +117,31 @@ export enum SenderType {
   Vault,
 }
 
+async function waitForEgressScheduled<A = []>(
+  cf: ChainflipIO<A>,
+  swapRequestId: bigint,
+  swapContext?: SwapContext,
+): Promise<void> {
+  const resultEvent = await cf.stepUntilOneEventOf({
+    egressScheduled: {
+      name: 'Swapping.SwapEgressScheduled',
+      schema: swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
+    },
+    egressIgnored: {
+      name: 'Swapping.SwapEgressIgnored',
+      schema: swappingSwapEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
+    },
+  });
+
+  if (resultEvent.key === 'egressIgnored') {
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
+    throwError(cf.logger, new Error(`Swap Egress was ignored reason: ${reason}`));
+  } else {
+    swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
+    cf.debug(`Egress ID: ${resultEvent.data.egressId}, Egress amount: ${resultEvent.data.amount}.`);
+  }
+}
+
 // Note: if using the swap context, the logger must contain the tag
 export async function doPerformSwap<A = []>(
   cf: ChainflipIO<A>,
@@ -122,14 +155,6 @@ export async function doPerformSwap<A = []>(
 
   cf.trace(`Old balance: ${oldBalance}`);
 
-  const swapRequestedHandle = observeSwapRequested(
-    cf,
-    sourceAsset,
-    destAsset,
-    { type: TransactionOrigin.DepositChannel, channelId },
-    SwapRequestType.Regular,
-  );
-
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
     : Promise.resolve();
@@ -139,13 +164,19 @@ export async function doPerformSwap<A = []>(
     : sendViaCfTester(cf.logger, sourceAsset, depositAddress));
 
   cf.debug(`Funded the address with tx ${txId}`);
-
   swapContext?.updateStatus(cf.logger, SwapStatus.Funded);
 
-  const swapRequestId = (await swapRequestedHandle).swapRequestId;
+  const swapRequestId = (
+    await observeSwapRequested(
+      cf,
+      sourceAsset,
+      destAsset,
+      { type: TransactionOrigin.DepositChannel, channelId },
+      SwapRequestType.Regular,
+    )
+  ).swapRequestId;
 
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapScheduled);
-
   cf.debug(`Swap requested with ID: ${swapRequestId}`);
 
   await cf.stepUntilEvent(
@@ -154,19 +185,11 @@ export async function doPerformSwap<A = []>(
   );
 
   swapContext?.updateStatus(cf.logger, SwapStatus.SwapCompleted);
-
-  cf.debug(`Swap Request Completed. Waiting for egress.`);
-
-  const { egressId, amount: egressAmount } = await cf.stepUntilEvent(
-    'Swapping.SwapEgressScheduled',
-    swappingSwapEgressScheduled.refine((event) => event.swapRequestId === swapRequestId),
-  );
-
-  swapContext?.updateStatus(cf.logger, SwapStatus.EgressScheduled);
-
   cf.debug(
-    `Egress ID: ${egressId}, Egress amount: ${egressAmount}. Waiting for balance to increase.`,
+    `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted (if CCM swap).`,
   );
+
+  await waitForEgressScheduled(cf, swapRequestId, swapContext);
 
   try {
     const [newBalance] = await Promise.all([
@@ -250,9 +273,42 @@ export async function performAndTrackSwap<A = []>(
   cf.debug(`Broadcast executed successfully, swap is complete!`);
 }
 
-export async function executeVaultSwap(
-  logger: Logger,
-  brokerUri: string,
+export type VaultSwapSource =
+  | { chain: 'Evm'; wallet: HDNodeWallet; sourceAddress: string }
+  | { chain: 'Bitcoin'; sourceAddress: string }
+  | { chain: 'Solana'; sourceAddress: string };
+
+export async function prepareVaultSwapSource<A = []>(
+  cf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  amount?: string,
+): Promise<VaultSwapSource> {
+  const srcChain = chainFromAsset(sourceAsset);
+  let vaultSwapSource: VaultSwapSource;
+
+  if (evmChains.includes(srcChain)) {
+    // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
+    // with other swaps via deposit channels.
+    const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset, amount);
+    vaultSwapSource = { chain: 'Evm', wallet, sourceAddress: wallet.address.toLowerCase() };
+  } else if (srcChain === 'Bitcoin') {
+    // Unused for now
+    vaultSwapSource = { chain: 'Bitcoin', sourceAddress: '' };
+  } else if (srcChain === 'Solana') {
+    vaultSwapSource = {
+      chain: 'Solana',
+      sourceAddress: decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58()),
+    };
+  } else {
+    throwError(cf.logger, new Error('Unsupported vault swap source chain'));
+  }
+
+  return vaultSwapSource;
+}
+
+export async function executeVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
+  vaultSwapSource: VaultSwapSource,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -267,24 +323,18 @@ export async function executeVaultSwap(
     commissionBps: number;
   }[] = [],
 ) {
-  let sourceAddress: string;
   let transactionId: TransactionOriginId;
 
   const srcChain = chainFromAsset(sourceAsset);
 
-  if (evmChains.includes(srcChain)) {
-    logger.trace('Executing EVM vault swap');
-    // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
-    // with other swaps via deposit channels.
-    const wallet = await createEvmWalletAndFund(logger, sourceAsset, amount);
-    sourceAddress = wallet.address.toLowerCase();
+  if (vaultSwapSource.chain === 'Evm') {
+    cf.trace('Executing EVM vault swap');
 
     // To uniquely identify the VaultSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const txHash = await executeEvmVaultSwap(
-      logger,
-      brokerUri,
+      cf,
       sourceAsset,
       destAsset,
       destAddress,
@@ -294,16 +344,14 @@ export async function executeVaultSwap(
       boostFeeBps,
       fillOrKillParams,
       dcaParams,
-      wallet,
+      vaultSwapSource.wallet,
       affiliateFees,
     );
     transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
-    sourceAddress = wallet.address.toLowerCase();
-  } else if (srcChain === 'Bitcoin') {
-    logger.trace('Executing BTC vault swap');
+  } else if (vaultSwapSource.chain === 'Bitcoin') {
+    cf.trace('Executing BTC vault swap');
     const txId = await buildAndSendBtcVaultSwap(
-      logger,
-      brokerUri,
+      cf,
       Number(amount ?? defaultAssetAmounts(sourceAsset)),
       destAsset,
       destAddress,
@@ -314,19 +362,14 @@ export async function executeVaultSwap(
       affiliateFees.map((f) => ({ account: f.accountAddress, bps: f.commissionBps })),
     );
     transactionId = { type: TransactionOrigin.VaultSwapBitcoin, txId };
-    // Unused for now
-    sourceAddress = '';
-  } else {
-    logger.trace('Executing Solana vault swap');
+  } else if (vaultSwapSource.chain === 'Solana') {
+    cf.trace('Executing Solana vault swap');
     const { slot, accountAddress } = await executeSolVaultSwap(
-      logger,
+      cf,
       sourceAsset,
       destAsset,
       destAddress,
-      {
-        account: createStateChainKeypair(brokerUri).address,
-        commissionBps: brokerFee,
-      },
+      brokerFee,
       messageMetadata,
       undefined,
       boostFeeBps,
@@ -338,19 +381,19 @@ export async function executeVaultSwap(
       type: TransactionOrigin.VaultSwapSolana,
       addressAndSlot: [decodeSolAddress(accountAddress.toBase58()), slot],
     };
-    sourceAddress = decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58());
+  } else {
+    throwError(cf.logger, new Error('Unsupported vault swap source chain'));
   }
 
-  logger.debug(
-    `vault swap sent on ${srcChain} with transactionId ${JSON.stringify(transactionId)} and source address ${sourceAddress}`,
+  cf.debug(
+    `vault swap sent on ${srcChain} with transactionId ${JSON.stringify(transactionId)} and source address ${vaultSwapSource.sourceAddress}`,
   );
 
-  return { transactionId, sourceAddress };
+  return { transactionId, sourceAddress: vaultSwapSource.sourceAddress };
 }
 
-export async function performVaultSwap<A = []>(
+export async function performVaultSwap<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
-  brokerUri: string,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
@@ -374,9 +417,22 @@ export async function performVaultSwap<A = []>(
   );
 
   try {
-    const { transactionId, sourceAddress } = await executeVaultSwap(
-      cf.logger,
-      brokerUri,
+    const vaultSwapSource = await prepareVaultSwapSource(cf, sourceAsset, amount);
+
+    // Start observing ccmEventEmitted before initiating the vault swap
+    const ccmEventEmitted = messageMetadata
+      ? observeCcmReceived(
+          sourceAsset,
+          destAsset,
+          destAddress,
+          messageMetadata,
+          vaultSwapSource.sourceAddress,
+        )
+      : Promise.resolve();
+
+    const { transactionId } = await executeVaultSwap(
+      cf,
+      vaultSwapSource,
       sourceAsset,
       destAsset,
       destAddress,
@@ -390,23 +446,35 @@ export async function performVaultSwap<A = []>(
     );
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapInitiated);
 
-    await observeSwapRequested(cf, sourceAsset, destAsset, transactionId, SwapRequestType.Regular);
-
+    const swapRequestedEvent = await observeSwapRequested(
+      cf,
+      sourceAsset,
+      destAsset,
+      transactionId,
+      SwapRequestType.Regular,
+    );
+    cf.debug(
+      `Observed Swapping.SwapRequested event with swapRequestId ${swapRequestedEvent.swapRequestId}`,
+    );
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
-    const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata, sourceAddress)
-      : Promise.resolve();
+    const swapRequestId = swapRequestedEvent.swapRequestId;
+    await cf.stepUntilEvent(
+      'Swapping.SwapRequestCompleted',
+      swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+    );
+    swapContext?.updateStatus(cf.logger, SwapStatus.SwapCompleted);
 
-    const balanceIncreaseHandle =
-      messageMetadata && isEvmAsset(destAsset)
-        ? // EVM CCM Swap outputs are sent to the contract address, so we avoid trying to detect the increase
-          // to avoid cross-talk between tests.
-          Promise.resolve(undefined)
-        : observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance);
+    cf.debug(
+      `Swap Request Completed. Waiting for egress scheduled event, balance increase and CCM emitted if CCM swap.`,
+    );
 
-    const [newBalance] = await Promise.all([balanceIncreaseHandle, ccmEventEmitted]);
+    await waitForEgressScheduled(cf, swapRequestId, swapContext);
 
+    const [newBalance] = await Promise.all([
+      observeBalanceIncrease(cf.logger, destAsset, destAddress, oldBalance),
+      ccmEventEmitted,
+    ]);
     cf.debug(`Swap success!${newBalance !== undefined ? ` New balance: ${newBalance}` : ''}!`);
 
     if (sourceAsset === 'Sol') {

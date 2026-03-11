@@ -12,6 +12,7 @@
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function main() {
   const wasmPath = process.argv[2];
@@ -22,12 +23,8 @@ async function main() {
   const arg4 = process.argv[4].trim();
   const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
 
-  await submitRuntimeUpgradeWithRestrictions(
-    globalLogger,
-    wasmPath,
-    semverRestriction,
-    percentNodesUpgraded,
-  );
+  const cf = await newChainflipIO(globalLogger, []);
+  await submitRuntimeUpgradeWithRestrictions(cf, wasmPath, semverRestriction, percentNodesUpgraded);
 }
 
 await runWithTimeoutAndExit(main(), 20);

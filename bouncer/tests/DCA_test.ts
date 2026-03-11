@@ -10,13 +10,13 @@ import {
   TransactionOrigin,
 } from 'shared/utils';
 import { send } from 'shared/send';
-import { observeEvents } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
-import { executeVaultSwap, requestNewSwap } from 'shared/perform_swap';
+import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
+import { swappingSwapExecuted } from '../generated/events/swapping/swapExecuted';
 
 async function testDCASwap<A = []>(
   parentCf: ChainflipIO<A>,
@@ -48,7 +48,7 @@ async function testDCASwap<A = []>(
   const destBalanceBefore = await getBalance(destAsset, destAddress);
   cf.debug(`DCA destination address: ${destAddress}`);
 
-  let swapRequestedHandle;
+  let swapRequestedEvent;
 
   if (!swapViaVault) {
     const swapRequest = await requestNewSwap(
@@ -64,21 +64,27 @@ async function testDCASwap<A = []>(
     );
 
     const depositChannelId = swapRequest.channelId;
-    swapRequestedHandle = observeSwapRequested(
+
+    // Deposit the asset
+    cf.debug(
+      `Sending ${amount} of ${inputAsset} to address: ${swapRequest.depositAddress}  destAddress: ${destAddress}`,
+    );
+    await send(cf.logger, inputAsset, swapRequest.depositAddress, amount.toString());
+    cf.debug(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
+
+    swapRequestedEvent = await observeSwapRequested(
       cf,
       inputAsset,
       destAsset,
       { type: TransactionOrigin.DepositChannel, channelId: depositChannelId },
       SwapRequestType.Regular,
     );
-
-    // Deposit the asset
-    await send(cf.logger, inputAsset, swapRequest.depositAddress, amount.toString());
-    cf.debug(`Sent ${amount} ${inputAsset} to ${swapRequest.depositAddress}`);
   } else {
+    const subcf = cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+    const source = await prepareVaultSwapSource(subcf, inputAsset, amount.toString());
     const { transactionId } = await executeVaultSwap(
-      cf.logger,
-      '//BROKER_1',
+      subcf,
+      source,
       inputAsset,
       destAsset,
       destAddress,
@@ -92,7 +98,7 @@ async function testDCASwap<A = []>(
     cf.debug(`Vault swap executed, tx id: ${transactionId}`);
 
     // Look after Swap Requested of data.origin.Vault.tx_hash
-    swapRequestedHandle = observeSwapRequested(
+    swapRequestedEvent = await observeSwapRequested(
       cf,
       inputAsset,
       destAsset,
@@ -101,41 +107,34 @@ async function testDCASwap<A = []>(
     );
   }
 
-  const swapRequestId = (await swapRequestedHandle).swapRequestId;
+  const swapRequestId = swapRequestedEvent.swapRequestId;
   cf.debug(
     `${inputAsset} swap ${swapViaVault ? 'via vault' : ''}, swapRequestId: ${swapRequestId}`,
   );
 
-  // Wait for the swap to complete
+  // Find the `SwapExecuted` event of the first chunk
+  await cf.stepUntilEvent(
+    `Swapping.SwapExecuted`,
+    swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
+  );
+  cf.debug(`Chunk 1/${numberOfChunks} complete`);
+
+  // Find the remaining chunks
+  for (let i = 2; i <= numberOfChunks; i++) {
+    // Exactly step chunkIntervalBlocks. This also checks that the chunk interval is correctly observed.
+    await cf.stepNBlocks(chunkIntervalBlocks);
+    await cf.expectEvent(
+      `Swapping.SwapExecuted`,
+      swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
+    );
+    cf.debug(`Chunk ${i}/${numberOfChunks} complete`);
+  }
+
+  // Wait for SwapRequestCompleted, usually it appears at the same block of the last chunk.
   await cf.stepUntilEvent(
     `Swapping.SwapRequestCompleted`,
     swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
   );
-
-  // Find the `SwapExecuted` events for this swap.
-  const historicalCheckBlocks = numberOfChunks * chunkIntervalBlocks + 10;
-  const observeSwapExecutedEvents = await observeEvents(cf.logger, `swapping:SwapExecuted`, {
-    test: (event) => BigInt(event.data.swapRequestId.replaceAll(',', '')) === swapRequestId,
-    historicalCheckBlocks,
-    stopAfter: { blocks: historicalCheckBlocks },
-  }).events;
-
-  // Check that there were the correct number of SwapExecuted events, one for each chunk.
-  assert.strictEqual(
-    observeSwapExecutedEvents.length,
-    numberOfChunks,
-    `Unexpected number of SwapExecuted events: expected ${numberOfChunks}, found ${observeSwapExecutedEvents.length}`,
-  );
-
-  // Check the chunk interval of all chunks
-  for (let i = 1; i < numberOfChunks; i++) {
-    const interval = observeSwapExecutedEvents[i].block - observeSwapExecutedEvents[i - 1].block;
-    assert.strictEqual(
-      interval,
-      chunkIntervalBlocks,
-      `Unexpected chunk interval between chunk ${i - 1} & ${i}`,
-    );
-  }
 
   cf.debug(`Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`);
 
@@ -147,7 +146,7 @@ export async function testDCASwaps(testContext: TestContext) {
   await cf.all([
     (subcf) => testDCASwap(subcf, Assets.Eth, 1, 2, 2),
     (subcf) => testDCASwap(subcf, Assets.ArbEth, 1, 4, 1),
-    (subcf) => testDCASwap(subcf, Assets.Sol, 1, 2, 3, true),
-    (subcf) => testDCASwap(subcf, Assets.SolUsdc, 1, 2, 1, true),
+    (subcf) => testDCASwap(subcf, Assets.Sol, 10, 2, 3, true),
+    (subcf) => testDCASwap(subcf, Assets.SolUsdc, 10, 2, 1, true),
   ]);
 }
