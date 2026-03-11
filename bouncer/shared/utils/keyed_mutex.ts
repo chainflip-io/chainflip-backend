@@ -1,12 +1,19 @@
 import { Mutex, MutexInterface } from 'async-mutex';
+import { TrackedMutex } from 'shared/utils/tracked_mutex';
 
 export class KeyedMutex {
-  private map = new Map<string, Mutex>();
+  private map = new Map<string, TrackedMutex>();
 
-  private get(key: string): Mutex {
+  private readonly name: string;
+
+  constructor(name?: string) {
+    this.name = name ?? 'KeyedMutex';
+  }
+
+  private get(key: string): TrackedMutex {
     let m = this.map.get(key);
     if (!m) {
-      m = new Mutex();
+      m = new TrackedMutex(this.name, key);
       this.map.set(key, m);
     }
     return m;
@@ -15,14 +22,16 @@ export class KeyedMutex {
   /**
    * Returns a proxy that allows you to call methods on the mutex directly.
    * This is useful for chaining calls like `mutex.for(key).runExclusive(...)`.
+   *
+   * Note: `runExclusive` calls through the proxy are tracked.
    */
   for(key: string): Mutex {
-    const mutex = this.get(key);
-    return new Proxy(mutex, {
-      get: (target, prop) => {
-        const value = target[prop as keyof Mutex];
+    const tracked = this.get(key);
+    return new Proxy(tracked as unknown as Mutex, {
+      get: (_target, prop) => {
+        const value = tracked[prop as keyof TrackedMutex];
         if (typeof value === 'function') {
-          return value.bind(target);
+          return value.bind(tracked);
         }
         return value;
       },

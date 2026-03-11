@@ -42,6 +42,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { globalLogger, Logger, loggerError, throwError } from 'shared/utils/logger';
 import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
+import { TrackedMutex } from 'shared/utils/tracked_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
   cfChainsAddressForeignChainAddress,
@@ -60,7 +61,7 @@ import bitcoin from 'bitcoinjs-lib';
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
 
-export const cfMutex = new KeyedMutex();
+export const cfMutex = new KeyedMutex('cfMutex');
 export const btcClientMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
@@ -433,8 +434,8 @@ export const deferredPromise = <T>(): {
 
 export { sleep };
 
-export const polkadotSigningMutex = new Mutex();
-export const assethubSigningMutex = new Mutex();
+export const polkadotSigningMutex = new TrackedMutex('polkadotSigningMutex');
+export const assethubSigningMutex = new TrackedMutex('assethubSigningMutex');
 
 const toLowerCase = <const T extends string>(string: T) => string.toLowerCase() as Lowercase<T>;
 
