@@ -30,6 +30,7 @@ gh release download \
 
 unzip -u ${ZIP_FILE} \
     'IStateChainGateway.json' \
+    'StateChainGateway.json' \
     'IVault.json' \
     'IKeyManager.json' \
     'Deposit_bytecode.json' \

@@ -1,4 +1,3 @@
-import { sendDot } from 'shared/send_dot';
 import { sendBtc } from 'shared/send_btc';
 import { sendErc20 } from 'shared/send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from 'shared/send_evm';
@@ -36,8 +35,6 @@ export async function send(
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
       return sendEvmNative(logger, 'Arbitrum', address, amount);
-    case 'Dot':
-      return sendDot(address, amount);
     case 'Sol':
       return sendSol(logger, address, amount);
     case 'Usdc':

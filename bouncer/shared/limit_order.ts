@@ -1,5 +1,4 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
-import { amountToFineAmount, assetDecimals } from 'shared/utils';
+import { amountToFineAmount, assetDecimals, Asset } from 'shared/utils';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
 export async function limitOrder<A extends WithLpAccount>(

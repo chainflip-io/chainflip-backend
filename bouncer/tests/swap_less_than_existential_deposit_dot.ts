@@ -1,8 +1,8 @@
-import { getDotBalance } from 'shared/get_dot_balance';
 import { performAndTrackSwap } from 'shared/perform_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { getSwapRate, newAssetAddress } from 'shared/utils';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { getHubDotBalance } from '../shared/get_hub_balance';
 
 const DOT_EXISTENTIAL_DEPOSIT = 1;
 
@@ -30,13 +30,13 @@ export async function swapLessThanED(testContext: TestContext) {
       'HubDot',
       '!testing less than ED output for dot swaps!' + inputAmount + outputAmount,
     );
-    cf.debug(`Generated Dot address: ${address}`);
+    cf.debug(`Generated HubDot address: ${address}`);
 
     await performAndTrackSwap(parentCf, 'Usdc', 'HubDot', address, inputAmount);
 
     // if for some reason the balance after swapping is > 0 it means that the output was larger than
     // ED, so we'll retry the test with a lower input
-    if (parseFloat(await getDotBalance(address)) > 0) {
+    if (parseFloat(await getHubDotBalance(address)) > 0) {
       cf.debug(`Swap output was more than ED, retrying with less...`);
       inputAmount = (parseFloat(inputAmount) / 3).toString();
     } else {

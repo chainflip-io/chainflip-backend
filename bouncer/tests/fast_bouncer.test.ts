@@ -1,7 +1,6 @@
 import { describe } from 'vitest';
 import { testBoostingSwap } from 'tests/boost';
 import { testVaultSwap } from 'tests/vault_swap_tests';
-import { testPolkadotRuntimeUpdate } from 'tests/polkadot_runtime_update';
 import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
@@ -74,11 +73,6 @@ describe('ConcurrentTests', () => {
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);
-
-  // Tests that only work if there is more than one node
-  if (numberOfNodes > 1) {
-    concurrentTest('PolkadotRuntimeUpdate', testPolkadotRuntimeUpdate, 1300 * ciTimeoutFactor);
-  }
 
   // Post test checks
   serialTest('CheckSolEventAccountsClosure', checkSolEventAccountsClosure, 5 * ciTimeoutFactor);
