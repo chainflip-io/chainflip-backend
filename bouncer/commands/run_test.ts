@@ -5,7 +5,7 @@
 // It will find and run the test function (using vitest) in the test file provided as an argument.
 //
 // For example: ./commands/run_test.ts ./tests/boost.ts
-// This is the equivalent of running `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
+// This is the equivalent of running `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=1000 --hideSkippedTests run -t "BoostingForAsset"`
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
@@ -78,7 +78,7 @@ if (!matchingTestName) {
   process.exit(1);
 } else {
   execSync(
-    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
+    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=1000 --hideSkippedTests run -t "${matchingTestName}"`,
     { stdio: 'inherit' },
   );
 }
