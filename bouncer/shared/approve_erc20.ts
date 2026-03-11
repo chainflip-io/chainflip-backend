@@ -29,17 +29,11 @@ export async function approveErc20(
 
   logger.debug('Approving ' + amount + ' ' + asset + ' to ' + toAddress);
 
-  // Use the default whale keypair if no wallet is provided
-  if (evmWallet) {
-    await signAndSendTxEvm(
-      logger,
-      chain,
-      { to: tokenContractAddress, value: '0', data: txData },
-      {
-        privateKey: evmWallet!.privateKey,
-      },
-    );
-  } else {
-    await signAndSendTxEvm(logger, chain, { to: tokenContractAddress, value: '0', data: txData });
-  }
+  // Uses the default whale keypair if no wallet is provided
+  await signAndSendTxEvm(
+    logger,
+    chain,
+    { to: tokenContractAddress, value: '0', data: txData },
+    { privateKey: evmWallet?.privateKey },
+  );
 }
