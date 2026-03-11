@@ -1,5 +1,5 @@
 import { decodeDotAddressForContract, isPolkadotAsset, newAssetAddress, Asset } from 'shared/utils';
-import { brokerRequestSwapDepositAddress } from 'shared/broker_rpcs';
+import { brokerRequestSwapDepositAddress } from 'shared/utils/broker_api';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 const defaultCommissionBps = 100; // 1%

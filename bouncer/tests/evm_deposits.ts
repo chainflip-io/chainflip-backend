@@ -1,4 +1,4 @@
-import { brokerEncodeCfParameters } from 'shared/broker_rpcs';
+import { brokerEncodeCfParameters } from 'shared/utils/broker_api';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import BigNumber from 'bignumber.js';
