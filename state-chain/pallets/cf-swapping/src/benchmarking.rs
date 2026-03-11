@@ -335,6 +335,17 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn init_network_fee_swap_request() {
+		#[block]
+		{
+			Pallet::<T>::init_network_fee_swap_request(Asset::Usdc, 1_000_000);
+		}
+
+		// Verify the swap request was scheduled.
+		assert!(SwapRequests::<T>::iter().next().is_some());
+	}
+
+	#[benchmark]
 	fn bind_broker_fee_withdrawal_address() {
 		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
 			AccountRole::Broker,
