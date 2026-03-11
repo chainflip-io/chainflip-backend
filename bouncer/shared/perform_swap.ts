@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { HDNodeWallet } from 'ethers';
 import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
@@ -23,6 +22,7 @@ import {
   newAssetAddress,
   getContractAddress,
   decodeDispatchError,
+  Asset,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -198,7 +198,7 @@ export async function doPerformSwap<A = []>(
     ]);
 
     const chain = chainFromAsset(sourceAsset);
-    if (chain !== 'Bitcoin' && chain !== 'Polkadot' && chain !== 'Assethub') {
+    if (chain !== 'Bitcoin' && chain !== 'Assethub') {
       cf.debug(`Waiting deposit fetch ${depositAddress}`);
       await observeFetch(sourceAsset, depositAddress);
     }

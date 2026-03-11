@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { randomBytes } from 'crypto';
 import assert from 'assert';
 import {
@@ -8,6 +7,7 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  Asset,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';

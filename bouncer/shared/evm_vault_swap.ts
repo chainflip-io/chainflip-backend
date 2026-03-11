@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
@@ -14,6 +13,7 @@ import {
   decodeDotAddressForContract,
   getWeb3,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -107,9 +107,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     cf.requirements.account.keypair.address,
     stateChainAssetFromAsset(sourceAsset),
     stateChainAssetFromAsset(destAsset),
-    destChain === Chains.Polkadot || destChain === Chains.Assethub
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress,
+    destChain === Chains.Assethub ? decodeDotAddressForContract(destAddress) : destAddress,
     brokerCommissionBps,
     extraParameters,
     messageMetadata && {

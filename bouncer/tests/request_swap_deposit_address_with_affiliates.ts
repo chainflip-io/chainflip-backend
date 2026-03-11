@@ -3,7 +3,8 @@ import * as base58 from '@chainflip/utils/base58';
 import { isHex } from '@chainflip/utils/string';
 import { bytesToHex, hexToBytes } from '@chainflip/utils/bytes';
 import { ApiPromise, Keyring } from '@polkadot/api';
-import { Asset, broker, chainConstants, getInternalAsset } from '@chainflip/cli';
+import { AssetSymbol as Asset, chainConstants, getInternalAsset } from '@chainflip/utils/chainflip';
+import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import assert from 'assert';
 import { z } from 'zod';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -18,8 +19,6 @@ function toEncodedAddress(chain: Chain, address: string) {
     case 'Ethereum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Eth: hexToBytes(address) };
-    case 'Polkadot':
-      return { Dot: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Assethub':
       return { Hub: isHex(address) ? hexToBytes(address) : ss58.decode(address).data };
     case 'Solana':
@@ -37,12 +36,16 @@ export async function depositChannelCreation(testContext: TestContext) {
 
   const account1 = keyring.addFromUri('//BROKER_2');
   const account2 = keyring.addFromUri('//BROKER_1');
-  type SwapDetails = Omit<
-    Parameters<(typeof broker)['requestSwapDepositAddress']>[0],
-    'srcChain' | 'destChain'
-  > & {
+  type SwapDetails = {
     srcAsset: { asset: Asset; chain: Chain };
     destAsset: { asset: Asset; chain: Chain };
+    destAddress: string;
+    commissionBps?: number;
+    ccmParams?: CcmDepositMetadata;
+    maxBoostFeeBps?: number;
+    affiliates?: { account: string; commissionBps: number }[];
+    fillOrKillParams?: FillOrKillParamsX128;
+    dcaParams?: DcaParams;
   };
 
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));

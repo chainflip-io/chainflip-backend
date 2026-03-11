@@ -33,13 +33,6 @@ export async function setMinimumDeposit(logger: Logger, asset: Asset, amount: bi
         ]),
       );
       break;
-    case 'Dot':
-      await submitGovernanceExtrinsic((api) =>
-        api.tx.polkadotIngressEgress.updatePalletConfig([
-          { SetMinimumDepositPolkadot: { asset, minimumDeposit: amount } },
-        ]),
-      );
-      break;
     case 'HubDot':
       await submitGovernanceExtrinsic((api) =>
         api.tx.assethubIngressEgress.updatePalletConfig([

@@ -1,4 +1,4 @@
-import { Asset, Chain } from '@chainflip/cli';
+import { AssetSymbol as Asset, ChainflipChain as Chain } from '@chainflip/utils/chainflip';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { amountToFineAmount, getContractAddress, getWeb3 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';

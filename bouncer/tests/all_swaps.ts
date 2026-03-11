@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { SwapParams } from 'shared/perform_swap';
 import { newCcmMetadata, newVaultSwapCcmMetadata, testSwap, testVaultSwap } from 'shared/swapping';
 import { btcAddressTypes } from 'shared/new_btc_address';
@@ -8,6 +7,7 @@ import {
   chainFromAsset,
   VaultSwapParams,
   vaultSwapSupportedChains,
+  Asset,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
@@ -78,14 +78,18 @@ export function testAllSwaps(timeoutPerSwap: number) {
     return items[Math.floor(Math.random() * items.length)];
   }
 
+  // TODO: properly include TRON and BSC assets once they are fully integrated
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
-  const AssetsWithoutAssethubAndDot = Object.values(Assets).filter(
-    (id) => !id.startsWith('Hub') && id !== 'Dot',
+  const AssetsWithoutAssethub = Object.values(Assets).filter(
+    (id) =>
+      chainFromAsset(id) !== 'Assethub' &&
+      chainFromAsset(id) !== 'Bsc' &&
+      chainFromAsset(id) !== 'Tron',
   );
 
-  AssetsWithoutAssethubAndDot.sort().forEach((sourceAsset) => {
-    AssetsWithoutAssethubAndDot.sort()
+  AssetsWithoutAssethub.sort().forEach((sourceAsset) => {
+    AssetsWithoutAssethub.sort()
       .filter((destAsset) => sourceAsset !== destAsset)
       .forEach((destAsset) => {
         // Regular swaps
@@ -116,7 +120,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.sort().forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsWithoutAssethubAndDot), testSwap);
+    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
   });
 
   for (const swap of allSwaps) {

@@ -1,5 +1,4 @@
-import { Chain } from '@chainflip/cli';
-import { fineAmountToAmount, getWeb3 } from 'shared/utils';
+import { fineAmountToAmount, getWeb3, Chain } from 'shared/utils';
 import { getErc20abi } from 'shared/contract_interfaces';
 
 const erc20abi = await getErc20abi();

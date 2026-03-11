@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from 'polkadot/util-crypto';
@@ -8,6 +7,7 @@ import {
   getContractAddress,
   solVersionedCcmAdditionalDataCodec,
   newAssetAddress,
+  Asset,
 } from 'shared/utils';
 import { BtcAddressType } from 'shared/new_btc_address';
 import { CcmDepositMetadata } from 'shared/new_swap';

@@ -1,4 +1,3 @@
-import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
@@ -12,6 +11,8 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
+  Asset,
+  Chain,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';

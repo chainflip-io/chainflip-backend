@@ -17,8 +17,11 @@ const CF_SOL_PROGRAM_IDL_TAG = 'v1.3.0';
 export const getErc20abi = loadContractCached(
   '../contract-interfaces/eth-contract-abis/IERC20.json',
 );
-export const getGatewayAbi = loadContractCached(
+export const getIStateChainGatewayAbi = loadContractCached(
   `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/IStateChainGateway.json`,
+);
+export const getStateChainGatewayAbi = loadContractCached(
+  `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/StateChainGateway.json`,
 );
 export const getCFTesterAbi = loadContractCached(
   `../contract-interfaces/eth-contract-abis/${CF_ETH_CONTRACT_ABI_TAG}/CFTester.json`,

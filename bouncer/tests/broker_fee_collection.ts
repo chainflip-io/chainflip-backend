@@ -1,6 +1,5 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { InternalAsset as Asset } from '@chainflip/cli';
 
 import {
   decodeDotAddressForContract,
@@ -16,6 +15,8 @@ import {
   getFreeBalance,
   Assets,
   chainFromAsset,
+  Chains,
+  Asset,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -88,7 +89,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     seed ?? randomBytes(32).toString('hex'),
   );
   const observeDestinationAddress =
-    inputAsset === Assets.Dot
+    chainFromAsset(inputAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress;
   cf.debug(`${inputAsset} destinationAddress:`, destinationAddress);
