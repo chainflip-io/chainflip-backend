@@ -230,7 +230,6 @@ export async function testFillOrKill(testContext: TestContext) {
   await cf.all([
     (subcf) => testMinPriceRefund(subcf, Assets.Flip, 500),
     (subcf) => testMinPriceRefund(subcf, Assets.Eth, 1),
-    // subcf => testMinPriceRefund(subcf, Assets.HubDot, 100), // flaky, so we don't test HubDot
     (subcf) => testMinPriceRefund(subcf, Assets.Btc, 0.1),
     (subcf) => testMinPriceRefund(subcf, Assets.Usdc, 1000),
     (subcf) => testMinPriceRefund(subcf, Assets.Sol, 10),
