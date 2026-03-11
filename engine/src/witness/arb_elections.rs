@@ -197,9 +197,10 @@ impl<Chain: EvmBlockRangeChainType<W>, W: RangeWitnessConfig> EvmEventClient<Cha
 					.parse_log(unparsed_log)
 					.map_err(|err| {
 						tracing::info!(
-						    "event for contract {} could not be decoded in block range {:?}: {err}",
-						    contract_address, query.blocks_heights
-					    )
+							"event for contract {} could not be decoded in block range {:?}: {err}",
+							contract_address,
+							query.blocks_heights
+						)
 					})
 					.ok()
 			})
