@@ -27,7 +27,7 @@ export async function sendErc20(
 
     logger.debug(`Transferring ${amount} ${symbol} to ${destinationAddress}`);
 
-    return await signAndSendTxEvm(logger, chain, contractAddress, '0', txData, undefined);
+    return await signAndSendTxEvm(logger, chain, { to: contractAddress, value: '0', data: txData });
   } catch (error) {
     // log the error and rethrow
     logger.error(`sendErc20 failed: ${error instanceof Error ? error.message : String(error)}`, {

@@ -120,14 +120,18 @@ async function getEvmTxRevertReason(chain: Chain, txHash: string): Promise<strin
 export async function signAndSendTxEvm(
   logger: Logger,
   chain: Chain,
-  to: string,
-  value?: string,
-  data?: string,
-  gas = chain === 'Arbitrum' ? 5000000 : 200000,
+  tx: {
+    to: string;
+    value?: string;
+    data?: string;
+    gas?: number;
+  },
   options: {
     privateKey?: string;
   } = {},
 ) {
+  const { to, value, data } = tx;
+  const gas = tx.gas ?? (chain === 'Arbitrum' ? 5000000 : 200000);
   const semaphore = chain === 'Arbitrum' ? arbSemaphore : ethSemaphore;
 
   return semaphore.runExclusive(async () => {
@@ -205,7 +209,7 @@ export async function sendEvmNative(
   ethAmount: string,
 ) {
   const weiAmount = amountToFineAmount(ethAmount, assetDecimals('Eth'));
-  return signAndSendTxEvm(logger, chain, evmAddress, weiAmount, undefined, undefined);
+  return signAndSendTxEvm(logger, chain, { to: evmAddress, value: weiAmount });
 }
 
 const EVM_BASE_GAS_LIMIT = 21000;

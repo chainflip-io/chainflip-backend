@@ -141,13 +141,11 @@ async function testTxMultipleVaultSwaps<A = []>(
     )
     .encodeABI();
 
-  const receipt = await signAndSendTxEvm(
-    cf.logger,
-    chainFromAsset(sourceAsset),
-    cfTesterAddress,
-    (amount * BigInt(numSwaps)).toString(),
-    txData,
-  );
+  const receipt = await signAndSendTxEvm(cf.logger, chainFromAsset(sourceAsset), {
+    to: cfTesterAddress,
+    value: (amount * BigInt(numSwaps)).toString(),
+    data: txData,
+  });
 
   const txOrigin: TransactionOriginId = {
     type: TransactionOrigin.VaultSwapEvm,
@@ -273,7 +271,7 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
       gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
     };
 
-    const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx.to, tx.value, tx.data, tx.gas, {
+    const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx, {
       privateKey: evmWallet.privateKey,
     });
 
@@ -365,13 +363,11 @@ async function testEncodeCfParameters<A = []>(
     )
     .encodeABI();
 
-  const receipt = await signAndSendTxEvm(
-    cf.logger,
-    chainFromAsset(sourceAsset),
-    cfVaultAddress,
-    amount.toString(),
-    txData,
-  );
+  const receipt = await signAndSendTxEvm(cf.logger, chainFromAsset(sourceAsset), {
+    to: cfVaultAddress,
+    value: amount.toString(),
+    data: txData,
+  });
 
   cf.debug(`Vault swap transaction hash: ${receipt.transactionHash}`);
 

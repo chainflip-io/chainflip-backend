@@ -102,5 +102,5 @@ export async function sendViaCfTester(
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEvm(logger, chain, cfTesterAddress, value, txData);
+  await signAndSendTxEvm(logger, chain, { to: cfTesterAddress, value, data: txData });
 }

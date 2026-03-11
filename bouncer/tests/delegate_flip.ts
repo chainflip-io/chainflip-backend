@@ -66,7 +66,7 @@ async function encodeAndSendDelegationApiCall(
     gas: 100000,
   };
 
-  const receipt = await signAndSendTxEvm(logger, 'Ethereum', tx.to, tx.value, tx.data, tx.gas, {
+  const receipt = await signAndSendTxEvm(logger, 'Ethereum', tx, {
     privateKey: evmWallet.privateKey,
   });
 

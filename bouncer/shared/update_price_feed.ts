@@ -87,7 +87,7 @@ async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, pr
     priceFeedAddress,
   );
   const txData = priceFeedContract.methods.updatePrice(finePrice).encodeABI();
-  await signAndSendTxEvm(logger, chain, priceFeedAddress, '0', txData);
+  await signAndSendTxEvm(logger, chain, { to: priceFeedAddress, value: '0', data: txData });
 }
 
 export async function updatePriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
