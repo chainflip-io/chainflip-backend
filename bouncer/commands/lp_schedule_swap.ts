@@ -13,12 +13,12 @@
  * ./commands/lp_schedule_swap.ts Eth Flip 20
  */
 import {
+  cfMutex,
   amountToFineAmount,
   assetDecimals,
   Assets,
   createStateChainKeypair,
   handleSubstrateError,
-  cfMutex,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { globalLogger as logger } from 'shared/utils/logger';

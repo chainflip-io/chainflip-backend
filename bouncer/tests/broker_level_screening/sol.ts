@@ -2,31 +2,30 @@ import { InternalAsset } from '@chainflip/cli';
 import {
   newAssetAddress,
   sleep,
-  createStateChainKeypair,
   chainFromAsset,
-  ingressEgressPalletForChain,
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
   Chains,
+  decodeSolAddress,
 } from 'shared/utils';
-import { observeEvent } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/sol_vault_swap';
-import { ChainflipIO } from 'shared/utils/chainflip_io';
-
-const brokerUri = '//BROKER_1';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+import { solanaIngressEgressTransactionRejectedByBroker } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
+import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngressEgress/depositFinalised';
 
 export async function testSol<A = []>(
-  cf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
   ccmRefund = false,
 ) {
+  const cf = parentCf.withChildLogger(`${sourceAsset}_BrokerLevelScreening_testSol`);
   cf.info(`Testing broker level screening for Sol ${sourceAsset}...`);
 
   const chain = chainFromAsset(sourceAsset);
@@ -34,8 +33,6 @@ export async function testSol<A = []>(
     // This should always be Sol
     throw new Error('Expected chain to be Solana');
   }
-  const ingressEgressPallet = ingressEgressPalletForChain(chain);
-
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
   cf.debug(`BTC destination address: ${destinationAddressForBtc}`);
@@ -63,16 +60,6 @@ export async function testSol<A = []>(
     refundParameters,
   );
 
-  cf.debug(`Sending ${sourceAsset} tx to reject...`);
-  const result = await send(cf.logger, sourceAsset, swapParams.depositAddress);
-  const txHash = result.transaction.signatures[0] as string;
-  cf.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
-
-  await reportFunction(txHash);
-  cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
-
-  await observeEvent(cf.logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
-
   const ccmEventEmitted = refundParameters.refundCcmMetadata
     ? observeCcmReceived(
         sourceAsset,
@@ -81,6 +68,40 @@ export async function testSol<A = []>(
         refundParameters.refundCcmMetadata,
       )
     : Promise.resolve();
+
+  cf.debug(`Sending ${sourceAsset} tx to reject...`);
+  const result = await send(cf.logger, sourceAsset, swapParams.depositAddress);
+  const txHash = result.transaction.signatures[0] as string;
+  cf.debug(`Sent ${sourceAsset} tx, hash is ${txHash}`);
+
+  await reportFunction(txHash);
+  cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
+
+  const resultEvent = await cf.stepUntilOneEventOf({
+    transactionRejected: {
+      name: 'SolanaIngressEgress.TransactionRejectedByBroker',
+      schema: solanaIngressEgressTransactionRejectedByBroker.refine(
+        (event) =>
+          event.txId.__kind === 'Channel' &&
+          event.txId.value === decodeSolAddress(swapParams.depositAddress),
+      ),
+    },
+    depositFinalized: {
+      name: 'SolanaIngressEgress.DepositFinalised',
+      schema: solanaIngressEgressDepositFinalised.refine(
+        (event) =>
+          event.depositDetails.__kind === 'Channel' &&
+          event.depositDetails.value === decodeSolAddress(swapParams.depositAddress),
+      ),
+    },
+  });
+
+  if (resultEvent.key === 'depositFinalized') {
+    throw new Error(
+      `Failed to reject Solana tx ${txHash}. The transaction was ingressed instead of being rejected.
+       It might be because the deposit monitor was late in reporting the tx and the transaction ended up being swapped instead`,
+    );
+  }
 
   await Promise.all([
     observeBalanceIncrease(
@@ -98,10 +119,12 @@ export async function testSol<A = []>(
 }
 
 export async function testSolVaultSwap<A = []>(
-  cf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
+  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
+
   const chain = chainFromAsset(sourceAsset);
   if (chain !== Chains.Solana) {
     // This should always be Sol
@@ -119,14 +142,11 @@ export async function testSolVaultSwap<A = []>(
   cf.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
 
   const receipt = await executeSolVaultSwap(
-    cf.logger,
+    cf,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
-    {
-      account: createStateChainKeypair(brokerUri).address,
-      commissionBps: 0.0,
-    },
+    0.0,
     undefined,
     undefined,
     undefined,
@@ -146,7 +166,14 @@ export async function testSolVaultSwap<A = []>(
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
   // just wait for the funds to arrive at the refund address
-  // await observeEvent(`${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  // await cf.stepUntilEvent(
+  //   'SolanaIngressEgress.TransactionRejectedByBroker',
+  //   solanaIngressEgressTransactionRejectedByBroker.refine(
+  //     (event) =>
+  //       event.txId.__kind === 'VaultSwapAccount' &&
+  //       event.txId.value[0] === decodeSolAddress(receipt.accountAddress.toString()), // fix decoding
+  //   ),
+  // );
 
   let receivedRefund = false;
   for (let i = 0; i < MAX_RETRIES; i++) {

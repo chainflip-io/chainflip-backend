@@ -1,25 +1,21 @@
 import axios from 'axios';
 import { Chain, InternalAsset } from '@chainflip/cli';
-import Web3 from 'web3';
 import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
+  btcClientMutex,
   newAssetAddress,
   sleep,
-  handleSubstrateError,
   chainGasAsset,
-  cfMutex,
-  createStateChainKeypair,
   isWithinOnePercent,
-  amountToFineAmountBigInt,
-  getEvmEndpoint,
+  getWeb3,
   chainFromAsset,
-  ingressEgressPalletForChain,
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
-  btcClientMutex,
   getBtcClient,
   getChainContractId,
+  amountToFineAmount,
+  assetDecimals,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
@@ -29,12 +25,23 @@ import { TestContext } from 'shared/utils/test_context';
 import { getIsoTime, globalLogger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
 import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
-import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import {
+  ChainflipIO,
+  fullAccountFromUri,
+  newChainflipIO,
+  WithBrokerAccount,
+  WithLpAccount,
+} from 'shared/utils/chainflip_io';
 import { testSol, testSolVaultSwap } from 'tests/broker_level_screening/sol';
+import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
+import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
+import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
+import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
+import { arbitrumIngressEgressTransactionRejectedByBroker } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
 
 const brokerUri = '//BROKER_1';
 
@@ -48,7 +55,7 @@ async function observeBtcAddressBalanceChange(address: string): Promise<boolean>
   const MAX_RETRIES = 100;
   const initialBalance = await getBtcBalance(address);
   for (let i = 0; i < MAX_RETRIES; i++) {
-    await sleep(1000);
+    await sleep(3000);
     const balance = await getBtcBalance(address);
     if (balance !== initialBalance) {
       return Promise.resolve(true);
@@ -70,7 +77,7 @@ async function postToDepositMonitor(portAndRoute: string, body: string | object)
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      timeout: 5000,
+      timeout: 20000,
     })
     .then((res) => res.data)
     .catch((error) => {
@@ -123,7 +130,7 @@ async function setTxRiskScore(txid: string, score: number) {
  */
 async function ensureHealth() {
   const response = await postToDepositMonitor(':6060/health', {});
-  globalLogger.info(`DM health response is: ${response}`);
+  globalLogger.info(`DM health response is: ${JSON.stringify(response)}`);
   if (response.starting === true || response.all_processors === false) {
     throw new Error(
       `Deposit monitor is running, but not healthy. It's response was: ${JSON.stringify(response)}`,
@@ -145,7 +152,7 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
   }
 
   const MAX_RETRIES = 100;
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   let contractDeployed = false;
   for (let i = 0; i < MAX_RETRIES; i++) {
     const bytecode = await web3.eth.getCode(depositAddress);
@@ -217,19 +224,16 @@ async function brokerLevelScreeningTestBtc<A = []>(
  * @param refundAddress - The address to refund to.
  * @returns - The the channel id of the deposit channel.
  */
-async function brokerLevelScreeningTestBtcVaultSwap(
-  testContext: TestContext,
+async function brokerLevelScreeningTestBtcVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   amount: string,
   doBoost: boolean,
   refundAddress: string,
   reportFunction: (txId: string) => Promise<void>,
 ): Promise<void> {
-  const logger = testContext.logger;
-
   const destinationAddressForUsdc = await newAssetAddress('Usdc');
   const txId = await buildAndSendBtcVaultSwap(
-    logger,
-    brokerUri,
+    cf,
     parseFloat(amount),
     'Usdc',
     destinationAddressForUsdc,
@@ -240,22 +244,70 @@ async function brokerLevelScreeningTestBtcVaultSwap(
   await reportFunction(txId);
 }
 
-async function testEvm<A = []>(
+async function waitForEvmTransactionRejection<A = []>(
   cf: ChainflipIO<A>,
+  chain: Chain,
+  txHash: string,
+) {
+  let resultEvent;
+  if (chain === 'Ethereum') {
+    resultEvent = await cf.stepUntilOneEventOf({
+      transactionRejected: {
+        name: 'EthereumIngressEgress.TransactionRejectedByBroker',
+        schema: ethereumIngressEgressTransactionRejectedByBroker.refine(
+          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+        ),
+      },
+      depositFinalized: {
+        name: 'EthereumIngressEgress.DepositFinalized',
+        schema: ethereumIngressEgressDepositFinalised.refine(
+          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+        ),
+      },
+    });
+  } else if (chain === 'Arbitrum') {
+    resultEvent = await cf.stepUntilOneEventOf({
+      transactionRejected: {
+        name: 'ArbitrumIngressEgress.TransactionRejectedByBroker',
+        schema: arbitrumIngressEgressTransactionRejectedByBroker.refine(
+          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+        ),
+      },
+      depositFinalized: {
+        name: 'ArbitrumIngressEgress.DepositFinalized',
+        schema: arbitrumIngressEgressDepositFinalised.refine(
+          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+        ),
+      },
+    });
+  } else {
+    throw Error('Unsupported broker level screening EVM chain');
+  }
+
+  if (resultEvent.key === 'depositFinalized') {
+    throw new Error(
+      `Failed to reject ${chain} tx ${txHash}. The transaction was ingressed instead of being rejected.
+       It might be because the deposit monitor was late in reporting the tx and the transaction ended up being swapped instead`,
+    );
+  }
+}
+
+async function testEvm<A = []>(
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
   ccmRefund = false,
 ) {
+  const cf = parentCf.withChildLogger(`${sourceAsset}_BrokerLevelScreening_TestEvm`);
   cf.info(`Testing broker level screening for Evm ${sourceAsset}...`);
 
   const chain = chainFromAsset(sourceAsset);
-  const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
   const destinationAddressForBtc = await newAssetAddress('Btc');
 
   cf.debug(`BTC destination address: ${destinationAddressForBtc}`);
 
-  const ethereumRefundAddress = await newAssetAddress('Eth', undefined, undefined, ccmRefund);
+  const ethereumRefundAddress = await newAssetAddress(sourceAsset, undefined, undefined, ccmRefund);
   const initialRefundAddressBalance = await getBalance(sourceAsset, ethereumRefundAddress);
 
   const refundCcmMetadata = ccmRefund ? await newCcmMetadata(sourceAsset) : undefined;
@@ -278,10 +330,29 @@ async function testEvm<A = []>(
     refundParameters,
   );
 
+  const ccmEventEmitted = refundParameters.refundCcmMetadata
+    ? observeCcmReceived(
+        sourceAsset,
+        sourceAsset,
+        refundParameters.refundAddress,
+        refundParameters.refundCcmMetadata,
+      )
+    : Promise.resolve();
+
   if (sourceAsset === chainGasAsset('Ethereum')) {
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
-    await observeEvent(cf.logger, 'ethereumIngressEgress:DepositFinalised').event;
+
+    await cf.stepUntilEvent(
+      'EthereumIngressEgress.DepositFinalised',
+      ethereumIngressEgressDepositFinalised.refine(
+        (event) =>
+          event.depositAddress === swapParams.depositAddress &&
+          event.channelId === BigInt(swapParams.channelId),
+      ),
+    );
+    await cf.stepOneBlock();
+
     cf.debug(`Initial deposit ${sourceAsset} received...`);
     // The first tx will cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
@@ -297,16 +368,8 @@ async function testEvm<A = []>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
-  await observeEvent(cf.logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
-
-  const ccmEventEmitted = refundParameters.refundCcmMetadata
-    ? observeCcmReceived(
-        sourceAsset,
-        sourceAsset,
-        refundParameters.refundAddress,
-        refundParameters.refundCcmMetadata,
-      )
-    : Promise.resolve();
+  // Observe the TransactionRejectedByBroker event
+  await waitForEvmTransactionRejection(cf, chain, txHash);
 
   await Promise.all([
     observeBalanceIncrease(
@@ -323,10 +386,14 @@ async function testEvm<A = []>(
 }
 
 async function testEvmVaultSwap<A = []>(
-  cf: ChainflipIO<A>,
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
+  const cf = parentCf
+    .with({ account: fullAccountFromUri(brokerUri, 'Broker') })
+    .withChildLogger(`${sourceAsset}_BrokerLevelScreening_testEvmVaultSwap`);
+
   const chain = chainFromAsset(sourceAsset);
 
   cf.info(`Testing broker level screening for ${chain} ${sourceAsset} vault swap...`);
@@ -339,8 +406,7 @@ async function testEvmVaultSwap<A = []>(
 
   cf.debug(`Sending ${sourceAsset} (vault swap) tx to reject...`);
   const txHash = await executeEvmVaultSwap(
-    cf.logger,
-    brokerUri,
+    cf,
     sourceAsset,
     'Btc',
     destinationAddressForBtc,
@@ -359,9 +425,7 @@ async function testEvmVaultSwap<A = []>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} (vault swap) ${txHash} for rejection. Awaiting refund.`);
 
-  // Currently this event cannot be decoded correctly, so we don't wait for it,
-  // just wait for the funds to arrive at the refund address
-  // await observeEvent(`${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  await waitForEvmTransactionRejection(cf, chain, txHash);
 
   let receivedRefund = false;
   for (let i = 0; i < MAX_RETRIES; i++) {
@@ -381,21 +445,22 @@ async function testEvmVaultSwap<A = []>(
   cf.info(`Marked ${sourceAsset} vault swap was rejected and refunded 👍.`);
 }
 
-async function testEvmLiquidityDeposit<A = []>(
-  cf: ChainflipIO<A>,
+async function testEvmLiquidityDeposit<A extends WithLpAccount>(
+  parentCf: ChainflipIO<A>,
   sourceAsset: InternalAsset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
+  // setup access to chainflip api and lp
+  await using chainflip = await getChainflipApi();
+  const cf = parentCf.withChildLogger(
+    `${sourceAsset}_BrokerLevelScreening_testEvmLiquidityDeposit`,
+  );
+  const lp = cf.requirements.account.keypair;
+
   const chain = chainFromAsset(sourceAsset);
-  const ingressEgressPallet = ingressEgressPalletForChain(chain);
 
   cf.info(`Testing broker level screening for ${chain} ${sourceAsset}...`);
   const MAX_RETRIES = 120;
-
-  // setup access to chainflip api and lp
-  await using chainflip = await getChainflipApi();
-  const lpUri = process.env.LP_URI || '//LP_1';
-  const lp = createStateChainKeypair(lpUri);
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
   /* eslint-disable  @typescript-eslint/no-explicit-any */
@@ -408,6 +473,7 @@ async function testEvmLiquidityDeposit<A = []>(
   if (addressReponse === undefined) {
     throw new Error(`There was now refund address for ${sourceAsset} for the LP.`);
   }
+
   let ethereumRefundAddress;
   if (chain === 'Ethereum') {
     ethereumRefundAddress = addressReponse.eth;
@@ -416,30 +482,23 @@ async function testEvmLiquidityDeposit<A = []>(
   } else {
     throw new Error('Unsupported Evm chain');
   }
-
   cf.debug(`refund address is: ${ethereumRefundAddress}`);
 
   // Create new LP deposit address for //LP_1
-  const eventHandle = observeEvent(cf.logger, 'liquidityProvider:LiquidityDepositAddressReady', {
-    test: (event) => event.data.asset === sourceAsset && event.data.accountId === lp.address,
-  }).event;
-
   cf.debug('Requesting ' + sourceAsset + ' deposit address');
-  await cfMutex.runExclusive(lpUri, async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
-    await chainflip.tx.liquidityProvider
-      .requestLiquidityDepositAddress(sourceAsset, null)
-      .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
+  const depositAddressReadyEvent = await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, null),
+    expectedEvent: {
+      name: 'LiquidityProvider.LiquidityDepositAddressReady',
+      schema: liquidityProviderLiquidityDepositAddressReady.refine(
+        (event) => event.asset === sourceAsset && event.accountId === lp.address,
+      ),
+    },
   });
 
-  let depositAddress;
-  if (chain === 'Ethereum') {
-    depositAddress = (await eventHandle).data.depositAddress.Eth;
-  } else if (chain === 'Arbitrum') {
-    depositAddress = (await eventHandle).data.depositAddress.Arb;
-  } else {
-    throw new Error('Unsupported Evm chain');
-  }
+  const depositAddress = depositAddressReadyEvent.depositAddress.address;
+  const depositChannelId = depositAddressReadyEvent.channelId;
+
   cf.debug(`Got deposit address: ${depositAddress}`);
 
   if (sourceAsset === chainGasAsset('Ethereum') || sourceAsset === chainGasAsset('Arbitrum')) {
@@ -448,22 +507,41 @@ async function testEvmLiquidityDeposit<A = []>(
     // succesfully to make sure the Deposit contract is deployed.
 
     const amount = '3';
-    const observeAccountCreditedEvent = observeEvent(cf.logger, 'assetBalances:AccountCredited', {
-      test: (event) =>
-        event.data.asset === sourceAsset &&
-        isWithinOnePercent(
-          BigInt(event.data.amountCredited.replace(/,/g, '')),
-          BigInt(amountToFineAmountBigInt(amount, sourceAsset)),
-        ),
-      timeoutSeconds: 120,
-    }).event;
-
     await send(cf.logger, sourceAsset, depositAddress, amount);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
-    await observeEvent(cf.logger, `${ingressEgressPallet}:DepositFinalised`).event;
+
+    if (chain === 'Ethereum') {
+      await cf.stepUntilEvent(
+        'EthereumIngressEgress.DepositFinalised',
+        ethereumIngressEgressDepositFinalised.refine(
+          (event) =>
+            event.depositAddress === depositAddress && event.channelId === depositChannelId,
+        ),
+      );
+    } else if (chain === 'Arbitrum') {
+      await cf.stepUntilEvent(
+        'ArbitrumIngressEgress.DepositFinalised',
+        arbitrumIngressEgressDepositFinalised.refine(
+          (event) =>
+            event.depositAddress === depositAddress && event.channelId === depositChannelId,
+        ),
+      );
+    }
     cf.debug(`Initial deposit ${sourceAsset} received...`);
-    await observeAccountCreditedEvent;
-    cf.debug(`Account credited for ${sourceAsset}...`);
+
+    const observeAccountCreditedEvent = await cf.stepUntilEvent(
+      'AssetBalances.AccountCredited',
+      assetBalancesAccountCredited.refine(
+        (event) =>
+          event.asset === sourceAsset &&
+          event.accountId === lp.address &&
+          isWithinOnePercent(
+            event.amountCredited,
+            BigInt(amountToFineAmount(String(amount), assetDecimals(sourceAsset))),
+          ),
+      ),
+    );
+    cf.debug(`Account credited for ${observeAccountCreditedEvent.asset}...`);
     await waitForDepositContractDeployment(chain, depositAddress);
   }
 
@@ -474,7 +552,7 @@ async function testEvmLiquidityDeposit<A = []>(
   await reportFunction(txHash);
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
-  await observeEvent(cf.logger, `${ingressEgressPallet}:TransactionRejectedByBroker`).event;
+  await waitForEvmTransactionRejection(cf, chain, txHash);
 
   let receivedRefund = false;
 
@@ -498,7 +576,7 @@ async function testEvmLiquidityDeposit<A = []>(
 }
 
 // Sets the ingress_egress broker whitelist to the given `broker`.
-async function setWhitelistedBroker(brokerAddress: Uint8Array) {
+async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: Uint8Array) {
   const BTC_WHITELIST_PREFIX = '3ed3ce16dbc61ca64eaac5a96e809a8f6b8fb02fc586c9dab2385ea1690a7db6';
   const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
   const ARB_WHITELIST_PREFIX = '3d3491b8c14ff78a5176bc3b6ebe516f6b8fb02fc586c9dab2385ea1690a7db6';
@@ -520,17 +598,18 @@ async function setWhitelistedBroker(brokerAddress: Uint8Array) {
     ARB_WHITELIST_PREFIX,
     SOL_WHITELIST_PREFIX,
   ]) {
-    await submitGovernanceExtrinsic((api) =>
-      api.tx.governance.callAsSudo(
-        api.tx.system.setStorage([
-          [
-            decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
-            // Empty, we just need to insert the key.
-            '',
-          ],
-        ]),
-      ),
-    );
+    await cf.submitGovernance({
+      extrinsic: (api) =>
+        api.tx.governance.callAsSudo(
+          api.tx.system.setStorage([
+            [
+              decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+              // Empty, we just need to insert the key.
+              '',
+            ],
+          ]),
+        ),
+    });
   }
 }
 
@@ -616,20 +695,15 @@ export async function testBitcoin<A = []>(
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
-/* eslint-disable  @typescript-eslint/no-unused-vars */
-async function testBitcoinVaultSwap(testContext: TestContext) {
-  const logger = testContext.logger;
+async function testBitcoinVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
+  const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
 
   // -- Test vault swap rejection --
-  logger.info('Testing broker level screening for Bitcoin vault swap...');
+  cf.info('Testing broker level screening for Bitcoin vault swap...');
   const btcRefundAddress = await newAssetAddress('Btc');
 
-  await brokerLevelScreeningTestBtcVaultSwap(
-    testContext,
-    '0.2',
-    false,
-    btcRefundAddress,
-    async (txId) => setTxRiskScore(txId, 9.0),
+  await brokerLevelScreeningTestBtcVaultSwap(cf, '0.2', false, btcRefundAddress, async (txId) =>
+    setTxRiskScore(txId, 9.0),
   );
 
   // Currently this event cannot be decoded correctly, so we don't wait for it,
@@ -639,18 +713,13 @@ async function testBitcoinVaultSwap(testContext: TestContext) {
     throw new Error(`Didn't receive funds refund to address ${btcRefundAddress} within timeout!`);
   }
 
-  logger.info(`Bitcoin vault swap was rejected and refunded 👍.`);
+  cf.info(`Bitcoin vault swap was rejected and refunded 👍.`);
 }
 
-export async function testBrokerLevelScreening(
-  testContext: TestContext,
+export async function doTestSwapDeposits<A = []>(
+  cf: ChainflipIO<A>,
   testBoostedDeposits: boolean = false,
 ) {
-  const parentcf = await newChainflipIO(testContext.logger, []);
-
-  await ensureHealth();
-  const previousMockmode = (await setMockmode('Manual')).previous;
-
   // NOTE: We currently don't test the following assets:
   // - Flip: we don't test Flip rejections because they are currently disabled in the
   //         deposit monitor, since Elliptic doesn't provide Flip analysis.
@@ -666,38 +735,70 @@ export async function testBrokerLevelScreening(
   //                   a different wallet into the `sendVaultSwap` flow, we disable the test for now.
 
   // test rejection of swaps by the responsible broker
-  await parentcf.all([
-    (cf) => testSol(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testSol(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testSol(cf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvm(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvm(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvm(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvm(cf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
-    ...(await testBitcoin(parentcf, false)),
-    ...(testBoostedDeposits ? await testBitcoin(parentcf, true) : []),
+  await cf.all([
+    (subcf) => testSol(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSol(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSol(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvm(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin'), false),
+    ...(testBoostedDeposits
+      ? [
+          (subcf: ChainflipIO<A>) =>
+            testBitcoin(subcf.withChildLogger('BrokerLevelScreening_testBitcoin_boost'), true),
+        ]
+      : []),
   ]);
+}
+
+export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
+  const cf = parentCf.with({ account: fullAccountFromUri('//LP_1', 'LP') });
+
+  await cf.all([
+    // --- LP deposits ---
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmLiquidityDeposit(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
+}
+
+export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
+  await cf.all([
+    // --- vault swaps ---
+    (subcf) => testBitcoinVaultSwap(subcf),
+    (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testEvmVaultSwap(subcf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+  ]);
+}
+
+export async function testBrokerLevelScreening(
+  testContext: TestContext,
+  testBoostedDeposits: boolean = false,
+) {
+  const cf = await newChainflipIO(testContext.logger, []);
+
+  await ensureHealth();
+  const previousMockmode = (await setMockmode('Manual')).previous;
 
   // test rejection of LP deposits and vault swaps:
   //  - this requires the rejecting broker to be whitelisted
   //  - for bitcoin vault swaps a private channel has to be opened
-  await setWhitelistedBroker(fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
-  await parentcf.all([
-    // --- LP deposits ---
-    (cf) => testEvmLiquidityDeposit(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmLiquidityDeposit(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmLiquidityDeposit(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmLiquidityDeposit(cf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
+  cf.debug('Whitelisting the broker api broker');
+  await setWhitelistedBroker(cf, fullAccountFromUri('//BROKER_API', 'Broker').keypair.addressRaw);
 
-    // --- vault swaps ---
-    // testBitcoinVaultSwap(testContext),
-    (cf) => testEvmVaultSwap(cf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmVaultSwap(cf, 'Usdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmVaultSwap(cf, 'Usdt', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testEvmVaultSwap(cf, 'Wbtc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testSolVaultSwap(cf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testSolVaultSwap(cf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
-    (cf) => testSolVaultSwap(cf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+  cf.debug('Launching broker level screening tests...');
+  await cf.all([
+    (subcf) => doTestLpDeposits(subcf),
+    (subcf) => doTestVaultSwaps(subcf),
+    (subcf) => doTestSwapDeposits(subcf, testBoostedDeposits),
   ]);
 
   await setMockmode(previousMockmode);

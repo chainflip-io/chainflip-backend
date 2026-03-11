@@ -1,7 +1,6 @@
 import { Asset, Chain } from '@chainflip/cli';
-import Web3 from 'web3';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { amountToFineAmount, getContractAddress, getEvmEndpoint } from 'shared/utils';
+import { amountToFineAmount, getContractAddress, getWeb3 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 import { price as defaultPrice } from 'shared/setup_swaps';
 
@@ -9,7 +8,7 @@ import { price as defaultPrice } from 'shared/setup_swaps';
 const PRICE_FEED_DECIMALS = 8;
 
 async function updateEvmPriceFeed(logger: Logger, chain: Chain, asset: Asset, price: string) {
-  const evmClient = new Web3(getEvmEndpoint(chain));
+  const evmClient = getWeb3(chain);
   const priceFeedAddress = getContractAddress(chain, `PRICE_FEED_${asset}`);
   const finePrice = amountToFineAmount(price, PRICE_FEED_DECIMALS);
 
@@ -121,4 +120,6 @@ export async function updateDefaultPriceFeeds(logger: Logger) {
     updatePriceFeed(logger, 'Arbitrum', 'USDC', defaultPrice.get('Usdc')!.toString()),
     updatePriceFeed(logger, 'Arbitrum', 'USDT', defaultPrice.get('Usdt')!.toString()),
   ]);
+
+  logger.info('All price feeds updated');
 }
