@@ -72,6 +72,7 @@ export const globalBtcWhaleMutexClient = new BtcMutexClient(
 );
 
 const btcClients: Record<string, BtcMutexClient> = {
+  wallet0: new BtcMutexClient('wallet0', getBtcClient('wallet0')),
   wallet1: new BtcMutexClient('wallet1', getBtcClient('wallet1')),
   wallet2: new BtcMutexClient('wallet2', getBtcClient('wallet2')),
   wallet3: new BtcMutexClient('wallet3', getBtcClient('wallet3')),
@@ -81,6 +82,11 @@ const btcClients: Record<string, BtcMutexClient> = {
   wallet7: new BtcMutexClient('wallet7', getBtcClient('wallet7')),
   wallet8: new BtcMutexClient('wallet8', getBtcClient('wallet8')),
   wallet9: new BtcMutexClient('wallet9', getBtcClient('wallet9')),
+  wallet10: new BtcMutexClient('wallet10', getBtcClient('wallet10')),
+  wallet11: new BtcMutexClient('wallet11', getBtcClient('wallet11')),
+  wallet12: new BtcMutexClient('wallet12', getBtcClient('wallet12')),
+  wallet13: new BtcMutexClient('wallet13', getBtcClient('wallet13')),
+  wallet14: new BtcMutexClient('wallet14', getBtcClient('wallet14')),
 };
 
 async function assertCanSubmitRawTx(rawTx: string, client: Client) {
@@ -254,6 +260,7 @@ export async function setupWallet(logger: ILogger, name: string) {
 
 export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
   await cf.all([
+    (subcf) => setupWallet(subcf, 'wallet0'),
     (subcf) => setupWallet(subcf, 'wallet1'),
     (subcf) => setupWallet(subcf, 'wallet2'),
     (subcf) => setupWallet(subcf, 'wallet3'),
@@ -263,10 +270,15 @@ export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
     (subcf) => setupWallet(subcf, 'wallet7'),
     (subcf) => setupWallet(subcf, 'wallet8'),
     (subcf) => setupWallet(subcf, 'wallet9'),
+    (subcf) => setupWallet(subcf, 'wallet10'),
+    (subcf) => setupWallet(subcf, 'wallet11'),
+    (subcf) => setupWallet(subcf, 'wallet12'),
+    (subcf) => setupWallet(subcf, 'wallet13'),
+    (subcf) => setupWallet(subcf, 'wallet14'),
   ]);
 }
 
-export async function getRandomBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
+export async function getNextBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
   const keys = Object.keys(btcClients);
   if (keys.length === 0) {
     throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");

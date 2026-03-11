@@ -1,5 +1,5 @@
 import { sendDot } from 'shared/send_dot';
-import { getRandomBtcClient, sendBtc } from 'shared/send_btc';
+import { getNextBtcClient, sendBtc } from 'shared/send_btc';
 import { sendErc20 } from 'shared/send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from 'shared/send_evm';
 import {
@@ -31,7 +31,7 @@ export async function send(
   logger.debug(`Sending ${amount} ${asset} to ${address}`);
   switch (asset) {
     case 'Btc':
-      return sendBtc(logger, address, amount, 1, await getRandomBtcClient(logger));
+      return sendBtc(logger, address, amount, 1, await getNextBtcClient(logger));
     case 'Eth':
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
