@@ -1,5 +1,4 @@
 import z from 'zod';
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import assert from 'assert';
 import {
   amountToFineAmount,
@@ -11,6 +10,7 @@ import {
   doBtcAddressesMatch,
   newAssetAddress,
   shortChainFromAsset,
+  Asset,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';

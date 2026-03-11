@@ -10,8 +10,7 @@
 // Adds existing funds to the specified boost pool and waits until it is confirmed via an event.
 // For example: ./commands/add_boost_funds.ts Btc 5 0.1 "//LP_2"
 
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
-import { runWithTimeoutAndExit } from 'shared/utils';
+import { runWithTimeoutAndExit, Asset } from 'shared/utils';
 import { addBoostFunds } from 'tests/boost';
 import { globalLogger } from 'shared/utils/logger';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';

@@ -1,4 +1,3 @@
-import { ChainflipChain as Chain, ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   newAssetAddress,
   decodeDotAddressForContract,
@@ -11,6 +10,8 @@ import {
   shortChainFromChain,
   doAddressesMatch,
   chainGasAsset,
+  Chain,
+  Asset,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';

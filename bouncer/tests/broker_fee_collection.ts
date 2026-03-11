@@ -1,6 +1,5 @@
 import assert from 'assert';
 import { randomBytes } from 'crypto';
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 
 import {
   decodeDotAddressForContract,
@@ -17,6 +16,7 @@ import {
   Assets,
   chainFromAsset,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';

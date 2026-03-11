@@ -1,4 +1,3 @@
-import { ChainflipAsset as InternalAsset } from '@chainflip/utils/chainflip';
 import {
   newAssetAddress,
   sleep,
@@ -8,6 +7,7 @@ import {
   observeFetch,
   Chains,
   decodeSolAddress,
+  Asset,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
@@ -21,7 +21,7 @@ import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngr
 
 export async function testSol<A = []>(
   parentCf: ChainflipIO<A>,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
   ccmRefund = false,
 ) {
@@ -120,7 +120,7 @@ export async function testSol<A = []>(
 
 export async function testSolVaultSwap<A = []>(
   parentCf: ChainflipIO<A>,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });

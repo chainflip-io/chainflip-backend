@@ -1,5 +1,4 @@
 import { brokerEncodeCfParameters } from 'shared/broker_rpcs';
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { doPerformSwap, requestNewSwap } from 'shared/perform_swap';
 import { prepareSwap, testSwap } from 'shared/swapping';
 import BigNumber from 'bignumber.js';
@@ -23,6 +22,7 @@ import {
   checkRequestTypeMatches,
   TransactionOriginId,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';

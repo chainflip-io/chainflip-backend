@@ -1,4 +1,3 @@
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { Contract, HDNodeWallet } from 'ethers';
 import { randomBytes } from 'crypto';
 import BigNumber from 'bignumber.js';
@@ -14,6 +13,7 @@ import {
   decodeDotAddressForContract,
   getWeb3,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';

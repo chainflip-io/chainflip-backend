@@ -1,4 +1,3 @@
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { SwapParams } from 'shared/perform_swap';
 import { newCcmMetadata, newVaultSwapCcmMetadata, testSwap, testVaultSwap } from 'shared/swapping';
 import { btcAddressTypes } from 'shared/new_btc_address';
@@ -8,6 +7,7 @@ import {
   chainFromAsset,
   VaultSwapParams,
   vaultSwapSupportedChains,
+  Asset,
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';

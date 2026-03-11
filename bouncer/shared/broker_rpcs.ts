@@ -1,5 +1,4 @@
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
-import { stateChainAssetFromAsset } from 'shared/utils';
+import { stateChainAssetFromAsset, Asset } from 'shared/utils';
 import { brokerApiRpc } from 'shared/json_rpc';
 import { Logger } from 'shared/utils/logger';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';

@@ -1,4 +1,3 @@
-import { ChainflipAsset as Asset, ChainflipChain as Chain } from '@chainflip/utils/chainflip';
 import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
@@ -12,6 +11,8 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
+  Asset,
+  Chain,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';

@@ -1,4 +1,3 @@
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import { randomBytes } from 'crypto';
 import {
   amountToFineAmount,
@@ -12,6 +11,7 @@ import {
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
+  Asset,
 } from 'shared/utils';
 import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';

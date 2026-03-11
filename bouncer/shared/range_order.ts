@@ -1,5 +1,4 @@
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
-import { amountToFineAmount, assetDecimals } from 'shared/utils';
+import { amountToFineAmount, assetDecimals, Asset } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 

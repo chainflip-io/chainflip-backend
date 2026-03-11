@@ -1,6 +1,5 @@
 import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-import { ChainflipAsset as Asset } from '@chainflip/utils/chainflip';
 import {
   PublicKey,
   sendAndConfirmTransaction,
@@ -24,6 +23,7 @@ import {
   decodeDotAddressForContract,
   observeFetch,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 
