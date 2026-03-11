@@ -14,6 +14,7 @@ export interface MutexRecord {
 }
 
 const WAIT_TIME_THRESHOLD_MS = 15_000;
+const HOLD_TIME_THRESHOLD_MS = 15_000;
 
 const REPORT_DIR = '/tmp/chainflip';
 
@@ -53,7 +54,7 @@ class MutexTrackerSingleton {
   private records: MutexRecord[] = [];
 
   record(entry: MutexRecord): void {
-    if (entry.waitTimeMs >= WAIT_TIME_THRESHOLD_MS) {
+    if (entry.waitTimeMs >= WAIT_TIME_THRESHOLD_MS || entry.holdTimeMs >= HOLD_TIME_THRESHOLD_MS) {
       this.records.push(entry);
     }
   }
