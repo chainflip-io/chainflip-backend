@@ -8,7 +8,7 @@
 // For example: ./commands/update_price_feeds.ts BTC 123456
 // Or: ./commands/update_price_feeds.ts ALL
 
-import { Asset } from '@chainflip/cli';
+import { AssetSymbol as Asset } from '@chainflip/utils/chainflip';
 import { updatePriceFeed, updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';

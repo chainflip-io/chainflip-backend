@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { Chain, InternalAsset } from '@chainflip/cli';
 import { btcClient, sendBtc, sendBtcTransactionWithParent } from 'shared/send_btc';
 import {
   btcClientMutex,
@@ -16,6 +15,8 @@ import {
   getChainContractId,
   amountToFineAmount,
   assetDecimals,
+  Chain,
+  Asset,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
@@ -294,7 +295,7 @@ async function waitForEvmTransactionRejection<A = []>(
 
 async function testEvm<A = []>(
   parentCf: ChainflipIO<A>,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
   ccmRefund = false,
 ) {
@@ -387,7 +388,7 @@ async function testEvm<A = []>(
 
 async function testEvmVaultSwap<A = []>(
   parentCf: ChainflipIO<A>,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   const cf = parentCf
@@ -447,7 +448,7 @@ async function testEvmVaultSwap<A = []>(
 
 async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   parentCf: ChainflipIO<A>,
-  sourceAsset: InternalAsset,
+  sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
   // setup access to chainflip api and lp

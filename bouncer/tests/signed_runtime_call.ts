@@ -1,5 +1,4 @@
 import { TestContext } from 'shared/utils/test_context';
-import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   createEvmWallet,
   decodeSolAddress,
@@ -7,6 +6,7 @@ import {
   newAssetAddress,
   shortChainFromAsset,
   sleep,
+  Asset,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
 import { getChainflipApi } from 'shared/utils/substrate';
