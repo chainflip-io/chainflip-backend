@@ -4,10 +4,11 @@ import { Assets, defaultAssetAmounts, newAssetAddress, sleep } from 'shared/util
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
 import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
 import { AccountRole, setupAccount } from 'shared/setup_account';
-import { executeVaultSwap, performVaultSwap } from 'shared/perform_swap';
+import { executeVaultSwap, prepareVaultSwapSource, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
+import { SwapContext } from 'shared/utils/swap_context';
 import {
   ChainflipIO,
   FullAccount,
@@ -21,8 +22,7 @@ import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIn
 const commissionBps = 100;
 
 async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
-  const brokerUri = '//BROKER_1';
-  const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
+  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
 
   cf.info('Starting refund vault swap test...');
 
@@ -39,9 +39,10 @@ async function testRefundVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   };
 
   cf.info('Sending vault swap...');
+  const source = await prepareVaultSwapSource(cf, inputAsset, depositAmount);
   await executeVaultSwap(
-    cf.logger,
-    brokerUri,
+    cf,
+    source,
     inputAsset,
     destAsset,
     destAddress,
@@ -113,24 +114,26 @@ async function testWithdrawCollectedAffiliateFees<A extends WithBrokerAccount>(
 async function testFeeCollection<A = []>(
   parentCf: ChainflipIO<A>,
   inputAsset: Asset,
-  testContext: TestContext,
+  swapContext: SwapContext,
 ): Promise<[FullAccount<'Broker'>, string, string]> {
   // Setup broker accounts. Different for each asset and specific to this test.
   const brokerUri: `//${string}` = `//BROKER_VAULT_FEE_COLLECTION_${inputAsset}`;
-  const broker = await setupAccount(parentCf.logger, brokerUri, AccountRole.Broker);
+  const broker = await setupAccount(parentCf, brokerUri, AccountRole.Broker);
   const brokerAccount = fullAccountFromUri(brokerUri, 'Broker');
 
-  const cf = parentCf.with({ account: brokerAccount });
+  const cf = parentCf
+    .with({ account: brokerAccount })
+    .withChildLogger(`${brokerUri}_testFeeCollection`);
 
-  const refundAddress = await newAssetAddress('Eth', 'BTC_VAULT_SWAP_REFUND' + Math.random() * 100);
+  const refundAddress = await newAssetAddress('Eth', undefined);
 
   cf.debug('Registering affiliate');
 
-  const { affiliateId, shortId } = await registerAffiliate(cf.logger, brokerUri, refundAddress);
+  const { affiliateId, shortId } = await registerAffiliate(cf, refundAddress);
 
-  cf.debug('Broker:', broker.address);
-  cf.debug('Affiliate:', affiliateId);
-  cf.debug('Short ID:', shortId);
+  cf.debug(`Broker ${broker.address}`);
+  cf.debug(`Affiliate: ${affiliateId}`);
+  cf.debug(`Short ID: ${shortId}`);
 
   // Setup
   const feeAsset = Assets.Usdc;
@@ -143,25 +146,23 @@ async function testFeeCollection<A = []>(
     undefined, // addressType
     undefined, // messageMetadata
     'VaultSwapFeeTest',
-    testContext.swapContext,
+    swapContext,
   );
 
   // Amounts before swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
   const earnedAffiliateFeesBefore = await getEarnedBrokerFees(cf.logger, affiliateId);
-  cf.debug('Earned broker fees before:', earnedBrokerFeesBefore);
-  cf.debug('Earned affiliate fees before:', earnedAffiliateFeesBefore);
+  cf.debug(`Earned broker fees before: ${earnedBrokerFeesBefore}`);
+  cf.debug(`Earned affiliate fees before: ${earnedAffiliateFeesBefore}`);
 
   // Do the vault swap
-  const subcf = cf.withChildLogger(tag);
   await performVaultSwap(
-    subcf,
-    brokerUri,
+    cf.withChildLogger(tag),
     inputAsset,
     destAsset,
     destAddress,
     undefined, // messageMetadata
-    testContext.swapContext,
+    swapContext,
     depositAmount,
     0, // boostFeeBps
     undefined, // fillOrKillParams
@@ -173,8 +174,8 @@ async function testFeeCollection<A = []>(
   // Check that both the broker and affiliate earned fees
   const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
   const earnedAffiliateFeesAfter = await getEarnedBrokerFees(cf.logger, affiliateId);
-  cf.debug('Earned broker fees after:', earnedBrokerFeesAfter);
-  cf.debug('Earned affiliate fees after:', earnedAffiliateFeesAfter);
+  cf.debug(`Earned broker fees after: ${earnedBrokerFeesAfter}`);
+  cf.debug(`Earned affiliate fees after: ${earnedAffiliateFeesAfter}`);
   assert(
     earnedBrokerFeesAfter > earnedBrokerFeesBefore,
     `No increase in earned broker fees after ${tag}(${inputAsset} -> ${destAsset}) vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
@@ -188,8 +189,7 @@ async function testFeeCollection<A = []>(
 }
 
 async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
-  const brokerUri = '//BROKER_1';
-  const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
+  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
 
   cf.info('Starting invalid BTC vault swap test...');
 
@@ -199,8 +199,7 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   const destAddress = await newAssetAddress(destAsset);
 
   const txId = await buildAndSendInvalidBtcVaultSwap(
-    cf.logger,
-    brokerUri,
+    cf,
     Number(depositAmount),
     destAsset,
     destAddress,
@@ -218,21 +217,31 @@ async function testInvalidBtcVaultSwap<A = []>(parentCf: ChainflipIO<A>) {
   cf.info('Invalid BTC vault swap ingressed ✅.');
 }
 
-export async function testVaultSwap(testContext: TestContext) {
-  const cf = await newChainflipIO(testContext.logger, []);
-  await cf.all([
-    (subcf) => testFeeCollection(subcf, Assets.Eth, testContext),
-    (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext),
-    (subcf) => testFeeCollection(subcf, Assets.Sol, testContext),
-  ]);
-
+async function testFeeCollectionWithdrawal<A = []>(
+  cf: ChainflipIO<A>,
+  inputAsset: Asset,
+  swapContext: SwapContext,
+) {
   // Test the affiliate withdrawal functionality
-  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, Assets.Btc, testContext);
+  const [broker, affiliateId, refundAddress] = await testFeeCollection(cf, inputAsset, swapContext);
   await testWithdrawCollectedAffiliateFees(
-    cf.with({ account: broker }),
+    cf
+      .with({ account: broker })
+      .withChildLogger(`${broker.uri}_testWithdrawCollectedAffiliateFees`),
     affiliateId,
     refundAddress,
   );
-  await testRefundVaultSwap(cf);
-  await testInvalidBtcVaultSwap(cf);
+}
+
+export async function testVaultSwap(testContext: TestContext) {
+  const cf = await newChainflipIO(testContext.logger, []);
+
+  await cf.all([
+    (subcf) => testFeeCollection(subcf, Assets.Eth, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.Sol, testContext.swapContext),
+    (subcf) => testFeeCollectionWithdrawal(subcf, Assets.Btc, testContext.swapContext),
+    (subcf) => testRefundVaultSwap(subcf),
+    (subcf) => testInvalidBtcVaultSwap(subcf),
+  ]);
 }

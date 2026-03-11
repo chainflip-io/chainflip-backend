@@ -53,13 +53,18 @@ export type ResultOfEventQuery<Q extends EventQuery> = Q extends OneOfEventsQuer
 
 // ------------ Querying for block height --------------
 
+// Make sure to use the events table to query for the highest block
+// to avoid any races between indexing blocks and indexing events operations
 export const highestBlock = async (): Promise<number> => {
-  const result = await prisma.block.findFirst({
+  const result = await prisma.event.findFirst({
     orderBy: {
-      height: 'desc',
+      block: { height: 'desc' },
+    },
+    include: {
+      block: true,
     },
   });
-  return result?.height ?? 0;
+  return result?.block.height ?? 0;
 };
 
 // ------------ Querying for transaction hashes --------------
@@ -103,14 +108,30 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   timing: EventTime,
 ): Promise<OneOfEventsResult<Descriptions>> => {
   // before searching for events, we collect all call ids for events that have an associated txhash
+  const txBlockHeights: number[] = [];
   const callIdsList: { [x: string]: string | undefined }[] = await Promise.all(
     Object.entries(descriptions).map(([key, description]) =>
       description.txHash
-        ? findTxHash(description.txHash).then((tx) => ({ [key]: tx.callId }))
+        ? findTxHash(description.txHash).then((tx) => {
+            txBlockHeights.push(tx.block.height);
+            return { [key]: tx.callId };
+          })
         : Promise.resolve({ [key]: undefined }),
     ),
   );
-  const callIds = Object.assign(callIdsList) as { [x: string]: string | undefined };
+  const callIds = Object.assign({}, ...callIdsList) as { [x: string]: string | undefined };
+
+  // Wait until at least one event from each extrinsic block exists in the DB.
+  // Any block containing an extrinsic will have at least one event (e.g. system.ExtrinsicSuccess),
+  // so once any event from the block appears, we know that the block events started to be indexed,
+  // this doesn't guarantee that all events are indexed.
+  for (const blockHeight of txBlockHeights) {
+    while (
+      !(await prisma.event.findFirst({ where: { block: { height: { equals: blockHeight } } } }))
+    ) {
+      await sleep(100);
+    }
+  }
 
   // now we search for all events, and if provided we require
   //  - the block height to be restricted to the ones allowed by `timings`
@@ -133,6 +154,7 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       include: {
         block: true,
       },
+      orderBy: [{ block: { height: 'asc' } }, { id: 'asc' }],
     });
 
     // using an OR query might return the same event multiple times
@@ -166,8 +188,8 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
       });
     }
 
-    // we wait two additional CF blocks to be indexed before we error out in case we couldn't find the event(s) we were looking for
-    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 2) {
+    // we wait some additional CF blocks to be indexed before we error out in case we couldn't find the event(s) we were looking for
+    if (timing.endBeforeBlock && (await highestBlock()) > timing.endBeforeBlock + 10) {
       throw new Error(
         `Did not find any of the events in ${JSON.stringify(Object.values(descriptions).map((v) => v.name))} in block range ${timing.startFromBlock}..${timing.endBeforeBlock}`,
       );

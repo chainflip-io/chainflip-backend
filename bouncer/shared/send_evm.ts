@@ -1,10 +1,9 @@
-import Web3 from 'web3';
 import {
+  arbNonceMutex,
+  ethNonceMutex,
   Chain,
   amountToFineAmount,
-  ethNonceMutex,
-  arbNonceMutex,
-  getEvmEndpoint,
+  getWeb3,
   getEvmWhaleKeypair,
   assetDecimals,
   getContractAddress,
@@ -16,7 +15,11 @@ const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
   Arbitrum: undefined,
 };
 
-export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<number> {
+export async function getNextEvmNonce(
+  logger: Logger,
+  chain: Chain,
+  forceRefetch = false,
+): Promise<number> {
   let mutex;
   switch (chain) {
     case 'Ethereum':
@@ -30,8 +33,8 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
   }
 
   return mutex.runExclusive(async () => {
-    if (nextEvmNonce[chain] === undefined) {
-      const web3 = new Web3(getEvmEndpoint(chain));
+    if (nextEvmNonce[chain] === undefined || forceRefetch) {
+      const web3 = getWeb3(chain);
       const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
       const address = web3.eth.accounts.privateKeyToAccount(whalePrivKey).address;
       const txCount = await web3.eth.getTransactionCount(address, 'pending');
@@ -42,6 +45,71 @@ export async function getNextEvmNonce(logger: Logger, chain: Chain): Promise<num
   });
 }
 
+// web3.js errors are sometimes plain objects { reason: Error, ... } rather than
+// Error instances, so we extract the message from wherever it lives.
+function extractWeb3ErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const e = error as Record<string, unknown>;
+    if (typeof e.message === 'string') return e.message;
+    if (e.reason instanceof Error) return e.reason.message;
+    if (typeof e.reason === 'string') return e.reason;
+  }
+  return String(error);
+}
+
+function isEvmRevertError(error: unknown): boolean {
+  const msg = extractWeb3ErrorMessage(error);
+  return (
+    msg.includes('Transaction has been reverted by the EVM') || msg.includes('execution reverted')
+  );
+}
+
+function isNonceError(error: unknown): boolean {
+  const msg = extractWeb3ErrorMessage(error);
+  return msg.includes('nonce too low') || msg.includes('nonce too high');
+}
+
+export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum') return;
+
+  try {
+    const web3 = getWeb3(chain);
+    const code = await web3.eth.getCode(address);
+    const hasNoCode = !code || code === '0x' || /^0x0+$/.test(code);
+    if (hasNoCode) {
+      logger.warn(
+        `Address ${address} on ${chain} has no contract code (eth_getCode=${code}). Deposit may not be witnessed.`,
+      );
+    }
+  } catch (err) {
+    logger.warn(`Failed to check contract code for address ${address} on ${chain}: ${String(err)}`);
+  }
+}
+
+async function getEvmTxRevertReason(chain: Chain, txHash: string): Promise<string> {
+  const web3 = getWeb3(chain);
+  const tx = await web3.eth.getTransaction(txHash);
+  if (!tx.to || !tx.from) {
+    return 'transaction details missing: to/from';
+  }
+
+  try {
+    await web3.eth.call(
+      {
+        to: tx.to,
+        from: tx.from,
+        data: tx.input,
+        value: tx.value,
+      },
+      tx.blockNumber as number,
+    );
+    return 'revert reason not available';
+  } catch (err) {
+    return extractWeb3ErrorMessage(err);
+  }
+}
+
 export async function signAndSendTxEvm(
   logger: Logger,
   chain: Chain,
@@ -50,32 +118,59 @@ export async function signAndSendTxEvm(
   data?: string,
   gas = chain === 'Arbitrum' ? 5000000 : 200000,
 ) {
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   const { privkey: whalePrivKey } = getEvmWhaleKeypair('Ethereum');
 
-  const nonce = await getNextEvmNonce(logger, chain);
-  const tx = { to, data, gas, nonce, value };
-
-  const signedTx = await web3.eth.accounts.signTransaction(tx, whalePrivKey);
-
-  let receipt;
   const numberRetries = 10;
+  let receipt;
 
-  // Retry mechanism as we expect all transactions to succeed.
+  // Fetch nonce and sign outside the loop; re-sign only if we get a nonce error.
+  let nonce = await getNextEvmNonce(logger, chain);
+  let signedTx = await web3.eth.accounts.signTransaction(
+    { to, data, gas, nonce, value },
+    whalePrivKey,
+  );
+
   for (let i = 0; i < numberRetries; i++) {
     try {
       receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
       break;
     } catch (error) {
+      // EVM reverts are deterministic — retrying the same tx will always fail.
+      if (isEvmRevertError(error)) {
+        throw new Error(`${chain} transaction reverted by EVM: ${error}`);
+      }
+
       if (i === numberRetries - 1) {
         throw new Error(`${chain} transaction failure: ${error}`);
       }
-      logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+
+      // On nonce errors, reset the counter so getNextEvmNonce re-fetches from chain
+      // and re-sign with the corrected nonce.
+      if (isNonceError(error)) {
+        logger.warn(`${chain} nonce error, re-fetching nonce. Error: ${error}`);
+        nonce = await getNextEvmNonce(logger, chain, true);
+        signedTx = await web3.eth.accounts.signTransaction(
+          { to, data, gas, nonce, value },
+          whalePrivKey,
+        );
+      } else {
+        logger.error(`${chain} Retrying transaction. Found error: ${error}`);
+      }
     }
   }
   if (!receipt) {
     throw new Error('Receipt not found');
   }
+  if (!receipt.status) {
+    const revertReason = await getEvmTxRevertReason(chain, receipt.transactionHash);
+    logger.warn(
+      `${chain} transaction mined but failed. revertReason=${revertReason} receipt=${JSON.stringify(
+        receipt,
+      )}`,
+    );
+  }
+  logger.debug(`Transaction receipt: ${JSON.stringify(receipt)}`);
 
   logger.debug(
     'Transaction complete, tx_hash: ' +
@@ -102,7 +197,7 @@ export async function sendEvmNative(
 const EVM_BASE_GAS_LIMIT = 21000;
 
 export async function estimateCcmCfTesterGas(destChain: Chain, message: string) {
-  const web3 = new Web3(getEvmEndpoint(destChain));
+  const web3 = getWeb3(destChain);
   const cfTester = getContractAddress(destChain, 'CFTESTER');
   const vault = getContractAddress(destChain, 'VAULT');
   const messageLength = message.slice(2).length / 2;

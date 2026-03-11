@@ -3,9 +3,7 @@ import { randomBytes } from 'crypto';
 import { InternalAsset as Asset } from '@chainflip/cli';
 
 import {
-  cfMutex,
   decodeDotAddressForContract,
-  handleSubstrateError,
   observeBalanceIncrease,
   shortChainFromAsset,
   hexStringToBytesArray,
@@ -17,34 +15,48 @@ import {
   newAssetAddress,
   getFreeBalance,
   Assets,
-  createStateChainKeypair,
+  chainFromAsset,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
 import { Logger } from 'shared/utils/logger';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import {
+  ChainflipIO,
+  fullAccountFromUri,
+  newChainflipIO,
+  WithBrokerAccount,
+} from 'shared/utils/chainflip_io';
 import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
 import { AccountRole, setupAccount } from 'shared/setup_account';
+import { swappingWithdrawalRequested } from 'generated/events/swapping/withdrawalRequested';
+import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 
 const commissionBps = 1000; // 10%
 
-export async function submitBrokerWithdrawal(
-  brokerUri: string,
+export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   asset: Asset,
   addressObject: { [chain: string]: string },
 ) {
-  const broker = createStateChainKeypair(brokerUri);
-  await using chainflip = await getChainflipApi();
+  const broker = cf.requirements.account.keypair;
 
-  // Only allow one withdrawal at a time to stop nonce issues
-  return cfMutex.runExclusive(brokerUri, async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    return chainflip.tx.swapping
-      .withdraw(asset, addressObject)
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+  cf.debug(`Submitted withdrawal for ${asset} broker: ${broker.address}`);
+
+  const withdrawalRequestedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.swapping.withdraw(asset, addressObject),
+    expectedEvent: {
+      name: 'Swapping.WithdrawalRequested',
+      schema: swappingWithdrawalRequested.refine(
+        (event) => event.accountId === broker.address && event.egressAsset === asset,
+      ),
+    },
   });
+
+  cf.debug(
+    `Withdrawal request successful for ${asset} broker: ${withdrawalRequestedEvent.accountId} egressId: ${withdrawalRequestedEvent.egressId}`,
+  );
 }
 
 const feeAsset = Assets.Usdc;
@@ -57,13 +69,12 @@ export async function getEarnedBrokerFees(logger: Logger, address: string): Prom
 
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
-async function testBrokerFees<A = []>(
+async function testBrokerFees<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
-  brokerUri: string,
   inputAsset: Asset,
   seed?: string,
 ): Promise<void> {
-  const broker = createStateChainKeypair(brokerUri);
+  const broker = cf.requirements.account.keypair;
   await using chainflip = await getChainflipApi();
 
   // Check the broker fees before the swap
@@ -86,23 +97,6 @@ async function testBrokerFees<A = []>(
 
   const rawDepositForSwapAmount = defaultAssetAmounts(inputAsset);
 
-  // we need to manually create the swap channel and observe the relative event
-  // because we want to use a separate broker to not interfere with other tests
-  const addressPromise = observeEvent(cf.logger, 'swapping:SwapDepositAddressReady', {
-    test: (event) => {
-      // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = event.data.destinationAddress[shortChainFromAsset(destAsset)];
-      if (!destAddressEvent) return false;
-
-      const destAssetMatches = event.data.destinationAsset === destAsset;
-      const sourceAssetMatches = event.data.sourceAsset === inputAsset;
-      const destAddressMatches =
-        destAddressEvent.toLowerCase() === observeDestinationAddress.toLowerCase();
-
-      return destAddressMatches && destAssetMatches && sourceAssetMatches;
-    },
-  });
-
   const encodedEthAddr = chainflip.createType('EncodedAddress', {
     Eth: hexStringToBytesArray(destinationAddress),
   });
@@ -115,10 +109,11 @@ async function testBrokerFees<A = []>(
     retryDuration: 0,
   };
 
-  await cfMutex.runExclusive(brokerUri, async () => {
-    const nonce = await chainflip.rpc.system.accountNextIndex(broker.address);
-    await chainflip.tx.swapping
-      .requestSwapDepositAddress(
+  // we need to manually create the swap channel and observe the relative event
+  // because we want to use a separate broker to not interfere with other tests
+  const swapDepositAddressReadyEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.swapping.requestSwapDepositAddress(
         inputAsset,
         destAsset,
         encodedEthAddr,
@@ -126,14 +121,21 @@ async function testBrokerFees<A = []>(
         null,
         0,
         refundParams,
-      )
-      .signAndSend(broker, { nonce }, handleSubstrateError(chainflip));
+      ),
+    expectedEvent: {
+      name: 'Swapping.SwapDepositAddressReady',
+      schema: swappingSwapDepositAddressReady.refine(
+        (event) =>
+          event.destinationAddress.chain === chainFromAsset(destAsset) &&
+          event.destinationAddress.address === observeDestinationAddress.toLowerCase() &&
+          event.destinationAsset === destAsset &&
+          event.sourceAsset === inputAsset,
+      ),
+    },
   });
 
-  const res = (await addressPromise.event).data;
-
-  const depositAddress = res.depositAddress[shortChainFromAsset(inputAsset)];
-  const channelId = Number(res.channelId);
+  const depositAddress = swapDepositAddressReadyEvent.depositAddress.address;
+  const channelId = Number(swapDepositAddressReadyEvent.channelId);
 
   await send(cf.logger, inputAsset, depositAddress, rawDepositForSwapAmount);
   const swapRequestedEvent = await observeSwapRequested(
@@ -185,19 +187,10 @@ async function testBrokerFees<A = []>(
   cf.debug(
     `Withdrawing broker fees to ${withdrawalAddress}, balance before: ${balanceBeforeWithdrawal}`,
   );
-  const observeWithdrawalRequested = observeEvent(cf.logger, 'swapping:WithdrawalRequested', {
-    test: (event) =>
-      event.data.destinationAddress[chain]?.toLowerCase() === withdrawalAddress.toLowerCase(),
-  });
 
-  await submitBrokerWithdrawal(brokerUri, feeAsset, {
+  await submitBrokerWithdrawal(cf, feeAsset, {
     [chain]: withdrawalAddress,
   });
-  cf.debug(`Submitted withdrawal for ${feeAsset}`);
-
-  const withdrawalRequestedEvent = await observeWithdrawalRequested.event;
-
-  cf.debug(`Withdrawal requested, egressId: ${withdrawalRequestedEvent.data.egressId}`);
 
   await observeBalanceIncrease(cf.logger, feeAsset, withdrawalAddress, balanceBeforeWithdrawal);
 
@@ -213,9 +206,12 @@ async function testBrokerFees<A = []>(
 }
 
 export async function testBrokerFeeCollection(testContext: TestContext): Promise<void> {
-  const cf = await newChainflipIO(testContext.logger, []);
-  const brokerUri = '//BROKER_FEE_TEST';
-  await setupAccount(cf.logger, brokerUri, AccountRole.Broker);
+  const parentCf = await newChainflipIO(testContext.logger, []);
 
-  await testBrokerFees(cf, brokerUri, Assets.Flip, randomBytes(32).toString('hex'));
+  const brokerUri = '//BROKER_FEE_TEST';
+
+  await setupAccount(parentCf, brokerUri, AccountRole.Broker);
+
+  const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
+  await testBrokerFees(cf, Assets.Flip, randomBytes(32).toString('hex'));
 }

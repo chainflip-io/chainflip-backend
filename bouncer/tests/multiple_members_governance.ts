@@ -1,10 +1,11 @@
 import assert from 'assert';
-import { createStateChainKeypair, tryUntilSuccess } from 'shared/utils';
+import { createStateChainKeypair } from 'shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { Logger } from 'shared/utils/logger';
 import { Codec } from '@polkadot/types/types';
+import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { governanceExecuted } from '../generated/events/governance/executed';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -18,8 +19,8 @@ async function getGovernanceMembers(): Promise<string[]> {
 
 const alice = createStateChainKeypair('//Alice');
 
-async function addAliceToGovernance(logger: Logger, initMembers: string[] = []) {
-  logger.debug(`Adding Alice to governance: ${alice.address}`);
+async function addAliceToGovernance<A = []>(cf: ChainflipIO<A>, initMembers: string[] = []) {
+  cf.debug(`Adding Alice to governance: ${alice.address}`);
 
   const newMembers = [...initMembers, alice.address];
 
@@ -31,55 +32,45 @@ async function addAliceToGovernance(logger: Logger, initMembers: string[] = []) 
 
   const newThreshold = newMembers.length;
 
-  await submitGovernanceExtrinsic(
-    (chainflip) => chainflip.tx.governance.newMembershipSet(newMembers, newThreshold),
-    logger,
-  );
+  await cf.submitGovernance({
+    extrinsic: (api) => api.tx.governance.newMembershipSet(newMembers, newThreshold),
+  });
 
-  await observeEvent(logger, 'governance:Executed').event;
-
-  await tryUntilSuccess(
-    async () => {
-      const members = await getGovernanceMembers();
-      return members.length === newMembers.length;
-    },
-    6000,
-    4,
-  );
-
-  logger.debug('Added Alice to governance!');
+  cf.debug('Added Alice to governance!');
 }
 
-async function submitWithMultipleGovernanceMembers(logger: Logger) {
+async function submitWithMultipleGovernanceMembers<A = []>(cf: ChainflipIO<A>) {
   // Ensure Alice is in governance before submitting the proposal
   const initMembers = await getGovernanceMembers();
 
   if (!initMembers.includes(alice.address)) {
-    await addAliceToGovernance(logger, initMembers);
+    await addAliceToGovernance(cf, initMembers);
   }
 
   const members = await getGovernanceMembers();
 
-  logger.debug(`Current governance members: ${members}`);
+  cf.debug(`Current governance members: ${members}`);
 
   // Killing 2 birds with 1 stone: testing governance execution with multiple
   // members *and* restoring governance to its original state
   const proposalId = await submitGovernanceExtrinsic(
     (chainflip) => chainflip.tx.governance.newMembershipSet([snowWhite.address], 1),
-    logger,
+    cf.logger,
   );
 
-  logger.info(`Submitted governance proposal with ID: ${proposalId}`);
+  cf.info(`Submitted governance proposal with ID: ${proposalId}`);
 
   await using chainflip = await getChainflipApi();
 
   // Note that with two members, we need to approve with the other account:
   const nonce = (await chainflip.rpc.system.accountNextIndex(alice.address)) as unknown as number;
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
-  logger.info(`Approved governance proposal with ID: ${proposalId}`);
-  await observeEvent(logger, 'governance:Executed', {
-    test: (event) => Number(event.data[0]) === proposalId,
-  }).event;
+  cf.info(`Approved governance proposal with ID: ${proposalId}`);
+
+  await cf.stepUntilEvent(
+    'Governance.Executed',
+    governanceExecuted.refine((id) => id === proposalId),
+  );
 
   assert.strictEqual(
     (await getGovernanceMembers()).length,
@@ -87,9 +78,10 @@ async function submitWithMultipleGovernanceMembers(logger: Logger) {
     'Governance should have been restored to 1 member',
   );
 
-  logger.debug('Removed Alice from governance!');
+  cf.debug('Removed Alice from governance!');
 }
 
 export async function testMultipleMembersGovernance(testContext: TestContext) {
-  await submitWithMultipleGovernanceMembers(testContext.logger);
+  const cf = await newChainflipIO(testContext.logger, []);
+  await submitWithMultipleGovernanceMembers(cf);
 }

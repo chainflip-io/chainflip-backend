@@ -94,7 +94,10 @@ function logMethod(
 export const globalLogger: Logger = pino(
   {
     hooks: { logMethod },
-    level: 'trace',
+    // Setting the global pino level (not just the transport level) ensures pino skips calling
+    // logMethod entirely for sub-level messages. This matters because logMethod does a synchronous
+    // appendFileSync on every call, so allowing debug/trace through is a significant perf hit.
+    level: process.env.BOUNCER_LOG_LEVEL ?? 'trace',
     // We don't want to log the hostname or pid
     // We do want to save the start time.
     base: { startTime: getIsoTime() },

@@ -12,7 +12,7 @@ import { execWithLog } from 'shared/utils/exec_with_log';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
-import { AccountRole, setupAccount } from 'shared/setup_account';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
@@ -123,7 +123,9 @@ async function compatibleUpgrade(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
+  const cf = await newChainflipIO(logger, []);
+
+  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
 
   killOldNodes();
 
@@ -169,25 +171,17 @@ async function incompatibleUpgradeNoBuild(
   runtimePath: string,
   numberOfNodes: 1 | 3,
 ) {
-  // Temporary, while upgrading from 2.0 to 2.1
-  // Because the localnet in 2.1 now uses a new account //BROKER_API,
-  // this account has to be registered + funded before the broker api can start.
-  // But, since we need the broker api to run `setupAccount`, we do this *before* any
-  // of the upgrade procedures, on the old network.
-  await setupAccount(logger, `//BROKER_API`, AccountRole.Broker, '200');
-  // ^ remove this when UPGRADE_FROM is 2.1
+  const cf = await newChainflipIO(logger, []);
 
   // We need to kill the engine process before starting the new engine (engine-runner)
   // Since the new engine contains the old one.
-  logger.info('Killing the old engines');
+  cf.info('Killing the old engines');
   await killEngines();
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
 
-  await submitRuntimeUpgradeWithRestrictions(logger, runtimePath, undefined, undefined, true);
+  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
 
-  logger.info(
-    'Check that the old engine has now shut down, and that the new engine is now running.',
-  );
+  cf.info('Check that the old engine has now shut down, and that the new engine is now running.');
 
   // TODO: add some tests here. After this point. If the upgrade doesn't work.
   // but below, we effectively restart the engine before running any tests it's possible that
@@ -204,7 +198,7 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  logger.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
+  cf.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
   // Ensure extrinsic gets in.
   await sleep(12000);
 
@@ -213,49 +207,9 @@ async function incompatibleUpgradeNoBuild(
   // let them shutdown
   await sleep(4000);
 
-  // Temporary, while upgrading from 2.0 to 2.1
-  // Because the localnet in 2.1 now uses a new account //BROKER_API,
-  // the old key for //BROKER_1 that has been in the keystore has to be removed,
-  // before the node is started up again. Otherwise, it will have 2 broker keys
-  // in it's keystore and is going to ignore both of them.
-  console.log('Deleting //BROKER_1 key from keystore.');
-  console.log('Current files in keystore:');
-  try {
-    await execWithLog(
-      'ls',
-      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
-      'ls',
-    );
-  } catch (err) {
-    console.log(`First ls failed with: ${err}`);
-  }
-  console.log('Now deleting key.');
-  try {
-    await execWithLog(
-      'rm',
-      [
-        '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/62726f6b9059e6d854b769a505d01148af212bf8cb7f8469a7153edce8dcaedd9d299125',
-      ],
-      'rm',
-    );
-  } catch (err) {
-    console.log(`rm failed with: ${err}`);
-  }
-  console.log('Files in keystore after deleting key.');
-  try {
-    await execWithLog(
-      'ls',
-      ['-la', '/tmp/chainflip/bashful/chaindata/chains/cf-dev/keystore/'],
-      'ls',
-    );
-  } catch (err) {
-    console.log(`second ls failed with: ${err}`);
-  }
-  // ^ remove this when UPGRADE_FROM is 2.1
+  cf.info('Old broker and LP-API have crashed since we killed the node.');
 
-  logger.info('Old broker and LP-API have crashed since we killed the node.');
-
-  logger.info('Starting the new node');
+  cf.info('Starting the new node');
 
   const KEYS_DIR = `${localnetInitPath}/keys`;
 
@@ -277,7 +231,7 @@ async function incompatibleUpgradeNoBuild(
   clearSubscribeHeadsCache();
 
   // Set missed authorship suspension back to 100/150 after nodes back up.
-  logger.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
+  cf.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
   await submitGovernanceExtrinsic((api) =>
     api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
       reputation: 100,
@@ -285,10 +239,10 @@ async function incompatibleUpgradeNoBuild(
     }),
   );
 
-  logger.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 100/150');
+  cf.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 100/150');
 
   const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
-  logger.info('New node PID: ' + output.toString());
+  cf.info('New node PID: ' + output.toString());
 
   // Engines crash when the node shuts down, so we need to restart them.
   await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
@@ -296,10 +250,10 @@ async function incompatibleUpgradeNoBuild(
   await sleep(4000);
 
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-  logger.info('Started new broker and lp-api.');
+  cf.info('Started new broker and lp-api.');
 
   await startDepositMonitor(localnetInitPath);
-  logger.info('Started new deposit monitor.');
+  cf.info('Started new deposit monitor.');
 }
 
 async function incompatibleUpgrade(

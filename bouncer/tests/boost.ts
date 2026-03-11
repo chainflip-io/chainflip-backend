@@ -2,15 +2,15 @@ import z from 'zod';
 import { InternalAsset as Asset } from '@chainflip/cli';
 import assert from 'assert';
 import {
-  shortChainFromAsset,
   amountToFineAmount,
-  assetDecimals,
-  calculateFeeWithBps,
   amountToFineAmountBigInt,
-  newAssetAddress,
-  createStateChainKeypair,
-  chainFromAsset,
+  assetDecimals,
   Assets,
+  calculateFeeWithBps,
+  chainFromAsset,
+  doBtcAddressesMatch,
+  newAssetAddress,
+  shortChainFromAsset,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -19,10 +19,14 @@ import { createBoostPools } from 'shared/setup_boost_pools';
 import { jsonRpc } from 'shared/json_rpc';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { throwError } from 'shared/utils/logger';
 import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
 import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stoppedBoosting';
-import { ChainflipIO, newChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
+import {
+  ChainflipIO,
+  fullAccountFromUri,
+  newChainflipIO,
+  WithLpAccount,
+} from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -35,19 +39,29 @@ export async function stopBoosting(
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   assert(boostTier > 0, 'Boost tier must be greater than 0');
 
-  return cf.submitExtrinsic({
-    extrinsic: (api) =>
-      api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-    expectedEvent: {
-      name: 'LendingPools.StoppedBoosting',
-      schema: lendingPoolsStoppedBoosting.refine(
-        (event) =>
-          event.boosterId === cf.requirements.account.keypair.address &&
-          event.boostPool.asset === asset &&
-          event.boostPool.tier === boostTier,
-      ),
-    },
-  });
+  try {
+    return await cf.submitExtrinsic({
+      extrinsic: (api) =>
+        api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
+      expectedEvent: {
+        name: 'LendingPools.StoppedBoosting',
+        schema: lendingPoolsStoppedBoosting.refine(
+          (event) =>
+            event.boosterId === cf.requirements.account.keypair.address &&
+            event.boostPool.asset === asset &&
+            event.boostPool.tier === boostTier,
+        ),
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('lendingPools.AccountNotFoundInPool')) {
+      cf.debug(
+        `Already stopped boosting asset: ${asset} boostTier: ${boostTier} booster: ${cf.requirements.account.uri}`,
+      );
+      return undefined;
+    }
+    throw err;
+  }
 }
 
 /// Adds existing funds to the boost pool of the given tier and returns the BoostFundsAdded event.
@@ -81,32 +95,16 @@ export async function addBoostFunds(
 }
 
 /// Adds boost funds to the boost pool and does a swap with boosting enabled, then stops boosting and checks the fees collected are correct.
-async function testBoostingForAsset(
-  asset: Asset,
+async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
+  cf: ChainflipIO<A>,
   boostFee: number,
-  lpUri: `//${string}`,
   amount: number,
-  testContext: TestContext,
 ) {
-  const cf: ChainflipIO<WithLpAccount> = await newChainflipIO(
-    testContext.logger.child({ boostAsset: asset, boostFee }),
-    {
-      account: {
-        uri: lpUri,
-        keypair: createStateChainKeypair(lpUri),
-        type: 'LP',
-      },
-    },
-  );
+  const asset = Assets.Btc;
   cf.debug(`Testing boosting`);
 
   cf.debug('Starting the test with a clean slate by stopping boosting');
-  let preTestStopBoostingEvent;
-  try {
-    preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
-  } catch (err) {
-    cf.info(`Already stopped boosting (${err})`);
-  }
+  const preTestStopBoostingEvent = await stopBoosting(cf, asset, boostFee);
   assert.strictEqual(
     preTestStopBoostingEvent?.pendingBoosts.length ?? 0,
     0,
@@ -127,8 +125,8 @@ async function testBoostingForAsset(
   await addBoostFunds(cf, asset, boostFee, amount);
 
   // Do a swap
-  const swapAsset = asset === Assets.Usdc ? Assets.Flip : Assets.Usdc;
-  const destAddress = await newAssetAddress(swapAsset, 'LP_BOOST');
+  const swapAsset = Assets.Usdc;
+  const destAddress = await newAssetAddress(swapAsset, cf.requirements.account.uri);
   cf.debug(`Swap destination address: ${destAddress}`);
   const swapRequest = await requestNewSwap(
     cf,
@@ -151,40 +149,49 @@ async function testBoostingForAsset(
     boosted: {
       name: `${chainFromAsset(asset)}IngressEgress.DepositBoosted`,
       schema: bitcoinIngressEgressDepositBoosted.refine(
-        (event) => event.channelId === BigInt(swapRequest.channelId),
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
       ),
     },
     insufficientLiquidity: {
       name: `${chainFromAsset(asset)}IngressEgress.InsufficientBoostLiquidity`,
       schema: bitcoinIngressEgressDepositBoosted.refine(
-        (event) => event.channelId === BigInt(swapRequest.channelId),
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
       ),
     },
     finalized: {
       name: `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
       schema: bitcoinIngressEgressDepositFinalised.refine(
-        (event) => event.channelId === BigInt(swapRequest.channelId),
+        (event) =>
+          event.channelId === BigInt(swapRequest.channelId) &&
+          event.asset === asset &&
+          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
       ),
     },
   });
 
   if (firstEvent.key !== 'boosted') {
-    throwError(
-      cf.logger,
-      new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent.data)}`),
-    );
+    throw new Error(`Expected DepositBoosted event, but got: ${JSON.stringify(firstEvent)}`);
   }
 
   // Check that the swap was finalized after being boosted
-  await cf.stepOneBlock();
   await cf.stepUntilEvent(
     `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
     bitcoinIngressEgressDepositFinalised.refine(
-      (event) => event.channelId === BigInt(swapRequest.channelId),
+      (event) =>
+        event.channelId === BigInt(swapRequest.channelId) &&
+        event.asset === asset &&
+        doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
     ),
   );
 
   // Stop boosting
+  cf.debug('Stopping boosting to check unlocked amounts');
   const stoppedBoostingEvent = (await stopBoosting(cf, asset, boostFee))!;
   cf.trace('StoppedBoosting event:', JSON.stringify(stoppedBoostingEvent));
   assert.strictEqual(
@@ -208,8 +215,11 @@ async function testBoostingForAsset(
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
-  const cf = await newChainflipIO(testContext.logger, []);
+  const parentCf = await newChainflipIO(testContext.logger, []);
   await using chainflip = await getChainflipApi();
+
+  const lpUri = '//LP_BOOST';
+  const cf = parentCf.with({ account: fullAccountFromUri(lpUri, 'LP') });
 
   // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
   const boostPoolTier = 4;
@@ -246,5 +256,5 @@ export async function testBoostingSwap(testContext: TestContext) {
   );
 
   // Pre-witnessing is only enabled for btc.
-  await testBoostingForAsset(Assets.Btc, boostPoolTier, '//LP_1', 0.1, testContext);
+  await doBoostingForBtcAssetTest(cf, boostPoolTier, 0.1);
 }

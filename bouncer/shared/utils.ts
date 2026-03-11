@@ -4,8 +4,6 @@ import { HDNodeWallet, Wallet, getDefaultProvider } from 'ethers';
 import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, Keyring } from '@polkadot/api';
-// eslint-disable-next-line no-restricted-imports
-import { KeyringPair } from '@polkadot/keyring/types';
 import { Mutex } from 'async-mutex';
 import {
   Chain as SDKChain,
@@ -37,12 +35,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import {
-  DisposableApiPromise,
-  getChainflipApi,
-  observeBadEvent,
-  observeEvent,
-} from 'shared/utils/substrate';
+import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -51,14 +44,18 @@ import { DispatchError, EventRecord, Header } from '@polkadot/types/interfaces';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import {
+  cfChainsAddressForeignChainAddress,
+  cfChainsBtcScriptPubkey,
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
+  spRuntimeDispatchError,
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
-import { Err, Ok, Result } from 'shared/utils/result';
 import { randomBytes } from 'crypto';
+import { HexString } from '@polkadot/util/types';
+import bitcoin from 'bitcoinjs-lib';
 
 const cfTesterAbi = await getCFTesterAbi();
 const cfTesterIdl = await getCfTesterIdl();
@@ -252,6 +249,25 @@ export function getContractAddress(chain: Chain, contract: string): string {
   }
 }
 
+export function shortChainFromChain(chain: Chain) {
+  switch (chain) {
+    case 'Ethereum':
+      return 'Eth';
+    case 'Arbitrum':
+      return 'Arb';
+    case 'Bitcoin':
+      return 'Btc';
+    case 'Polkadot':
+      return 'Dot';
+    case 'Solana':
+      return 'Sol';
+    case 'Assethub':
+      return 'Hub';
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
+}
+
 export function shortChainFromAsset(asset: Asset) {
   switch (asset) {
     case 'Dot':
@@ -309,7 +325,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
-      return '500';
+      return '1000';
     case 'Sol':
       return '100';
     default:
@@ -583,14 +599,14 @@ export type TransactionOriginId =
   | { type: TransactionOrigin.VaultSwapBitcoin; txId: string }
   | { type: TransactionOrigin.OnChainAccount; accountId: string };
 
-function checkRequestTypeMatches(
+export function checkRequestTypeMatches(
   actual: z.infer<typeof cfTraitsSwappingSwapRequestTypeGeneric>,
   expected: SwapRequestType,
 ) {
   return actual.__kind === expected;
 }
 
-function checkTransactionInMatches(
+export function checkTransactionInMatches(
   actual: z.infer<typeof cfChainsSwapOrigin>,
   expected: TransactionOriginId,
 ): boolean {
@@ -646,6 +662,9 @@ export async function observeSwapRequested<A = []>(
   id: TransactionOriginId,
   swapRequestType: SwapRequestType,
 ) {
+  cf.debug(
+    `Observing SwapRequested sourceAsset: ${sourceAsset} -> destAsset: ${destAsset} transaction id: ${JSON.stringify(id)} swapRequestType: ${swapRequestType}`,
+  );
   return cf.stepUntilEvent(
     'Swapping.SwapRequested',
     swappingSwapRequested.refine((event) => {
@@ -672,6 +691,62 @@ export async function observeBroadcastSuccess(logger: Logger, broadcastId: Broad
   }).event;
 
   await observeBroadcastFailure.stop();
+}
+
+export type ExtendedBtcAddressType = BtcAddressType | 'Taproot';
+
+export function doBtcAddressesMatch(
+  btcEventAddress: z.infer<typeof cfChainsBtcScriptPubkey>,
+  btcAddress: string,
+  btcAddrType: ExtendedBtcAddressType,
+): boolean {
+  if (btcAddrType === 'Taproot') {
+    // Decode the Bench32 address and convert from Buffer to hex
+    const { data } = bitcoin.address.fromBech32(btcAddress);
+    const taprootHex = ('0x' + Buffer.from(data).toString('hex')) as HexString;
+    return btcEventAddress.__kind === 'Taproot' && btcEventAddress.value === taprootHex;
+  }
+
+  const decoded = bitcoin.address.fromBase58Check(btcAddress);
+  const hashHex = ('0x' + decoded.hash.toString('hex')) as HexString;
+  return btcEventAddress.__kind === btcAddrType && btcEventAddress.value === hashHex;
+}
+
+// Takes an address from index events and checks whether it matches an input chain address to
+// For Eth, Arb, Sol nad hub it expects a HexString
+export function doAddressesMatch(
+  eventAddress: z.infer<typeof cfChainsAddressForeignChainAddress>,
+  chain: Chain,
+  address: string,
+  btcAddressType?: ExtendedBtcAddressType,
+): boolean {
+  const validateHexString = (addr: string): HexString => {
+    const addrLowerCase = addr.toLowerCase();
+    if (!/^0x[a-f0-9]+$/.test(addrLowerCase)) {
+      throw new Error(`Invalid hex address: ${addr}`);
+    }
+    return addrLowerCase as HexString;
+  };
+
+  switch (chain) {
+    case 'Ethereum':
+    case 'Arbitrum':
+    case 'Solana':
+    case 'Assethub': {
+      const hexAddress = validateHexString(address);
+      const shortChain = shortChainFromChain(chain);
+      return eventAddress.__kind === shortChain && eventAddress.value === hexAddress;
+    }
+    case 'Bitcoin': {
+      const btcAddrType = btcAddressType ?? 'P2PKH';
+      return (
+        eventAddress.__kind === 'Btc' &&
+        doBtcAddressesMatch(eventAddress.value, address, btcAddrType)
+      );
+    }
+    default:
+      throw new Error(`Unsupported chain: ${chain}`);
+  }
 }
 
 export async function newAddress(
@@ -768,6 +843,11 @@ export function getEvmEndpoint(chain: Chain): string {
   }
 }
 
+export function getWeb3(chain: Chain): Web3 {
+  const endpoint = getEvmEndpoint(chain);
+  return new Web3(endpoint);
+}
+
 export function getSolConnection(): Connection {
   return new Connection(process.env.SOL_HTTP_ENDPOINT ?? 'http://0.0.0.0:8899', {
     commitment: 'confirmed',
@@ -817,17 +897,19 @@ export async function observeBalanceIncrease(
   dstCcy: Asset,
   address: string,
   oldBalance?: string,
-  timeoutSeconds = 120,
+  timeoutSeconds = 200,
 ): Promise<number> {
-  logger.debug(`Observing balance increase of ${dstCcy} at ${address}`);
   const initialBalance = oldBalance
     ? Number(oldBalance)
     : Number(await getBalance(dstCcy, address));
+  logger.debug(
+    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
+  );
   for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
     const newBalance = Number(await getBalance(dstCcy, address));
     if (newBalance > initialBalance) {
       logger.debug(
-        `Observed balance increase of ${newBalance - initialBalance}${dstCcy} in ${i * 3} seconds`,
+        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
       );
       return newBalance;
     }
@@ -848,8 +930,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     if (balance === 0) {
       const chain = chainFromAsset(asset);
       if (chain === 'Ethereum' || chain === 'Arbitrum') {
-        const web3 = new Web3(getEvmEndpoint(chain));
-        if ((await web3.eth.getCode(address)) === '0x') {
+        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
           throw new Error('EVM address has no bytecode');
         }
       }
@@ -878,7 +959,7 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<ContractEvent | undefined> {
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -1173,15 +1254,12 @@ export function waitForExt(
         mutexRelease!();
         release = false;
       }
-      logger.trace(`Extrinsic status: ${status.toString()}`);
       if (dispatchError) {
-        logger.warn(`Extrinsic error: ${dispatchError.toString()}`);
         try {
           dispatchErrorHandler({ dispatchError });
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           reject(err);
-          throwError(logger, err);
         }
         return;
       }
@@ -1197,7 +1275,6 @@ export function waitForExt(
         logger.warn(`Extrinsic failed: ${status.toString()}`);
         const error = new Error(`Extrinsic failed with status: ${status.toString()}`);
         reject(error);
-        throwError(logger, error);
       }
     },
   };
@@ -1211,6 +1288,20 @@ export function decodeModuleError(module: any, api: any): string {
   };
   const { docs, name, section } = api.registry.findMetaError(errorIndex);
   return `${section}.${name}: ${docs}`;
+}
+
+export function decodeDispatchError(
+  reason: z.infer<typeof spRuntimeDispatchError>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  api: any,
+): string {
+  if (reason.__kind === 'Module') {
+    return decodeModuleError(reason.value, api);
+  }
+  if ('value' in reason) {
+    return `${reason.__kind}(${reason.value})`;
+  }
+  return reason.__kind;
 }
 
 export function isValidHexHash(hash: string): boolean {
@@ -1276,77 +1367,6 @@ export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
   const outputPrice = fineAmountToAmount(finePriceOutput.toString(), assetDecimals(to));
 
   return outputPrice;
-}
-
-export function extractExtrinsicResult(
-  chainflipApi: DisposableApiPromise,
-  extrinsicResult: ISubmittableResult,
-): Result<ISubmittableResult, string> {
-  if (extrinsicResult.dispatchError) {
-    let error;
-    if (extrinsicResult.dispatchError.isModule) {
-      const { docs, name, section } = chainflipApi.registry.findMetaError(
-        extrinsicResult.dispatchError.asModule,
-      );
-      error = section + '.' + name + ': ' + docs;
-    } else {
-      error = extrinsicResult.dispatchError.toString();
-    }
-    return Err(`Extrinsic failed: ${error}`);
-  }
-  return Ok(extrinsicResult);
-}
-
-/// Submits an extrinsic and waits for it to be included in a block.
-/// Returning the extrinsic result or throwing the dispatchError.
-export async function submitChainflipExtrinsic(
-  account: KeyringPair,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  extrinsic: any,
-  errorOnFail = true,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  await using chainflipApi = await getChainflipApi();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let extrinsicResult: any;
-  const nonce = await chainflipApi.rpc.system.accountNextIndex(account.address);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await extrinsic.signAndSend(account, { nonce }, (arg: any) => {
-    if (arg.blockNumber !== undefined || arg.dispatchError !== undefined) {
-      extrinsicResult = arg;
-    }
-  });
-  while (!extrinsicResult) {
-    await sleep(100);
-  }
-  if (errorOnFail) {
-    const extracted = extractExtrinsicResult(chainflipApi, extrinsicResult);
-    if (!extracted.ok) {
-      throw new Error(extracted.error);
-    }
-  }
-  return extrinsicResult;
-}
-
-export class ChainflipExtrinsicSubmitter {
-  private keyringPair: KeyringPair;
-
-  private mutex: Mutex;
-
-  constructor(keyringPair: KeyringPair, mutex: Mutex = new Mutex()) {
-    this.keyringPair = keyringPair;
-    this.mutex = mutex;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async submit(extrinsic: any, errorOnFail: boolean = true) {
-    let extrinsicResult;
-    await this.mutex.runExclusive(async () => {
-      extrinsicResult = await submitChainflipExtrinsic(this.keyringPair, extrinsic, errorOnFail);
-    });
-    return extrinsicResult;
-  }
 }
 
 /// Calculate the fee using the given bps. Used for broker & boost fee calculation.

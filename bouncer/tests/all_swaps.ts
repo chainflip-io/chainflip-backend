@@ -120,12 +120,12 @@ export function testAllSwaps(timeoutPerSwap: number) {
   });
 
   for (const swap of allSwaps) {
-    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, true);
+    concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
   }
 }
 
 export async function testSwapsToAssethub(testContext: TestContext) {
-  // we run three swaps to assethub in sequence. Otherweise there can be nonce issues,
+  // we run three swaps to assethub in sequence. Otherwise, there can be nonce issues,
   // which caused bouncer flakiness in the past.
   for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
     const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });

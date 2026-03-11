@@ -354,7 +354,7 @@ services:
         "-e",
         "ws://host.docker.internal:9944",
         "--out",
-        "postgres://postgres:postgres@postgres:${INDEXER_DB_PORT:-5432}/squid_archive",
+        "postgres://postgres:postgres@postgres:5432/squid_archive",
         "--finalized-blocks",
         "false",
       ]

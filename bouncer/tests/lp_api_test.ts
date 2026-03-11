@@ -75,7 +75,8 @@ async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
     expectedEvent: {
       name: 'LiquidityProvider.LiquidityRefundAddressRegistered',
       schema: liquidityProviderLiquidityRefundAddressRegistered.refine(
-        (event) => event.address.__kind === 'Eth' && event.address.value === testAddress,
+        (event) =>
+          event.address.__kind === 'Eth' && event.address.value === testAddress.toLowerCase(),
       ),
     },
   });

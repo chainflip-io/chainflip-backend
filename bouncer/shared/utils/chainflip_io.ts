@@ -1,11 +1,4 @@
-import {
-  createStateChainKeypair,
-  extractExtrinsicResult,
-  cfMutex,
-  isValidHexHash,
-  sleep,
-  waitForExt,
-} from 'shared/utils';
+import { cfMutex, createStateChainKeypair, isValidHexHash, sleep, waitForExt } from 'shared/utils';
 import { z } from 'zod';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
@@ -26,6 +19,33 @@ import {
   highestBlock,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
+import { ISubmittableResult } from '@polkadot/types/types';
+import { Err, Ok, Result } from 'shared/utils/result';
+
+async function toExtrinsicResult(
+  chainflipApi: DisposableApiPromise,
+  extrinsicResultPromise: Promise<ISubmittableResult>,
+): Promise<Result<ISubmittableResult, string>> {
+  try {
+    const extrinsicResult = await extrinsicResultPromise;
+
+    if (extrinsicResult.dispatchError) {
+      let error;
+      if (extrinsicResult.dispatchError.isModule) {
+        const { docs, name, section } = chainflipApi.registry.findMetaError(
+          extrinsicResult.dispatchError.asModule,
+        );
+        error = section + '.' + name + ': ' + docs;
+      } else {
+        error = extrinsicResult.dispatchError.toString();
+      }
+      return Err(`Extrinsic failed: ${error}`);
+    }
+    return Ok(extrinsicResult);
+  } catch (err) {
+    return Err(`${err}`);
+  }
+}
 
 export class ChainflipIO<Requirements> {
   /**
@@ -120,7 +140,7 @@ export class ChainflipIO<Requirements> {
    * that was returned by the extrinsic.
    */
   async submitExtrinsic<
-    Data extends Requirements & { account: FullAccount<AccountType> },
+    Data extends Requirements & { account: PartialAccount },
     Schema extends z.ZodTypeAny,
   >(
     this: ChainflipIO<Data>,
@@ -142,12 +162,12 @@ export class ChainflipIO<Requirements> {
 
       // submit
       const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'InBlock', release);
+      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'Finalized', release);
       const nonce = (await chainflipApi.rpc.system.accountNextIndex(
         this.requirements.account.keypair.address,
       )) as unknown as number;
       const unsub = await ext.signAndSend(this.requirements.account.keypair, { nonce }, waiter);
-      const result = extractExtrinsicResult(chainflipApi, await promise);
+      const result = await toExtrinsicResult(chainflipApi, promise);
       unsub();
 
       if (!result.ok) {
@@ -293,6 +313,13 @@ export class ChainflipIO<Requirements> {
    */
   async stepOneBlock() {
     this.lastIoBlockHeight += 1;
+  }
+
+  /**
+   * Advance the current chainflip block height by N block.
+   */
+  async stepNBlocks(n: number) {
+    this.lastIoBlockHeight += n;
   }
 
   /**
@@ -488,8 +515,8 @@ export class ChainflipIO<Requirements> {
     };
 
     // start printing messages, but don't await this promise
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    messagePrinter();
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    messagePrinter().catch(() => {});
 
     const result = await promise;
 
@@ -614,9 +641,12 @@ export type ExtrinsicFromApi = (
 
 export type AccountType = 'Broker' | 'LP';
 
-export type FullAccount<T extends AccountType> = {
+export type PartialAccount = {
   uri: `//${string}`;
   keypair: KeyringPair;
+};
+
+export type FullAccount<T extends AccountType> = PartialAccount & {
   type: T;
 };
 
@@ -632,6 +662,13 @@ export function fullAccountFromUri<A extends AccountType>(
     uri,
     keypair: createStateChainKeypair(uri),
     type,
+  };
+}
+
+export function partialAccountFromUri(uri: `//${string}`): PartialAccount {
+  return {
+    uri,
+    keypair: createStateChainKeypair(uri),
   };
 }
 

@@ -1,12 +1,6 @@
-import Web3 from 'web3';
 import { HDNodeWallet } from 'ethers';
 import { InternalAsset as Asset } from '@chainflip/cli';
-import {
-  amountToFineAmount,
-  chainFromAsset,
-  getEvmEndpoint,
-  getContractAddress,
-} from 'shared/utils';
+import { amountToFineAmount, chainFromAsset, getWeb3, getContractAddress } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { Logger } from 'shared/utils/logger';
@@ -22,7 +16,7 @@ export async function approveErc20(
 ) {
   const chain = chainFromAsset(asset);
 
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
 
   const tokenContractAddress = getContractAddress(chain, asset);
 
