@@ -1,2 +1,2 @@
 #!/bin/bash
-pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+pnpm vitest --maxConcurrency=1000 run -t "ConcurrentTests"
