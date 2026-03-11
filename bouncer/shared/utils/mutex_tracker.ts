@@ -91,14 +91,18 @@ export function getCallerFromStack(): string {
       line.includes('mutex_tracker') ||
       line.includes('keyed_mutex') ||
       line.includes('tracked_mutex') ||
+      line.includes('tracked_semaphore') ||
       line.includes('async-mutex') ||
+      line.includes('node_modules') ||
+      line.includes('node:') ||
       line.startsWith('Error')
     ) {
       // eslint-disable-next-line no-continue
       continue;
     }
-    // Extract filename and line number from the stack frame
-    const match = line.match(/([^/\s]+\.ts):(\d+):\d+/);
+    // Extract filename and line number from the stack frame.
+    // Vitest may strip .ts extensions from aliased imports, so match with or without extension.
+    const match = line.match(/([^/\s(]+):([0-9]+):[0-9]+/);
     if (match) {
       return `${match[1]}:${match[2]}`;
     }
