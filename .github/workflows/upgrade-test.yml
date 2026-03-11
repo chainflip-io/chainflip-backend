@@ -224,7 +224,7 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+          pnpm vitest --maxConcurrency=1000 run -t "ConcurrentTests"
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
