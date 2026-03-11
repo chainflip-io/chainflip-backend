@@ -400,13 +400,17 @@ pub fn handle_vault_events<
 	let mut result = Vec::new();
 
 	for event in events {
-		if let Some(mapped) = handle_vault_event::<T, I>(
+		match handle_vault_event::<T, I>(
 			supported_assets,
 			event.event_parameters,
 			event.tx_hash,
 			block_query,
-		)? {
-			result.push(mapped);
+		) {
+			Ok(Some(mapped)) => result.push(mapped),
+			Ok(None) => {},
+			Err(e) => {
+				tracing::warn!("Ignoring vault contract event at {block_query:?}: {e:#}");
+			},
 		}
 	}
 
@@ -577,4 +581,47 @@ fn handle_vault_event<
 		},
 		_ => return Ok(None),
 	}))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn make_event(event_parameters: VaultEvents) -> Event<VaultEvents> {
+		Event { tx_hash: H256::default(), log_index: U256::zero(), event_parameters }
+	}
+
+	#[test]
+	fn bad_vault_event_is_skipped_gracefully() {
+		let supported_assets: HashMap<H160, <cf_chains::Ethereum as Chain>::ChainAsset> =
+			HashMap::new();
+
+		let bad_event = make_event(VaultEvents::SwapNativeFilter(SwapNativeFilter {
+			dst_chain: 1u32,
+			dst_address: ethers::types::Bytes::from(vec![0u8; 20]),
+			dst_token: 1u32,
+			amount: U256::from(100),
+			sender: H160::default(),
+			cf_parameters: ethers::types::Bytes::from(vec![0xFFu8; 4]), // garbage
+		}));
+
+		let good_event =
+			make_event(VaultEvents::TransferNativeFailedFilter(TransferNativeFailedFilter {
+				recipient: H160::from([1u8; 20]),
+				amount: U256::from(100),
+			}));
+
+		let result = handle_vault_events::<Runtime, EthereumInstance>(
+			&supported_assets,
+			vec![bad_event, good_event],
+			&"test_block",
+		);
+
+		let events = result.expect("should not fail even with a bad event");
+		assert_eq!(events.len(), 1, "only the valid event should be included");
+		assert!(
+			matches!(events[0], EvmVaultContractEvent::TransferFailed(_)),
+			"the valid event should be a TransferFailed"
+		);
+	}
 }
