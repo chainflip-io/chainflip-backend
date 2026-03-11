@@ -189,8 +189,8 @@ impl<Chain: EvmSingleBlockChainTypes> EvmEventClient<Chain>
 				event_type
 					.parse_log(unparsed_log)
 					.map_err(|err| {
-						tracing::error!(
-						"event for contract {} could not be decoded in block {:?}. Error: {err}",
+						tracing::info!(
+						"event for contract {} could not be decoded in block {:?}: {err}",
 						contract_address,
 						query.block_hash
 					)
