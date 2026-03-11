@@ -1,8 +1,8 @@
 import { Mutex, MutexInterface } from 'async-mutex';
-import { mutexTracker, getCallerFromStack } from 'shared/utils/mutex_tracker';
+import { TrackedMutex } from 'shared/utils/tracked_mutex';
 
 export class KeyedMutex {
-  private map = new Map<string, Mutex>();
+  private map = new Map<string, TrackedMutex>();
 
   private readonly name: string;
 
@@ -10,10 +10,10 @@ export class KeyedMutex {
     this.name = name ?? 'KeyedMutex';
   }
 
-  private get(key: string): Mutex {
+  private get(key: string): TrackedMutex {
     let m = this.map.get(key);
     if (!m) {
-      m = new Mutex();
+      m = new TrackedMutex(this.name, key);
       this.map.set(key, m);
     }
     return m;
@@ -26,85 +26,24 @@ export class KeyedMutex {
    * Note: `runExclusive` calls through the proxy are tracked.
    */
   for(key: string): Mutex {
-    const mutex = this.get(key);
-    const mutexName = this.name;
-    return new Proxy(mutex, {
-      get: (target, prop) => {
-        if (prop === 'runExclusive') {
-          return async <T>(callback: MutexInterface.Worker<T>): Promise<T> => {
-            const caller = getCallerFromStack();
-            const timestamp = new Date().toISOString();
-            const waitStart = Date.now();
-            return target.runExclusive(async () => {
-              const waitTimeMs = Date.now() - waitStart;
-              const holdStart = Date.now();
-              try {
-                return await callback();
-              } finally {
-                mutexTracker.record({
-                  mutexName,
-                  key,
-                  waitTimeMs,
-                  holdTimeMs: Date.now() - holdStart,
-                  caller,
-                  timestamp,
-                });
-              }
-            });
-          };
-        }
-        const value = target[prop as keyof Mutex];
+    const tracked = this.get(key);
+    return new Proxy(tracked as unknown as Mutex, {
+      get: (_target, prop) => {
+        const value = tracked[prop as keyof TrackedMutex];
         if (typeof value === 'function') {
-          return value.bind(target);
+          return value.bind(tracked);
         }
         return value;
       },
     });
   }
 
-  async acquire(key: string): Promise<MutexInterface.Releaser> {
-    const caller = getCallerFromStack();
-    const timestamp = new Date().toISOString();
-    const waitStart = Date.now();
-
-    const releaser = await this.get(key).acquire();
-    const waitTimeMs = Date.now() - waitStart;
-    const holdStart = Date.now();
-
-    return () => {
-      mutexTracker.record({
-        mutexName: this.name,
-        key,
-        waitTimeMs,
-        holdTimeMs: Date.now() - holdStart,
-        caller,
-        timestamp,
-      });
-      releaser();
-    };
+  acquire(key: string): Promise<MutexInterface.Releaser> {
+    return this.get(key).acquire();
   }
 
-  async runExclusive<T>(key: string, callback: MutexInterface.Worker<T>): Promise<T> {
-    const caller = getCallerFromStack();
-    const timestamp = new Date().toISOString();
-    const waitStart = Date.now();
-
-    return this.get(key).runExclusive(async () => {
-      const waitTimeMs = Date.now() - waitStart;
-      const holdStart = Date.now();
-      try {
-        return await callback();
-      } finally {
-        mutexTracker.record({
-          mutexName: this.name,
-          key,
-          waitTimeMs,
-          holdTimeMs: Date.now() - holdStart,
-          caller,
-          timestamp,
-        });
-      }
-    });
+  runExclusive<T>(key: string, callback: MutexInterface.Worker<T>): Promise<T> {
+    return this.get(key).runExclusive(callback);
   }
 
   isLocked(key: string): boolean {
