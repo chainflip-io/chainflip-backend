@@ -113,7 +113,7 @@ export async function fundAndSendTransaction(
     })) as { hex: string };
     logger.debug(`signing raw tx`);
     const signedTx = await c.signRawTransactionWithWallet(fundedTx.hex);
-    logger.debug(`checking in mempool`);
+    logger.debug(`checking that signed raw tx could be submitted`);
     await assertCanSubmitRawTx(signedTx.hex, c);
     logger.debug(`sending`);
     const txId = (await c.sendRawTransaction(signedTx.hex)) as string | undefined;
@@ -234,7 +234,7 @@ export async function setupWallet(logger: ILogger, name: string) {
       warning?: string;
     };
     if (!reply.name) {
-      throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
+      throw new Error(`Could not create btc wallet with name ${name}, with error ${reply.warning}`);
     }
     if (reply.name !== name) {
       throw new Error(
