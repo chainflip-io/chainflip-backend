@@ -112,7 +112,13 @@ impl SwappingApi for MockSwappingApi {
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
 
-		let output_amount = (input_amount as f64 * SwapRate::get()) as AssetAmount;
+		// Most tests use a round number for the swap rate, so we use simple multiplication in that
+		// case to avoid floating point precision issues.
+		let output_amount = if SwapRate::get().fract() == 0.0 {
+			input_amount.saturating_mul(SwapRate::get() as AssetAmount)
+		} else {
+			(input_amount as f64 * SwapRate::get()) as AssetAmount
+		};
 
 		let mut liquidity = Liquidity::get();
 
@@ -184,6 +190,10 @@ impl WeightInfo for MockWeightInfo {
 	}
 
 	fn bind_broker_fee_withdrawal_address() -> Weight {
+		Weight::from_parts(100, 0)
+	}
+
+	fn init_network_fee_swap_request() -> Weight {
 		Weight::from_parts(100, 0)
 	}
 }

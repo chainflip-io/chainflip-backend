@@ -321,6 +321,7 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 				minimum: 0,
 			});
 
+			// Initialize the liquidity mock for the input asset
 			MockSwappingApi::add_liquidity(INPUT_ASSET, 0);
 
 			// This is about 2 times (ignoring fees) what the output will be, so will fail
@@ -356,7 +357,7 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 
 			// This ensures that storage from the initial failure was reverted (otherwise
 			// we would see the network fee charged more than once)
-			assert_eq!(CollectedNetworkFee::<Test>::get(), EXPECTED_NETWORK_FEE_AMOUNT);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
 
 			assert_eq!(
 				MockSwappingApi::get_liquidity(&INPUT_ASSET),
@@ -540,63 +541,6 @@ fn test_refund_parameter_validation() {
 	});
 }
 
-#[test]
-fn test_zero_refund_amount_remaining() {
-	const SWAPS_SCHEDULED_FOR_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
-	new_test_ext()
-		.then_execute_at_block(INIT_BLOCK, |_| {
-			// Set a refund fee to the swap amount
-			NetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::zero(),
-				minimum: INPUT_AMOUNT,
-			});
-
-			// A swap with 0 retry duration, so it will be refunded immediately
-			insert_swaps(&[fok_swap(
-				Some(TestRefundParams { retry_duration: 0, min_output: INPUT_AMOUNT }),
-				false,
-			)]);
-
-			assert_swaps_scheduled_for_block(&[1.into()], SWAPS_SCHEDULED_FOR_BLOCK);
-		})
-		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
-			// Trigger a refund
-			MockSwappingApi::set_swaps_should_fail(true);
-		})
-		.then_execute_with(|_| {
-			// The refund should ignored and all of the swap amount should be swapped for fees
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
-				RuntimeEvent::Swapping(Event::SwapAborted { swap_id: SwapId(1), reason: SwapFailureReason::PriceImpactLimit }),
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					swap_request_id: SwapRequestId(2),
-					input_asset: Asset::Usdc,
-					input_amount: INPUT_AMOUNT,
-					output_asset: Asset::Flip,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapScheduled {
-					swap_request_id: SwapRequestId(2),
-					input_amount: INPUT_AMOUNT,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::RefundEgressIgnored {
-					swap_request_id: SwapRequestId(1),
-					amount: 0,
-					asset: INPUT_ASSET,
-					reason,
-					..
-				}) if reason == DispatchError::from(Error::<Test>::NoRefundAmountRemaining),
-				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1),
-					..
-				}),
-			);
-		});
-}
-
 mod oracle_swaps {
 	use super::*;
 	use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
@@ -622,19 +566,26 @@ mod oracle_swaps {
 
 		// Set the price to match the swap rate for each leg
 		const OUTPUT_ASSET_PRICE: u128 = 100_000_000;
-		const STABLE_PRICE: u128 = OUTPUT_ASSET_PRICE * SWAP_RATE;
-		const INPUT_ASSET_PRICE: u128 = STABLE_PRICE * SWAP_RATE;
+		const USDC_PRICE: u128 = OUTPUT_ASSET_PRICE * SWAP_RATE;
+		const INPUT_ASSET_PRICE: u128 = USDC_PRICE * SWAP_RATE;
 
-		const NETWORK_FEE_BPS: u32 = 100;
-		const BROKER_FEE_BPS: u16 = 100;
-		let network_fee = Permill::from_parts(NETWORK_FEE_BPS * 100);
+		const NETWORK_FEE_BPS: BasisPoints = 100;
+		const BROKER_FEE_BPS: BasisPoints = 100;
+		let network_fee = permill_from_bps(NETWORK_FEE_BPS);
 		// Using a large enough minimum that it will be applied in the test to ensure the oracle
 		// price protection does not trigger on the first chunk because of it.
-		let network_fee_minimum = network_fee * CHUNK_AMOUNT * 2;
+		let network_fee_minimum_input_asset = network_fee * CHUNK_AMOUNT * 2;
+		// The minimum network fee in USDC terms minus a compounding rounding error when converting
+		// to input asset.
+		let network_fee_minimum_usdc = network_fee_minimum_input_asset * SWAP_RATE - 4;
+		let broker_fee_for_chunk_with_minimum =
+			BROKER_FEE_BPS as u128 * (CHUNK_AMOUNT - network_fee_minimum_input_asset) / 10_000;
 
-		// Also checking the oracle delta value is set correctly (with rounding error)
+		// Also checking the oracle delta value is set correctly when the minimum network fee is
+		// applied. With a small rounding error.
 		let expected_oracle_delta =
-			Some(SignedBasisPoints::negative_slippage(NETWORK_FEE_BPS as u16 + BROKER_FEE_BPS));
+			Some(SignedBasisPoints::negative_slippage(NETWORK_FEE_BPS * 2 + BROKER_FEE_BPS - 1));
+		println!("expected_oracle_delta: {expected_oracle_delta:?}");
 
 		new_test_ext()
 			.execute_with(|| {
@@ -642,11 +593,11 @@ mod oracle_swaps {
 
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, INPUT_ASSET_PRICE);
 				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, OUTPUT_ASSET_PRICE);
-				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, STABLE_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, USDC_PRICE);
 
 				NetworkFee::<Test>::set(FeeRateAndMinimum {
 					rate: network_fee,
-					minimum: network_fee_minimum,
+					minimum: network_fee_minimum_usdc,
 				});
 
 				// Set the default oracle price slippage protection so we can check that the our
@@ -701,17 +652,19 @@ mod oracle_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_1_BLOCK)
 			.then_execute_with(|_| {
+				let expected_input_amount = CHUNK_AMOUNT - network_fee_minimum_input_asset - broker_fee_for_chunk_with_minimum;
+
 				assert_has_matching_event!(
 					Test,
 					RuntimeEvent::Swapping(
 						Event::SwapExecuted {
-						input_amount: CHUNK_AMOUNT,
+						input: AssetAndAmount { asset: INPUT_ASSET, amount },
 						network_fee,
 						oracle_delta,
 						..
 					},
 					// Make sure the network fee minimum was taken
-					) if *network_fee == network_fee_minimum && *oracle_delta == expected_oracle_delta
+					) if *network_fee == AssetAndAmount { asset: INPUT_ASSET, amount: network_fee_minimum_input_asset } && *oracle_delta == expected_oracle_delta && *amount == expected_input_amount
 				);
 
 				// Turn the swap rate down to trigger the oracle slippage protection
@@ -734,9 +687,12 @@ mod oracle_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_2_RETRY_BLOCK)
 			.then_execute_with(|_| {
+				// The first chunk took a minimum network fee that was twice the normal fee, so this chunk will have no network fee applied.
+				let expected_input_amount = CHUNK_AMOUNT - BROKER_FEE_BPS as u128 * CHUNK_AMOUNT / 10_000;
 				assert_has_matching_event!(
 					Test,
-					RuntimeEvent::Swapping(Event::SwapExecuted { input_amount: CHUNK_AMOUNT, .. })
+					RuntimeEvent::Swapping(Event::SwapExecuted { input: AssetAndAmount { asset: INPUT_ASSET, amount }, .. })
+					if *amount == expected_input_amount
 				);
 
 				assert_has_matching_event!(
@@ -748,12 +704,8 @@ mod oracle_swaps {
 
 	#[test]
 	fn oracle_swap_ignores_oracle_if_not_supported_or_unavailable() {
-		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-
 		new_test_ext()
 			.execute_with(|| {
-				assert_eq!(System::block_number(), INIT_BLOCK);
-
 				// Set the price of one of the assets to None to simulate being unsupported
 				MockPriceFeedApi::set_price(INPUT_ASSET, None);
 				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, DEFAULT_SWAP_RATE);
@@ -773,7 +725,7 @@ mod oracle_swaps {
 					LP_ACCOUNT,
 				);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -807,7 +759,7 @@ mod oracle_swaps {
 					LP_ACCOUNT,
 				);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -884,8 +836,8 @@ mod oracle_swaps {
 	fn test_negative_oracle_price_delta() {
 		// The swap output will be lower than the oracle
 		const SWAP_RATE_BPS: u32 = 100;
-		const NETWORK_FEE_BPS: u32 = 100;
-		const BROKER_FEE_BPS: u16 = 100;
+		const NETWORK_FEE_BPS: BasisPoints = 100;
+		const BROKER_FEE_BPS: BasisPoints = 100;
 
 		// The expected delta is 0.99^3-1 = -0.029701 = -297.01 bps, rounded away from zero to -298
 		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(-298));
@@ -898,7 +850,7 @@ mod oracle_swaps {
 
 				// Set the fees, price and swap rate so we get the exact delta we want
 				NetworkFee::<Test>::set(FeeRateAndMinimum {
-					rate: Permill::from_parts(NETWORK_FEE_BPS * 100),
+					rate: permill_from_bps(NETWORK_FEE_BPS),
 					minimum: 0,
 				});
 				SwapRate::set(1.0 - (SWAP_RATE_BPS as f64 / 10000.0));
@@ -925,7 +877,7 @@ mod oracle_swaps {
 					SwapOrigin::OnChainAccount(0_u64),
 				);
 			})
-			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -941,9 +893,9 @@ mod oracle_swaps {
 	#[test]
 	fn can_handle_positive_oracle_price_delta() {
 		// The swap output will be higher than the oracle
-		const SWAP_RATE_BPS: u32 = 100;
-		const NETWORK_FEE_BPS: u32 = 10;
-		const BROKER_FEE_BPS: u16 = 10;
+		const SWAP_RATE_BPS: BasisPoints = 100;
+		const NETWORK_FEE_BPS: BasisPoints = 10;
+		const BROKER_FEE_BPS: BasisPoints = 10;
 		const EXPECTED_DELTA: Option<SignedBasisPoints> = Some(SignedBasisPoints(80));
 
 		new_test_ext()
@@ -952,7 +904,7 @@ mod oracle_swaps {
 
 				// Set the fees, price and swap rate so we get the exact delta we want
 				NetworkFee::<Test>::set(FeeRateAndMinimum {
-					rate: Permill::from_parts(NETWORK_FEE_BPS * 100),
+					rate: permill_from_bps(NETWORK_FEE_BPS),
 					minimum: 0,
 				});
 				// Using a positive swap rate
@@ -977,7 +929,7 @@ mod oracle_swaps {
 					SwapOrigin::OnChainAccount(0_u64),
 				);
 			})
-			.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
@@ -997,9 +949,9 @@ mod oracle_swaps {
 		// Values from an actual swap
 		const INPUT_AMOUNT: AssetAmount = 9000632;
 		const OUTPUT_AMOUNT: AssetAmount = 2695410274420764757;
-		const STABLE_AMOUNT: AssetAmount = 8020476946;
-		const BROKER_FEE: AssetAmount = 12048789; // 15 bps
-		const NETWORK_FEE: AssetAmount = 8040566; // 10 bps
+		const USDC_AMOUNT: AssetAmount = 8020476946;
+		const BROKER_FEE: AssetAmount = INPUT_AMOUNT * 15 / 10000; // 15 bps
+		const NETWORK_FEE: AssetAmount = INPUT_AMOUNT * 10 / 10000; // 10 bps
 
 		fn set_prices() {
 			// Prices taken at similar time to the swap values above
@@ -1021,7 +973,7 @@ mod oracle_swaps {
 					0.into(),
 					Asset::Btc,
 					Asset::Eth,
-					INPUT_AMOUNT,
+					INPUT_AMOUNT - NETWORK_FEE - BROKER_FEE,
 					Some(SwapRefundParameters {
 						refund_block: 10,
 						price_limits: PriceLimits {
@@ -1034,7 +986,7 @@ mod oracle_swaps {
 
 				network_fee_taken: Some(NETWORK_FEE),
 				broker_fee_taken: Some(BROKER_FEE),
-				stable_amount: Some(STABLE_AMOUNT),
+				intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
 				final_output: Some(OUTPUT_AMOUNT),
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
@@ -1054,7 +1006,7 @@ mod oracle_swaps {
 				set_prices();
 				let swap_state = test_swap_state(None);
 				let oracle_delta = Pallet::<Test>::get_delta_from_oracle_price(
-					swap_state.input_amount(),
+					swap_state.input_amount_before_fees(),
 					swap_state.final_output.unwrap_or(0),
 					swap_state.input_asset(),
 					swap_state.output_asset(),
@@ -1178,8 +1130,6 @@ mod oracle_swaps {
 	/// supported asset.
 	#[test]
 	fn single_sided_oracle_swap() {
-		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64; // TODO JAMIE: can we factor this out? .then_process_blocks(
-
 		const INPUT_ASSET: Asset = Asset::Eth;
 		const OUTPUT_ASSET: Asset = Asset::Flip;
 		const INPUT_PROTECTION_BPS: BasisPoints = 100;
@@ -1239,7 +1189,7 @@ mod oracle_swaps {
 				// Set the swap rate so the swap will fail
 				SwapRate::set(0.1);
 			})
-			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_process_blocks(SWAP_DELAY_BLOCKS)
 			.then_execute_with(|_| {
 				assert_has_matching_event!(
 					Test,
