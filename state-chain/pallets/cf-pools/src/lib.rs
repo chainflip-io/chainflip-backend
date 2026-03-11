@@ -500,10 +500,10 @@ pub mod pallet {
 		/// Unsupported call.
 		UnsupportedCall,
 		/// The update can't be scheduled because the given dispatch_at block is in the past or too
-		/// far in the future (3600 blocks).
+		/// far in the future.
 		InvalidDispatchAt,
 		/// The given close_order_at is in the past, not larger than dispatch_at or too far in the
-		/// future (3600 blocks).
+		/// future.
 		InvalidCloseOrderAt,
 		/// The range order size is invalid.
 		InvalidSize,
