@@ -10,8 +10,11 @@ export class TrackedMutex {
 
   private readonly name: string;
 
-  constructor(name: string) {
+  private readonly key?: string;
+
+  constructor(name: string, key?: string) {
     this.name = name;
+    this.key = key;
   }
 
   async runExclusive<T>(callback: MutexInterface.Worker<T>): Promise<T> {
@@ -27,6 +30,7 @@ export class TrackedMutex {
       } finally {
         mutexTracker.record({
           mutexName: this.name,
+          key: this.key,
           waitTimeMs,
           holdTimeMs: Date.now() - holdStart,
           caller,
@@ -48,6 +52,7 @@ export class TrackedMutex {
     return () => {
       mutexTracker.record({
         mutexName: this.name,
+        key: this.key,
         waitTimeMs,
         holdTimeMs: Date.now() - holdStart,
         caller,
