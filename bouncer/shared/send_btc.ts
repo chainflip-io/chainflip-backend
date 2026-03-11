@@ -3,7 +3,7 @@ import * as bitcoinjs from 'bitcoinjs-lib';
 import * as ecc from 'tiny-secp256k1';
 import { sleep, btcClientMutex, getBtcClient } from 'shared/utils';
 import { ILogger } from 'shared/utils/logger_interface';
-import { Mutex } from 'async-mutex';
+import { TrackedMutex } from 'shared/utils/tracked_mutex';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
@@ -13,12 +13,12 @@ class BtcMutexClient {
 
   private readonly client: Client;
 
-  private readonly mutex: Mutex;
+  private readonly mutex: TrackedMutex;
 
   constructor(name: string, client: Client) {
     this.name = name;
     this.client = client;
-    this.mutex = new Mutex();
+    this.mutex = new TrackedMutex(`BtcMutexClient(${name})`);
   }
 
   runExclusive<A>(logger: ILogger, f: (client: Client) => Promise<A>): Promise<A> {
