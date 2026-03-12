@@ -44,19 +44,19 @@ impl OnRuntimeUpgrade for Migration {
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 2,
+					safety_margin: 4,
 					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 2,
+					safety_margin: 4,
 					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 2,
+					safety_margin: 4,
 					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 				},
 				Default::default(),
@@ -64,13 +64,13 @@ impl OnRuntimeUpgrade for Migration {
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 2,
+					safety_margin: 4,
 					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 2,
+					safety_margin: 4,
 					safety_buffer: ETHEREUM_MAINNET_SAFETY_BUFFER,
 				},
 			))
