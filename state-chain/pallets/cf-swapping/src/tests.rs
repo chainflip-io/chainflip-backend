@@ -2361,14 +2361,17 @@ mod affiliates {
 			// A non-USDC balance also blocks deregistration.
 			MockBalance::credit_account(&affiliate_account_id, Asset::Eth, BALANCE);
 
-			assert_noop!(
-				Swapping::deregister_as_broker(OriginTrait::signed(BROKER)),
-				Error::<Test>::AffiliateEarnedFeesNotWithdrawn
-			);
+			assert!(matches!(
+				BrokerDeregistrationCheck::<Test>::check(&BROKER),
+				Err(Error::<Test>::AffiliateEarnedFeesNotWithdrawn)
+			));
 
 			MockBalance::try_debit_account(&affiliate_account_id, Asset::Eth, BALANCE).unwrap();
 
-			assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+			// The deregister_as_broker call will use the mock and always succeed, so we do the
+			// deregistration check manually here as well.
+			assert_ok!(BrokerDeregistrationCheck::<Test>::check(&BROKER));
+			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)).unwrap();
 
 			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
 			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
