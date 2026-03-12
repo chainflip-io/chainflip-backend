@@ -471,6 +471,92 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 		self.spawn(future);
 		handle
 	}
+
+	/// Spawns a weak task that automatically restarts on failure with exponential backoff.
+	///
+	/// Calls `make_future()` in a loop. If the returned future errors or panics, the error is
+	/// logged, a metric is incremented, and the task is restarted after a backoff delay. The
+	/// parent scope is never affected by inner task failures.
+	///
+	/// Backoff starts at 30 seconds and doubles up to 30 mins max. If a task runs for more
+	/// than 60 seconds before failing, the backoff is reset to the initial value.
+	///
+	/// If the inner future returns `Ok(())` unexpectedly, it is restarted immediately (tasks
+	/// wrapped by this method are expected to run indefinitely).
+	#[track_caller]
+	pub fn spawn_with_restart<F, Fut>(&self, task_name: &'static str, mut make_future: F)
+	where
+		F: FnMut() -> Fut + Send + 'env,
+		Fut: Future<Output = Result<(), Error>> + Send + 'env,
+	{
+		use std::time::Duration;
+
+		#[cfg(not(test))]
+		const INITIAL_BACKOFF: Duration = Duration::from_secs(30);
+		#[cfg(not(test))]
+		const MAX_BACKOFF: Duration = Duration::from_secs(60 * 30);
+		#[cfg(not(test))]
+		const HEALTHY_DURATION: Duration = Duration::from_secs(60);
+
+		#[cfg(test)]
+		const MAX_BACKOFF: Duration = Duration::from_millis(4);
+		#[cfg(test)]
+		const INITIAL_BACKOFF: Duration = Duration::from_millis(1);
+		#[cfg(test)]
+		const HEALTHY_DURATION: Duration = Duration::from_millis(50);
+
+		self.spawn_weak(async move {
+			let mut backoff = INITIAL_BACKOFF;
+
+			loop {
+				let start = std::time::Instant::now();
+
+				let result = std::panic::AssertUnwindSafe(make_future()).catch_unwind().await;
+
+				let ran_for = start.elapsed();
+
+				match result {
+					Ok(Ok(())) => {
+						tracing::warn!(
+							target: "task_scope",
+							"Task '{task_name}' returned Ok unexpectedly, restarting immediately"
+						);
+						backoff = INITIAL_BACKOFF;
+						continue;
+					},
+					Ok(Err(error)) => {
+						tracing::error!(
+							target: "task_scope",
+							"Task '{task_name}' failed with error: {error:?}, restarting in {backoff:?}"
+						);
+					},
+					Err(panic_payload) => {
+						let panic_msg = panic_payload
+							.downcast_ref::<String>()
+							.map(|s| s.as_str())
+							.or_else(|| panic_payload.downcast_ref::<&str>().copied())
+							.unwrap_or("<unknown panic>");
+						tracing::error!(
+							target: "task_scope",
+							"Task '{task_name}' panicked: {panic_msg}, restarting in {backoff:?}"
+						);
+					},
+				}
+
+				#[cfg(not(test))]
+				super::metrics::TASK_RESTARTS.inc(&[task_name]);
+
+				// Reset backoff if the task ran long enough to be considered healthy
+				if ran_for >= HEALTHY_DURATION {
+					backoff = INITIAL_BACKOFF;
+				}
+
+				tokio::time::sleep(backoff).await;
+
+				backoff = std::cmp::min(backoff.saturating_mul(2), MAX_BACKOFF);
+			}
+		});
+	}
 }
 
 /// This struct allows code to await on the task to exit, when dropped the associated task will be
@@ -890,6 +976,129 @@ mod tests {
 		})
 		.await
 		.unwrap();
+	}
+
+	#[tokio::main]
+	#[test]
+	async fn spawn_with_restart_recovers_from_errors() {
+		let attempt = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+		task_scope::<_, anyhow::Error, _>(|scope| {
+			async {
+				let attempt_for_check = attempt.clone();
+				let attempt_for_task = attempt.clone();
+				scope.spawn_with_restart("test_error_recovery", move || {
+					let attempt = attempt_for_task.clone();
+					async move {
+						let n: u32 = attempt.fetch_add(1, Ordering::Relaxed);
+						if n < 2 {
+							Err(anyhow!("attempt {n} failed"))
+						} else {
+							futures::future::pending::<Result<(), anyhow::Error>>().await
+						}
+					}
+				});
+
+				// Wait for retries to complete (3 failures with ~1-4ms backoff each)
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+				assert!(attempt_for_check.load(Ordering::Relaxed) == 3);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::main]
+	#[test]
+	async fn spawn_with_restart_recovers_from_panics() {
+		let attempt = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+		task_scope::<_, anyhow::Error, _>(|scope| {
+			async {
+				let attempt_for_check = attempt.clone();
+				let attempt_for_task = attempt.clone();
+				scope.spawn_with_restart("test_panic_recovery", move || {
+					let attempt = attempt_for_task.clone();
+					async move {
+						let n = attempt.fetch_add(1, Ordering::Relaxed);
+						if n < 2 {
+							panic!("attempt {n} panicked")
+						}
+						futures::future::pending::<Result<(), anyhow::Error>>().await
+					}
+				});
+
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+				assert!(attempt_for_check.load(Ordering::Relaxed) == 3);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::main]
+	#[test]
+	async fn spawn_with_restart_does_not_affect_parent_scope() {
+		let parent_completed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+		task_scope::<_, anyhow::Error, _>(|scope| {
+			async {
+				// Spawn a task that always fails
+				scope.spawn_with_restart("always_failing", || async {
+					Err::<(), _>(anyhow!("always fails"))
+				});
+
+				// Parent scope completes its work despite child failures
+				tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+				parent_completed.store(true, Ordering::Relaxed);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+
+		assert!(parent_completed.load(Ordering::Relaxed));
+	}
+
+	#[tokio::main]
+	#[test]
+	async fn spawn_with_restart_cancels_when_parent_exits() {
+		let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+		task_scope::<_, anyhow::Error, _>(|scope| {
+			async {
+				let running_for_check = running.clone();
+				let running_for_task = running.clone();
+				scope.spawn_with_restart("cancellable", move || {
+					let running = running_for_task.clone();
+					async move {
+						running.store(true, Ordering::Relaxed);
+						futures::future::pending::<Result<(), anyhow::Error>>().await
+					}
+				});
+
+				// Let the task start
+				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+				assert!(running_for_check.load(Ordering::Relaxed));
+
+				// Parent exits, which should cancel the restart loop
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+		// If we get here, the restart task was properly cancelled
 	}
 
 	#[tokio::test]
