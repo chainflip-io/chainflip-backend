@@ -3501,7 +3501,7 @@ pub mod utilities {
 			Asset::Dot | Asset::HubDot => 200,     // ~$2
 			Asset::Btc | Asset::Wbtc => 8_650_000, // ~$86,500
 			Asset::Sol => 12_700,                  // ~$127
-			Asset::Bnb => 60_000,               // ~$600
+			Asset::Bnb => 60_000,                  // ~$600
 		};
 
 		Price::from_usd_cents(asset, price_usd_cents)

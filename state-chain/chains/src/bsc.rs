@@ -110,7 +110,9 @@ impl BscTrackedData {
 	) -> <Bsc as Chain>::ChainAmount {
 		// the priority fee has to be non zero and ideally above a certain threshold otherwise the
 		// tx will likely be rejected by the validator
-		priority_fee_multiplier.saturating_mul_int(self.priority_fee).max(20_000_000_000)
+		priority_fee_multiplier
+			.saturating_mul_int(self.priority_fee)
+			.max(20_000_000_000)
 	}
 
 	pub fn calculate_ccm_gas_limit(
