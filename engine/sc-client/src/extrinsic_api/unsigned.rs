@@ -23,7 +23,9 @@ use sp_core::H256;
 use sp_runtime::{traits::Hash, transaction_validity::InvalidTransaction};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::extrinsic_api::common::invalid_err_obj;
+use crate::extrinsic_api::common::{
+	invalid_err_obj, POOL_ALREADY_IMPORTED, POOL_TEMPORARILY_BANNED,
+};
 
 use super::{
 	super::{base_rpc_api, SUBSTRATE_BEHAVIOUR},
@@ -86,7 +88,9 @@ impl UnsignedExtrinsicClient {
 									// that this particular extrinsic has already been
 									// submitted. And so we can ignore the error and return
 									// the transaction hash
-									ClientError::Call(obj) if obj.code() == 1013 => {
+									ClientError::Call(obj)
+										if obj.code() == POOL_ALREADY_IMPORTED =>
+									{
 										tracing::debug!(
 											"Already in pool with tx_hash: {expected_hash:#x}."
 										);
@@ -96,7 +100,9 @@ impl UnsignedExtrinsicClient {
 									// believe it has a similiar meaning to POOL_ALREADY_IMPORTED,
 									// but we don't know. We believe there maybe cases where we need
 									// to resubmit if this error occurs.
-									ClientError::Call(obj) if obj.code() == 1012 => {
+									ClientError::Call(obj)
+										if obj.code() == POOL_TEMPORARILY_BANNED =>
+									{
 										tracing::debug!(
 											"Transaction is temporarily banned with tx_hash: {expected_hash:#x}."
 										);

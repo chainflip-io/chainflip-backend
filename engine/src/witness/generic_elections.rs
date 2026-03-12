@@ -212,27 +212,34 @@ where
 		StorageApi + ChainApi + SignedExtrinsicApi + ElectoralApi<()> + 'static + Send + Sync,
 {
 	tracing::info!("Starting generic election witnessing");
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<GenericElectoralSystemRunner, _>::new((OraclePriceVoter {
-						arb_client: arb_client.clone(),
-						eth_client: eth_client.clone(),
-					},)),
-					None,
-					"GenericElections",
-				)
-				.continuously_vote()
-				.await;
+	scope.spawn_with_restart("oracle_witnessing", move || {
+		let arb_client = arb_client.clone();
+		let eth_client = eth_client.clone();
+		let state_chain_client = state_chain_client.clone();
+		async move {
+			task_scope::task_scope(|scope| {
+				async {
+					crate::elections::Voter::new(
+						scope,
+						state_chain_client,
+						CompositeVoter::<GenericElectoralSystemRunner, _>::new((
+							OraclePriceVoter {
+								arb_client: arb_client.clone(),
+								eth_client: eth_client.clone(),
+							},
+						)),
+						None,
+						"GenericElections",
+					)
+					.continuously_vote()
+					.await;
 
-				Ok(())
-			}
-			.boxed()
-		})
-		.await
+					Ok(())
+				}
+				.boxed()
+			})
+			.await
+		}
 	});
 
 	Ok(())

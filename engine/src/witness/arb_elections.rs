@@ -350,7 +350,7 @@ where
 		.map(|(asset, address)| (address, asset))
 		.collect();
 
-	let supported_asset_address_and_event_type = [
+	let supported_asset_address_and_event_type: HashMap<_, _> = [
 		(ArbAsset::ArbUsdc, EvmEventSource::new::<UsdcEvents>(usdc_contract_address)),
 		(ArbAsset::ArbUsdt, EvmEventSource::new::<UsdtEvents>(usdt_contract_address)),
 	]
@@ -360,47 +360,57 @@ where
 	let vault_event_source = EvmEventSource::new::<VaultEvents>(vault_address);
 	let key_manager_event_source = EvmEventSource::new::<KeyManagerEvents>(key_manager_address);
 
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<ArbitrumElectoralSystemRunner, _>::new((
-						EvmVoter::new(client.clone()),
-						GenericBwVoter::new(
+	scope.spawn_with_restart("arb_witnessing", move || {
+		let client = client.clone();
+		let state_chain_client = state_chain_client.clone();
+		let vault_event_source = vault_event_source.clone();
+		let key_manager_event_source = key_manager_event_source.clone();
+		let supported_asset_address_and_event_type = supported_asset_address_and_event_type.clone();
+		let supported_erc20_tokens = supported_erc20_tokens.clone();
+		async move {
+			task_scope::task_scope(|scope| {
+				async {
+					crate::elections::Voter::new(
+						scope,
+						state_chain_client,
+						CompositeVoter::<ArbitrumElectoralSystemRunner, _>::new((
 							EvmVoter::new(client.clone()),
-							EvmDepositChannelWitnessingConfig {
-								address_checker_address,
-								vault_contract: vault_event_source.clone(),
-								supported_assets: supported_asset_address_and_event_type,
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							VaultDepositWitnessingConfig {
-								vault: vault_event_source,
-								supported_assets: supported_erc20_tokens.clone(),
-							},
-						),
-						GenericBwVoter::new(
-							EvmVoter::new(client.clone()),
-							EvmKeyManagerWitnessingConfig { key_manager: key_manager_event_source },
-						),
-						ArbitrumFeeVoter { client: client.clone() },
-						ArbitrumLivenessVoter { client: client.clone() },
-					)),
-					Some(client.cache_invalidation_senders),
-					"Arbitrum",
-				)
-				.continuously_vote()
-				.await;
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EvmDepositChannelWitnessingConfig {
+									address_checker_address,
+									vault_contract: vault_event_source.clone(),
+									supported_assets: supported_asset_address_and_event_type,
+								},
+							),
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								VaultDepositWitnessingConfig {
+									vault: vault_event_source,
+									supported_assets: supported_erc20_tokens.clone(),
+								},
+							),
+							GenericBwVoter::new(
+								EvmVoter::new(client.clone()),
+								EvmKeyManagerWitnessingConfig {
+									key_manager: key_manager_event_source,
+								},
+							),
+							ArbitrumFeeVoter { client: client.clone() },
+							ArbitrumLivenessVoter { client: client.clone() },
+						)),
+						Some(client.cache_invalidation_senders),
+						"Arbitrum",
+					)
+					.continuously_vote()
+					.await;
 
-				Ok(())
-			}
-			.boxed()
-		})
-		.await
+					Ok(())
+				}
+				.boxed()
+			})
+			.await
+		}
 	});
 
 	Ok(())
