@@ -965,6 +965,12 @@ pub mod pallet {
 			broker: T::AccountId,
 			address: EthereumAddress,
 		},
+		/// An affiliate has been deregistered.
+		AffiliateDeregistration {
+			broker_id: T::AccountId,
+			short_id: AffiliateShortId,
+			affiliate_account_id: T::AccountId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1532,16 +1538,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let next_id: u8 = AffiliateIdMapping::<T>::iter_prefix_values(&broker_id)
-				.count()
-				.try_into()
-				.map_err(|_| Error::<T>::AffiliateShortIdOutOfBounds)?;
-
-			let short_id = AffiliateShortId::from(next_id);
-
-			ensure!(
-				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
-				Error::<T>::AffiliateAlreadyRegistered
+			let short_id = AffiliateShortId(
+				(0..=u8::MAX)
+					.find(|short_id| {
+						!AffiliateIdMapping::<T>::contains_key(
+							&broker_id,
+							AffiliateShortId::from(*short_id),
+						)
+					})
+					.ok_or(Error::<T>::AffiliateShortIdOutOfBounds)?,
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
@@ -1566,6 +1571,45 @@ pub mod pallet {
 				short_id,
 				withdrawal_address,
 				affiliate_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::deregister_affiliate())]
+		pub fn deregister_affiliate(
+			origin: OriginFor<T>,
+			affiliate_account_id: T::AccountId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let AffiliateDetails { short_id, .. } =
+				AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_account_id)
+					.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
+
+			ensure!(
+				T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
+				Error::<T>::AffiliateEarnedFeesNotWithdrawn
+			);
+
+			frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
+				// This shouldn't happen, and not much we can do if it does except fix it on a
+				// subsequent release. Consequences are minor.
+				log::error!(
+					"Unexpected reference count error while reaping the affiliate {:?}: {:?}.",
+					affiliate_account_id,
+					e
+				);
+			});
+
+			AffiliateAccountDetails::<T>::remove(&broker_id, &affiliate_account_id);
+			AffiliateIdMapping::<T>::remove(&broker_id, short_id);
+
+			Self::deposit_event(Event::<T>::AffiliateDeregistration {
+				broker_id,
+				short_id,
+				affiliate_account_id,
 			});
 
 			Ok(())

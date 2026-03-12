@@ -87,6 +87,12 @@ impl fmt::Display for WithdrawFeesDetail {
 	}
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DeregisteredAffiliate {
+	pub account_id: AccountId32,
+	pub short_id: AffiliateShortId,
+}
+
 pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
 #[derive(Serialize, Deserialize)]
