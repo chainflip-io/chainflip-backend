@@ -478,7 +478,7 @@ fn test_dispatch_at_validation() {
 				Some(0),
 				IncreaseOrDecrease::Decrease(55),
 				// Too far in the future
-				Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 1)
+				Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64) + 1)
 			),
 			Error::<Test>::InvalidDispatchAt
 		);
@@ -492,7 +492,7 @@ fn test_dispatch_at_validation() {
 			Some(0),
 			IncreaseOrDecrease::Decrease(55),
 			// Valid dispatch at
-			Some(CURRENT_BLOCK + (SCHEDULE_UPDATE_LIMIT_BLOCKS as u64))
+			Some(CURRENT_BLOCK + (SCHEDULE_OPEN_LIMIT_BLOCKS as u64))
 		));
 	});
 }
@@ -1544,7 +1544,7 @@ fn test_limit_order_auto_close() {
 					AMOUNT,
 					Some(DISPATCH_AT),
 					// Schedule the close order for too far in the future
-					Some((SCHEDULE_UPDATE_LIMIT_BLOCKS as u64) + 2),
+					Some((SCHEDULE_CLOSE_LIMIT_BLOCKS as u64) + 2),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);

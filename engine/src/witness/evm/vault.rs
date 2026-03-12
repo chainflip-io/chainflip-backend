@@ -41,8 +41,7 @@ use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
 use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
 use state_chain_runtime::{
-	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, EthereumInstance, Runtime,
-	RuntimeCall,
+	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, RuntimeCall,
 };
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
