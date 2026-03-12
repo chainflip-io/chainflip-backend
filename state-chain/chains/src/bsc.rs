@@ -48,7 +48,7 @@ impl ChainWitnessConfig for Bsc {
 
 impl Chain for Bsc {
 	const NAME: &'static str = "Bsc";
-	const GAS_ASSET: Self::ChainAsset = assets::bsc::Asset::BscBnb;
+	const GAS_ASSET: Self::ChainAsset = assets::bsc::Asset::Bnb;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
@@ -163,7 +163,7 @@ impl FeeEstimationApi<Bsc> for BscTrackedData {
 			IngressOrEgress::IngressDepositChannel => {
 				let gas_cost_per_fetch = BASE_COST_PER_BATCH +
 					match asset {
-						assets::bsc::Asset::BscBnb => Zero::zero(),
+						assets::bsc::Asset::Bnb => Zero::zero(),
 						assets::bsc::Asset::BscUsdt => GAS_COST_PER_FETCH,
 					};
 
@@ -173,7 +173,7 @@ impl FeeEstimationApi<Bsc> for BscTrackedData {
 			IngressOrEgress::Egress => {
 				let gas_cost_per_transfer = BASE_COST_PER_BATCH +
 					match asset {
-						assets::bsc::Asset::BscBnb => GAS_COST_PER_TRANSFER_NATIVE,
+						assets::bsc::Asset::Bnb => GAS_COST_PER_TRANSFER_NATIVE,
 						assets::bsc::Asset::BscUsdt => GAS_COST_PER_TRANSFER_TOKEN,
 					};
 
@@ -196,7 +196,7 @@ impl From<&DepositChannel<Bsc>> for EvmFetchId {
 		match channel.state {
 			DeploymentStatus::Undeployed => EvmFetchId::DeployAndFetch(channel.channel_id),
 			DeploymentStatus::Pending | DeploymentStatus::Deployed { .. } =>
-				if channel.asset == assets::bsc::Asset::BscBnb {
+				if channel.asset == assets::bsc::Asset::Bnb {
 					EvmFetchId::NotRequired
 				} else {
 					EvmFetchId::Fetch(channel.address)

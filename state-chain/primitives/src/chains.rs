@@ -139,7 +139,7 @@ impl ForeignChain {
 			ForeignChain::Arbitrum => assets::any::Asset::ArbEth,
 			ForeignChain::Solana => assets::any::Asset::Sol,
 			ForeignChain::Assethub => assets::any::Asset::HubDot,
-			ForeignChain::Bsc => assets::any::Asset::BscBnb,
+			ForeignChain::Bsc => assets::any::Asset::Bnb,
 		}
 	}
 	pub const fn ccm_support(self) -> bool {

@@ -514,7 +514,7 @@ impl EvmEnvironmentProvider<Arbitrum> for EvmEnvironment {
 impl EvmEnvironmentProvider<Bsc> for EvmEnvironment {
 	fn token_address(asset: assets::bsc::Asset) -> Option<EvmAddress> {
 		match asset {
-			assets::bsc::Asset::BscBnb => Some(ETHEREUM_ETH_ADDRESS),
+			assets::bsc::Asset::Bnb => Some(ETHEREUM_ETH_ADDRESS),
 			assets::bsc::Asset::BscUsdt => Environment::supported_bsc_assets(asset),
 		}
 	}
