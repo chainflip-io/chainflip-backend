@@ -7,7 +7,7 @@
 // Setup_vaults.ts must be ran first.
 import { existsSync, unlinkSync } from 'fs';
 import { setupBoostPools } from 'shared/setup_boost_pools';
-import { setupElections } from 'shared/setup_elections';
+import { setupWitnessing } from 'shared/setup_elections';
 import { setupLendingPools } from 'shared/lending';
 import { setupSwaps } from 'shared/setup_swaps';
 import { runWithTimeoutAndExit } from 'shared/utils';
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
     (subcf) => setupSwaps(subcf),
     (subcf) => setupBoostPools(subcf),
     (subcf) => setupLendingPools(subcf),
-    (subcf) => setupElections(subcf),
+    (subcf) => setupWitnessing(subcf),
   ]);
   cf.info('Setup concurrent complete');
 }
