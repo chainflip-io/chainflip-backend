@@ -906,7 +906,7 @@ assets!(
 		json: "Bsc",
 		assets: [
 			Asset {
-				variant: BscBnb,
+				variant: Bnb,
 				member: bnb,
 				string: "BNB" (aliases: ["Bnb", "bnb"]),
 				json: "BNB",

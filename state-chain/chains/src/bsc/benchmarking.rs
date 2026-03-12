@@ -40,7 +40,7 @@ impl BenchmarkValue for BscTrackedData {
 
 impl BenchmarkValue for bsc::Asset {
 	fn benchmark_value() -> Self {
-		bsc::Asset::BscBnb
+		bsc::Asset::Bnb
 	}
 }
 
