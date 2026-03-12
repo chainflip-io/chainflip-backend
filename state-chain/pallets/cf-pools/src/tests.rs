@@ -378,7 +378,7 @@ fn can_execute_scheduled_limit_order_updates() {
 	fn test_scheduled_limit_order_update(
 		update: impl Fn(OrderId, u64, AssetAmount) -> DispatchResult,
 	) {
-		const DISPATCH_AT: u64 = 6;
+		const DISPATCH_AT: u64 = SCHEDULE_OPEN_LIMIT_BLOCKS as u64;
 		const ORDER_ID: u64 = 0;
 		const AMOUNT: AssetAmount = 55;
 
@@ -1468,8 +1468,8 @@ fn test_sweeping_when_updating_range_order() {
 #[test]
 fn test_limit_order_auto_close() {
 	const ASSET: Asset = Asset::Flip;
-	const CLOSE_ORDER_AT: u64 = 10;
-	const DISPATCH_AT: u64 = 5;
+	const CLOSE_ORDER_AT: u64 = SCHEDULE_CLOSE_LIMIT_BLOCKS as u64;
+	const DISPATCH_AT: u64 = SCHEDULE_OPEN_LIMIT_BLOCKS as u64;
 	const AMOUNT: AssetAmount = 10_000;
 	const ORDER_ID: u64 = 1;
 
@@ -1513,8 +1513,8 @@ fn test_limit_order_auto_close() {
 					AMOUNT,
 					// Schedule the call for the same block as the close order, so it
 					// should be rejected
-					Some(CLOSE_ORDER_AT),
-					Some(CLOSE_ORDER_AT),
+					Some(DISPATCH_AT),
+					Some(DISPATCH_AT),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
@@ -1528,8 +1528,8 @@ fn test_limit_order_auto_close() {
 					Some(5),
 					AMOUNT,
 					// Schedule the call for after the close order, so it should be rejected
-					Some(CLOSE_ORDER_AT + 1),
-					Some(CLOSE_ORDER_AT),
+					Some(DISPATCH_AT),
+					Some(DISPATCH_AT - 1),
 				),
 				Error::<Test>::InvalidCloseOrderAt
 			);
