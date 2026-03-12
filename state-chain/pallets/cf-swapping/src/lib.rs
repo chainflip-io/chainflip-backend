@@ -82,7 +82,7 @@ pub use weights::WeightInfo;
 
 type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(16);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(17);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
