@@ -43,8 +43,9 @@ use cf_chains::{
 	TransferAssetParams,
 };
 use cf_primitives::{
-	chains, AccountId, AccountRole, Asset, AssetAmount, AuthorityCount, Beneficiary, DcaParameters,
-	EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	chains, AccountId, AccountRole, Asset, AssetAmount, AssetAndAmount, AuthorityCount,
+	Beneficiary, DcaParameters, EgressId, IngressOrEgress, SwapId, FLIPPERINOS_PER_FLIP,
+	STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
@@ -215,8 +216,8 @@ pub fn do_eth_swap(
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_request_id: executed_swap_request_id,
-					input_amount,
-					output_amount,
+					input: AssetAndAmount { asset: _, amount: input_amount },
+					output: AssetAndAmount { asset: _, amount: output_amount },
 					..
 				},
 			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
@@ -249,8 +250,8 @@ pub fn do_eth_swap(
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_request_id: executed_swap_request_id,
-					input_amount,
-					output_amount,
+					input: AssetAndAmount { asset: _, amount: input_amount },
+					output: AssetAndAmount { asset: _, amount: output_amount },
 					..
 				},
 			) if executed_swap_request_id == swap_request_id => (input_amount, output_amount),
@@ -1114,6 +1115,9 @@ fn order_fills_subscription() {
 }
 
 mod swap_simulation {
+	use cf_traits::PriceFeedApi;
+	use state_chain_runtime::chainflip::ChainlinkOracle;
+
 	use super::*;
 
 	const INPUT_ASSET: Asset = Asset::Eth;
@@ -1132,6 +1136,7 @@ mod swap_simulation {
 
 			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
 				rate: network_fee_rate,
+				// Using no minimum so the rate will always be used
 				minimum: 0,
 			});
 
@@ -1148,29 +1153,35 @@ mod swap_simulation {
 			)
 			.unwrap();
 
+			assert_eq!(simulated_swap.network_fee.asset, INPUT_ASSET);
+			assert_eq!(simulated_swap.broker_fee.asset, INPUT_ASSET);
+			assert_eq!(simulated_swap.ingress_fee.asset, INPUT_ASSET);
+			assert_eq!(simulated_swap.egress_fee.asset, OUTPUT_ASSET);
+
 			assert_eq!(
 				simulated_swap.output +
-					simulated_swap.egress_fee +
-					simulated_swap.ingress_fee +
-					simulated_swap.network_fee +
-					simulated_swap.broker_fee,
+					simulated_swap.egress_fee.amount +
+					simulated_swap.ingress_fee.amount +
+					simulated_swap.network_fee.amount +
+					simulated_swap.broker_fee.amount,
 				// Small rounding error
 				AMOUNT - 2
 			);
 			assert!(simulated_swap.output > 0);
 
-			let expected_network_fee = network_fee_rate * (AMOUNT - simulated_swap.ingress_fee);
-			assert_eq!(simulated_swap.network_fee, expected_network_fee);
+			let expected_network_fee =
+				network_fee_rate * (AMOUNT - simulated_swap.ingress_fee.amount);
+			assert_eq!(simulated_swap.network_fee.amount, expected_network_fee);
 
-			let expected_broker_fee =
-				broker_fee_rate * (AMOUNT - simulated_swap.ingress_fee - expected_network_fee);
-			assert_eq!(simulated_swap.broker_fee, expected_broker_fee);
+			let expected_broker_fee = broker_fee_rate *
+				(AMOUNT - simulated_swap.ingress_fee.amount - expected_network_fee);
+			assert_eq!(simulated_swap.broker_fee.amount, expected_broker_fee);
 
 			// Small rounding error
 			let expected_intermediate_amount = AMOUNT -
 				expected_network_fee -
 				expected_broker_fee -
-				simulated_swap.ingress_fee -
+				simulated_swap.ingress_fee.amount -
 				1;
 			assert_eq!(simulated_swap.intermediary, Some(expected_intermediate_amount));
 		});
@@ -1287,11 +1298,16 @@ mod swap_simulation {
 			.unwrap();
 
 			// The ingress and egress fees should be zero for the internal swaps
-			assert_eq!(simulated_internal_swap.ingress_fee, 0);
-			assert_eq!(simulated_internal_swap.egress_fee, 0);
+			assert_eq!(simulated_internal_swap.ingress_fee.amount, 0);
+			assert_eq!(simulated_internal_swap.egress_fee.amount, 0);
 			// Not concerned with the exact values as they are tested elsewhere
-			assert!(simulated_normal_swap.network_fee < simulated_internal_swap.network_fee);
-			assert!(simulated_normal_swap.broker_fee < simulated_internal_swap.broker_fee);
+			assert!(
+				simulated_normal_swap.network_fee.amount <
+					simulated_internal_swap.network_fee.amount
+			);
+			assert!(
+				simulated_normal_swap.broker_fee.amount < simulated_internal_swap.broker_fee.amount
+			);
 			assert!(
 				simulated_normal_swap.intermediary.unwrap() <
 					simulated_internal_swap.intermediary.unwrap()
@@ -1302,16 +1318,27 @@ mod swap_simulation {
 
 	#[test]
 	fn network_fee_minimum_is_enforced() {
+		let input_asset_price = Price::from_usd(INPUT_ASSET, 100);
+		let usdc_price = Price::from_usd(STABLE_ASSET, 1);
+
 		// Setting a very large minimum so that it will be used instead of the rate
-		const MINIMUM_NETWORK_FEE: u128 = AMOUNT / 2;
+		const MINIMUM_NETWORK_FEE_INPUT_ASSET: u128 = AMOUNT / 2;
+		let minimum_network_fee_usdc: AssetAmount = input_asset_price
+			.divide_by(usdc_price)
+			.output_amount_ceil(MINIMUM_NETWORK_FEE_INPUT_ASSET)
+			.saturated_into();
 
 		super::genesis::with_test_defaults().build().execute_with(|| {
 			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
 
-			// Set the network
+			// Set the prices. Only used for calculating the network fee minimum in this test.
+			ChainlinkOracle::set_price(INPUT_ASSET, input_asset_price);
+			ChainlinkOracle::set_price(STABLE_ASSET, usdc_price);
+
+			// Set the network fee
 			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
 				rate: Permill::from_percent(1),
-				minimum: MINIMUM_NETWORK_FEE,
+				minimum: minimum_network_fee_usdc,
 			});
 
 			let simulated_swap = simulate_swap(
@@ -1327,8 +1354,12 @@ mod swap_simulation {
 			)
 			.unwrap();
 
-			assert_eq!(simulated_swap.network_fee, MINIMUM_NETWORK_FEE);
-			assert!(simulated_swap.intermediary.unwrap() < AMOUNT / 2);
+			// Actual network minimum is slightly higher because of a slippage factor that the
+			// swapping pallet applies to the oracle price.
+			assert!(simulated_swap.network_fee.amount >= MINIMUM_NETWORK_FEE_INPUT_ASSET);
+			assert!(
+				simulated_swap.intermediary.unwrap() < AMOUNT - MINIMUM_NETWORK_FEE_INPUT_ASSET
+			);
 		});
 	}
 }

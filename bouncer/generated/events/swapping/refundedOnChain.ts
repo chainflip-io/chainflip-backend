@@ -6,5 +6,4 @@ export const swappingRefundedOnChain = z.object({
   accountId,
   asset: cfPrimitivesChainsAssetsAnyAsset,
   amount: numberOrHex,
-  refundFee: numberOrHex,
 });

@@ -86,8 +86,8 @@ fn assert_chunk_1_executed(number_of_chunks: u32) {
 		RuntimeEvent::Swapping(Event::SwapExecuted {
 			swap_request_id: SWAP_REQUEST_ID,
 			swap_id: SwapId(1),
-			input_amount,
-			output_amount,
+			input: AssetAndAmount { asset: INPUT_ASSET, amount: input_amount },
+			output: AssetAndAmount { asset: OUTPUT_ASSET, amount: output_amount },
 			..
 		}) if *input_amount == chunk_amount_after_fee && *output_amount == chunk_amount_after_fee * DEFAULT_SWAP_RATE
 	);
@@ -169,9 +169,9 @@ fn dca_happy_path(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input_amount: CHUNK_AMOUNT_AFTER_FEE,
-					output_amount: CHUNK_OUTPUT,
-					broker_fee: CHUNK_BROKER_FEE,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
+					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_BROKER_FEE },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -217,9 +217,9 @@ fn dca_single_chunk(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input_amount: INPUT_AMOUNT_AFTER_FEE,
-					output_amount: EGRESS_AMOUNT,
-					broker_fee: BROKER_FEE,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: INPUT_AMOUNT_AFTER_FEE },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: EGRESS_AMOUNT },
+					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: BROKER_FEE },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -253,25 +253,17 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 
 	// Allow for one retry for good measure:
 	const REFUND_BLOCK: u64 = CHUNK_1_BLOCK + (DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
-	const REFUND_FEE: AssetAmount = 10;
-	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - REFUND_FEE;
 
 	new_test_ext()
 		.execute_with(|| {
-			// Turn on the network fee minimum so we can check the refund fee works correctly
-			NetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::zero(),
-				minimum: REFUND_FEE,
-			});
-
 			setup_dca_swap(
 				NUMBER_OF_CHUNKS,
 				CHUNK_INTERVAL,
 				Some(TestRefundParams {
 					// Allow for exactly 1 retry
 					retry_duration: DEFAULT_SWAP_RETRY_DELAY_BLOCKS,
-					// This ensures the swap is refunded:
-					min_output: INPUT_AMOUNT * DEFAULT_SWAP_RATE + 1,
+					// This ensures the swap is refunded
+					min_output: INPUT_AMOUNT * (DEFAULT_SWAP_RATE + 1),
 				}),
 				is_ccm,
 			);
@@ -311,18 +303,10 @@ fn dca_with_fok_full_refund(is_ccm: bool) {
 					swap_id: SwapId(1),
 					reason: SwapFailureReason::MinPriceViolation
 				}),
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					input_asset: INPUT_ASSET,
-					input_amount: REFUND_FEE,
-					output_asset: Asset::Flip,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapScheduled { input_amount: REFUND_FEE, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: INPUT_ASSET,
-					amount: REFUNDED_AMOUNT,
-					refund_fee: REFUND_FEE,
+					amount: INPUT_AMOUNT,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
@@ -355,9 +339,8 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 	const CHUNK_AMOUNT_AFTER_FEE: AssetAmount = CHUNK_AMOUNT - CHUNK_BROKER_FEE;
 	const CHUNK_OUTPUT: AssetAmount = CHUNK_AMOUNT_AFTER_FEE * DEFAULT_SWAP_RATE;
 
-	const REFUND_FEE: AssetAmount = 10;
 	// The test will be set up as to execute one chunk only and refund the rest
-	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - CHUNK_AMOUNT - REFUND_FEE;
+	const REFUNDED_AMOUNT: AssetAmount = INPUT_AMOUNT - CHUNK_AMOUNT;
 
 	new_test_ext()
 		.execute_with(|| {
@@ -401,13 +384,6 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					accumulated_output_amount: CHUNK_OUTPUT,
 				}
 			);
-
-			// Now turn on the network fee minimum so we can check the refund fee works correctly
-			// without needing to take it into account on the other chunks.
-			NetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::zero(),
-				minimum: REFUND_FEE,
-			});
 		})
 		.then_process_blocks_until_block(CHUNK_2_RESCHEDULED_AT_BLOCK)
 		.then_execute_with(|_| {
@@ -426,18 +402,10 @@ fn dca_with_fok_partial_refund(is_ccm: bool) {
 					swap_id: SwapId(2),
 					reason: SwapFailureReason::MinPriceViolation
 				}),
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					input_asset: INPUT_ASSET,
-					input_amount: REFUND_FEE,
-					output_asset: Asset::Flip,
-					..
-				}),
-				RuntimeEvent::Swapping(Event::SwapScheduled { input_amount: REFUND_FEE, .. }),
 				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
 					swap_request_id: SWAP_REQUEST_ID,
 					asset: INPUT_ASSET,
 					amount: REFUNDED_AMOUNT,
-					refund_fee: REFUND_FEE,
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -525,9 +493,9 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					input_amount: CHUNK_AMOUNT_AFTER_FEE,
-					output_amount: CHUNK_OUTPUT,
-					broker_fee: CHUNK_BROKER_FEE,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
+					broker_fee: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_BROKER_FEE },
 					..
 				}),
 				// Second chunk should be scheduled 2 blocks after the first is executed:
@@ -560,8 +528,8 @@ fn dca_with_fok_fully_executed(is_ccm: bool) {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
-					input_amount: CHUNK_AMOUNT_AFTER_FEE,
-					output_amount: CHUNK_OUTPUT,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: CHUNK_AMOUNT_AFTER_FEE },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: CHUNK_OUTPUT },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -666,8 +634,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
 					// The first chunk should 0 in and out
-					input_amount: ZERO_CHUNK_AMOUNT,
-					output_amount: ZERO_CHUNK_AMOUNT,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: ZERO_CHUNK_AMOUNT },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: ZERO_CHUNK_AMOUNT },
 					..
 				})
 			);
@@ -705,8 +673,8 @@ fn can_handle_dca_chunk_size_of_zero(is_ccm: bool) {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(3),
 					// The last chunk should be the full amount
-					input_amount: INPUT_AMOUNT,
-					output_amount: OUTPUT_AMOUNT,
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: INPUT_AMOUNT },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: OUTPUT_AMOUNT },
 					..
 				})
 			);
@@ -1206,7 +1174,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 				RuntimeEvent::Swapping(Event::SwapExecuted {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(1),
-					network_fee: NETWORK_FEE_MINIMUM,
+					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: NETWORK_FEE_MINIMUM },
 					..
 				})
 			);
@@ -1230,7 +1198,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 			);
 
 			// Check that the minimum network fee was collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		})
 		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
@@ -1240,13 +1208,13 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 					swap_request_id: SWAP_REQUEST_ID,
 					swap_id: SwapId(2),
 					// The second chunk should not collect any additional network fee
-					network_fee: 0,
+					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: 0 },
 					..
 				})
 			);
 
 			// Confirm no additional network fee was collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM);
+			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		})
 		.then_process_blocks_until_block(CHUNK_3_BLOCK)
 		.then_execute_with(|_| {
@@ -1259,10 +1227,13 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 					swap_request_id: SWAP_REQUEST_ID,
 					network_fee,
 					..
-				}) if *network_fee == expected_fee
+				}) if *network_fee == AssetAndAmount { asset: INPUT_ASSET, amount: expected_fee }
 			);
 
 			// Confirm the additional network fee was collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(), NETWORK_FEE_MINIMUM + expected_fee);
+			assert_eq!(
+				CollectedNetworkFee::<Test>::get(INPUT_ASSET),
+				NETWORK_FEE_MINIMUM + expected_fee
+			);
 		});
 }

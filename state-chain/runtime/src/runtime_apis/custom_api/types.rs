@@ -27,7 +27,7 @@ use cf_chains::{
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
+use cf_primitives::{Asset, AssetAndAmount, BroadcastId, EpochIndex, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -442,10 +442,10 @@ pub enum FeeTypes {
 pub struct SimulatedSwapInformation {
 	pub intermediary: Option<AssetAmount>,
 	pub output: AssetAmount,
-	pub network_fee: AssetAmount,
-	pub ingress_fee: AssetAmount,
-	pub egress_fee: AssetAmount,
-	pub broker_fee: AssetAmount,
+	pub network_fee: AssetAndAmount<AssetAmount>,
+	pub ingress_fee: AssetAndAmount<AssetAmount>,
+	pub egress_fee: AssetAndAmount<AssetAmount>,
+	pub broker_fee: AssetAndAmount<AssetAmount>,
 }
 
 #[derive(Debug, Decode, Encode, TypeInfo)]

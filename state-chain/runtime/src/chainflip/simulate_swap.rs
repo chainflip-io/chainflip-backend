@@ -29,16 +29,17 @@ use cf_chains::{
 	},
 };
 use cf_primitives::{
-	AccountId, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, IngressOrEgress,
+	AccountId, Asset, AssetAmount, AssetAndAmount, BasisPoints, Beneficiary, DcaParameters,
+	IngressOrEgress,
 };
-use cf_traits::{AssetConverter, OrderId};
+use cf_traits::OrderId;
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
+use pallet_cf_swapping::{BatchExecutionError, FeeRateAndMinimum, FeeType};
 use sp_runtime::{
 	traits::{Saturating, UniqueSaturatedInto},
 	DispatchError,
 };
-use sp_std::{collections::btree_set::BTreeSet, vec, vec::Vec};
+use sp_std::{cmp::max, collections::btree_set::BTreeSet, vec, vec::Vec};
 
 /// Simulates a swap in order to estimate the output amount and fees.
 pub fn simulate_swap(
@@ -102,54 +103,24 @@ pub fn simulate_swap(
 		};
 
 	// If no DCA parameter is given, swap the entire amount with 1 chunk.
-	let number_of_chunks: u128 = dca_parameters
-		.map(|dca| sp_std::cmp::max(dca.number_of_chunks, 1u32))
-		.unwrap_or(1u32)
-		.into();
+	let number_of_chunks: u128 =
+		dca_parameters.map(|dca| max(dca.number_of_chunks, 1u32)).unwrap_or(1u32).into();
 
-	// Calculate the network fee in both USDC and in terms of the input asset.
-	// We manually calculate the minimum network fee to avoid complications with the network fee
+	// We manually calculate the network fee to avoid complications with the network fee
 	// minimum affecting the simulated chunk.
-	let (network_fee_amount_input_asset, network_fee_usdc) = if include_fee(FeeTypes::Network) {
-		let network_fee = pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
-			input_asset,
-			output_asset,
-			is_internal,
-		);
-
-		let min_network_fee_input_asset =
-			pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_desired_output_or_default_to_zero(
-				input_asset,
-				Asset::Usdc,
-				network_fee.minimum,
-				false, // Do not apply network fee to this calculation
-				false, // Not internal
-			);
-		let network_fee_input_asset = network_fee.rate * amount_to_swap;
-		if min_network_fee_input_asset > network_fee_input_asset {
-			(min_network_fee_input_asset, network_fee.minimum)
-		} else {
-			let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
-			let swap_output = &Swapping::simulate_swap(
+	let network_fee = if include_fee(FeeTypes::Network) {
+		let FeeRateAndMinimum { rate, minimum } =
+			pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 				input_asset,
 				output_asset,
-				amount_per_chunk,
-				vec![FeeType::NetworkFee(NetworkFeeTracker::new_without_minimum(
-					network_fee.clone(),
-				))],
-			)
-			.map_err(|_| DispatchError::Other("Failed to calculate network fee"))?;
-
-			(
-				network_fee_input_asset,
-				swap_output[0].network_fee_taken.unwrap_or_default() * number_of_chunks,
-			)
-		}
+				is_internal,
+			);
+		max(rate * amount_to_swap, minimum)
 	} else {
-		(0, 0)
+		0
 	};
 
-	amount_to_swap.saturating_reduce(network_fee_amount_input_asset);
+	amount_to_swap.saturating_reduce(network_fee);
 
 	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
 
@@ -158,6 +129,7 @@ pub fn simulate_swap(
 		output_asset,
 		amount_per_chunk,
 		if broker_commission > 0 {
+			// Leaving out the network fee because it is already taken from the input amount
 			vec![FeeType::BrokerFee(
 				vec![Beneficiary { account: AccountId::new([0xbb; 32]), bps: broker_commission }]
 					.try_into()
@@ -177,7 +149,9 @@ pub fn simulate_swap(
 	let swap = &swap_output[0];
 
 	// Extrapolate the total by multiplying the chunk by the number of chunks
-	let intermediary = swap.intermediate_amount().map(|amount| amount * number_of_chunks);
+	let intermediary = swap
+		.intermediate()
+		.map(|AssetAndAmount { asset: _, amount }| amount * number_of_chunks);
 	let output = swap.final_output.unwrap_or_default() * number_of_chunks;
 	let broker_fee = swap.broker_fee_taken.unwrap_or_default() * number_of_chunks;
 
@@ -198,10 +172,10 @@ pub fn simulate_swap(
 	Ok(SimulatedSwapInformation {
 		intermediary,
 		output,
-		network_fee: network_fee_usdc,
-		ingress_fee,
-		egress_fee,
-		broker_fee,
+		network_fee: AssetAndAmount::new(input_asset, network_fee),
+		ingress_fee: AssetAndAmount::new(input_asset, ingress_fee),
+		egress_fee: AssetAndAmount::new(output_asset, egress_fee),
+		broker_fee: AssetAndAmount::new(input_asset, broker_fee),
 	})
 }
 

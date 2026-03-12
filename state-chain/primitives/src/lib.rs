@@ -319,19 +319,6 @@ pub enum AccountRole {
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
-/// Struct that represents the estimated output of a Swap.
-#[derive(
-	PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo,
-)]
-pub struct SwapOutput {
-	// Intermediary amount, if there's any
-	pub intermediary: Option<AssetAmount>,
-	// Final output of the swap
-	pub output: AssetAmount,
-	// the USDC network fee
-	pub network_fee: AssetAmount,
-}
-
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub enum SwapLeg {
 	FromStable,
@@ -609,7 +596,20 @@ impl<T> ApiWaitForResult<T> {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+	Serialize,
+	Deserialize,
+)]
 pub struct AssetAndAmount<Amount> {
 	#[serde(flatten)]
 	pub asset: Asset,
@@ -621,6 +621,12 @@ impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
 		Self { asset: other.asset, amount: other.amount.into() }
 	}
 }
+impl<Amount> AssetAndAmount<Amount> {
+	pub fn new(asset: Asset, amount: Amount) -> Self {
+		Self { asset, amount }
+	}
+}
+
 /// Used in cf_ingress_egress and in cf_chains.
 pub enum IngressOrEgress {
 	IngressDepositChannel,
