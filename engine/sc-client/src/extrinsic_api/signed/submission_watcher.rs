@@ -273,16 +273,6 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
-						// AlreadyImported error occurs when the
-						// transaction is already in the pool. Thus, if we
-						// get a "Transaction already in pool" "error" we know
-						// that this particular extrinsic has already been
-						// submitted. And so we can ignore the error and return
-						// the transaction hash.
-						ClientError::Call(obj) if obj.code() == 1013 => {
-							debug!("Already in pool with tx_hash: {tx_hash:#x}.");
-							break Ok(Ok(Some(tx_hash)))
-						},
 						// This occurs when the nonce has already been *consumed* i.e a
 						// transaction with that nonce is in a block
 						ClientError::Call(obj)
