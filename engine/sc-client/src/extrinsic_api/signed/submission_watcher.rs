@@ -169,6 +169,7 @@ pub struct SubmissionWatcher<
 pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
+	ImmediatelyDropped,
 }
 
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
@@ -316,6 +317,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the state is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::StateDiscarded))
 						},
+						ClientError::Call(obj)
+							// ImmediatelyDropped
+							if obj.code() == 1016 =>
+						{
+							warn!(
+								target: "state_chain_client",
+								request_id = request.id,
+								"Submission failed for extrinsic {signed_extrinsic:?}: {obj:?}"
+							);
+							break Ok(Err(SubmissionLogicError::ImmediatelyDropped))
+						},
 						err =>
 							break Err(anyhow!(
 								"Unhandled error while submitting signed extrinsic {:?}: {}",
@@ -346,8 +358,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			};
 			match self.submit_extrinsic_at_nonce(request, next_nonce).await? {
 				Ok(tx_hash) => break tx_hash,
-				Err(SubmissionLogicError::NonceTooLow | SubmissionLogicError::StateDiscarded) => {
-					// In either of these cases we want to refresh the account nonce and try again.
+				Err(_) => {
+					// In any error case we want to refresh the account nonce and try again.
+					warn!(target: "state_chain_client", request_id = request.id, "Submission failed at nonce {next_nonce}, refreshing nonce and retrying.");
 					self.best_nonce.lock().await.take();
 				},
 			}
