@@ -861,7 +861,14 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 									.nonce(current_nonce.into())
 									.build(),
 							)
-							.await?
+							.await
+							.inspect(|tx| {
+								tracing::info!(
+									"Submitting CFE version extrinsic with nonce {}: {:?}",
+									current_nonce,
+									tx.encoded()
+								);
+							})?
 							.submit_and_watch()
 							.await?
 							.wait_for_finalized()
