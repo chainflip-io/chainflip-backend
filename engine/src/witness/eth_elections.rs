@@ -96,7 +96,7 @@ pub struct EvmSingleBlockQuery {
 }
 
 impl EvmSingleBlockQuery {
-	fn try_from_native_block(block: Block<H256>) -> Result<Self> {
+	pub(crate) fn try_from_native_block(block: Block<H256>) -> Result<Self> {
 		Ok(EvmSingleBlockQuery {
 			block_height: block.number.ok_or_else(|| anyhow::anyhow!("No block number"))?.low_u64(),
 			block_hash: block.hash.ok_or_else(|| anyhow::anyhow!("No block hash"))?,

@@ -28,30 +28,26 @@ interface EvmVaultSwapDetails {
   to: string;
 }
 
-interface EvmVaultSwapExtraParameters {
-  chain: 'Ethereum' | 'Arbitrum';
+interface VaultSwapExtraParameters {
+  chain: string;
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
 }
 
-export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
+export async function requestEvmSwapParameterEncoding<A extends WithBrokerAccount, T>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  brokerCommissionBps: number = 0,
-  messageMetadata?: CcmDepositMetadata,
-  amount?: string,
-  boostFeeBps?: number,
-  fillOrKillParams?: FillOrKillParamsX128,
-  dcaParams?: DcaParams,
-  wallet?: HDNodeWallet,
-  affiliateFees: {
-    accountAddress: string;
-    commissionBps: number;
-  }[] = [],
-  optionalRefundAddress?: string,
-) {
+  brokerCommissionBps: number,
+  messageMetadata: CcmDepositMetadata | undefined,
+  boostFeeBps: number,
+  affiliateFees: { accountAddress: string; commissionBps: number }[],
+  dcaParams: DcaParams | undefined,
+  fillOrKillParams: FillOrKillParamsX128 | undefined,
+  amount: string | undefined,
+  optionalRefundAddress: string | undefined,
+): Promise<T> {
   const srcChain = chainFromAsset(sourceAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
   const refundAddress =
@@ -62,19 +58,6 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
-  cf.debug('Creating evm wallet ...');
-  const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset, amount));
-
-  if (erc20Assets.includes(sourceAsset)) {
-    cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
-    // Doing effectively infinite approvals to make sure it doesn't fail.
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-    await approveEvmTokenVault(
-      sourceAsset,
-      (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
-      evmWallet,
-    );
-  }
 
   await using chainflip = await getChainflipApi();
 
@@ -92,8 +75,8 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     max_oracle_price_slippage: undefined,
   };
 
-  const extraParameters: EvmVaultSwapExtraParameters = {
-    chain: srcChain as 'Ethereum' | 'Arbitrum',
+  const extraParameters: VaultSwapExtraParameters = {
+    chain: srcChain,
     input_amount: '0x' + new BigNumber(fineAmount).toString(16),
     refund_parameters: refundParams,
   };

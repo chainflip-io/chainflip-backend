@@ -34,6 +34,11 @@ http_endpoint = "http://localhost:8899"
 ws_endpoint = "wss://my_fake_assethub_rpc:443/secret_key"
 http_endpoint = "http://my_fake_assethub_rpc:443/secret_key"
 
+[tron.rpc]
+http_endpoint = "http://localhost:8090"
+json_rpc_endpoint = "http://localhost:8091"
+
+
 [health_check]
 hostname = "127.0.0.1"
 port = 5555

@@ -251,6 +251,17 @@ mod runtime {
 	pub type EthereumElections = pallet_cf_elections<Instance1>;
 	#[runtime::pallet_index(57)]
 	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
+
+	#[runtime::pallet_index(58)]
+	pub type TronChainTracking = pallet_cf_chain_tracking<Instance7>;
+	#[runtime::pallet_index(59)]
+	pub type TronVault = pallet_cf_vaults<Instance7>;
+	#[runtime::pallet_index(60)]
+	pub type TronBroadcaster = pallet_cf_broadcast<Instance7>;
+	#[runtime::pallet_index(61)]
+	pub type TronIngressEgress = pallet_cf_ingress_egress<Instance7>;
+	#[runtime::pallet_index(62)]
+	pub type TronElections = pallet_cf_elections<Instance7>;
 }
 
 /// The address format for describing accounts.
@@ -340,12 +351,14 @@ pub type PalletExecutionOrder = (
 	ArbitrumChainTracking,
 	SolanaChainTracking,
 	AssethubChainTracking,
+	TronChainTracking,
 	// Elections
 	GenericElections,
 	SolanaElections,
 	BitcoinElections,
 	EthereumElections,
 	ArbitrumElections,
+	TronElections,
 	// Vaults
 	EthereumVault,
 	PolkadotVault,
@@ -353,6 +366,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumVault,
 	SolanaVault,
 	AssethubVault,
+	TronVault,
 	// Threshold Signers
 	EvmThresholdSigner,
 	PolkadotThresholdSigner,
@@ -365,6 +379,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumBroadcaster,
 	SolanaBroadcaster,
 	AssethubBroadcaster,
+	TronBroadcaster,
 	// Swapping and Liquidity Provision
 	Swapping,
 	LiquidityProvider,
@@ -375,6 +390,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumIngressEgress,
 	SolanaIngressEgress,
 	AssethubIngressEgress,
+	TronIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
 	// Miscellaneous
@@ -419,12 +435,14 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BitcoinInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotCryptoInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, BitcoinInstance>,
@@ -435,6 +453,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, EthereumInstance>,
@@ -443,6 +462,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,

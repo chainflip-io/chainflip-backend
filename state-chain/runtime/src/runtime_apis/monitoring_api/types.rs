@@ -34,6 +34,7 @@ pub struct ExternalChainsBlockHeight {
 	pub solana: u64,
 	pub arbitrum: u64,
 	pub assethub: u64,
+	pub tron: u64,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct BtcUtxos {
@@ -63,6 +64,7 @@ pub struct PendingBroadcasts {
 	pub arbitrum: u32,
 	pub solana: u32,
 	pub assethub: u32,
+	pub tron: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct PendingTssCeremonies {
@@ -79,6 +81,7 @@ pub struct OpenDepositChannels {
 	pub arbitrum: u32,
 	pub solana: u32,
 	pub assethub: u32,
+	pub tron: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FeeImbalance<A> {
@@ -88,6 +91,7 @@ pub struct FeeImbalance<A> {
 	pub bitcoin: VaultImbalance<A>,
 	pub solana: VaultImbalance<A>,
 	pub assethub: VaultImbalance<A>,
+	pub tron: VaultImbalance<A>,
 }
 
 impl<A> FeeImbalance<A> {
@@ -99,6 +103,7 @@ impl<A> FeeImbalance<A> {
 			bitcoin: self.bitcoin.map(&f),
 			solana: self.solana.map(&f),
 			assethub: self.assethub.map(&f),
+			tron: self.tron.map(&f),
 		}
 	}
 }
@@ -143,6 +148,7 @@ pub struct ActivateKeysBroadcastIds {
 	pub arbitrum: Option<u32>,
 	pub solana: (Option<u32>, Option<SolSignature>),
 	pub assethub: Option<u32>,
+	pub tron: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]

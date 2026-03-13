@@ -97,6 +97,7 @@ macro_rules! generate_voter_api_tuple_impls {
 }
 
 generate_voter_api_tuple_impls!(tuple_1_impls: ((A, A0),));
+generate_voter_api_tuple_impls!(tuple_5_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0)));
 generate_voter_api_tuple_impls!(tuple_6_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0)));
 generate_voter_api_tuple_impls!(tuple_7_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (G, G0)));
 generate_voter_api_tuple_impls!(tuple_8_impls: ((A, A0), (B, B0), (C, C0), (D, D0), (EE, E0), (FF, F0), (G, G0), (HH, H0)));
