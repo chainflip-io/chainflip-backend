@@ -21,18 +21,6 @@ jobs:
       - name: Check Format
         run: cargo fmt --all -- --check
 
-  audit:
-    runs-on: namespace-profile-default
-    container:
-      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
-
-    steps:
-      - name: Checkout 🛒
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-
-      - name: cargo audit 🕵️‍♂️
-        run: cargo cf-audit
-
   cargo-clippy:
     runs-on: namespace-profile-${{ inputs.ci-runner }}
     container:

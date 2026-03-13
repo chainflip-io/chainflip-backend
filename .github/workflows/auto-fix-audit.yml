@@ -1,0 +1,150 @@
+name: Auto-fix Cargo Audit
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 8 * * 1-5" # Weekdays at 8 AM UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: auto-fix-audit
+  cancel-in-progress: false
+
+# Read-only by default. The App token is used for write operations.
+permissions:
+  contents: read
+
+jobs:
+  check-audit:
+    runs-on: namespace-profile-default
+    container:
+      image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
+    outputs:
+      audit_failed: ${{ steps.run-audit.outcome == 'failure' }}
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Run cargo audit 🕵️‍♂️
+        id: run-audit
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cargo cf-audit 2>&1 | tee /tmp/audit-output.txt
+
+      - name: Upload audit output
+        if: steps.run-audit.outcome == 'failure'
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+        with:
+          name: audit-output
+          path: /tmp/audit-output.txt
+
+  propose-fix:
+    needs: check-audit
+    if: needs.check-audit.outputs.audit_failed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Generate App token 🔑
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVATE_KEY }}
+
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Check for existing audit fix PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          EXISTING=$(gh pr list --search "head:auto/fix-audit" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "::notice::Audit fix PR #$EXISTING already open, skipping"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download audit output
+        if: steps.check-pr.outputs.exists == 'false'
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: audit-output
+          path: /tmp
+
+      - name: Install Rust toolchain
+        if: steps.check-pr.outputs.exists == 'false'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Propose fix with Claude Code 🤖
+        if: steps.check-pr.outputs.exists == 'false'
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        with:
+          anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
+          prompt: |
+            You are fixing cargo audit failures for the chainflip-backend project.
+
+            ## Audit Output
+
+            Read /tmp/audit-output.txt to see which advisories are failing.
+
+            ## Background
+
+            This project's cargo audit configuration is in `.cargo/config.toml` under the `cf-audit`
+            alias. It already ignores many known advisories — mostly transitive dependencies of
+            substrate/polkadot-sdk that can't be easily fixed. Your job is to handle NEW advisories
+            that aren't yet ignored.
+
+            ## Fix Strategy
+
+            For each NEW advisory in the audit output:
+
+            1. **Identify the advisory**: Note the RUSTSEC ID, affected crate, and whether it's a
+               vulnerability, unmaintained, or unsound issue.
+
+            2. **Check if the affected crate is a direct dependency**: Search Cargo.toml files in the
+               workspace for the crate name.
+
+            3. **Try `cargo update` first**: Run `cargo update -p <crate_name>` — if a patched
+               version exists within the semver-compatible range, this fixes it without code changes.
+               After updating, verify by running `cargo cf-audit` to check if the advisory is resolved.
+
+            4. **If `cargo update` doesn't resolve it** (most common case — transitive dep of substrate):
+               Add an `--ignore` entry to `.cargo/config.toml`.
+
+            ## Adding an ignore entry
+
+            Edit `.cargo/config.toml` following the existing style exactly:
+
+            - Add a comment in the block above the `cf-audit = '''` line. Use this format:
+              `# - RUSTSEC-XXXX-XXXX: Brief description of the issue. It's a dependency of <parent crate>.`
+            - Place the comment under the appropriate category heading (Vulnerabilities, Unmaintained, etc.)
+            - Add `	--ignore RUSTSEC-XXXX-XXXX` (tab-indented) inside the alias, keeping the list
+              sorted by year then number within the RUSTSEC ID.
+
+            ## Creating the PR
+
+            After making all changes:
+
+            1. Create a branch: `git checkout -b auto/fix-audit-$(date +%Y%m%d)`
+            2. Stage relevant files: `git add .cargo/config.toml Cargo.lock` (only files you changed)
+            3. Commit: `git commit -m "chore: fix cargo audit failures"`
+            4. Push: `git push -u origin HEAD`
+            5. Create PR with gh:
+               - Title: `chore: fix cargo audit failures`
+               - Body: list each advisory RUSTSEC ID, what it affects, and what action was taken
+
+            ## Important
+
+            - Match the existing comment and formatting style in `.cargo/config.toml` exactly
+            - Prefer `cargo update` over adding ignores when possible
+            - Always explain WHY an advisory is being ignored
+            - Do NOT modify files beyond `.cargo/config.toml`, `Cargo.toml`, and `Cargo.lock`
