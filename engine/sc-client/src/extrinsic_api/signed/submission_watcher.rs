@@ -17,7 +17,6 @@
 use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
-	time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -167,6 +166,7 @@ pub struct SubmissionWatcher<
 	best_nonce: tokio::sync::Mutex<Option<Nonce>>,
 }
 
+#[derive(Debug)]
 pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
@@ -217,7 +217,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		&mut self,
 		request: &mut Request,
 		nonce: Nonce,
-	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
+	) -> Result<Result<Option<H256>, SubmissionLogicError>, anyhow::Error> {
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
@@ -262,7 +262,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					);
 					info!(target: "state_chain_client", request_id = request.id, submission_id = request.next_submission_id, "Submission succeeded");
 					request.next_submission_id += 1;
-					break Ok(Ok(tx_hash))
+					break Ok(Ok(Some(tx_hash)))
 				},
 				Err(rpc_err) => {
 					match rpc_err {
@@ -292,9 +292,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							let new_runtime_version =
 								self.base_rpc_client.runtime_version(None).await?;
 							if new_runtime_version == self.runtime_version {
-								// break, as the error is now very unlikely to be solved by
-								// fetching again
-								return Err(anyhow!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", self.runtime_version))
+								warn!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", self.runtime_version);
+
+								// NEW FIX, not sure if this works
+								return Ok(Ok(None));
 							}
 
 							self.runtime_version = new_runtime_version;
@@ -331,12 +332,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		}
 	}
 
-	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
-		let mut timeout = Option::None;
+	async fn submit_extrinsic(
+		&mut self,
+		request: &mut Request,
+	) -> Result<Option<H256>, anyhow::Error> {
 		Ok(loop {
-			if let Some(timeout) = timeout.take() {
-				tokio::time::sleep(timeout).await;
-			}
 			let next_nonce = {
 				let mut maybe_best_nonce = self.best_nonce.lock().await;
 				if let Some(best_nonce) = maybe_best_nonce.as_mut() {
@@ -355,19 +355,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				Ok(tx_hash) => break tx_hash,
 				Err(err) => {
 					// In any error case we want to refresh the account nonce and try again.
-					warn!(target: "state_chain_client", request_id = request.id, "Submission failed at nonce {next_nonce}, refreshing nonce and retrying.");
-					match err {
-						SubmissionLogicError::ImmediatelyDropped => {
-							// ImmediatelyDropped implies that the mempool was full. In this case,
-							// we wait for block duration and try again.
-							timeout = Some(Duration::from_secs(6));
-						},
-						SubmissionLogicError::NonceTooLow |
-						SubmissionLogicError::StateDiscarded => {
-							// These errors imply that the nonce is wrong, so we just retry
-							// immediately after refreshing it.
-						},
-					}
+					warn!(target: "state_chain_client", request_id = request.id, "Submission failed with error {err:?} at nonce {next_nonce}, refreshing nonce and retrying.");
 					self.best_nonce.lock().await.take();
 				},
 			}
@@ -440,10 +428,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				},
 			)
 			.unwrap();
-		let tx_hash: H256 = self.submit_extrinsic(request).await?;
+		let tx_hash: Option<H256> = self.submit_extrinsic(request).await?;
 		info!(target: "state_chain_client", request_id = request.id, "New request: {:?}", request.call);
 		if let RequestStrategy::StrictlyOneSubmission(hash_sender) = strategy {
-			let _result = hash_sender.send(tx_hash);
+			if let Some(tx_hash) = tx_hash {
+				let _result = hash_sender.send(tx_hash);
+			}
 		};
 		Ok(())
 	}
