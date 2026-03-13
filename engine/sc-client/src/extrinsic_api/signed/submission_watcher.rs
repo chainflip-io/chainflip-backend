@@ -279,7 +279,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// that this particular extrinsic has already been
 						// submitted. And so we can ignore the error and return
 						// the transaction hash.
-						ClientError::Call(obj) if obj.code() == POOL_ALREADY_IMPORTED => {
+						ClientError::Call(obj) if obj.code() == 1013 => {
 							debug!("Already in pool with tx_hash: {tx_hash:#x}.");
 							break Ok(Ok(Some(tx_hash)))
 						},
