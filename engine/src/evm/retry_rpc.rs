@@ -22,7 +22,7 @@ use ethers::{
 	types::{transaction::eip2930::AccessList, TransactionReceipt},
 };
 
-use cf_utilities::task_scope::Scope;
+use cf_utilities::{make_periodic_tick, task_scope::Scope};
 use futures_core::Future;
 
 use crate::{
@@ -58,8 +58,12 @@ pub struct EvmRetryRpcClient<Rpc: EvmRpcApi> {
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(4 * 1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-const MAX_BROADCAST_RETRIES: Attempt = 2;
+const MAX_BROADCAST_RETRIES: Attempt = 3;
 pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
+
+// Ethereum block-time, so that we check after a block is mined
+const GET_TX_VERIFY_DELAY_MS: u64 = 12000;
+const GET_TX_VERIFY_RETRIES: u64 = 2;
 
 impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
@@ -563,10 +567,33 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 								},
 							});
 
-						client
+						let tx_hash = client
 							.send_transaction(transaction_request)
 							.await
-							.context(format!("Failed to send {} transaction", s))
+							.context(format!("Failed to send {} transaction", s))?;
+
+						// Verify the transaction exists in the node's mempool/blockchain.
+						// This catches "ghost" submissions where the RPC accepted the tx
+						// but never propagated it to the network.
+						let mut poll_interval = make_periodic_tick(
+							Duration::from_millis(GET_TX_VERIFY_DELAY_MS),
+							false,
+						);
+						for _ in 0..GET_TX_VERIFY_RETRIES {
+							poll_interval.tick().await;
+							if client.get_transaction(tx_hash).await.is_ok() {
+								return Ok(tx_hash);
+							}
+						}
+
+						tracing::warn!(
+							"Sent {} transaction {tx_hash:#x} but could not verify it in the mempool after {GET_TX_VERIFY_RETRIES} attempts",
+							s,
+						);
+						Err(anyhow::anyhow!(
+							"{} transaction {tx_hash:#x} accepted by RPC but not found in mempool/on chain",
+							s
+						))
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
