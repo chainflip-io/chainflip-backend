@@ -65,7 +65,13 @@ export const bscNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
-export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Bsc', 'Solana', 'Bitcoin'] as Chain[];
+export const vaultSwapSupportedChains = [
+  'Ethereum',
+  'Arbitrum',
+  'Bsc',
+  'Solana',
+  'Bitcoin',
+] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum', 'Bsc'] as Chain[];
 
 export const testInfoFile = '/tmp/chainflip/test_info.csv';
@@ -248,7 +254,9 @@ export function getContractAddress(chain: Chain, contract: string): string {
         case 'VAULT':
           return process.env.BSC_VAULT_ADDRESS ?? '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
         case 'KEY_MANAGER':
-          return process.env.BSC_KEY_MANAGER_ADDRESS ?? '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+          return (
+            process.env.BSC_KEY_MANAGER_ADDRESS ?? '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+          );
         case 'Bnb':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'BscUsdt':
@@ -779,6 +787,8 @@ export async function newAddress(
     case Assets.ArbEth:
     case Assets.ArbUsdc:
     case Assets.ArbUsdt:
+    case Assets.Bnb:
+    case Assets.BscUsdt:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.HubDot:
