@@ -1,5 +1,6 @@
 use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
 use cf_primitives::EpochIndex;
+use cf_runtime_utilities::log_or_panic;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
@@ -156,6 +157,13 @@ impl<Account: Ord + Clone + FullCodec + 'static, Bid: FullCodec + 'static>
 		}
 		DelegationSnapshots::<T>::insert(epoch_index, operator, self);
 	}
+
+	pub fn clear_epoch_registrations<T: Config<AccountId = Account, Amount = Bid>>(
+		epoch_index: EpochIndex,
+	) {
+		let _ = DelegationSnapshots::<T>::clear_prefix(epoch_index, u32::MAX, None);
+		let _ = ValidatorToOperator::<T>::clear_prefix(epoch_index, u32::MAX, None);
+	}
 }
 
 impl<Account, Bid> DelegationSnapshot<Account, Bid>
@@ -257,11 +265,23 @@ where
 	}
 
 	fn move_lowest_validator_to_delegator(&mut self) {
-		if let Some((validator, amount)) =
-			self.validators.clone().into_iter().min_by_key(|(_, v)| *v)
-		{
-			self.validators.remove(&validator);
-			self.delegators.insert(validator.into_ref().clone(), amount);
+		if let Some((validator, _)) = self.validators.iter().min_by_key(|(_, v)| *v) {
+			let _ = self.move_validator_to_delegator(validator.clone());
+		}
+	}
+
+	/// Moves a specific validator to delegators.
+	/// Returns true if the validator was found and moved.
+	pub fn move_validator_to_delegator(&mut self, validator: Account) -> bool {
+		if let Some(bid) = self.validators.remove(&validator) {
+			if self.delegators.insert(validator, bid).is_some() {
+				log_or_panic!(
+					"Validator being moved to delegator should not already be a delegator"
+				)
+			}
+			true
+		} else {
+			false
 		}
 	}
 
