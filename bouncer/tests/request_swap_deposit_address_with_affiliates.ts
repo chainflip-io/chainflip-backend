@@ -51,12 +51,13 @@ export async function depositChannelCreation(testContext: TestContext) {
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
-  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub']);
+  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub', 'Bsc']);
 
   const addressTransforms = {
     Btc: (address: string) => address,
     Eth: (address: string) => address.toLowerCase(),
     Arb: (address: string) => address.toLowerCase(),
+    Bsc: (address: string) => address.toLowerCase(),
     Dot: (address: string) =>
       isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
     Sol: (address: string) => (isHex(address) ? base58.encode(hexToBytes(address)) : address),

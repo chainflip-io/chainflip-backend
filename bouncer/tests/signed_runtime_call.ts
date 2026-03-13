@@ -29,6 +29,7 @@ const encodedAddressCodec = Enum({
   Dot: TsBytes(32), // [u8; 32]
   Btc: TsBytes(), // Vec<u8>
   Arb: TsBytes(20), // [u8; 20]
+  Bsc: TsBytes(20), // [u8; 20]
   Sol: TsBytes(32), // [u8; 32]
   Hub: TsBytes(32), // [u8; 32]
 });
