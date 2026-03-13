@@ -16,7 +16,9 @@ import { sendSol } from 'shared/send_sol';
 import { sendSolUsdc } from 'shared/send_solusdc';
 import { sendSolUsdt } from 'shared/send_solusdt';
 import { sendHubAsset } from 'shared/send_hubasset';
+import { sendTrx } from 'shared/send_trx';
 import { Logger } from 'shared/utils/logger';
+import { sendTrc20 } from './send_trc20';
 
 const cfTesterAbi = await getCFTesterAbi();
 
@@ -57,6 +59,10 @@ export async function send(
     case 'HubUsdc':
     case 'HubUsdt':
       return sendHubAsset(logger, asset, address, amount);
+    case 'Trx':
+      return sendTrx(logger, address, amount);
+    case 'TronUsdt':
+      return sendTrc20(logger, address, getContractAddress('Tron', 'TronUsdt'), amount);
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }

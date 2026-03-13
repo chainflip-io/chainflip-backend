@@ -21,7 +21,8 @@ use cf_chains::{
 	eth::EthereumTrackedData,
 	hub::AssethubTrackedData,
 	sol::{sol_tx_core::sol_test_values, SolTrackedData},
-	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Solana,
+	tron::TronTrackedData,
+	Arbitrum, Assethub, Bitcoin, ChainState, Ethereum, Polkadot, Solana, Tron,
 };
 use chainflip_node::{
 	chain_spec::testnet::{EXPIRY_SPAN_IN_SECONDS, REDEMPTION_TTL_SECS},
@@ -51,7 +52,8 @@ use state_chain_runtime::{
 	EmissionsConfig, EnvironmentConfig, EthereumChainTrackingConfig, EthereumElectionsConfig,
 	EthereumVaultConfig, EvmThresholdSignerConfig, FlipConfig, FundingConfig,
 	GenericElectionsConfig, GovernanceConfig, PolkadotChainTrackingConfig, ReputationConfig,
-	SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig, ValidatorConfig,
+	SessionConfig, SolanaChainTrackingConfig, SolanaElectionsConfig, TronChainTrackingConfig,
+	TronElectionsConfig, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
@@ -299,6 +301,12 @@ impl ExtBuilder {
 					tracked_data: SolTrackedData { priority_fee: COMPUTE_PRICE },
 				},
 			},
+			tron_chain_tracking: TronChainTrackingConfig {
+				init_chain_state: ChainState::<Tron> {
+					block_height: 0,
+					tracked_data: TronTrackedData {},
+				},
+			},
 			bitcoin_threshold_signer: Default::default(),
 			evm_threshold_signer: EvmThresholdSignerConfig {
 				key: Some(ethereum_vault_key),
@@ -328,6 +336,7 @@ impl ExtBuilder {
 			assethub_vault: Default::default(),
 			arbitrum_vault: Default::default(),
 			solana_vault: Default::default(),
+			tron_vault: Default::default(),
 			swapping: Default::default(),
 			system: Default::default(),
 			transaction_payment: Default::default(),
@@ -337,6 +346,7 @@ impl ExtBuilder {
 			ethereum_ingress_egress: Default::default(),
 			arbitrum_ingress_egress: Default::default(),
 			solana_ingress_egress: Default::default(),
+			tron_ingress_egress: Default::default(),
 			solana_elections: SolanaElectionsConfig {
 				option_initial_state: Some(InitialState {
 					unsynchronised_state: (
@@ -384,6 +394,7 @@ impl ExtBuilder {
 			},
 			ethereum_elections: EthereumElectionsConfig { option_initial_state: None },
 			arbitrum_elections: ArbitrumElectionsConfig { option_initial_state: None },
+			tron_elections: TronElectionsConfig { option_initial_state: None },
 			ethereum_broadcaster: state_chain_runtime::EthereumBroadcasterConfig {
 				broadcast_timeout: 5 * BLOCKS_PER_MINUTE_ETHEREUM,
 			},
@@ -401,6 +412,9 @@ impl ExtBuilder {
 			},
 			solana_broadcaster: state_chain_runtime::SolanaBroadcasterConfig {
 				broadcast_timeout: 4 * BLOCKS_PER_MINUTE_SOLANA,
+			},
+			tron_broadcaster: state_chain_runtime::TronBroadcasterConfig {
+				broadcast_timeout: 3 * BLOCKS_PER_MINUTE_TRON,
 			},
 		})
 	}

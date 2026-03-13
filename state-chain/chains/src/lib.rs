@@ -85,6 +85,7 @@ pub mod evm;
 pub mod hub;
 pub mod none;
 pub mod sol;
+pub mod tron;
 
 pub mod address;
 pub mod deposit_channel;
@@ -1524,6 +1525,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		refund_parameters: ChannelRefundParametersUnchecked<Address>,
 		from_token_account: Option<Address>,
 	},
+	Tron(EvmVaultSwapExtraParameters<Address, Amount>),
 }
 
 impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
@@ -1560,6 +1562,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				refund_parameters: refund_parameters.try_map_address(&f)?,
 				from_token_account: from_token_account.map(&f).transpose()?,
 			},
+			VaultSwapExtraParameters::Tron(extra_parameter) =>
+				VaultSwapExtraParameters::Tron(extra_parameter.try_map_address(f)?),
 		})
 	}
 
@@ -1596,6 +1600,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				refund_parameters,
 				from_token_account,
 			},
+			VaultSwapExtraParameters::Tron(extra_parameter) =>
+				VaultSwapExtraParameters::Tron(extra_parameter.try_map_amounts(f)?),
 		})
 	}
 }

@@ -17,6 +17,7 @@ echo "start-node NODE_COUNT: $NODE_COUNT"
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 source $LOCALNET_INIT_DIR/env/eth.env
 source $LOCALNET_INIT_DIR/env/arb.env
+source $LOCALNET_INIT_DIR/env/tron.env
 source $LOCALNET_INIT_DIR/env/node.env
 source $LOCALNET_INIT_DIR/env/$NODE_COUNT/eth-aggkey.env
 source $LOCALNET_INIT_DIR/env/$NODE_COUNT/dot-aggkey.env

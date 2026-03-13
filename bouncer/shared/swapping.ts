@@ -118,6 +118,7 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Tron':
       return '0x';
     case 'Solana': {
       const messageLength = message.slice(2).length / 2;
@@ -157,6 +158,9 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
     case 'Arbitrum':
       length = ARB_MAX_CCM_MSG_LENGTH;
       break;
+    case 'Tron':
+      length = MAX_CCM_MSG_LENGTH;
+      break;
     case 'Solana':
       if (destAsset === 'Sol') {
         length = MAX_CCM_BYTES_SOL;
@@ -180,6 +184,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 }
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_COMPUTE_UNITS = 30000;
+const OVERHEAD_ENERGY = 10000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
@@ -201,6 +206,8 @@ export async function newCcmMetadata(
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
+  } else if (destChain === 'Tron') {
+    userLogicGasBudget = OVERHEAD_ENERGY.toString();
   } else {
     throw new Error(`Unsupported chain: ${destChain}`);
   }
@@ -299,7 +306,6 @@ export async function testSwap<A = []>(
     tagSuffix,
     swapContext,
   );
-
   return performSwap(
     cf.withChildLogger(tag),
     sourceAsset,
