@@ -386,6 +386,8 @@ export async function dotestEvmDeposits<A = []>(
       (subcf) => testSuccessiveDepositEvm(subcf, 'Flip', 'Btc', swapContext),
       (subcf) => testSuccessiveDepositEvm(subcf, 'ArbEth', 'Flip', swapContext),
       (subcf) => testSuccessiveDepositEvm(subcf, 'ArbUsdc', 'Btc', swapContext),
+      (subcf) => testSuccessiveDepositEvm(subcf, 'Bnb', 'Eth', swapContext),
+      (subcf) => testSuccessiveDepositEvm(subcf, 'BscUsdt', 'Btc', swapContext),
     ]);
 
   const noDuplicatedWitnessingTest = (parentCf: ChainflipIO<A>) =>
@@ -398,6 +400,12 @@ export async function dotestEvmDeposits<A = []>(
       (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Btc', swapContext),
       (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Flip', swapContext),
       (subcf) => testNoDuplicateWitnessing(subcf, 'ArbEth', 'Usdc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Bnb', 'Eth', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Bnb', 'Btc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Bnb', 'Flip', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'Bnb', 'Usdc', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'BscUsdt', 'Eth', swapContext),
+      (subcf) => testNoDuplicateWitnessing(subcf, 'BscUsdt', 'Btc', swapContext),
     ]);
 
   const multipleTxSwapsTest = (parentCf: ChainflipIO<A>) =>
@@ -412,12 +420,16 @@ export async function dotestEvmDeposits<A = []>(
       (subcf) => testDoubleDeposit(subcf, 'Usdc', 'Flip'),
       (subcf) => testDoubleDeposit(subcf, 'ArbEth', 'Sol'),
       (subcf) => testDoubleDeposit(subcf, 'ArbUsdc', 'Flip'),
+      (subcf) => testDoubleDeposit(subcf, 'Bnb', 'Flip'),
+      (subcf) => testDoubleDeposit(subcf, 'BscUsdt', 'Flip'),
     ]);
 
   const testEncodingCfParameters = (parentCf: ChainflipIO<A>) =>
     parentCf.all([
       (subcf) => testEncodeCfParameters(subcf, 'ArbEth', 'Eth'),
       (subcf) => testEncodeCfParameters(subcf, 'Eth', 'Flip'),
+      (subcf) => testEncodeCfParameters(subcf, 'Bnb', 'Eth'),
+      (subcf) => testEncodeCfParameters(subcf, 'Bnb', 'Flip'),
     ]);
 
   await cf.all([
