@@ -26,11 +26,19 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
       result = await getErc20Balance('Arbitrum', address, contractAddress);
       break;
     }
+    case 'BscUsdt': {
+      const contractAddress = getContractAddress('Bsc', asset);
+      result = await getErc20Balance('Bsc', address, contractAddress);
+      break;
+    }
     case 'Eth':
       result = await getEvmNativeBalance('Ethereum', address);
       break;
     case 'ArbEth':
       result = await getEvmNativeBalance('Arbitrum', address);
+      break;
+    case 'Bnb':
+      result = await getEvmNativeBalance('Bsc', address);
       break;
     case 'Btc':
       result = (await getBtcBalance(address)).toString().trim();

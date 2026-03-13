@@ -31,7 +31,7 @@ use cf_chains::{
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
-	Arbitrum, Assethub, Bitcoin, Chain, ChainEnvironment, Polkadot, Solana,
+	Arbitrum, Assethub, Bitcoin, Bsc, Chain, ChainEnvironment, Polkadot, Solana,
 };
 use cf_primitives::{BroadcastId, SemVer, ThresholdSignatureRequestId};
 use cf_traits::{
@@ -97,6 +97,15 @@ pub struct MockArbitrumVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Arbitrum> for MockArbitrumVaultKeyWitnessedHandler {
 	fn on_first_key_activated(
 		_block_number: <Arbitrum as Chain>::ChainBlockNumber,
+	) -> frame_support::pallet_prelude::DispatchResult {
+		Ok(())
+	}
+}
+
+pub struct MockBscVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Bsc> for MockBscVaultKeyWitnessedHandler {
+	fn on_first_key_activated(
+		_block_number: <Bsc as Chain>::ChainBlockNumber,
 	) -> frame_support::pallet_prelude::DispatchResult {
 		Ok(())
 	}
@@ -304,6 +313,7 @@ impl pallet_cf_environment::Config for Test {
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
+	type BscVaultKeyWitnessedHandler = MockBscVaultKeyWitnessedHandler;
 	type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
 	type AssethubVaultKeyWitnessedHandler = MockAssethubVaultKeyWitnessedHandler;
 	type SolanaNonceWatch = ();
@@ -393,6 +403,7 @@ pub mod benchmarks_mock {
 		type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 		type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 		type ArbitrumVaultKeyWitnessedHandler = MockArbitrumVaultKeyWitnessedHandler;
+		type BscVaultKeyWitnessedHandler = MockBscVaultKeyWitnessedHandler;
 		type SolanaVaultKeyWitnessedHandler = MockSolanaVaultKeyWitnessedHandler;
 		type AssethubVaultKeyWitnessedHandler = MockAssethubVaultKeyWitnessedHandler;
 		type SolanaNonceWatch = ();

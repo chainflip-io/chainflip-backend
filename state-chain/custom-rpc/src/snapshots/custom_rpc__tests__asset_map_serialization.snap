@@ -30,5 +30,9 @@ expression: val
     "DOT": "0x1f4",
     "USDT": "0x1f4",
     "USDC": "0x1f4"
+  },
+  "Bsc": {
+    "BNB": "0x1f4",
+    "USDT": "0x1f4"
   }
 }

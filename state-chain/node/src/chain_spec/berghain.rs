@@ -48,6 +48,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const BSC_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3; //todo: revisit
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("826180541412D574cf1336d22c0C0a287822678A"),
@@ -64,6 +65,12 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
 	arb_usdt_token_address: hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 	arb_address_checker_address: hex_literal::hex!("69C700A0DEBAb9e349dd1f52ED62eb253a3c9892"),
+	// TODO: fill in real BSC mainnet contract addresses
+	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_usdt_token_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_address_checker_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	bsc_chain_id: cf_chains::bsc::CHAIN_ID_MAINNET,
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(

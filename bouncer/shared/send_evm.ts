@@ -1,5 +1,6 @@
 import {
   arbNonceMutex,
+  bscNonceMutex,
   ethNonceMutex,
   Chain,
   amountToFineAmount,
@@ -10,9 +11,10 @@ import {
 } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
 
-const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum']: number | undefined } = {
+const nextEvmNonce: { [key in 'Ethereum' | 'Arbitrum' | 'Bsc']: number | undefined } = {
   Ethereum: undefined,
   Arbitrum: undefined,
+  Bsc: undefined,
 };
 
 export async function getNextEvmNonce(
@@ -27,6 +29,9 @@ export async function getNextEvmNonce(
       break;
     case 'Arbitrum':
       mutex = arbNonceMutex;
+      break;
+    case 'Bsc':
+      mutex = bscNonceMutex;
       break;
     default:
       throw new Error('Invalid chain');
@@ -71,7 +76,7 @@ function isNonceError(error: unknown): boolean {
 }
 
 export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum') return;
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum' && chain !== 'Bsc') return;
 
   try {
     const web3 = getWeb3(chain);

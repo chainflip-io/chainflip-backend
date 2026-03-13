@@ -42,7 +42,7 @@ use cf_chains::{
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	chains::assets::{arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset},
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
@@ -108,7 +108,7 @@ pub mod pallet {
 	use crate::submit_runtime_call::{validate_metadata, ChainflipExtrinsic};
 
 	use super::*;
-	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
+	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum, Bsc};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 	use frame_support::{
@@ -127,6 +127,8 @@ pub mod pallet {
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 		/// On new key witnessed handler for Arbitrum
 		type ArbitrumVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Arbitrum>;
+		/// On new key witnessed handler for BSC
+		type BscVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bsc>;
 		/// On new key witnessed handler for Solana
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 		/// On new key witnessed handler for Assethub
@@ -303,6 +305,35 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
 
+	// BSC CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn supported_bsc_assets)]
+	/// Map of supported assets for BSC
+	pub type BscSupportedAssets<T: Config> = StorageMap<_, Blake2_128Concat, BscAsset, EvmAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_key_manager_address)]
+	/// The address of the BSC key manager contract
+	pub type BscKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_vault_address)]
+	/// The address of the BSC vault contract
+	pub type BscVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_address_checker_address)]
+	/// The address of the Address Checker contract on BSC.
+	pub type BscAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn bsc_chain_id)]
+	/// The BSC chain id
+	pub type BscChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type BscSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
 	// SOLANA CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn solana_available_nonce_accounts)]
@@ -393,6 +424,8 @@ pub mod pallet {
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
+		/// BSC Initialized: contract addresses have been set, first key activated
+		BscInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded {
 			utxos: Vec<Utxo>,
@@ -550,6 +583,26 @@ pub mod pallet {
 			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::SolanaInitialized);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(18)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(T::WeightInfo::witness_initialize_bsc_vault())]
+		pub fn witness_initialize_bsc_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for BSC
+			T::BscVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::BscInitialized);
 
 			Ok(())
 		}
@@ -846,6 +899,11 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
+		pub bsc_usdt_address: EvmAddress,
+		pub bsc_key_manager_address: EvmAddress,
+		pub bsc_vault_address: EvmAddress,
+		pub bsc_address_checker_address: EvmAddress,
+		pub bsc_chain_id: u64,
 		pub network_environment: NetworkEnvironment,
 		pub chainflip_network: ChainflipNetwork,
 		pub sol_genesis_hash: Option<SolHash>,
@@ -886,6 +944,12 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
+			BscKeyManagerAddress::<T>::set(self.bsc_key_manager_address);
+			BscVaultAddress::<T>::set(self.bsc_vault_address);
+			BscAddressCheckerAddress::<T>::set(self.bsc_address_checker_address);
+			BscSupportedAssets::<T>::insert(BscAsset::BscUsdt, self.bsc_usdt_address);
+			BscChainId::<T>::set(self.bsc_chain_id);
+
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());
 			SolanaAvailableNonceAccounts::<T>::set(self.sol_durable_nonces_and_accounts.clone());
@@ -918,6 +982,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn next_arbitrum_signature_nonce() -> SignatureNonce {
 		ArbitrumSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+
+	pub fn next_bsc_signature_nonce() -> SignatureNonce {
+		BscSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})

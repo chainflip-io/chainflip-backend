@@ -21,17 +21,17 @@ import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 
-const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
+const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt', 'BscUsdt'];
 
 interface EvmVaultSwapDetails {
-  chain: 'Ethereum' | 'Arbitrum';
+  chain: 'Ethereum' | 'Arbitrum' | 'Bsc';
   calldata: string;
   value: string;
   to: string;
 }
 
 interface EvmVaultSwapExtraParameters {
-  chain: 'Ethereum' | 'Arbitrum';
+  chain: 'Ethereum' | 'Arbitrum' | 'Bsc';
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
 }
@@ -96,7 +96,7 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
 
   const extraParameters: EvmVaultSwapExtraParameters = {
-    chain: srcChain as 'Ethereum' | 'Arbitrum',
+    chain: srcChain as 'Ethereum' | 'Arbitrum' | 'Bsc',
     input_amount: '0x' + new BigNumber(fineAmount).toString(16),
     refund_parameters: refundParams,
   };

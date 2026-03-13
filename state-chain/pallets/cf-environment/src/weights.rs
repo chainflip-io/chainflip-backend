@@ -54,6 +54,7 @@ pub trait WeightInfo {
 	fn witness_polkadot_vault_creation() -> Weight;
 	fn witness_current_bitcoin_block_number_for_key() -> Weight;
 	fn witness_initialize_arbitrum_vault() -> Weight;
+	fn witness_initialize_bsc_vault() -> Weight;
 	fn witness_initialize_solana_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
@@ -152,6 +153,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Measured:  `426`
 		//  Estimated: `1911`
 		// Minimum execution time: 26_164_000 picoseconds.
+		Weight::from_parts(26_834_000, 1911)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	fn witness_initialize_bsc_vault() -> Weight {
 		Weight::from_parts(26_834_000, 1911)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
@@ -424,6 +430,11 @@ impl WeightInfo for () {
 		//  Measured:  `426`
 		//  Estimated: `1911`
 		// Minimum execution time: 26_164_000 picoseconds.
+		Weight::from_parts(26_834_000, 1911)
+			.saturating_add(ParityDbWeight::get().reads(2_u64))
+			.saturating_add(ParityDbWeight::get().writes(2_u64))
+	}
+	fn witness_initialize_bsc_vault() -> Weight {
 		Weight::from_parts(26_834_000, 1911)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))

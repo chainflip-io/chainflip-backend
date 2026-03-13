@@ -16,6 +16,9 @@ function toEncodedAddress(chain: Chain, address: string) {
     case 'Arbitrum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Arb: hexToBytes(address) };
+    case 'Bsc':
+      assert(isHex(address), 'Expected hex-encoded EVM address');
+      return { Bsc: hexToBytes(address) };
     case 'Ethereum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Eth: hexToBytes(address) };
@@ -51,12 +54,13 @@ export async function depositChannelCreation(testContext: TestContext) {
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
-  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub']);
+  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub', 'Bsc']);
 
   const addressTransforms = {
     Btc: (address: string) => address,
     Eth: (address: string) => address.toLowerCase(),
     Arb: (address: string) => address.toLowerCase(),
+    Bsc: (address: string) => address.toLowerCase(),
     Dot: (address: string) =>
       isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
     Sol: (address: string) => (isHex(address) ? base58.encode(hexToBytes(address)) : address),
@@ -260,6 +264,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     ],
     Ethereum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
+    Bsc: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
     Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
   } as const;

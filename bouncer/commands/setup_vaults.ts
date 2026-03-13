@@ -19,6 +19,8 @@ import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
   initializeArbitrumChain,
   initializeArbitrumContracts,
+  initializeBscChain,
+  initializeBscContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
   initializeAssethubChain,
@@ -30,6 +32,7 @@ import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { bscVaultAwaitingGovernanceActivation } from 'generated/events/bscVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
@@ -123,6 +126,7 @@ async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
   const arbClient = getWeb3('Arbitrum');
+  const bscClient = getWeb3('Bsc');
   const solClient = getSolConnection();
 
   await using assethub = await getAssethubApi();
@@ -135,6 +139,7 @@ async function main(): Promise<void> {
   // Step 1
   await Promise.all([
     initializeArbitrumChain(cf.logger),
+    initializeBscChain(cf.logger),
     initializeSolanaChain(cf.logger),
     initializeAssethubChain(cf.logger),
   ]);
@@ -156,6 +161,10 @@ async function main(): Promise<void> {
       name: 'ArbitrumVault.AwaitingGovernanceActivation',
       schema: arbitrumVaultAwaitingGovernanceActivation,
     },
+    bsc: {
+      name: 'BscVault.AwaitingGovernanceActivation',
+      schema: bscVaultAwaitingGovernanceActivation,
+    },
     sol: {
       name: 'SolanaVault.AwaitingGovernanceActivation',
       schema: solanaVaultAwaitingGovernanceActivation,
@@ -168,11 +177,12 @@ async function main(): Promise<void> {
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
+  const bscKey = keyEvents.bsc.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
   const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana, Assethub) with new keys');
+  cf.info('Setting up external chains (Arbitrum, BSC, Solana, Assethub) with new keys');
 
   const createAssethubProxy = async () => {
     // Wait for the assethub vault Promise to resolve
@@ -199,6 +209,12 @@ async function main(): Promise<void> {
     cf.debug('Arbitrum key inserted');
   };
 
+  const insertBscKey = async () => {
+    cf.info('Inserting BSC key in the contracts');
+    await initializeBscContracts(cf.logger, bscClient, bscKey);
+    cf.debug('BSC key inserted');
+  };
+
   const insertSolanaKey = async () => {
     cf.info('Inserting Solana key in the programs');
     await initializeSolanaPrograms(cf.logger, solKey);
@@ -208,6 +224,7 @@ async function main(): Promise<void> {
   const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([
     createAssethubProxy(),
     insertArbitrumKey(),
+    insertBscKey(),
     insertSolanaKey(),
   ]);
 
