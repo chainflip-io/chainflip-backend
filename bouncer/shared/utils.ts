@@ -750,6 +750,7 @@ export function doAddressesMatch(
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Bsc':
     case 'Solana':
     case 'Assethub': {
       const hexAddress = validateHexString(address);
