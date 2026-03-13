@@ -14,6 +14,7 @@ import {
   getSolConnection,
   deferredPromise,
   runWithTimeout,
+  getTronWebClient,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
@@ -22,6 +23,8 @@ import {
   initializeSolanaChain,
   initializeSolanaPrograms,
   initializeAssethubChain,
+  initializeTronChain,
+  initializeTronContracts,
 } from 'shared/initialize_new_chains';
 import { globalLogger, Logger, loggerChild } from 'shared/utils/logger';
 import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
@@ -32,6 +35,7 @@ import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitco
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
+import { tronVaultAwaitingGovernanceActivation } from 'generated/events/tronVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
 
 export async function createPolkadotVault(api: DisposableApiPromise) {
@@ -124,6 +128,7 @@ async function main(): Promise<void> {
   const btcClient = getBtcClient();
   const arbClient = getWeb3('Arbitrum');
   const solClient = getSolConnection();
+  const tronClient = getTronWebClient();
 
   await using assethub = await getAssethubApi();
 
@@ -137,6 +142,7 @@ async function main(): Promise<void> {
     initializeArbitrumChain(cf.logger),
     initializeSolanaChain(cf.logger),
     initializeAssethubChain(cf.logger),
+    initializeTronChain(cf.logger),
   ]);
 
   // Step 2
@@ -164,15 +170,20 @@ async function main(): Promise<void> {
       name: 'AssethubVault.AwaitingGovernanceActivation',
       schema: assethubVaultAwaitingGovernanceActivation,
     },
+    tron: {
+      name: 'TronVault.AwaitingGovernanceActivation',
+      schema: tronVaultAwaitingGovernanceActivation,
+    },
   });
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
   const hubKey = keyEvents.hub.data.newPublicKey;
+  const tronKey = keyEvents.tron.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana, Assethub) with new keys');
+  cf.info('Setting up external chains (Arbitrum, Solana, Assethub, Tron) with new keys');
 
   const createAssethubProxy = async () => {
     // Wait for the assethub vault Promise to resolve
@@ -205,10 +216,17 @@ async function main(): Promise<void> {
     cf.debug('Solana key inserted');
   };
 
+  const insertTronKey = async () => {
+    cf.info('Inserting Tron key in the contracts');
+    await initializeTronContracts(tronClient, tronKey);
+    cf.debug('Tron key inserted');
+  };
+
   const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([
     createAssethubProxy(),
     insertArbitrumKey(),
     insertSolanaKey(),
+    insertTronKey(),
   ]);
 
   // Step 7

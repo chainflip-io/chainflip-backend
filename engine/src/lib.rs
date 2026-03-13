@@ -28,6 +28,7 @@ pub mod elections;
 pub mod multisig;
 pub mod p2p;
 pub mod retrier;
+pub mod rpc_utils;
 pub mod settings;
 pub mod state_chain_observer;
 pub mod witness;
@@ -37,8 +38,9 @@ pub mod btc;
 pub mod dot;
 pub mod evm;
 pub mod sol;
+pub mod tron;
 
-use crate::evm::cached_rpc::EvmCachingClient;
+use crate::{evm::cached_rpc::EvmCachingClient, tron::cached_rpc::TronCachingClient};
 use ::multisig::{
 	bitcoin::BtcSigning, ed25519::SolSigning, eth::EthSigning, polkadot::PolkadotSigning,
 };
@@ -55,6 +57,7 @@ use self::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
+	tron::{retry_rpc::TronRetryRpcClient, rpc::TronRpcSigningClient},
 };
 use anyhow::Context;
 use cf_chains::{evm::U256, Chain};
@@ -343,6 +346,29 @@ async fn run_main(
 				DotRetryRpcClient::new(scope, settings.hub.nodes, expected_hub_genesis_hash)?
 			};
 
+			let tron_client = {
+				let expected_tron_chain_id = U256::from(
+					state_chain_client
+						.storage_value::<pallet_cf_environment::TronChainId<state_chain_runtime::Runtime>>(
+							state_chain_client.latest_finalized_block().hash,
+						)
+						.await
+						.expect(STATE_CHAIN_CONNECTION),
+				);
+				TronCachingClient::new(
+					scope,
+					TronRetryRpcClient::<TronRpcSigningClient>::new(
+						scope,
+						settings.tron.nodes,
+						expected_tron_chain_id,
+						"tron_rpc",
+						"Tron",
+						settings.tron.private_key_file,
+					)
+					.await?,
+				)
+			};
+
 			witness::start::start(
 				scope,
 				eth_client.clone(),
@@ -350,6 +376,7 @@ async fn run_main(
 				btc_client.clone(),
 				sol_client.clone(),
 				hub_client.clone(),
+				tron_client.clone(),
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				unfinalised_state_chain_stream.clone(),
@@ -365,6 +392,7 @@ async fn run_main(
 				btc_client,
 				sol_client,
 				hub_client,
+				tron_client,
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,

@@ -18,6 +18,7 @@ import {
   AssetSymbol,
 } from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
+import { TronWeb } from 'tronweb';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
@@ -63,7 +64,7 @@ export const ethNonceMutex = new Mutex();
 export const arbNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Tron'] as Chain[];
 export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
 export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
 
@@ -242,6 +243,21 @@ export function getContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
+    case 'Tron':
+      switch (contract) {
+        case 'Vault':
+          return '41a0e915df8a24a4718061461a41f303c6d3353e51';
+        case 'KEY_MANAGER':
+          return '419df3e70fc7ea8128d6d0634664118d16bc856e1c';
+        case 'Trx':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'TronUsdt':
+          return process.env.TRON_USDT_ADDRESS ?? '41874dabe2d179dd5060b48881872b5851458c9fe0';
+        case 'CFTESTER':
+          return '0x09464271134799e67f7026eedb1aac4c5087b9a7';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -259,6 +275,8 @@ export function shortChainFromChain(chain: Chain) {
       return 'Sol';
     case 'Assethub':
       return 'Hub';
+    case 'Tron':
+      return 'Tron';
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -286,6 +304,9 @@ export function shortChainFromAsset(asset: Asset) {
     case 'HubUsdc':
     case 'HubUsdt':
       return 'Hub';
+    case 'Trx':
+    case 'TronUsdt':
+      return 'Tron';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -318,9 +339,12 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
+    case 'TronUsdt':
       return '1000';
     case 'Sol':
       return '100';
+    case 'Trx':
+      return '1000';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -353,6 +377,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Sol;
     case 'Assethub':
       return Assets.HubDot;
+    case 'Tron':
+      return Assets.Trx;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -703,7 +729,7 @@ export function doBtcAddressesMatch(
 }
 
 // Takes an address from index events and checks whether it matches an input chain address to
-// For Eth, Arb, Sol nad hub it expects a HexString
+// For Eth, Arb, Sol, Hub and Tron it expects a HexString
 export function doAddressesMatch(
   eventAddress: z.infer<typeof cfChainsAddressForeignChainAddress>,
   chain: Chain,
@@ -721,6 +747,7 @@ export function doAddressesMatch(
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Tron':
     case 'Solana':
     case 'Assethub': {
       const hexAddress = validateHexString(address);
@@ -755,6 +782,8 @@ export async function newAddress(
     case Assets.ArbEth:
     case Assets.ArbUsdc:
     case Assets.ArbUsdt:
+    case Assets.Trx:
+    case Assets.TronUsdt:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.HubDot:
@@ -765,9 +794,9 @@ export async function newAddress(
     case Assets.Btc:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
-    case 'Sol':
-    case 'SolUsdc':
-    case 'SolUsdt':
+    case Assets.Sol:
+    case Assets.SolUsdc:
+    case Assets.SolUsdt:
       rawAddress = newSolAddress(seed);
       break;
     default:
@@ -866,6 +895,11 @@ export function getSolWhaleKeyPair(): Keypair {
   return Keypair.fromSecretKey(new Uint8Array(secretKey));
 }
 
+// TRON HTTP API runs on port 8090 (see localnet/docker-compose.yml)
+export function getTronWebClient(): TronWeb {
+  return new TronWeb({ fullHost: process.env.TRON_HTTP_URL ?? 'http://localhost:8090' });
+}
+
 export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: string } {
   switch (chain) {
     case 'Ethereum':
@@ -881,54 +915,10 @@ export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: str
   }
 }
 
-export async function observeBalanceIncrease(
-  logger: Logger,
-  dstCcy: Asset,
-  address: string,
-  oldBalance?: string,
-  timeoutSeconds = 200,
-): Promise<number> {
-  const initialBalance = oldBalance
-    ? Number(oldBalance)
-    : Number(await getBalance(dstCcy, address));
-  logger.debug(
-    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
-  );
-  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
-    const newBalance = Number(await getBalance(dstCcy, address));
-    if (newBalance > initialBalance) {
-      logger.debug(
-        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
-      );
-      return newBalance;
-    }
-    await sleep(3000);
-  }
-
-  return throwError(
-    logger,
-    new Error(
-      `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
-    ),
-  );
-}
-
-export async function observeFetch(asset: Asset, address: string): Promise<void> {
-  for (let i = 0; i < 360; i++) {
-    const balance = Number(await getBalance(asset, address));
-    if (balance === 0) {
-      const chain = chainFromAsset(asset);
-      if (chain === 'Ethereum' || chain === 'Arbitrum') {
-        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
-          throw new Error('EVM address has no bytecode');
-        }
-      }
-      return;
-    }
-    await sleep(3000);
-  }
-
-  throw new Error('Failed to observe the fetch');
+// Deployer = hardhat account #0, same key as ETH whale (TYBNgWfhGuNzdLtjKtxXTfskAhTbMcqbaG)
+export function getTronWhaleKeyPair(): { privkey: string; pubkey: string } {
+  const { privkey, pubkey } = getEvmWhaleKeypair('Ethereum');
+  return { privkey: privkey.replace(/^0x/, ''), pubkey };
 }
 
 type ContractEvent = {
@@ -948,7 +938,12 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<ContractEvent | undefined> {
-  const web3 = getWeb3(chain);
+  // Supporting the TRON endpoint only here instead of in `getEvmEndpoint` because
+  // we want to ensure we use Tronweb for everything outside of this event witnessing.
+  const web3 =
+    chain === 'Tron'
+      ? new Web3(process.env.TRON_JSON_RPC_ENDPOINT ?? 'http://127.0.0.1:8555/jsonrpc')
+      : getWeb3(chain);
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -1101,6 +1096,8 @@ export async function observeCcmReceived(
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Tron': {
+      const assetAddress = getContractAddress(destChain, destAsset.toString());
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
@@ -1110,13 +1107,17 @@ export async function observeCcmReceived(
           getChainContractId(chainFromAsset(sourceAsset)).toString(),
           sourceAddress ?? null,
           messageMetadata.message,
-          getContractAddress(destChain, destAsset.toString()),
+          // We need to convert the address TRON->ETH as we use web3 to get a Tron event
+          destChain === 'Tron'
+            ? Web3.utils.toChecksumAddress('0x' + assetAddress.slice(2))
+            : assetAddress,
           '*',
           '*',
           '*',
         ],
         stopObserveEvent,
       );
+    }
     case 'Solana':
       return observeSolanaCcmEvent(
         'ReceivedCcm',
@@ -1174,6 +1175,74 @@ export function encodeSolAddress(address: string): string {
 
 export function getEncodedSolAddress(address: string): string {
   return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
+}
+
+export function getEncodedTronAddress(address: string): string {
+  if (address.startsWith('0x')) {
+    return TronWeb.address.fromHex(address);
+  }
+  return address;
+}
+
+export async function observeBalanceIncrease(
+  logger: Logger,
+  dstCcy: Asset,
+  address: string,
+  oldBalance?: string,
+  timeoutSeconds = 200,
+): Promise<number> {
+  const initialBalance = oldBalance
+    ? Number(oldBalance)
+    : Number(await getBalance(dstCcy, address));
+  logger.debug(
+    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
+  );
+  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
+    const newBalance = Number(await getBalance(dstCcy, address));
+    if (newBalance > initialBalance) {
+      logger.debug(
+        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
+      );
+      return newBalance;
+    }
+    await sleep(3000);
+  }
+
+  return throwError(
+    logger,
+    new Error(
+      `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
+    ),
+  );
+}
+
+export async function observeFetch(asset: Asset, address: string): Promise<void> {
+  for (let i = 0; i < 360; i++) {
+    const balance = await getBalance(asset, address);
+    // In TRON the fetches will leave 1 dust amount of USDT to make deposits cheaper.
+    if (asset === Assets.TronUsdt) {
+      if (balance === fineAmountToAmount('1', assetDecimals(Assets.TronUsdt))) {
+        const tronWeb = getTronWebClient();
+        const contract = await tronWeb.trx.getContract(getEncodedTronAddress(address));
+        if (!(contract && contract.code_hash)) {
+          throw new Error('Tron address has no bytecode');
+        }
+        return;
+      }
+    }
+    if (Number(balance) === 0) {
+      const chain = chainFromAsset(asset);
+      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
+          throw new Error('EVM address has no bytecode');
+        }
+      }
+      return;
+    }
+    await sleep(3000);
+  }
+
+  throw new Error('Failed to observe the fetch');
 }
 
 // Left pad the external chain's address to convert it to a Statechain address.

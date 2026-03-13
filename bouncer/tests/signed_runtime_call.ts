@@ -31,6 +31,7 @@ const encodedAddressCodec = Enum({
   Arb: TsBytes(20), // [u8; 20]
   Sol: TsBytes(32), // [u8; 32]
   Hub: TsBytes(32), // [u8; 32]
+  Tron: TsBytes(20), // [u8; 20]
 });
 
 const remarkDataCodec = encodedAddressCodec;

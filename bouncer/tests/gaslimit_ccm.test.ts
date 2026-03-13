@@ -6,6 +6,7 @@ import {
   getWeb3,
   getEvmWhaleKeypair,
   getSolConnection,
+  getTronWebClient,
   observeCcmReceived,
   observeSwapRequested,
   sleep,
@@ -376,6 +377,62 @@ async function testEvmInsufficientGas<A = []>(
   await testGasLimitSwapToEvm(cf, sourceAsset, destAsset, true);
 }
 
+async function testTronInsufficientGas<A = []>(
+  cf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+) {
+  const destChain = chainFromAsset(destAsset);
+  const tronWeb = getTronWebClient();
+
+  if (destChain !== 'Tron') {
+    throw new Error(`Destination chain ${destChain} is not Tron`);
+  }
+
+  // Using a high number to ensure the energy consumption is beyond the budget
+  const numberOfStores = 25;
+
+  // No need to override the gasBudget since the numberOfStores will make sure the energy
+  // consumption is higher than the budget.
+  const ccmMetadata = await newCcmMetadata(
+    destAsset,
+    tronWeb.utils.abi.encodeParams(['string', 'uint256'], ['GasTest', numberOfStores]),
+  );
+
+  const { tag, destAddress, broadcastId, txPayload } = await executeAndTrackCcmSwap(
+    cf,
+    sourceAsset,
+    destAsset,
+    ccmMetadata,
+    `InsufficientGas`,
+  );
+  const gasLimitBudget = Number(txPayload.feeLimit.replace(/,/g, ''));
+
+  cf.debug(`${tag} Finished tracking events`);
+  cf.debug(
+    `Expecting broadcast abort . Broadcast gas budget: ${gasLimitBudget}, user gasBudget ${ccmMetadata.gasBudget}}`,
+  );
+  let stopObservingCcmReceived = false;
+
+  observeCcmReceived(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    ccmMetadata,
+    undefined,
+    () => stopObservingCcmReceived,
+  ).then((event) => {
+    if (event !== undefined) {
+      throw new Error(`$CCM event emitted. Transaction should not have been broadcasted!`);
+    }
+  });
+  await observeEvent(cf.logger, `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
+    test: (event) => event.data.broadcastId === broadcastId,
+  }).event;
+  stopObservingCcmReceived = true;
+  cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
+}
+
 function spamEvmChain<A = []>(cf: ChainflipIO<A>, chain: Chain): () => void {
   const { pubkey: whalePubkey } = getEvmWhaleKeypair('Ethereum');
 
@@ -518,6 +575,27 @@ describe('GasLimitCcmSwaps', async () => {
       `Solana CCM Gas Limit swap ${pair[0]} to ${pair[1]}`,
       async (ctx) => {
         await testGasLimitSwapToSolana(
+          await newChainflipIO(ctx.logger, []),
+          pair[0] as Asset,
+          pair[1] as Asset,
+        );
+      },
+      300,
+      0,
+      true,
+    );
+  }
+
+  for (const pair of [
+    ['ArbEth', 'Trx'],
+    ['Sol', 'TronUsdt'],
+  ]) {
+    concurrentTest(
+      `EVM Insufficient Gas CCM swap ${pair[0]} to ${pair[1]}`,
+      async (ctx) => {
+        // TODO: we're somehow recreating a ChainflipIO from a context, instead of that we should
+        // consider redoing the whole pipeline with ChainflipIO
+        await testTronInsufficientGas(
           await newChainflipIO(ctx.logger, []),
           pair[0] as Asset,
           pair[1] as Asset,

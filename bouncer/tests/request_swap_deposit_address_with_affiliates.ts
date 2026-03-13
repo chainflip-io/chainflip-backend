@@ -25,6 +25,9 @@ function toEncodedAddress(chain: Chain, address: string) {
       return { Sol: isHex(address) ? hexToBytes(address) : base58.decode(address) };
     case 'Bitcoin':
       return { Btc: bytesToHex(new TextEncoder().encode(address)) };
+    case 'Tron':
+      assert(isHex(address), 'Expected hex-encoded Tron address');
+      return { Trn: hexToBytes(address) };
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -51,7 +54,7 @@ export async function depositChannelCreation(testContext: TestContext) {
   const numberSchema = z.string().transform((n) => Number(n.replace(/,/g, '')));
   const bigintSchema = z.string().transform((n) => BigInt(n.replace(/,/g, '')));
 
-  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub']);
+  const shortChainSchema = z.enum(['Btc', 'Eth', 'Arb', 'Dot', 'Sol', 'Hub', 'Tron']);
 
   const addressTransforms = {
     Btc: (address: string) => address,
@@ -62,6 +65,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     Sol: (address: string) => (isHex(address) ? base58.encode(hexToBytes(address)) : address),
     Hub: (address: string) =>
       isHex(address) ? ss58.encode({ data: address, ss58Format: 0 }) : address,
+    Tron: (address: string) => address.toLowerCase(),
   } as const;
 
   const eventSchema = z
@@ -262,6 +266,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
     Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
+    Tron: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
   } as const;
 
   const entries = Object.entries as <T>(o: T) => [keyof T, T[keyof T]][];

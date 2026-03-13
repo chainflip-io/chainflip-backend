@@ -113,7 +113,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
           return true;
         }
         cf.info(
-          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))}.`,
+          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset ${ccy}.`,
         );
         return false;
       }

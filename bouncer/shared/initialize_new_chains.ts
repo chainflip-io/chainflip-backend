@@ -8,6 +8,7 @@ import {
 } from '@solana/web3.js';
 import {
   getContractAddress,
+  getTronWhaleKeyPair,
   getSolWhaleKeyPair,
   encodeSolAddress,
   solanaNumberOfNonces,
@@ -19,6 +20,7 @@ import { signAndSendTxEvm } from 'shared/send_evm';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { observeEvent } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
+import { TronWeb } from 'tronweb';
 
 export async function initializeArbitrumChain(logger: Logger) {
   logger.info('Initializing Arbitrum');
@@ -41,6 +43,13 @@ export async function initializeAssethubChain(logger: Logger) {
   await hubInitializationRequest;
 }
 
+export async function initializeTronChain(logger: Logger) {
+  logger.info('Initializing Tron');
+  const tronInitializationRequest = observeEvent(logger, 'tronVault:ChainInitialized').event;
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.tronVault.initializeChain());
+  await tronInitializationRequest;
+}
+
 export async function initializeArbitrumContracts(
   logger: Logger,
   arbClient: Web3,
@@ -60,6 +69,21 @@ export async function initializeArbitrumContracts(
     })
     .encodeABI();
   await signAndSendTxEvm(logger, 'Arbitrum', keyManagerAddress, '0', txData);
+}
+
+export async function initializeTronContracts(
+  tronClient: TronWeb,
+  tronKey: { pubKeyX: string; pubKeyYParity: string },
+) {
+  const keyManagerAddress = getContractAddress('Tron', 'KEY_MANAGER');
+  const keyManagerContract = tronClient.contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    keyManagerAddress,
+  );
+  await keyManagerContract
+    .setAggKeyWithGovKey([tronKey.pubKeyX, tronKey.pubKeyYParity === 'Odd' ? 1 : 0])
+    .send({ feeLimit: 100_000_000 }, getTronWhaleKeyPair().privkey);
 }
 
 function numberToBuffer(bytes: number, number: number): Buffer {

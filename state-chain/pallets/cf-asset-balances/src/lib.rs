@@ -230,7 +230,7 @@ impl<T: Config> Pallet<T> {
 		available: &mut AssetAmount,
 	) -> Result<(), DispatchError> {
 		let amount_reconciled = match chain {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => match owner {
+			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron => match owner {
 				ExternalOwner::Account(address) =>
 					if *amount_owed > *available {
 						0
@@ -383,7 +383,8 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum => address.into(),
+				ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+					address.into(),
 				ForeignChain::Polkadot | ForeignChain::Assethub => ExternalOwner::AggKey,
 				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 			})

@@ -26,3 +26,5 @@ pub mod generic_elections;
 pub mod hub;
 pub mod sol;
 pub mod start;
+pub mod tron;
+pub mod tron_elections;

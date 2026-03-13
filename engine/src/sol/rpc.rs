@@ -16,14 +16,14 @@
 
 use futures_core::Future;
 
-use reqwest::{header::CONTENT_TYPE, Client};
+use reqwest::Client;
 
 use serde_json::{from_value, json};
 
 use cf_utilities::make_periodic_tick;
 use tracing::error;
 
-use crate::{btc::rpc::Error, constants::RPC_RETRY_CONNECTION_INTERVAL};
+use crate::{constants::RPC_RETRY_CONNECTION_INTERVAL, rpc_utils::Error};
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 
 use anyhow::{anyhow, Result};
@@ -90,52 +90,15 @@ impl SolRpcClient {
 		method: &str,
 		params: Option<serde_json::Value>,
 	) -> Result<serde_json::Value, Error> {
-		call_rpc_raw(&self.client, &self.endpoint, method, params).await
-	}
-}
-
-async fn call_rpc_raw(
-	client: &Client,
-	endpoint: &SecretUrl,
-	method: &str,
-	params: Option<serde_json::Value>,
-) -> Result<serde_json::Value, Error> {
-	let request_body = json!({
-		"jsonrpc": "2.0",
-		"id": 0,
-		"method": method,
-		"params": params.clone().unwrap_or_else(|| json!([]))
-	});
-
-	let response = client
-		.post(endpoint.as_ref())
-		.header(CONTENT_TYPE, "application/json")
-		.json(&request_body)
-		.send()
-		.await
-		.map_err(reqwest::Error::without_url)
-		.map_err(Error::Transport)?;
-
-	let mut json = response.json::<serde_json::Value>().await.map_err(Error::Transport)?;
-
-	if json.is_object() {
-		if json["error"].is_object() {
-			return Err(Error::Rpc(
-				serde_json::from_value(json["error"].clone()).map_err(Error::Json)?,
-			));
-		}
-
-		Ok(json["result"].take())
-	} else {
-		warn!("The rpc response returned for {method:?} with params: {params:?} was not a valid json object: {json:?}");
-		Err(Error::Rpc(serde_json::from_value(json.clone()).map_err(Error::Json)?))
+		crate::rpc_utils::call_rpc_raw(&self.client, self.endpoint.as_ref(), method, params).await
 	}
 }
 
 async fn get_genesis_hash(client: &Client, endpoint: &SecretUrl) -> anyhow::Result<SolHash> {
-	let json_value = call_rpc_raw(client, endpoint, "getGenesisHash", None)
-		.await
-		.map_err(anyhow::Error::msg)?;
+	let json_value =
+		crate::rpc_utils::call_rpc_raw(client, endpoint.as_ref(), "getGenesisHash", None)
+			.await
+			.map_err(anyhow::Error::msg)?;
 
 	let genesis_hash_str = json_value
 		.as_str()

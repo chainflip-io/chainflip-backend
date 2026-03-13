@@ -149,17 +149,35 @@ pub trait EvmCall {
 	/// The function values to be used as call parameters, not including sigData.
 	fn function_call_args(&self) -> Vec<Token>;
 
-	fn get_function(with_sig_data: bool) -> ethabi::Function {
-		let inputs = if with_sig_data {
+	/// Returns the function parameters as (name, type) pairs, optionally including sigData.
+	fn function_params_with_sig_data(
+		with_sig_data: bool,
+	) -> Vec<(&'static str, ethabi::ParamType)> {
+		if with_sig_data {
 			let mut params = vec![("sigData", SigData::param_type())];
 			params.extend(Self::function_params());
 			params
 		} else {
 			Self::function_params()
 		}
-		.into_iter()
-		.map(|(n, t)| ethabi_param(n, t))
-		.collect();
+	}
+
+	/// Returns the function selector string (e.g., "transfer(address,uint256)") before hashing,
+	/// always including sigData
+	fn function_selector_string(&self) -> Vec<u8> {
+		let param_types = Self::function_params_with_sig_data(true)
+			.into_iter()
+			.map(|(_, t)| scale_info::prelude::format!("{}", t))
+			.collect::<Vec<_>>()
+			.join(",");
+		scale_info::prelude::format!("{}({})", Self::FUNCTION_NAME, param_types).into_bytes()
+	}
+
+	fn get_function(with_sig_data: bool) -> ethabi::Function {
+		let inputs = Self::function_params_with_sig_data(with_sig_data)
+			.into_iter()
+			.map(|(n, t)| ethabi_param(n, t))
+			.collect();
 
 		#[expect(deprecated)]
 		ethabi::Function {
@@ -299,6 +317,10 @@ impl<C: EvmCall> EvmTransactionBuilder<C> {
 		self.signer_and_sig_data = None;
 		self.replay_protection = replay_protection;
 	}
+
+	pub fn function_selector_string(&self) -> Vec<u8> {
+		self.call.function_selector_string()
+	}
 }
 
 pub type EvmChainId = u64;
@@ -412,5 +434,56 @@ mod tests {
 
 		assert_eq!(builder.replay_protection(), new_replay_protection);
 		assert!(!builder.is_signed());
+	}
+
+	#[test]
+	fn check_function_selector_strings() {
+		use super::*;
+		use hex_literal::hex;
+
+		// Add all EvmCall types here
+		let calls: Vec<(&str, Vec<u8>, [u8; 4])> = vec![
+			(
+				"SetAggKeyWithAggKey",
+				set_agg_key_with_agg_key::SetAggKeyWithAggKey { new_key: AggKey::default() }
+					.function_selector_string(),
+				hex!("c1c4a149"),
+			),
+			(
+				"SetCommKeyWithAggKey",
+				set_comm_key_with_agg_key::SetCommKeyWithAggKey { new_comm_key: Address::zero() }
+					.function_selector_string(),
+				hex!("65b48463"),
+			),
+			(
+				"SetGovKeyWithAggKey",
+				set_gov_key_with_agg_key::SetGovKeyWithAggKey { new_gov_key: Address::zero() }
+					.function_selector_string(),
+				hex!("28f57777"),
+			),
+			(
+				"AllBatch",
+				all_batch::AllBatch::new(vec![], vec![], vec![]).function_selector_string(),
+				hex!("5f8c0f9a"),
+			),
+			(
+				"ExecutexSwapAndCall",
+				execute_x_swap_and_call::ExecutexSwapAndCall {
+					transfer_param: Default::default(),
+					source_chain: 0,
+					source_address: vec![],
+					gas_budget: Default::default(),
+					message: vec![],
+				}
+				.function_selector_string(),
+				hex!("5293178e"),
+			),
+		];
+
+		for (name, selector, expected_bytes) in calls {
+			let selector_hash = Keccak256::hash(&selector);
+			let selector_bytes = &selector_hash.as_ref()[..4];
+			assert_eq!(selector_bytes, &expected_bytes, "{} selector bytes mismatch", name);
+		}
 	}
 }

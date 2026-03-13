@@ -30,10 +30,84 @@ interface EvmVaultSwapDetails {
   to: string;
 }
 
-interface EvmVaultSwapExtraParameters {
-  chain: 'Ethereum' | 'Arbitrum';
+interface VaultSwapExtraParameters {
+  chain: string;
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
+}
+
+export async function requestEvmSwapParameterEncoding<A extends WithBrokerAccount, T>(
+  cf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  brokerCommissionBps: number,
+  messageMetadata: CcmDepositMetadata | undefined,
+  boostFeeBps: number,
+  affiliateFees: { accountAddress: string; commissionBps: number }[],
+  dcaParams: DcaParams | undefined,
+  fillOrKillParams: FillOrKillParamsX128 | undefined,
+  amount: string | undefined,
+  optionalRefundAddress: string | undefined,
+): Promise<T> {
+  const srcChain = chainFromAsset(sourceAsset);
+  const destChain = chainFromAsset(destAsset);
+  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
+  const refundAddress =
+    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: '0',
+  };
+  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+
+  await using chainflip = await getChainflipApi();
+
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: fokParams.retryDurationBlocks,
+    refund_address: fokParams.refundAddress,
+    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
+    max_oracle_price_slippage: undefined,
+  };
+
+  const extraParameters: VaultSwapExtraParameters = {
+    chain: srcChain,
+    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
+    refund_parameters: refundParams,
+  };
+
+  cf.debug('Requesting vault swap parameter encoding');
+  return (await chainflip.rpc(
+    `cf_request_swap_parameter_encoding`,
+    cf.requirements.account.keypair.address,
+    stateChainAssetFromAsset(sourceAsset),
+    stateChainAssetFromAsset(destAsset),
+    destChain === Chains.Assethub ? decodeDotAddressForContract(destAddress) : destAddress,
+    brokerCommissionBps,
+    extraParameters,
+    messageMetadata && {
+      message: messageMetadata.message as `0x${string}`,
+      gas_budget: messageMetadata.gasBudget,
+      ccm_additional_data: messageMetadata.ccmAdditionalData,
+    },
+    boostFeeBps,
+    affiliateFees.map((fee) => ({
+      account: fee.accountAddress,
+      bps: fee.commissionBps,
+    })),
+    dcaParams && {
+      number_of_chunks: dcaParams.numberOfChunks,
+      chunk_interval: dcaParams.chunkIntervalBlocks,
+    },
+  )) as unknown as T;
 }
 
 export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
@@ -55,21 +129,14 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   optionalRefundAddress?: string,
 ) {
   const srcChain = chainFromAsset(sourceAsset);
-  const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
-  const refundAddress =
-    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
-  const fokParams = fillOrKillParams ?? {
-    retryDurationBlocks: 0,
-    refundAddress,
-    minPriceX128: '0',
-  };
-  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+
   cf.debug('Creating evm wallet ...');
   const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset, amount));
 
   if (erc20Assets.includes(sourceAsset)) {
     cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
+
     // Doing effectively infinite approvals to make sure it doesn't fail.
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     await approveEvmTokenVault(
@@ -79,52 +146,20 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     );
   }
 
-  await using chainflip = await getChainflipApi();
-
-  const refundParams: ChannelRefundParameters = {
-    retry_duration: fokParams.retryDurationBlocks,
-    refund_address: fokParams.refundAddress,
-    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
-    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
-      ? {
-          message: fillOrKillParams.refundCcmMetadata.message,
-          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
-          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
-        }
-      : undefined,
-    max_oracle_price_slippage: undefined,
-  };
-
-  const extraParameters: EvmVaultSwapExtraParameters = {
-    chain: srcChain as 'Ethereum' | 'Arbitrum',
-    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
-    refund_parameters: refundParams,
-  };
-
-  cf.debug('Requesting vault swap parameter encoding');
-  const vaultSwapDetails = (await chainflip.rpc(
-    `cf_request_swap_parameter_encoding`,
-    cf.requirements.account.keypair.address,
-    stateChainAssetFromAsset(sourceAsset),
-    stateChainAssetFromAsset(destAsset),
-    destChain === Chains.Assethub ? decodeDotAddressForContract(destAddress) : destAddress,
+  const vaultSwapDetails = await requestEvmSwapParameterEncoding<A, EvmVaultSwapDetails>(
+    cf,
+    sourceAsset,
+    destAsset,
+    destAddress,
     brokerCommissionBps,
-    extraParameters,
-    messageMetadata && {
-      message: messageMetadata.message as `0x${string}`,
-      gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.ccmAdditionalData,
-    },
+    messageMetadata,
     boostFeeBps ?? 0,
-    affiliateFees.map((fee) => ({
-      account: fee.accountAddress,
-      bps: fee.commissionBps,
-    })),
-    dcaParams && {
-      number_of_chunks: dcaParams.numberOfChunks,
-      chunk_interval: dcaParams.chunkIntervalBlocks,
-    },
-  )) as unknown as EvmVaultSwapDetails;
+    affiliateFees,
+    dcaParams,
+    fillOrKillParams,
+    amount,
+    optionalRefundAddress,
+  );
 
   const web3 = getWeb3(srcChain);
   const tx = {

@@ -271,4 +271,7 @@ impl<E> ArbitrumApi<E> {
 	pub fn ccm_transfer_data(&self) -> Option<(AssetAmount, usize, Address)> {
 		map_over_api_variants!(self, call, call.ccm_transfer_data())
 	}
+	pub fn function_selector_string(&self) -> Vec<u8> {
+		map_over_api_variants!(self, call, call.function_selector_string())
+	}
 }

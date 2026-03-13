@@ -45,7 +45,7 @@ use cf_primitives::{
 	SWAP_DELAY_BLOCKS,
 };
 use cf_traits::{AffiliateRegistry, SwapParameterValidation};
-use codec::Decode;
+use codec::{Decode, Encode};
 
 use frame_support::pallet_prelude::DispatchError;
 use sol_prim::consts::SOL_USD_DECIMAL;
@@ -160,7 +160,8 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| match addr {
-		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) => Ok(inner),
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Tron(inner) =>
+			Ok(inner),
 		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
@@ -168,35 +169,36 @@ pub fn evm_vault_swap<A>(
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum | ForeignChain::Arbitrum => build_and_encode_cf_parameters(
-			refund_params,
-			dca_parameters,
-			boost_fee,
-			broker_id,
-			broker_commission,
-			processed_affiliate_fees,
-			channel_metadata.as_ref(),
-		),
+		ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Tron =>
+			build_and_encode_cf_parameters(
+				refund_params,
+				dca_parameters,
+				boost_fee,
+				broker_id,
+				broker_commission,
+				processed_affiliate_fees,
+				channel_metadata.as_ref(),
+			),
 		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
 	};
 
 	let mut source_token_address = None;
 	let calldata = match source_asset {
 		Asset::Eth | Asset::ArbEth =>
-			if let Some(ccm) = channel_metadata {
+			if let Some(ccm) = channel_metadata.clone() {
 				Ok(cf_chains::evm::api::x_call_native::XCallNative::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					ccm.message.to_vec(),
 					ccm.gas_budget,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_native::XSwapNative::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			},
@@ -217,28 +219,34 @@ pub fn evm_vault_swap<A>(
 				.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?,
 			);
 
-			if let Some(ccm) = channel_metadata {
+			if let Some(ccm) = channel_metadata.clone() {
 				Ok(cf_chains::evm::api::x_call_token::XCallToken::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					ccm.message.to_vec(),
 					ccm.gas_budget,
 					*source_token_address_ref,
 					amount,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			} else {
 				Ok(cf_chains::evm::api::x_swap_token::XSwapToken::new(
-					destination_address,
+					destination_address.clone(),
 					destination_asset,
 					*source_token_address_ref,
 					amount,
-					cf_parameters,
+					cf_parameters.clone(),
 				)
 				.abi_encoded_payload())
 			}
 		},
+		Asset::Trx => Ok(vec![]),
+		Asset::TronUsdt => Ok(cf_chains::evm::api::transfer_token::TransferToken::new(
+			Environment::tron_vault_address(),
+			amount,
+		)
+		.abi_encoded_payload()),
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),
@@ -259,6 +267,44 @@ pub fn evm_vault_swap<A>(
 			to: Environment::arb_vault_address(),
 			source_token_address,
 		})),
+		ForeignChain::Tron => {
+			// Encode TronVaultSwapData for the note
+			let ccm_data =
+				channel_metadata.as_ref().map(|ccm| (ccm.gas_budget, ccm.message.clone()));
+
+			let tron_vault_swap_data =
+				(destination_asset, destination_address.clone(), ccm_data, cf_parameters.clone());
+
+			let note = tron_vault_swap_data.encode();
+
+			let to = Environment::tron_vault_address();
+
+			if source_asset != Asset::Trx {
+				source_token_address = Some(
+					<EvmEnvironment as EvmEnvironmentProvider<cf_chains::Tron>>::token_address(
+						source_asset.try_into().expect("Only TronUsdt asset is processed here"),
+					)
+					.ok_or(DispatchErrorWithMessage::from(
+						"Failed to look up Tron token address",
+					))?,
+				);
+			}
+
+			Ok(VaultSwapDetails::tron(
+				EvmCallDetails {
+					calldata,
+					// Only return `amount` for native currently. 0 for Tokens
+					value: if source_asset == Asset::Trx {
+						U256::from(amount)
+					} else {
+						U256::default()
+					},
+					to,
+					source_token_address,
+				},
+				note,
+			))
+		},
 		_ => Err(DispatchErrorWithMessage::from(
 			"Only EVM chains should execute this branch of logic. This error should never happen",
 		)),

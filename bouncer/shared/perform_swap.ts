@@ -23,6 +23,7 @@ import {
   getContractAddress,
   decodeDispatchError,
   Asset,
+  getTronWhaleKeyPair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -35,6 +36,7 @@ import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequ
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnored } from 'generated/events/swapping/swapEgressIgnored';
+import { executeTronVaultSwap } from './tron_vault_swap';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -241,7 +243,6 @@ export async function performSwap<A = []>(
     messageMetadata,
     brokerCommissionBps,
   );
-
   await doPerformSwap(cf, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
@@ -276,7 +277,8 @@ export async function performAndTrackSwap<A = []>(
 export type VaultSwapSource =
   | { chain: 'Evm'; wallet: HDNodeWallet; sourceAddress: string }
   | { chain: 'Bitcoin'; sourceAddress: string }
-  | { chain: 'Solana'; sourceAddress: string };
+  | { chain: 'Solana'; sourceAddress: string }
+  | { chain: 'Tron'; sourceAddress: string };
 
 export async function prepareVaultSwapSource<A = []>(
   cf: ChainflipIO<A>,
@@ -298,6 +300,11 @@ export async function prepareVaultSwapSource<A = []>(
     vaultSwapSource = {
       chain: 'Solana',
       sourceAddress: decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58()),
+    };
+  } else if (srcChain === 'Tron') {
+    vaultSwapSource = {
+      chain: 'Tron',
+      sourceAddress: getTronWhaleKeyPair().pubkey,
     };
   } else {
     throwError(cf.logger, new Error('Unsupported vault swap source chain'));
@@ -381,6 +388,22 @@ export async function executeVaultSwap<A extends WithBrokerAccount>(
       type: TransactionOrigin.VaultSwapSolana,
       addressAndSlot: [decodeSolAddress(accountAddress.toBase58()), slot],
     };
+  } else if (vaultSwapSource.chain === 'Tron') {
+    cf.trace('Executing Tron vault swap');
+    const txHash = await executeTronVaultSwap(
+      cf,
+      sourceAsset,
+      destAsset,
+      destAddress,
+      brokerFee,
+      messageMetadata,
+      amount,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
+      affiliateFees,
+    );
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
   } else {
     throwError(cf.logger, new Error('Unsupported vault swap source chain'));
   }

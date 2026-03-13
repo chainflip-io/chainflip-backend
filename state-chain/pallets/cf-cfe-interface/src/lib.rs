@@ -25,7 +25,7 @@ use weights::WeightInfo;
 
 use cf_chains::{
 	btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::SolanaCrypto, Arbitrum, Assethub,
-	Bitcoin, Ethereum, Polkadot, Solana,
+	Bitcoin, Ethereum, Polkadot, Solana, Tron,
 };
 use cf_primitives::{Ed25519PublicKey, Ipv6Addr, Port};
 use cf_traits::{CfeBroadcastRequest, CfeMultisigRequest, CfePeerRegistration, Chainflip};
@@ -160,6 +160,12 @@ impl<T: Config> CfeBroadcastRequest<T, Solana> for Pallet<T> {
 impl<T: Config> CfeBroadcastRequest<T, Assethub> for Pallet<T> {
 	fn tx_broadcast_request(req: TxBroadcastRequest<T, Assethub>) {
 		CfeEvents::<T>::append(CfeEvent::<T>::HubTxBroadcastRequest(req))
+	}
+}
+
+impl<T: Config> CfeBroadcastRequest<T, Tron> for Pallet<T> {
+	fn tx_broadcast_request(req: TxBroadcastRequest<T, Tron>) {
+		CfeEvents::<T>::append(CfeEvent::<T>::TronTxBroadcastRequest(req))
 	}
 }
 

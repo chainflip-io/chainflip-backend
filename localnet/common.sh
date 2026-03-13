@@ -2,8 +2,8 @@ export LOCALNET_INIT_DIR=localnet/init
 export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
 export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
-export INIT_CONTAINERS="eth-init solana-init"
-export CORE_CONTAINERS="bitcoin geth polkadot1 polkadot2 assethub redis"
+export INIT_CONTAINERS="eth-init solana-init tron-init"
+export CORE_CONTAINERS="bitcoin geth polkadot1 polkadot2 assethub redis tron tron-peer"
 export DEPOSIT_MONITOR_CONTAINER="deposit-monitor"
 export ARB_CONTAINERS="sequencer staker-unsafe poster"
 export SOLANA_BASE_PATH="/tmp/solana"
@@ -105,6 +105,9 @@ build-localnet() {
   echo "💎 Waiting for ETH node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 >>$DEBUG_OUTPUT_DESTINATION
   wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' >>$DEBUG_OUTPUT_DESTINATION
+
+  echo "🌞 Waiting for TRON node to start"
+  check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock >>$DEBUG_OUTPUT_DESTINATION
 
   echo "🚦 Waiting for polkadot nodes to start"
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9947') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
@@ -298,7 +301,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker deposit-monitor; do
+  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis tron all ingress-egress-tracker deposit-monitor; do
     if [[ $SERVICE == "all" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
@@ -329,6 +332,9 @@ logs() {
     fi
     if [[ $SERVICE == "staker" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
+    fi
+    if [[ $SERVICE == "tron" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow tron
     fi
     if [[ $SERVICE == "deposit-monitor" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow deposit-monitor
