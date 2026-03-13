@@ -56,6 +56,7 @@ use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
 mod tests;
 
 const REQUEST_LIFETIME: u32 = 128;
+const BAD_PROOF_SIGNING_CONTEXT_REFRESH_RETRY_LIMIT: u8 = 3;
 
 #[derive(Error, Debug)]
 pub enum ExtrinsicError<OtherError> {
@@ -150,6 +151,8 @@ pub struct SubmissionWatcher<
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
+	signing_block_hash: state_chain_runtime::Hash,
+	signing_block_number: BlockNumber,
 	runtime_version: sp_version::RuntimeVersion,
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: BlockNumber,
@@ -171,11 +174,23 @@ pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
 	ImmediatelyDropped,
+	BadProof,
 }
 
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	SubmissionWatcher<'a, 'env, BaseRpcClient>
 {
+	async fn refresh_signing_context(
+		&mut self,
+	) -> Result<(sp_version::RuntimeVersion, H256, BlockNumber), anyhow::Error> {
+		let signing_block_hash = self.base_rpc_client.latest_finalized_block_hash().await?;
+		let (runtime_version, signing_block_header) = tokio::try_join!(
+			self.base_rpc_client.runtime_version(None),
+			self.base_rpc_client.block_header(signing_block_hash),
+		)?;
+		Ok((runtime_version, signing_block_hash, signing_block_header.number))
+	}
+
 	pub fn new(
 		scope: &'a Scope<'env, anyhow::Error>,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
@@ -197,6 +212,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				finalized_nonce,
 				finalized_block_hash,
 				finalized_block_number,
+				signing_block_hash: finalized_block_hash,
+				signing_block_number: finalized_block_number,
 				runtime_version,
 				genesis_hash,
 				extrinsic_lifetime,
@@ -223,12 +240,12 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
-				self.finalized_block_hash,
-				self.finalized_block_number,
+				self.signing_block_hash,
+				self.signing_block_number,
 				self.extrinsic_lifetime,
 				nonce,
 			);
-			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
+			assert!(lifetime.contains(&(self.signing_block_number + 1)));
 
 			let tx_hash: H256 = {
 				let encoded = signed_extrinsic.encode();
@@ -284,20 +301,18 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::BadProof) =>
 						{
-							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
+							warn!(
+								target: "state_chain_client",
+								request_id = request.id,
+								"Submission failed due to a bad proof: {obj:?}. Refreshing signing context."
+							);
 
-							// TODO: Check if hash and block number should also be updated
-							// here
-
-							let new_runtime_version =
-								self.base_rpc_client.runtime_version(None).await?;
-							if new_runtime_version == self.runtime_version {
-								// break, as the error is now very unlikely to be solved by
-								// fetching again
-								return Err(anyhow!("Fetched RuntimeVersion of {:?} is the same as the previous RuntimeVersion. This is not expected.", self.runtime_version))
-							}
-
+							let (new_runtime_version, new_signing_block_hash, new_signing_block_number) =
+								self.refresh_signing_context().await?;
 							self.runtime_version = new_runtime_version;
+							self.signing_block_hash = new_signing_block_hash;
+							self.signing_block_number = new_signing_block_number;
+							break Ok(Err(SubmissionLogicError::BadProof))
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
@@ -333,6 +348,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		let mut timeout = Option::None;
+		let mut bad_proof_retries = 0;
 		Ok(loop {
 			if let Some(timeout) = timeout.take() {
 				tokio::time::sleep(timeout).await;
@@ -366,6 +382,16 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						SubmissionLogicError::StateDiscarded => {
 							// These errors imply that the nonce is wrong, so we just retry
 							// immediately after refreshing it.
+						},
+						SubmissionLogicError::BadProof => {
+							bad_proof_retries += 1;
+							if bad_proof_retries > BAD_PROOF_SIGNING_CONTEXT_REFRESH_RETRY_LIMIT {
+								return Err(anyhow!(
+									"Submission failed with BadProof {} times for request {}",
+									BAD_PROOF_SIGNING_CONTEXT_REFRESH_RETRY_LIMIT,
+									request.id,
+								))
+							}
 						},
 					}
 					self.best_nonce.lock().await.take();
@@ -605,6 +631,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			// Update the finalized data
 			self.finalized_block_number = block.header.number;
 			self.finalized_block_hash = block_hash;
+			self.signing_block_number = block.header.number;
+			self.signing_block_hash = block_hash;
 			self.finalized_nonce = nonce;
 
 			for (extrinsic_index, extrinsic_events) in events
