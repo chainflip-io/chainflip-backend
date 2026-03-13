@@ -52,6 +52,7 @@ impl Chain for Bsc {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
+	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;
