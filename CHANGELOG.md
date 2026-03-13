@@ -6,6 +6,12 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Fixes
 
+- Improved logging on startup.
+
+## [2.1.7 - 2026-03-13
+
+### Fixes
+
 - Optimistically increment nonce for engine submissions.
 - Handle ImmediatelyDropped error.
 
