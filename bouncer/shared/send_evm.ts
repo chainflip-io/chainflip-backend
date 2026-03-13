@@ -15,6 +15,7 @@ import { Logger } from 'shared/utils/logger';
 const MAX_IN_FLIGHT_TXS = 48;
 const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
+const bscSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
 
 // Nonce tracking and mutex per (chain, account) to avoid cross-account collisions.
 const nonceMutex = new KeyedMutex();
@@ -32,7 +33,7 @@ export async function getNextEvmNonce(
     privkey: string;
   },
 ): Promise<number> {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum') {
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum' && chain !== 'Bsc') {
     throw new Error('Invalid chain');
   }
 
@@ -191,11 +192,11 @@ export async function signAndSendTxEvm(
 
     logger.debug(
       'Transaction complete, tx_hash: ' +
-        receipt.transactionHash +
-        ' blockNumber: ' +
-        receipt.blockNumber +
-        ' blockHash: ' +
-        receipt.blockHash,
+      receipt.transactionHash +
+      ' blockNumber: ' +
+      receipt.blockNumber +
+      ' blockHash: ' +
+      receipt.blockHash,
     );
 
     return receipt;

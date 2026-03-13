@@ -10,6 +10,8 @@ import { getBtcClient, getSolConnection, getWeb3 } from 'shared/utils';
 import {
   initializeArbitrumChain,
   initializeArbitrumContracts,
+  initializeBscChain,
+  initializeBscContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
 } from 'shared/initialize_new_chains';
@@ -19,6 +21,7 @@ import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { bscVaultAwaitingGovernanceActivation } from 'generated/events/bscVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
 
@@ -26,6 +29,7 @@ async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
   const btcClient = getBtcClient();
   const arbClient = getWeb3('Arbitrum');
+  const bscClient = getWeb3('Bsc');
   const solClient = getSolConnection();
 
   cf.info(`LP endpoint set to: ${lpApiEndpoint}`);
@@ -34,7 +38,8 @@ async function main(): Promise<void> {
   cf.info('Performing initial Vault setup');
 
   // Step 1
-  await Promise.all([initializeArbitrumChain(cf.logger), initializeSolanaChain(cf.logger)]);
+  await Promise.all([initializeArbitrumChain(cf.logger), initializeSolanaChain(cf.logger), initializeBscChain(cf.logger),
+  ]);
 
   // Step 2
   cf.info('Forcing rotation');
@@ -51,6 +56,10 @@ async function main(): Promise<void> {
       name: 'ArbitrumVault.AwaitingGovernanceActivation',
       schema: arbitrumVaultAwaitingGovernanceActivation,
     },
+    bsc: {
+      name: 'BscVault.AwaitingGovernanceActivation',
+      schema: bscVaultAwaitingGovernanceActivation,
+    },
     sol: {
       name: 'SolanaVault.AwaitingGovernanceActivation',
       schema: solanaVaultAwaitingGovernanceActivation,
@@ -59,15 +68,22 @@ async function main(): Promise<void> {
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
+  const bscKey = keyEvents.bsc.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana) with new keys');
+  cf.info('Setting up external chains (Arbitrum, Solana, Bsc) with new keys');
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
     await initializeArbitrumContracts(cf.logger, arbClient, arbKey);
     cf.debug('Arbitrum key inserted');
+  };
+
+  const insertBscKey = async () => {
+    cf.info('Inserting BSC key in the contracts');
+    await initializeBscContracts(cf.logger, bscClient, bscKey);
+    cf.debug('BSC key inserted');
   };
 
   const insertSolanaKey = async () => {
@@ -76,7 +92,8 @@ async function main(): Promise<void> {
     cf.debug('Solana key inserted');
   };
 
-  await Promise.all([insertArbitrumKey(), insertSolanaKey()]);
+  await Promise.all([insertArbitrumKey(), insertSolanaKey(), insertBscKey(),
+  ]);
 
   // Step 7
   cf.info('Setting up price feeds');
