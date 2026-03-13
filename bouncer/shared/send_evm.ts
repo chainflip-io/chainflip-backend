@@ -76,7 +76,7 @@ function isNonceError(error: unknown): boolean {
 }
 
 export async function warnIfEvmAddressHasNoCode(logger: Logger, chain: Chain, address: string) {
-  if (chain !== 'Ethereum' && chain !== 'Arbitrum') return;
+  if (chain !== 'Ethereum' && chain !== 'Arbitrum' && chain !== 'Bsc') return;
 
   try {
     const web3 = getWeb3(chain);

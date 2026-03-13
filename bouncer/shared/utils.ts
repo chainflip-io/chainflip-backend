@@ -885,6 +885,7 @@ export function getWhaleMnemonic(chain: Chain): string {
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Bsc':
       return (
         process.env.ETH_USDC_WHALE_MNEMONIC ??
         'test test test test test test test test test test test junk'

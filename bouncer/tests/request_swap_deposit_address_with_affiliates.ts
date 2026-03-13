@@ -16,6 +16,9 @@ function toEncodedAddress(chain: Chain, address: string) {
     case 'Arbitrum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Arb: hexToBytes(address) };
+    case 'Bsc':
+      assert(isHex(address), 'Expected hex-encoded EVM address');
+      return { Bsc: hexToBytes(address) };
     case 'Ethereum':
       assert(isHex(address), 'Expected hex-encoded EVM address');
       return { Eth: hexToBytes(address) };
@@ -261,6 +264,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     ],
     Ethereum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
+    Bsc: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
     Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
   } as const;
