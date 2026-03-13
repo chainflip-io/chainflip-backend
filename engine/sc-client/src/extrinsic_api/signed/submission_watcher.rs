@@ -17,7 +17,6 @@
 use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
-	time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -167,6 +166,7 @@ pub struct SubmissionWatcher<
 	best_nonce: tokio::sync::Mutex<Option<Nonce>>,
 }
 
+#[derive(Debug)]
 pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
@@ -365,7 +365,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				Ok(tx_hash) => break tx_hash,
 				Err(err) => {
 					// In any error case we want to refresh the account nonce and try again.
-					warn!(target: "state_chain_client", request_id = request.id, "Submission failed at nonce {next_nonce}, refreshing nonce and retrying.");
+					warn!(target: "state_chain_client", request_id = request.id, "Submission failed with error {err:?} at nonce {next_nonce}, refreshing nonce and retrying.");
 					self.best_nonce.lock().await.take();
 				},
 			}
