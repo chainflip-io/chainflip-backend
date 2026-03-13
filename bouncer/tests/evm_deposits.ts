@@ -141,13 +141,11 @@ async function testTxMultipleVaultSwaps<A = []>(
     )
     .encodeABI();
 
-  const receipt = await signAndSendTxEvm(
-    cf.logger,
-    chainFromAsset(sourceAsset),
-    cfTesterAddress,
-    (amount * BigInt(numSwaps)).toString(),
-    txData,
-  );
+  const receipt = await signAndSendTxEvm(cf.logger, chainFromAsset(sourceAsset), {
+    to: cfTesterAddress,
+    value: (amount * BigInt(numSwaps)).toString(),
+    data: txData,
+  });
 
   const txOrigin: TransactionOriginId = {
     type: TransactionOrigin.VaultSwapEvm,
@@ -233,7 +231,6 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
   const sourceAsset = 'ArbEth';
   const srcChain = 'Arbitrum';
   const evmWallet = await createEvmWalletAndFund(cf.logger, sourceAsset);
-  const web3 = getWeb3(srcChain);
 
   // Hardcoded payload obtained encoding a Vault Swap with the old Encoding
   const vaultSwapDetailsArray = [
@@ -274,8 +271,9 @@ async function testEvmLegacyCfParametersVaultSwap<A = []>(parentCf: ChainflipIO<
       gas: srcChain === 'Arbitrum' ? 32000000 : 5000000,
     };
 
-    const signedTx = await web3.eth.accounts.signTransaction(tx, evmWallet.privateKey);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    const receipt = await signAndSendTxEvm(cf.logger, srcChain, tx, {
+      privateKey: evmWallet.privateKey,
+    });
 
     const subcf = cf.withChildLogger(
       `${vaultSwapDetails.chain}_${vaultSwapDetails.broker ?? ''} testEvmLegacyCfParametersVaultSwap`,
@@ -359,13 +357,11 @@ async function testEncodeCfParameters<A = []>(
     )
     .encodeABI();
 
-  const receipt = await signAndSendTxEvm(
-    cf.logger,
-    chainFromAsset(sourceAsset),
-    cfVaultAddress,
-    amount.toString(),
-    txData,
-  );
+  const receipt = await signAndSendTxEvm(cf.logger, chainFromAsset(sourceAsset), {
+    to: cfVaultAddress,
+    value: amount.toString(),
+    data: txData,
+  });
 
   cf.debug(`Vault swap transaction hash: ${receipt.transactionHash}`);
 

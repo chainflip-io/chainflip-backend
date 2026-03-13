@@ -59,7 +59,7 @@ export async function initializeArbitrumContracts(
       pubKeyYParity: arbKey.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm(logger, 'Arbitrum', keyManagerAddress, '0', txData);
+  await signAndSendTxEvm(logger, 'Arbitrum', { to: keyManagerAddress, value: '0', data: txData });
 }
 
 function numberToBuffer(bytes: number, number: number): Buffer {
