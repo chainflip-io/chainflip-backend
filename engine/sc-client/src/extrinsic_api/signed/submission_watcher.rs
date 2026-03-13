@@ -284,7 +284,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::BadProof) =>
 						{
-							warn!(target: "state_chain_client", request_id = request.id, "Submission failed due to a bad proof: {obj:?}. Refetching the runtime version.");
+							warn!(
+								target: "state_chain_client",
+								request_id = request.id,
+								"Submission failed due to a bad proof: {obj:?}. Extrinsic was {signed_extrinsic:?}. Refetching the runtime version."
+							);
 
 							// TODO: Check if hash and block number should also be updated
 							// here
