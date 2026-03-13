@@ -20,6 +20,7 @@ use crate::{
 	btc::retry_rpc::mocks::MockBtcRetryRpcClient, dot::retry_rpc::mocks::MockDotRpcClient,
 	evm::retry_rpc::mocks::MockEvmRetryRpcClient, sol::retry_rpc::mocks::MockSolRetryRpcClient,
 	state_chain_observer::test_helpers::test_header,
+	tron::retry_rpc::mocks::MockTronRetryRpcClient,
 };
 use cf_chains::{evm::Transaction, ChainCrypto};
 use cf_primitives::{AccountRole, CeremonyId, GENESIS_EPOCH};
@@ -66,6 +67,7 @@ async fn start_sc_observer<BlockStream: StreamApi<FINALIZED>>(
 		MockBtcRetryRpcClient::new(),
 		MockSolRetryRpcClient::new(),
 		MockDotRpcClient::new(),
+		MockTronRetryRpcClient::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
@@ -772,6 +774,7 @@ async fn run_the_sc_observer() {
 				MockBtcRetryRpcClient::new(),
 				MockSolRetryRpcClient::new(),
 				MockDotRpcClient::new(),
+				MockTronRetryRpcClient::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),

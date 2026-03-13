@@ -17,6 +17,16 @@ services:
       - "/tmp/solana:/test-ledger"
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
+  tron-init:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-test-23-${NODE_COUNT}
+    pull_policy: if_not_present
+    container_name: tron-init
+    platform: linux/amd64
+    entrypoint: /bin/sh
+    volumes:
+      - "/tmp/chainflip/data/tron-data:/tron-initial-state"
+    command: -c "cp -R /tron/output-directory/* /tron-initial-state/"
+
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.4.1-${NODE_COUNT}
     restart: always
@@ -244,6 +254,53 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  tron:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-test-23-${NODE_COUNT}
+    platform: linux/amd64
+    pull_policy: if_not_present
+    container_name: tron
+    restart: unless-stopped
+    ports:
+      - "8090:8090" # TRON HTTP API (wallet)
+      - "8555:8555" # EVM-compatible JSON-RPC
+      - "50051:50051" # gRPC
+    volumes:
+      - "./init/tron:/tron/config"
+      - "/tmp/chainflip/data/tron-data:/tron/output-directory"
+    command: -c /tron/config/config.conf -d /tron/output-directory -w -p ef895dc87b545ba42ece3162b8441f712c892d0681ae34682eeb3e5443afefaa
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "http://127.0.0.1:8090/wallet/getnowblock",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Observer-only peer node. Its sole purpose is to give the witness node above
+  # an active peer connection so that wallet/broadcasttransaction is unblocked
+  # (java-tron returns NO_CONNECTION when activePeerCount < 1).
+  tron-peer:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-test-23-${NODE_COUNT}
+    platform: linux/amd64
+    pull_policy: if_not_present
+    container_name: tron-peer
+    restart: unless-stopped
+    depends_on:
+      - tron
+    volumes:
+      - "./init/tron:/tron/config"
+      - "/tmp/chainflip/data/tron-peer-data:/tron/output-directory"
+    command: -c /tron/config/config-peer.conf -d /tron/output-directory
 
   deposit-monitor:
     image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-7f2557281a3a1b1dd5410a4e3df980fea71adc93}

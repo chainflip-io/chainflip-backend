@@ -71,6 +71,12 @@ pub const HUB_HTTP_ENDPOINT: &str = "HUB__RPC__HTTP_ENDPOINT";
 pub const HUB_BACKUP_WS_ENDPOINT: &str = "HUB__BACKUP_RPC__WS_ENDPOINT";
 pub const HUB_BACKUP_HTTP_ENDPOINT: &str = "HUB__BACKUP_RPC__HTTP_ENDPOINT";
 
+pub const TRON_HTTP_ENDPOINT: &str = "TRON__RPC__HTTP_ENDPOINT";
+pub const TRON_JSON_RPC_ENDPOINT: &str = "TRON__RPC__JSON_RPC_ENDPOINT";
+
+pub const TRON_BACKUP_HTTP_ENDPOINT: &str = "TRON__BACKUP_RPC__HTTP_ENDPOINT";
+pub const TRON_BACKUP_JSON_RPC_ENDPOINT: &str = "TRON__BACKUP_RPC__JSON_RPC_ENDPOINT";
+
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";
