@@ -51,6 +51,11 @@ New or removed pallets:
   TokenholderGovernance: added
   TradingStrategy: added
   TransactionPayment: added
+  TronBroadcaster: added
+  TronChainTracking: added
+  TronElections: added
+  TronIngressEgress: added
+  TronVault: added
   Validator: added
   Witnesser: added
 

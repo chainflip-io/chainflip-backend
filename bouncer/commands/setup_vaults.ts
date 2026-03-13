@@ -6,12 +6,14 @@
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
 // For example: ./commands/setup_vaults.ts
 
-import { getBtcClient, getSolConnection, getWeb3 } from 'shared/utils';
+import { getBtcClient, getSolConnection, getWeb3, getTronWebClient } from 'shared/utils';
 import {
   initializeArbitrumChain,
   initializeArbitrumContracts,
   initializeSolanaChain,
   initializeSolanaPrograms,
+  initializeTronChain,
+  initializeTronContracts,
 } from 'shared/initialize_new_chains';
 import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
@@ -20,6 +22,7 @@ import { newChainflipIO } from 'shared/utils/chainflip_io';
 import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
+import { tronVaultAwaitingGovernanceActivation } from 'generated/events/tronVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
 import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
 import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
@@ -29,6 +32,7 @@ async function main(): Promise<void> {
   const btcClient = getBtcClient();
   const arbClient = getWeb3('Arbitrum');
   const solClient = getSolConnection();
+  const tronClient = getTronWebClient();
 
   cf.info(`LP endpoint set to: ${lpApiEndpoint}`);
   cf.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
@@ -36,7 +40,11 @@ async function main(): Promise<void> {
   cf.info('Performing initial Vault setup');
 
   // Step 1
-  await Promise.all([initializeArbitrumChain(cf.logger), initializeSolanaChain(cf.logger)]);
+  await Promise.all([
+    initializeArbitrumChain(cf.logger),
+    initializeSolanaChain(cf.logger),
+    initializeTronChain(cf.logger),
+  ]);
 
   // Step 2
   cf.info('Forcing rotation');
@@ -75,14 +83,19 @@ async function main(): Promise<void> {
       name: 'SolanaVault.AwaitingGovernanceActivation',
       schema: solanaVaultAwaitingGovernanceActivation,
     },
+    tron: {
+      name: 'TronVault.AwaitingGovernanceActivation',
+      schema: tronVaultAwaitingGovernanceActivation,
+    },
   });
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
+  const tronKey = keyEvents.tron.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana) with new keys');
+  cf.info('Setting up external chains (Arbitrum, Solana, Tron) with new keys');
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
@@ -96,7 +109,13 @@ async function main(): Promise<void> {
     cf.debug('Solana key inserted');
   };
 
-  await Promise.all([insertArbitrumKey(), insertSolanaKey()]);
+  const insertTronKey = async () => {
+    cf.info('Inserting Tron key in the contracts');
+    await initializeTronContracts(tronClient, tronKey);
+    cf.debug('Tron key inserted');
+  };
+
+  await Promise.all([insertArbitrumKey(), insertSolanaKey(), insertTronKey()]);
 
   // Step 7
   cf.info('Setting up price feeds');

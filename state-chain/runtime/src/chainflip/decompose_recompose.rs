@@ -277,6 +277,7 @@ mod tests {
 				}),
 			ForeignChain::Arbitrum => unimplemented!(),
 			ForeignChain::Solana => unimplemented!(),
+			ForeignChain::Tron => unimplemented!(),
 			ForeignChain::Assethub =>
 				RuntimeCall::AssethubChainTracking(pallet_cf_chain_tracking::Call::<
 					Runtime,
