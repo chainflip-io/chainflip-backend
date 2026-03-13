@@ -5,6 +5,7 @@ import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
+import { testBscDeposits } from 'tests/bsc_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
 import { testBrokerFeeCollection } from 'tests/broker_fee_collection';
@@ -39,6 +40,7 @@ describe('ConcurrentTests', () => {
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
   concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
+  concurrentTest('BscDeposits', testBscDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor);

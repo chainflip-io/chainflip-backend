@@ -78,14 +78,11 @@ export function testAllSwaps(timeoutPerSwap: number) {
     return items[Math.floor(Math.random() * items.length)];
   }
 
-  // TODO: properly include TRON and BSC assets once they are fully integrated
+  // TODO: properly include TRON assets once they are fully integrated
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
   const AssetsWithoutAssethub = Object.values(Assets).filter(
-    (id) =>
-      chainFromAsset(id) !== 'Assethub' &&
-      chainFromAsset(id) !== 'Bsc' &&
-      chainFromAsset(id) !== 'Tron',
+    (id) => chainFromAsset(id) !== 'Assethub' && chainFromAsset(id) !== 'Tron',
   );
 
   AssetsWithoutAssethub.sort().forEach((sourceAsset) => {

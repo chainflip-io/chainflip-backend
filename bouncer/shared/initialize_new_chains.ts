@@ -41,6 +41,34 @@ export async function initializeAssethubChain(logger: Logger) {
   await hubInitializationRequest;
 }
 
+export async function initializeBscChain(logger: Logger) {
+  logger.info('Initializing BSC');
+  const bscInitializationRequest = observeEvent(logger, 'bscVault:ChainInitialized').event;
+  await submitGovernanceExtrinsic((chainflip) => chainflip.tx.bscVault.initializeChain());
+  await bscInitializationRequest;
+}
+
+export async function initializeBscContracts(
+  logger: Logger,
+  bscClient: Web3,
+  bscKey: { pubKeyX: string; pubKeyYParity: string },
+) {
+  const keyManagerAddress = getContractAddress('Bsc', 'KEY_MANAGER');
+
+  const keyManagerContract = new bscClient.eth.Contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    keyManagerAddress,
+  );
+  const txData = keyManagerContract.methods
+    .setAggKeyWithGovKey({
+      pubKeyX: bscKey.pubKeyX,
+      pubKeyYParity: bscKey.pubKeyYParity === 'Odd' ? 1 : 0,
+    })
+    .encodeABI();
+  await signAndSendTxEvm(logger, 'Bsc', keyManagerAddress, '0', txData);
+}
+
 export async function initializeArbitrumContracts(
   logger: Logger,
   arbClient: Web3,

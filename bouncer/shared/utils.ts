@@ -61,11 +61,12 @@ const cfTesterIdl = await getCfTesterIdl();
 export const cfMutex = new KeyedMutex();
 export const ethNonceMutex = new Mutex();
 export const arbNonceMutex = new Mutex();
+export const bscNonceMutex = new Mutex();
 export const btcClientMutex = new Mutex();
 
 export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
-export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Solana', 'Bitcoin'] as Chain[];
-export const evmChains = ['Ethereum', 'Arbitrum'] as Chain[];
+export const vaultSwapSupportedChains = ['Ethereum', 'Arbitrum', 'Bsc', 'Solana', 'Bitcoin'] as Chain[];
+export const evmChains = ['Ethereum', 'Arbitrum', 'Bsc'] as Chain[];
 
 export const testInfoFile = '/tmp/chainflip/test_info.csv';
 
@@ -242,6 +243,19 @@ export function getContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
+    case 'Bsc':
+      switch (contract) {
+        case 'VAULT':
+          return process.env.BSC_VAULT_ADDRESS ?? '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+        case 'KEY_MANAGER':
+          return process.env.BSC_KEY_MANAGER_ADDRESS ?? '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+        case 'Bnb':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'BscUsdt':
+          return process.env.BSC_USDT_TOKEN_ADDRESS ?? '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -259,6 +273,8 @@ export function shortChainFromChain(chain: Chain) {
       return 'Sol';
     case 'Assethub':
       return 'Hub';
+    case 'Bsc':
+      return 'Bsc';
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -286,6 +302,9 @@ export function shortChainFromAsset(asset: Asset) {
     case 'HubUsdc':
     case 'HubUsdt':
       return 'Hub';
+    case 'Bnb':
+    case 'BscUsdt':
+      return 'Bsc';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -306,6 +325,7 @@ export function defaultAssetAmounts(asset: Asset): string {
       return '0.1';
     case 'Eth':
     case 'ArbEth':
+    case 'Bnb':
       return '5';
     case 'HubDot':
       return '50';
@@ -313,6 +333,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'Usdt':
     case 'ArbUsdc':
     case 'ArbUsdt':
+    case 'BscUsdt':
     case 'Flip':
     case 'SolUsdc':
     case 'SolUsdt':
@@ -349,6 +370,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Btc;
     case 'Arbitrum':
       return Assets.ArbEth;
+    case 'Bsc':
+      return Assets.Bnb;
     case 'Solana':
       return Assets.Sol;
     case 'Assethub':
@@ -436,6 +459,7 @@ export function ingressEgressPalletForChain(chain: Chain) {
     case 'Ethereum':
     case 'Bitcoin':
     case 'Arbitrum':
+    case 'Bsc':
     case 'Assethub':
     case 'Solana':
       return `${toLowerCase(chain)}IngressEgress` as const;
@@ -827,6 +851,8 @@ export function getEvmEndpoint(chain: Chain): string {
       return process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
     case 'Arbitrum':
       return process.env.ARB_ENDPOINT ?? 'http://127.0.0.1:8547';
+    case 'Bsc':
+      return process.env.BSC_ENDPOINT ?? 'http://127.0.0.1:8645';
     default:
       throw new Error(`${chain} is not a supported EVM chain`);
   }
@@ -870,6 +896,7 @@ export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: str
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Bsc':
       return {
         privkey:
           process.env.ETH_USDC_WHALE ??
@@ -918,7 +945,7 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
     const balance = Number(await getBalance(asset, address));
     if (balance === 0) {
       const chain = chainFromAsset(asset);
-      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+      if (chain === 'Ethereum' || chain === 'Arbitrum' || chain === 'Bsc') {
         if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
           throw new Error('EVM address has no bytecode');
         }

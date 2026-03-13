@@ -8,7 +8,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@chainflip/processor": "2.1.3-bsc-dev.1",
+    "@chainflip/processor": "2.1.3-bsc-dev.2",
     "@chainflip/utils": "2.1.4-bsc-dev.1",
     "@coral-xyz/anchor": "^0.30.1",
     "@iarna/toml": "^2.2.5",
