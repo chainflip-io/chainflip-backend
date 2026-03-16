@@ -1312,6 +1312,29 @@ fn test_get_scheduled_swap_legs() {
 }
 
 #[test]
+fn test_get_scheduled_swap_legs_returns_empty_when_swaps_disabled() {
+	new_test_ext().execute_with(|| {
+		const INIT_AMOUNT: AssetAmount = 1000;
+		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+
+		ScheduledSwaps::<Test>::mutate(|swaps| {
+			swaps.extend(vec![(
+				1.into(),
+				create_test_swap(1, Asset::Flip, Asset::Usdc, INIT_AMOUNT, None, BLOCK),
+			)]);
+		});
+
+		// Sanity check: swaps are returned when safe mode is green
+		assert!(!Swapping::get_scheduled_swap_legs(Asset::Flip).is_empty());
+
+		// Disable swaps via safe mode
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+
+		assert!(Swapping::get_scheduled_swap_legs(Asset::Flip).is_empty());
+	});
+}
+
+#[test]
 fn test_get_scheduled_swap_legs_fallback() {
 	new_test_ext().execute_with(|| {
 		const INIT_AMOUNT: AssetAmount = 1000000000000000000000;
