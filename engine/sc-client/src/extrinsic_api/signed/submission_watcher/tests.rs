@@ -17,10 +17,13 @@
 use base_rpc_api::WatchExtrinsicStream;
 use cf_chains::{dot, ChainState};
 use cf_utilities::task_scope::task_scope;
+use codec::Encode;
 use futures::stream;
 use futures_util::FutureExt;
 use jsonrpsee::types::ErrorObject;
 use sc_transaction_pool_api::TransactionStatus;
+use sp_core::storage::StorageData;
+use sp_runtime::traits::Header as _;
 use std::sync::{
 	atomic::{AtomicU8, Ordering},
 	Arc,
@@ -164,10 +167,7 @@ async fn should_track_submission_when_already_in_pool() {
 			);
 
 			watcher
-				.new_request(
-					&mut requests,
-					RequestStrategy::AllowMultipleSubmissions,
-				)
+				.new_request(&mut requests, RequestStrategy::AllowMultipleSubmissions)
 				.await?;
 			assert_eq!(requests.get(&0).unwrap().pending_submissions.len(), 1);
 			assert_eq!(watcher.submissions_by_nonce.len(), 1);
@@ -311,6 +311,126 @@ fn test_call() -> state_chain_runtime::RuntimeCall {
 		epoch_index: 0,
 	})
 }
+#[tokio::test]
+async fn should_cleanup_duplicate_submissions_for_same_extrinsic_and_nonce_after_finalization() {
+	const NONCE: state_chain_runtime::Nonce = 10;
+	const FINALIZED_BLOCK_HASH: H256 = H256([3; 32]);
+
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
+			let first_submitted_extrinsic =
+				Arc::new(std::sync::Mutex::new(None::<state_chain_runtime::UncheckedExtrinsic>));
+			let first_submitted_extrinsic_for_mock = first_submitted_extrinsic.clone();
+
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).return_once(
+				move |submitted_extrinsic| {
+					*first_submitted_extrinsic_for_mock.lock().unwrap() =
+						Some(submitted_extrinsic.clone());
+					Ok(Box::pin(stream::pending()) as WatchExtrinsicStream)
+				},
+			);
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).return_once(move |_| {
+				Err(ErrorObject::owned(
+					POOL_ALREADY_IMPORTED,
+					"Already Imported",
+					Option::<()>::None,
+				)
+				.into())
+			});
+
+			let mut watcher = new_watcher_with_mock_rpc_api(scope, mock_rpc_api, NONCE, 0).await;
+			let mut request = new_test_request(42, false);
+
+			let first_hash = watcher
+				.submit_extrinsic_at_nonce(&mut request, NONCE)
+				.await?
+				.map_err(|_| anyhow::anyhow!("Unexpected submission logic error"))?;
+			let second_hash = watcher
+				.submit_extrinsic_at_nonce(&mut request, NONCE)
+				.await?
+				.map_err(|_| anyhow::anyhow!("Unexpected submission logic error"))?;
+
+			assert_ne!(first_hash, second_hash);
+			assert_eq!(request.pending_submissions.len(), 2);
+			assert_eq!(watcher.submissions_by_nonce.get(&NONCE).map(Vec::len), Some(2));
+			assert_eq!(watcher.submission_status_futures.len(), 1);
+
+			let matching_extrinsic = first_submitted_extrinsic
+				.lock()
+				.unwrap()
+				.clone()
+				.expect("first submitted extrinsic should be captured");
+
+			let block = state_chain_runtime::SignedBlock {
+				block: state_chain_runtime::Block {
+					header: state_chain_runtime::Header::new(
+						1,
+						Default::default(),
+						Default::default(),
+						Default::default(),
+						Default::default(),
+					),
+					extrinsics: vec![matching_extrinsic],
+				},
+				justifications: None,
+			};
+			let events = vec![Box::new(frame_system::EventRecord::<
+				state_chain_runtime::RuntimeEvent,
+				H256,
+			> {
+				phase: frame_system::Phase::ApplyExtrinsic(0),
+				event: state_chain_runtime::RuntimeEvent::System(
+					frame_system::Event::ExtrinsicSuccess {
+						dispatch_info: frame_system::DispatchEventInfo {
+							weight: Default::default(),
+							class: frame_support::dispatch::DispatchClass::Normal,
+							pays_fee: frame_support::dispatch::Pays::Yes,
+						},
+					},
+				),
+				topics: vec![],
+			})];
+
+			let account_info = frame_system::AccountInfo::<
+				state_chain_runtime::Nonce,
+				<state_chain_runtime::Runtime as frame_system::Config>::AccountData,
+			> {
+				nonce: NONCE + 1,
+				..Default::default()
+			};
+
+			let base_rpc_client = Arc::get_mut(&mut watcher.base_rpc_client)
+				.expect("watcher should have unique ownership of mock rpc");
+			base_rpc_client.expect_block().times(1).return_once(move |hash| {
+				assert_eq!(hash, FINALIZED_BLOCK_HASH);
+				Ok(Some(block))
+			});
+			base_rpc_client
+				.expect_storage()
+				.times(1)
+				.return_once(move |_, _| Ok(Some(StorageData(events.encode()))));
+			base_rpc_client
+				.expect_storage()
+				.times(1)
+				.return_once(move |_, _| Ok(Some(StorageData(account_info.encode()))));
+
+			let mut requests = BTreeMap::new();
+			requests.insert(request.id, request);
+
+			watcher.on_block_finalized(&mut requests, FINALIZED_BLOCK_HASH).await?;
+
+			assert!(requests.is_empty());
+			assert!(!watcher.submissions_by_nonce.contains_key(&NONCE));
+			assert!(watcher.submission_status_futures.is_empty());
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
 
 /// Create a new watcher and submit a dummy extrinsic.
 async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
@@ -347,23 +467,6 @@ async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 }
 
 fn new_test_request(id: RequestID, strictly_one_submission: bool) -> Request {
-	// Just some dummy call to test with
-	let call =
-		state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-			call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
-				pallet_cf_chain_tracking::Call::update_chain_state {
-					new_chain_state: ChainState {
-						block_height: 0,
-						tracked_data: dot::PolkadotTrackedData {
-							median_tip: 0,
-							runtime_version: Default::default(),
-						},
-					},
-				},
-			)),
-			epoch_index: 0,
-		});
-
 	Request {
 		id,
 		next_submission_id: 0,
