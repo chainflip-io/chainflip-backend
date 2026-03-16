@@ -71,7 +71,7 @@ where
 fn order_fills_for_pool<'a>(
 	asset_pair: &'a AssetPair,
 	pool: &'a Pool<Runtime>,
-	previous_pool: Option<&'a Pool<Runtime>>,
+	previous_pool: &'a Pool<Runtime>,
 	updated_range_orders: &'a HashSet<(AccountId, AssetPair, OrderId)>,
 	updated_limit_orders: &'a HashSet<(AccountId, AssetPair, Side, OrderId)>,
 ) -> impl IntoIterator<Item = OrderFilled> + 'a {
@@ -89,9 +89,7 @@ fn order_fills_for_pool<'a>(
 						)) {
 							None
 						} else {
-							previous_pool.and_then(|pool| {
-								pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok()
-							})
+							previous_pool.pool_state.limit_order(&(lp.clone(), id), side, tick).ok()
 						};
 
 						if let Some((previous_collected, _)) = option_previous_order_state {
@@ -140,9 +138,10 @@ fn order_fills_for_pool<'a>(
 						if updated_range_orders.contains(&(lp.clone(), *asset_pair, id)) {
 							None
 						} else {
-							previous_pool.and_then(|pool| {
-								pool.pool_state.range_order(&(lp.clone(), id), range.clone()).ok()
-							})
+							previous_pool
+								.pool_state
+								.range_order(&(lp.clone(), id), range.clone())
+								.ok()
 						};
 
 					if let Some((previous_collected, _)) = option_previous_order_state {
@@ -209,11 +208,12 @@ pub fn order_fills_from_block_updates(
 
 	let order_fills = pools
 		.iter()
-		.flat_map(|(asset_pair, pool)| {
+		.filter_map(|(asset_pair, pool)| Some((asset_pair, pool, previous_pools.get(asset_pair)?)))
+		.flat_map(|(asset_pair, pool, previous_pool)| {
 			order_fills_for_pool(
 				asset_pair,
 				pool,
-				previous_pools.get(asset_pair),
+				previous_pool,
 				&updated_range_orders,
 				&updated_limit_orders,
 			)
