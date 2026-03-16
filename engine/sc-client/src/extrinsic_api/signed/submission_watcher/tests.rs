@@ -138,6 +138,84 @@ async fn should_remove_terminated_submission_from_tracking() {
 }
 
 #[tokio::test]
+async fn should_track_submission_when_already_in_pool() {
+	const NONCE: state_chain_runtime::Nonce = 1;
+
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
+
+			mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
+			mock_rpc_api.expect_submit_and_watch_extrinsic().return_once(move |_| {
+				Ok(Box::pin(stream::iter(vec![Ok(TransactionStatus::Dropped)]))
+					as WatchExtrinsicStream)
+			});
+
+			let (mut watcher, mut requests) = SubmissionWatcher::new(
+				scope,
+				signer::PairSigner::new(sp_core::Pair::generate().0),
+				INITIAL_NONCE,
+				H256::default(),
+				0,
+				Default::default(),
+				H256::default(),
+				SIGNED_EXTRINSIC_LIFETIME,
+				Arc::new(mock_rpc_api),
+			);
+
+			watcher
+				.new_request(
+					&mut requests,
+					RequestStrategy::AllowMultipleSubmissions,
+				)
+				.await?;
+			assert_eq!(requests.get(&0).unwrap().pending_submissions.len(), 1);
+			assert_eq!(watcher.submissions_by_nonce.len(), 1);
+
+			let submission_details = watcher.watch_for_submission_in_block().await;
+			watcher.on_submission_in_block(&mut requests, submission_details).await?;
+
+			assert!(requests.get(&0).unwrap().pending_submissions.is_empty());
+			assert!(watcher.submissions_by_nonce.is_empty());
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).return_once(move |_| {
+				Err(ErrorObject::owned(
+					POOL_ALREADY_IMPORTED,
+					"Already Imported",
+					Option::<()>::None,
+				)
+				.into())
+			});
+
+			let mut watcher =
+				new_watcher_with_mock_rpc_api(scope, mock_rpc_api, INITIAL_NONCE, 0).await;
+			let mut request = new_test_request(7, false);
+
+			let tx_hash = watcher
+				.submit_extrinsic_at_nonce(&mut request, NONCE)
+				.await?
+				.map_err(|_| anyhow::anyhow!("Unexpected submission logic error"))?;
+
+			assert_eq!(request.next_submission_id, 1);
+			assert_eq!(request.pending_submissions.get(&0), Some(&NONCE));
+
+			let submission = watcher
+				.submissions_by_nonce
+				.get(&NONCE)
+				.and_then(|submissions| submissions.first())
+				.expect("submission must be tracked");
+
+			assert_eq!(submission.tx_hash, tx_hash);
+			assert_eq!(submission.request_id, request.id);
+			assert!(!watcher.submission_status_futures.contains_key(&(request.id, submission.id)));
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
+
+#[tokio::test]
 async fn should_retry_after_dropped_on_next_finalized_block() {
 	task_scope(|scope| {
 		async {
@@ -239,30 +317,61 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 	scope: &'a Scope<'env, anyhow::Error>,
 	mock_rpc_api: MockBaseRpcApi,
 ) -> SubmissionWatcher<'a, 'env, MockBaseRpcApi> {
-	let (mut watcher, _requests) = SubmissionWatcher::new(
+	let mut watcher = new_watcher_with_mock_rpc_api(scope, mock_rpc_api, INITIAL_NONCE, 0).await;
+	let mut request = new_test_request(0, false);
+
+	let _ = watcher.submit_extrinsic(&mut request).await;
+
+	watcher
+}
+
+async fn new_watcher_with_mock_rpc_api<'a, 'env>(
+	scope: &'a Scope<'env, anyhow::Error>,
+	mock_rpc_api: MockBaseRpcApi,
+	finalized_nonce: state_chain_runtime::Nonce,
+	finalized_block_number: state_chain_runtime::BlockNumber,
+) -> SubmissionWatcher<'a, 'env, MockBaseRpcApi> {
+	let (watcher, _requests) = SubmissionWatcher::new(
 		scope,
 		signer::PairSigner::new(sp_core::Pair::generate().0),
-		INITIAL_NONCE,
+		finalized_nonce,
 		H256::default(),
-		0,
+		finalized_block_number,
 		Default::default(),
 		H256::default(),
 		SIGNED_EXTRINSIC_LIFETIME,
 		Arc::new(mock_rpc_api),
 	);
 
-	let mut request = Request {
-		id: 0,
+	watcher
+}
+
+fn new_test_request(id: RequestID, strictly_one_submission: bool) -> Request {
+	// Just some dummy call to test with
+	let call =
+		state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+			call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
+				pallet_cf_chain_tracking::Call::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: 0,
+						tracked_data: dot::PolkadotTrackedData {
+							median_tip: 0,
+							runtime_version: Default::default(),
+						},
+					},
+				},
+			)),
+			epoch_index: 0,
+		});
+
+	Request {
+		id,
 		next_submission_id: 0,
 		pending_submissions: Default::default(),
-		strictly_one_submission: false,
+		strictly_one_submission,
 		resubmit_window: ..=1,
 		call: test_call(),
 		until_in_block_sender: Some(oneshot::channel().0),
 		until_finalized_sender: oneshot::channel().0,
-	};
-
-	let _result = watcher.submit_extrinsic(&mut request).await;
-
-	watcher
+	}
 }
