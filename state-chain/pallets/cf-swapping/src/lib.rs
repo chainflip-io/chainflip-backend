@@ -1775,6 +1775,10 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn get_scheduled_swap_legs(base_asset: Asset) -> Vec<(SwapLegInfo, BlockNumberFor<T>)> {
+			if !T::SafeMode::get().swaps_enabled {
+				return vec![];
+			}
+
 			let mut swaps: Vec<_> = ScheduledSwaps::<T>::get()
 				.values()
 				.filter(|swap| swap.from == base_asset || swap.to == base_asset)
