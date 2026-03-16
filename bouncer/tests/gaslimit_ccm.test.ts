@@ -389,7 +389,7 @@ function spamEvmChain<A = []>(cf: ChainflipIO<A>, chain: Chain): () => void {
     case 'Arbitrum':
       (async () => {
         while (!stop) {
-          await signAndSendTxEvm(cf.logger, chain, whalePubkey, '1', undefined, undefined);
+          await signAndSendTxEvm(cf.logger, chain, { to: whalePubkey, value: '1' });
           await sleep(200);
         }
       })();
