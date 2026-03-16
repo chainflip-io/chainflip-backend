@@ -160,7 +160,8 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| match addr {
-		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Bsc(inner) => Ok(inner),
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Bsc(inner) =>
+			Ok(inner),
 		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
@@ -168,15 +169,16 @@ pub fn evm_vault_swap<A>(
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc => build_and_encode_cf_parameters(
-			refund_params,
-			dca_parameters,
-			boost_fee,
-			broker_id,
-			broker_commission,
-			processed_affiliate_fees,
-			channel_metadata.as_ref(),
-		),
+		ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc =>
+			build_and_encode_cf_parameters(
+				refund_params,
+				dca_parameters,
+				boost_fee,
+				broker_id,
+				broker_commission,
+				processed_affiliate_fees,
+				channel_metadata.as_ref(),
+			),
 		_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for EVM vault swap"))?,
 	};
 
@@ -200,7 +202,13 @@ pub fn evm_vault_swap<A>(
 				)
 				.abi_encoded_payload())
 			},
-		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc | Asset::ArbUsdt | Asset::BscUsdt => {
+		Asset::Flip |
+		Asset::Usdc |
+		Asset::Usdt |
+		Asset::Wbtc |
+		Asset::ArbUsdc |
+		Asset::ArbUsdt |
+		Asset::BscUsdt => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
