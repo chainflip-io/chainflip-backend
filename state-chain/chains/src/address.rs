@@ -201,7 +201,9 @@ impl TryFrom<ForeignChainAddress> for EvmAddress {
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Eth(addr) | ForeignChainAddress::Arb(addr) => Ok(addr),
+			ForeignChainAddress::Eth(addr) |
+			ForeignChainAddress::Arb(addr) |
+			ForeignChainAddress::Bsc(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}

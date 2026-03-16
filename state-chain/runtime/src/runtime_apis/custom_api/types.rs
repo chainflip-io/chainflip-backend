@@ -109,6 +109,10 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(flatten)]
 		details: EvmCallDetails,
 	},
+	Bsc {
+		#[serde(flatten)]
+		details: EvmCallDetails,
+	},
 	Solana {
 		#[serde(flatten)]
 		instruction: SolInstructionRpc,
@@ -139,6 +143,10 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
+	pub fn bsc(details: EvmCallDetails) -> Self {
+		VaultSwapDetails::Bsc { details }
+	}
+
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>
 	where
 		F: FnOnce(BtcAddress) -> T,
@@ -149,6 +157,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
+			VaultSwapDetails::Bsc { details } => VaultSwapDetails::Bsc { details },
 		}
 	}
 }

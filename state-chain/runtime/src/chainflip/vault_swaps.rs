@@ -36,7 +36,7 @@ use cf_chains::{
 		sol_tx_core::address_derivation::derive_associated_token_account, DecodedXSwapParams,
 		SolAmount, SolInstruction, SolPubkey,
 	},
-	Arbitrum, Bitcoin, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, Chain,
+	Arbitrum, Bitcoin, Bsc, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked, Chain,
 	ChannelRefundParametersUncheckedEncoded, Ethereum, ForeignChain, VaultSwapExtraParameters,
 	VaultSwapInputEncoded,
 };
@@ -160,7 +160,7 @@ pub fn evm_vault_swap<A>(
 	channel_metadata: Option<CcmChannelMetadataChecked>,
 ) -> Result<VaultSwapDetails<A>, DispatchErrorWithMessage> {
 	let refund_params = refund_params.try_map_address(|addr| match addr {
-		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) => Ok(inner),
+		EncodedAddress::Eth(inner) | EncodedAddress::Arb(inner) | EncodedAddress::Bsc(inner) => Ok(inner),
 		_ => Err(DispatchErrorWithMessage::from("Refund address must be an EVM address")),
 	})?;
 	let processed_affiliate_fees = to_affiliate_and_fees(&broker_id, affiliate_fees)?
@@ -168,7 +168,7 @@ pub fn evm_vault_swap<A>(
 		.map_err(|_| "Too many affiliates.")?;
 
 	let cf_parameters = match ForeignChain::from(source_asset) {
-		ForeignChain::Ethereum | ForeignChain::Arbitrum => build_and_encode_cf_parameters(
+		ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc => build_and_encode_cf_parameters(
 			refund_params,
 			dca_parameters,
 			boost_fee,
@@ -182,7 +182,7 @@ pub fn evm_vault_swap<A>(
 
 	let mut source_token_address = None;
 	let calldata = match source_asset {
-		Asset::Eth | Asset::ArbEth =>
+		Asset::Eth | Asset::ArbEth | Asset::Bnb =>
 			if let Some(ccm) = channel_metadata {
 				Ok(cf_chains::evm::api::x_call_native::XCallNative::new(
 					destination_address,
@@ -200,7 +200,7 @@ pub fn evm_vault_swap<A>(
 				)
 				.abi_encoded_payload())
 			},
-		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc | Asset::ArbUsdt => {
+		Asset::Flip | Asset::Usdc | Asset::Usdt | Asset::Wbtc | Asset::ArbUsdc | Asset::ArbUsdt | Asset::BscUsdt => {
 			// Lookup Token addresses depending on the Chain
 			let source_token_address_ref = source_token_address.insert(
 				match source_asset {
@@ -212,7 +212,11 @@ pub fn evm_vault_swap<A>(
 						<EvmEnvironment as EvmEnvironmentProvider<Arbitrum>>::token_address(
 							source_asset.try_into().expect("Only Arbitrum asset is processed here"),
 						),
-					_ => unreachable!("Unreachable for non-Ethereum/Arbitrum assets"),
+					Asset::BscUsdt =>
+						<EvmEnvironment as EvmEnvironmentProvider<Bsc>>::token_address(
+							source_asset.try_into().expect("Only BSC asset is processed here"),
+						),
+					_ => unreachable!("Unreachable for non-Ethereum/Arbitrum/Bsc assets"),
 				}
 				.ok_or(DispatchErrorWithMessage::from("Failed to look up EVM token address"))?,
 			);
@@ -257,6 +261,13 @@ pub fn evm_vault_swap<A>(
 			// Only return `amount` for native currently. 0 for Tokens
 			value: if source_asset == Asset::ArbEth { U256::from(amount) } else { U256::default() },
 			to: Environment::arb_vault_address(),
+			source_token_address,
+		})),
+		ForeignChain::Bsc => Ok(VaultSwapDetails::bsc(EvmCallDetails {
+			calldata,
+			// Only return `amount` for native currently. 0 for Tokens
+			value: if source_asset == Asset::Bnb { U256::from(amount) } else { U256::default() },
+			to: Environment::bsc_vault_address(),
 			source_token_address,
 		})),
 		_ => Err(DispatchErrorWithMessage::from(

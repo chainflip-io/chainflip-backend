@@ -1403,6 +1403,10 @@ impl_runtime_apis! {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
 				},
+				VaultSwapExtraParametersEncoded::Bsc(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				},
 				VaultSwapExtraParametersEncoded::Solana { refund_parameters, .. } => {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
@@ -1477,6 +1481,10 @@ impl_runtime_apis! {
 				(
 					ForeignChain::Arbitrum,
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				)|
+				(
+					ForeignChain::Bsc,
+					VaultSwapExtraParametersEncoded::Bsc(extra_params)
 				) => {
 					crate::chainflip::vault_swaps::evm_vault_swap(
 						broker,
@@ -1608,6 +1616,7 @@ impl_runtime_apis! {
 			Ok(match ForeignChain::from(source_asset) {
 				ForeignChain::Ethereum => build_and_encode_cf_parameters_for_chain!(Ethereum),
 				ForeignChain::Arbitrum => build_and_encode_cf_parameters_for_chain!(Arbitrum),
+				ForeignChain::Bsc => build_and_encode_cf_parameters_for_chain!(Bsc),
 				ForeignChain::Solana => build_and_encode_cf_parameters_for_chain!(Solana),
 				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
 			})

@@ -1515,6 +1515,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	},
 	Ethereum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
+	Bsc(EvmVaultSwapExtraParameters<Address, Amount>),
 	Solana {
 		from: Address,
 		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
@@ -1546,6 +1547,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_address(f)?),
+			VaultSwapExtraParameters::Bsc(extra_parameter) =>
+				VaultSwapExtraParameters::Bsc(extra_parameter.try_map_address(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				seed,
@@ -1582,6 +1585,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				VaultSwapExtraParameters::Ethereum(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Arbitrum(extra_parameter) =>
 				VaultSwapExtraParameters::Arbitrum(extra_parameter.try_map_amounts(f)?),
+			VaultSwapExtraParameters::Bsc(extra_parameter) =>
+				VaultSwapExtraParameters::Bsc(extra_parameter.try_map_amounts(f)?),
 			VaultSwapExtraParameters::Solana {
 				from,
 				seed,

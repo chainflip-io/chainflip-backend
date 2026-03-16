@@ -76,8 +76,13 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // TODO: properly include TRON assets once they are fully integrated
   // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
+  // BscUsdc and BscWbtc exist in the SDK but are not yet supported in the runtime.
+  const unsupportedBscAssets = new Set(['BscUsdc', 'BscWbtc']);
   const AssetsWithoutAssethub = Object.values(Assets).filter(
-    (id) => chainFromAsset(id) !== 'Assethub' && chainFromAsset(id) !== 'Tron',
+    (id) =>
+      chainFromAsset(id) !== 'Assethub' &&
+      chainFromAsset(id) !== 'Tron' &&
+      !unsupportedBscAssets.has(id),
   );
 
   AssetsWithoutAssethub.sort().forEach((sourceAsset) => {

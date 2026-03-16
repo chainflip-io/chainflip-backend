@@ -10,7 +10,7 @@ export const deposits = new Map<Asset, number>([
   ['ArbEth', 1000],
   ['Bnb', 1000],
   ['Btc', 100],
-  ['Usdc', 10000000],
+  ['Usdc', 15000000],
   ['ArbUsdc', 1000000],
   ['ArbUsdt', 1000000],
   ['BscUsdt', 1000000],
