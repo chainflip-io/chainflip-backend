@@ -138,7 +138,14 @@ pub fn simulate_swap(
 					network_fee.clone(),
 				))],
 			)
-			.map_err(|_| DispatchError::Other("Failed to calculate network fee"))?;
+			.map_err(|e| match e {
+				BatchExecutionError::SwapLegFailed { .. } =>
+					DispatchError::Other("Failed to calculate network fee: Swap leg failed."),
+				BatchExecutionError::PriceViolation { .. } => DispatchError::Other(
+					"Failed to calculate network fee: Price Violation, some swaps failed due to Price Impact Limitations.",
+				),
+				BatchExecutionError::DispatchError { error } => error,
+			})?;
 
 			(
 				network_fee_input_asset,
