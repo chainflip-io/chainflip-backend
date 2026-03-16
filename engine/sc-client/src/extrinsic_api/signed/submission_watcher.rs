@@ -163,11 +163,13 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: error_decoder::ErrorDecoder,
+	best_nonce: tokio::sync::Mutex<Option<Nonce>>,
 }
 
 pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
+	ImmediatelyDropped,
 }
 
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
@@ -200,6 +202,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				block_cache: Default::default(),
 				base_rpc_client,
 				error_decoder: Default::default(),
+				best_nonce: Default::default(),
 			},
 			// Return an empty requests map. This is done so that initial state of the requests
 			// matches the submission watchers state. The requests must be stored outside of
@@ -314,6 +317,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the state is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::StateDiscarded))
 						},
+						ClientError::Call(obj)
+							// ImmediatelyDropped
+							if obj.code() == 1016 =>
+						{
+							warn!(
+								target: "state_chain_client",
+								request_id = request.id,
+								"Submission failed for extrinsic {signed_extrinsic:?}: {obj:?}"
+							);
+							break Ok(Err(SubmissionLogicError::ImmediatelyDropped))
+						},
 						err =>
 							break Err(anyhow!(
 								"Unhandled error while submitting signed extrinsic {:?}: {}",
@@ -328,12 +342,26 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
-			let nonce =
-				self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
-			match self.submit_extrinsic_at_nonce(request, nonce).await? {
+			let next_nonce = {
+				let mut maybe_best_nonce = self.best_nonce.lock().await;
+				if let Some(best_nonce) = maybe_best_nonce.as_mut() {
+					*best_nonce += 1;
+					*best_nonce
+				} else {
+					let best_nonce = self
+						.base_rpc_client
+						.next_account_nonce(self.signer.account_id.clone())
+						.await?;
+					*maybe_best_nonce = Some(best_nonce);
+					best_nonce
+				}
+			};
+			match self.submit_extrinsic_at_nonce(request, next_nonce).await? {
 				Ok(tx_hash) => break tx_hash,
-				Err(SubmissionLogicError::NonceTooLow | SubmissionLogicError::StateDiscarded) => {
-					// In either of these cases we want to refresh the account nonce and try again.
+				Err(_) => {
+					// In any error case we want to refresh the account nonce and try again.
+					warn!(target: "state_chain_client", request_id = request.id, "Submission failed at nonce {next_nonce}, refreshing nonce and retrying.");
+					self.best_nonce.lock().await.take();
 				},
 			}
 		})
@@ -704,6 +732,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			for (_request_id, request) in requests.iter_mut() {
 				if request.pending_submissions.is_empty() {
 					info!("Resubmitting extrinsic as all existing submissions have expired.");
+					// If any extrinsics expired, there is likely an issue with the nonce, so reset
+					// it to force a refresh.
+					self.best_nonce.lock().await.take();
 					self.submit_extrinsic(request).await?;
 				}
 			}
