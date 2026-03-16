@@ -11,6 +11,7 @@ export CHAINFLIP_BASE_PATH="/tmp/chainflip"
 export DEBUG_OUTPUT_DESTINATION=${DEBUG_OUTPUT_DESTINATION:-"$CHAINFLIP_BASE_PATH/debug.log"}
 export BACKSPIN=${BACKSPIN:-"false"}
 export LOCALNET_SPEED_SETTING=${LOCALNET_SPEED_SETTING:-"default"}
+export INDEXER_DB_PORT=5433
 
 source ./localnet/helper.sh
 

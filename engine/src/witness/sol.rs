@@ -254,32 +254,36 @@ where
 		+ Send
 		+ Sync,
 {
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
-						SolanaBlockHeightTrackingVoter { client: client.clone() },
-						SolanaIngressTrackingVoter { client: client.clone() },
-						SolanaNonceTrackingVoter { client: client.clone() },
-						SolanaEgressWitnessingVoter { client: client.clone() },
-						SolanaLivenessVoter { client: client.clone() },
-						SolanaVaultSwapsVoter { client: client.clone() },
-						SolanaAltWitnessingVoter { client },
-					)),
-					None,
-					"Solana",
-				)
-				.continuously_vote()
-				.await;
+	scope.spawn_with_restart("sol_witnessing", move || {
+		let client = client.clone();
+		let state_chain_client = state_chain_client.clone();
+		async move {
+			task_scope::task_scope(|scope| {
+				async {
+					crate::elections::Voter::new(
+						scope,
+						state_chain_client,
+						CompositeVoter::<SolanaElectoralSystemRunner, _>::new((
+							SolanaBlockHeightTrackingVoter { client: client.clone() },
+							SolanaIngressTrackingVoter { client: client.clone() },
+							SolanaNonceTrackingVoter { client: client.clone() },
+							SolanaEgressWitnessingVoter { client: client.clone() },
+							SolanaLivenessVoter { client: client.clone() },
+							SolanaVaultSwapsVoter { client: client.clone() },
+							SolanaAltWitnessingVoter { client },
+						)),
+						None,
+						"Solana",
+					)
+					.continuously_vote()
+					.await;
 
-				Ok(())
-			}
-			.boxed()
-		})
-		.await
+					Ok(())
+				}
+				.boxed()
+			})
+			.await
+		}
 	});
 
 	Ok(())

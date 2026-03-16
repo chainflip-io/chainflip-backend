@@ -72,6 +72,21 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
+          show_full_output: true
+          claude_args: >-
+            --allowedTools
+            'Bash(psql *)'
+            'Bash(gh *)'
+            'Bash(find *)'
+            'Bash(cat *)'
+            'Bash(head *)'
+            'Bash(tail *)'
+            'Bash(grep *)'
+            'Bash(jq *)'
+            'Bash(echo *)'
+            Read
+            Glob
+            Grep
           prompt: |
             You are debugging a CI test failure for the chainflip-backend project.
 

@@ -1,6 +1,5 @@
 import assert from 'assert';
 import * as anchor from '@coral-xyz/anchor';
-import { InternalAsset as Asset } from '@chainflip/cli';
 import {
   PublicKey,
   sendAndConfirmTransaction,
@@ -24,6 +23,7 @@ import {
   decodeDotAddressForContract,
   observeFetch,
   Chains,
+  Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 
@@ -138,7 +138,7 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
     cf.requirements.account.keypair.address,
     stateChainAssetFromAsset(srcAsset),
     stateChainAssetFromAsset(destAsset),
-    chainFromAsset(destAsset) === Chains.Polkadot
+    chainFromAsset(destAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destAddress)
       : destAddress,
     brokerCommissionBps,

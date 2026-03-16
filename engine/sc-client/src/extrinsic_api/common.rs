@@ -37,3 +37,12 @@ pub(super) fn invalid_err_obj(
 		Some(<&'static str>::from(invalid_reason)),
 	)
 }
+
+// error codes declared https://github.com/paritytech/polkadot-sdk/blob/master/substrate/client/rpc-api/src/author/error.rs
+// not exported
+/// The transaction is temporarily banned.
+pub const POOL_TEMPORARILY_BANNED: i32 = 1012;
+/// The transaction is already in the pool
+pub const POOL_ALREADY_IMPORTED: i32 = 1013;
+/// Transaction has too low priority to replace existing one in the pool.
+pub const POOL_TOO_LOW_PRIORITY: i32 = 1014;

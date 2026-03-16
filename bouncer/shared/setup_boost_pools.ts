@@ -1,4 +1,4 @@
-import { getInternalAsset } from '@chainflip/cli';
+import { getInternalAsset } from '@chainflip/utils/chainflip';
 import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';

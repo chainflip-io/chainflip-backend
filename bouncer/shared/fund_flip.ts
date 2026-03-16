@@ -1,5 +1,5 @@
 import type { HexString } from '@polkadot/util/types';
-import { fundStateChainAccount } from '@chainflip/cli';
+import { fundStateChainAccount } from 'shared/utils/chainflip_cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEvmNonce } from 'shared/send_evm';
 import {
