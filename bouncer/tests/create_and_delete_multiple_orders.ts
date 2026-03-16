@@ -43,7 +43,6 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
     // provide liquidity to lpUri
     (subcf) => depositLiquidity(subcf, 'Usdc', 10000),
     (subcf) => depositLiquidity(subcf, 'Eth', deposits.get('Eth')!),
-    (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!),
     (subcf) => depositLiquidity(subcf, 'Btc', deposits.get('Btc')!),
     (subcf) => depositLiquidity(subcf, 'Flip', deposits.get('Flip')!),
     (subcf) => depositLiquidity(subcf, 'Usdt', deposits.get('Usdt')!),
