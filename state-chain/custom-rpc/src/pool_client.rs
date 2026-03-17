@@ -590,14 +590,21 @@ where
 
 		while let Some(status) = status_stream.next().await {
 			match status {
-				TransactionStatus::InBlock((block_hash, tx_index)) =>
-					if !until_finalized {
-						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+				TransactionStatus::InBlock((block_hash, tx_index)) if !until_finalized =>
+					match self.get_extrinsic_data_dynamic(block_hash, tx_index).await {
+						Ok(data) => return Ok(data),
+						Err(e) => log::debug!(
+							"Could not get extrinsic data at InBlock {block_hash}, falling back to finalized. {e}"
+						),
 					},
+				TransactionStatus::Retracted(block_hash) if !until_finalized => {
+					log::debug!("The block {block_hash} that this transaction was included in has been retracted.\
+					 Most likely due to a reorg, falling back to finalized.");
+				},
+				// Always process Finalized: either it's the primary target (until_finalized=true)
+				// or it's the re-org fallback when InBlock extraction failed.
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
-					if until_finalized {
-						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
-					},
+					return self.get_extrinsic_data_dynamic(block_hash, tx_index).await,
 				_ => is_transaction_status_error(&status)?,
 			}
 		}
