@@ -34,6 +34,7 @@ use cf_primitives::{
 use cf_traits::{AssetConverter, OrderId};
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
 use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
+use scale_info::prelude::format;
 use sp_runtime::{
 	traits::{Saturating, UniqueSaturatedInto},
 	DispatchError,
@@ -138,14 +139,16 @@ pub fn simulate_swap(
 					network_fee.clone(),
 				))],
 			)
-			.map_err(|e| match e {
+			.map_err(|e| -> DispatchErrorWithMessage { match e {
 				BatchExecutionError::SwapLegFailed { .. } =>
-					DispatchError::Other("Failed to calculate network fee: Swap leg failed."),
+					DispatchError::Other("Failed to calculate network fee: Swap leg failed.").into(),
 				BatchExecutionError::PriceViolation { .. } => DispatchError::Other(
 					"Failed to calculate network fee: Price Violation, some swaps failed due to Price Impact Limitations.",
+				).into(),
+				BatchExecutionError::DispatchError { error } => DispatchErrorWithMessage::RawMessage(
+					format!("Failed to calculate network fee: {error:?}").into_bytes(),
 				),
-				BatchExecutionError::DispatchError { error } => error,
-			})?;
+			}})?;
 
 			(
 				network_fee_input_asset,
