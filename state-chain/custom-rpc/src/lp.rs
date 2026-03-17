@@ -276,22 +276,23 @@ where
 		while let Some(status) = status_stream.next().await {
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
-					let (channel_id, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
-						.await?;
-
-					// If the extracted deposit channel was pre-allocated to this lp
-					// in the previous finalized block, we can return it immediately.
-					// Otherwise, we need to wait for the transaction to be finalized.
-					if pre_allocated_channels.contains(&channel_id) {
-						return Ok(ExtrinsicResponse {
-							block_number: self.rpc_backend.block_number_for(block_hash)?,
-							block_hash,
-							tx_index,
-							response: channel_details,
-						});
+					if let Ok((channel_id, channel_details)) =
+						self.extract_liquidity_deposit_channel_details(block_hash, tx_index).await
+					{
+						// If the extracted deposit channel was pre-allocated to this lp
+						// in the previous finalized block, we can return it immediately.
+						// Otherwise, we need to wait for the transaction to be finalized.
+						if pre_allocated_channels.contains(&channel_id) {
+							return Ok(ExtrinsicResponse {
+								block_number: self.rpc_backend.block_number_for(block_hash)?,
+								block_hash,
+								tx_index,
+								response: channel_details,
+							});
+						}
 					}
 				},
+				TransactionStatus::Retracted(_block_hash) => {},
 				TransactionStatus::Finalized((block_hash, tx_index)) => {
 					let (_, channel_details) = self
 						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
