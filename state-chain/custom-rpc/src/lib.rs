@@ -569,12 +569,7 @@ impl From<RpcSwapOutputV2> for RpcSwapOutputV1 {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct RpcFee {
-	#[serde(flatten)]
-	pub asset: Asset,
-	pub amount: AmmAmount,
-}
+pub type RpcFee = AssetAndAmount<AmmAmount>;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RpcSwapOutputV2 {
@@ -587,24 +582,17 @@ pub struct RpcSwapOutputV2 {
 	pub egress_fee: RpcFee,
 	pub broker_commission: RpcFee,
 }
-fn into_rpc_swap_output(
-	simulated_swap_info: SimulatedSwapInformation,
-	from_asset: Asset,
-	to_asset: Asset,
-) -> RpcSwapOutputV2 {
-	RpcSwapOutputV2 {
-		intermediary: simulated_swap_info.intermediary.map(Into::into),
-		output: simulated_swap_info.output.into(),
-		network_fee: RpcFee {
-			asset: cf_primitives::STABLE_ASSET,
-			amount: simulated_swap_info.network_fee.into(),
-		},
-		ingress_fee: RpcFee { asset: from_asset, amount: simulated_swap_info.ingress_fee.into() },
-		egress_fee: RpcFee { asset: to_asset, amount: simulated_swap_info.egress_fee.into() },
-		broker_commission: RpcFee {
-			asset: cf_primitives::STABLE_ASSET,
-			amount: simulated_swap_info.broker_fee.into(),
-		},
+
+impl From<SimulatedSwapInformation> for RpcSwapOutputV2 {
+	fn from(simulated_swap_info: SimulatedSwapInformation) -> Self {
+		RpcSwapOutputV2 {
+			intermediary: simulated_swap_info.intermediary.map(Into::into),
+			output: simulated_swap_info.output.into(),
+			network_fee: simulated_swap_info.network_fee.into(),
+			ingress_fee: simulated_swap_info.ingress_fee.into(),
+			egress_fee: simulated_swap_info.egress_fee.into(),
+			broker_commission: simulated_swap_info.broker_fee.into(),
+		}
 	}
 }
 
@@ -2163,9 +2151,7 @@ where
 					additional_orders,
 					is_internal,
 				)?
-				.map(|simulated_swap_info_v2| {
-					into_rpc_swap_output(simulated_swap_info_v2, from_asset, to_asset)
-				})?,
+				.map(Into::into)?,
 			)
 		})
 	}

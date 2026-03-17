@@ -30,7 +30,6 @@ use cf_chains::{
 };
 pub use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
-	SwapOutput,
 };
 pub use cf_traits::{
 	AccountInfo, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode, SessionKeysRegistered,

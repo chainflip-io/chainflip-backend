@@ -224,7 +224,8 @@ fn ccm_principal_swap_only() {
 				Test,
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SWAP_REQUEST_ID,
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 
