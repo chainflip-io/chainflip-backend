@@ -28,24 +28,26 @@ use cf_chains::{evm::DepositDetails, Chain, DepositChannel, Tron};
 use ethers::types::{H160, H256};
 use std::collections::{HashMap, HashSet};
 
-/// Query block balance information from the Tron blockchain and calculate
-/// TRX balance changes for specific deposit channels.
+/// Query block balance information from the Tron blockchain and calculate the
+/// TRX balance changes for specific addresses. This is used both for deposit
+/// channel witnessing and vault swap witnessing.
 /// Transactions with any negative deposit channel amounts are skipped entirely.
-pub async fn trx_ingress_amounts<Client>(
+pub async fn trx_ingress_transactions<Client>(
 	client: &Client,
-	trx_deposit_channels: HashSet<H160>,
+	monitored_addresses: HashSet<H160>,
 	block_number: i64,
 	block_hash: &str,
 ) -> Result<Vec<(H160, u64, H256)>, anyhow::Error>
 where
 	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
 {
-	if trx_deposit_channels.is_empty() {
+	if monitored_addresses.is_empty() {
 		return Ok(Vec::new());
 	}
 
 	let block_balance = client.get_block_balances(block_number, block_hash).await?;
 
+	// Check that block identifiers matches
 	ensure!(
 		block_balance.block_identifier.hash == block_hash,
 		"Block hash mismatch: expected {}, got {}",
@@ -61,15 +63,15 @@ where
 		);
 	}
 
-	let mut deposit_channel_changes: Vec<(H160, u64, H256)> = Vec::new();
+	let mut monitored_addresses_changes: Vec<(H160, u64, H256)> = Vec::new();
 
 	// Iterate over transaction balance traces
 	'transaction_loop: for tx_trace in block_balance.transaction_balance_trace {
-		// Skip transactions that are not successful, even if they should be succesfull as the
-		// balance changed
+		// Skip transactions that are not successful, they should be succesfull as the balance
+		// changed
 		if tx_trace.status != "SUCCESS" {
 			tracing::warn!(
-				"Skipping Tron transaction with non-success status: tx_id={}, status={}",
+				"Skipping Tron transaction with non-success status, expected success: tx_id={}, status={}",
 				tx_trace.transaction_identifier,
 				tx_trace.status
 			);
@@ -77,36 +79,35 @@ where
 		}
 
 		let tx_id = tx_trace.transaction_identifier;
-		let mut channel_balances: HashMap<H160, u64> = HashMap::new();
+		let mut balance_changes: HashMap<H160, u64> = HashMap::new();
 
 		// Iterate over operations in this transaction and accumulate amounts to deposit channels.
 		// A transaction might deposit to multiple deposit channels. We accumulate multiple deposits
-		// to the same channel in a single item. We skip any transactions that subtract any
-		// amount from the deposit channels, as that would indicate a fetch transaction.
-		// It's technically  possible that an allBatch transaction transfers to a deposit channel
-		// but in reality that never happens. It just seems safer to just skip all allBatch txs.
+		// in the same transaction to the same channel in a single item. We skip any transactions
+		// that subtract any amount from the deposit channels, as that would indicate a fetch
+		// transaction or a transaction that transfer funds from our Vault.
+		// It's technically possible that an allBatch transaction transfers to a deposit channel
+		// but in reality that never happens. It just seems safer to just skip all `AllBatch` txs.
 		for operation in tx_trace.operation {
 			let evm_addr = operation.address.to_evm_address().map_err(|e| {
 				anyhow::anyhow!("Failed to convert Tron address to EVM address: {}", e)
 			})?;
 
-			if trx_deposit_channels.contains(&evm_addr) {
-				// If any operation for a deposit channel has negative amount, skip this
-				// transaction. That means it's a fetch (allBatch) transaction.
+			if monitored_addresses.contains(&evm_addr) {
 				if operation.amount < 0 {
 					continue 'transaction_loop;
 				}
-				*channel_balances.entry(evm_addr).or_insert(0) += operation.amount as u64;
+				*balance_changes.entry(evm_addr).or_insert(0) += operation.amount as u64;
 			}
 		}
 
-		// Add the deposit channel changes to the result vector
-		for (channel_address, amount) in channel_balances {
-			deposit_channel_changes.push((channel_address, amount, tx_id));
+		// Add the balance change transactions to the result vector
+		for (address, amount) in balance_changes {
+			monitored_addresses_changes.push((address, amount, tx_id));
 		}
 	}
 
-	Ok(deposit_channel_changes)
+	Ok(monitored_addresses_changes)
 }
 
 pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send + Sync + Clone>(
@@ -118,22 +119,20 @@ pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send +
 	use itertools::Itertools;
 	use pallet_cf_ingress_egress::DepositWitness;
 
-	let (trx_deposit_channels, erc20_deposit_channels): (Vec<_>, HashMap<_, Vec<_>>) =
+	let (trx_deposit_addresses, erc20_deposit_channels): (HashSet<H160>, HashMap<_, Vec<_>>) =
 		deposit_addresses.into_iter().fold(
-			(Vec::new(), HashMap::new()),
+			(HashSet::new(), HashMap::new()),
 			|(mut trx, mut erc20), deposit_channel| {
 				let asset = deposit_channel.asset;
 				let address = deposit_channel.address;
 				if asset == Tron::GAS_ASSET {
-					trx.push((address, deposit_channel.state));
+					trx.insert(address);
 				} else {
-					erc20.entry(asset).or_insert_with(Vec::new).push(address);
+					erc20.entry(asset).or_default().push(address);
 				}
 				(trx, erc20)
 			},
 		);
-	let trx_deposit_addresses: HashSet<H160> =
-		trx_deposit_channels.iter().map(|(address, _state)| *address).collect();
 
 	let block_number_u64 = query.get_lowest_block_height_of_query();
 	let block_number = i64::try_from(block_number_u64).map_err(|_| {
@@ -142,11 +141,7 @@ pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send +
 	let block_hash = format!("{:064x}", query.block_hash);
 
 	let deposit_channel_changes =
-		trx_ingress_amounts(client, trx_deposit_addresses, block_number, &block_hash).await?;
-
-	if deposit_channel_changes.len() > 0 {
-		println!("DALEDALE Tron deposit channel changes: {:?}", deposit_channel_changes);
-	}
+		trx_ingress_transactions(client, trx_deposit_addresses, block_number, &block_hash).await?;
 
 	// --- ERC20 deposit channel witnessing ---
 	let mut erc20_ingresses: Vec<DepositWitness<Tron>> = Vec::new();
@@ -182,10 +177,6 @@ pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send +
 		erc20_ingresses.extend(asset_ingresses);
 	}
 
-	if erc20_ingresses.len() > 0 {
-		println!("DALEDALE Tron ERC20 ingresses: {:?}", erc20_ingresses);
-	}
-
 	Ok(deposit_channel_changes
 		.into_iter()
 		.map(|(channel_address, amount, tx_id)| DepositWitness {
@@ -204,7 +195,7 @@ mod tests {
 	use crate::{
 		settings::TronEndpoints,
 		tron::{retry_rpc::TronRetryRpcClient, rpc_client_api::TronAddress},
-		witness::tron::tron_deposits::trx_ingress_amounts,
+		witness::tron::tron_deposits::trx_ingress_transactions,
 	};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
 	use ethers::types::H160;
@@ -252,12 +243,14 @@ mod tests {
 					.map(|addr| addr.to_evm_address().unwrap())
 					.collect();
 
-				let deposit_channel_changes =
-					trx_ingress_amounts(&retry_client, deposit_channels, block_num, block_hash)
-						.await
-						.unwrap();
-
-				println!("Deposit channel changes: {:?}", deposit_channel_changes);
+				let deposit_channel_changes = trx_ingress_transactions(
+					&retry_client,
+					deposit_channels,
+					block_num,
+					block_hash,
+				)
+				.await
+				.unwrap();
 
 				assert_eq!(deposit_channel_changes.len(), 0);
 
@@ -271,7 +264,7 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
-	async fn test_get_tron_trx_ingress_amounts() {
+	async fn test_get_tron_trx_ingress_transactions() {
 		task_scope::task_scope(|scope| {
 			async {
 				let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcClient>::new(
@@ -330,30 +323,7 @@ mod tests {
 					.map(|addr| addr.to_evm_address().unwrap())
 					.collect();
 
-				let deposit_channel_changes = trx_ingress_amounts(
-					&retry_client,
-					deposit_channels.clone(),
-					block_num,
-					block_hash,
-				)
-				.await
-				.unwrap();
-
-				assert_eq!(
-					deposit_channel_changes,
-					vec![(
-						H160::from_slice(
-							&hex::decode("595aeac7a37b75c0abe0561e1390c748b5dc4ca2").unwrap()
-						),
-						3,
-						"faaaba965bce89c1cb28cada1615d75d2e3c3a05970e8a3bbc296a1239d411e2"
-							.parse()
-							.unwrap()
-					)]
-				);
-
-				// Test with vault address that has negative change (should be skipped)
-				let deposit_channel_changes = trx_ingress_amounts(
+				let deposit_channel_changes = trx_ingress_transactions(
 					&retry_client,
 					deposit_channels.clone(),
 					block_num,

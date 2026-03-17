@@ -1056,10 +1056,10 @@ pub mod tests {
 		ARB_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8547",
 		ARB_BACKUP_WS_ENDPOINT => "ws://second.localhost:8548",
 
-		TRON_HTTP_ENDPOINT => "http://localhost:8090",
-		TRON_JSON_RPC_ENDPOINT => "http://localhost:8091",
-		TRON_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8090",
-		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091"
+		TRON_HTTP_ENDPOINT => "http://localhost:8090/wallet",
+		TRON_JSON_RPC_ENDPOINT => "http://localhost:8091/jsonrpc",
+		TRON_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8090/wallet",
+		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091/jsonrpc"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -1089,8 +1089,14 @@ pub mod tests {
 			settings.hub.nodes.primary.ws_endpoint.as_ref(),
 			"wss://my_fake_assethub_rpc:443/<secret_key>"
 		);
-		assert_eq!(settings.tron.nodes.primary.http_endpoint.as_ref(), "http://localhost:8090");
-		assert_eq!(settings.tron.nodes.primary.json_rpc_endpoint.as_ref(), "http://localhost:8091");
+		assert_eq!(
+			settings.tron.nodes.primary.http_endpoint.as_ref(),
+			"http://localhost:8090/wallet"
+		);
+		assert_eq!(
+			settings.tron.nodes.primary.json_rpc_endpoint.as_ref(),
+			"http://localhost:8091/jsonrpc"
+		);
 		assert_eq!(
 			settings.eth.nodes.backup.unwrap().http_endpoint.as_ref(),
 			"http://second.localhost:8545"
@@ -1109,11 +1115,11 @@ pub mod tests {
 		);
 		assert_eq!(
 			settings.tron.nodes.backup.clone().unwrap().http_endpoint.as_ref(),
-			"http://second.localhost:8090"
+			"http://second.localhost:8090/wallet"
 		);
 		assert_eq!(
 			settings.tron.nodes.backup.unwrap().json_rpc_endpoint.as_ref(),
-			"http://second.localhost:8091"
+			"http://second.localhost:8091/jsonrpc"
 		);
 	}
 

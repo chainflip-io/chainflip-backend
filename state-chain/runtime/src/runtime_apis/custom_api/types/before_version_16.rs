@@ -31,6 +31,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 			solana_sol_vault: old.solana_sol_vault,
 			solana_usdc_token_vault_ata: old.solana_usdc_token_vault_ata,
 			solana_vault_swap_account: old.solana_vault_swap_account,
+			tron: EncodedAddress::Tron([0u8; 20]),
 			predicted_seconds_until_next_vault_rotation: old
 				.predicted_seconds_until_next_vault_rotation,
 			// Set usdt token pubkey and ata to null addresses

@@ -14,70 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use ethers::types::{Address, Bloom, Bytes, H160, H256, U256, U64};
+use ethers::types::{Address, Bloom, Bytes, H256, U256, U64};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Tron address is 21 bytes: 0x41 prefix + 20 bytes (EVM address)
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TronAddress(pub [u8; 21]);
-
-impl TronAddress {
-	// Convert EVM address (H160/20 bytes) to Tron address (21 bytes)
-	// by prepending 0x41
-	pub fn from_evm_address(evm_address: H160) -> Self {
-		let mut tron_address = [0u8; 21];
-		tron_address[0] = 0x41;
-		tron_address[1..].copy_from_slice(evm_address.as_bytes());
-		TronAddress(tron_address)
-	}
-
-	// Convert Tron address (21 bytes) to EVM address (H160/20 bytes)
-	// by removing the 0x41 prefix
-	pub fn to_evm_address(&self) -> anyhow::Result<H160> {
-		if self.0[0] == 0x41 {
-			Ok(H160::from_slice(&self.0[1..]))
-		} else {
-			Err(anyhow!("Invalid Tron address: expected 0x41 prefix"))
-		}
-	}
-}
-
-// Serialize as hex string for JSON (without 0x prefix)
-impl serde::Serialize for TronAddress {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		serializer.serialize_str(&hex::encode(self.0))
-	}
-}
-
-// Deserialize from hex string (expects 42 characters: "41" + 40 hex chars)
-impl<'de> serde::Deserialize<'de> for TronAddress {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let s = String::deserialize(deserializer)?;
-		let hex_str = s.strip_prefix("0x").unwrap_or(&s);
-
-		if hex_str.len() != 42 {
-			return Err(serde::de::Error::custom(format!(
-				"Invalid hex length: expected 42, got {}",
-				hex_str.len()
-			)));
-		}
-
-		let bytes = hex::decode(hex_str)
-			.map_err(|e| serde::de::Error::custom(format!("Failed to decode hex: {}", e)))?;
-
-		let mut address = [0u8; 21];
-		address.copy_from_slice(&bytes);
-		Ok(TronAddress(address))
-	}
-}
+pub use cf_chains::tron::TronAddress;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockBalanceTrace {

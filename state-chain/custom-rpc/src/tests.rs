@@ -492,6 +492,7 @@ fn test_vault_addresses_custom_rpc() {
 		predicted_seconds_until_next_vault_rotation: 9,
 		usdt_token_mint_pubkey: EncodedAddress::Sol([10; 32]),
 		solana_usdt_token_vault_ata: EncodedAddress::Sol([11; 32]),
+		tron: EncodedAddress::Tron([12; 20]),
 	};
 	insta::assert_json_snapshot!(val);
 }

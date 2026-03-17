@@ -224,6 +224,8 @@ decl_runtime_apis!(
 		fn cf_failed_call_arbitrum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
+		#[changed_in(17)]
+		fn cf_failed_call_tron();
 		fn cf_failed_call_tron(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Tron as Chain>::Transaction>;
