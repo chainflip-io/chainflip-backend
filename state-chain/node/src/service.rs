@@ -33,7 +33,7 @@ use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_consensus_aura::sr25519::AuthorityPair as AuraPair;
 use state_chain_runtime::{self, opaque::Block, runtime_apis::impl_api::RuntimeApi};
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 pub(crate) type FullClient = sc_service::TFullClient<
 	Block,
@@ -262,6 +262,21 @@ pub fn new_full<
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
+
+	let gran_key_count = keystore_container
+		.keystore()
+		.ed25519_public_keys(sp_consensus_grandpa::KEY_TYPE)
+		.into_iter()
+		.collect::<BTreeSet<_>>()
+		.len();
+	if gran_key_count > 1 {
+		log::warn!(
+			"⚠️  Found {gran_key_count} GRANDPA (GRAN) identities in the keystore.\
+			 Only one GRANDPA voting process will be active: multiple-key voting is not supported.
+			 Please remove the extra keys.
+			 This will become a hard error in a future release."
+		);
+	}
 
 	let rpc_builder = {
 		let client = client.clone();
