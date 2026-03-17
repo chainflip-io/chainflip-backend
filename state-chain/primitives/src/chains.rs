@@ -110,7 +110,8 @@ chains! {
 	Arbitrum = 4,
 	Solana = 5,
 	Assethub = 6,
-	Tron = 7
+	// Note: 7 is for BSC
+	Tron = 8
 }
 
 /// Can be any Chain.
@@ -163,7 +164,7 @@ fn chain_as_u32() {
 	assert_eq!(ForeignChain::Arbitrum as u32, 4);
 	assert_eq!(ForeignChain::Solana as u32, 5);
 	assert_eq!(ForeignChain::Assethub as u32, 6);
-	assert_eq!(ForeignChain::Tron as u32, 7);
+	assert_eq!(ForeignChain::Tron as u32, 8);
 }
 
 #[test]
@@ -174,8 +175,9 @@ fn chain_id_to_chain() {
 	assert_eq!(ForeignChain::try_from(4), Ok(ForeignChain::Arbitrum));
 	assert_eq!(ForeignChain::try_from(5), Ok(ForeignChain::Solana));
 	assert_eq!(ForeignChain::try_from(6), Ok(ForeignChain::Assethub));
-	assert_eq!(ForeignChain::try_from(7), Ok(ForeignChain::Tron));
-	assert!(ForeignChain::try_from(8).is_err());
+	assert_eq!(ForeignChain::try_from(8), Ok(ForeignChain::Tron));
+	assert!(ForeignChain::try_from(7).is_err());
+	assert!(ForeignChain::try_from(9).is_err());
 }
 
 #[test]
