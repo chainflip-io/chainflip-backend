@@ -1,16 +1,14 @@
 import { z } from 'zod';
-import { cfPrimitivesChainsAssetsAnyAsset, numberOrHex } from '../common';
+import { cfPrimitivesAssetAndAmount, numberOrHex } from '../common';
 
 export const swappingSwapExecuted = z.object({
   swapRequestId: numberOrHex,
   swapId: numberOrHex,
-  inputAsset: cfPrimitivesChainsAssetsAnyAsset,
-  outputAsset: cfPrimitivesChainsAssetsAnyAsset,
-  inputAmount: numberOrHex,
-  networkFee: numberOrHex,
-  brokerFee: numberOrHex,
-  intermediateAmount: numberOrHex.nullish(),
-  outputAmount: numberOrHex,
+  input: cfPrimitivesAssetAndAmount,
+  output: cfPrimitivesAssetAndAmount,
+  networkFee: cfPrimitivesAssetAndAmount,
+  brokerFee: cfPrimitivesAssetAndAmount,
+  intermediate: cfPrimitivesAssetAndAmount.nullish(),
   oracleDelta: z.number().nullish(),
   oracleDeltaExFees: z.number().nullish(),
 });

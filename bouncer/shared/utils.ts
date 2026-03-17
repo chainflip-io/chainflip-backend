@@ -83,6 +83,8 @@ export type VaultSwapParams = {
   destAsset: Asset;
   destAddress: string;
   transactionId: TransactionOriginId;
+  // [BrokerAccountId, swapRequestId]
+  brokerFeeSwaps: [string, bigint][];
 };
 
 const isSDKAsset = (asset: Asset): asset is SDKAsset => asset in assetConstants;
