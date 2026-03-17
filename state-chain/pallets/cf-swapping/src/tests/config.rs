@@ -330,7 +330,7 @@ fn cannot_swap_in_safe_mode() {
 	new_test_ext().execute_with(|| {
 		let swaps_scheduled_at = System::block_number() + SWAP_DELAY_BLOCKS as u64;
 
-		insert_swaps(&generate_test_swaps());
+		insert_swaps(&generate_test_swaps(), None);
 
 		assert_eq!(ScheduledSwaps::<Test>::get().len(), 4);
 

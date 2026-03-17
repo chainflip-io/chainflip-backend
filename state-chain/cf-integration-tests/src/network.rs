@@ -629,7 +629,6 @@ pub fn dispatch_all_pending_extrinsics() {
 pub fn on_contract_event(event: &ContractEvent) {
 	match event {
 		ContractEvent::Funded { node_id: validator_id, amount, .. } => {
-			println!("Funding account {:?}", validator_id);
 			pallet_cf_funding::Pallet::<Runtime>::fund_account(
 				validator_id.clone(),
 				*amount,
