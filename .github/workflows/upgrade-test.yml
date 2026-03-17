@@ -23,8 +23,6 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v1.3.0
-  EVM_CONTRACTS_VERSION: v1.4.1
   NODE_COUNT: "1-node"
   CHAIN: "dev"
 
@@ -220,7 +218,20 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          ./test_commands/all_cuncurrent_tests.sh
+          ./fast_bouncer.sh
+          git reset --hard
+
+      # TODO: This is a temporary workaround to setup Tron in the upgrade test.
+      # To remove after TRON is released.
+      - name: Start Tron containers 🌞
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron-init --quiet-pull
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron tron-peer --quiet-pull -d
+          source localnet/helper.sh
+          echo "🌞 Waiting for TRON node to start"
+          check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock
           git reset --hard
 
       - name: Upgrade runtime 🚀
@@ -250,6 +261,9 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary workaround to setup Tron.
+          # To remove after TRON is released.
+          ./commands/setup_new_chain.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
@@ -265,18 +279,17 @@ jobs:
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
 
-      - name: Print new pre-upgrade chainflip-engine logs 🚗
+      - name: Print during-upgrade chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
-        # In the case of a compatible upgrade, we don't expect any logs here
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-1.*log
 
-      - name: Print new post-upgrade chainflip-engine logs 🚗
+      - name: Print post-upgrade chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-2.*log
 
       - name: Print chainflip-node logs 📡
         if: inputs.run-job || failure() || cancelled()

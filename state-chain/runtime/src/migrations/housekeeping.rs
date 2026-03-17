@@ -25,6 +25,7 @@ use sp_std::vec::Vec;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
+pub mod tron_integration;
 
 pub type Migration = (
 	NetworkSpecificHousekeeping,
@@ -32,6 +33,10 @@ pub type Migration = (
 	// Can be removed once Solana address re-use is activated.
 	solana_remove_unused_channels_state::SolanaRemoveUnusedChannelsState,
 	liveness_election_state::LivenessElectionStateMigration,
+	tron_integration::TronSafeModeUpdate,
+	tron_integration::TronElectionsInit,
+	tron_integration::TronIngressEgressInit,
+	tron_integration::TronChainstate,
 );
 
 pub struct NetworkSpecificHousekeeping;

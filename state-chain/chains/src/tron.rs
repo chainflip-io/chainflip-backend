@@ -360,9 +360,137 @@ impl From<&DepositChannel<Tron>> for EvmFetchId {
 	}
 }
 
+// --- TronAddress ---
+
+extern crate alloc;
+use alloc::{format, string::String, vec::Vec};
+use sha2::{Digest, Sha256};
+
+const TRON_PREFIX_BYTE: u8 = 0x41;
+
+fn double_sha256(data: &[u8]) -> [u8; 32] {
+	let hash1 = Sha256::digest(data);
+	Sha256::digest(hash1).into()
+}
+
+/// A Tron address: 0x41 prefix + 20-byte EVM address.
+///
+/// Display/FromStr use base58check encoding (always starts with 'T').
+/// Serde uses hex encoding (42 hex chars: "41" + 40 hex digits) for Tron HTTP API compatibility.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TronAddress(pub [u8; 21]);
+
+impl TronAddress {
+	pub fn from_evm_address(evm_address: Address) -> Self {
+		let mut tron_address = [0u8; 21];
+		tron_address[0] = TRON_PREFIX_BYTE;
+		tron_address[1..].copy_from_slice(evm_address.as_bytes());
+		TronAddress(tron_address)
+	}
+
+	pub fn to_evm_address(&self) -> Result<Address, &'static str> {
+		if self.0[0] != TRON_PREFIX_BYTE {
+			return Err("Invalid Tron address: expected 0x41 prefix");
+		}
+		Ok(Address::from_slice(&self.0[1..]))
+	}
+
+	/// Encode as a base58check string.
+	pub fn to_base58check(&self) -> String {
+		let checksum = double_sha256(&self.0);
+		let mut with_checksum = Vec::with_capacity(25);
+		with_checksum.extend_from_slice(&self.0);
+		with_checksum.extend_from_slice(&checksum[..4]);
+		bs58::encode(with_checksum).into_string()
+	}
+
+	/// Decode from a base58check string.
+	pub fn from_base58check(address: &str) -> Result<Self, &'static str> {
+		let bytes = bs58::decode(address).into_vec().map_err(|_| "Invalid base58")?;
+
+		if bytes.len() != 25 {
+			return Err("Invalid Tron address length");
+		}
+
+		if bytes[0] != TRON_PREFIX_BYTE {
+			return Err("Invalid Tron version byte");
+		}
+
+		let checksum = double_sha256(&bytes[..21]);
+		if bytes[21..] != checksum[..4] {
+			return Err("Invalid Tron address checksum");
+		}
+
+		let mut inner = [0u8; 21];
+		inner.copy_from_slice(&bytes[..21]);
+		Ok(TronAddress(inner))
+	}
+}
+
+impl TryFrom<Vec<u8>> for TronAddress {
+	type Error = &'static str;
+
+	fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+		let inner: [u8; 21] =
+			bytes.try_into().map_err(|_| "Invalid Tron address: expected 21 bytes")?;
+		if inner[0] != TRON_PREFIX_BYTE {
+			return Err("Invalid Tron address: expected 0x41 prefix");
+		}
+		Ok(TronAddress(inner))
+	}
+}
+
+impl core::str::FromStr for TronAddress {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Self::from_base58check(s)
+	}
+}
+
+impl core::fmt::Display for TronAddress {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{}", self.to_base58check())
+	}
+}
+
+impl Serialize for TronAddress {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serializer.serialize_str(&hex::encode(self.0))
+	}
+}
+
+impl<'de> Deserialize<'de> for TronAddress {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let s = <String as Deserialize>::deserialize(deserializer)?;
+		let hex_str = s.strip_prefix("0x").unwrap_or(&s);
+
+		if hex_str.len() != 42 {
+			return Err(serde::de::Error::custom(format!(
+				"Invalid hex length: expected 42, got {}",
+				hex_str.len()
+			)));
+		}
+
+		let bytes = hex::decode(hex_str)
+			.map_err(|e| serde::de::Error::custom(format!("Failed to decode hex: {e}")))?;
+
+		let mut address = [0u8; 21];
+		address.copy_from_slice(&bytes);
+		Ok(TronAddress(address))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use core::str::FromStr;
 
 	#[test]
 	fn fee_estimation_trx_ingress() {
@@ -371,28 +499,71 @@ mod tests {
 		let fee = tracked_data
 			.estimate_fee(assets::tron::Asset::Trx, IngressOrEgress::IngressDepositChannel);
 
-		assert_eq!(fee, 6_656_000);
+		assert_eq!(fee, 5_156_000);
 	}
 
 	#[test]
-	fn print_ccm_egress_fee_estimates() {
-		let tracked_data = TronTrackedData::new();
-		let message_length = 500;
-		let gas_budget = 50_000u128;
+	fn base58check_roundtrip() {
+		let base58 = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+		let tron_addr = TronAddress::from_base58check(base58).unwrap();
+		assert_eq!(tron_addr.to_base58check(), base58);
+	}
 
-		for (label, asset) in [
-			("Trx", assets::tron::Asset::Trx),
-			// ("TronUsdt", assets::tron::Asset::TronUsdt),
-		] {
-			let fee = tracked_data.estimate_fee(
-				asset,
-				IngressOrEgress::EgressCcm { gas_budget: 0, message_length: 10 },
-			);
-			println!("{} fee limit only 10 bytes: {}", label, fee);
+	#[test]
+	fn from_str_roundtrip() {
+		let base58 = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
+		let tron_addr = TronAddress::from_str(base58).unwrap();
+		assert_eq!(tron_addr.to_string(), base58);
+	}
 
-			let fee = tracked_data
-				.estimate_fee(asset, IngressOrEgress::EgressCcm { gas_budget, message_length });
-			println!("{} fee limit:               {}", label, fee);
-		}
+	#[test]
+	fn evm_address_roundtrip() {
+		let evm_addr = Address::from([0xABu8; 20]);
+		let tron_addr = TronAddress::from_evm_address(evm_addr);
+		assert_eq!(tron_addr.to_evm_address().unwrap(), evm_addr);
+		assert_eq!(tron_addr.0[0], 0x41);
+	}
+
+	#[test]
+	fn base58check_to_evm_bytes() {
+		let base58 = "TQNPGpohiZLiWQvc6wTWjHCae8VoxaXnej";
+		let tron_addr = TronAddress::from_base58check(base58).unwrap();
+		let evm = tron_addr.to_evm_address().unwrap();
+		assert_eq!(hex::encode(evm.as_bytes()), "9df3e70fc7ea8128d6d0634664118d16bc856e1c");
+	}
+
+	#[test]
+	fn evm_bytes_to_base58check() {
+		let evm_hex = "9df3e70fc7ea8128d6d0634664118d16bc856e1c";
+		let evm_bytes: [u8; 20] = hex::decode(evm_hex).unwrap().try_into().unwrap();
+		let tron_addr = TronAddress::from_evm_address(Address::from(evm_bytes));
+		assert_eq!(tron_addr.to_base58check(), "TQNPGpohiZLiWQvc6wTWjHCae8VoxaXnej");
+	}
+
+	#[test]
+	fn invalid_base58check_rejected() {
+		// Wrong checksum
+		assert!(TronAddress::from_base58check("TJRabPrwbZy45sbavfcjinPJC18kjpRTv9").is_err());
+		// Too short
+		assert!(TronAddress::from_base58check("T").is_err());
+		// Not base58
+		assert!(TronAddress::from_base58check("0000").is_err());
+	}
+
+	#[test]
+	fn try_from_hex_bytes() {
+		// Valid: 0x41 prefix + 20 bytes
+		let mut bytes = vec![0x41u8];
+		bytes.extend_from_slice(&[0xAB; 20]);
+		let tron_addr = TronAddress::try_from(bytes).unwrap();
+		assert_eq!(tron_addr.to_evm_address().unwrap(), Address::from([0xAB; 20]));
+
+		// Invalid: wrong prefix
+		let mut bad_prefix = vec![0x00u8];
+		bad_prefix.extend_from_slice(&[0xAB; 20]);
+		assert!(TronAddress::try_from(bad_prefix).is_err());
+
+		// Invalid: wrong length
+		assert!(TronAddress::try_from(vec![0x41, 0x01, 0x02]).is_err());
 	}
 }

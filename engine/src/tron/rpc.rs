@@ -276,7 +276,7 @@ impl TronRpcApi for TronRpcClient {
 			.await?;
 
 		// If the transaction exists but is not yet included or has low number of confirmations it
-		// can  return an empty object. Erroring with a different message than the JSON convertion
+		// can return an empty object. Erroring with a different message than the JSON convertion
 		// for clarity.
 		if let Some(obj) = response.as_object() {
 			if obj.is_empty() {
@@ -302,7 +302,7 @@ impl TronRpcApi for TronRpcClient {
 			.await?;
 
 		// If the transaction exists but is not yet included or has low number of confirmations it
-		// can  return an empty object. Erroring with a different message than the JSON convertion
+		// can return an empty object. Erroring with a different message than the JSON convertion
 		// for clarity.
 		if let Some(obj) = response.as_object() {
 			if obj.is_empty() {
@@ -354,8 +354,6 @@ impl TronRpcApi for TronRpcClient {
 
 		let response = self.call_http_api("/triggerconstantcontract", Some(body)).await?;
 
-		println!("Trigger constant contract rpc response: {:?}", response);
-
 		let result: super::rpc_client_api::TriggerConstantContractResult = from_value(response)
 			.map_err(|err| anyhow!("Failed to parse transaction extension: {}", err))?;
 
@@ -380,8 +378,6 @@ impl TronRpcApi for TronRpcClient {
 		});
 
 		let response = self.call_http_api("/triggersmartcontract", Some(body)).await?;
-
-		println!("Trigger contract rpc response: {:?}", response);
 
 		let result: TransactionExtention = from_value(response)
 			.map_err(|err| anyhow!("Failed to parse trigger smart contract result: {}", err))?;
@@ -431,8 +427,6 @@ impl TronRpcApi for TronRpcClient {
 		});
 
 		let response = self.call_http_api("/broadcasttransaction", Some(body)).await?;
-
-		println!("Broadcast rpc response: {:?}", response);
 
 		let broadcast_response: BroadcastResponse = from_value(response)
 			.map_err(|e| anyhow!("Failed to parse broadcast response: {}", e))?;
@@ -730,7 +724,7 @@ mod tests {
 		let tron_rpc_client = TronRpcClient::new(
 			SecretUrl::from("https://docs-demo.tron-mainnet.quiknode.pro/wallet".to_string()),
 			SecretUrl::from("https://docs-demo.tron-mainnet.quiknode.pro/jsonrpc".to_string()),
-			728126428, // Mainnet  chain ID (0x2b6653dc)
+			728126428, // Mainnet chain ID (0x2b6653dc)
 			"Tron",
 		)
 		.unwrap()

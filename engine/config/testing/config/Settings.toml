@@ -28,8 +28,8 @@ ws_endpoint = "wss://my_fake_assethub_rpc:443/secret_key"
 http_endpoint = "http://my_fake_assethub_rpc:443/secret_key"
 
 [tron.rpc]
-http_endpoint = "http://localhost:8090"
-json_rpc_endpoint = "http://localhost:8091"
+http_endpoint = "http://localhost:8090/wallet"
+json_rpc_endpoint = "http://localhost:8091/jsonrpc"
 
 
 [health_check]

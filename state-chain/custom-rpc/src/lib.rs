@@ -1106,6 +1106,13 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
 
+	#[method(name = "failed_call_tron")]
+	fn cf_failed_call_tron(
+		&self,
+		broadcast_id: BroadcastId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<<cf_chains::Tron as Chain>::Transaction>>;
+
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
 		&self,
@@ -1710,6 +1717,7 @@ where
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
+		cf_failed_call_tron(broadcast_id: BroadcastId) -> Option<<cf_chains::Tron as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
@@ -3067,6 +3075,7 @@ where
 			solana_usdc_token_vault_ata,
 			solana_usdt_token_vault_ata,
 			solana_vault_swap_account,
+			tron,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
@@ -3136,7 +3145,7 @@ where
 					name: "solana_sol_vault_swap_account".into(),
 					address: AddressString::from_encoded_address(solana_vault_swap_account),
 					explanation: none_if_compact("Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into()),
-					rotation_policy: rotates_never,
+					rotation_policy: rotates_never.clone(),
 					next_predicted_rotation: None,
 				})
 			}
@@ -3166,6 +3175,16 @@ where
 				}
 			}));
 			result.insert(ForeignChain::Bitcoin, bitcoin_addresses);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Tron) {
+			result.insert(ForeignChain::Tron, vec![AddressAndExplanation {
+				name: "tron_vault_contract".into(),
+				address: AddressString::from_encoded_address(tron),
+				explanation: none_if_compact("Holds TRX and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
 		}
 
 		Ok(result)
