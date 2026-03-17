@@ -27,7 +27,7 @@ function toEncodedAddress(chain: Chain, address: string) {
       return { Btc: bytesToHex(new TextEncoder().encode(address)) };
     case 'Tron':
       assert(isHex(address), 'Expected hex-encoded Tron address');
-      return { Trn: hexToBytes(address) };
+      return { Tron: hexToBytes(address) };
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
