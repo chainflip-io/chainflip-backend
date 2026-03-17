@@ -2,13 +2,14 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.1.7 - 2026-03-13
+## [2.1.8] - 2026-03-13
 
 ### Fixes
 
+- Don't use BTC oracle price for WBTC.
 - Improved logging on startup.
 
-## [2.1.7 - 2026-03-13
+## [2.1.7] - 2026-03-13
 
 ### Fixes
 
