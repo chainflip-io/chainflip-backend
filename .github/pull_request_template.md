@@ -6,6 +6,18 @@ Closes: PRO-xxxx
 
 *Please include a succinct description of the purpose and content of the PR. What problem does it solve, and how? Link issues, discussions, other PRs, and anything else that will help the reviewer.*
 
+## API Changes
+
+*Document the impact on any external APIs, whether breaking or non-breaking.*
+
+### RPCS
+
+*Any changes to the RPC interfaces, or internal behaviour?*
+
+### Extrinsics & Events
+
+*Any changes to extrinsic or event encodings?*
+
 ---
 
 ## *Checklist [feel free to add/remove/edit as appropriate but please don't ignore]*
