@@ -1836,6 +1836,7 @@ impl_runtime_apis! {
 						Environment::network_environment(),
 					)
 				}),
+				tron: EncodedAddress::Tron(Environment::tron_vault_address().into()),
 				predicted_seconds_until_next_vault_rotation: {
 					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
 					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();

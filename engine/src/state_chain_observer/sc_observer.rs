@@ -538,7 +538,6 @@ where
                                     }
                                     CfeEvent::TronTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
                                         if nominee == account_id {
-                                            warn!("Tron TransactionBroadcastRequest {broadcast_id:?} received but not yet implemented");
                                             let tron_rpc = tron_rpc.clone();
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {

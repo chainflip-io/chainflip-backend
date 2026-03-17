@@ -23,10 +23,9 @@ use crate::{
 			vault::{decode_cf_parameters, vault_deposit_witness},
 			EvmBlockQuery,
 		},
-		tron::VaultDepositWitnessingConfig,
+		tron::{tron_deposits::trx_ingress_transactions, VaultDepositWitnessingConfig},
 	},
 };
-use anyhow::ensure;
 use cf_chains::{
 	address::EncodedAddress,
 	assets::{any::Asset, tron::Asset as TronAsset},
@@ -36,12 +35,13 @@ use cf_chains::{
 };
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
-use ethers::types::{H160, H256};
+use ethers::types::H256;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::{Runtime, TronInstance};
+use std::collections::HashSet;
 
 // This is the encoded data that the Tron memo/note must have.
 // We follow the same aproach as for EVM Vault contracts for consistency where the user
@@ -57,87 +57,15 @@ pub struct TronVaultSwapData {
 	pub cf_parameters: Vec<u8>,
 }
 
-/// Query block balance information from the Tron blockchain and calculate
-/// TRX balance changes for the Vault address.
-/// Transactions with any negative deposit channel amounts are skipped entirely.
-pub async fn trx_vault_ingresses<Client>(
-	client: &Client,
-	vault_address: H160,
-	block_number: i64,
-	block_hash: &str,
-) -> Result<Vec<(TronAsset, u64, H256)>, anyhow::Error>
-where
-	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
-{
-	let block_balance = client.get_block_balances(block_number, block_hash).await?;
-
-	// Check that block identifier matches
-	ensure!(
-		block_balance.block_identifier.hash == block_hash,
-		"Block hash mismatch: expected {}, got {}",
-		block_hash,
-		block_balance.block_identifier.hash
-	);
-	if let Some(number) = block_balance.block_identifier.number {
-		ensure!(
-			number == block_number,
-			"Block number mismatch: expected {}, got {}",
-			block_number,
-			number
-		);
-	}
-
-	let mut vault_changes: Vec<(_, u64, H256)> = Vec::new();
-
-	// Iterate over transaction balance traces
-	'transaction_loop: for tx_trace in block_balance.transaction_balance_trace {
-		// Skip transactions that are not successful
-		if tx_trace.status != "SUCCESS" {
-			continue;
-		}
-
-		let tx_id = tx_trace.transaction_identifier;
-		let mut vault_balance: u64 = 0;
-
-		// Iterate over operations in this transaction and accumulate amounts to the Vault.
-		// We accumulate multiple deposits to Vault in the same item (same tx).
-		// We skip fetch and transfer (allBatch) transactions.
-		for operation in tx_trace.operation {
-			// Convert TronAddress to EVM address - addresses being a valid length (TronAddress)
-			// is already validated by RPC layer
-			let evm_addr = operation
-				.address
-				.to_evm_address()
-				.expect("Address should have valid 0x41 prefix");
-
-			if evm_addr == vault_address {
-				// If any operation for the vault has negative amount, skip this transaction.
-				// Valid native Vault swaps will always transfer a positive amount to the Vault.
-				if operation.amount < 0 {
-					continue 'transaction_loop;
-				}
-				vault_balance += operation.amount as u64;
-			}
-		}
-
-		// Add the vault change to the result vector if there was a change
-		if vault_balance != 0 {
-			vault_changes.push((TronAsset::Trx, vault_balance, tx_id));
-		}
-	}
-
-	Ok(vault_changes)
-}
-
 pub async fn fetch_and_decode_transactions<Client>(
 	client: &Client,
-	vault_changes: Vec<(TronAsset, u64, H256)>,
+	vault_ingress_transactions: Vec<(TronAsset, u64, H256)>,
 	block_number: i64,
 ) -> Result<Vec<VaultDepositWitness<Runtime, TronInstance>>, anyhow::Error>
 where
 	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
 {
-	if vault_changes.is_empty() {
+	if vault_ingress_transactions.is_empty() {
 		return Ok(Vec::new());
 	}
 
@@ -146,7 +74,7 @@ where
 
 	// We could do this in parallel but it's anyway unlikely to have multiple Vault swaps in the
 	// same block.
-	for (asset, amount, tx_id) in vault_changes {
+	for (asset, amount, tx_id) in vault_ingress_transactions {
 		let tx_id_str = format!("{:x}", tx_id);
 		let transaction = client.get_transaction_by_id(&tx_id_str).await?;
 
@@ -161,68 +89,81 @@ where
 			continue;
 		}
 
-		if transaction.tx_id == tx_id {
-			if let Some(raw_data) = transaction.raw_data.data {
-				if let Ok(bytes) = hex::decode(&raw_data) {
-					if let Ok(details) = TronVaultSwapData::decode(&mut &bytes[..]) {
-						// Decode cf_parameters and build deposit_metadata based on whether CCM data
-						// is present
-						let (vault_swap_params, deposit_metadata) =
-							if let Some((gas_budget, message)) = details.ccm_data.as_ref() {
-								let (vault_swap_params, ccm_additional_data) =
-									match decode_cf_parameters::<EvmAddress, CcmAdditionalData>(
-										&details.cf_parameters,
-										block_number as u64,
-									) {
-										Ok(result) => result,
-										Err(e) => {
-											tracing::warn!("Failed to decode cf_parameters with CCM for tx {}: {:?}", tx_id, e);
-											continue;
-										},
-									};
-
-								let deposit_metadata =
-									Some(CcmDepositMetadata::<ForeignChainAddress, _> {
-										source_chain: ForeignChain::Tron,
-										source_address: Default::default(),
-										channel_metadata: CcmChannelMetadata {
-											message: message.clone(),
-											gas_budget: *gas_budget,
-											ccm_additional_data,
-										},
-									});
-								(vault_swap_params, deposit_metadata)
-							} else {
-								let (vault_swap_params, ()) =
-									match decode_cf_parameters::<EvmAddress, ()>(
-										&details.cf_parameters,
-										block_number as u64,
-									) {
-										Ok(result) => result,
-										Err(e) => {
-											tracing::warn!("Failed to decode cf_parameters with CCM for tx {}: {:?}", tx_id, e);
-											continue;
-										},
-									};
-								(vault_swap_params, None)
-							};
-
-						// Build the `VaultDepositWitness<Runtime, TronInstance>` and push it
-						let vault_witness = vault_deposit_witness!(
-							asset,
-							amount.into(),
-							details.output_asset,
-							details.destination_address,
-							deposit_metadata,
-							tx_id,
-							vault_swap_params
-						);
-
-						vault_swaps.push(vault_witness);
-					}
-				}
-			}
+		if transaction.tx_id != tx_id {
+			tracing::warn!(
+				"Transaction ID mismatch: expected {:?}, got {:?}",
+				tx_id,
+				transaction.tx_id
+			);
+			continue;
 		}
+
+		let Some(raw_data) = transaction.raw_data.data else { continue };
+		let Ok(bytes) = hex::decode(&raw_data) else {
+			tracing::warn!("Failed to hex-decode vault swap data for tx {:?}", tx_id);
+			continue;
+		};
+		let Ok(details) = TronVaultSwapData::decode(&mut &bytes[..]) else {
+			tracing::warn!("Failed to SCALE-decode vault swap data for tx {:?}", tx_id);
+			continue;
+		};
+
+		// Decode cf_parameters and build deposit_metadata based on whether CCM data is present
+		let (vault_swap_params, deposit_metadata) =
+			if let Some((gas_budget, message)) = details.ccm_data.as_ref() {
+				let (vault_swap_params, ccm_additional_data) =
+					match decode_cf_parameters::<EvmAddress, CcmAdditionalData>(
+						&details.cf_parameters,
+						block_number as u64,
+					) {
+						Ok(result) => result,
+						Err(e) => {
+							tracing::warn!(
+								"Failed to decode cf_parameters with CCM for tx {}: {:?}",
+								tx_id,
+								e
+							);
+							continue;
+						},
+					};
+
+				let deposit_metadata = Some(CcmDepositMetadata::<ForeignChainAddress, _> {
+					source_chain: ForeignChain::Tron,
+					source_address: Default::default(),
+					channel_metadata: CcmChannelMetadata {
+						message: message.clone(),
+						gas_budget: *gas_budget,
+						ccm_additional_data,
+					},
+				});
+				(vault_swap_params, deposit_metadata)
+			} else {
+				let (vault_swap_params, ()) = match decode_cf_parameters::<EvmAddress, ()>(
+					&details.cf_parameters,
+					block_number as u64,
+				) {
+					Ok(result) => result,
+					Err(e) => {
+						tracing::warn!(
+							"Failed to decode cf_parameters without CCM for tx {}: {:?}",
+							tx_id,
+							e
+						);
+						continue;
+					},
+				};
+				(vault_swap_params, None)
+			};
+
+		vault_swaps.push(vault_deposit_witness!(
+			asset,
+			amount.into(),
+			details.output_asset,
+			details.destination_address,
+			deposit_metadata,
+			tx_id,
+			vault_swap_params
+		));
 	}
 
 	Ok(vault_swaps)
@@ -240,22 +181,34 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 
 	let vault_address = config.vault;
 
-	let mut ingresses =
-		trx_vault_ingresses(client, vault_address, block_number, &block_hash).await?;
+	let mut vault_ingress_transactions: Vec<(TronAsset, u64, H256)> =
+		trx_ingress_transactions(client, HashSet::from([vault_address]), block_number, &block_hash)
+			.await?
+			.into_iter()
+			.filter_map(|(addr, amount, tx_id)| {
+				if addr == vault_address {
+					Some((TronAsset::Trx, amount, tx_id))
+				} else {
+					tracing::warn!(
+						"TRX ingress address mismatch: expected {:?}, got {:?}",
+						vault_address,
+						addr
+					);
+					None
+				}
+			})
+			.collect();
 
 	// --- ERC20 Vault swap witnessing ---
 
 	// Iterate over all event sources in config.supported_assets
 	for (asset, event_source) in &config.supported_assets {
 		let logs = client.get_logs(query.block_hash, event_source.contract_address).await?;
-		let events: Vec<_> = logs
-			.into_iter()
-			.filter_map(|log| event_source.event_type.parse_log(log).ok())
-			.collect();
-		for event in events {
+		for event in logs.into_iter().filter_map(|log| event_source.event_type.parse_log(log).ok())
+		{
 			if let TransferFilter { to, value, from: _ } = event.event_parameters {
 				if to == vault_address {
-					ingresses.push((
+					vault_ingress_transactions.push((
 						*asset,
 						value.try_into().map_err(|_| anyhow::anyhow!("Value conversion failed"))?,
 						event.tx_hash,
@@ -265,7 +218,7 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 		}
 	}
 
-	fetch_and_decode_transactions(client, ingresses, block_number).await
+	fetch_and_decode_transactions(client, vault_ingress_transactions, block_number).await
 }
 
 #[cfg(test)]
@@ -274,9 +227,6 @@ mod tests {
 	use crate::{
 		settings::TronEndpoints,
 		tron::{retry_rpc::TronRetryRpcClient, rpc_client_api::TronAddress},
-		// witness::tron::tron_deposits::{
-		// 	ingress_deposit_channels_and_vault_swaps, trx_ingress_amounts,
-		// },
 	};
 	use cf_chains::{cf_parameters::VaultSwapParameters, ChannelRefundParameters};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
@@ -285,7 +235,7 @@ mod tests {
 
 	#[ignore = "requires access to external RPC"]
 	#[tokio::test]
-	async fn test_get_tron_trx_ingress_amounts() {
+	async fn test_get_tron_trx_ingress_transactions() {
 		task_scope::task_scope(|scope| {
 			async {
 				let retry_client = TronRetryRpcClient::<crate::tron::rpc::TronRpcClient>::new(
@@ -322,15 +272,19 @@ mod tests {
 				.to_evm_address()
 				.unwrap();
 
-				let trx_ingresses =
-					trx_vault_ingresses(&retry_client, vault_address, block_num, block_hash)
-						.await
-						.unwrap();
+				let trx_ingresses = trx_ingress_transactions(
+					&retry_client,
+					HashSet::from([vault_address]),
+					block_num,
+					block_hash,
+				)
+				.await
+				.unwrap();
 
 				assert_eq!(
 					trx_ingresses,
 					vec![(
-						TronAsset::Trx,
+						vault_address,
 						2,
 						"011fc77de4dd7777d1ddaa5d5411b28c250000631f8aeda0c5808d0d5134e4ca"
 							.parse()
@@ -348,10 +302,14 @@ mod tests {
 				.to_evm_address()
 				.unwrap();
 
-				let trx_ingresses =
-					trx_vault_ingresses(&retry_client, vault_address, block_num, block_hash)
-						.await
-						.unwrap();
+				let trx_ingresses = trx_ingress_transactions(
+					&retry_client,
+					HashSet::from([vault_address]),
+					block_num,
+					block_hash,
+				)
+				.await
+				.unwrap();
 
 				assert_eq!(trx_ingresses, vec![]);
 
@@ -402,16 +360,20 @@ mod tests {
 				.to_evm_address()
 				.unwrap();
 
-				let trx_ingresses =
-					trx_vault_ingresses(&retry_client, vault_address, block_num, block_hash)
-						.await
-						.unwrap();
+				let trx_ingresses = trx_ingress_transactions(
+					&retry_client,
+					HashSet::from([vault_address]),
+					block_num,
+					block_hash,
+				)
+				.await
+				.unwrap();
 
 				// Update assertions based on expected results
 				assert_eq!(
 					trx_ingresses,
 					vec![(
-						TronAsset::Trx, // Replace with the correct asset type
+						vault_address,
 						1000000,
 						"f3de44cca0c78890854a637c215e19490211c0ece6cf892fe759773b98dbf900"
 							.parse()
@@ -422,17 +384,21 @@ mod tests {
 				// This cointains a TRX Vault Swap with valid data
 				// https://nile.tronscan.org/#/transaction/b8042280e6a813d65ad01a0555e1e9a9497bf69d012b58cdc5d925c21df35972
 				let block_num = 64845362;
-				let trx_ingresses = trx_vault_ingresses(
+				let trx_ingresses = trx_ingress_transactions(
 					&retry_client,
-					vault_address,
+					HashSet::from([vault_address]),
 					block_num,
 					"0000000003dd7632dd9fcdfcbe8008f7e534191ff5d1ceedb05ac5affdf76b32",
 				)
 				.await
 				.unwrap();
 
+				let ingresses: Vec<(TronAsset, u64, H256)> = trx_ingresses
+					.into_iter()
+					.map(|(_addr, amount, tx_id)| (TronAsset::Trx, amount, tx_id))
+					.collect();
 				let vault_swaps =
-					fetch_and_decode_transactions(&retry_client, trx_ingresses, block_num).await?;
+					fetch_and_decode_transactions(&retry_client, ingresses, block_num).await?;
 
 				// Assert that vault_swaps matches the expected value
 				let expected_refund_params = ChannelRefundParameters {

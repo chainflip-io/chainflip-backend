@@ -184,7 +184,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 }
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_COMPUTE_UNITS = 30000;
-const OVERHEAD_ENERGY = 10000;
+const OVERHEAD_ENERGY = 20000;
 
 export async function newCcmMetadata(
   destAsset: Asset,

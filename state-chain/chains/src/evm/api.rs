@@ -447,7 +447,7 @@ mod tests {
 				"SetAggKeyWithAggKey",
 				set_agg_key_with_agg_key::SetAggKeyWithAggKey { new_key: AggKey::default() }
 					.function_selector_string(),
-				hex!("c1c4a149"),
+				hex!("c1c4a159"),
 			),
 			(
 				"SetCommKeyWithAggKey",
