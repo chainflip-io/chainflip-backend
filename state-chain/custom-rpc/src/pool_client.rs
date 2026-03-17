@@ -407,15 +407,16 @@ where
 		call: RuntimeCall,
 		wait_for: WaitFor,
 		dry_run: bool,
+		fallback_to_finalized: bool,
 	) -> Result<WaitForDynamicResult, PoolClientError> {
 		match wait_for {
 			WaitFor::NoWait =>
 				Ok(WaitForDynamicResult::TransactionHash(self.submit_one(call, dry_run).await?)),
 			WaitFor::InBlock => Ok(WaitForDynamicResult::Data(Box::new(
-				self.submit_watch_dynamic(call, false, dry_run).await?,
+				self.submit_watch_dynamic(call, false, dry_run, fallback_to_finalized).await?,
 			))),
 			WaitFor::Finalized => Ok(WaitForDynamicResult::Data(Box::new(
-				self.submit_watch_dynamic(call, true, dry_run).await?,
+				self.submit_watch_dynamic(call, true, dry_run, fallback_to_finalized).await?,
 			))),
 		}
 	}
@@ -578,12 +579,17 @@ where
 	/// metadata. This means that if a runtime upgrade changes the event signature, this
 	/// function can still decode the changed event.
 	///
+	/// If `fallback_to_finalized` is true and `until_finalized` is false (i.e. InBlock mode),
+	/// failures to extract extrinsic data at InBlock (e.g. due to reorgs) will silently fall back
+	/// to waiting for Finalized instead of returning an error.
+	///
 	/// See [SignedPoolClient::submit_watch] for more details.
 	pub async fn submit_watch_dynamic(
 		&self,
 		call: RuntimeCall,
 		until_finalized: bool,
 		dry_run: bool,
+		fallback_to_finalized: bool,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
 		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
 			self.submit_watch(call, dry_run).await?;
@@ -591,20 +597,28 @@ where
 		while let Some(status) = status_stream.next().await {
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) if !until_finalized =>
-					match self.get_extrinsic_data_dynamic(block_hash, tx_index).await {
-						Ok(data) => return Ok(data),
-						Err(e) => log::debug!(
-							"Could not get extrinsic data at InBlock {block_hash}, falling back to finalized. {e}"
-						),
+					if fallback_to_finalized {
+						match self.get_extrinsic_data_dynamic(block_hash, tx_index).await {
+							Ok(data) => return Ok(data),
+							Err(e) => log::debug!(
+								"Could not get extrinsic data at InBlock {block_hash}, falling back to finalized. {e}"
+							),
+						}
+					} else {
+						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
 					},
-				TransactionStatus::Retracted(block_hash) if !until_finalized => {
+				TransactionStatus::Retracted(block_hash)
+					if !until_finalized && fallback_to_finalized =>
+				{
 					log::debug!("The block {block_hash} that this transaction was included in has been retracted.\
 					 Most likely due to a reorg, falling back to finalized.");
 				},
 				// Always process Finalized: either it's the primary target (until_finalized=true)
 				// or it's the re-org fallback when InBlock extraction failed.
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
-					return self.get_extrinsic_data_dynamic(block_hash, tx_index).await,
+					if until_finalized || fallback_to_finalized {
+						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+					},
 				_ => is_transaction_status_error(&status)?,
 			}
 		}

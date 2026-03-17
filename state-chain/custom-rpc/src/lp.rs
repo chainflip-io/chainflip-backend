@@ -195,6 +195,7 @@ where
 				RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				false,
 				true,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -227,6 +228,7 @@ where
 					}),
 					wait_for_param,
 					false,
+					true,
 				)
 				.await
 				.map_err(CfApiError::from)?
@@ -325,6 +327,7 @@ where
 				}),
 				false,
 				false,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -357,6 +360,7 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
+					true,
 				)
 				.await
 				.map_err(CfApiError::from)?
@@ -397,6 +401,7 @@ where
 				}),
 				false,
 				false,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -424,6 +429,7 @@ where
 						size_change: size_change.try_map(|size| size.try_into())?,
 					}),
 					wait_for.unwrap_or_default(),
+					false,
 					false,
 				)
 				.await
@@ -453,6 +459,7 @@ where
 						size: size.try_into()?,
 					}),
 					wait_for.unwrap_or_default(),
+					false,
 					false,
 				)
 				.await
@@ -486,6 +493,7 @@ where
 						dispatch_at,
 					}),
 					wait_for.unwrap_or_default(),
+					false,
 					false,
 				)
 				.await
@@ -521,6 +529,7 @@ where
 						dispatch_at,
 					}),
 					wait_for.unwrap_or_default(),
+					false,
 					false,
 				)
 				.await
@@ -575,6 +584,7 @@ where
 					executor: executor_address,
 				}),
 				false,
+				true,
 				true,
 			)
 			.await
@@ -716,6 +726,7 @@ where
 					}),
 					wait_for.unwrap_or_default(),
 					false,
+					true,
 				)
 				.await
 				.map_err(CfApiError::from)?
@@ -767,6 +778,7 @@ where
 				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_pools::Call::cancel_orders_batch { orders }),
 					wait_for.unwrap_or_default(),
+					false,
 					false,
 				)
 				.await

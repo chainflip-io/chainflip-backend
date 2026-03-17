@@ -231,6 +231,7 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				false,
 				true,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -318,6 +319,7 @@ where
 				}),
 				false,
 				false,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -473,6 +475,7 @@ where
 				},
 				false,
 				true,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -528,6 +531,7 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
 				false,
 				true,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -547,6 +551,7 @@ where
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
 				false,
+				true,
 				true,
 			)
 			.await
@@ -569,6 +574,7 @@ where
 					withdrawal_address,
 				}),
 				false,
+				true,
 				true,
 			)
 			.await
@@ -594,6 +600,7 @@ where
 					affiliate_account_id,
 				}),
 				false,
+				true,
 				true,
 			)
 			.await
@@ -639,6 +646,7 @@ where
 				}),
 				false,
 				true,
+				true,
 			)
 			.await
 			.map_err(CfApiError::from)?;
@@ -678,6 +686,7 @@ where
 					minimum_fee_bps,
 				}),
 				false,
+				true,
 				true,
 			)
 			.await
@@ -747,6 +756,7 @@ where
 				RuntimeCall::from(pallet_cf_swapping::Call::bind_broker_fee_withdrawal_address {
 					address,
 				}),
+				false,
 				true,
 				true,
 			)
