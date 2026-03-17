@@ -168,6 +168,12 @@ mod tests {
 			"--hub.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
 			"--hub.rpc.http_endpoint=http://localhost:8545".to_string(),
 			"--hub.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
+			// Tron
+			format!("--tron.private_key_file={some_file}"),
+			"--tron.rpc.http_endpoint=http://localhost:8090/wallet".to_string(),
+			"--tron.rpc.json_rpc_endpoint=http://localhost:8091/jsonrpc".to_string(),
+			"--tron.backup_rpc.http_endpoint=http://localhost:8090/wallet".to_string(),
+			"--tron.backup_rpc.json_rpc_endpoint=http://localhost:8091/jsonrpc".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),

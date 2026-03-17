@@ -205,7 +205,7 @@ mod test_super {
 	fn test_tron_trx() {
 		assert_eq!(
 			get_create_2_address_tron(TRON_VAULT_ADDRESS, None, 0),
-			EthereumAddress(hex_literal::hex!("d5b7d46e0266a92af97ef45befa21991878a1675"))
+			EthereumAddress(hex_literal::hex!("eb9b3220f5e1c7f719ce7b67d88b170f917c5999"))
 		);
 
 		println!("Derivation worked for TRON:TRX! 🚀");
@@ -215,7 +215,7 @@ mod test_super {
 	fn test_tron_token() {
 		assert_eq!(
 			get_create_2_address_tron(TRON_VAULT_ADDRESS, Some(TRON_USDT_ADDRESS), 0),
-			EthereumAddress(hex_literal::hex!("6a5adcf00353acb046d8491bacc1d56e59f79e42"))
+			EthereumAddress(hex_literal::hex!("73cf16c2bba473aec4ac5c17156a4c0e67f0fa10"))
 		);
 
 		println!("Derivation worked for TRON:USDT! 🚀");

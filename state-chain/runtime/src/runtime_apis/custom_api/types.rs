@@ -570,6 +570,8 @@ pub struct VaultAddresses {
 	pub solana_usdt_token_vault_ata: EncodedAddress,
 	pub solana_vault_swap_account: Option<EncodedAddress>,
 
+	pub tron: EncodedAddress,
+
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
 
