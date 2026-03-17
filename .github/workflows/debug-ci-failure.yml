@@ -72,7 +72,6 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.CF_PROTOCOL_ANTHROPIC_API_KEY }}
-          show_full_output: true
           claude_args: >-
             --allowedTools
             'Bash(psql *)'
