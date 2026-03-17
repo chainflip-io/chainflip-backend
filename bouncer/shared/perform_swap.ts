@@ -459,7 +459,7 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
     swapContext?.updateStatus(cf.logger, SwapStatus.VaultSwapScheduled);
 
     const swapRequestId = swapRequestedEvent.swapRequestId;
-    await cf.stepUntilEvent(
+    const swapRequestCompletedEvent = await cf.stepUntilEvent(
       'Swapping.SwapRequestCompleted',
       swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
     );
@@ -494,6 +494,7 @@ export async function performVaultSwap<A extends WithBrokerAccount>(
       destAsset,
       destAddress,
       transactionId,
+      brokerFeeSwaps: swapRequestCompletedEvent.brokerFeeSwaps,
     };
   } catch (err) {
     swapContext?.updateStatus(cf.logger, SwapStatus.Failure);

@@ -729,6 +729,7 @@ export const cfTraitsSwappingSwapOutputActionGenericEncodedAddress = z.discrimin
 export const cfTraitsSwappingSwapRequestTypeGeneric = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('NetworkFee') }),
   z.object({ __kind: z.literal('IngressEgressFee') }),
+  z.object({ __kind: z.literal('BrokerFee'), accountId }),
   z.object({
     __kind: z.literal('Regular'),
     outputAction: cfTraitsSwappingSwapOutputActionGenericEncodedAddress,
@@ -802,7 +803,12 @@ export const cfChainsRefundParametersChannelRefundParameters = z.object({
   maxOraclePriceSlippage: z.number().nullish(),
 });
 
-export const cfTraitsSwappingSwapType = simpleEnum(['Swap', 'NetworkFee', 'IngressEgressFee']);
+export const cfTraitsSwappingSwapType = simpleEnum([
+  'Swap',
+  'NetworkFee',
+  'IngressEgressFee',
+  'BrokerFee',
+]);
 
 export const palletCfSwappingSwapFailureReason = simpleEnum([
   'PriceImpactLimit',
@@ -814,6 +820,11 @@ export const palletCfSwappingSwapFailureReason = simpleEnum([
   'AbortedFromOrigin',
   'LogicError',
 ]);
+
+export const cfPrimitivesAssetAndAmount = z.object({
+  asset: cfPrimitivesChainsAssetsAnyAsset,
+  amount: numberOrHex,
+});
 
 export const cfPrimitivesSwapLeg = simpleEnum(['FromStable', 'ToStable']);
 
