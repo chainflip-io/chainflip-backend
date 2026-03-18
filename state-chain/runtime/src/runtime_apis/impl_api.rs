@@ -1220,7 +1220,9 @@ impl_runtime_apis! {
 		}
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
-			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
+			if quote_asset != STABLE_ASSET {
+				return vec![]
+			}
 			Swapping::get_scheduled_swap_legs(base_asset)
 		}
 
