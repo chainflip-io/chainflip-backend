@@ -584,6 +584,8 @@ fn handle_vault_event<
 
 #[cfg(test)]
 mod tests {
+	use state_chain_runtime::{EthereumInstance, Runtime};
+
 	use super::*;
 
 	fn make_event(event_parameters: VaultEvents) -> Event<VaultEvents> {
