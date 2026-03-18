@@ -5,6 +5,7 @@ self-hosted-runner:
       hetzner,
       hetzner,
       namespace-profile-default,
+      namespace-profile-default-light,
       namespace-profile-rust-builder,
       namespace-profile-rust-builder-light,
       namespace-profile-rust-builder-light-no-cache,
