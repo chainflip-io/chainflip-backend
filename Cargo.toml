@@ -59,12 +59,14 @@ members = [
 	"state-chain/runtime",
 	"state-chain/runtime-utilities",
 	"state-chain/runtime-utilities/macros",
-  'state-chain/runtime-tests',
 	"state-chain/test-utilities",
 	"state-chain/traits",
 	"utilities",
 	"utilities/scale-json",
 	"utilities/scale-json-event-logger",
+]
+exclude = [
+	"state-chain/runtime-tests",
 ]
 
 [workspace.lints.clippy]
