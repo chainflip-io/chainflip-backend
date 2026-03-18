@@ -2,11 +2,18 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.9] - 2026-03-18
+
+### Fixes
+
+- Don't panic in cf_scheduled_swaps rpc
+- Map network fee calculation error to the correct reason it failed
+- Don't use BTC oracle price for WBTC.
+
 ## [2.1.8] - 2026-03-13
 
 ### Fixes
 
-- Don't use BTC oracle price for WBTC.
 - Improved logging on startup.
 
 ## [2.1.7] - 2026-03-13
@@ -14,6 +21,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Optimistically increment nonce for engine submissions.
+- Add timeout for ImmediatelyDropped error.
 - Handle ImmediatelyDropped error.
 
 ## [2.1.6] - 2026-03-12
