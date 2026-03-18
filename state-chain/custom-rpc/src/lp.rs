@@ -21,6 +21,7 @@ use crate::{
 	CfApiError, RpcResult, StorageQueryApi,
 };
 
+use crate::pool_client::TransactionStatusStreamBoxed;
 use anyhow::anyhow;
 use cf_amm::{
 	common::Side,
@@ -62,7 +63,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::TransactionPoolWrapper;
-use sc_transaction_pool_api::{TransactionStatus, TransactionStatusStreamFor, TxIndex};
+use sc_transaction_pool_api::{TransactionStatus, TxIndex};
 use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
@@ -70,7 +71,7 @@ use state_chain_runtime::{
 	chainflip::BlockUpdate, runtime_apis::custom_api::CustomRuntimeApi, AccountId, ConstU32, Hash,
 	Nonce, RuntimeCall,
 };
-use std::{ops::Range, pin::Pin, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
 pub mod lp_crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -143,11 +144,12 @@ where
 	async fn extract_liquidity_deposit_channel_details(
 		&self,
 		block_hash: Hash,
+		tx_hash: Hash,
 		tx_index: TxIndex,
 	) -> RpcResult<(ChannelId, LiquidityDepositChannelDetails)> {
 		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
-			.get_extrinsic_data_dynamic(block_hash, tx_index)
+			.get_extrinsic_data_dynamic(block_hash, tx_hash, tx_index)
 			.await
 			.map_err(CfApiError::from)?;
 
@@ -254,17 +256,17 @@ where
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
-		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
-			self.signed_pool_client
-				.submit_watch(
-					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
-						asset,
-						boost_fee: boost_fee.unwrap_or_default(),
-					}),
-					false,
-				)
-				.await
-				.map_err(CfApiError::from)?;
+		let (tx_hash, mut status_stream): (Hash, TransactionStatusStreamBoxed<B, C>) = self
+			.signed_pool_client
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				}),
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
 		let pre_allocated_channels = get_preallocated_channels(
@@ -277,7 +279,7 @@ where
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
 					let (channel_id, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(block_hash, tx_hash, tx_index)
 						.await?;
 
 					// If the extracted deposit channel was pre-allocated to this lp
@@ -294,7 +296,7 @@ where
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) => {
 					let (_, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(block_hash, tx_hash, tx_index)
 						.await?;
 					return Ok(ExtrinsicResponse {
 						block_number: self.rpc_backend.block_number_for(block_hash)?,
