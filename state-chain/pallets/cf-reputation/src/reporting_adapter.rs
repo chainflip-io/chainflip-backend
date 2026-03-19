@@ -30,27 +30,13 @@ use sp_staking::offence::ReportOffence;
 pub type ReportId = <Blake2_128Concat as StorageHasher>::Output;
 pub type OpaqueTimeSlot = Vec<u8>;
 
-/// Note: `FullIdentification` is misleading since it actually only forms part of the 'full'
-/// `IdentificationTuple`, but the naming has been preserved here for consistency with other
-/// substrate pallets, in particular session_historical.
-type IdentificationTuple<T, FullIdentification> =
-	(<T as Chainflip>::ValidatorId, FullIdentification);
-
 /// An adapter struct on which to implement [ReportOffence] for our runtime.
-///
-/// `FullIdentification` is the additional identification information used in the
-/// `IdentificationTuple` of the [KeyOwnerProofSystem](frame_support::traits::KeyOwnerProofSystem)
-/// used in the runtime, for the [sp_staking::offence::Offence] `O` being reported. Typically, the
-/// [KeyOwnerProofSystem] is implemented in `pallet_session_historical`, and `FullIdentification =
-/// ()`.
-pub struct ChainflipOffenceReportingAdapter<T, O, FullIdentification>(
-	sp_std::marker::PhantomData<(T, O, FullIdentification)>,
-);
+pub struct ChainflipOffenceReportingAdapter<T, O>(sp_std::marker::PhantomData<(T, O)>);
 
-impl<T, O, FullIdentification> ChainflipOffenceReportingAdapter<T, O, FullIdentification>
+impl<T, O> ChainflipOffenceReportingAdapter<T, O>
 where
 	T: Config,
-	O: sp_staking::offence::Offence<IdentificationTuple<T, FullIdentification>>,
+	O: sp_staking::offence::Offence<T::ValidatorId>,
 {
 	/// Encodes a unique hash for a tuple of (report_type, offender).
 	///
@@ -70,12 +56,11 @@ where
 	}
 }
 
-impl<T, O, FullIdentification>
-	ReportOffence<T::ValidatorId, IdentificationTuple<T, FullIdentification>, O>
-	for ChainflipOffenceReportingAdapter<T, O, FullIdentification>
+impl<T, O> ReportOffence<T::ValidatorId, T::ValidatorId, O>
+	for ChainflipOffenceReportingAdapter<T, O>
 where
 	T: Config,
-	O: sp_staking::offence::Offence<IdentificationTuple<T, FullIdentification>> + Into<T::Offence>,
+	O: sp_staking::offence::Offence<T::ValidatorId> + Into<T::Offence>,
 {
 	/// Reports a substrate offence.
 	///
@@ -103,7 +88,7 @@ where
 			);
 			sp_staking::offence::OffenceError::Other(CF_ERROR_EXPECTED_SINGLE_OFFENDER)
 		});
-		let (offender, _) = offence.offenders().pop().expect("len == 1; qed");
+		let offender = offence.offenders().pop().expect("len == 1; qed");
 
 		ensure!(
 			!Self::is_time_slot_stale(&offender, &offence.time_slot()),
@@ -129,21 +114,15 @@ where
 	/// This implementation assumes that it's not possible to submit a report for a *future* time
 	/// slot. Hence we can simply check if the reported slot is not later than the latest one seen
 	/// for this offender.
-	fn is_known_offence(
-		offenders: &[IdentificationTuple<T, FullIdentification>],
-		time_slot: &O::TimeSlot,
-	) -> bool {
-		offenders
-			.iter()
-			.any(|(offender, _)| Self::is_time_slot_stale(offender, time_slot))
+	fn is_known_offence(offenders: &[T::ValidatorId], time_slot: &O::TimeSlot) -> bool {
+		offenders.iter().any(|offender| Self::is_time_slot_stale(offender, time_slot))
 	}
 }
 
-impl<T, O, FullIdentification> OnKilledAccount<T::AccountId>
-	for ChainflipOffenceReportingAdapter<T, O, FullIdentification>
+impl<T, O> OnKilledAccount<T::AccountId> for ChainflipOffenceReportingAdapter<T, O>
 where
 	T: Config,
-	O: sp_staking::offence::Offence<IdentificationTuple<T, FullIdentification>>,
+	O: sp_staking::offence::Offence<T::ValidatorId>,
 {
 	fn on_killed_account(who: &T::AccountId) {
 		OffenceTimeSlotTracker::<T>::remove(Self::report_id(T::ValidatorId::from_ref(who)));

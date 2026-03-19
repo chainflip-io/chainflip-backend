@@ -17,7 +17,8 @@ extern crate alloc;
 
 use crate::{
 	chainflip::{
-		ethereum_sc_calls::*, witnessing::solana_elections::SolanaChainTrackingProvider, *,
+		ethereum_sc_calls::*, key_owner_proof::CurrentSessionProofSystem,
+		witnessing::solana_elections::SolanaChainTrackingProvider, *,
 	},
 	runtime_apis::{
 		custom_api::{runtime_decl_for_custom_runtime_api::CustomRuntimeApi as _, *},
@@ -230,7 +231,7 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
+			CurrentSessionProofSystem::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)
 		}

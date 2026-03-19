@@ -1,6 +1,7 @@
 use crate::{
 	chainflip::{
 		epoch_transition::ChainflipEpochTransitions,
+		key_owner_proof::CurrentSessionProofSystem,
 		multi_vault_activator::MultiVaultActivator,
 		witnessing::solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -517,12 +518,6 @@ impl pallet_session::Config for Runtime {
 	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
-impl pallet_session::historical::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type FullIdentification = ();
-	type FullIdentificationOf = ();
-}
-
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 const BLOCK_LENGTH_RATIO: Perbill = Perbill::from_percent(40);
 pub const MAX_BLOCK_LENGTH: u32 = 1024 * 1024 * 625 / 100; // 6.25 MB
@@ -598,8 +593,9 @@ type KeyOwnerIdentification<T, Id> =
 	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
 type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
 	T,
-	pallet_grandpa::EquivocationOffence<KeyOwnerIdentification<Historical, GrandpaId>>,
-	<T as pallet_session::historical::Config>::FullIdentification,
+	pallet_grandpa::EquivocationOffence<
+		KeyOwnerIdentification<CurrentSessionProofSystem, GrandpaId>,
+	>,
 >;
 
 impl pallet_grandpa::Config for Runtime {
@@ -610,11 +606,12 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type KeyOwnerProof = sp_session::MembershipProof;
+	type KeyOwnerProof =
+		<CurrentSessionProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
 		Self,
 		GrandpaOffenceReporter<Self>,
-		Historical,
+		CurrentSessionProofSystem,
 		ConstU64<14400>,
 	>;
 }

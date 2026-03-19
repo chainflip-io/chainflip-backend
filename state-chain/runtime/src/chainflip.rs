@@ -29,6 +29,7 @@ mod signer_nomination;
 #[macro_use]
 pub mod witnessing;
 pub mod ethereum_sc_calls;
+pub mod key_owner_proof;
 pub mod simulate_swap;
 pub mod vault_swaps;
 
