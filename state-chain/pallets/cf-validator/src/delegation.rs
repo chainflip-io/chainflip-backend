@@ -1,6 +1,5 @@
 use crate::{AuctionOutcome, Config, DelegationSnapshots, Pallet, ValidatorToOperator};
 use cf_primitives::EpochIndex;
-use cf_runtime_utilities::log_or_panic;
 use cf_traits::{EpochInfo, Issuance, RewardsDistribution, Slashing};
 use codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use core::iter::Sum;
