@@ -38,7 +38,6 @@ use frame_support::sp_runtime::{
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
 };
-use pallet_session::historical as session_historical;
 use sp_runtime::generic;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -141,8 +140,6 @@ mod runtime {
 	pub type Validator = pallet_cf_validator;
 	#[runtime::pallet_index(10)]
 	pub type Session = pallet_session;
-	#[runtime::pallet_index(11)]
-	pub type Historical = session_historical;
 	#[runtime::pallet_index(12)]
 	pub type Aura = pallet_aura;
 	#[runtime::pallet_index(13)]
@@ -325,7 +322,6 @@ pub type PalletExecutionOrder = (
 	Witnesser,
 	Validator,
 	Session,
-	Historical,
 	Aura,
 	Authorship,
 	Grandpa,
