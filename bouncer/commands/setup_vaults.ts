@@ -24,7 +24,6 @@ import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbi
 import { bscVaultAwaitingGovernanceActivation } from 'generated/events/bscVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
-import { environmentBscInitialized } from 'generated/events/environment/bscInitialized';
 
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
@@ -120,12 +119,6 @@ async function main(): Promise<void> {
         extrinsic: async (api) =>
           api.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
         expectedEvent: { name: 'Environment.SolanaInitialized' },
-      }),
-    (subcf) =>
-      subcf.submitGovernance({
-        extrinsic: async (api) =>
-          api.tx.environment.witnessInitializeBscVault(await bscClient.eth.getBlockNumber()),
-        expectedEvent: { name: 'Environment.BscInitialized', schema: environmentBscInitialized },
       }),
   ]);
 
