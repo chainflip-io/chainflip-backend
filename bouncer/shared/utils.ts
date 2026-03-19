@@ -652,12 +652,12 @@ export function checkTransactionInMatches(
           return (
             expected.type === TransactionOrigin.VaultSwapBitcoin &&
             actual.txId.value ===
-            // Reverse byte order of BTC transactions
-            '0x' +
-            // eslint-disable-next-line @typescript-eslint/no-use-before-define
-            [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
-              .map((x) => x.toString(16).padStart(2, '0'))
-              .join('')
+              // Reverse byte order of BTC transactions
+              '0x' +
+                // eslint-disable-next-line @typescript-eslint/no-use-before-define
+                [...new Uint8Array(hexStringToBytesArray(expected.txId).reverse())]
+                  .map((x) => x.toString(16).padStart(2, '0'))
+                  .join('')
           );
         default:
           return false;

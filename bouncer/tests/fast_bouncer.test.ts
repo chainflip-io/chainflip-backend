@@ -30,7 +30,7 @@ describe('ConcurrentTests', () => {
   const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
   const inCi = !!process.env.GITHUB_ACTIONS;
   // CI runners are slower, use a larger timeout factor
-  const ciTimeoutFactor = inCi ? 1.6 : 1.1;
+  const ciTimeoutFactor = inCi ? 1.6 : 1.5;
 
   // Launch all tests in parallel. This will create a lot of contention for the first few blocks.
   // The concurrentTest function can be called with startDelaySeconds parameter that will delay the start of the

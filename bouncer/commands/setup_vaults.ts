@@ -39,7 +39,10 @@ async function main(): Promise<void> {
   cf.info('Performing initial Vault setup');
 
   // Step 1
-  await Promise.all([initializeArbitrumChain(cf.logger), initializeSolanaChain(cf.logger), initializeBscChain(cf.logger),
+  await Promise.all([
+    initializeArbitrumChain(cf.logger),
+    initializeSolanaChain(cf.logger),
+    initializeBscChain(cf.logger),
   ]);
 
   // Step 2
@@ -93,8 +96,7 @@ async function main(): Promise<void> {
     cf.debug('Solana key inserted');
   };
 
-  await Promise.all([insertArbitrumKey(), insertSolanaKey(), insertBscKey(),
-  ]);
+  await Promise.all([insertArbitrumKey(), insertSolanaKey(), insertBscKey()]);
 
   // Step 7
   cf.info('Setting up price feeds');

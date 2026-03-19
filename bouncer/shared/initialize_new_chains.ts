@@ -59,7 +59,7 @@ export async function initializeBscContracts(
       pubKeyYParity: bscKey.pubKeyYParity === 'Odd' ? 1 : 0,
     })
     .encodeABI();
-  await signAndSendTxEvm(logger, 'Bsc', keyManagerAddress, '0', txData);
+  await signAndSendTxEvm(logger, 'Bsc', { to: keyManagerAddress, value: '0', data: txData });
 }
 
 export async function initializeArbitrumContracts(

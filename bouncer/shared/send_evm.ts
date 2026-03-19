@@ -133,7 +133,8 @@ export async function signAndSendTxEvm(
 ) {
   const { to, value, data } = tx;
   const gas = tx.gas ?? (chain === 'Arbitrum' ? 5000000 : 200000);
-  const semaphore = chain === 'Arbitrum' ? arbSemaphore : ethSemaphore;
+  const semaphore =
+    chain === 'Arbitrum' ? arbSemaphore : chain === 'Bsc' ? bscSemaphore : ethSemaphore;
 
   return semaphore.runExclusive(async () => {
     const web3 = getWeb3(chain);
@@ -192,11 +193,11 @@ export async function signAndSendTxEvm(
 
     logger.debug(
       'Transaction complete, tx_hash: ' +
-      receipt.transactionHash +
-      ' blockNumber: ' +
-      receipt.blockNumber +
-      ' blockHash: ' +
-      receipt.blockHash,
+        receipt.transactionHash +
+        ' blockNumber: ' +
+        receipt.blockNumber +
+        ' blockHash: ' +
+        receipt.blockHash,
     );
 
     return receipt;
