@@ -266,22 +266,13 @@ where
 
 	fn move_lowest_validator_to_delegator(&mut self) {
 		if let Some((validator, _)) = self.validators.iter().min_by_key(|(_, v)| *v) {
-			let _ = self.move_validator_to_delegator(validator.clone());
-		}
-	}
-
-	/// Moves a specific validator to delegators.
-	/// Returns true if the validator was found and moved.
-	pub fn move_validator_to_delegator(&mut self, validator: Account) -> bool {
-		if let Some(bid) = self.validators.remove(&validator) {
+			let validator = validator.clone();
+			let bid = self.validators.remove(&validator).expect("just found it");
 			if self.delegators.insert(validator, bid).is_some() {
 				log_or_panic!(
 					"Validator being moved to delegator should not already be a delegator"
 				)
 			}
-			true
-		} else {
-			false
 		}
 	}
 

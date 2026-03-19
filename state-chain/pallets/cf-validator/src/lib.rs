@@ -74,14 +74,6 @@ type Version = SemVer;
 
 type Ed25519Signature = ed25519::Signature;
 
-type AuctionOutcomeWithDelegators<T> = (
-	AuctionOutcome<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
-	BTreeMap<
-		<T as frame_system::Config>::AccountId,
-		DelegationSnapshot<<T as frame_system::Config>::AccountId, <T as Chainflip>::Amount>,
-	>,
-);
-
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen,
 )]
@@ -1743,23 +1735,9 @@ impl<T: Config> Pallet<T> {
 		),
 		AuctionError,
 	> {
-		Self::run_initial_auction(excluded).and_then(
-			|(_auction_outcome, resolver, delegation_snapshots, auction_bids)| {
-				Self::resolve_auction_with_snapshots(&resolver, delegation_snapshots, auction_bids)
-			},
-		)
-	}
+		let (_auction_outcome, resolver, mut delegation_snapshots, auction_bids) =
+			Self::run_initial_auction(excluded)?;
 
-	fn resolve_auction_with_snapshots(
-		resolver: &SetSizeMaximisingAuctionResolver,
-		mut delegation_snapshots: BTreeMap<
-			T::AccountId,
-			DelegationSnapshot<T::AccountId, T::Amount>,
-		>,
-		auction_bids: impl Fn(
-			&BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
-		) -> Vec<Bid<T::AccountId, T::Amount>>,
-	) -> Result<AuctionOutcomeWithDelegators<T>, AuctionError> {
 		let mut current_outcome = resolver.resolve_auction(auction_bids(&delegation_snapshots))?;
 		loop {
 			let old_snapshots = delegation_snapshots.clone();
@@ -2084,45 +2062,28 @@ impl<T: Config> Pallet<T> {
 		let mut snapshots = BTreeMap::new();
 
 		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
-			if excluded.contains(&bidder_id) {
-				// `into_ref` is used to cast between AccountId and ValidatorId.
-				let bidder_id = bidder_id.into_ref();
-				if let Some(operator) = OperatorChoice::<T>::get(bidder_id) {
+			let is_excluded = excluded.contains(&bidder_id);
+			// `into_ref` is used to cast between AccountId and ValidatorId.
+			let bidder_id = bidder_id.into_ref();
+			if let Some(operator) = OperatorChoice::<T>::get(bidder_id) {
+				let snapshot = snapshots.entry(operator.clone()).or_insert_with(|| {
+					DelegationSnapshot::init(
+						&operator,
+						OperatorSettingsLookup::<T>::get(&operator)
+							.map(|settings| settings.fee_bps)
+							.unwrap_or(MinimumOperatorFee::<T>::get()),
+					)
+				});
+				if is_excluded {
 					// Excluded managed validator: still appears as a delegator so their
 					// stake contributes to the operator, but they cannot be selected.
-					snapshots
-						.entry(operator.clone())
-						.or_insert_with(|| {
-							DelegationSnapshot::init(
-								&operator,
-								OperatorSettingsLookup::<T>::get(&operator)
-									.map(|settings| settings.fee_bps)
-									.unwrap_or(MinimumOperatorFee::<T>::get()),
-							)
-						})
-						.delegators
-						.insert(bidder_id.clone(), amount);
-				}
-				// else: Excluded independent validator: does not appear at all in the auction.
-			} else {
-				// `into_ref` is used to cast between AccountId and ValidatorId.
-				let bidder_id = bidder_id.into_ref();
-				if let Some(operator) = OperatorChoice::<T>::get(bidder_id) {
-					snapshots
-						.entry(operator.clone())
-						.or_insert_with(|| {
-							DelegationSnapshot::init(
-								&operator,
-								OperatorSettingsLookup::<T>::get(&operator)
-									.map(|settings| settings.fee_bps)
-									.unwrap_or(MinimumOperatorFee::<T>::get()),
-							)
-						})
-						.validators
-						.insert(bidder_id.clone(), amount);
+					snapshot.delegators.insert(bidder_id.clone(), amount);
 				} else {
-					let _ = independent_bidders.insert(bidder_id.clone(), amount);
+					snapshot.validators.insert(bidder_id.clone(), amount);
 				}
+			} else if !is_excluded {
+				// Independent validator (excluded independents are dropped entirely).
+				let _ = independent_bidders.insert(bidder_id.clone(), amount);
 			}
 		}
 

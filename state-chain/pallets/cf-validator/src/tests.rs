@@ -3412,24 +3412,24 @@ mod keygen_failure_with_delegation {
 	}
 
 	#[test]
-	fn move_validator_to_delegator_works() {
+	fn maybe_optimize_bid_moves_lowest_validator_to_delegator() {
 		new_test_ext().execute_with(|| {
 			let mut snapshot = DelegationSnapshot::<u64, u128> {
 				operator: OPERATOR,
 				validators: BTreeMap::from_iter([(VALIDATOR_1, 150), (VALIDATOR_2, 120)]),
-				delegators: BTreeMap::from_iter([(DELEGATOR, 500)]),
+				delegators: BTreeMap::new(),
 				delegation_fee_bps: 2000,
 			};
 
-			// Move validator 1 to delegators
-			assert!(snapshot.move_validator_to_delegator(VALIDATOR_1));
-			assert!(!snapshot.validators.contains_key(&VALIDATOR_1));
-			assert_eq!(snapshot.delegators.get(&VALIDATOR_1), Some(&150));
-			assert_eq!(snapshot.validators.len(), 1);
-			assert_eq!(snapshot.delegators.len(), 2);
+			// avg_bid = (150 + 120) / 2 = 135 which is below bond of 200,
+			// so maybe_optimize_bid should move the lowest (VALIDATOR_2) to delegators.
+			let outcome = AuctionOutcome { winners: vec![], bond: 200 };
+			snapshot.maybe_optimize_bid(&outcome);
 
-			// Try to move a non-existent validator
-			assert!(!snapshot.move_validator_to_delegator(999));
+			assert!(!snapshot.validators.contains_key(&VALIDATOR_2));
+			assert_eq!(snapshot.delegators.get(&VALIDATOR_2), Some(&120));
+			assert_eq!(snapshot.validators.len(), 1);
+			assert_eq!(snapshot.delegators.len(), 1);
 		});
 	}
 
