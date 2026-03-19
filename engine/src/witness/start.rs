@@ -76,26 +76,6 @@ where
 		}
 	};
 
-	let _prewitness_call = {
-		let state_chain_client = state_chain_client.clone();
-		move |call, epoch_index| {
-			let state_chain_client = state_chain_client.clone();
-			async move {
-				let _ = state_chain_client
-					.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(
-							pallet_cf_witnesser::Call::prewitness_and_execute {
-								call: Box::new(call),
-							}
-							.into(),
-						),
-						epoch_index,
-					})
-					.await;
-			}
-		}
-	};
-
 	let start_arb =
 		super::arb_elections::start(scope, arb_client.clone(), state_chain_client.clone());
 

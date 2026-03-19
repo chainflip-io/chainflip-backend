@@ -296,6 +296,8 @@ mod tests {
 	use state_chain_runtime::{EthereumInstance, Runtime};
 
 	use super::*;
+	use cf_chains::instances::EthereumInstance;
+	use state_chain_runtime::Runtime;
 
 	fn make_event(event_parameters: VaultEvents) -> Event<VaultEvents> {
 		Event { tx_hash: H256::default(), log_index: U256::zero(), event_parameters }
