@@ -1157,6 +1157,7 @@ fn test_get_network_fee() {
 				input_asset_fee.0,
 				output_asset_fee.0,
 				is_internal,
+				true, // with minimum
 			);
 
 			// Check that the fee rate and minimum are as expected

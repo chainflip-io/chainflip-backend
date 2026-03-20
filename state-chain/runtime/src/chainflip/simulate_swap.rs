@@ -113,6 +113,7 @@ pub fn simulate_swap(
 				input_asset,
 				output_asset,
 				is_internal,
+				true, // With minimum
 			);
 		max(rate * amount_to_swap, minimum)
 	} else {

@@ -3113,19 +3113,24 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			is_internal_swap: bool,
+			with_minimum: bool,
 		) -> FeeRateAndMinimum {
 			// Find the correct fee values in USDC
 			let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
 				Self::get_network_fee(input_asset, output_asset, is_internal_swap);
 
 			// Convert the minimum amount to the input asset
-			let minimum = Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
-				input_asset,
-				Asset::Usdc,
-				usdc_minimum,
-				false, // no network fee
-				false, // not internal
-			);
+			let minimum = if with_minimum {
+				Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
+					input_asset,
+					Asset::Usdc,
+					usdc_minimum,
+					false, // no network fee
+					false, // not internal
+				)
+			} else {
+				0
+			};
 
 			FeeRateAndMinimum { rate, minimum }
 		}
@@ -3342,6 +3347,7 @@ pub mod pallet {
 								// TODO: see if we want to treat lending swaps as internal for
 								// the purposes of determining network fee?
 								matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+								true, // with minimum
 							)
 						} else {
 							// No network fee for RegularNoNetworkFee
