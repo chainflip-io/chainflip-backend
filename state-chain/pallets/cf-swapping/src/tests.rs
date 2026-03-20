@@ -1605,13 +1605,15 @@ mod swap_batching {
 		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T> {
 			SwapState {
 				swap: self.clone(),
-				network_fee_taken: None,
-				broker_fee_taken: None,
+				network_fee_taken: 0,
+				broker_fee_taken: 0,
 				intermediate: stable_amount
 					.map(|amount| AssetAndAmount { asset: self.from, amount }),
-				output_amount: None,
+				output_amount_before_fees: None,
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
+				output_amount_after_fees: None,
+				input_amount_after_fees: self.input_amount,
 			}
 		}
 	}

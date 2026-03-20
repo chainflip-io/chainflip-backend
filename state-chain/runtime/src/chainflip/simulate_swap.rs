@@ -114,6 +114,7 @@ pub fn simulate_swap(
 				input_asset,
 				output_asset,
 				is_internal,
+				true, // With minimum
 			);
 		max(rate * amount_to_swap, minimum)
 	} else {
@@ -124,7 +125,7 @@ pub fn simulate_swap(
 
 	let amount_per_chunk: u128 = amount_to_swap / number_of_chunks;
 
-	let swap_output = &Swapping::simulate_swap(
+	let swap = &Swapping::simulate_swap(
 		input_asset,
 		output_asset,
 		amount_per_chunk,
@@ -145,15 +146,14 @@ pub fn simulate_swap(
 		),
 		BatchExecutionError::DispatchError { error } => error,
 	})?;
-	let swap = &swap_output[0];
 
 	// Extrapolate the total by multiplying the chunk by the number of chunks
 	let intermediary = swap
 		.intermediate
 		.as_ref()
 		.map(|AssetAndAmount { asset: _, amount }| amount * number_of_chunks);
-	let output = swap.output_amount.unwrap_or_default() * number_of_chunks;
-	let broker_fee = swap.broker_fee_taken.unwrap_or_default() * number_of_chunks;
+	let output = swap.output_amount_after_fees() * number_of_chunks;
+	let broker_fee = swap.broker_fee_taken * number_of_chunks;
 
 	let AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: egress_fee } =
 		if include_fee(FeeTypes::Egress) {

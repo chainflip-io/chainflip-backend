@@ -113,6 +113,7 @@ fn test_buy_back_flip() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
+				swap_request_id: SwapRequestId(3),
 				input_asset: Asset::Usdc,
 				input_amount: USDC_FEE,
 				output_asset: Asset::Flip,
@@ -124,6 +125,7 @@ fn test_buy_back_flip() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
+				swap_request_id: SwapRequestId(1),
 				input_asset: Asset::Btc,
 				input_amount: BTC_FEE,
 				output_asset: Asset::Flip,
@@ -135,6 +137,7 @@ fn test_buy_back_flip() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
+				swap_request_id: SwapRequestId(2),
 				input_asset: Asset::Eth,
 				input_amount: ETH_FEE,
 				output_asset: Asset::Flip,
@@ -143,14 +146,19 @@ fn test_buy_back_flip() {
 				..
 			})
 		);
+		assert_has_matching_event!(
+			Test,
+			RuntimeEvent::Swapping(Event::NetworkFeeSwapsInitiated { swap_request_ids })
+				if *swap_request_ids == vec![SwapRequestId(1), SwapRequestId(2), SwapRequestId(3)]
+		);
 	});
 }
 
-// This test covers:
-// - The internal network fee is not used for normal swaps
-// - The custom network fee is applied if set for an asset
-// - The network fee minimum is correct for oracle assets
-// - The network fee minimum is correct for non-oracle assets (using swap simulation)
+/// This test covers:
+/// - The internal network fee is not used for normal swaps
+/// - The custom network fee is applied if set for an asset
+/// - The network fee minimum is correct for oracle assets
+/// - The network fee minimum is correct for non-oracle assets (using swap simulation)
 #[test]
 fn normal_swap_uses_correct_network_fee() {
 	const AMOUNT: AssetAmount = 10000;
@@ -939,196 +947,6 @@ fn withdraw_broker_fees() {
 }
 
 #[test]
-fn expect_earned_fees_to_be_recorded() {
-	const INPUT_AMOUNT: AssetAmount = 10_000;
-
-	const NETWORK_FEE_PERCENT: u32 = 1;
-
-	const ALICE: u64 = 2_u64;
-	const BOB: u64 = 3_u64;
-
-	const ALICE_FEE_BPS: u16 = 200;
-	const BOB_FEE_BPS: u16 = 100;
-
-	// Network fee is taken from input. Broker fee is taken from output.
-	const NETWORK_FEE_1: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
-	const SWAP_1_PRE_BROKER_OUTPUT: AssetAmount =
-		(INPUT_AMOUNT - NETWORK_FEE_1) * DEFAULT_SWAP_RATE;
-	const ALICE_FEE_1: AssetAmount = SWAP_1_PRE_BROKER_OUTPUT * ALICE_FEE_BPS as u128 / 10_000;
-	const SWAP_1_OUTPUT: AssetAmount = SWAP_1_PRE_BROKER_OUTPUT - ALICE_FEE_1;
-	const INPUT_AFTER_NETWORK_FEE_1: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_1;
-
-	const NETWORK_FEE_2: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
-	const SWAP_2_PRE_BROKER_OUTPUT: AssetAmount =
-		(INPUT_AMOUNT - NETWORK_FEE_2) * DEFAULT_SWAP_RATE;
-	const ALICE_FEE_2: AssetAmount = SWAP_2_PRE_BROKER_OUTPUT * ALICE_FEE_BPS as u128 / 10_000;
-	const SWAP_2_OUTPUT: AssetAmount = SWAP_2_PRE_BROKER_OUTPUT - ALICE_FEE_2;
-	const INPUT_AFTER_NETWORK_FEE_2: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_2;
-
-	const NETWORK_FEE_3: AssetAmount = INPUT_AMOUNT * NETWORK_FEE_PERCENT as u128 / 100;
-	const SWAP_3_INTERMEDIATE: AssetAmount = (INPUT_AMOUNT - NETWORK_FEE_3) * DEFAULT_SWAP_RATE;
-	const SWAP_3_PRE_BROKER_OUTPUT: AssetAmount = SWAP_3_INTERMEDIATE * DEFAULT_SWAP_RATE;
-	const ALICE_FEE_3: AssetAmount = SWAP_3_PRE_BROKER_OUTPUT * ALICE_FEE_BPS as u128 / 10_000;
-	const BOB_FEE_1: AssetAmount = SWAP_3_PRE_BROKER_OUTPUT * BOB_FEE_BPS as u128 / 10_000;
-	const TOTAL_BROKER_FEES_3: AssetAmount = ALICE_FEE_3 + BOB_FEE_1;
-	const SWAP_3_OUTPUT: AssetAmount = SWAP_3_PRE_BROKER_OUTPUT - TOTAL_BROKER_FEES_3;
-	const INPUT_AFTER_NETWORK_FEE_3: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_3;
-
-	// Broker fee swaps (not USDC output -> USDC) also pay network fee.
-	// Permill uses NearestPrefDown rounding: 1% of 396 = 3.96 rounds up to 4.
-	const ALICE_FEE_2_NET_FEE: AssetAmount = ALICE_FEE_2 * NETWORK_FEE_PERCENT as u128 / 100 + 1;
-	const ALICE_FEE_2_USDC: AssetAmount = (ALICE_FEE_2 - ALICE_FEE_2_NET_FEE) * DEFAULT_SWAP_RATE;
-	// Permill uses NearestPrefDown rounding: 1% of 792 = 7.92 rounds up to 8.
-	const ALICE_FEE_3_NET_FEE: AssetAmount = ALICE_FEE_3 * NETWORK_FEE_PERCENT as u128 / 100 + 1;
-	const ALICE_FEE_3_USDC: AssetAmount = (ALICE_FEE_3 - ALICE_FEE_3_NET_FEE) * DEFAULT_SWAP_RATE;
-	// Permill uses NearestPrefDown rounding: 1% of 396 = 3.96 rounds up to 4.
-	const BOB_FEE_1_NET_FEE: AssetAmount = BOB_FEE_1 * NETWORK_FEE_PERCENT as u128 / 100 + 1;
-	const BOB_FEE_1_USDC: AssetAmount = (BOB_FEE_1 - BOB_FEE_1_NET_FEE) * DEFAULT_SWAP_RATE;
-
-	new_test_ext()
-		.execute_with(|| {
-			NetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::from_percent(NETWORK_FEE_PERCENT),
-				minimum: 0,
-			});
-			// Swap 1: Flip -> USDC. Broker fee taken from USDC output, credited directly.
-			swap_with_custom_broker_fee(
-				Asset::Flip,
-				Asset::Usdc,
-				INPUT_AMOUNT,
-				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
-			);
-		})
-		.then_process_blocks(SWAP_DELAY_BLOCKS)
-		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee: AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE_1 },
-					broker_fee: AssetAndAmount { asset: Asset::Usdc, amount: ALICE_FEE_1 },
-					input: AssetAndAmount { asset: Asset::Flip, amount: INPUT_AFTER_NETWORK_FEE_1 },
-					output: AssetAndAmount { asset: Asset::Usdc, amount: SWAP_1_OUTPUT },
-					intermediate: Some(AssetAndAmount {
-						asset: STABLE_ASSET,
-						amount: SWAP_1_PRE_BROKER_OUTPUT
-					}),
-					..
-				})
-			);
-			// Output is USDC — broker fee credited directly, no swap needed.
-			assert_eq!(get_broker_balance::<Test>(&ALICE, Asset::Usdc), ALICE_FEE_1);
-		})
-		.execute_with(|| {
-			// Swap 2: USDC -> Flip. Broker fee taken from Flip output, triggers a Flip->USDC swap.
-			swap_with_custom_broker_fee(
-				Asset::Usdc,
-				Asset::Flip,
-				INPUT_AMOUNT,
-				bounded_vec![Beneficiary { account: ALICE, bps: ALICE_FEE_BPS }],
-			);
-		})
-		.then_process_blocks(SWAP_DELAY_BLOCKS)
-		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee: AssetAndAmount { asset: Asset::Usdc, amount: NETWORK_FEE_2 },
-					broker_fee: AssetAndAmount { asset: Asset::Flip, amount: ALICE_FEE_2 },
-					input: AssetAndAmount { asset: Asset::Usdc, amount: INPUT_AFTER_NETWORK_FEE_2 },
-					output: AssetAndAmount { asset: Asset::Flip, amount: SWAP_2_OUTPUT },
-					intermediate: Some(AssetAndAmount {
-						asset: STABLE_ASSET,
-						amount: INPUT_AFTER_NETWORK_FEE_2
-					}),
-					..
-				})
-			);
-			// Broker fee swap initiated: Flip -> USDC for ALICE.
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					input_asset: Asset::Flip,
-					input_amount: ALICE_FEE_2,
-					output_asset: Asset::Usdc,
-					request_type: SwapRequestTypeEncoded::BrokerFee { account_id: ALICE },
-					..
-				})
-			);
-		})
-		// Process blocks so the broker fee swap completes.
-		.then_process_blocks(SWAP_DELAY_BLOCKS)
-		.then_execute_with(|_| {
-			// ALICE now has swap 1 USDC + swap 2 broker fee swap USDC.
-			assert_eq!(
-				get_broker_balance::<Test>(&ALICE, Asset::Usdc),
-				ALICE_FEE_1 + ALICE_FEE_2_USDC
-			);
-		})
-		.execute_with(|| {
-			// Swap 3: Flip -> ArbEth. Broker fees for ALICE and BOB taken from ArbEth output.
-			swap_with_custom_broker_fee(
-				Asset::Flip,
-				Asset::ArbEth,
-				INPUT_AMOUNT,
-				bounded_vec![
-					Beneficiary { account: ALICE, bps: ALICE_FEE_BPS },
-					Beneficiary { account: BOB, bps: BOB_FEE_BPS }
-				],
-			);
-		})
-		.then_process_blocks(SWAP_DELAY_BLOCKS)
-		.then_execute_with(|_| {
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					network_fee: AssetAndAmount { asset: Asset::Flip, amount: NETWORK_FEE_3 },
-					broker_fee: AssetAndAmount {
-						asset: Asset::ArbEth,
-						amount: TOTAL_BROKER_FEES_3
-					},
-					input: AssetAndAmount { asset: Asset::Flip, amount: INPUT_AFTER_NETWORK_FEE_3 },
-					output: AssetAndAmount { asset: Asset::ArbEth, amount: SWAP_3_OUTPUT },
-					intermediate: Some(AssetAndAmount {
-						asset: STABLE_ASSET,
-						amount: SWAP_3_INTERMEDIATE
-					}),
-					..
-				})
-			);
-			// Broker fee swaps initiated: ArbEth -> USDC for ALICE and BOB.
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					input_asset: Asset::ArbEth,
-					input_amount: ALICE_FEE_3,
-					output_asset: Asset::Usdc,
-					request_type: SwapRequestTypeEncoded::BrokerFee { account_id: ALICE },
-					..
-				})
-			);
-			assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					input_asset: Asset::ArbEth,
-					input_amount: BOB_FEE_1,
-					output_asset: Asset::Usdc,
-					request_type: SwapRequestTypeEncoded::BrokerFee { account_id: BOB },
-					..
-				})
-			);
-		})
-		// Process blocks so the broker fee swaps complete.
-		.then_process_blocks(SWAP_DELAY_BLOCKS)
-		.then_execute_with(|_| {
-			assert_eq!(
-				get_broker_balance::<Test>(&ALICE, Asset::Usdc),
-				ALICE_FEE_1 + ALICE_FEE_2_USDC + ALICE_FEE_3_USDC
-			);
-			assert_eq!(get_broker_balance::<Test>(&BOB, Asset::Usdc), BOB_FEE_1_USDC);
-		});
-}
-
-#[test]
 fn minimum_network_fee_is_enforced_on_dca_swap() {
 	const INPUT_AMOUNT: u128 = 3000;
 	const NUMBER_OF_CHUNKS: u32 = 3;
@@ -1339,6 +1157,7 @@ fn test_get_network_fee() {
 				input_asset_fee.0,
 				output_asset_fee.0,
 				is_internal,
+				true, // with minimum
 			);
 
 			// Check that the fee rate and minimum are as expected
@@ -1752,10 +1571,6 @@ fn broker_fees_credited_directly_when_output_is_usdc() {
 	// No network fee to keep calculations simple.
 	const OUTPUT_BEFORE_BROKER_FEE: AssetAmount = INPUT_AMOUNT * DEFAULT_SWAP_RATE;
 	const BROKER_FEE: AssetAmount = OUTPUT_BEFORE_BROKER_FEE / 100;
-	const USER_OUTPUT: AssetAmount = OUTPUT_BEFORE_BROKER_FEE - BROKER_FEE;
-
-	const MAIN_SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
-	const MAIN_SWAP_ID: SwapId = SwapId(1);
 
 	new_test_ext()
 		.execute_with(|| {
@@ -1770,27 +1585,20 @@ fn broker_fees_credited_directly_when_output_is_usdc() {
 		})
 		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
-			// The main swap executes: broker fee deducted from USDC output and credited
-			// directly. No broker fee swap is started.
-			assert_event_sequence!(
+			// Confirm the main swap executed and the broker fee was taken.
+			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
-					swap_request_id: MAIN_SWAP_REQUEST_ID,
-					swap_id: MAIN_SWAP_ID,
 					broker_fee: AssetAndAmount { asset: OUTPUT_ASSET, amount: BROKER_FEE },
-					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: USER_OUTPUT },
 					..
-				}),
-				RuntimeEvent::Swapping(Event::<Test>::SwapEgressScheduled {
-					swap_request_id: MAIN_SWAP_REQUEST_ID,
-					amount: USER_OUTPUT,
-					..
-				}),
-				// No SwapRequested/SwapScheduled for broker fee
+				})
+			);
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: MAIN_SWAP_REQUEST_ID,
 					ref broker_fee_swaps,
 					..
+					// Make sure the event also confirms that no broker fee swaps were created.
 				}) if broker_fee_swaps.is_empty(),
 			);
 

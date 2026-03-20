@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod collected_network_fee_per_asset;
+pub mod fee_fields_in_swap_requests;
 
 use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
@@ -28,5 +29,12 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<17, Pallet<T>>,
+	VersionedMigration<
+		17,
+		18,
+		fee_fields_in_swap_requests::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<18, Pallet<T>>,
 );
