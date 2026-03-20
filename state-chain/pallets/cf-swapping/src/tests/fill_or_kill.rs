@@ -975,8 +975,8 @@ mod oracle_swaps {
 		const INPUT_AMOUNT: AssetAmount = 9000632;
 		const OUTPUT_AMOUNT: AssetAmount = 2695410274420764757;
 		const USDC_AMOUNT: AssetAmount = 8020476946;
-		const BROKER_FEE: AssetAmount = INPUT_AMOUNT * 15 / 10000; // 15 bps
 		const NETWORK_FEE: AssetAmount = INPUT_AMOUNT * 10 / 10000; // 10 bps
+		const BROKER_FEE: AssetAmount = OUTPUT_AMOUNT * 15 / 10000; // 15 bps
 
 		fn set_prices() {
 			// Prices taken at similar time to the swap values above
@@ -998,7 +998,7 @@ mod oracle_swaps {
 					0.into(),
 					Asset::Btc,
 					Asset::Eth,
-					INPUT_AMOUNT - NETWORK_FEE - BROKER_FEE,
+					INPUT_AMOUNT,
 					Some(SwapRefundParameters {
 						refund_block: 10,
 						price_limits: PriceLimits {
@@ -1009,10 +1009,12 @@ mod oracle_swaps {
 					Default::default(),
 				),
 
-				network_fee_taken: Some(NETWORK_FEE),
-				broker_fee_taken: Some(BROKER_FEE),
+				network_fee_taken: NETWORK_FEE,
+				broker_fee_taken: BROKER_FEE,
 				intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
-				output_amount: Some(OUTPUT_AMOUNT),
+				output_amount_before_fees: Some(OUTPUT_AMOUNT + BROKER_FEE),
+				output_amount_after_fees: Some(OUTPUT_AMOUNT),
+				input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
 			}
