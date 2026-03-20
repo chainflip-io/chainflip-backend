@@ -133,8 +133,11 @@ export async function signAndSendTxEvm(
 ) {
   const { to, value, data } = tx;
   const gas = tx.gas ?? (chain === 'Arbitrum' ? 5000000 : 200000);
-  const semaphore =
-    chain === 'Arbitrum' ? arbSemaphore : chain === 'Bsc' ? bscSemaphore : ethSemaphore;
+  const semaphoreByChain: Record<string, typeof ethSemaphore> = {
+    Arbitrum: arbSemaphore,
+    Bsc: bscSemaphore,
+  };
+  const semaphore = semaphoreByChain[chain] ?? ethSemaphore;
 
   return semaphore.runExclusive(async () => {
     const web3 = getWeb3(chain);
