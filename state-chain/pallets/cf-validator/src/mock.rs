@@ -156,6 +156,33 @@ impl RotationBroadcastsPending for MockRotationBroadcastsPending {
 	}
 }
 
+use crate::GrandpaAuthorityId;
+use crate::GrandpaVoteDelegation;
+
+/// No-op GRANDPA delegation for mock tests.
+pub struct MockGrandpaDelegation;
+
+impl GrandpaVoteDelegation for MockGrandpaDelegation {
+	fn add_vote_delegation(
+		_delegator: GrandpaAuthorityId,
+		_delegate: GrandpaAuthorityId,
+	) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
+	fn remove_vote_delegation(
+		_delegator: GrandpaAuthorityId,
+	) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
+	fn get_delegate(_delegator: &GrandpaAuthorityId) -> Option<GrandpaAuthorityId> {
+		None
+	}
+	fn vote_delegations()
+	-> sp_std::collections::btree_map::BTreeMap<GrandpaAuthorityId, GrandpaAuthorityId> {
+		Default::default()
+	}
+}
+
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type Offence = PalletOffence;
@@ -171,6 +198,7 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type MinimumFunding = MockMinimumFundingProvider;
 	type CfePeerRegistration = MockCfeInterface;
+	type GrandpaDelegation = MockGrandpaDelegation;
 }
 
 /// Session pallet requires a set of validators at genesis.

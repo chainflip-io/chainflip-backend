@@ -127,6 +127,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ReputationResetter = Reputation;
 	type MinimumFunding = Funding;
 	type CfePeerRegistration = CfeInterface;
+	type GrandpaDelegation = Grandpa;
 }
 
 parameter_types! {
@@ -606,6 +607,7 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
+	type MaxDelegatorsPerGrandpaAuthority = ConstU32<20>;
 	type KeyOwnerProof =
 		<CurrentSessionProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
