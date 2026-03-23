@@ -17,6 +17,7 @@
 use std::{
 	collections::{BTreeMap, VecDeque},
 	sync::Arc,
+	time::Duration,
 };
 
 use anyhow::{anyhow, Result};
@@ -423,7 +424,11 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	}
 
 	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
+		let mut timeout = Option::None;
 		Ok(loop {
+			if let Some(timeout) = timeout.take() {
+				tokio::time::sleep(timeout).await;
+			}
 			let next_nonce = self.next_submission_nonce().await?;
 			match self.submit_extrinsic_at_nonce(request, next_nonce).await? {
 				Ok(tx_hash) => break tx_hash,
@@ -433,6 +438,18 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						request_id = request.id, "Submission failed at nonce {next_nonce} ({err:?}), refreshing nonce and retrying."
 					);
 					self.invalidate_best_nonce();
+					match err {
+						SubmissionLogicError::ImmediatelyDropped => {
+							// ImmediatelyDropped implies that the mempool was full. In this case,
+							// we wait for block duration and try again.
+							timeout = Some(Duration::from_secs(6));
+						},
+						SubmissionLogicError::NonceTooLow |
+						SubmissionLogicError::StateDiscarded => {
+							// These errors imply that the nonce is wrong, so we just retry
+							// immediately after refreshing it.
+						},
+					}
 				},
 			}
 		})
