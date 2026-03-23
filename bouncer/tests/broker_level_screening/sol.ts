@@ -14,7 +14,7 @@ import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
-import { executeSolVaultSwap } from 'shared/sol_vault_swap';
+import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 import { solanaIngressEgressTransactionRejectedByBroker } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
 import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngressEgress/depositFinalised';
