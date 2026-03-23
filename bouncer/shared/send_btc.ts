@@ -42,13 +42,31 @@ class BtcMutexClient {
 
   private async ensureFunded(logger: ILogger) {
     const balance = (await this.client.getBalance()) as number;
-    if (balance <= 100.0) {
-      if (this.name === 'whale') {
-        throw new Error(`The whale wallet is underfunded, current balance ${balance}`);
-      }
+    if (this.name === 'whale') {
+      if (balance <= 200.0) {
+        logger.debug(
+          `The whale wallet ${this.name} is underfunded (${balance} btc) waiting for btc node to mine more blocks.`,
+        );
 
+        let previousBalance = balance;
+        let currentBalance = balance;
+        while (currentBalance <= 200.0) {
+          await sleep(15000);
+          currentBalance = (await this.client.getBalance()) as number;
+
+          if (currentBalance === previousBalance) {
+            throw new Error(
+              `Whale wallet balance didn't increase after 15s. It is currently underfunded with ${currentBalance}, and the test cannot continue.`,
+            );
+          }
+          logger.debug(`Whale wallet balance is ${currentBalance}`);
+          previousBalance = currentBalance;
+        }
+        logger.debug(`Whale wallet has now enough funds: ${currentBalance} btc.`);
+      }
+    } else if (balance <= 50.0) {
       logger.debug(
-        `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up.`,
+        `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up from whale wallet.`,
       );
 
       const fundingAddress = await this.client.getNewAddress();
