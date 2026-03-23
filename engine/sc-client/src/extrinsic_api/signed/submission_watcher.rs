@@ -169,9 +169,13 @@ pub struct SubmissionWatcher<
 	)>,
 	base_rpc_client: Arc<BaseRpcClient>,
 	error_decoder: error_decoder::ErrorDecoder,
-	best_nonce: tokio::sync::Mutex<Option<Nonce>>,
+	// Access to this cached nonce is serialized by the single `SubmissionWatcher`
+	// task in `signed.rs`, which only ever calls these methods through `&mut self`.
+	// It is therefore used as an optimistic local cache, not as a cross-task lock.
+	best_nonce: Option<Nonce>,
 }
 
+#[derive(Debug)]
 pub enum SubmissionLogicError {
 	NonceTooLow,
 	StateDiscarded,
@@ -339,7 +343,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// transaction pool (and the priority is <= priority of that
 						// existing tx)
 						ClientError::Call(obj) if obj.code() == POOL_TOO_LOW_PRIORITY => {
-							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as transaction with same nonce found in transaction pool: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						// AlreadyImported error occurs when the
@@ -365,7 +369,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::Stale) =>
 						{
-							debug!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed as the transaction is stale: {obj:?}");
 							break Ok(Err(SubmissionLogicError::NonceTooLow))
 						},
 						ClientError::Call(obj)
@@ -420,29 +424,35 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 	async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
-			let next_nonce = {
-				let mut maybe_best_nonce = self.best_nonce.lock().await;
-				if let Some(best_nonce) = maybe_best_nonce.as_mut() {
-					*best_nonce += 1;
-					*best_nonce
-				} else {
-					let best_nonce = self
-						.base_rpc_client
-						.next_account_nonce(self.signer.account_id.clone())
-						.await?;
-					*maybe_best_nonce = Some(best_nonce);
-					best_nonce
-				}
-			};
+			let next_nonce = self.next_submission_nonce().await?;
 			match self.submit_extrinsic_at_nonce(request, next_nonce).await? {
 				Ok(tx_hash) => break tx_hash,
-				Err(_) => {
-					// In any error case we want to refresh the account nonce and try again.
-					warn!(target: "state_chain_client", request_id = request.id, "Submission failed at nonce {next_nonce}, refreshing nonce and retrying.");
-					self.best_nonce.lock().await.take();
+				Err(err) => {
+					warn!(
+						target: "state_chain_client",
+						request_id = request.id, "Submission failed at nonce {next_nonce} ({err:?}), refreshing nonce and retrying."
+					);
+					self.invalidate_best_nonce();
 				},
 			}
 		})
+	}
+
+	async fn next_submission_nonce(&mut self) -> Result<Nonce, anyhow::Error> {
+		if let Some(best_nonce) = self.best_nonce.as_mut() {
+			*best_nonce += 1;
+			return Ok(*best_nonce)
+		}
+
+		let refreshed_nonce =
+			self.base_rpc_client.next_account_nonce(self.signer.account_id.clone()).await?;
+
+		self.best_nonce = Some(refreshed_nonce);
+		Ok(refreshed_nonce)
+	}
+
+	fn invalidate_best_nonce(&mut self) {
+		self.best_nonce.take();
 	}
 
 	pub async fn dry_run_extrinsic(
@@ -852,7 +862,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					info!("Resubmitting extrinsic as all existing submissions have expired.");
 					// If any extrinsics expired, there is likely an issue with the nonce, so reset
 					// it to force a refresh.
-					self.best_nonce.lock().await.take();
+					self.invalidate_best_nonce();
 					self.submit_extrinsic(request).await?;
 				}
 			}
