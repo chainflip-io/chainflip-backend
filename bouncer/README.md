@@ -130,10 +130,10 @@ Ways to run multiple test:
 
 ```sh
 # Run just the tests in a test group
-pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+pnpm vitest --maxConcurrency=1000 run -t "ConcurrentTests"
 
 # run all tests in a file
-pnpm vitest --maxConcurrency=100 run -t ./tests/fast_bouncer.test.ts
+pnpm vitest --maxConcurrency=1000 run -t ./tests/fast_bouncer.test.ts
 ```
 
 ## Logging
