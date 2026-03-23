@@ -6,6 +6,12 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Fixes
 
+- Upgrade Assethub metadata to 2.1.1
+
+## [2.1.9] - 2026-03-18
+
+### Fixes
+
 - Don't panic in cf_scheduled_swaps rpc
 - Map network fee calculation error to the correct reason it failed
 - Don't use BTC oracle price for WBTC.
