@@ -2,9 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { afterEach, beforeEach, it } from 'vitest';
 import { Semaphore } from 'async-mutex';
 import { TestContext } from 'shared/utils/test_context';
-import { runWithTimeout, sleep, testInfoFile } from 'shared/utils';
+import { Chain, runWithTimeout, sleep, testInfoFile } from 'shared/utils';
 import { getTestLogFile, getTestLogFilesForTaggedChildren } from 'shared/utils/logger';
-import { Chain } from '@chainflip/cli';
 
 export type CfSemaphoreTag = Chain;
 export type CfTestOptions = {
