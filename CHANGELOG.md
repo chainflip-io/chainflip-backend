@@ -2,7 +2,7 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.1.9] - 2026-03-18
+## [2.1.10] - 2026-03-23
 
 ### Fixes
 
