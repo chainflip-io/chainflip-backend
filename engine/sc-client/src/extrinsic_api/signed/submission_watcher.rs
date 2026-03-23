@@ -135,6 +135,12 @@ pub struct Submission {
 	request_id: RequestID,
 }
 
+#[derive(Debug)]
+pub enum SubmissionStatus {
+	InBlock { block_hash: H256, tx_hash: H256 },
+	Terminated { tx_hash: H256, reason: &'static str },
+}
+
 pub struct SubmissionWatcher<
 	'a,
 	'env,
@@ -144,7 +150,7 @@ pub struct SubmissionWatcher<
 	next_request_id: RequestID,
 	submissions_by_nonce: BTreeMap<Nonce, Vec<Submission>>,
 	submission_status_futures:
-		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<Option<(H256, H256)>>>,
+		FutureMap<(RequestID, SubmissionID), task_scope::ScopedJoinHandle<SubmissionStatus>>,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
@@ -236,30 +242,74 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
 				Ok(mut transaction_status_stream) => {
-					request.pending_submissions.insert(request.next_submission_id, nonce);
+					let request_id = request.id;
+					let submission_id = request.next_submission_id;
+					request.pending_submissions.insert(submission_id, nonce);
 					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
-						id: request.next_submission_id,
+						id: submission_id,
 						lifetime,
 						tx_hash,
-						request_id: request.id,
+						request_id,
 					});
 					self.submission_status_futures.insert(
-						(request.id, request.next_submission_id),
-						self.scope.spawn_with_handle(async move {
-							while let Some(status) = transaction_status_stream.next().await {
-								// NOTE: Currently the _extrinsic_index returned by substrate
-								// through the subscription is wrong and is always 0
-								if let TransactionStatus::InBlock((block_hash, _extrinsic_index)) =
-									status?
-								{
-									return Ok(Some((block_hash, tx_hash)))
+							(request_id, submission_id),
+							self.scope.spawn_with_handle(async move {
+								while let Some(status) = transaction_status_stream.next().await {
+									match status {
+										// NOTE: Currently the _extrinsic_index returned by
+										// substrate through the subscription is wrong and is always
+										// 0.
+										Ok(TransactionStatus::InBlock((block_hash, _extrinsic_index))) |
+										Ok(TransactionStatus::Finalized((block_hash, _extrinsic_index))) => {
+											return Ok(SubmissionStatus::InBlock { block_hash, tx_hash });
+										},
+										Ok(TransactionStatus::Future) |
+										Ok(TransactionStatus::Ready) |
+										Ok(TransactionStatus::Broadcast(_)) |
+										Ok(TransactionStatus::Retracted(_)) => {},
+										Ok(TransactionStatus::Invalid) =>
+											return Ok(SubmissionStatus::Terminated {
+												tx_hash,
+												reason: "transaction became invalid in the pool",
+											}),
+										Ok(TransactionStatus::Dropped) =>
+											return Ok(SubmissionStatus::Terminated {
+												tx_hash,
+												reason: "transaction was dropped by the pool",
+											}),
+										Ok(TransactionStatus::Usurped(_)) =>
+											return Ok(SubmissionStatus::Terminated {
+												tx_hash,
+												reason:
+													"transaction was replaced in the pool (same nonce)",
+											}),
+										Ok(TransactionStatus::FinalityTimeout(_)) =>
+											return Ok(SubmissionStatus::Terminated {
+												tx_hash,
+												reason: "transaction finality timeout",
+											}),
+										Err(error) => {
+											warn!(
+												target: "state_chain_client",
+												request_id,
+												submission_id,
+												"Error while watching submission status for tx_hash {tx_hash:?}: {error}. Marking submission as terminated."
+											);
+											return Ok(SubmissionStatus::Terminated {
+												tx_hash,
+												reason: "error while decoding submission status",
+											});
+										},
+									}
 								}
-							}
 
-							Ok(None)
-						}),
-					);
-					info!(target: "state_chain_client", request_id = request.id, submission_id = request.next_submission_id, "Submission succeeded");
+								Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason: "status stream ended before inclusion",
+								})
+							}),
+						);
+					info!(target: "state_chain_client", request_id, submission_id, "Submission succeeded");
 					request.next_submission_id += 1;
 					break Ok(Ok(tx_hash))
 				},
@@ -475,21 +525,61 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			})
 	}
 
-	pub async fn watch_for_submission_in_block(&mut self) -> (RequestID, SubmissionID, H256, H256) {
-		loop {
-			if let ((request_id, submission_id), Some((block_hash, tx_hash))) =
-				self.submission_status_futures.next_or_pending().await
-			{
-				return (request_id, submission_id, block_hash, tx_hash)
-			}
+	pub async fn watch_for_submission_in_block(
+		&mut self,
+	) -> (RequestID, SubmissionID, SubmissionStatus) {
+		let ((request_id, submission_id), submission_status) =
+			self.submission_status_futures.next_or_pending().await;
+		(request_id, submission_id, submission_status)
+	}
+
+	fn remove_submission_from_tracking(
+		&mut self,
+		requests: &mut BTreeMap<RequestID, Request>,
+		request_id: RequestID,
+		submission_id: SubmissionID,
+	) {
+		self.submission_status_futures.remove((request_id, submission_id));
+
+		let Some(nonce) = requests
+			.get_mut(&request_id)
+			.and_then(|request| request.pending_submissions.remove(&submission_id))
+		else {
+			return
+		};
+
+		let mut remove_nonce_entry = false;
+		if let Some(submissions) = self.submissions_by_nonce.get_mut(&nonce) {
+			submissions.retain(|submission| {
+				!(submission.request_id == request_id && submission.id == submission_id)
+			});
+			remove_nonce_entry = submissions.is_empty();
+		}
+
+		if remove_nonce_entry {
+			self.submissions_by_nonce.remove(&nonce);
 		}
 	}
 
 	pub async fn on_submission_in_block(
 		&mut self,
 		requests: &mut BTreeMap<RequestID, Request>,
-		(request_id, submission_id, block_hash, tx_hash): (RequestID, SubmissionID, H256, H256),
+		(request_id, submission_id, submission_status): (RequestID, SubmissionID, SubmissionStatus),
 	) -> Result<(), anyhow::Error> {
+		let (block_hash, tx_hash) = match submission_status {
+			SubmissionStatus::InBlock { block_hash, tx_hash } => (block_hash, tx_hash),
+			SubmissionStatus::Terminated { tx_hash, reason } => {
+				warn!(
+					target: "state_chain_client",
+					request_id,
+					submission_id,
+					"Submission for tx_hash {tx_hash:?} ended before inclusion ({reason}). Marking it as retriable."
+				);
+				self.remove_submission_from_tracking(requests, request_id, submission_id);
+				return Ok(())
+			},
+		};
+
 		if let Some((header, extrinsics, events)) = if let Some((
 			_,
 			cached_compatible_block_details,
