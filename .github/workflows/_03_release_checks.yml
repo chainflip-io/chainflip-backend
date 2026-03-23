@@ -11,7 +11,7 @@ env:
 
 jobs:
   check-version:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     strategy:
       matrix:
         manifest:
@@ -47,7 +47,7 @@ jobs:
           fi
 
   check-changelog:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     if: inputs.network != 'sisyphos'
     steps:
       - name: Checkout 🛒
@@ -58,7 +58,7 @@ jobs:
         run: ./ci/scripts/check_changelog.sh ${{ github.ref_name }}
 
   check-runtime-spec-version:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -68,7 +68,7 @@ jobs:
         run: ./ci/scripts/check_runtime_spec_version.sh berghain
 
   check-tag-on-legit-branch:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -101,7 +101,7 @@ jobs:
           exit 1
 
   notify-discord-on-failure:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     needs: [check-version, check-changelog, check-runtime-spec-version, check-tag-on-legit-branch]
     if: failure()
     steps:
