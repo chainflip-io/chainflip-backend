@@ -163,6 +163,20 @@ where
 		)
 		.map_err(CfApiError::from)?)
 	}
+
+	fn log_missing_withdrawal_egress_scheduled_event(
+		&self,
+		extrinsic_data: &ExtrinsicData<DynamicEvents>,
+	) {
+		log::warn!(
+			target: "custom_rpc::lp",
+			"Expected LiquidityProvider::WithdrawalEgressScheduled event was not found for successful LiquidityProvider::withdraw_asset extrinsic. tx_hash={:?}, block_hash={:?}, tx_index={}, call=LiquidityProvider::withdraw_asset, events={:?}",
+			extrinsic_data.tx_hash,
+			extrinsic_data.block_hash,
+			extrinsic_data.tx_index,
+			extrinsic_data.events.event_names(),
+		);
+	}
 }
 
 #[async_trait]
@@ -370,16 +384,27 @@ where
 				.map_err(CfApiError::from)?
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
-					extrinsic_data.events,
-					cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
-					{ egress_id },
-					ApiWaitForResult::TxDetails {
-						tx_hash: extrinsic_data.tx_hash,
-						response: (egress_id.0 .0, egress_id.1)
+				WaitForDynamicResult::Data(extrinsic_data) => {
+					let tx_hash = extrinsic_data.tx_hash;
+					match extract_from_first_matching_event!(
+						extrinsic_data.events,
+						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
+						{ egress_id },
+						ApiWaitForResult::TxDetails {
+							tx_hash,
+							response: (egress_id.0 .0, egress_id.1)
+						}
+					) {
+						Ok(result) => result,
+						Err(DynamicEventError::StaticEventNotFound(_)) => {
+							self.log_missing_withdrawal_egress_scheduled_event(&extrinsic_data);
+							Err(CfApiError::from(DynamicEventError::StaticEventNotFound(
+								"cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled",
+							)))?
+						},
+						Err(error) => Err(CfApiError::from(error))?,
 					}
-				)
-				.map_err(CfApiError::from)?,
+				},
 			},
 		)
 	}
