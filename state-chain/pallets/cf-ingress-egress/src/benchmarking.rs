@@ -35,8 +35,9 @@ pub(crate) type TargetChainBlockNumber<T, I> = <TargetChainOf<T, I> as Chain>::C
 #[instance_benchmarks]
 mod benchmarks {
 	use super::*;
+	use cf_primitives::BoostPoolTier;
 
-	const TIER_5_BPS: BoostPoolTier = 5;
+	const BOOST_FEE_BPS: BoostPoolTier = 5;
 
 	#[benchmark]
 	fn disable_asset_egress() {
@@ -229,7 +230,7 @@ mod benchmarks {
 			.map(|i| setup_booster_account::<T, I>(asset, i as u32))
 			.collect();
 
-		let deposit_address = prewitness_deposit::<T, I>(&boosters[0], asset, TIER_5_BPS);
+		let deposit_address = prewitness_deposit::<T, I>(&boosters[0], asset, BOOST_FEE_BPS);
 
 		#[block]
 		{

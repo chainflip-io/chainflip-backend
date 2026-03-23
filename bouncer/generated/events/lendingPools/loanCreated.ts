@@ -1,9 +1,13 @@
 import { z } from 'zod';
-import { accountId, cfPrimitivesChainsAssetsAnyAsset, numberOrHex } from '../common';
+import {
+  cfPrimitivesChainsAssetsAnyAsset,
+  numberOrHex,
+  palletCfLendingPoolsGeneralLendingLoanType,
+} from '../common';
 
 export const lendingPoolsLoanCreated = z.object({
   loanId: numberOrHex,
   asset: cfPrimitivesChainsAssetsAnyAsset,
-  borrowerId: accountId,
+  loanType: palletCfLendingPoolsGeneralLendingLoanType,
   principalAmount: numberOrHex,
 });

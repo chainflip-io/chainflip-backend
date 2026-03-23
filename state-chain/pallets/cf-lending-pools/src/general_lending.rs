@@ -1,12 +1,13 @@
 use cf_amm_math::Price;
 use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
-use core_lending_pool::ScaledAmountHP;
 use frame_support::{
 	fail,
 	sp_runtime::{traits::Bounded, FixedI64, FixedPointNumber, FixedU64, PerThing},
 	DefaultNoBound,
 };
+
+use crate::core_lending_pool::ScaledAmountHP;
 
 use super::*;
 
@@ -99,6 +100,23 @@ pub struct LoanAccount<T: Config> {
 enum SurplusOrDeficit {
 	Surplus(AssetAmount),
 	Deficit(AssetAmount),
+}
+
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum LoanType<AccountId> {
+	User(AccountId),
+	Boost(PrewitnessedDepositId),
 }
 
 impl<T: Config> LoanAccount<T> {
@@ -837,17 +855,7 @@ impl<T: Config> LoanAccount<T> {
 
 	fn settle_loan(&mut self, loan_id: LoanId, via_liquidation: bool) {
 		if let Some(loan) = self.loans.remove(&loan_id) {
-			if loan.owed_principal > 0 {
-				Pallet::<T>::mutate_existing_pool(loan.asset, |pool| {
-					pool.write_off_unrecoverable_debt(loan.owed_principal);
-				});
-			}
-
-			Pallet::<T>::deposit_event(Event::LoanSettled {
-				loan_id,
-				outstanding_principal: loan.owed_principal,
-				via_liquidation,
-			});
+			loan.settle(via_liquidation);
 		}
 
 		if self.loans.is_empty() {
@@ -891,31 +899,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let origination_fee_pool = origination_fee_total.saturating_sub(origination_fee_network);
 
-		GeneralLendingPools::<T>::try_mutate(loan_asset, |pool| {
-			let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-
-			pool.provide_funds_for_loan(extra_principal).map_err(Error::<T>::from)?;
-
-			pool.record_pool_fee(origination_fee_pool);
-
-			let network_fee_collected =
-				pool.record_and_collect_network_fee(origination_fee_network);
-
-			Pallet::<T>::credit_fees_to_network(loan_asset, network_fee_collected);
-
-			Ok::<_, DispatchError>(())
-		})?;
-
-		loan.owed_principal.saturating_accrue(extra_principal);
-		loan.owed_principal.saturating_accrue(origination_fee_total);
-
-		Pallet::<T>::deposit_event(Event::OriginationFeeTaken {
-			loan_id: loan.id,
-			pool_fee: origination_fee_pool,
-			network_fee: origination_fee_network,
-			// TODO: add support for broker fees
-			broker_fee: 0,
-		});
+		fund_loan::<T>(&mut loan, extra_principal, origination_fee_pool, origination_fee_network)?;
 
 		self.loans.insert(loan.id, loan);
 
@@ -1081,7 +1065,7 @@ impl<T: Config> GeneralLoan<T> {
 	/// the account or received during liquidation). Returns any unused amount. The caller is
 	/// responsible for making sure that all pending interest has already been collected (via
 	/// [collect_pending_interest]) and that the provided asset is the same as the loan's asset.
-	fn repay_principal(
+	pub(super) fn repay_principal(
 		&mut self,
 		provided_amount: AssetAmount,
 		action_type: LoanRepaidActionType,
@@ -1166,6 +1150,21 @@ impl<T: Config> GeneralLoan<T> {
 		}
 
 		Ok(())
+	}
+
+	/// Last method to be called on a loan. Checks outstanding debt and emits LoanSettled event.
+	pub fn settle(self, via_liquidation: bool) {
+		if self.owed_principal > 0 {
+			Pallet::<T>::mutate_existing_pool(self.asset, |pool| {
+				pool.write_off_unrecoverable_debt(self.owed_principal);
+			});
+		}
+
+		Pallet::<T>::deposit_event(Event::LoanSettled {
+			loan_id: self.id,
+			outstanding_principal: self.owed_principal,
+			via_liquidation,
+		});
 	}
 }
 
@@ -1292,6 +1291,50 @@ pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: Ass
 	Pallet::<T>::deposit_event(Event::LendingNetworkFeeSwapInitiated { swap_request_id });
 }
 
+/// Draws `principal` from the lending pool and records the origination fees against the loan.
+///
+/// The total amount owed (`loan.owed_principal`) is increased by `principal +
+/// origination_fee_pool + origination_fee_network`. The pool fee stays in the pool (increasing
+/// lenders' share), while the network fee is immediately credited to the network.
+///
+/// Emits [`Event::OriginationFeeTaken`].
+///
+/// Fails if the pool for `loan.asset` does not exist or has insufficient available funds.
+pub fn fund_loan<T: Config>(
+	loan: &mut GeneralLoan<T>,
+	principal: AssetAmount,
+	origination_fee_pool: AssetAmount,
+	origination_fee_network: AssetAmount,
+) -> Result<(), DispatchError> {
+	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
+		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
+
+		pool.record_pool_fee(origination_fee_pool);
+
+		let network_fee_collected = pool.record_and_collect_network_fee(origination_fee_network);
+
+		Pallet::<T>::credit_fees_to_network(loan.asset, network_fee_collected);
+
+		Ok::<_, DispatchError>(())
+	})?;
+
+	loan.owed_principal.saturating_accrue(principal);
+	loan.owed_principal
+		.saturating_accrue(origination_fee_pool.saturating_add(origination_fee_network));
+
+	Pallet::<T>::deposit_event(Event::OriginationFeeTaken {
+		loan_id: loan.id,
+		pool_fee: origination_fee_pool,
+		network_fee: origination_fee_network,
+		// TODO: add support for broker fees
+		broker_fee: 0,
+	});
+
+	Ok(())
+}
+
 impl<T: Config> LendingApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
@@ -1318,8 +1361,9 @@ impl<T: Config> LendingApi for Pallet<T> {
 			Error::<T>::AmountBelowMinimum
 		);
 
-		let loan_id = NextLoanId::<T>::get();
-		NextLoanId::<T>::set(loan_id + 1);
+		// Creating a loan with 0 principal first, then using `expand_loan_inner` to update it
+		let loan = create_new_loan::<T>(asset);
+		let loan_id = loan.id;
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
 			let account = Self::create_or_update_loan_account(
@@ -1328,19 +1372,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 				collateral_topup_asset,
 			)?;
 
-			// Creating a loan with 0 principal first, the using `expand_loan_inner` to update it
-			let loan = GeneralLoan {
-				id: loan_id,
-				asset,
-				created_at_block: frame_system::Pallet::<T>::current_block_number(),
-				owed_principal: 0,
-				pending_interest: Default::default(),
-			};
-
 			// NOTE: it is important that this event is emitted before `OriginationFeeTaken` event
 			Self::deposit_event(Event::LoanCreated {
 				loan_id,
-				borrower_id: borrower_id.clone(),
+				loan_type: LoanType::User(borrower_id.clone()),
 				asset,
 				principal_amount: amount_to_borrow,
 			});
@@ -1675,6 +1710,19 @@ pub fn remove_lender_funds<T: Config>(
 	Ok(())
 }
 
+pub fn create_new_loan<T: Config>(asset: Asset) -> GeneralLoan<T> {
+	let loan_id = NextLoanId::<T>::get();
+	NextLoanId::<T>::set(loan_id + 1);
+
+	GeneralLoan {
+		id: loan_id,
+		asset,
+		created_at_block: frame_system::Pallet::<T>::current_block_number(),
+		owed_principal: 0,
+		pending_interest: Default::default(),
+	}
+}
+
 impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
@@ -1807,7 +1855,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
+	pub fn credit_fees_to_network(fee_asset: Asset, fee_amount: AssetAmount) {
 		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
 			pending_amount.saturating_accrue(fee_amount);
 		});

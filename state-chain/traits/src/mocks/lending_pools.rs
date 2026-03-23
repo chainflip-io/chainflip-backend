@@ -17,7 +17,9 @@
 use sp_std::collections::btree_map::BTreeMap;
 
 use crate::{
-	lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LendingSystemApi, LoanId},
+	lending::{
+		BoostApi, BoostFinalisationOutcome, BoostOutcome, BoostSource, LendingSystemApi, LoanId,
+	},
 	LendingSwapType,
 };
 
@@ -121,9 +123,10 @@ impl BoostApi for MockBoostApi {
 
 		Self::set_available_amount(available_amount - required_amount);
 
-		let used_pools = BTreeMap::from_iter([(max_boost_fee_bps, deposit_amount)]);
-
-		Ok(BoostOutcome { used_pools, total_fee })
+		Ok(BoostOutcome {
+			total_fee,
+			amounts: [(BoostSource::LendingPool, deposit_amount)].into_iter().collect(),
+		})
 	}
 
 	fn finalise_boost(

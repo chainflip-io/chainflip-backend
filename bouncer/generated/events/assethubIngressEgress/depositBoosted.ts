@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   cfChainsDepositOriginType,
   cfPrimitivesChainsAssetsHubAsset,
+  cfTraitsLendingBoostSource,
   hexString,
   numberOrHex,
   palletCfAssethubIngressEgressDepositAction,
@@ -10,7 +11,7 @@ import {
 export const assethubIngressEgressDepositBoosted = z.object({
   depositAddress: hexString.nullish(),
   asset: cfPrimitivesChainsAssetsHubAsset,
-  amounts: z.array(z.tuple([z.number(), numberOrHex])),
+  amounts: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   depositDetails: z.number(),
   prewitnessedDepositId: numberOrHex,
   channelId: numberOrHex.nullish(),

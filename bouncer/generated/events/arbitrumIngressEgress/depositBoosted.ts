@@ -3,6 +3,7 @@ import {
   cfChainsDepositOriginType,
   cfChainsEvmDepositDetails,
   cfPrimitivesChainsAssetsArbAsset,
+  cfTraitsLendingBoostSource,
   hexString,
   numberOrHex,
   palletCfArbitrumIngressEgressDepositAction,
@@ -11,7 +12,7 @@ import {
 export const arbitrumIngressEgressDepositBoosted = z.object({
   depositAddress: hexString.nullish(),
   asset: cfPrimitivesChainsAssetsArbAsset,
-  amounts: z.array(z.tuple([z.number(), numberOrHex])),
+  amounts: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   depositDetails: cfChainsEvmDepositDetails,
   prewitnessedDepositId: numberOrHex,
   channelId: numberOrHex.nullish(),

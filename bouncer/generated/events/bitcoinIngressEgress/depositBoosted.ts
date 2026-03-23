@@ -4,6 +4,7 @@ import {
   cfChainsBtcUtxo,
   cfChainsDepositOriginType,
   cfPrimitivesChainsAssetsBtcAsset,
+  cfTraitsLendingBoostSource,
   numberOrHex,
   palletCfBitcoinIngressEgressDepositAction,
 } from '../common';
@@ -11,7 +12,7 @@ import {
 export const bitcoinIngressEgressDepositBoosted = z.object({
   depositAddress: cfChainsBtcScriptPubkey.nullish(),
   asset: cfPrimitivesChainsAssetsBtcAsset,
-  amounts: z.array(z.tuple([z.number(), numberOrHex])),
+  amounts: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   depositDetails: cfChainsBtcUtxo,
   prewitnessedDepositId: numberOrHex,
   channelId: numberOrHex.nullish(),

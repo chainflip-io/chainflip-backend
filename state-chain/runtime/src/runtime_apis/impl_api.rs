@@ -1865,6 +1865,10 @@ impl_runtime_apis! {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
 		}
 
+		fn cf_all_loans() -> Vec<RpcLoan<AccountId, AssetAmount>> {
+			pallet_cf_lending_pools::get_all_loans::<Runtime>()
+		}
+
 		fn cf_lending_pool_supply_balances(
 			asset: Option<Asset>,
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId, AssetAmount>> {

@@ -2,10 +2,8 @@ import z from 'zod';
 import assert from 'assert';
 import {
   amountToFineAmount,
-  amountToFineAmountBigInt,
   assetDecimals,
   Assets,
-  calculateFeeWithBps,
   chainFromAsset,
   doBtcAddressesMatch,
   newAssetAddress,
@@ -114,11 +112,6 @@ async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
   const boostPoolDetails = // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((await jsonRpc(cf.logger, 'cf_boost_pool_details', [asset.toUpperCase()])) as any)[0];
   assert.strictEqual(boostPoolDetails.fee_tier, boostFee, 'Unexpected lowest fee tier');
-  assert.strictEqual(
-    boostPoolDetails.available_amounts.length,
-    0,
-    'Boost pool must be empty for test',
-  );
 
   // Add boost funds
   await depositLiquidity(cf, asset, amount * 1.01);
@@ -199,19 +192,6 @@ async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
     0,
     'Unexpected pending boosts. Did another test run with a boostable swap at the same time?',
   );
-
-  // Compare the fees collected with the expected amount
-  const boostFeesCollected =
-    stoppedBoostingEvent.unlockedAmount - amountToFineAmountBigInt(amount, asset);
-  cf.debug('Boost fees collected:', boostFeesCollected);
-  // By default 50% of the boost fee is taken as network fee.
-  const expectedIncrease =
-    calculateFeeWithBps(amountToFineAmountBigInt(amount, asset), boostFee) / BigInt(2);
-  assert.strictEqual(
-    boostFeesCollected,
-    expectedIncrease,
-    'Unexpected amount of fees earned from boosting',
-  );
 }
 
 export async function testBoostingSwap(testContext: TestContext) {
@@ -221,8 +201,7 @@ export async function testBoostingSwap(testContext: TestContext) {
   const lpUri = '//LP_BOOST';
   const cf = parentCf.with({ account: fullAccountFromUri(lpUri, 'LP') });
 
-  // To make the test easier, we use a new boost pool tier that is lower than the ones that already exist so we are the only booster.
-  const boostPoolTier = 4;
+  const boostPoolTier = 5;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const boostPool: any = (

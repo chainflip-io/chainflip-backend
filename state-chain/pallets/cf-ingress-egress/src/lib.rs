@@ -47,14 +47,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	Beneficiary, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
 	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
-	lending::{BoostApi, BoostOutcome},
+	lending::{BoostApi, BoostOutcome, BoostSource},
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
@@ -73,7 +73,7 @@ use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
 pub use weights::WeightInfo;
 
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
@@ -451,10 +451,7 @@ pub mod pallet {
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
-	use sp_std::{
-		collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-		vec::Vec,
-	};
+	use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
@@ -1124,7 +1121,8 @@ pub mod pallet {
 		DepositBoosted {
 			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
-			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
+			/// Per-source amounts funded (entries present only if that source contributed).
+			amounts: BTreeMap<BoostSource, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			channel_id: Option<ChannelId>,
@@ -2668,7 +2666,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount.into(),
 				boost_fee,
 			) {
-				Ok(BoostOutcome { used_pools, total_fee }) => {
+				Ok(BoostOutcome { total_fee, amounts }) => {
 					let boost_fee_amount = total_fee.unique_saturated_into();
 					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
 
@@ -2682,11 +2680,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							&origin,
 						);
 
-					let used_pools = used_pools
-						.into_iter()
-						.map(|(fee, amount)| (fee, amount.unique_saturated_into()))
-						.collect();
-
 					let action = Self::perform_channel_action(
 						action,
 						asset,
@@ -2697,7 +2690,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Self::deposit_event(Event::DepositBoosted {
 						deposit_address,
 						asset,
-						amounts: used_pools,
+						amounts: amounts
+							.into_iter()
+							.map(|(source, amount)| (source, amount.unique_saturated_into()))
+							.collect(),
 						block_height,
 						prewitnessed_deposit_id,
 						channel_id,

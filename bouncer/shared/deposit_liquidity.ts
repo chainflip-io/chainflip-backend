@@ -73,7 +73,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
   const lp = cf.requirements.account.keypair;
-  cf.debug(`Depositing ${amount}${ccy} of liquidity for ${cf.requirements.account.uri}`);
+  cf.debug(`Depositing ${amount} ${ccy} of liquidity for ${cf.requirements.account.uri}`);
 
   // If no liquidity refund address is registered, then do that now
   await registerLiquidityRefundAddressForChain(cf, chainFromAsset(ccy), false);

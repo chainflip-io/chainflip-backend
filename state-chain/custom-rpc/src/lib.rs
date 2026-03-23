@@ -62,7 +62,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_lending_pools::{
-	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, LoanType, RpcLoan, RpcLoanAccount,
 };
 use pallet_cf_pools::{
 	AskBidMap, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
@@ -87,15 +87,14 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
-			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
+			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
+			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
+			RpcLendingPool, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+			SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+			TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -696,12 +695,13 @@ type TradingStrategyInfoHexAmounts = TradingStrategyInfo<NumberOrHex>;
 
 mod boost_pool_rpc {
 
-	use std::collections::BTreeSet;
-
 	use cf_primitives::PrewitnessedDepositId;
+	use pallet_cf_lending_pools::BoostPoolDetails;
 	use sp_runtime::AccountId32;
 
 	use super::*;
+
+	use std::collections::BTreeSet;
 
 	#[derive(Serialize, Deserialize, Clone)]
 	struct AccountAndAmount {
@@ -1727,29 +1727,58 @@ where
 		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
-		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_loan_accounts(hash, borrower_id).map(|accounts| {
-				accounts
-					.into_iter()
-					.map(|acc| RpcLoanAccount::<_, U256> {
-						account: acc.account,
-						collateral_topup_asset: acc.collateral_topup_asset,
-						ltv_ratio: acc.ltv_ratio,
-						collateral: acc.collateral.into_iter().map(Into::into).collect(),
-						loans: acc
-							.loans
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 17 {
+				#[expect(deprecated)]
+				api.cf_loan_accounts_before_version_17(hash, borrower_id.clone())
+					.map(|accounts| {
+						accounts
 							.into_iter()
-							.map(|loan| RpcLoan {
-								loan_id: loan.loan_id,
-								asset: loan.asset,
-								created_at: loan.created_at,
-								principal_amount: loan.principal_amount.into(),
+							.map(|acc| RpcLoanAccount::<_, U256> {
+								account: acc.account.clone(),
+								collateral_topup_asset: acc.collateral_topup_asset,
+								ltv_ratio: acc.ltv_ratio,
+								collateral: acc.collateral.into_iter().map(Into::into).collect(),
+								loans: acc
+									.loans
+									.into_iter()
+									.map(|loan| RpcLoan {
+										loan_id: loan.loan_id,
+										asset: loan.asset,
+										created_at: loan.created_at,
+										loan_type: LoanType::User(acc.account.clone()),
+										principal_amount: loan.principal_amount.into(),
+									})
+									.collect(),
+								liquidation_status: acc.liquidation_status,
 							})
-							.collect(),
-						liquidation_status: acc.liquidation_status,
+							.collect()
 					})
-					.collect()
-			})
+			} else {
+				api.cf_loan_accounts(hash, borrower_id.clone()).map(|accounts| {
+					accounts
+						.into_iter()
+						.map(|acc| RpcLoanAccount::<_, U256> {
+							account: acc.account.clone(),
+							collateral_topup_asset: acc.collateral_topup_asset,
+							ltv_ratio: acc.ltv_ratio,
+							collateral: acc.collateral.into_iter().map(Into::into).collect(),
+							loans: acc
+								.loans
+								.into_iter()
+								.map(|loan| RpcLoan {
+									loan_id: loan.loan_id,
+									asset: loan.asset,
+									created_at: loan.created_at,
+									loan_type: loan.loan_type,
+									principal_amount: loan.principal_amount.into(),
+								})
+								.collect(),
+							liquidation_status: acc.liquidation_status,
+						})
+						.collect()
+				})
+			}
 		})
 	}
 

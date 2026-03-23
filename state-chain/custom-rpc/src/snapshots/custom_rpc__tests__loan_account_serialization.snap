@@ -19,6 +19,9 @@ expression: loan_account
   "loans": [
     {
       "loan_id": 1,
+      "loan_type": {
+        "User": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT"
+      },
       "asset": {
         "chain": "Ethereum",
         "asset": "USDC"

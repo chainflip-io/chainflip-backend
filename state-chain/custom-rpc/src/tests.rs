@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::*;
 
 pub mod account_info;
@@ -13,14 +15,15 @@ use cf_rpc_apis::{
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
 use codec::Encode;
-use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
+use pallet_cf_lending_pools::{
+	BoostPoolDetails, LtvThresholds, NetworkFeeContributions, OwedAmount,
+};
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
 	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use std::{collections::BTreeSet, str::FromStr};
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -1344,6 +1347,7 @@ fn loan_account_serialization() {
 			loan_id: LoanId(1),
 			asset: Asset::Usdc,
 			created_at: 400,
+			loan_type: LoanType::User(ID_1),
 			principal_amount: 1000u128.into(),
 		}],
 		liquidation_status: Some(RpcLiquidationStatus {

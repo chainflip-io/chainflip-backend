@@ -12,8 +12,7 @@ export type BoostPoolId = {
   tier: number;
 };
 
-// These are the tiers of boost pools that will be created for each asset
-const boostPoolTiers = [5, 10, 30];
+const boostPoolFee = 5;
 const fundBtcBoostPoolsAmount = 2; // Put 2 BTC in each Btc boost pool after creation
 
 /// Submits a single governance extrinsic that creates the boost pools for the given assets and tiers.
@@ -67,35 +66,27 @@ export async function createBoostPools<A = []>(
   }
 }
 
-/// Creates 5, 10 and 30 bps tier boost pools for Btc and then funds them.
+/// Creates 5 bps tier boost pool for Btc and then funds it.
 export async function setupBoostPools<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
   const cf = parentCf.with({
     account: fullAccountFromUri('//LP_BOOST', 'LP'),
   });
 
   cf.info('Creating BTC Boost Pools');
-  const newPools: BoostPoolId[] = [];
-  for (const tier of boostPoolTiers) {
-    newPools.push({
+  const newPools: BoostPoolId[] = [
+    {
       asset: getInternalAsset({ asset: 'BTC', chain: Chains.Bitcoin }),
-      tier,
-    });
-  }
+      tier: boostPoolFee,
+    },
+  ];
   await createBoostPools(cf, newPools);
 
   // Add some boost funds to each Btc boost tier
   cf.info('Funding BTC Boost Pools');
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
-  await depositLiquidity(
-    cf,
-    Assets.Btc,
-    fundBtcBoostPoolsAmount * boostPoolTiers.length + btcIngressFee,
-  );
-  await cf.all(
-    boostPoolTiers.map(
-      (tier) => (subcf) => addBoostFunds(subcf, Assets.Btc, tier, fundBtcBoostPoolsAmount),
-    ),
-  );
+  await depositLiquidity(cf, Assets.Btc, fundBtcBoostPoolsAmount + btcIngressFee);
+
+  await addBoostFunds(cf, Assets.Btc, boostPoolFee, fundBtcBoostPoolsAmount);
 
   cf.info('Boost Pools Setup completed');
 }

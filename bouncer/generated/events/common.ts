@@ -1019,6 +1019,8 @@ export const cfChainsAllBatchError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('DispatchError'), value: spRuntimeDispatchError }),
 ]);
 
+export const cfTraitsLendingBoostSource = simpleEnum(['LendingPool', 'BoostPool']);
+
 export const palletCfEthereumIngressEgressPalletConfigUpdateEthereum = z.discriminatedUnion(
   '__kind',
   [
@@ -1878,6 +1880,11 @@ export const palletCfLendingPoolsCollateralAddedActionType = z.discriminatedUnio
   }),
 ]);
 
+export const palletCfLendingPoolsGeneralLendingLoanType = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('User'), value: accountId }),
+  z.object({ __kind: z.literal('Boost'), value: numberOrHex }),
+]);
+
 export const palletCfLendingPoolsGeneralLendingLiquidationType = simpleEnum([
   'SoftVoluntary',
   'Soft',
@@ -1893,6 +1900,7 @@ export const palletCfLendingPoolsGeneralLendingLiquidationCompletionReason = sim
 export const palletCfLendingPoolsLoanRepaidActionType = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Manual') }),
   z.object({ __kind: z.literal('Liquidation'), swapRequestId: numberOrHex }),
+  z.object({ __kind: z.literal('BoostFinalisation') }),
 ]);
 
 export const palletCfLendingPoolsGeneralLendingWhitelistWhitelistUpdate = z.discriminatedUnion(
