@@ -2,7 +2,7 @@ on:
   workflow_call:
     inputs:
       ci-runner:
-        default: rust-builder
+        default: rust-builder-light
         description: The CI runner to use
         type: string
 
@@ -11,7 +11,7 @@ env:
 
 jobs:
   cargo-fmt:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
     steps:
@@ -22,7 +22,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   audit:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"
 
@@ -57,7 +57,7 @@ jobs:
         run: cargo cf-clippy-ci
 
   lint-bouncer:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -92,7 +92,7 @@ jobs:
         run: pnpm tsc --noEmit
 
   lint-ci-workflows:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -104,7 +104,7 @@ jobs:
         shell: bash
 
   lint-dockerfiles:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     strategy:
       matrix:
         dockerfile:

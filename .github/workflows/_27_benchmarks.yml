@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       ci-runner:
-        default: rust-builder
+        default: rust-builder-light
         description: The CI runner to use
         type: string
 
