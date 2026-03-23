@@ -17,10 +17,7 @@
 use crate::{
 	backend::CustomRpcBackend,
 	get_preallocated_channels,
-	pool_client::{
-		is_transaction_status_error, PoolClientError, SignedPoolClient,
-		TransactionStatusStreamBoxed,
-	},
+	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
 };
 pub use cf_chains::evm::Address as EvmAddress;
@@ -131,12 +128,12 @@ where
 	async fn extract_swap_deposit_address(
 		&self,
 		block_hash: Hash,
-		tx_hash: Hash,
 		tx_index: TxIndex,
+		expected_tx_hash: Hash,
 	) -> RpcResult<SwapDepositAddress> {
 		let ExtrinsicData { events, header, .. } = self
 			.signed_pool_client
-			.get_extrinsic_data_dynamic(block_hash, tx_hash, tx_index)
+			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
@@ -168,12 +165,12 @@ where
 	async fn extract_account_creation_deposit_address(
 		&self,
 		block_hash: Hash,
-		tx_hash: Hash,
 		tx_index: TxIndex,
+		expected_tx_hash: Hash,
 	) -> RpcResult<AccountCreationDepositAddress> {
 		let ExtrinsicData { events, header, .. } = self
 			.signed_pool_client
-			.get_extrinsic_data_dynamic(block_hash, tx_hash, tx_index)
+			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
@@ -255,9 +252,9 @@ where
 		refund_parameters: RefundParametersRpc,
 		dca_parameters: Option<DcaParameters>,
 	) -> RpcResult<SwapDepositAddress> {
-		let (tx_hash, mut status_stream): (Hash, TransactionStatusStreamBoxed<B, C>) = self
+		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_with_tx_hash(
 				RuntimeCall::from(
 					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 						source_asset,
@@ -289,8 +286,9 @@ where
 		while let Some(status) = status_stream.next().await {
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
-					let swap_deposit_address =
-						self.extract_swap_deposit_address(block_hash, tx_hash, tx_index).await?;
+					let swap_deposit_address = self
+						.extract_swap_deposit_address(block_hash, tx_index, submitted_tx_hash)
+						.await?;
 
 					// If the extracted deposit channel was pre-allocated to this broker
 					// in the previous finalized block, we can return it immediately.
@@ -300,7 +298,9 @@ where
 					}
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
-					return self.extract_swap_deposit_address(block_hash, tx_hash, tx_index).await,
+					return self
+						.extract_swap_deposit_address(block_hash, tx_index, submitted_tx_hash)
+						.await,
 				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
 			}
 		}
@@ -699,9 +699,9 @@ where
 		boost_fee: Option<BasisPoints>,
 		refund_address: AddressString,
 	) -> RpcResult<AccountCreationDepositAddress> {
-		let (tx_hash, mut status_stream): (Hash, TransactionStatusStreamBoxed<B, C>) = self
+		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_with_tx_hash(
 				RuntimeCall::from(
 					pallet_cf_swapping::Call::request_account_creation_deposit_address {
 						signature_data,
@@ -728,7 +728,11 @@ where
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
 					let swap_deposit_address = self
-						.extract_account_creation_deposit_address(block_hash, tx_hash, tx_index)
+						.extract_account_creation_deposit_address(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await?;
 
 					// If the extracted deposit channel was pre-allocated to this broker
@@ -740,7 +744,11 @@ where
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
 					return self
-						.extract_account_creation_deposit_address(block_hash, tx_hash, tx_index)
+						.extract_account_creation_deposit_address(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await,
 				_ => is_transaction_status_error(&status).map_err(CfApiError::from)?,
 			}

@@ -21,7 +21,6 @@ use crate::{
 	CfApiError, RpcResult, StorageQueryApi,
 };
 
-use crate::pool_client::TransactionStatusStreamBoxed;
 use anyhow::anyhow;
 use cf_amm::{
 	common::Side,
@@ -144,12 +143,12 @@ where
 	async fn extract_liquidity_deposit_channel_details(
 		&self,
 		block_hash: Hash,
-		tx_hash: Hash,
 		tx_index: TxIndex,
+		expected_tx_hash: Hash,
 	) -> RpcResult<(ChannelId, LiquidityDepositChannelDetails)> {
 		let ExtrinsicData { events, .. } = self
 			.signed_pool_client
-			.get_extrinsic_data_dynamic(block_hash, tx_hash, tx_index)
+			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
@@ -256,9 +255,9 @@ where
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
-		let (tx_hash, mut status_stream): (Hash, TransactionStatusStreamBoxed<B, C>) = self
+		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch(
+			.submit_watch_with_tx_hash(
 				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
 					asset,
 					boost_fee: boost_fee.unwrap_or_default(),
@@ -279,7 +278,11 @@ where
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
 					let (channel_id, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await?;
 
 					// If the extracted deposit channel was pre-allocated to this lp
@@ -296,7 +299,11 @@ where
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) => {
 					let (_, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await?;
 					return Ok(ExtrinsicResponse {
 						block_number: self.rpc_backend.block_number_for(block_hash)?,
