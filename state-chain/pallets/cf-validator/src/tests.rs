@@ -3833,3 +3833,90 @@ mod keygen_failure_with_delegation {
 		});
 	}
 }
+
+mod grandpa_delegation {
+	use super::*;
+	use sp_consensus_grandpa::{AuthorityId as GrandpaAuthorityId, AuthoritySignature};
+	use sp_core::ed25519;
+
+	fn dummy_grandpa_args() -> (GrandpaAuthorityId, GrandpaAuthorityId, AuthoritySignature) {
+		let caller_key = GrandpaAuthorityId::from(ed25519::Public::from_raw([1u8; 32]));
+		let delegate_key = GrandpaAuthorityId::from(ed25519::Public::from_raw([2u8; 32]));
+		let sig = AuthoritySignature::from(ed25519::Signature::from_raw([0u8; 64]));
+		(caller_key, delegate_key, sig)
+	}
+
+	#[test]
+	fn delegate_grandpa_vote_fails_for_non_validator() {
+		new_test_ext().then_execute_with_checks(|| {
+			let (caller_key, delegate_key, sig) = dummy_grandpa_args();
+			// Account 42 is not a registered validator.
+			assert_noop!(
+				ValidatorPallet::delegate_grandpa_vote(
+					RuntimeOrigin::signed(42u64),
+					caller_key,
+					delegate_key,
+					sig,
+				),
+				BadOrigin,
+			);
+		});
+	}
+
+	#[test]
+	fn delegate_grandpa_vote_blocked_during_rotation() {
+		new_test_ext().then_execute_with_checks(|| {
+			set_default_test_bids();
+			// Start a rotation so the phase is KeygensInProgress.
+			ValidatorPallet::start_authority_rotation();
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
+			let authority = GENESIS_AUTHORITIES[0];
+			let (caller_key, delegate_key, sig) = dummy_grandpa_args();
+			assert_noop!(
+				ValidatorPallet::delegate_grandpa_vote(
+					RuntimeOrigin::signed(authority),
+					caller_key,
+					delegate_key,
+					sig,
+				),
+				Error::<Test>::RotationInProgress,
+			);
+		});
+	}
+
+	#[test]
+	fn revoke_grandpa_delegation_blocked_during_rotation() {
+		new_test_ext().then_execute_with_checks(|| {
+			set_default_test_bids();
+			ValidatorPallet::start_authority_rotation();
+			assert_rotation_phase_matches!(RotationPhase::KeygensInProgress(..));
+
+			let authority = GENESIS_AUTHORITIES[0];
+			let (caller_key, _, _) = dummy_grandpa_args();
+			assert_noop!(
+				ValidatorPallet::revoke_grandpa_delegation(
+					RuntimeOrigin::signed(authority),
+					caller_key,
+				),
+				Error::<Test>::RotationInProgress,
+			);
+		});
+	}
+
+	#[test]
+	fn set_keys_succeeds_without_delegation() {
+		// Regression test: the delegation gate in set_keys must not break normal key rotation
+		// for a validator that has no active GRANDPA delegation.
+		new_test_ext().then_execute_with_checks(|| {
+			// Use a WINNING_BID account — small id so arithmetic is safe.
+			let authority = WINNING_BIDS[0].bidder_id;
+			let new_keys = UintAuthorityId(authority + 100).into();
+			assert_ok!(ValidatorPallet::set_keys(
+				RuntimeOrigin::signed(authority),
+				new_keys,
+				vec![],
+			));
+		});
+	}
+}
