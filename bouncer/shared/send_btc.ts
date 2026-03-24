@@ -20,6 +20,10 @@ type WalletBalances = {
   watchonly?: WalletBalanceBuckets;
 };
 
+function getWalletBalanceIncludingPending(balances: WalletBalances): number {
+  return (balances.mine?.trusted ?? 0) + (balances.mine?.untrusted_pending ?? 0);
+}
+
 function formatWalletBalanceBuckets(label: string, balances?: WalletBalanceBuckets): string {
   if (!balances) {
     return `${label}=n/a`;
@@ -82,21 +86,22 @@ class BtcMutexClient {
   }
 
   private async ensureFunded(logger: ILogger) {
-    const { availableBalance: balance } = await logWalletBalances(
+    const { availableBalance, balances } = await logWalletBalances(
       logger,
       this.name,
       this.client,
       'ensureFunded:start',
     );
+    const balanceIncludingPending = getWalletBalanceIncludingPending(balances);
 
     if (this.name === 'whale') {
-      if (balance <= 200.0) {
+      if (availableBalance <= 200.0) {
         logger.info(
-          `The whale wallet ${this.name} is underfunded (${balance} btc) waiting for btc node to mine more blocks.`,
+          `The whale wallet ${this.name} is underfunded (${availableBalance} btc) waiting for btc node to mine more blocks.`,
         );
 
-        let previousBalance = balance;
-        let currentBalance = balance;
+        let previousBalance = availableBalance;
+        let currentBalance = availableBalance;
         while (currentBalance <= 200.0) {
           await sleep(15000);
           currentBalance = (
@@ -113,9 +118,9 @@ class BtcMutexClient {
         }
         logger.info(`Whale wallet has now enough funds: ${currentBalance} btc.`);
       }
-    } else if (balance <= 50.0) {
+    } else if (balanceIncludingPending <= 50.0) {
       logger.info(
-        `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up from whale wallet.`,
+        `The wallet ${this.name} is underfunded, current balance including pending UTXOs is ${balanceIncludingPending} btc (available=${availableBalance} btc). Topping up from whale wallet.`,
       );
 
       const fundingAddresses: string[] = [];
@@ -147,7 +152,7 @@ export const globalBtcWhaleMutexClient = new BtcMutexClient(
   }),
 );
 
-const BTC_WALLET_NAMES = Array.from({ length: 10 }, (_, i) => `wallet${i}`);
+const BTC_WALLET_NAMES = Array.from({ length: 15 }, (_, i) => `wallet${i}`);
 
 const btcClients: Record<string, BtcMutexClient> = Object.fromEntries(
   BTC_WALLET_NAMES.map((name) => [name, new BtcMutexClient(name, getBtcClient(name))]),
