@@ -273,7 +273,7 @@ where
 	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
 		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch_with_tx_hash(
+			.submit_watch(
 				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
 					asset,
 					boost_fee: boost_fee.unwrap_or_default(),

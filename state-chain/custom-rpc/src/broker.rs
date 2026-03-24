@@ -254,7 +254,7 @@ where
 	) -> RpcResult<SwapDepositAddress> {
 		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch_with_tx_hash(
+			.submit_watch(
 				RuntimeCall::from(
 					pallet_cf_swapping::Call::request_swap_deposit_address_with_affiliates {
 						source_asset,
@@ -701,7 +701,7 @@ where
 	) -> RpcResult<AccountCreationDepositAddress> {
 		let (submitted_tx_hash, mut status_stream) = self
 			.signed_pool_client
-			.submit_watch_with_tx_hash(
+			.submit_watch(
 				RuntimeCall::from(
 					pallet_cf_swapping::Call::request_account_creation_deposit_address {
 						signature_data,

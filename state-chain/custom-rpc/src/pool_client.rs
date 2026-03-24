@@ -297,15 +297,6 @@ where
 		}
 	}
 
-	pub async fn get_extrinsic_data_dynamic(
-		&self,
-		block_hash: Hash,
-		extrinsic_index: usize,
-	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
-		self.get_extrinsic_data_dynamic_internal(block_hash, extrinsic_index, None)
-			.await
-	}
-
 	pub async fn get_watched_extrinsic_data_dynamic(
 		&self,
 		block_hash: Hash,
@@ -559,7 +550,7 @@ where
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
 	/// if successful, it returns a `TransactionStatus` stream otherwise returns a PoolClientError
-	pub async fn submit_watch_with_tx_hash(
+	pub async fn submit_watch(
 		&self,
 		call: RuntimeCall,
 		dry_run: bool,
@@ -621,15 +612,6 @@ where
 		maybe_submission.ok_or(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
 	}
 
-	pub async fn submit_watch(
-		&self,
-		call: RuntimeCall,
-		dry_run: bool,
-	) -> Result<TransactionPoolStatusStream<B, C>, PoolClientError> {
-		let (_, status_stream) = self.submit_watch_with_tx_hash(call, dry_run).await?;
-		Ok(status_stream)
-	}
-
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
 	///
 	/// Returns statically decoded events ([state_chain_runtime::RuntimeEvent]).
@@ -646,7 +628,7 @@ where
 		dry_run: bool,
 	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
 		let (submitted_tx_hash, mut status_stream): (Hash, TransactionPoolStatusStream<B, C>) =
-			self.submit_watch_with_tx_hash(call, dry_run).await?;
+			self.submit_watch(call, dry_run).await?;
 
 		// Periodically poll the transaction pool to check inclusion status
 		while let Some(status) = status_stream.next().await {
@@ -693,7 +675,7 @@ where
 		dry_run: bool,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
 		let (submitted_tx_hash, mut status_stream): (Hash, TransactionPoolStatusStream<B, C>) =
-			self.submit_watch_with_tx_hash(call, dry_run).await?;
+			self.submit_watch(call, dry_run).await?;
 
 		while let Some(status) = status_stream.next().await {
 			match status {
