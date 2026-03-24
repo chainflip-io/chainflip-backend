@@ -96,6 +96,9 @@ pub struct AssetMap<T> {
 	#[serde(rename = "Assethub")]
 	#[serde(default)]
 	pub hub: cf_primitives::chains::assets::hub::AssetMap<T>,
+	#[serde(rename = "Bsc")]
+	#[serde(default)]
+	pub bsc: BscAssetMap<T>,
 }
 
 #[derive(
@@ -203,6 +206,37 @@ impl<T: Default> From<SolAssetMap<T>> for cf_primitives::chains::assets::sol::As
 	}
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Hash,
+	Serialize,
+	Deserialize,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	MaxEncodedLen,
+	Default,
+)]
+#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+pub struct BscAssetMap<T> {
+	#[serde(rename = "BNB")]
+	#[serde(default)]
+	pub bnb: T,
+	#[serde(rename = "USDT")]
+	#[serde(default)]
+	pub usdt: T,
+}
+impl<T: Default> From<BscAssetMap<T>> for cf_primitives::chains::assets::bsc::AssetMap<T> {
+	fn from(value: BscAssetMap<T>) -> Self {
+		Self { bnb: value.bnb, usdt: value.usdt }
+	}
+}
+
 impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::AssetMap<T> {
 	fn from(value: AssetMap<T>) -> Self {
 		Self {
@@ -212,6 +246,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			arb: value.arb.into(),
 			sol: value.sol.into(),
 			hub: value.hub,
+			bsc: value.bsc.into(),
 		}
 	}
 }
