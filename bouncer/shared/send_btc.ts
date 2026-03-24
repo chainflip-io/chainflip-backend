@@ -124,18 +124,18 @@ class BtcMutexClient {
       );
 
       const fundingAddresses: string[] = [];
-      for (let index = 0; index < 40; index++) {
+      for (let index = 0; index < 80; index++) {
         fundingAddresses.push(await this.client.getNewAddress());
       }
 
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       const hash = await sendBtcToMultipleAddresses(
         logger,
-        fundingAddresses.map((address) => ({ address, amount: 5 })),
+        fundingAddresses.map((address) => ({ address, amount: 2.5 })),
         1,
       );
 
-      logger.info(`Funded with 40 outputs of 5 btc in tx ${hash}`);
+      logger.info(`Funded with 80 outputs of 2.5 btc in tx ${hash}`);
       await logWalletBalances(logger, this.name, this.client, 'ensureFunded:after-top-up');
     }
   }
