@@ -118,11 +118,19 @@ class BtcMutexClient {
         `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up from whale wallet.`,
       );
 
-      const fundingAddress = await this.client.getNewAddress();
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      const hash = await sendBtc(logger, fundingAddress, 200, 1);
+      const fundingAddresses: string[] = [];
+      for (let index = 0; index < 40; index++) {
+        fundingAddresses.push(await this.client.getNewAddress());
+      }
 
-      logger.info(`Funded with 200 btc in tx ${hash}`);
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const hash = await sendBtcToMultipleAddresses(
+        logger,
+        fundingAddresses.map((address) => ({ address, amount: 5 })),
+        1,
+      );
+
+      logger.info(`Funded with 40 outputs of 5 btc in tx ${hash}`);
       await logWalletBalances(logger, this.name, this.client, 'ensureFunded:after-top-up');
     }
   }
@@ -340,12 +348,13 @@ export async function setupWallet(logger: ILogger, name: string) {
     logger.info(`Created new wallet: ${reply.name}`);
     return getBtcClient(reply.name);
   });
-  const fundingAddress = await newClient.getNewAddress();
-  logger.info(`funding wallet with 200btc to ${fundingAddress}`);
-  await sendBtc(logger, fundingAddress, 200, 1);
+
+  const btcMutexClient = new BtcMutexClient(name, newClient);
+  logger.info(`Funding wallet ${name} via ensureFunded`);
+  await btcMutexClient.runExclusive(logger, async () => undefined);
   logger.info(`funding success!`);
 
-  return new BtcMutexClient(name, newClient);
+  return btcMutexClient;
 }
 
 export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
