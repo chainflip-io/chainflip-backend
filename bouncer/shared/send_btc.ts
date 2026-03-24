@@ -33,11 +33,16 @@ function formatWalletBalanceBuckets(label: string, balances?: WalletBalanceBucke
   ].join(', ');
 }
 
-async function logWalletBalances(logger: ILogger, walletName: string, client: Client, context: string) {
+async function logWalletBalances(
+  logger: ILogger,
+  walletName: string,
+  client: Client,
+  context: string,
+) {
   const availableBalance = (await client.getBalance()) as number;
   const balances = (await client.getBalances()) as WalletBalances;
 
-  logger.debug(
+  logger.info(
     `Wallet ${walletName} balances (${context}): available=${availableBalance}, ${formatWalletBalanceBuckets('mine', balances.mine)}, ${formatWalletBalanceBuckets('watchonly', balances.watchonly)}`,
   );
 
@@ -86,7 +91,7 @@ class BtcMutexClient {
 
     if (this.name === 'whale') {
       if (balance <= 200.0) {
-        logger.debug(
+        logger.info(
           `The whale wallet ${this.name} is underfunded (${balance} btc) waiting for btc node to mine more blocks.`,
         );
 
@@ -103,13 +108,13 @@ class BtcMutexClient {
               `Whale wallet balance didn't increase after 15s. It is currently underfunded with ${currentBalance}, and the test cannot continue.`,
             );
           }
-          logger.debug(`Whale wallet balance is ${currentBalance}`);
+          logger.info(`Whale wallet balance is ${currentBalance}`);
           previousBalance = currentBalance;
         }
-        logger.debug(`Whale wallet has now enough funds: ${currentBalance} btc.`);
+        logger.info(`Whale wallet has now enough funds: ${currentBalance} btc.`);
       }
     } else if (balance <= 50.0) {
-      logger.debug(
+      logger.info(
         `The wallet ${this.name} is underfunded, current balance ${balance}. Topping up from whale wallet.`,
       );
 
@@ -117,7 +122,7 @@ class BtcMutexClient {
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       const hash = await sendBtc(logger, fundingAddress, 200, 1);
 
-      logger.debug(`Funded with 200 btc in tx ${hash}`);
+      logger.info(`Funded with 200 btc in tx ${hash}`);
       await logWalletBalances(logger, this.name, this.client, 'ensureFunded:after-top-up');
     }
   }
