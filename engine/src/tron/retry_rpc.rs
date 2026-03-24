@@ -511,14 +511,24 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						let function_selector = std::str::from_utf8(&transaction.function_selector)?
 							.to_string();
 						let parameter = {
-							// We could consider taking the first four bytes (the function
-							// selector) and compare them against the hashed
-							// function signature but it shouldn't be needed.
 							if transaction.data.len() < 4 {
 								return Err(anyhow::anyhow!(
 									"transaction data must be at least 4 bytes"
 								));
 							}
+
+							let expected_selector =
+								&ethers::utils::keccak256(function_selector.as_bytes())[..4];
+							let actual_selector = &transaction.data[..4];
+							if expected_selector != actual_selector {
+								return Err(anyhow::anyhow!(
+									"function selector mismatch: expected {:?} (from '{}'), got {:?}",
+									expected_selector,
+									function_selector,
+									actual_selector,
+								));
+							}
+
 							transaction.data[4..].to_vec()
 						};
 
@@ -566,27 +576,17 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 								}
 							},
 							_ => {
-								let mut details = Vec::new();
-								if let Some(code) = &energy_estimate.result.code {
-									details.push(format!("code: {code}"));
-								}
-								if let Some(message) = &energy_estimate.result.message {
-									details.push(format!("message: {message}"));
-								}
-								let suffix = if details.is_empty() {
-									String::new()
-								} else {
-									format!(" ({})", details.join(", "))
-								};
 								return Err(anyhow::anyhow!(
-									"Failed to estimate energy{suffix}"
+									"Failed to estimate energy (code: {:?}, message: {:?})",
+									energy_estimate.result.code,
+									energy_estimate.result.message,
 								));
 							},
 						}.min(i64::MAX as u128) as i64;
 
-						// Iff the estimate energy is reliable in both revertions AND energy exceed scenarios,
-						// then we can skip this step and just rely on the estimate energy. It should be the
-						// case but for now we have this just in case.
+						// Iff the energy estimation above is reliable in both logic revertions AND energy exceed
+						// scenarios, then we could skip this step and just rely on the estimate energy. It should
+						// be the case but for now we have this just as an extra sanity check.
 						let transaction_simulation_result =
 							client
 								.trigger_constant_contract(constant_request)
@@ -607,9 +607,9 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							TransactionResultStatus::Success => {},
 						}
 
-						// Then build the actual transaction with triggerSmartContract (includes fee_limit).
-						// We need this because the raw_hex_data from the triggerConstantContract does not
-						// contain all the data for the valid transaction (e.g. energy limit).
+						// Build the actual transaction with triggerSmartContract (includes fee_limit).
+						// This is needed because the raw_hex_data from the triggerConstantContract does
+						// not contain all the data for the valid transaction (e.g. energy limit).
 						let trigger_request = TriggerSmartContractRequest {
 							owner_address: signer_address.clone(),
 							contract_address: contract_address.clone(),
@@ -678,7 +678,6 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 							));
 						}
 
-						// The transaction ID is already in the transaction
 						Ok(transaction.tx_id)
 					})
 				}),
