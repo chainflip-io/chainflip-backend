@@ -54,9 +54,6 @@ use substrate_frame_rpc_system::{System, SystemApiServer};
 const SIGNED_EXTRINSIC_LIFETIME: state_chain_runtime::BlockNumber = 128;
 const MAX_POOL_SUBMISSION_RETRIES: usize = 10;
 
-pub type TransactionStatusStreamBoxed<B, C> =
-	Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>>;
-
 #[derive(thiserror::Error, Debug)]
 pub enum PoolClientError {
 	#[error("The block for this hash was not found: {0}")]

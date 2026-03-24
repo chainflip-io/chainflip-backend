@@ -1545,6 +1545,19 @@ impl From<CfApiError> for RpcApiError {
 	}
 }
 
+pub fn rpc_api_error_with_custom_message(
+	cf_api_error: CfApiError,
+	message: impl std::fmt::Display,
+) -> RpcApiError {
+	let rpc_api_error: RpcApiError = cf_api_error.into();
+	let error_obj: ErrorObjectOwned = rpc_api_error.into();
+	RpcApiError::ErrorObject(ErrorObject::owned(
+		error_obj.code(),
+		format!("{}: {}", message, error_obj.message()),
+		error_obj.data(),
+	))
+}
+
 #[macro_export]
 macro_rules! pass_through {
 	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {

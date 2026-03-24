@@ -18,7 +18,7 @@ use crate::{
 	backend::CustomRpcBackend,
 	get_preallocated_channels, order_fills,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
-	CfApiError, RpcResult, StorageQueryApi,
+	rpc_api_error_with_custom_message, CfApiError, RpcResult, StorageQueryApi,
 };
 
 use anyhow::anyhow;
@@ -164,13 +164,15 @@ where
 		.map_err(CfApiError::from)?)
 	}
 
-	fn log_missing_withdrawal_egress_scheduled_event(
+	fn log_missing_event(
 		&self,
 		extrinsic_data: &ExtrinsicData<DynamicEvents>,
+		expected_event: &str,
+		call: &str,
 	) {
 		log::warn!(
 			target: "custom_rpc::lp",
-			"Expected LiquidityProvider::WithdrawalEgressScheduled event was not found for successful LiquidityProvider::withdraw_asset extrinsic. tx_hash={:?}, block_hash={:?}, tx_index={}, call=LiquidityProvider::withdraw_asset, events={:?}",
+			"Expected {expected_event} event was not found for successful {call} extrinsic. tx_hash={:?}, block_hash={:?}, tx_index={}, events={:?}",
 			extrinsic_data.tx_hash,
 			extrinsic_data.block_hash,
 			extrinsic_data.tx_index,
@@ -385,24 +387,31 @@ where
 			{
 				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
 				WaitForDynamicResult::Data(extrinsic_data) => {
-					let tx_hash = extrinsic_data.tx_hash;
 					match extract_from_first_matching_event!(
 						extrinsic_data.events,
 						cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled,
 						{ egress_id },
 						ApiWaitForResult::TxDetails {
-							tx_hash,
+							tx_hash: extrinsic_data.tx_hash,
 							response: (egress_id.0 .0, egress_id.1)
 						}
 					) {
 						Ok(result) => result,
-						Err(DynamicEventError::StaticEventNotFound(_)) => {
-							self.log_missing_withdrawal_egress_scheduled_event(&extrinsic_data);
-							Err(CfApiError::from(DynamicEventError::StaticEventNotFound(
-								"cf_static_runtime::liquidity_provider::events::WithdrawalEgressScheduled",
-							)))?
+						Err(err) => {
+							if matches!(err, DynamicEventError::StaticEventNotFound(_)) {
+								self.log_missing_event(
+									&extrinsic_data,
+									"LiquidityProvider::WithdrawalEgressScheduled",
+									"LiquidityProvider::withdraw_asset",
+								);
+							}
+
+							Err(rpc_api_error_with_custom_message(
+								err.into(),
+								"LiquidityProvider::withdraw_asset extrinsic submitted successfully \
+								but an error occurred while trying to extract the LiquidityProvider::WithdrawalEgressScheduled event. ",
+							))?
 						},
-						Err(error) => Err(CfApiError::from(error))?,
 					}
 				},
 			},
