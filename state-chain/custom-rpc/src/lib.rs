@@ -110,6 +110,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod grandpa_ext;
 pub mod ingress_egress_tracker;
 pub mod lp;
 pub mod monitoring;

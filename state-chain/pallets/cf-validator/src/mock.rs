@@ -156,8 +156,7 @@ impl RotationBroadcastsPending for MockRotationBroadcastsPending {
 	}
 }
 
-use crate::GrandpaAuthorityId;
-use crate::GrandpaVoteDelegation;
+use crate::{GrandpaAuthorityId, GrandpaVoteDelegation};
 
 /// No-op GRANDPA delegation for mock tests.
 pub struct MockGrandpaDelegation;
@@ -169,16 +168,14 @@ impl GrandpaVoteDelegation for MockGrandpaDelegation {
 	) -> sp_runtime::DispatchResult {
 		Ok(())
 	}
-	fn remove_vote_delegation(
-		_delegator: GrandpaAuthorityId,
-	) -> sp_runtime::DispatchResult {
+	fn remove_vote_delegation(_delegator: GrandpaAuthorityId) -> sp_runtime::DispatchResult {
 		Ok(())
 	}
 	fn get_delegate(_delegator: &GrandpaAuthorityId) -> Option<GrandpaAuthorityId> {
 		None
 	}
-	fn vote_delegations()
-	-> sp_std::collections::btree_map::BTreeMap<GrandpaAuthorityId, GrandpaAuthorityId> {
+	fn vote_delegations(
+	) -> sp_std::collections::btree_map::BTreeMap<GrandpaAuthorityId, GrandpaAuthorityId> {
 		Default::default()
 	}
 }

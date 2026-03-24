@@ -769,25 +769,16 @@ pub mod pallet {
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
-			let validator_id =
-				<ValidatorIdOf<T> as IsType<<T as frame_system::Config>::AccountId>>::from_ref(
-					&account_id,
-				);
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
 
 			// Block key rotation while a GRANDPA delegation is active.
-			if let Some(existing_keys) = pallet_session::Pallet::<T>::load_keys(validator_id) {
-				use frame_support::sp_runtime::traits::OpaqueKeys;
-				let grandpa_key_raw = existing_keys.get_raw(sp_consensus_grandpa::KEY_TYPE);
-				if !grandpa_key_raw.is_empty() {
-					if let Ok(grandpa_key) =
-						GrandpaAuthorityId::decode(&mut &grandpa_key_raw[..])
-					{
-						ensure!(
-							T::GrandpaDelegation::get_delegate(&grandpa_key).is_none(),
-							Error::<T>::GrandpaDelegationActive
-						);
-					}
-				}
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				ensure!(
+					T::GrandpaDelegation::get_delegate(&grandpa_key).is_none(),
+					Error::<T>::GrandpaDelegationActive
+				);
 			}
 
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
@@ -912,16 +903,8 @@ pub mod pallet {
 			ensure!(!EpochHistory::<T>::is_keyholder(validator_id), Error::<T>::StillKeyHolder);
 
 			// Revoke any active GRANDPA delegation before purging keys.
-			if let Some(existing_keys) = pallet_session::Pallet::<T>::load_keys(validator_id) {
-				use frame_support::sp_runtime::traits::OpaqueKeys;
-				let grandpa_key_raw = existing_keys.get_raw(sp_consensus_grandpa::KEY_TYPE);
-				if !grandpa_key_raw.is_empty() {
-					if let Ok(grandpa_key) =
-						GrandpaAuthorityId::decode(&mut &grandpa_key_raw[..])
-					{
-						let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
-					}
-				}
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
 			}
 
 			// This can only error if the validator didn't register any keys, in which case we want
@@ -1421,10 +1404,9 @@ pub mod pallet {
 			proof: sp_consensus_grandpa::AuthoritySignature,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id =
-				<ValidatorIdOf<T> as IsType<<T as frame_system::Config>::AccountId>>::from_ref(
-					&account_id,
-				);
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -1460,10 +1442,9 @@ pub mod pallet {
 			caller_grandpa_key: GrandpaAuthorityId,
 		) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
-			let validator_id =
-				<ValidatorIdOf<T> as IsType<<T as frame_system::Config>::AccountId>>::from_ref(
-					&account_id,
-				);
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
 
 			ensure!(
 				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
@@ -1619,6 +1600,31 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 }
 
 impl<T: Config> Pallet<T> {
+	/// Look up a validator's GRANDPA key from their registered session keys.
+	///
+	/// Returns `None` if the validator has no session keys registered.
+	/// Panics in tests (logs in production) if session keys are registered but
+	/// the GRANDPA key cannot be decoded.
+	fn grandpa_key_for(validator_id: &ValidatorIdOf<T>) -> Option<GrandpaAuthorityId> {
+		use frame_support::sp_runtime::traits::OpaqueKeys;
+		let keys = pallet_session::Pallet::<T>::load_keys(validator_id)?;
+		let raw = keys.get_raw(sp_consensus_grandpa::KEY_TYPE);
+		if raw.is_empty() {
+			return None;
+		}
+		match GrandpaAuthorityId::decode(&mut &raw[..]) {
+			Ok(key) => Some(key),
+			Err(e) => {
+				cf_runtime_utilities::log_or_panic!(
+					"Failed to decode GRANDPA key for {:?}: {:?}",
+					validator_id,
+					e
+				);
+				None
+			},
+		}
+	}
+
 	/// Makes the transition to the next epoch.
 	///
 	/// Among other things, updates the authority, historical and backup sets.

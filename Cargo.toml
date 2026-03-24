@@ -225,6 +225,7 @@ sp-genesis-builder = { git = "https://github.com/chainflip-io/polkadot-sdk.git",
 sp-inherents = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
 sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
 sp-keyring = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
+sp-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
 sp-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
 sp-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }
 sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa", default-features = false }

@@ -30,6 +30,7 @@ jsonrpsee = { workspace = true, features = ["full"] }
 chainflip-engine = { workspace = true }
 engine-sc-client = { workspace = true }
 cf-utilities = { workspace = true, default-features = true }
+cf-rpc-apis = { workspace = true }
 cf-rpc-types = { workspace = true }
 cf-node-client = { workspace = true }
 
@@ -50,6 +51,7 @@ pallet-cf-swapping = { workspace = true, default-features = true }
 pallet-cf-pools = { workspace = true, default-features = true }
 pallet-cf-threshold-signature = { workspace = true, default-features = true }
 pallet-cf-validator = { workspace = true, default-features = true }
+pallet-session = { workspace = true, default-features = true }
 state-chain-runtime = { workspace = true, default-features = true }
 
 
