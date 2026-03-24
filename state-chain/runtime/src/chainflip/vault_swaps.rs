@@ -268,7 +268,7 @@ pub fn evm_vault_swap<A>(
 			source_token_address,
 		})),
 		ForeignChain::Tron => {
-			// Encode TronVaultSwapData for the note
+			// Encode TronVaultSwapData separately to be used as a note/memo in the transaction.
 			let ccm_data =
 				channel_metadata.as_ref().map(|ccm| (ccm.gas_budget, ccm.message.clone()));
 

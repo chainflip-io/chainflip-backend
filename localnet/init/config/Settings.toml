@@ -75,8 +75,8 @@ json_rpc_endpoint = "http://localhost:8555/jsonrpc"
 
 # optional
 # [tron.backup_rpc]
-# http_endpoint = "http://localhost:8090"
-# json_rpc_endpoint = "http://localhost:8555"
+# http_endpoint = "http://localhost:8090/wallet"
+# json_rpc_endpoint = "http://localhost:8555/jsonrpc"
 
 # optional
 [health_check]

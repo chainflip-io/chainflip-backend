@@ -67,7 +67,7 @@ where
 
 	// Iterate over transaction balance traces
 	'transaction_loop: for tx_trace in block_balance.transaction_balance_trace {
-		// Skip transactions that are not successful, they should be succesfull as the balance
+		// Skip transactions that are not successful, they should be successful since the balance
 		// changed
 		if tx_trace.status != "SUCCESS" {
 			tracing::warn!(
@@ -84,9 +84,9 @@ where
 		// Iterate over operations in this transaction and accumulate amounts to deposit channels.
 		// A transaction might deposit to multiple deposit channels. We accumulate multiple deposits
 		// in the same transaction to the same channel in a single item. We skip any transactions
-		// that subtract any amount from the deposit channels, as that would indicate a fetch
-		// transaction or a transaction that transfer funds from our Vault.
-		// It's technically possible that an allBatch transaction transfers to a deposit channel
+		// that subtract any amount from the monitored addresses, as that would indicate a fetch
+		// transaction or a transaction that transfer funds from our Vault (AllBatch transactions).
+		// It's technically possible that an AllBatch transaction transfers to a deposit channel
 		// but in reality that never happens. It just seems safer to just skip all `AllBatch` txs.
 		for operation in tx_trace.operation {
 			let evm_addr = operation.address.to_evm_address().map_err(|e| {
@@ -101,7 +101,6 @@ where
 			}
 		}
 
-		// Add the balance change transactions to the result vector
 		for (address, amount) in balance_changes {
 			monitored_addresses_changes.push((address, amount, tx_id));
 		}
