@@ -38,7 +38,7 @@ use crate::{
 		},
 		tron::{
 			tron_deposits::witness_deposit_channels, vault_swaps_witnessing::witness_vault_swaps,
-			TransferNativeFailedFilter, TransferTokenFailedFilter,
+			TransferNativeFailedFilter, TransferNativeSkippedFilter, TransferTokenFailedFilter,
 			TronDepositChannelWitnessingConfig, TronVaultEvents, VaultDepositWitnessingConfig,
 		},
 	},
@@ -339,6 +339,15 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmVaultContractEvent<Runtime, Tro
 					} else {
 						tracing::warn!("Unknown token {token:?} in Tron TransferTokenFailed event");
 					}
+				},
+				TronVaultEvents::TransferNativeSkippedFilter(TransferNativeSkippedFilter {
+					recipient,
+					amount,
+				}) => {
+					tracing::warn!(
+						"TransferNativeSkipped: recipient={recipient:?}, amount={amount} in block {:?}",
+						query.block_hash
+					);
 				},
 				// Skip all other vault events
 				_ => {},
