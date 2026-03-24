@@ -28,7 +28,11 @@ use cf_chains::{
 	evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
-use cf_node_client::events_decoder;
+use cf_node_client::{
+	events_decoder,
+	events_decoder::{DynamicEventError, DynamicEvents},
+	ExtrinsicData,
+};
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, AssetAndAmount, BasisPoints, BlockNumber,
@@ -1556,6 +1560,34 @@ pub fn rpc_api_error_with_custom_message(
 		format!("{}: {}", message, error_obj.message()),
 		error_obj.data(),
 	))
+}
+
+fn handle_dynamic_event_error(
+	err: DynamicEventError,
+	extrinsic_data: &ExtrinsicData<DynamicEvents>,
+) -> RpcApiError {
+	match err {
+		DynamicEventError::StaticEventNotFound(expected_event) => {
+			log::warn!(
+				target: "custom_rpc",
+				"Expected {expected_event} event was not found. tx_hash={:?}, block_hash={:?}, tx_index={}, events={:?}",
+				extrinsic_data.tx_hash,
+				extrinsic_data.block_hash,
+				extrinsic_data.tx_index,
+				extrinsic_data.events.event_names(),
+			);
+			rpc_api_error_with_custom_message(
+				err.into(),
+				format!(
+					"The extrinsic was submitted successfully but an error occurred while trying to extract the event: {expected_event}"
+				),
+			)
+		},
+		other => rpc_api_error_with_custom_message(
+			other.into(),
+			"The extrinsic was submitted successfully but an error occurred while trying to decode the extrinsic's dynamic events.",
+		),
+	}
 }
 
 #[macro_export]

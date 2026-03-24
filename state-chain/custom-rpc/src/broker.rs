@@ -16,7 +16,7 @@
 
 use crate::{
 	backend::CustomRpcBackend,
-	get_preallocated_channels,
+	get_preallocated_channels, handle_dynamic_event_error,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError,
 };
@@ -131,14 +131,14 @@ where
 		tx_index: TxIndex,
 		expected_tx_hash: Hash,
 	) -> RpcResult<SwapDepositAddress> {
-		let ExtrinsicData { events, header, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::SwapDepositAddressReady,
 			{
 				deposit_address,
@@ -149,7 +149,7 @@ where
 			},
 			SwapDepositAddress {
 				address: AddressString::from_encoded_address(deposit_address.0),
-				issued_block: header.number,
+				issued_block: extrinsic_data.header.number,
 				channel_id,
 				source_chain_expiry_block: source_chain_expiry_block.into(),
 				channel_opening_fee: channel_opening_fee.into(),
@@ -159,7 +159,7 @@ where
 				}),
 			}
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn extract_account_creation_deposit_address(
@@ -168,14 +168,14 @@ where
 		tx_index: TxIndex,
 		expected_tx_hash: Hash,
 	) -> RpcResult<AccountCreationDepositAddress> {
-		let ExtrinsicData { events, header, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::AccountCreationDepositAddressReady,
 			{
 				channel_id,
@@ -190,7 +190,7 @@ where
 			},
 			AccountCreationDepositAddress {
 				channel_id,
-				issued_block: header.number,
+				issued_block: extrinsic_data.header.number,
 				address: AddressString::from_encoded_address(deposit_address.0),
 				requested_for: AccountId32::from(requested_for.0),
 				deposit_chain_expiry_block: deposit_chain_expiry_block.into(),
@@ -198,7 +198,7 @@ where
 				refund_address: AddressString::from_encoded_address(refund_address.0),
 			}
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 }
 
@@ -312,7 +312,7 @@ where
 		asset: Asset,
 		destination_address: AddressString,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let ExtrinsicData { tx_hash, events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::withdraw {
@@ -327,8 +327,8 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{
 				egress_amount,
@@ -337,14 +337,14 @@ where
 				egress_id
 			},
 			WithdrawFeesDetail {
-				tx_hash,
+				tx_hash: extrinsic_data.tx_hash,
 				egress_id: (egress_id.0.0, egress_id.1),
 				egress_amount: egress_amount.into(),
 				egress_fee: egress_fee.into(),
 				destination_address: AddressString::from_encoded_address(destination_address.0),
 			}
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	// This is also defined in custom-rpc. // TODO: try to define only in one place
@@ -527,7 +527,7 @@ where
 	}
 
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let ExtrinsicData { events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::open_private_btc_channel {}),
@@ -537,17 +537,17 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelOpened,
 			{ channel_id },
 			channel_id
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn close_private_btc_channel(&self) -> RpcResult<ChannelId> {
-		let ExtrinsicData { events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::close_private_btc_channel {}),
@@ -557,17 +557,17 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::PrivateBrokerChannelClosed,
 			{ channel_id },
 			channel_id
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn register_affiliate(&self, withdrawal_address: EvmAddress) -> RpcResult<AccountId32> {
-		let ExtrinsicData { events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::register_affiliate {
@@ -579,20 +579,20 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::AffiliateRegistration,
 			{ affiliate_id },
 			AccountId32::from(affiliate_id.0)
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn deregister_affiliate(
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<DeregisteredAffiliate> {
-		let ExtrinsicData { events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::deregister_affiliate {
@@ -604,8 +604,8 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::AffiliateDeregistration,
 			{ affiliate_account_id, short_id },
 			DeregisteredAffiliate {
@@ -613,7 +613,7 @@ where
 				short_id: AffiliateShortId(short_id.0),
 			}
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn get_affiliates(
@@ -636,7 +636,7 @@ where
 		&self,
 		affiliate_account_id: AccountId32,
 	) -> RpcResult<WithdrawFeesDetail> {
-		let ExtrinsicData { tx_hash, events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
 			.submit_watch_dynamic(
 				RuntimeCall::from(pallet_cf_swapping::Call::affiliate_withdrawal_request {
@@ -648,19 +648,19 @@ where
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::swapping::events::WithdrawalRequested,
 			{ egress_amount, egress_fee, destination_address, egress_id },
 			WithdrawFeesDetail {
-				tx_hash,
+				tx_hash: extrinsic_data.tx_hash,
 				egress_id: (egress_id.0.0, egress_id.1),
 				egress_amount: egress_amount.into(),
 				egress_fee: egress_fee.into(),
 				destination_address: AddressString::from_encoded_address(destination_address.0),
 			}
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
