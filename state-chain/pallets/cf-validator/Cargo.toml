@@ -77,7 +77,8 @@ std = [
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-std/std",
-]default = ["std"]
+]
+default = ["std"]
 runtime-benchmarks = [
 	"cf-traits/runtime-benchmarks",
 	"cf-runtime-utilities/runtime-benchmarks",

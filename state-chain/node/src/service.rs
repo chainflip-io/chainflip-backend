@@ -15,9 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
-use cf_rpc_apis::{broker::BrokerRpcApiServer, lp::LpRpcApiServer};
+use cf_rpc_apis::{broker::BrokerRpcApiServer, grandpa::GrandpaExtApiServer, lp::LpRpcApiServer};
 use custom_rpc::{
 	broker::{broker_crypto, BrokerSignedRpc},
+	grandpa_ext::GrandpaExtRpc,
 	lp::{lp_crypto, LpSignedRpc},
 	monitoring::MonitoringApiServer,
 	CustomApiServer, CustomRpc,
@@ -259,6 +260,7 @@ pub fn new_full<
 		let pool = transaction_pool.clone();
 		let executor = Arc::new(task_manager.spawn_handle());
 		let keystore = keystore_container.local_keystore().clone();
+		let keystore_ptr = keystore_container.keystore();
 
 		// try to get the broker key pair from the node keystore
 		let broker_key_pair =
@@ -364,6 +366,11 @@ pub fn new_full<
 						pair.clone(),
 					)))?;
 				}
+
+				// Add GRANDPA extension RPCs for delegate key management
+				module.merge(GrandpaExtApiServer::into_rpc(GrandpaExtRpc::new(
+					keystore_ptr.clone(),
+				)))?;
 
 				Ok(module)
 			};
