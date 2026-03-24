@@ -89,17 +89,11 @@ export const globalBtcWhaleMutexClient = new BtcMutexClient(
   }),
 );
 
-const btcClients: Record<string, BtcMutexClient> = {
-  wallet1: new BtcMutexClient('wallet1', getBtcClient('wallet1')),
-  wallet2: new BtcMutexClient('wallet2', getBtcClient('wallet2')),
-  wallet3: new BtcMutexClient('wallet3', getBtcClient('wallet3')),
-  wallet4: new BtcMutexClient('wallet4', getBtcClient('wallet4')),
-  wallet5: new BtcMutexClient('wallet5', getBtcClient('wallet5')),
-  wallet6: new BtcMutexClient('wallet6', getBtcClient('wallet6')),
-  wallet7: new BtcMutexClient('wallet7', getBtcClient('wallet7')),
-  wallet8: new BtcMutexClient('wallet8', getBtcClient('wallet8')),
-  wallet9: new BtcMutexClient('wallet9', getBtcClient('wallet9')),
-};
+const BTC_WALLET_NAMES = Array.from({ length: 15 }, (_, i) => `wallet${i}`);
+
+const btcClients: Record<string, BtcMutexClient> = Object.fromEntries(
+  BTC_WALLET_NAMES.map((name) => [name, new BtcMutexClient(name, getBtcClient(name))]),
+);
 
 async function assertCanSubmitRawTx(rawTx: string, client: Client) {
   const check = (await client.testMempoolAccept([rawTx])) as {
@@ -271,17 +265,7 @@ export async function setupWallet(logger: ILogger, name: string) {
 }
 
 export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
-  await cf.all([
-    (subcf) => setupWallet(subcf, 'wallet1'),
-    (subcf) => setupWallet(subcf, 'wallet2'),
-    (subcf) => setupWallet(subcf, 'wallet3'),
-    (subcf) => setupWallet(subcf, 'wallet4'),
-    (subcf) => setupWallet(subcf, 'wallet5'),
-    (subcf) => setupWallet(subcf, 'wallet6'),
-    (subcf) => setupWallet(subcf, 'wallet7'),
-    (subcf) => setupWallet(subcf, 'wallet8'),
-    (subcf) => setupWallet(subcf, 'wallet9'),
-  ]);
+  await cf.all(BTC_WALLET_NAMES.map((name) => (subcf: ILogger) => setupWallet(subcf, name)));
 }
 
 export async function getRandomBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
