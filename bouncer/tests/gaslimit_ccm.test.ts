@@ -593,8 +593,6 @@ describe('GasLimitCcmSwaps', async () => {
     concurrentTest(
       `EVM Insufficient Gas CCM swap ${pair[0]} to ${pair[1]}`,
       async (ctx) => {
-        // TODO: we're somehow recreating a ChainflipIO from a context, instead of that we should
-        // consider redoing the whole pipeline with ChainflipIO
         await testTronInsufficientGas(
           await newChainflipIO(ctx.logger, []),
           pair[0] as Asset,

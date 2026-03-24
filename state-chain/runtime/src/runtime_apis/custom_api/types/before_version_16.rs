@@ -213,6 +213,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			arb: value.arb.into(),
 			sol: value.sol.into(),
 			hub: value.hub,
+			tron: Default::default(),
 		}
 	}
 }

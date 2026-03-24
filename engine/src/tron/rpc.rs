@@ -599,15 +599,6 @@ mod tests {
 	#[ignore = "requires local private tron node"]
 	#[tokio::test]
 	async fn test_private_node_block() {
-		// let tron_rpc_client = TronRpcClient::new(
-		// 	SecretUrl::from("http://localhost:8090/wallet".to_string()),
-		// 	SecretUrl::from("http://localhost:8555/jsonrpc".to_string()),
-		// 	4271970548, // local private node chain ID
-		// 	"Tron-Local",
-		// )
-		// .unwrap()
-		// .await;
-
 		let tron_rpc_client = TronRpcClient::new(
 			SecretUrl::from("https://nile.trongrid.io/wallet".to_string()),
 			SecretUrl::from("https://nile.trongrid.io/jsonrpc".to_string()),
