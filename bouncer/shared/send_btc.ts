@@ -8,6 +8,42 @@ import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
+type WalletBalanceBuckets = {
+  trusted?: number;
+  untrusted_pending?: number;
+  immature?: number;
+  used?: number;
+};
+
+type WalletBalances = {
+  mine?: WalletBalanceBuckets;
+  watchonly?: WalletBalanceBuckets;
+};
+
+function formatWalletBalanceBuckets(label: string, balances?: WalletBalanceBuckets): string {
+  if (!balances) {
+    return `${label}=n/a`;
+  }
+
+  return [
+    `${label}.trusted=${balances.trusted ?? 0}`,
+    `${label}.untrusted_pending=${balances.untrusted_pending ?? 0}`,
+    `${label}.immature=${balances.immature ?? 0}`,
+    `${label}.used=${balances.used ?? 0}`,
+  ].join(', ');
+}
+
+async function logWalletBalances(logger: ILogger, walletName: string, client: Client, context: string) {
+  const availableBalance = (await client.getBalance()) as number;
+  const balances = (await client.getBalances()) as WalletBalances;
+
+  logger.debug(
+    `Wallet ${walletName} balances (${context}): available=${availableBalance}, ${formatWalletBalanceBuckets('mine', balances.mine)}, ${formatWalletBalanceBuckets('watchonly', balances.watchonly)}`,
+  );
+
+  return { availableBalance, balances };
+}
+
 class BtcMutexClient {
   private readonly name: string;
 
@@ -41,7 +77,13 @@ class BtcMutexClient {
   }
 
   private async ensureFunded(logger: ILogger) {
-    const balance = (await this.client.getBalance()) as number;
+    const { availableBalance: balance } = await logWalletBalances(
+      logger,
+      this.name,
+      this.client,
+      'ensureFunded:start',
+    );
+
     if (this.name === 'whale') {
       if (balance <= 200.0) {
         logger.debug(
@@ -52,7 +94,9 @@ class BtcMutexClient {
         let currentBalance = balance;
         while (currentBalance <= 200.0) {
           await sleep(15000);
-          currentBalance = (await this.client.getBalance()) as number;
+          currentBalance = (
+            await logWalletBalances(logger, this.name, this.client, 'ensureFunded:whale-wait')
+          ).availableBalance;
 
           if (currentBalance === previousBalance) {
             throw new Error(
@@ -74,6 +118,7 @@ class BtcMutexClient {
       const hash = await sendBtc(logger, fundingAddress, 200, 1);
 
       logger.debug(`Funded with 200 btc in tx ${hash}`);
+      await logWalletBalances(logger, this.name, this.client, 'ensureFunded:after-top-up');
     }
   }
 }
@@ -114,6 +159,7 @@ export async function fundAndSendTransaction(
 ): Promise<string> {
   logger.debug(`Waiting for bitcoin mutex`);
   return client.runExclusive(logger, async (c) => {
+    await logWalletBalances(logger, 'selected-wallet', c, 'fundAndSendTransaction:before-create');
     logger.debug(`Acquired mutex, creating raw tx`);
     const rawTx = await c.createRawTransaction([], outputs);
     logger.debug(`funding raw tx`);
@@ -133,6 +179,8 @@ export async function fundAndSendTransaction(
     if (!txId) {
       throw new Error('Broadcast failed');
     }
+
+    await logWalletBalances(logger, 'selected-wallet', c, 'fundAndSendTransaction:after-send');
 
     return txId;
   });
