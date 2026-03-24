@@ -366,12 +366,15 @@ export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
   await cf.all(BTC_WALLET_NAMES.map((name) => (subcf: ILogger) => setupWallet(subcf, name)));
 }
 
-export async function getRandomBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
+let btcClientCounter = 0;
+
+export async function getNextBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
   const keys = Object.keys(btcClients);
   if (keys.length === 0) {
     throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
   }
-  const chosen = keys[Math.floor(Math.random() * keys.length)];
+  const chosen = keys[btcClientCounter % keys.length];
+  btcClientCounter += 1;
   return btcClients[chosen];
 }
 
