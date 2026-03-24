@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 491
 expression: val
 ---
 {
@@ -381,6 +382,30 @@ expression: val
       8,
       8,
       8
+    ]
+  },
+  "tron": {
+    "Tron": [
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12,
+      12
     ]
   },
   "predicted_seconds_until_next_vault_rotation": 9
