@@ -139,7 +139,7 @@ export const globalBtcWhaleMutexClient = new BtcMutexClient(
   }),
 );
 
-const BTC_WALLET_NAMES = Array.from({ length: 15 }, (_, i) => `wallet${i}`);
+const BTC_WALLET_NAMES = Array.from({ length: 10 }, (_, i) => `wallet${i}`);
 
 const btcClients: Record<string, BtcMutexClient> = Object.fromEntries(
   BTC_WALLET_NAMES.map((name) => [name, new BtcMutexClient(name, getBtcClient(name))]),
@@ -241,31 +241,42 @@ async function waitForBtcTransaction(
   );
 }
 
-export async function sendBtc(
+type BtcAddressAndAmount = {
+  address: string;
+  amount: number | string;
+};
+
+export async function sendBtcToMultipleAddresses(
   logger: ILogger,
-  address: string,
-  amount: number | string,
+  addressesAndAmounts: BtcAddressAndAmount[],
   confirmations = 1,
   client = globalBtcWhaleMutexClient,
 ): Promise<string> {
+  if (addressesAndAmounts.length === 0) {
+    throw new Error('Expected at least one BTC recipient');
+  }
+
   // Btc client has a limit on the number of concurrent requests
   let txid: string;
   let attempts = 0;
   const maxAttempts = 3;
 
-  // The client will error if the amount has more than 8 decimal places
-  const roundedAmount = Math.round(Number(amount) * 1e8) / 1e8;
+  // The client will error if an amount has more than 8 decimal places
+  const roundedRecipients = addressesAndAmounts.map(({ address, amount }) => ({
+    address,
+    amount: Math.round(Number(amount) * 1e8) / 1e8,
+  }));
 
   while (attempts < maxAttempts) {
     try {
-      logger.debug(`Sending ${roundedAmount}btc to ${address}.`);
+      logger.debug(
+        `Sending BTC to recipients: ${roundedRecipients.map(({ address, amount }) => `${amount}btc to ${address}`).join(', ')}.`,
+      );
       txid = await fundAndSendTransaction(
         logger,
-        [
-          {
-            [address]: roundedAmount,
-          },
-        ],
+        roundedRecipients.map(({ address, amount }) => ({
+          [address]: amount,
+        })),
         await client.getNewAddress(),
         undefined,
         client,
@@ -290,6 +301,26 @@ export async function sendBtc(
   }
 
   return '';
+}
+
+export async function sendBtc(
+  logger: ILogger,
+  address: string,
+  amount: number | string,
+  confirmations = 1,
+  client = globalBtcWhaleMutexClient,
+): Promise<string> {
+  return sendBtcToMultipleAddresses(
+    logger,
+    [
+      {
+        address,
+        amount,
+      },
+    ],
+    confirmations,
+    client,
+  );
 }
 
 export async function setupWallet(logger: ILogger, name: string) {
