@@ -137,7 +137,7 @@ pub struct Submission {
 
 #[derive(Debug)]
 pub enum SubmissionStatus {
-	InBlock { block_hash: H256, tx_hash: H256 },
+	InBlockOrFinalized { block_hash: H256, tx_hash: H256 },
 	Terminated { tx_hash: H256, reason: &'static str },
 }
 
@@ -261,7 +261,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 										// 0.
 										Ok(TransactionStatus::InBlock((block_hash, _extrinsic_index))) |
 										Ok(TransactionStatus::Finalized((block_hash, _extrinsic_index))) => {
-											return Ok(SubmissionStatus::InBlock { block_hash, tx_hash });
+											return Ok(SubmissionStatus::InBlockOrFinalized { block_hash, tx_hash });
 										},
 										Ok(TransactionStatus::Future) |
 										Ok(TransactionStatus::Ready) |
@@ -567,7 +567,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		(request_id, submission_id, submission_status): (RequestID, SubmissionID, SubmissionStatus),
 	) -> Result<(), anyhow::Error> {
 		let (block_hash, tx_hash) = match submission_status {
-			SubmissionStatus::InBlock { block_hash, tx_hash } => (block_hash, tx_hash),
+			SubmissionStatus::InBlockOrFinalized { block_hash, tx_hash } => (block_hash, tx_hash),
 			SubmissionStatus::Terminated { tx_hash, reason } => {
 				warn!(
 					target: "state_chain_client",
