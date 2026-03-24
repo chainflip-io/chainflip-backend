@@ -36,6 +36,7 @@ use cf_chains::{
 use cf_primitives::AssetAmount;
 use codec::{Decode, Encode};
 use ethers::types::H256;
+use futures::future;
 use itertools::Itertools;
 use pallet_cf_ingress_egress::VaultDepositWitness;
 use scale_info::TypeInfo;
@@ -69,17 +70,29 @@ where
 		return Ok(Vec::new());
 	}
 
-	// Fetch transaction data for each vault ingress and extract raw_data.data
+	// Fetch all transactions in parallel for efficiency
+	let get_tx_futures = vault_ingress_transactions.iter().map(|(_, _, tx_id)| {
+		let tx_id_str = format!("{:x}", tx_id);
+		async move { client.get_transaction_by_id(&tx_id_str).await }
+	});
+	let transactions_info_result = future::join_all(get_tx_futures).await;
+
 	let mut vault_swaps = Vec::new();
 
-	// We could do this in parallel but it's anyway unlikely to have multiple Vault swaps in the
-	// same block.
-	for (asset, amount, tx_id) in vault_ingress_transactions {
+	for ((asset, amount, tx_id), transaction_info_result) in
+		vault_ingress_transactions.into_iter().zip(transactions_info_result)
+	{
 		let tx_id_str = format!("{:x}", tx_id);
-		let transaction = client.get_transaction_by_id(&tx_id_str).await?;
+		let transaction = match transaction_info_result {
+			Ok(tx) => tx,
+			Err(e) => {
+				tracing::warn!("Failed to get transaction {:?}: {:?}", tx_id_str, e);
+				continue;
+			},
+		};
 
 		// The transaction should not have reverted, as otherwise the value would not
-		// have changed but we might to have the check.
+		// have changed but check anyway.
 		if transaction.status() != TransactionResultStatus::Success {
 			tracing::warn!(
 				"Transaction skipped because of the result status not being success even if we expect it to have been successful: {:?}, status={:?}",
@@ -400,7 +413,6 @@ mod tests {
 				let vault_swaps =
 					fetch_and_decode_transactions(&retry_client, ingresses, block_num).await?;
 
-				// Assert that vault_swaps matches the expected value
 				let expected_refund_params = ChannelRefundParameters {
 					retry_duration: 100,
 					refund_address: H160::from_slice(
@@ -434,7 +446,6 @@ mod tests {
 					)
 					.unwrap(),
 				);
-				// (expected vault witness construction removed; assert individual fields below)
 
 				// Validate returned vault witness fields we can deterministically assert
 				assert_eq!(vault_swaps.len(), 1);
