@@ -328,6 +328,7 @@ pub mod before_version_10;
 pub mod before_version_15;
 pub mod before_version_16;
 pub mod before_version_3;
+pub mod before_version_9;
 
 pub mod old {
 	use super::*;
@@ -377,30 +378,6 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub available_balance: AssetAmount,
 	pub in_use_balance: AssetAmount,
 	pub is_withdrawing: bool,
-}
-
-pub mod before_version_9 {
-	use super::*;
-
-	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
-	pub struct LiquidityProviderInfo {
-		pub refund_addresses: Vec<(ForeignChain, Option<ForeignChainAddress>)>,
-		pub balances: Vec<(Asset, AssetAmount)>,
-		pub earned_fees: AssetMap<AssetAmount>,
-		pub boost_balances: AssetMap<Vec<LiquidityProviderBoostPoolInfo>>,
-	}
-
-	impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
-		fn from(old: LiquidityProviderInfo) -> Self {
-			Self {
-				refund_addresses: old.refund_addresses,
-				balances: old.balances,
-				earned_fees: old.earned_fees,
-				boost_balances: old.boost_balances,
-				..Default::default()
-			}
-		}
-	}
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
@@ -684,6 +661,7 @@ pub struct RpcLendingConfig {
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
+#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]

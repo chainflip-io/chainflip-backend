@@ -10,7 +10,7 @@ env:
 
 jobs:
   compress-binaries:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -36,7 +36,7 @@ jobs:
           overwrite: true
 
   release:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     needs:
       - compress-binaries
     steps:

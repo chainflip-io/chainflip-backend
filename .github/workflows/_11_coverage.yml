@@ -6,8 +6,12 @@ on:
         type: string
         default: "runtime-benchmarks,slow-tests"
       ci-runner:
+        default: rust-builder-light
+        description: The CI runner to use for unit-tests
+        type: string
+      ci-runner-coverage:
         default: rust-builder
-        description: The CI runner to use
+        description: The CI runner to use for coverage (requires more memory)
         type: string
 
 env:
@@ -53,7 +57,7 @@ jobs:
         timeout-minutes: 23
 
   coverage:
-    runs-on: namespace-profile-${{ inputs.ci-runner }}
+    runs-on: namespace-profile-${{ inputs.ci-runner-coverage }}
     timeout-minutes: 60
     container:
       image: "nscr.io/n0ie27k9ikobs/chainflip-backend/rust-base:nightly-2026-01-06"

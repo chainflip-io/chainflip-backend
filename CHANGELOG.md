@@ -2,6 +2,31 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.6] - 2026-03-12
+
+- fix: Make safe mode RPC backwards compatible.
+- fix: Always sweep on free_balance query.
+
+## [2.1.5] - 2026-03-10
+
+- fix: Log and ignore invalid EVM vault swaps.
+
+## [2.1.4] - 2026-03-03
+
+- fix: RPC backwards compatibility for cf_liquidity_provider_info and cf_free_balances.
+
+## [2.1.3] - 2026-03-03
+
+- fix: Better RPC backwards compatibility for account_info and related RPCs.
+
+## [2.1.2] - 2026-03-03
+
+- fix: switch to deposit channel origin for `account_creation_deposit_channels` ([#6452](https://github.com/chainflip-io/chainflip-backend/issues/6452))
+
+## [2.1.1] - 2026-03-02
+
+- Fix an issue with light RPC mode.
+
 ## [2.1.0] - 2026-02-23
 
 ### Features

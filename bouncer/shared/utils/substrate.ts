@@ -6,6 +6,7 @@ import { Logger } from 'shared/utils/logger';
 import { AsyncQueue } from 'shared/utils/async_queue';
 import { appendFileSync } from 'node:fs';
 import { EventRecord, Header } from '@polkadot/types/interfaces';
+import { hexToU8a } from '@polkadot/util';
 
 // Set the STATE_CHAIN_EVENT_LOG_FILE env var to log all state chain events to a file. Used for debugging.
 export const stateChainEventLogFile = process.env.STATE_CHAIN_EVENT_LOG_FILE; // ?? '/tmp/chainflip/state_chain_events.log';
@@ -760,3 +761,24 @@ export function observeBadEvent<T = any>(
     },
   };
 }
+
+async function fetchSlotDuration(endpoint: string): Promise<number> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 1,
+      jsonrpc: '2.0',
+      method: 'state_call',
+      params: ['AuraApi_slot_duration', ''],
+    }),
+  });
+  const json = (await response.json()) as { result: string };
+  // The result is a SCALE-encoded little-endian u64 representing milliseconds
+  const bytes = hexToU8a(json.result);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return Number(view.getBigUint64(0, true));
+}
+
+/** Block time of the state chain in milliseconds, fetched from AuraApi_slot_duration. */
+export const chainflipBlockTimeMs: number = await fetchSlotDuration(CHAINFLIP_HTTP_ENDPOINT);
