@@ -496,7 +496,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 	Hub(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
-	Trx(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
+	Tron(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -505,7 +505,7 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 		match self {
 			ForeignChainAddressHumanreadable::Eth(address) |
 			ForeignChainAddressHumanreadable::Arb(address) |
-			ForeignChainAddressHumanreadable::Trx(address) => write!(f, "{:#x}", address),
+			ForeignChainAddressHumanreadable::Tron(address) => write!(f, "{:#x}", address),
 			ForeignChainAddressHumanreadable::Dot(address) |
 			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) |
@@ -543,8 +543,9 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Sol(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Hub(address) =>
 				ForeignChainAddressHumanreadable::Hub(address.to_humanreadable(network_environment)),
-			ForeignChainAddress::Tron(address) =>
-				ForeignChainAddressHumanreadable::Trx(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Tron(address) => ForeignChainAddressHumanreadable::Tron(
+				address.to_humanreadable(network_environment),
+			),
 		}
 	}
 }
