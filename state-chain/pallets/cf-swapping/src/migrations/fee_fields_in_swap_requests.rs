@@ -176,7 +176,6 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 									old.input_asset,
 									old.output_asset,
 									false, // not internal
-									false, // with minimum
 								))
 							}),
 							// Starting a new tracker for broker fees is safe.

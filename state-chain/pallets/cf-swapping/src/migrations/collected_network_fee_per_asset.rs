@@ -85,6 +85,11 @@ impl<T: crate::Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			"Post-upgrade: old CollectedNetworkFee StorageValue was not removed"
 		);
 
+		ensure!(
+			crate::CollectedNetworkFee::<T>::iter().count() == 1,
+			"Post-upgrade: CollectedNetworkFee contains more than just USDC"
+		);
+
 		log::info!("✅ Post-upgrade: CollectedNetworkFee migration verified. Usdc = {}.", migrated);
 
 		Ok(())

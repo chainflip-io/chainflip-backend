@@ -266,7 +266,7 @@ impl<T: Config> SwapState<T> {
 	Deserialize,
 )]
 pub struct FeeRateAndMinimum {
-	pub rate: sp_runtime::Permill,
+	pub rate: Permill,
 	pub minimum: AssetAmount,
 }
 
@@ -285,9 +285,9 @@ impl NetworkFeeTracker {
 		Self { network_fee, processed_asset_amount: 0, accumulated_fee: 0 }
 	}
 
-	pub fn new_without_minimum(network_fee: FeeRateAndMinimum) -> Self {
+	pub fn new_without_minimum(network_fee_rate: Permill) -> Self {
 		Self {
-			network_fee: FeeRateAndMinimum { rate: network_fee.rate, minimum: 0 },
+			network_fee: FeeRateAndMinimum { rate: network_fee_rate, minimum: 0 },
 			processed_asset_amount: 0,
 			accumulated_fee: 0,
 		}
@@ -1925,12 +1925,12 @@ pub mod pallet {
 							.as_ref()
 							.map(|intermediate| intermediate.amount)
 							.or_else(|| {
-								// If the swap into stable asset failed, fallback to estimating the
+								// If the swap into intermediate failed, fallback to estimating the
 								// amount via pool price.
 
 								// Should be able to successfully retrieve the price since the pool
 								// should exist as we wouldn't need to estimate if input asset
-								// was already STABLE_ASSET):
+								// was already the intermediate asset):
 								let sell_price =
 									T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
 										.ok()
@@ -2011,11 +2011,10 @@ pub mod pallet {
 							SwapRequestState::BrokerFee { .. } =>
 							// Disposable network fee tracker with no minimum
 								Some(&mut NetworkFeeTracker::new_without_minimum(
-									Pallet::<T>::get_network_fee_for_swap(
+									Pallet::<T>::get_network_fee_rate_for_swap(
 										swap.input_asset(),
 										swap.output_asset(),
-										false,
-										false, // no minium fee
+										false, // is_internal_swap
 									),
 								)),
 							SwapRequestState::NetworkFee => None,
@@ -3055,13 +3054,13 @@ pub mod pallet {
 			Ok(beneficiaries)
 		}
 
-		pub fn get_network_fee_for_swap(
+		/// Gets the network fee rate and minimum in usdc terms for a swap between the given input
+		/// and output assets, taking into account whether it's an internal swap or not.
+		fn get_network_fee(
 			input_asset: Asset,
 			output_asset: Asset,
 			is_internal_swap: bool,
-			with_minimum: bool,
 		) -> FeeRateAndMinimum {
-			// Find the correct fee values in USDC
 			let (input_asset_fee, output_asset_fee, usdc_minimum) = if is_internal_swap {
 				let default_fee = InternalSwapNetworkFee::<T>::get();
 				(
@@ -3080,20 +3079,37 @@ pub mod pallet {
 				)
 			};
 
-			// Convert the minimum amount to the input asset
-			let minimum = if with_minimum {
-				Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
-					input_asset,
-					Asset::Usdc,
-					usdc_minimum,
-					false, // no network fee
-					false, // not internal
-				)
-			} else {
-				0
-			};
+			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum: usdc_minimum }
+		}
 
-			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
+		pub fn get_network_fee_rate_for_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			is_internal_swap: bool,
+		) -> Permill {
+			Self::get_network_fee(input_asset, output_asset, is_internal_swap).rate
+		}
+
+		/// Gets the network fee rate and minimum in the input asset terms.
+		pub fn get_network_fee_for_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			is_internal_swap: bool,
+		) -> FeeRateAndMinimum {
+			// Find the correct fee values in USDC
+			let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
+				Self::get_network_fee(input_asset, output_asset, is_internal_swap);
+
+			// Convert the minimum amount to the input asset
+			let minimum = Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
+				input_asset,
+				Asset::Usdc,
+				usdc_minimum,
+				false, // no network fee
+				false, // not internal
+			);
+
+			FeeRateAndMinimum { rate, minimum }
 		}
 
 		/// Returns the configured default oracle price slippage protection for a single pool leg.
@@ -3308,7 +3324,6 @@ pub mod pallet {
 								// TODO: see if we want to treat lending swaps as internal for
 								// the purposes of determining network fee?
 								matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-								true, // with minimum
 							)
 						} else {
 							// No network fee for RegularNoNetworkFee
@@ -3445,15 +3460,13 @@ pub mod pallet {
 			}
 
 			let network_fee = if with_network_fee {
-				let fee_rate_and_minimum = Pallet::<T>::get_network_fee_for_swap(
+				// Ignoring the minimum network fee because this function is only used for fees and
+				// gas (no minimum).
+				Pallet::<T>::get_network_fee_rate_for_swap(
 					input_asset,
 					output_asset,
 					is_internal_swap,
-					true, // with minimum
-				);
-				// Ignoring the minimum network fee because this function is only used for fees and
-				// gas (no minimum).
-				fee_rate_and_minimum.rate
+				)
 			} else {
 				Permill::zero()
 			};
