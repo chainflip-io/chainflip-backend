@@ -55,7 +55,6 @@ use engine_sc_client::{
 	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
 };
-use ethers::types::H256;
 use futures::FutureExt;
 use itertools::Itertools;
 use pallet_cf_broadcast::TransactionConfirmation;
@@ -169,81 +168,6 @@ impl WitnessClient<TronChain> for TronVoter {
 }
 
 // ------------------------------------------
-// ---    TronRetryRpcApiWithResult       ---
-// ---    delegation for TronVoter        ---
-// ------------------------------------------
-
-#[async_trait::async_trait]
-impl TronRetryRpcApiWithResult for TronVoter {
-	async fn get_transaction_info_by_id(
-		&self,
-		tx_id: &str,
-	) -> anyhow::Result<crate::tron::rpc_client_api::TransactionInfo> {
-		self.client.get_transaction_info_by_id(tx_id).await
-	}
-
-	async fn get_transaction_by_id(
-		&self,
-		tx_id: &str,
-	) -> anyhow::Result<crate::tron::rpc_client_api::Transaction> {
-		self.client.get_transaction_by_id(tx_id).await
-	}
-
-	async fn get_block_balances(
-		&self,
-		block_number: crate::tron::rpc_client_api::BlockNumber,
-		hash: &str,
-	) -> anyhow::Result<crate::tron::rpc_client_api::BlockBalance> {
-		self.client.get_block_balances(block_number, hash).await
-	}
-
-	async fn chain_id(&self) -> anyhow::Result<ethers::types::U256> {
-		self.client.chain_id().await
-	}
-
-	async fn get_logs(
-		&self,
-		block_hash: H256,
-		contract_address: H160,
-	) -> anyhow::Result<Vec<ethers::types::Log>> {
-		self.client.get_logs(block_hash, contract_address).await
-	}
-
-	async fn transaction_receipt(
-		&self,
-		tx_hash: H256,
-	) -> anyhow::Result<ethers::types::TransactionReceipt> {
-		self.client.transaction_receipt(tx_hash).await
-	}
-
-	async fn block(
-		&self,
-		block_number: ethers::types::U64,
-	) -> anyhow::Result<ethers::types::Block<H256>> {
-		self.client.block(block_number).await
-	}
-
-	async fn block_by_hash(&self, block_hash: H256) -> anyhow::Result<ethers::types::Block<H256>> {
-		self.client.block_by_hash(block_hash).await
-	}
-
-	async fn block_with_txs(
-		&self,
-		block_number: ethers::types::U64,
-	) -> anyhow::Result<ethers::types::Block<ethers::types::Transaction>> {
-		self.client.block_with_txs(block_number).await
-	}
-
-	async fn get_transaction(&self, tx_hash: H256) -> anyhow::Result<ethers::types::Transaction> {
-		self.client.get_transaction(tx_hash).await
-	}
-
-	async fn get_block_number(&self) -> anyhow::Result<ethers::types::U64> {
-		self.client.get_block_number().await
-	}
-}
-
-// ------------------------------------------
 // ---    Block height witnessing         ---
 // ------------------------------------------
 
@@ -279,7 +203,7 @@ impl WitnessClientForBlockData<TronChain, Vec<DepositWitness<Tron>>> for TronVot
 		deposit_channels: &Vec<DepositChannel<Tron>>,
 		query: &EvmSingleBlockQuery,
 	) -> Result<Vec<DepositWitness<Tron>>> {
-		witness_deposit_channels(self, config, query, deposit_channels.clone()).await
+		witness_deposit_channels(&self.client, config, query, deposit_channels.clone()).await
 	}
 }
 
@@ -299,7 +223,7 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmVaultContractEvent<Runtime, Tro
 		_properties: &(),
 		query: &EvmSingleBlockQuery,
 	) -> Result<Vec<EvmVaultContractEvent<Runtime, TronInstance>>> {
-		let vault_swaps = witness_vault_swaps(self, config, query).await?;
+		let vault_swaps = witness_vault_swaps(&self.client, config, query).await?;
 
 		let mut result: Vec<EvmVaultContractEvent<Runtime, TronInstance>> = vault_swaps
 			.into_iter()
