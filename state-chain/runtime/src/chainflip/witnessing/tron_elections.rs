@@ -84,7 +84,7 @@ impl ChainTypes for TronChain {
 	const NAME: &'static str = "Tron";
 }
 
-pub const TRON_MAINNET_SAFETY_BUFFER: u32 = 1;
+pub const TRON_MAINNET_SAFETY_BUFFER: u32 = 20; // TODO: to set the right number
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum TronElectoralEvents {
@@ -358,19 +358,19 @@ pub fn initial_state() -> InitialStateOf<Runtime, TronInstance> {
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 10, // TODO: To set the right number
 				safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 10, // TODO: To set the right number
 				safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 			},
 			BlockWitnesserSettings {
 				max_ongoing_elections: 15,
 				max_optimistic_elections: 1,
-				safety_margin: 1,
+				safety_margin: 10, // TODO: To set the right number
 				safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 			},
 			(),
