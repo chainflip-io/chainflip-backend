@@ -65,6 +65,9 @@ members = [
 	"utilities/scale-json",
 	"utilities/scale-json-event-logger",
 ]
+exclude = [
+	"state-chain/runtime-tests",
+]
 
 [workspace.lints.clippy]
 blocks_in_conditions = "allow"
