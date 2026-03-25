@@ -110,7 +110,7 @@ chains! {
 	Arbitrum = 4,
 	Solana = 5,
 	Assethub = 6,
-	// Note: 7 is for BSC
+	// TODO: 7 is for BSC right now but if we add Tron first we might want to update this index.
 	Tron = 8
 }
 
