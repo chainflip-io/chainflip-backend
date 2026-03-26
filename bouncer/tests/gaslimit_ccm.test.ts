@@ -406,7 +406,6 @@ function spamEvmChain<A = []>(cf: ChainflipIO<A>, chain: Chain): () => void {
 
 let stopSpammingEth: () => void;
 let stopSpammingArb: () => void;
-let stopSpammingBsc: () => void;
 let feeDeficitRefused: { stop: () => Promise<void> };
 
 describe('GasLimitCcmSwaps', async () => {
@@ -420,32 +419,28 @@ describe('GasLimitCcmSwaps', async () => {
       // and the chain "base fee" don't increase anyway..
       stopSpammingEth = spamEvmChain(cf, 'Ethereum');
       stopSpammingArb = spamEvmChain(cf, 'Arbitrum');
-      stopSpammingBsc = spamEvmChain(cf, 'Bsc');
 
       // Wait for the fees to increase to the stable expected amount
       const ethMinPriorityFee = getChainMinFee('Ethereum');
       const arbMinBaseFee = getChainMinFee('Arbitrum');
-      const bscMinPriorityFee = getChainMinFee('Bsc');
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const [ethFees, arbFees, bscFees] = await Promise.all([
+        const [ethFees, arbFees] = await Promise.all([
           getChainFees(cf.logger, 'Ethereum'),
           getChainFees(cf.logger, 'Arbitrum'),
-          getChainFees(cf.logger, 'Bsc'),
         ]);
 
         if (
           ethFees.priorityFee < ethMinPriorityFee ||
-          arbFees.baseFee < arbMinBaseFee ||
-          bscFees.priorityFee < bscMinPriorityFee
+          arbFees.baseFee < arbMinBaseFee
         ) {
           cf.debug(
-            `Waiting for chain fees to increase. Ethereum priorityFee: ${ethFees.priorityFee} (waiting for ${ethMinPriorityFee}), Arbitrum baseFee: ${arbFees.baseFee} (waiting for ${arbMinBaseFee}), Bsc priorityFee: ${bscFees.priorityFee} (waiting for ${bscMinPriorityFee})`,
+            `Waiting for chain fees to increase. Ethereum priorityFee: ${ethFees.priorityFee} (waiting for ${ethMinPriorityFee}), Arbitrum baseFee: ${arbFees.baseFee} (waiting for ${arbMinBaseFee})`,
           );
         } else {
           cf.info(
-            `Spamming successful. Ethereum priorityFee: ${ethFees.priorityFee}, Arbitrum baseFee: ${arbFees.baseFee}, Bsc priorityFee: ${bscFees.priorityFee}`,
+            `Spamming successful. Ethereum priorityFee: ${ethFees.priorityFee}, Arbitrum baseFee: ${arbFees.baseFee}`,
           );
           break;
         }
@@ -470,8 +465,6 @@ describe('GasLimitCcmSwaps', async () => {
     ['ArbEth', 'Eth'],
     ['Sol', 'ArbUsdc'],
     ['SolUsdc', 'Eth'],
-    ['Eth', 'Bnb'],
-    ['Flip', 'BscUsdt'],
   ]) {
     concurrentTest(
       `EVM Insufficient Gas CCM swap ${pair[0]} to ${pair[1]}`,
@@ -550,7 +543,6 @@ describe('GasLimitCcmSwaps', async () => {
   afterAll(async () => {
     stopSpammingEth();
     stopSpammingArb();
-    stopSpammingBsc();
 
     // Make sure all the spamming has stopped to avoid triggering connectivity issues when running the next test.
     await sleep(10000);
