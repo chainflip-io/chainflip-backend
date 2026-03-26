@@ -16,7 +16,7 @@
 
 use crate::{
 	backend::CustomRpcBackend,
-	get_preallocated_channels, order_fills,
+	get_preallocated_channels, handle_dynamic_event_error, order_fills,
 	pool_client::{is_transaction_status_error, PoolClientError, SignedPoolClient},
 	CfApiError, RpcResult, StorageQueryApi,
 };
@@ -62,7 +62,7 @@ use sc_client_api::{
 	HeaderBackend, StorageProvider,
 };
 use sc_transaction_pool::TransactionPoolWrapper;
-use sc_transaction_pool_api::{TransactionStatus, TransactionStatusStreamFor, TxIndex};
+use sc_transaction_pool_api::{TransactionStatus, TxIndex};
 use sp_api::CallApiAt;
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
@@ -70,7 +70,7 @@ use state_chain_runtime::{
 	chainflip::BlockUpdate, runtime_apis::custom_api::CustomRuntimeApi, AccountId, ConstU32, Hash,
 	Nonce, RuntimeCall,
 };
-use std::{ops::Range, pin::Pin, sync::Arc};
+use std::{ops::Range, sync::Arc};
 
 pub mod lp_crypto {
 	use sp_application_crypto::{app_crypto, sr25519, KeyTypeId};
@@ -144,15 +144,16 @@ where
 		&self,
 		block_hash: Hash,
 		tx_index: TxIndex,
+		expected_tx_hash: Hash,
 	) -> RpcResult<(ChannelId, LiquidityDepositChannelDetails)> {
-		let ExtrinsicData { events, .. } = self
+		let extrinsic_data = self
 			.signed_pool_client
-			.get_extrinsic_data_dynamic(block_hash, tx_index)
+			.get_watched_extrinsic_data_dynamic(block_hash, tx_index, expected_tx_hash)
 			.await
 			.map_err(CfApiError::from)?;
 
-		Ok(extract_from_first_matching_event!(
-			events,
+		extract_from_first_matching_event!(
+			extrinsic_data.events,
 			cf_static_runtime::liquidity_provider::events::LiquidityDepositAddressReady,
 			{ channel_id, deposit_address, deposit_chain_expiry_block },
 			(channel_id, LiquidityDepositChannelDetails {
@@ -160,7 +161,7 @@ where
 					deposit_chain_expiry_block,
 			})
 		)
-		.map_err(CfApiError::from)?)
+		.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))
 	}
 }
 
@@ -244,7 +245,7 @@ where
 						}
 					}
 				)
-				.map_err(CfApiError::from)?,
+				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
 			},
 		)
 	}
@@ -254,17 +255,17 @@ where
 		asset: Asset,
 		boost_fee: Option<BasisPoints>,
 	) -> RpcResult<ExtrinsicResponse<LiquidityDepositChannelDetails>> {
-		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
-			self.signed_pool_client
-				.submit_watch(
-					RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
-						asset,
-						boost_fee: boost_fee.unwrap_or_default(),
-					}),
-					false,
-				)
-				.await
-				.map_err(CfApiError::from)?;
+		let (submitted_tx_hash, mut status_stream) = self
+			.signed_pool_client
+			.submit_watch(
+				RuntimeCall::from(pallet_cf_lp::Call::request_liquidity_deposit_address {
+					asset,
+					boost_fee: boost_fee.unwrap_or_default(),
+				}),
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
 
 		// Get the pre-allocated channels from the previous finalized block
 		let pre_allocated_channels = get_preallocated_channels(
@@ -277,7 +278,11 @@ where
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) => {
 					let (channel_id, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await?;
 
 					// If the extracted deposit channel was pre-allocated to this lp
@@ -294,7 +299,11 @@ where
 				},
 				TransactionStatus::Finalized((block_hash, tx_index)) => {
 					let (_, channel_details) = self
-						.extract_liquidity_deposit_channel_details(block_hash, tx_index)
+						.extract_liquidity_deposit_channel_details(
+							block_hash,
+							tx_index,
+							submitted_tx_hash,
+						)
 						.await?;
 					return Ok(ExtrinsicResponse {
 						block_number: self.rpc_backend.block_number_for(block_hash)?,
@@ -370,7 +379,7 @@ where
 						response: (egress_id.0 .0, egress_id.1)
 					}
 				)
-				.map_err(CfApiError::from)?,
+				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
 			},
 		)
 	}
@@ -729,7 +738,7 @@ where
 						response: swap_request_id.0.into()
 					}
 				)
-				.map_err(CfApiError::from)?,
+				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
 			},
 		)
 	}
