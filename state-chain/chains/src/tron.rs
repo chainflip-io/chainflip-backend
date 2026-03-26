@@ -567,3 +567,70 @@ mod tests {
 		assert!(TronAddress::try_from(vec![0x41, 0x01, 0x02]).is_err());
 	}
 }
+
+#[cfg(test)]
+mod lifecycle_tests {
+	use super::*;
+	use crate::ChannelLifecycleHooks;
+
+	const TRX: assets::tron::Asset = assets::tron::Asset::Trx;
+	const USDT: assets::tron::Asset = assets::tron::Asset::TronUsdt;
+
+	macro_rules! expect_deposit_state {
+		( $state:expr, $asset:expr, $pat:pat ) => {
+			cf_utilities::assert_matches!(
+				DepositChannel::<Tron> {
+					channel_id: Default::default(),
+					address: Default::default(),
+					asset: $asset,
+					state: $state,
+				}
+				.fetch_id(),
+				$pat
+			);
+		};
+	}
+
+	#[test]
+	fn tron_deposit_address_lifecycle() {
+		const TEST_BLOCK_NUMBER: u64 = 42;
+
+		// Initial state is undeployed.
+		let mut state = DeploymentStatus::default();
+		assert_eq!(state, DeploymentStatus::Undeployed);
+		assert!(state.can_fetch());
+		expect_deposit_state!(state, TRX, EvmFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, USDT, EvmFetchId::DeployAndFetch(..));
+
+		// Pending channels can't be fetched from.
+		assert!(state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// Trying to schedule the fetch on a pending channel has no effect.
+		assert!(!state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// On completion, the pending channel is now deployed and can be fetched from again.
+		assert!(state.on_fetch_completed(TEST_BLOCK_NUMBER));
+		assert_eq!(state, DeploymentStatus::Deployed { at_block_height: TEST_BLOCK_NUMBER });
+		assert!(state.can_fetch());
+
+		// Both native TRX and any ERC-20 require a fetch. This is a Tron-specific behaviour,
+		// in other EVMs the native asset does not require a fetch after deployment.
+		expect_deposit_state!(state, TRX, EvmFetchId::Fetch(..));
+		expect_deposit_state!(state, USDT, EvmFetchId::Fetch(..));
+
+		// Channel is now in its final deployed state and can be fetched from at any time.
+		assert!(!state.on_fetch_scheduled());
+		assert!(state.can_fetch());
+		assert!(!state.on_fetch_completed(TEST_BLOCK_NUMBER + 1));
+		assert!(state.can_fetch());
+		expect_deposit_state!(state, TRX, EvmFetchId::Fetch(..));
+		expect_deposit_state!(state, USDT, EvmFetchId::Fetch(..));
+
+		assert_eq!(state, DeploymentStatus::Deployed { at_block_height: TEST_BLOCK_NUMBER });
+		assert!(!state.on_fetch_scheduled());
+	}
+}
