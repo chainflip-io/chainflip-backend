@@ -60,6 +60,15 @@ pub enum PoolClientError {
 	BlockNotFound(Hash),
 	#[error("The block extrinsics does not have an extrinsic at index {0}")]
 	ExtrinsicNotFound(usize),
+	#[error(
+		"Watched transaction {expected_tx_hash} was not found at reported index {reported_index} in block {block_hash}. Reported extrinsic hash: {reported_tx_hash:?}"
+	)]
+	WatchedTransactionHashMismatch {
+		expected_tx_hash: Hash,
+		block_hash: Hash,
+		reported_index: usize,
+		reported_tx_hash: Option<Hash>,
+	},
 	#[error("Failed to submit extrinsic to the transaction pool after {0} attempts")]
 	PoolSubmitError(usize),
 	#[error("Could not acquire lock for transaction pool")]
@@ -116,6 +125,9 @@ where
 	runtime_decoders: Arc<RwLock<HashMap<u32, RuntimeDecoder>>>,
 	_phantom: PhantomData<(B, BE)>,
 }
+
+type TransactionPoolStatusStream<B, C> =
+	Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>>;
 
 impl<C, B, BE> SignedPoolClient<C, B, BE>
 where
@@ -236,21 +248,27 @@ where
 		Ok(Decode::decode(&mut &call_data[..])?)
 	}
 
-	pub async fn get_extrinsic_data_dynamic(
+	fn extrinsic_hash(extrinsic: &B::Extrinsic) -> Hash {
+		<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic)
+	}
+
+	async fn get_extrinsic_data_dynamic_internal(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
+		expected_tx_hash: Option<Hash>,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
 		let signed_block = self
 			.client
 			.block(block_hash)?
 			.ok_or(PoolClientError::BlockNotFound(block_hash))?;
 
-		let extrinsic = signed_block
-			.block
-			.extrinsics()
-			.get(extrinsic_index)
-			.ok_or(PoolClientError::ExtrinsicNotFound(extrinsic_index))?;
+		let (resolved_index, tx_hash) = self.resolve_extrinsic_index(
+			block_hash,
+			signed_block.block.extrinsics(),
+			extrinsic_index,
+			expected_tx_hash,
+		)?;
 
 		// Construct the storage key for system events
 		let events_storage_key = sp_core::storage::StorageKey(
@@ -262,17 +280,14 @@ where
 		let dynamic_events = self
 			.runtime_decoder(block_hash)
 			.await?
-			.decode_extrinsic_events(extrinsic_index, raw_events)?;
-
-		let tx_hash =
-			<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
+			.decode_extrinsic_events(resolved_index, raw_events)?;
 
 		match dynamic_events.extrinsic_result()? {
 			Either::Left(dispatch_info) => Ok(ExtrinsicData {
 				tx_hash,
 				events: dynamic_events,
 				header: signed_block.block.header().clone(),
-				tx_index: extrinsic_index,
+				tx_index: resolved_index,
 				dispatch_info,
 				block_hash,
 			}),
@@ -282,21 +297,37 @@ where
 		}
 	}
 
-	async fn get_extrinsic_data_static(
+	pub async fn get_watched_extrinsic_data_dynamic(
 		&self,
 		block_hash: Hash,
 		extrinsic_index: usize,
+		expected_tx_hash: Hash,
+	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
+		self.get_extrinsic_data_dynamic_internal(
+			block_hash,
+			extrinsic_index,
+			Some(expected_tx_hash),
+		)
+		.await
+	}
+
+	async fn get_extrinsic_data_static_internal(
+		&self,
+		block_hash: Hash,
+		extrinsic_index: usize,
+		expected_tx_hash: Option<Hash>,
 	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
 		let signed_block = self
 			.client
 			.block(block_hash)?
 			.ok_or(PoolClientError::BlockNotFound(block_hash))?;
 
-		let extrinsic = signed_block
-			.block
-			.extrinsics()
-			.get(extrinsic_index)
-			.ok_or(PoolClientError::ExtrinsicNotFound(extrinsic_index))?;
+		let (resolved_index, tx_hash) = self.resolve_extrinsic_index(
+			block_hash,
+			signed_block.block.extrinsics(),
+			extrinsic_index,
+			expected_tx_hash,
+		)?;
 
 		let block_events = StorageQueryApi::new(&self.client)
 			.get_storage_value::<frame_system::Events<state_chain_runtime::Runtime>, _>(block_hash)
@@ -309,13 +340,10 @@ where
 					phase: frame_system::Phase::ApplyExtrinsic(index),
 					event,
 					..
-				} if *index as usize == extrinsic_index => Some(event.clone()),
+				} if *index as usize == resolved_index => Some(event.clone()),
 				_ => None,
 			})
 			.collect::<Vec<_>>();
-
-		let tx_hash =
-			<state_chain_runtime::Runtime as frame_system::Config>::Hashing::hash_of(extrinsic);
 
 		// We expect to find a Success or Failed event, grab the dispatch info and send
 		// it with the events
@@ -335,7 +363,7 @@ where
 				tx_hash,
 				events: extrinsic_events,
 				header: signed_block.block.header().clone(),
-				tx_index: extrinsic_index,
+				tx_index: resolved_index,
 				dispatch_info,
 				block_hash,
 			});
@@ -345,6 +373,55 @@ where
 			Err(dispatch_error) => Err(PoolClientError::ExtrinsicDispatchError(
 				self.runtime_decoder(block_hash).await?.decode_dispatch_error(dispatch_error),
 			)),
+		}
+	}
+
+	/// Returns the extrinsic index and hash for the given block hash and reported extrinsic index.
+	///
+	/// Optimistically checks if the extrinsic at the reported index matches the expected
+	/// transaction hash. If not, it falls back to searching through all extrinsics in the block to
+	/// find a matching hash. This is to handle cases where the transaction status reports an
+	/// incorrect extrinsic index.
+	fn resolve_extrinsic_index(
+		&self,
+		block_hash: Hash,
+		extrinsics: &[B::Extrinsic],
+		reported_index: usize,
+		expected_tx_hash: Option<Hash>,
+	) -> Result<(usize, Hash), PoolClientError> {
+		let reported_tx_hash = extrinsics.get(reported_index).map(Self::extrinsic_hash);
+
+		match expected_tx_hash {
+			Some(expected_tx_hash) if reported_tx_hash == Some(expected_tx_hash) =>
+				Ok((reported_index, expected_tx_hash)),
+			Some(expected_tx_hash) => {
+				if let Some(resolved_index) = extrinsics
+					.iter()
+					.position(|extrinsic| Self::extrinsic_hash(extrinsic) == expected_tx_hash)
+				{
+					log::warn!(
+						target: "pool_client",
+						"Transaction status reported tx index {reported_index} for tx {expected_tx_hash} in block {block_hash}, but the matching extrinsic was found at index {resolved_index}. Falling back to the resolved index.",
+					);
+					Ok((resolved_index, expected_tx_hash))
+				} else {
+					log::warn!(
+						target: "pool_client",
+						"Transaction status reported tx index {reported_index} for tx {expected_tx_hash} in block {block_hash}, but the extrinsic at that index had hash {:?} and the expected transaction was not found anywhere in the block.",
+						reported_tx_hash,
+					);
+					Err(PoolClientError::WatchedTransactionHashMismatch {
+						expected_tx_hash,
+						block_hash,
+						reported_index,
+						reported_tx_hash,
+					})
+				}
+			},
+			None => extrinsics
+				.get(reported_index)
+				.map(|extrinsic| (reported_index, Self::extrinsic_hash(extrinsic)))
+				.ok_or(PoolClientError::ExtrinsicNotFound(reported_index)),
 		}
 	}
 
@@ -477,13 +554,12 @@ where
 		&self,
 		call: RuntimeCall,
 		dry_run: bool,
-	) -> Result<Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>>, PoolClientError>
-	{
+	) -> Result<(Hash, TransactionPoolStatusStream<B, C>), PoolClientError> {
 		if dry_run {
 			self.dry_run_extrinsic(call.clone()).await?;
 		}
 
-		let mut maybe_status_stream = None;
+		let mut maybe_submission: Option<(Hash, TransactionPoolStatusStream<B, C>)> = None;
 		let permit = self
 			.pool_semaphore
 			.acquire()
@@ -499,18 +575,19 @@ where
 			}
 			let nonce = self.next_nonce().await?;
 			let extrinsic = self.create_signed_extrinsic(call.clone(), nonce)?;
+			let tx_hash = Self::extrinsic_hash(&extrinsic);
 
 			match self
 				.pool
 				.submit_and_watch(
 					self.client.info().best_hash,
 					TransactionSource::External,
-					extrinsic,
+					extrinsic.clone(),
 				)
 				.await
 			{
 				Ok(status_stream) => {
-					maybe_status_stream = Some(status_stream);
+					maybe_submission = Some((tx_hash, status_stream));
 					break;
 				},
 				Err(pool_error) => {
@@ -532,7 +609,7 @@ where
 		// release the semaphore permit as soon as possible
 		drop(permit);
 
-		maybe_status_stream.ok_or(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
+		maybe_submission.ok_or(PoolClientError::PoolSubmitError(MAX_POOL_SUBMISSION_RETRIES))
 	}
 
 	/// Signs and submits a `RuntimeCall` to the transaction pool and watches its progress.
@@ -550,7 +627,7 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<Vec<state_chain_runtime::RuntimeEvent>>, PoolClientError> {
-		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
+		let (submitted_tx_hash, mut status_stream): (Hash, TransactionPoolStatusStream<B, C>) =
 			self.submit_watch(call, dry_run).await?;
 
 		// Periodically poll the transaction pool to check inclusion status
@@ -558,11 +635,23 @@ where
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) =>
 					if !until_finalized {
-						return self.get_extrinsic_data_static(block_hash, tx_index).await
+						return self
+							.get_extrinsic_data_static_internal(
+								block_hash,
+								tx_index,
+								Some(submitted_tx_hash),
+							)
+							.await
 					},
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
 					if until_finalized {
-						return self.get_extrinsic_data_static(block_hash, tx_index).await
+						return self
+							.get_extrinsic_data_static_internal(
+								block_hash,
+								tx_index,
+								Some(submitted_tx_hash),
+							)
+							.await
 					},
 				_ => is_transaction_status_error(&status)?,
 			}
@@ -585,18 +674,30 @@ where
 		until_finalized: bool,
 		dry_run: bool,
 	) -> Result<ExtrinsicData<DynamicEvents>, PoolClientError> {
-		let mut status_stream: Pin<Box<TransactionStatusStreamFor<TransactionPoolWrapper<B, C>>>> =
+		let (submitted_tx_hash, mut status_stream): (Hash, TransactionPoolStatusStream<B, C>) =
 			self.submit_watch(call, dry_run).await?;
 
 		while let Some(status) = status_stream.next().await {
 			match status {
 				TransactionStatus::InBlock((block_hash, tx_index)) =>
 					if !until_finalized {
-						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+						return self
+							.get_extrinsic_data_dynamic_internal(
+								block_hash,
+								tx_index,
+								Some(submitted_tx_hash),
+							)
+							.await
 					},
 				TransactionStatus::Finalized((block_hash, tx_index)) =>
 					if until_finalized {
-						return self.get_extrinsic_data_dynamic(block_hash, tx_index).await
+						return self
+							.get_extrinsic_data_dynamic_internal(
+								block_hash,
+								tx_index,
+								Some(submitted_tx_hash),
+							)
+							.await
 					},
 				_ => is_transaction_status_error(&status)?,
 			}
