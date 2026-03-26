@@ -61,7 +61,7 @@ const cfTesterIdl = await getCfTesterIdl();
 export const cfMutex = new KeyedMutex();
 export const btcClientMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Solana'] as Chain[];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Bsc', 'Solana'] as Chain[];
 export const vaultSwapSupportedChains = [
   'Ethereum',
   'Arbitrum',
@@ -258,6 +258,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'BscUsdt':
           return process.env.BSC_USDT_TOKEN_ADDRESS ?? '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9';
+        case 'CFTESTER':
+          return process.env.BSC_CF_TESTER_ADDRESS ?? '0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
@@ -1137,6 +1139,7 @@ export async function observeCcmReceived(
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Bsc':
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
