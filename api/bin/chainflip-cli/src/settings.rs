@@ -212,7 +212,9 @@ pub enum CliCommand {
 	GetBoundExecutorAddress,
 	#[clap(about = "Rotate your session keys")]
 	Rotate,
-	#[clap(about = "Delegate your GRANDPA vote to a freshly generated delegate key")]
+	#[clap(
+		about = "Delegate your GRANDPA vote - generates a delegate key on the node if no key exists and delegates the vote to it"
+	)]
 	DelegateGrandpaVote,
 	#[clap(about = "Revoke your GRANDPA vote delegation")]
 	RevokeGrandpaDelegation,
