@@ -183,6 +183,19 @@ jobs:
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
+      - name: Upgrade binaries 💾
+        if: inputs.run-job
+        shell: bash
+        id: upgrade-binaries
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/upgrade_binaries.ts \
+            --bins ./../upgrade-to-bins \
+            --localnet_init ./../localnet/init
+
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
@@ -196,22 +209,21 @@ jobs:
           ./fast_bouncer.sh
           git reset --hard
 
-      - name: Upgrade network 🚀
+      - name: Upgrade runtime 🚀
         if: inputs.run-job
         shell: bash
-        id: upgrade-network
-        env:
-          SKIP_BLS_TESTS: "true"
+        id: upgrade-runtime
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/upgrade_network.ts prebuilt \
+          ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
+            --try_runtime
+          ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
-            --localnet_init ./../localnet/init \
-            --oldVersion "${{ env.OLD_BIN_VERSION }}"
+            --localnet_init ./../localnet/init
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
@@ -281,13 +293,6 @@ jobs:
         continue-on-error: true
         run: |
           cat /tmp/chainflip/debug.log
-
-      - name: Show logs from docker containers 🐳🕵️‍♂️
-        if: always()
-        continue-on-error: true
-        run: |
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs > /tmp/chainflip/chainflip-docker-logs.log 
-          cat /tmp/chainflip/chainflip-docker-logs.log
 
       - name: Upload Localnet Logs 💾
         if: inputs.run-job || failure() || cancelled()
