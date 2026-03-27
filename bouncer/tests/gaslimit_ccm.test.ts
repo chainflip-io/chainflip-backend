@@ -431,10 +431,7 @@ describe('GasLimitCcmSwaps', async () => {
           getChainFees(cf.logger, 'Arbitrum'),
         ]);
 
-        if (
-          ethFees.priorityFee < ethMinPriorityFee ||
-          arbFees.baseFee < arbMinBaseFee
-        ) {
+        if (ethFees.priorityFee < ethMinPriorityFee || arbFees.baseFee < arbMinBaseFee) {
           cf.debug(
             `Waiting for chain fees to increase. Ethereum priorityFee: ${ethFees.priorityFee} (waiting for ${ethMinPriorityFee}), Arbitrum baseFee: ${arbFees.baseFee} (waiting for ${arbMinBaseFee})`,
           );
