@@ -11,7 +11,6 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
-import { SwapContext } from 'shared/utils/swap_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 function shuffle<T>(array: T[]): T[] {
@@ -76,37 +75,30 @@ type SwapPair = {
   destination: Destination;
 };
 
-function generateSwapPairs() {
+function generateSwapPairs(allTestedAssets: Asset[], testWithAllPossiblePartners: Asset[]) {
   const sources: Source[] = [];
   const destinations: Destination[] = [];
 
-  // TODO: properly include TRON and BSC assets once they are fully integrated
-  // if we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
-  // the test starts to randomly fail because the assethub node is overloaded.
-  const AssetsWithoutAssethub = Object.values(Assets).filter(
-    (id) =>
-      chainFromAsset(id) !== 'Assethub' &&
-      chainFromAsset(id) !== 'Bsc' &&
-      chainFromAsset(id) !== 'Tron',
-  );
+  for (const asset of testWithAllPossiblePartners) {
+    if (!allTestedAssets.includes(asset)) {
+      throw new Error(
+        `Asset ${asset} that's supposed to be tested against all assets is not included in the list of all assets.`,
+      );
+    }
+  }
 
   // populate sources and destination lists
-  AssetsWithoutAssethub.forEach((asset) => {
+  allTestedAssets.forEach((asset) => {
     const chain = chainFromAsset(asset);
     sources.push({ asset, trigger: 'DepositChannel' });
+    destinations.push({ asset });
     if (vaultSwapSupportedChains.includes(chain)) {
       sources.push({ asset, trigger: 'VaultSwap' });
     }
-
-    destinations.push({ asset });
   });
 
-  // randomly shuffle sources and destinations
-  shuffle(sources);
-  shuffle(destinations);
-
   function randomSource(arg: { exclude?: Asset } = {}): Source {
-    const available = AssetsWithoutAssethub.filter((a) => a !== arg.exclude);
+    const available = allTestedAssets.filter((a) => a !== arg.exclude);
     const asset = available[Math.floor(Math.random() * available.length)];
     const chain = chainFromAsset(asset);
     const trigger =
@@ -117,13 +109,40 @@ function generateSwapPairs() {
   }
 
   function randomDestination(arg: { exclude?: Asset } = {}): Destination {
-    const available = AssetsWithoutAssethub.filter((a) => a !== arg.exclude);
+    const available = allTestedAssets.filter((a) => a !== arg.exclude);
     const asset = available[Math.floor(Math.random() * available.length)];
     return { asset };
   }
 
-  // assign swap pairs
+  // -----------------------------------
+  // the swap pairs that will be tested
   const pairs: SwapPair[] = [];
+
+  // append all pairs for assets that should be tested against all
+  function pushSwap(trigger: 'DepositChannel' | 'VaultSwap', source: Asset, destination: Asset) {
+    pairs.push({
+      source: { asset: source, trigger },
+      destination: { asset: destination },
+    });
+  }
+  for (const asset1 of testWithAllPossiblePartners) {
+    for (const asset2 of allTestedAssets) {
+      if (asset1 !== asset2) {
+        pushSwap('DepositChannel', asset1, asset2);
+        pushSwap('DepositChannel', asset2, asset1);
+        if (vaultSwapSupportedChains.includes(chainFromAsset(asset1))) {
+          pushSwap('VaultSwap', asset1, asset2);
+        }
+        if (vaultSwapSupportedChains.includes(chainFromAsset(asset2))) {
+          pushSwap('VaultSwap', asset2, asset1);
+        }
+      }
+    }
+  }
+
+  // append swaps with random partners by picking from randomly shuffled sources and destinations
+  shuffle(sources);
+  shuffle(destinations);
   while (sources.length > 0 || destinations.length > 0) {
     const source = sources.pop() || randomSource();
     const destination = destinations.pop() || randomDestination();
@@ -138,7 +157,16 @@ function generateSwapPairs() {
     }
   }
 
-  return pairs;
+  // remove duplicates
+  const seenPairs = new Set<string>();
+  const uniquePairs = pairs.filter((pair) => {
+    const key = `${pair.source.asset}-${pair.source.trigger}-${pair.destination.asset}`;
+    if (seenPairs.has(key)) return false;
+    seenPairs.add(key);
+    return true;
+  });
+
+  return uniquePairs;
 }
 
 export function testAllSwaps(timeoutPerSwap: number) {
@@ -162,16 +190,15 @@ export function testAllSwaps(timeoutPerSwap: number) {
     });
   }
 
-  function randomElement<Value>(items: Value[]): Value {
-    return items[Math.floor(Math.random() * items.length)];
-  }
-
-  // If we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
-  // the test starts to randomly fail because the assethub node is overloaded.
-  const AssetsForTesting = Object.values(Assets).filter((id) => chainFromAsset(id) !== 'Assethub');
+  // All assets that should be tested.
+  const allTestedAssets = Object.values(Assets);
+  // These assets are tested against *every* possible asset
+  const testWithAllPossiblePartners = Object.values(Assets).filter(
+    (id) => chainFromAsset(id) === 'Tron' || chainFromAsset(id) === 'Bsc',
+  );
 
   // we do 2 tests for every input and output
-  const pairs = [...generateSwapPairs(), ...generateSwapPairs()];
+  const pairs = generateSwapPairs(allTestedAssets, testWithAllPossiblePartners);
   for (const { source, destination } of pairs) {
     const testFunction = source.trigger === 'DepositChannel' ? testSwap : testVaultSwap;
     appendSwap(source.asset, destination.asset, testFunction, false);
@@ -185,25 +212,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
     }
   }
 
-  // Swaps from assethub paired with random chains.
-  // NOTE: we don't test swaps *to* assethub here, those tests are run sequentially in
-  // `testSwapsToAssethub`.
-  const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
-  assethubAssets.sort().forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsForTesting), testSwap);
-  });
-
   for (const swap of allSwaps) {
     concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
-  }
-}
-
-export async function testSwapsToAssethub(testContext: TestContext) {
-  // we run three swaps to assethub in sequence. Otherwise, there can be nonce issues,
-  // which caused bouncer flakiness in the past.
-  for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
-    const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });
-    const cf = await newChainflipIO(logger, [] as []);
-    await testSwap(cf, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
   }
 }
