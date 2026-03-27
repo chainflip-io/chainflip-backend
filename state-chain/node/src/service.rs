@@ -382,10 +382,13 @@ pub fn new_full<
 					)))?;
 				}
 
-				// Add GRANDPA extension RPCs for delegate key management
-				module.merge(GrandpaExtApiServer::into_rpc(GrandpaExtRpc::new(
-					keystore_ptr.clone(),
-				)))?;
+				// Add GRANDPA extension RPCs for delegate key management only if the node is a
+				// a validator (not for RPC nodes).
+				if role.is_authority() {
+					module.merge(GrandpaExtApiServer::into_rpc(GrandpaExtRpc::new(
+						keystore_ptr.clone(),
+					)))?;
+				}
 
 				Ok(module)
 			};
