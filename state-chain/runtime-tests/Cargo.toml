@@ -9,13 +9,13 @@ state-chain-runtime = { path = "../runtime", features = ["std"] }
 cf-primitives = { path = "../primitives", features = ["std"] }
 
 # Polkadot SDK dependencies
-frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
-sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3-grandpa" }
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
 codec = { version = "3.7.4", package = "parity-scale-codec", features = [
     "std",
 ] }
