@@ -563,10 +563,22 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 								},
 							});
 
-						client
+						let tx_hash = client
 							.send_transaction(transaction_request)
 							.await
-							.context(format!("Failed to send {} transaction", s))
+							.context(format!("Failed to send {} transaction", s))?;
+
+						// 12s ethereum block time
+						tokio::time::sleep(Duration::from_millis(12_000)).await;
+
+						let confirmation = client.get_transaction(tx_hash).await;
+						match confirmation {
+							Ok(_) => {},
+							Err(err) => {
+								tracing::warn!("Sent transaction {tx_hash:#x} but could not verify it in the mempool/chain after 12s: {err:?}")
+							},
+						}
+						Ok(tx_hash)
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
