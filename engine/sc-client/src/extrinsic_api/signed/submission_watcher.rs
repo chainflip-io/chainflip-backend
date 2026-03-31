@@ -349,6 +349,13 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// submitted. And so we can ignore the error and return
 						// the transaction hash.
 						ClientError::Call(obj) if obj.code() == POOL_ALREADY_IMPORTED => {
+							// POOL_ALREADY_IMPORTED can be returned even on a single submission due
+							// to a substrate bug (https://github.com/paritytech/polkadot-sdk/pull/11419).
+							// We track the submission here so it gets properly cleaned up when the
+							// tx appears in a finalized block. This is duplicate-tolerant,
+							// so double-tracking the same submission (e.g. on an actual
+							// resubmission) is harmless, as duplicates get cleaned up when
+							// the tx is observed in a finalized block.
 							self.track_submission(request, nonce, lifetime, tx_hash, None);
 							debug!("Already in pool with tx_hash: {tx_hash:#x}.");
 							break Ok(Ok(tx_hash))
