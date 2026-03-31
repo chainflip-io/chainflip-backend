@@ -75,10 +75,31 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
   const lpAccounts = knownAccounts.filter((a) => a.role === AccountRole.LiquidityProvider);
 
   await cf.all([
+    // Account based rpc calls
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_account_info_v2', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_free_balances', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_lp_total_balances', lpAccounts),
 
+    // read only rpc calls, often change
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_safe_mode_statuses'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_environment'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_funding_environment'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_swapping_environment'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_ingress_egress_environment'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_pools_environment'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_available_pools'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_get_trading_strategy_limits'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_lending_config'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_auction_parameters'),
+
+    // read only rpc calls, mostly stable
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_accounts'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_current_compatibility_version'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_lp_get_order_fills'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_supported_assets'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_boost_pools_depth'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_get_transaction_screening_events'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_controlled_vault_addresses'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_all_open_deposit_channels'),
   ]);
 }
