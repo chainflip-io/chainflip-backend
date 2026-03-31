@@ -21,6 +21,8 @@ import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitco
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
+import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
+import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
 
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
@@ -39,6 +41,24 @@ async function main(): Promise<void> {
   // Step 2
   cf.info('Forcing rotation');
   await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
+
+  const rotationEvent = await cf.stepUntilOneEventOf({
+    rotationPhaseUpdated: {
+      name: 'Validator.RotationPhaseUpdated',
+      schema: validatorRotationPhaseUpdated.refine(
+        (event) => event.newPhase.__kind === 'KeygensInProgress',
+      ),
+    },
+    rotationAborted: {
+      name: 'Validator.RotationAborted',
+      schema: validatorRotationAborted,
+    },
+  });
+  if (rotationEvent.key === 'rotationAborted') {
+    throw new Error(
+      `Initial setup_vaults forced rotation was ABORTED. Cannot continue with the test, please check the node logs for possible reasons.`,
+    );
+  }
 
   // Step 3
   cf.info('Waiting for new keys');
