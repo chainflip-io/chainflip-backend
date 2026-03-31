@@ -34,8 +34,6 @@ use engine_sc_client::{
 use futures::try_join;
 use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, SolanaInstance};
 
-use super::common::epoch_source::EpochSource;
-
 use anyhow::Result;
 
 /// Starts all the witnessing tasks.
@@ -68,12 +66,6 @@ where
 		+ Send
 		+ Sync,
 {
-	let epoch_source =
-		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
-			.await
-			.participating(state_chain_client.account_id())
-			.await;
-
 	let witness_call = {
 		let state_chain_client = state_chain_client.clone();
 		move |call, epoch_index| {
@@ -119,20 +111,19 @@ where
 	let start_eth =
 		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
-	let start_hub = super::hub::start(
+	super::hub::start(
 		scope,
 		hub_client,
 		witness_call.clone(),
 		state_chain_client.clone(),
 		state_chain_stream,
-		epoch_source,
 		db,
 	);
 
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(start_eth, start_arb, start_sol, start_btc, start_hub, start_generic_elections)?;
+	try_join!(start_eth, start_arb, start_sol, start_btc, start_generic_elections)?;
 
 	Ok(())
 }
