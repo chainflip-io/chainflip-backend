@@ -114,5 +114,6 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
     (subcf) => testParameterlessRpcCall(subcf, 'cf_get_transaction_screening_events'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_controlled_vault_addresses'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_all_open_deposit_channels'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_get_vault_addresses'),
   ]);
 }
