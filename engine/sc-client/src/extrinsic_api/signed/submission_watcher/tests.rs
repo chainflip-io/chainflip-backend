@@ -148,35 +148,6 @@ async fn should_track_submission_when_already_in_pool() {
 		async {
 			let mut mock_rpc_api = MockBaseRpcApi::new();
 
-			mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
-			mock_rpc_api.expect_submit_and_watch_extrinsic().return_once(move |_| {
-				Ok(Box::pin(stream::iter(vec![Ok(TransactionStatus::Dropped)]))
-					as WatchExtrinsicStream)
-			});
-
-			let (mut watcher, mut requests) = SubmissionWatcher::new(
-				scope,
-				signer::PairSigner::new(sp_core::Pair::generate().0),
-				INITIAL_NONCE,
-				H256::default(),
-				0,
-				Default::default(),
-				H256::default(),
-				SIGNED_EXTRINSIC_LIFETIME,
-				Arc::new(mock_rpc_api),
-			);
-
-			watcher
-				.new_request(&mut requests, RequestStrategy::AllowMultipleSubmissions)
-				.await?;
-			assert_eq!(requests.get(&0).unwrap().pending_submissions.len(), 1);
-			assert_eq!(watcher.submissions_by_nonce.len(), 1);
-
-			let submission_details = watcher.watch_for_submission_in_block().await;
-			watcher.on_submission_in_block(&mut requests, submission_details).await?;
-
-			assert!(requests.get(&0).unwrap().pending_submissions.is_empty());
-			assert!(watcher.submissions_by_nonce.is_empty());
 			mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).return_once(move |_| {
 				Err(ErrorObject::owned(
 					POOL_ALREADY_IMPORTED,
@@ -207,6 +178,7 @@ async fn should_track_submission_when_already_in_pool() {
 			assert_eq!(submission.tx_hash, tx_hash);
 			assert_eq!(submission.request_id, request.id);
 			assert!(!watcher.submission_status_futures.contains_key(&(request.id, submission.id)));
+
 			Ok(())
 		}
 		.boxed()
