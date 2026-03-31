@@ -16,7 +16,7 @@ import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { execWithLog } from 'shared/utils/exec_with_log';
-import { clearChainflipApiCache, clearSubscribeHeadsCache, } from 'shared/utils/substrate';
+import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { Logger } from 'pino';
 import { globalLogger } from './utils/logger';
