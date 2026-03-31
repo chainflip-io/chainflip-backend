@@ -56,4 +56,4 @@ async function main() {
   );
 }
 
-await runWithTimeoutAndExit(main(), 20);
+await main();
