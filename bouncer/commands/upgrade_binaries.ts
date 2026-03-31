@@ -19,6 +19,8 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { upgradeBinaries } from 'shared/upgrade_network';
+import { newChainflipIO } from '../shared/utils/chainflip_io';
+import { globalLogger } from '../shared/utils/logger';
 
 async function main(): Promise<void> {
   const argv = await yargs(hideBin(process.argv))
@@ -41,7 +43,8 @@ async function main(): Promise<void> {
     })
     .help().argv;
 
-  await upgradeBinaries(argv.localnet_init, argv.bins, argv.nodes as 1 | 3);
+  const cf = await newChainflipIO(globalLogger, []);
+  await upgradeBinaries(cf, argv.localnet_init, argv.bins, argv.nodes as 1 | 3);
 }
 
 await runWithTimeoutAndExit(main(), 10 * 60);
