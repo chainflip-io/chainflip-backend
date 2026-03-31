@@ -20,6 +20,7 @@ import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
 import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
+import { testRpcCalls } from 'tests/rpc_tests';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -65,6 +66,7 @@ describe('ConcurrentTests', () => {
     testGovernanceDepositWitnessing,
     265 * ciTimeoutFactor,
   );
+  concurrentTest('RpcCalls', testRpcCalls, 100 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);
