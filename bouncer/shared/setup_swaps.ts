@@ -1,6 +1,6 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { createLpPool } from 'shared/create_lp_pool';
-import { depositLiquidity } from 'shared/deposit_liquidity';
+import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { Asset } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
@@ -18,9 +18,6 @@ export const deposits = new Map<Asset, number>([
   ['Sol', 1000],
   ['SolUsdc', 100000],
   ['SolUsdt', 100000],
-  ['HubDot', 10000],
-  ['HubUsdc', 250000],
-  ['HubUsdt', 250000],
 ]);
 
 export const price = new Map<Asset, number>([
@@ -36,9 +33,6 @@ export const price = new Map<Asset, number>([
   ['Sol', 100],
   ['SolUsdc', 1],
   ['SolUsdt', 1],
-  ['HubDot', 10],
-  ['HubUsdc', 1],
-  ['HubUsdt', 1],
 ]);
 
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
@@ -56,9 +50,6 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     createLpPool(cf.logger, 'Sol', price.get('Sol')!),
     createLpPool(cf.logger, 'SolUsdc', price.get('SolUsdc')!),
     createLpPool(cf.logger, 'SolUsdt', price.get('SolUsdt')!),
-    createLpPool(cf.logger, 'HubDot', price.get('HubDot')!),
-    createLpPool(cf.logger, 'HubUsdc', price.get('HubUsdc')!),
-    createLpPool(cf.logger, 'HubUsdt', price.get('HubUsdt')!),
   ]);
 
   // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
@@ -76,8 +67,24 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     ),
   );
 
-  const lp1Deposits = (lpcf: ChainflipIO<A>) =>
-    lpcf
+  cf.info('Registering refund addresses');
+  await cf.all(
+    ['//LP_1', '//LP_API'].map(
+      (uri) => (parentCf) =>
+        parentCf
+          .with({ account: fullAccountFromUri(uri as `//${string}`, 'LP') })
+          .all([
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Ethereum'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Bitcoin'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Arbitrum'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Solana'),
+            (subcf) => registerLiquidityRefundAddressForChain(subcf, 'Assethub'),
+          ]),
+    ),
+  );
+
+  const lp1Deposits = (parentCf: ChainflipIO<A>) =>
+    parentCf
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
       .all([
         (subcf) => depositLiquidity(subcf, 'Usdc', deposits.get('Usdc')!),
@@ -92,13 +99,10 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => depositLiquidity(subcf, 'Sol', deposits.get('Sol')!),
         (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!),
         (subcf) => depositLiquidity(subcf, 'SolUsdt', deposits.get('SolUsdt')!),
-        (subcf) => depositLiquidity(subcf, 'HubDot', deposits.get('HubDot')!),
-        (subcf) => depositLiquidity(subcf, 'HubUsdc', deposits.get('HubUsdc')!),
-        (subcf) => depositLiquidity(subcf, 'HubUsdt', deposits.get('HubUsdt')!),
       ]);
 
-  const lpApiDeposits = (lpcf: ChainflipIO<A>) =>
-    lpcf
+  const lpApiDeposits = (parentCf: ChainflipIO<A>) =>
+    parentCf
       .with({ account: fullAccountFromUri('//LP_API', 'LP') })
       .all([
         (subcf) => depositLiquidity(subcf, 'Usdc', 1000),
@@ -113,29 +117,30 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => depositLiquidity(subcf, 'Sol', 500),
         (subcf) => depositLiquidity(subcf, 'SolUsdc', 1000),
         (subcf) => depositLiquidity(subcf, 'SolUsdt', 1000),
-        (subcf) => depositLiquidity(subcf, 'HubDot', 2000),
-        (subcf) => depositLiquidity(subcf, 'HubUsdc', 1000),
-        (subcf) => depositLiquidity(subcf, 'HubUsdt', 1000),
       ]);
 
+  cf.info('Depositing liquidity');
   await cf.all([lpApiDeposits, lp1Deposits]);
 
-  await Promise.all([
-    rangeOrder(cf.logger, 'Eth', deposits.get('Eth')! * 0.9999),
-    rangeOrder(cf.logger, 'Btc', deposits.get('Btc')! * 0.9999),
-    rangeOrder(cf.logger, 'Flip', deposits.get('Flip')! * 0.9999),
-    rangeOrder(cf.logger, 'Usdt', deposits.get('Usdt')! * 0.9999),
-    rangeOrder(cf.logger, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
-    rangeOrder(cf.logger, 'ArbEth', deposits.get('ArbEth')! * 0.9999),
-    rangeOrder(cf.logger, 'ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
-    rangeOrder(cf.logger, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
-    rangeOrder(cf.logger, 'Sol', deposits.get('Sol')! * 0.9999),
-    rangeOrder(cf.logger, 'SolUsdc', deposits.get('SolUsdc')! * 0.9999),
-    rangeOrder(cf.logger, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
-    rangeOrder(cf.logger, 'HubDot', deposits.get('HubDot')! * 0.9999),
-    rangeOrder(cf.logger, 'HubUsdc', deposits.get('HubUsdc')! * 0.9999),
-    rangeOrder(cf.logger, 'HubUsdt', deposits.get('HubUsdt')! * 0.9999),
-  ]);
+  const lp1RangeOrders = (parentCf: ChainflipIO<A>) =>
+    parentCf
+      .with({ account: fullAccountFromUri('//LP_1', 'LP') })
+      .all([
+        (subcf) => rangeOrder(subcf, 'Eth', deposits.get('Eth')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Btc', deposits.get('Btc')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Flip', deposits.get('Flip')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Usdt', deposits.get('Usdt')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Wbtc', deposits.get('Wbtc')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'ArbEth', deposits.get('ArbEth')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'ArbUsdc', deposits.get('ArbUsdc')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'ArbUsdt', deposits.get('ArbUsdt')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'Sol', deposits.get('Sol')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'SolUsdc', deposits.get('SolUsdc')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
+      ]);
+
+  cf.info('Setting up range orders');
+  await cf.all([lp1RangeOrders]);
 
   cf.debug('Range orders placed');
 

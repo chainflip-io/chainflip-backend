@@ -26,8 +26,8 @@ use cf_chains::assets::any::AssetMap;
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, OrderId, STABLE_ASSET};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, LpOrdersWeightsProvider,
-	LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
+	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	LpOrdersWeightsProvider, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
 use sp_runtime::Saturating;
 
@@ -71,7 +71,8 @@ impl<const N: u128> Get<SweepingThresholds> for StablecoinDefaults<N> {
 }
 
 // Limit on how far in the future an LP can schedule a limit order update/close.
-const SCHEDULE_UPDATE_LIMIT_BLOCKS: u32 = 3600; // 6 hours
+const SCHEDULE_OPEN_LIMIT_BLOCKS: u32 = 2;
+const SCHEDULE_CLOSE_LIMIT_BLOCKS: u32 = 20; // 2 minutes
 
 pub const MAX_ORDERS_DELETE: u32 = 100;
 #[derive(
@@ -185,13 +186,24 @@ impl<T: Config> LimitOrderUpdate<T> {
 		(weight, result)
 	}
 
-	pub fn schedule(self, dispatch_at: BlockNumberFor<T>) {
-		Pallet::<T>::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
-			lp: self.lp.clone(),
-			order_id: self.id,
-			dispatch_at,
-		});
-		ScheduledLimitOrderUpdates::<T>::append(dispatch_at, self);
+	pub fn try_schedule(self, dispatch_at: BlockNumberFor<T>) -> Result<(), Error<T>> {
+		/// The maximum number of scheduled updates per (lp, block number).
+		const MAX_SCHEDULED_UPDATES: u32 = 12;
+		ScheduledLimitOrderUpdateCount::<T>::try_mutate((self.lp.clone(), dispatch_at), |count| {
+			if *count >= MAX_SCHEDULED_UPDATES {
+				Err(Error::<T>::SheduledUpdateLimitReached)
+			} else {
+				*count += 1;
+				Pallet::<T>::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
+					lp: self.lp.clone(),
+					order_id: self.id,
+					dispatch_at,
+				});
+				ScheduledLimitOrderUpdates::<T>::append(dispatch_at, self);
+				Ok(())
+			}
+		})?;
+		Ok(())
 	}
 
 	pub fn schedule_or_dispatch(self, dispatch_at: Option<BlockNumberFor<T>>) -> DispatchResult {
@@ -201,7 +213,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 				dispatch_at >= current_block_number &&
 					dispatch_at <=
 						current_block_number.saturating_add(BlockNumberFor::<T>::from(
-							SCHEDULE_UPDATE_LIMIT_BLOCKS
+							SCHEDULE_OPEN_LIMIT_BLOCKS
 						)),
 				Error::<T>::InvalidDispatchAt
 			);
@@ -213,7 +225,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 					close_order_at > dispatch_at &&
 						close_order_at <=
 							current_block_number.saturating_add(BlockNumberFor::<T>::from(
-								SCHEDULE_UPDATE_LIMIT_BLOCKS
+								SCHEDULE_CLOSE_LIMIT_BLOCKS
 							)),
 					Error::<T>::InvalidCloseOrderAt
 				);
@@ -223,7 +235,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 				let (_weight, result) = self.dispatch();
 				result
 			} else {
-				self.schedule(dispatch_at);
+				self.try_schedule(dispatch_at)?;
 				Ok(())
 			}
 		} else {
@@ -364,6 +376,11 @@ pub mod pallet {
 	pub(super) type ScheduledLimitOrderUpdates<T: Config> =
 		StorageMap<_, Twox64Concat, BlockNumberFor<T>, Vec<LimitOrderUpdate<T>>, ValueQuery>;
 
+	/// The current number of scheduled updates, per account.
+	#[pallet::storage]
+	pub type ScheduledLimitOrderUpdateCount<T: Config> =
+		StorageMap<_, Identity, (T::AccountId, BlockNumberFor<T>), u32, ValueQuery>;
+
 	/// Maximum price impact for a single swap, measured in number of ticks. Configurable
 	/// for each pool.
 	#[pallet::storage]
@@ -390,6 +407,17 @@ pub mod pallet {
 			Self::auto_sweep_limit_orders();
 
 			for update in ScheduledLimitOrderUpdates::<T>::take(current_block) {
+				let lp = update.lp.clone();
+				ScheduledLimitOrderUpdateCount::<T>::mutate_exists((lp, current_block), |count| {
+					if let Some(count) = count {
+						count.saturating_dec();
+					}
+					if *count == Some(0) {
+						*count = None;
+					}
+				});
+				// We could consider limiting the weight here but then we'd be
+				// dropping LP updates. We already limit per LP.
 				let (call_weight, _result) = update.dispatch();
 				weight_used.saturating_accrue(call_weight);
 			}
@@ -437,13 +465,17 @@ pub mod pallet {
 		/// Unsupported call.
 		UnsupportedCall,
 		/// The update can't be scheduled because the given dispatch_at block is in the past or too
-		/// far in the future (3600 blocks).
+		/// far in the future.
 		InvalidDispatchAt,
 		/// The given close_order_at is in the past, not larger than dispatch_at or too far in the
-		/// future (3600 blocks).
+		/// future.
 		InvalidCloseOrderAt,
 		/// The range order size is invalid.
 		InvalidSize,
+		/// The scheduled update limit has been reached.
+		SheduledUpdateLimitReached,
+		/// The account still has open orders.
+		OpenOrdersRemaining,
 	}
 
 	#[pallet::event]
@@ -828,7 +860,7 @@ pub mod pallet {
 						close_order_at > current_block_number &&
 							close_order_at <=
 								current_block_number.saturating_add(
-									BlockNumberFor::<T>::from(SCHEDULE_UPDATE_LIMIT_BLOCKS)
+									BlockNumberFor::<T>::from(SCHEDULE_CLOSE_LIMIT_BLOCKS)
 								),
 						Error::<T>::InvalidCloseOrderAt
 					);
@@ -841,7 +873,7 @@ pub mod pallet {
 						id,
 						details: LimitOrderUpdateDetails::Close,
 					}
-					.schedule(close_order_at);
+					.try_schedule(close_order_at)?;
 				}
 			}
 			Ok(())
@@ -2443,6 +2475,25 @@ impl<T: Config> Pallet<T> {
 
 			Ok::<_, DispatchError>(())
 		});
+	}
+}
+
+pub struct OpenOrdersDeregistrationCheck<T>(sp_std::marker::PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for OpenOrdersDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			<Pallet<T> as PoolApi>::pools().iter().all(|asset_pair| {
+				<Pallet<T> as PoolApi>::open_order_count(account_id, asset_pair).unwrap_or_default() ==
+					0
+			}),
+			Error::<T>::OpenOrdersRemaining
+		);
+
+		Ok(())
 	}
 }
 

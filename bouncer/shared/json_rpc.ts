@@ -1,6 +1,6 @@
 import { Logger, throwError } from 'shared/utils/logger';
 
-// export const brokerEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
+// export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
 
 // export const lpApiEndpoint = 'http://127.0.0.1:10589';

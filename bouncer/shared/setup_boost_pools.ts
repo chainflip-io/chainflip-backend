@@ -1,4 +1,4 @@
-import { getInternalAsset } from '@chainflip/cli';
+import { getInternalAsset } from '@chainflip/utils/chainflip';
 import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
@@ -68,8 +68,8 @@ export async function createBoostPools<A = []>(
 }
 
 /// Creates 5, 10 and 30 bps tier boost pools for Btc and then funds them.
-export async function setupBoostPools<A = []>(parentcf: ChainflipIO<A>): Promise<void> {
-  const cf = parentcf.with({
+export async function setupBoostPools<A = []>(parentCf: ChainflipIO<A>): Promise<void> {
+  const cf = parentCf.with({
     account: fullAccountFromUri('//LP_BOOST', 'LP'),
   });
 

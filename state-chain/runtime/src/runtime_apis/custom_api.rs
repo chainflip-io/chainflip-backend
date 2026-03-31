@@ -193,6 +193,10 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_9::LiquidityProviderInfo;
+		#[changed_in(16)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_16::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
@@ -204,7 +208,13 @@ decl_runtime_apis!(
 		) -> before_version_15::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
+		#[changed_in(16)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		#[changed_in(16)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_16::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -298,7 +308,11 @@ decl_runtime_apis!(
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
+		#[changed_in(16)]
+		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
+		#[changed_in(16)]
+		fn cf_network_fees() -> before_version_16::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(12)]
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;
@@ -325,6 +339,10 @@ decl_runtime_apis!(
 		fn cf_evm_calldata();
 		#[changed_in(7)]
 		fn cf_common_account_info();
+		#[changed_in(16)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;

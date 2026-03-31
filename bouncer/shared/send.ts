@@ -1,5 +1,3 @@
-import Web3 from 'web3';
-import { sendDot } from 'shared/send_dot';
 import { sendBtc } from 'shared/send_btc';
 import { sendErc20 } from 'shared/send_erc20';
 import { sendEvmNative, signAndSendTxEvm } from 'shared/send_evm';
@@ -8,7 +6,7 @@ import {
   defaultAssetAmounts,
   amountToFineAmount,
   chainFromAsset,
-  getEvmEndpoint,
+  getWeb3,
   assetDecimals,
   Asset,
 } from 'shared/utils';
@@ -29,6 +27,7 @@ export async function send(
   amount: string = defaultAssetAmounts(asset),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
+  logger.debug(`Sending ${amount} ${asset} to ${address}`);
   switch (asset) {
     case 'Btc':
       return sendBtc(logger, address, amount);
@@ -36,8 +35,6 @@ export async function send(
       return sendEvmNative(logger, 'Ethereum', address, amount);
     case 'ArbEth':
       return sendEvmNative(logger, 'Arbitrum', address, amount);
-    case 'Dot':
-      return sendDot(address, amount);
     case 'Sol':
       return sendSol(logger, address, amount);
     case 'Usdc':
@@ -73,7 +70,7 @@ export async function sendViaCfTester(
 ) {
   const chain = chainFromAsset(asset);
 
-  const web3 = new Web3(getEvmEndpoint(chain));
+  const web3 = getWeb3(chain);
 
   const cfTesterAddress = getContractAddress(chain, 'CFTESTER');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,5 +99,5 @@ export async function sendViaCfTester(
       throw new Error(`Unsupported asset type: ${asset}`);
   }
 
-  await signAndSendTxEvm(logger, chain, cfTesterAddress, value, txData);
+  await signAndSendTxEvm(logger, chain, { to: cfTesterAddress, value, data: txData });
 }

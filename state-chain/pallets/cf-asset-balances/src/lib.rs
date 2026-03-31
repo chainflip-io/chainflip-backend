@@ -21,12 +21,12 @@ use cf_chains::{assets::any::AssetMap, AnyChain, ForeignChain, ForeignChainAddre
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip, EgressApi,
-	KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
+	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
+	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
 };
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::traits::Saturating,
+	sp_runtime::traits::{Saturating, Zero},
 	storage::transactional::with_storage_layer,
 	traits::{DefensiveSaturating, OnKilledAccount},
 };
@@ -113,6 +113,8 @@ pub mod pallet {
 		BalanceOverflow,
 		/// The Chain is deprecated.
 		ChainDeprecated,
+		/// The account still has free balance.
+		FundsRemaining,
 	}
 
 	#[pallet::event]
@@ -476,14 +478,28 @@ where
 	}
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
-		if T::AccountRoleRegistry::has_account_role(who, AccountRole::LiquidityProvider) {
-			let _ = T::PoolApi::sweep(who);
-		}
+		let _ = T::PoolApi::sweep(who);
 		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		FreeBalances::<T>::get(who, asset)
+	}
+}
+
+pub struct FreeBalancesDeregistrationCheck<T: Config>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for FreeBalancesDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			FreeBalances::<T>::iter_prefix(account_id).all(|(_, amount)| amount.is_zero()),
+			Error::<T>::FundsRemaining
+		);
+
+		Ok(())
 	}
 }
 

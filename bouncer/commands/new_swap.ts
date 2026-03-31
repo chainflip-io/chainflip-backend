@@ -10,13 +10,13 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { InternalAsset } from '@chainflip/cli';
 import {
   parseAssetString,
   runWithTimeoutAndExit,
   assetPriceToInternalAssetPrice,
   decodeDotAddressForContract,
   isPolkadotAsset,
+  Asset,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
@@ -103,8 +103,8 @@ async function newSwapCommand() {
             ? decodeDotAddressForContract(args.refundAddress)
             : args.refundAddress,
           minPriceX128: assetPriceToInternalAssetPrice(
-            args.sourceAsset as InternalAsset,
-            args.destAsset as InternalAsset,
+            args.sourceAsset as Asset,
+            args.destAsset as Asset,
             args.minPrice,
           ),
         }
@@ -124,8 +124,8 @@ async function newSwapCommand() {
 
   await requestNewSwap(
     await newChainflipIO(globalLogger, [] as []),
-    parseAssetString(args.sourceAsset) as InternalAsset,
-    parseAssetString(args.destAsset) as InternalAsset,
+    parseAssetString(args.sourceAsset) as Asset,
+    parseAssetString(args.destAsset) as Asset,
     args.destAddress,
     undefined, // messageMetadata
     undefined, // brokerCommissionBps

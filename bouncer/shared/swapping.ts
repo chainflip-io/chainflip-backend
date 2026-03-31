@@ -1,4 +1,3 @@
-import { InternalAsset as Asset } from '@chainflip/cli';
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { u8aToHex } from '@polkadot/util';
 import { randomAsHex } from 'polkadot/util-crypto';
@@ -8,13 +7,14 @@ import {
   getContractAddress,
   solVersionedCcmAdditionalDataCodec,
   newAssetAddress,
+  Asset,
 } from 'shared/utils';
 import { BtcAddressType } from 'shared/new_btc_address';
 import { CcmDepositMetadata } from 'shared/new_swap';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { estimateCcmCfTesterGas } from 'shared/send_evm';
 import { Logger } from 'shared/utils/logger';
-import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
 
 let swapCount = 1;
 
@@ -313,7 +313,7 @@ export async function testSwap<A = []>(
   );
 }
 export async function testVaultSwap(
-  cf: ChainflipIO<[]>,
+  parentCf: ChainflipIO<[]>,
   sourceAsset: Asset,
   destAsset: Asset,
   addressType?: BtcAddressType,
@@ -322,7 +322,7 @@ export async function testVaultSwap(
   tagSuffix?: string,
 ) {
   const { destAddress, tag } = await prepareSwap(
-    cf.logger,
+    parentCf.logger,
     sourceAsset,
     destAsset,
     addressType,
@@ -331,13 +331,9 @@ export async function testVaultSwap(
     swapContext,
   );
 
-  return performVaultSwap(
-    cf.withChildLogger(tag),
-    '//BROKER_1',
-    sourceAsset,
-    destAsset,
-    destAddress,
-    messageMetadata,
-    swapContext,
-  );
+  const cf = parentCf
+    .with({ account: fullAccountFromUri('//BROKER_2', 'Broker') })
+    .withChildLogger(tag);
+
+  return performVaultSwap(cf, sourceAsset, destAsset, destAddress, messageMetadata, swapContext);
 }

@@ -35,10 +35,10 @@ use cf_primitives::{
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, ExpiryBehaviour, FundingInfo,
-	FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry,
-	SwapOutputAction, SwapParameterValidation, SwapRequestHandler, SwapRequestType,
-	SwapRequestTypeEncoded, SwapType, SwappingApi,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
+	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -965,6 +965,12 @@ pub mod pallet {
 			broker: T::AccountId,
 			address: EthereumAddress,
 		},
+		/// An affiliate has been deregistered.
+		AffiliateDeregistration {
+			broker_id: T::AccountId,
+			short_id: AffiliateShortId,
+			affiliate_account_id: T::AccountId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -1355,22 +1361,9 @@ pub mod pallet {
 		pub fn deregister_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = T::AccountRoleRegistry::ensure_broker(who)?;
 
-			ensure!(
-				!BrokerPrivateBtcChannels::<T>::contains_key(&account_id),
-				Error::<T>::PrivateChannelExistsForBroker
-			);
+			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
-			ensure!(
-				T::BalanceApi::free_balances(&account_id).iter().all(|(_, amount)| *amount == 0),
-				Error::<T>::EarnedFeesNotWithdrawn,
-			);
-
-			// Check the affiliate's balance before we allow deregistration
 			for affiliate_account_id in AffiliateAccountDetails::<T>::iter_key_prefix(&account_id) {
-				ensure!(
-					T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
-					Error::<T>::AffiliateEarnedFeesNotWithdrawn
-				);
 				frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a
 					// subsequent release. Consequences are minor.
@@ -1386,8 +1379,6 @@ pub mod pallet {
 			// With this the broker has no longer access to the affiliate's account.
 			let _ = AffiliateAccountDetails::<T>::clear_prefix(&account_id, u32::MAX, None);
 			let _ = AffiliateIdMapping::<T>::clear_prefix(&account_id, u32::MAX, None);
-
-			T::AccountRoleRegistry::deregister_as_broker(&account_id)?;
 
 			Ok(())
 		}
@@ -1547,16 +1538,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
-			let next_id: u8 = AffiliateIdMapping::<T>::iter_prefix_values(&broker_id)
-				.count()
-				.try_into()
-				.map_err(|_| Error::<T>::AffiliateShortIdOutOfBounds)?;
-
-			let short_id = AffiliateShortId::from(next_id);
-
-			ensure!(
-				!AffiliateIdMapping::<T>::contains_key(&broker_id, short_id),
-				Error::<T>::AffiliateAlreadyRegistered
+			let short_id = AffiliateShortId(
+				(0..=u8::MAX)
+					.find(|short_id| {
+						!AffiliateIdMapping::<T>::contains_key(
+							&broker_id,
+							AffiliateShortId::from(*short_id),
+						)
+					})
+					.ok_or(Error::<T>::AffiliateShortIdOutOfBounds)?,
 			);
 
 			let affiliate_id = Decode::decode(&mut TrailingZeroInput::new(
@@ -1581,6 +1571,45 @@ pub mod pallet {
 				short_id,
 				withdrawal_address,
 				affiliate_id,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::call_index(15)]
+		#[pallet::weight(T::WeightInfo::deregister_affiliate())]
+		pub fn deregister_affiliate(
+			origin: OriginFor<T>,
+			affiliate_account_id: T::AccountId,
+		) -> DispatchResult {
+			let broker_id = T::AccountRoleRegistry::ensure_broker(origin)?;
+
+			let AffiliateDetails { short_id, .. } =
+				AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_account_id)
+					.ok_or(Error::<T>::AffiliateNotRegisteredForBroker)?;
+
+			ensure!(
+				T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero(),
+				Error::<T>::AffiliateEarnedFeesNotWithdrawn
+			);
+
+			frame_system::Provider::<T>::killed(&affiliate_account_id).unwrap_or_else(|e| {
+				// This shouldn't happen, and not much we can do if it does except fix it on a
+				// subsequent release. Consequences are minor.
+				log::error!(
+					"Unexpected reference count error while reaping the affiliate {:?}: {:?}.",
+					affiliate_account_id,
+					e
+				);
+			});
+
+			AffiliateAccountDetails::<T>::remove(&broker_id, &affiliate_account_id);
+			AffiliateIdMapping::<T>::remove(&broker_id, short_id);
+
+			Self::deposit_event(Event::<T>::AffiliateDeregistration {
+				broker_id,
+				short_id,
+				affiliate_account_id,
 			});
 
 			Ok(())
@@ -1746,6 +1775,10 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		pub fn get_scheduled_swap_legs(base_asset: Asset) -> Vec<(SwapLegInfo, BlockNumberFor<T>)> {
+			if !T::SafeMode::get().swaps_enabled {
+				return vec![];
+			}
+
 			let mut swaps: Vec<_> = ScheduledSwaps::<T>::get()
 				.values()
 				.filter(|swap| swap.from == base_asset || swap.to == base_asset)
@@ -3361,6 +3394,28 @@ pub mod pallet {
 				.saturating_mul_int(required_input)
 			}
 		}
+	}
+}
+
+pub struct BrokerDeregistrationCheck<T>(PhantomData<T>);
+
+impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
+	type AccountId = T::AccountId;
+	type Error = Error<T>;
+
+	fn check(account_id: &Self::AccountId) -> Result<(), Self::Error> {
+		ensure!(
+			!BrokerPrivateBtcChannels::<T>::contains_key(account_id),
+			Error::<T>::PrivateChannelExistsForBroker
+		);
+		ensure!(
+			AffiliateAccountDetails::<T>::iter_key_prefix(account_id).all(|affiliate_account_id| {
+				T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero()
+			}),
+			Error::<T>::AffiliateEarnedFeesNotWithdrawn
+		);
+
+		Ok(())
 	}
 }
 

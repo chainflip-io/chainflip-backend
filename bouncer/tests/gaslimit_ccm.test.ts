@@ -1,11 +1,9 @@
-import Web3 from 'web3';
-import { InternalAsset as Asset, Chain } from '@chainflip/cli';
 import { newCcmMetadata, prepareSwap } from 'shared/swapping';
 import {
   ccmSupportedChains,
   chainFromAsset,
   EgressId,
-  getEvmEndpoint,
+  getWeb3,
   getEvmWhaleKeypair,
   getSolConnection,
   observeCcmReceived,
@@ -13,6 +11,8 @@ import {
   sleep,
   SwapRequestType,
   TransactionOrigin,
+  Asset,
+  Chain,
 } from 'shared/utils';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
@@ -235,7 +235,7 @@ async function testGasLimitSwapToEvm<A = []>(
   }
 
   const destChain = chainFromAsset(destAsset);
-  const web3 = new Web3(getEvmEndpoint(chainFromAsset(destAsset)));
+  const web3 = getWeb3(chainFromAsset(destAsset));
 
   if (destChain !== 'Arbitrum' && destChain !== 'Ethereum') {
     throw new Error(`Destination chain ${destChain} is not Ethereum nor Arbitrum`);
@@ -389,7 +389,7 @@ function spamEvmChain<A = []>(cf: ChainflipIO<A>, chain: Chain): () => void {
     case 'Arbitrum':
       (async () => {
         while (!stop) {
-          await signAndSendTxEvm(cf.logger, chain, whalePubkey, '1', undefined, undefined);
+          await signAndSendTxEvm(cf.logger, chain, { to: whalePubkey, value: '1' });
           await sleep(200);
         }
       })();
@@ -471,6 +471,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
+      0,
       true,
     );
   }
@@ -501,6 +502,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
+      0,
       true,
     );
   }
@@ -522,6 +524,7 @@ describe('GasLimitCcmSwaps', async () => {
         );
       },
       300,
+      0,
       true,
     );
   }

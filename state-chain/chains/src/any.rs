@@ -34,6 +34,7 @@ impl Chain for AnyChain {
 	const WITNESS_PERIOD: u64 = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000;
 	const BURN_ADDRESS: Self::ChainAccount = ForeignChainAddress::Eth(evm::Address::zero());
+	const IS_EVM_CHAIN: bool = false;
 
 	type ChainCrypto = NoneChainCrypto;
 	type ChainBlockNumber = u64;

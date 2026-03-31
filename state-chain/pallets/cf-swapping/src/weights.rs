@@ -56,6 +56,7 @@ pub trait WeightInfo {
 	fn open_private_btc_channel() -> Weight;
 	fn close_private_btc_channel() -> Weight;
 	fn register_affiliate() -> Weight;
+	fn deregister_affiliate() -> Weight;
 	fn affiliate_withdrawal_request() -> Weight;
 	fn set_vault_swap_minimum_broker_fee() -> Weight;
 	fn request_account_creation_deposit_address() -> Weight;
@@ -252,6 +253,25 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(42_300_000, 6617)
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::AffiliateAccountDetails` (r:1 w:1)
+	/// Proof: `Swapping::AffiliateAccountDetails` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `System::Account` (r:1 w:1)
+	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
+	/// Storage: `Swapping::AffiliateIdMapping` (r:0 w:1)
+	/// Proof: `Swapping::AffiliateIdMapping` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn deregister_affiliate() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `777`
+		//  Estimated: `6717`
+		// Minimum execution time: 42_000_000 picoseconds.
+		Weight::from_parts(43_000_000, 6717)
+			.saturating_add(T::DbWeight::get().reads(4_u64))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
@@ -548,6 +568,25 @@ impl WeightInfo for () {
 		Weight::from_parts(42_300_000, 6617)
 			.saturating_add(ParityDbWeight::get().reads(4_u64))
 			.saturating_add(ParityDbWeight::get().writes(4_u64))
+	}
+	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
+	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `Swapping::AffiliateAccountDetails` (r:1 w:1)
+	/// Proof: `Swapping::AffiliateAccountDetails` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
+	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `System::Account` (r:1 w:1)
+	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(64), added: 2539, mode: `MaxEncodedLen`)
+	/// Storage: `Swapping::AffiliateIdMapping` (r:0 w:1)
+	/// Proof: `Swapping::AffiliateIdMapping` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	fn deregister_affiliate() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `777`
+		//  Estimated: `6717`
+		// Minimum execution time: 42_000_000 picoseconds.
+		Weight::from_parts(43_000_000, 6717)
+			.saturating_add(ParityDbWeight::get().reads(4_u64))
+			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
 	/// Storage: `AccountRoles::AccountRoles` (r:2 w:0)
 	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)

@@ -209,10 +209,13 @@ mod benchmarks {
 		let broker_id =
 			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
 
-		const IDX: u8 = 0;
 		let caller = OriginFor::<T>::signed(broker_id.clone());
-
 		let withdrawal_address: EthereumAddress = Default::default();
+
+		// Worst case: 255 slots already occupied, forcing a scan through all of them.
+		for _ in 0..u8::MAX {
+			assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
+		}
 
 		#[block]
 		{
@@ -220,8 +223,41 @@ mod benchmarks {
 		}
 
 		assert!(
-			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)).is_some(),
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(u8::MAX)).is_some(),
 			"Affiliate must have been registered"
+		);
+	}
+
+	#[benchmark]
+	fn deregister_affiliate() {
+		let broker_id =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Broker).unwrap();
+
+		const IDX: u8 = 0;
+		let caller = OriginFor::<T>::signed(broker_id.clone());
+		let withdrawal_address: EthereumAddress = Default::default();
+
+		assert_ok!(Pallet::<T>::register_affiliate(caller.clone(), withdrawal_address,));
+
+		let affiliate_account_id =
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX))
+				.expect("Affiliate must be registered!");
+
+		#[block]
+		{
+			assert_ok!(Pallet::<T>::deregister_affiliate(
+				caller.clone(),
+				affiliate_account_id.clone()
+			));
+		}
+
+		assert!(
+			AffiliateAccountDetails::<T>::get(&broker_id, &affiliate_account_id).is_none(),
+			"Affiliate must have been deregistered"
+		);
+		assert!(
+			AffiliateIdMapping::<T>::get(&broker_id, AffiliateShortId::from(IDX)).is_none(),
+			"Affiliate mapping must have been removed"
 		);
 	}
 

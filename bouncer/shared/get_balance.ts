@@ -1,6 +1,5 @@
 import { Asset, getContractAddress } from 'shared/utils';
 import { getBtcBalance } from 'shared/get_btc_balance';
-import { getDotBalance } from 'shared/get_dot_balance';
 import { getEvmNativeBalance } from 'shared/get_evm_native_balance';
 import { getErc20Balance } from 'shared/get_erc20_balance';
 import { getSolBalance } from 'shared/get_sol_balance';
@@ -32,9 +31,6 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
       break;
     case 'ArbEth':
       result = await getEvmNativeBalance('Arbitrum', address);
-      break;
-    case 'Dot':
-      result = await getDotBalance(address);
       break;
     case 'Btc':
       result = (await getBtcBalance(address)).toString().trim();

@@ -9,13 +9,20 @@
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { globalLogger } from 'shared/utils/logger';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function main() {
   const lpUri = process.argv[2];
   if (!lpUri) {
     throw new Error('No LP URI provided');
   }
-  await setupAccount(globalLogger, lpUri, AccountRole.LiquidityProvider);
+  if (!lpUri.startsWith('//')) {
+    throw new Error('LP URI must start with "//"');
+  }
+
+  const cf = await newChainflipIO(globalLogger, []);
+
+  await setupAccount(cf, lpUri as `//${string}`, AccountRole.LiquidityProvider);
 }
 
 await runWithTimeoutAndExit(main(), 120);

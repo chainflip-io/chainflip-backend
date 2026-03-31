@@ -1,27 +1,27 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { TestContext } from 'shared/utils/test_context';
-import { observeEvent, observeBadEvent, getChainflipApi } from 'shared/utils/substrate';
+import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import {
   amountToFineAmount,
   assetDecimals,
   Assets,
-  createStateChainKeypair,
-  cfMutex,
   newAssetAddress,
   observeBalanceIncrease,
-  waitForExt,
 } from 'shared/utils';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { liquidityProviderWithdrawalEgressScheduled } from 'generated/events/liquidityProvider/withdrawalEgressScheduled';
+import { arbitrumIngressEgressBatchBroadcastRequested } from 'generated/events/arbitrumIngressEgress/batchBroadcastRequested';
+import { arbitrumBroadcasterTransactionBroadcastRequest } from 'generated/events/arbitrumBroadcaster/transactionBroadcastRequest';
 
 // Testing broadcast through vault rotations
 export async function testRotationBarrier(testContext: TestContext) {
   const lpUri = (process.env.LP_URI || '//LP_1') as `//${string}`;
-  const withdrawalAddress = await newAssetAddress(Assets.ArbEth);
-
   const cf = await newChainflipIO(testContext.logger, {
     account: fullAccountFromUri(lpUri, 'LP'),
   });
+
+  const withdrawalAddress = await newAssetAddress(Assets.ArbEth);
 
   await depositLiquidity(cf, Assets.ArbEth, 5);
 
@@ -37,38 +37,45 @@ export async function testRotationBarrier(testContext: TestContext) {
   const broadcastAborted = observeBadEvent(cf.logger, ':BroadcastAborted', {});
 
   cf.info(`Submitting withdrawal request.`);
-  const api = await getChainflipApi();
-  const { promise, waiter } = waitForExt(api, cf.logger, 'InBlock', await cfMutex.acquire(lpUri));
-  const lp = createStateChainKeypair(lpUri);
-  const nonce = Number(await api.rpc.system.accountNextIndex(lp.address));
-  const unsub = await api.tx.liquidityProvider
-    .withdrawAsset(amountToFineAmount('2', assetDecimals(Assets.ArbEth)), Assets.ArbEth, {
-      Arb: withdrawalAddress,
-    })
-    .signAndSend(lp, { nonce }, waiter);
 
-  const events = (await promise).events;
-  unsub();
+  const depositAddressReadyEvent = await cf.submitExtrinsic({
+    extrinsic: (api) =>
+      api.tx.liquidityProvider.withdrawAsset(
+        amountToFineAmount('2', assetDecimals(Assets.ArbEth)),
+        Assets.ArbEth,
+        {
+          Arb: withdrawalAddress,
+        },
+      ),
+    expectedEvent: {
+      name: 'LiquidityProvider.WithdrawalEgressScheduled',
+      schema: liquidityProviderWithdrawalEgressScheduled.refine(
+        (event) => event.asset === Assets.ArbEth,
+      ),
+    },
+  });
 
-  const egressId = events
-    .find(({ event }) => event.method.endsWith('WithdrawalEgressScheduled'))
-    ?.event.data[0].toHuman();
+  const egressId = depositAddressReadyEvent.egressId;
 
   cf.info(
     `Withdrawal extrinsic included in a block, scheduled egress ID ${JSON.stringify(egressId)}`,
   );
 
-  const event = await observeEvent(cf.logger, 'arbitrumIngressEgress:BatchBroadcastRequested', {
-    test: (e) => JSON.stringify(e.data.egressIds).includes(JSON.stringify(egressId)),
-    historicalCheckBlocks: 10,
-  }).event;
+  const batchBroadcastEvent = await cf.stepUntilEvent(
+    'ArbitrumIngressEgress.BatchBroadcastRequested',
+    arbitrumIngressEgressBatchBroadcastRequested.refine((event) =>
+      JSON.stringify(event.egressIds).includes(JSON.stringify(egressId)),
+    ),
+  );
 
-  const broadcastId = Number(event.data.broadcastId);
+  const broadcastId = Number(batchBroadcastEvent.broadcastId);
 
-  await observeEvent(cf.logger, 'arbitrumBroadcaster:TransactionBroadcastRequest', {
-    test: (e) => Number(e.data.broadcastId) === broadcastId,
-    historicalCheckBlocks: 10,
-  }).event;
+  await cf.stepUntilEvent(
+    'ArbitrumBroadcaster.TransactionBroadcastRequest',
+    arbitrumBroadcasterTransactionBroadcastRequest.refine(
+      (event) => Number(event.broadcastId) === broadcastId,
+    ),
+  );
 
   cf.info(`Broadcast requested for egress ID ${egressId}. Waiting for balance increase...`);
 

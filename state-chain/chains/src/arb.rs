@@ -54,6 +54,7 @@ impl Chain for Arbitrum {
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 24;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = eth::ONE_ETH;
 	const BURN_ADDRESS: Self::ChainAccount = evm::Address::zero();
+	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = EvmCrypto;
 	type ChainBlockNumber = u64;

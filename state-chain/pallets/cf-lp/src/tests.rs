@@ -366,26 +366,12 @@ fn account_registration_and_deregistration() {
 
 		MockBalanceApi::credit_account(&LP_ACCOUNT, Asset::Eth, DEPOSIT_AMOUNT);
 
-		assert_noop!(
-			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
-			Error::<Test>::FundsRemaining,
-		);
-
 		assert_ok!(LiquidityProvider::withdraw_asset(
 			OriginTrait::signed(LP_ACCOUNT),
 			DEPOSIT_AMOUNT,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 		));
-
-		assert_ok!(MockIngressEgressBoostApi::set_boost_funds(100));
-
-		assert_noop!(
-			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),
-			Error::<Test>::BoostedFundsRemaining,
-		);
-
-		assert_ok!(MockIngressEgressBoostApi::remove_boost_funds(100));
 
 		assert_ok!(
 			LiquidityProvider::deregister_lp_account(OriginTrait::signed(LP_ACCOUNT)),

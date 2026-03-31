@@ -47,4 +47,4 @@ sp-core = { workspace = true, default-features = true }
 [dev-dependencies]
 cf-utilities = { workspace = true, default-features = true, features = [
 	"test-utils",
-]}
+] }

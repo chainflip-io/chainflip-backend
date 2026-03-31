@@ -1,26 +1,32 @@
 // This requires the try-runtime cli to be installed globally
 // https://github.com/paritytech/try-runtime-cli
 
+import os from 'os';
 import path from 'path';
 import { ApiPromise, HttpProvider } from '@polkadot/api';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { mkTmpDir, execWithRustLog } from 'shared/utils/exec_with_log';
 import { CHAINFLIP_HTTP_ENDPOINT } from 'shared/utils/substrate';
 import { retryRpcCall } from 'shared/utils';
-import { globalLogger as logger } from 'shared/utils/logger';
+import { globalLogger as logger, loggerChild, type Logger } from 'shared/utils/logger';
 
-async function createSnapshotFile(networkUrl: string, blockHash: string): Promise<boolean> {
+async function createSnapshotFile(
+  networkUrl: string,
+  blockHash: string,
+  childLogger: Logger,
+): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? '' : `--at ${blockHash}`;
   const snapshotFolder = await mkTmpDir('chainflip/snapshots/');
   const snapshotOutputPath = path.join(snapshotFolder, `snapshot-at-${blockHash}.snap`);
 
-  logger.info('Writing snapshot to: ', snapshotOutputPath);
+  childLogger.info('Writing snapshot to: ', snapshotOutputPath);
 
   return execWithRustLog(
     `try-runtime`,
     `create-snapshot ${blockParam} --uri ${networkUrl} ${snapshotOutputPath}`.split(' '),
     `create-snapshot-${blockHash}`,
     'info,runtime::executive=debug',
+    childLogger,
   );
 }
 
@@ -28,6 +34,7 @@ async function tryRuntimeCommand(
   runtimePath: string,
   blockHash: 'latest' | string,
   networkUrl: string,
+  childLogger: Logger = logger,
 ): Promise<boolean> {
   const blockParam = blockHash === 'latest' ? 'live' : `live --at ${blockHash}`;
 
@@ -47,9 +54,10 @@ async function tryRuntimeCommand(
 --uri ${networkUrl}`.split(' '),
     `try-runtime-${blockHash}`,
     'info,runtime::executive=debug',
+    childLogger,
   );
   if (!success) {
-    await createSnapshotFile(networkUrl, blockHash);
+    await createSnapshotFile(networkUrl, blockHash, childLogger);
   }
   return success;
 }
@@ -89,32 +97,42 @@ export async function tryRuntimeUpgrade(
     }
     logger.info(`Block ${latestBlock} has been reached, exiting.`);
   } else if (block === 'last-n') {
-    logger.info(`Running migrations for the last ${lastN} blocks.`);
-    let blocksProcessed = 0;
+    // Each try-runtime process is CPU-bound (wasm execution) so capping parallelism to the number
+    // of logical CPUs avoids resource contention and OOM on memory-constrained CI runners.
+    const BATCH_SIZE = os.cpus().length;
+    logger.info(`Running migrations for the last ${lastN} blocks in batches of ${BATCH_SIZE}.`);
 
+    // Fetch all block hashes sequentially and organise into batches
+    const batches: string[][] = [];
     let nextHash = await httpApi.rpc.chain.getBlockHash();
-
-    while (blocksProcessed < lastN) {
-      logger.info('Running try-runtime for block: ', nextHash.toString());
-
-      const success = await tryRuntimeCommand(runtimePath, `${nextHash}`, networkUrl);
-
-      if (!success) {
-        throw new Error('Migration failed for block: ' + nextHash.toString());
-      }
-
+    for (let i = 0; i < lastN; i++) {
+      const batchIndex = Math.floor(i / BATCH_SIZE);
+      if (batches[batchIndex] === undefined) batches[batchIndex] = [];
       const currentHash = nextHash;
-      const currentBlockHeader = await retryRpcCall(
-        () => httpApi.rpc.chain.getHeader(currentHash),
-        {
-          maxAttempts: 10,
-          timeoutMs: 20000,
-          operation: `get block header at ${currentHash}`,
-        },
-      );
-      nextHash = currentBlockHeader.parentHash;
+      batches[batchIndex].push(currentHash.toString());
+      const header = await retryRpcCall(() => httpApi.rpc.chain.getHeader(currentHash), {
+        maxAttempts: 10,
+        timeoutMs: 20000,
+        operation: `get block header at ${currentHash}`,
+      });
+      nextHash = header.parentHash;
+    }
 
-      blocksProcessed++;
+    // Run batches serially, commands within each batch in parallel
+    for (const batch of batches) {
+      const results = await Promise.all(
+        batch.map(async (hash) => {
+          const blockLogger = loggerChild(logger, `block_${hash}`);
+          blockLogger.info('Running try-runtime for block: ', hash);
+          const success = await tryRuntimeCommand(runtimePath, hash, networkUrl, blockLogger);
+          return { hash, success };
+        }),
+      );
+
+      const failed = results.filter((r) => !r.success);
+      if (failed.length > 0) {
+        throw new Error(`Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')}`);
+      }
     }
   } else if (block === 'latest') {
     const success = await tryRuntimeCommand(runtimePath, 'latest', networkUrl);

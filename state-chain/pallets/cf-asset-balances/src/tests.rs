@@ -292,7 +292,8 @@ fn can_reconciliate_multiple_chains_at_once() {
 }
 
 pub mod balance_api {
-	use crate::DeleteAccount;
+	use crate::{DeleteAccount, FreeBalancesDeregistrationCheck};
+	use cf_traits::DeregistrationCheck;
 
 	use super::*;
 
@@ -380,6 +381,27 @@ pub mod balance_api {
 				Pallet::<Test>::free_balances(&AccountId::from([1; 32])).eth,
 				eth::AssetMap { eth: 100, flip: 0, usdc: 0, usdt: 0, wbtc: 0 }
 			);
+		});
+	}
+
+	#[test]
+	fn deregistration_check_fails_when_funds_remain() {
+		new_test_ext().execute_with(|| {
+			let account = AccountId::from([9; 32]);
+			FreeBalances::<Test>::insert(&account, ForeignChain::Ethereum.gas_asset(), 100);
+
+			assert!(matches!(
+				FreeBalancesDeregistrationCheck::<Test>::check(&account),
+				Err(crate::Error::<Test>::FundsRemaining)
+			));
+		});
+	}
+
+	#[test]
+	fn deregistration_check_passes_without_funds() {
+		new_test_ext().execute_with(|| {
+			let account = AccountId::from([10; 32]);
+			assert_ok!(FreeBalancesDeregistrationCheck::<Test>::check(&account));
 		});
 	}
 }
