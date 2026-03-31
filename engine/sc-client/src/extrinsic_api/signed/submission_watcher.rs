@@ -181,6 +181,87 @@ pub enum SubmissionLogicError {
 impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	SubmissionWatcher<'a, 'env, BaseRpcClient>
 {
+	fn track_submission(
+		&mut self,
+		request: &mut Request,
+		nonce: Nonce,
+		lifetime: std::ops::RangeTo<cf_primitives::BlockNumber>,
+		tx_hash: H256,
+		transaction_status_stream: Option<base_rpc_api::WatchExtrinsicStream>,
+	) -> SubmissionID {
+		let submission_id = request.next_submission_id;
+		let request_id = request.id;
+		request.pending_submissions.insert(submission_id, nonce);
+		self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
+			id: submission_id,
+			lifetime,
+			tx_hash,
+			request_id,
+		});
+		if let Some(mut transaction_status_stream) = transaction_status_stream {
+			self.submission_status_futures.insert(
+				(request_id, submission_id),
+				self.scope.spawn_with_handle(async move {
+					while let Some(status) = transaction_status_stream.next().await {
+						match status {
+							// NOTE: Currently the _extrinsic_index returned by
+							// substrate through the subscription is wrong and is always
+							// 0.
+							Ok(TransactionStatus::InBlock((block_hash, _extrinsic_index))) |
+							Ok(TransactionStatus::Finalized((block_hash, _extrinsic_index))) => {
+								return Ok(SubmissionStatus::InBlockOrFinalized { block_hash, tx_hash });
+							},
+							Ok(TransactionStatus::Future) |
+							Ok(TransactionStatus::Ready) |
+							Ok(TransactionStatus::Broadcast(_)) |
+							Ok(TransactionStatus::Retracted(_)) => {},
+							Ok(TransactionStatus::Invalid) =>
+								return Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason: "transaction became invalid in the pool",
+								}),
+							Ok(TransactionStatus::Dropped) =>
+								return Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason: "transaction was dropped by the pool",
+								}),
+							Ok(TransactionStatus::Usurped(_)) =>
+								return Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason:
+										"transaction was replaced in the pool (same nonce)",
+								}),
+							Ok(TransactionStatus::FinalityTimeout(_)) =>
+								return Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason: "transaction finality timeout",
+								}),
+							Err(error) => {
+								warn!(
+									target: "state_chain_client",
+									request_id,
+									submission_id,
+									"Error while watching submission status for tx_hash {tx_hash:?}: {error}. Marking submission as terminated."
+								);
+								return Ok(SubmissionStatus::Terminated {
+									tx_hash,
+									reason: "error while decoding submission status",
+								});
+							},
+						}
+					}
+
+					Ok(SubmissionStatus::Terminated {
+						tx_hash,
+						reason: "status stream ended before inclusion",
+					})
+				}),
+			);
+		}
+		request.next_submission_id += 1;
+		submission_id
+	}
+
 	pub fn new(
 		scope: &'a Scope<'env, anyhow::Error>,
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
@@ -241,76 +322,15 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			};
 
 			match self.base_rpc_client.submit_and_watch_extrinsic(signed_extrinsic.clone()).await {
-				Ok(mut transaction_status_stream) => {
-					let request_id = request.id;
-					let submission_id = request.next_submission_id;
-					request.pending_submissions.insert(submission_id, nonce);
-					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
-						id: submission_id,
+				Ok(transaction_status_stream) => {
+					let submission_id = self.track_submission(
+						request,
+						nonce,
 						lifetime,
 						tx_hash,
-						request_id,
-					});
-					self.submission_status_futures.insert(
-							(request_id, submission_id),
-							self.scope.spawn_with_handle(async move {
-								while let Some(status) = transaction_status_stream.next().await {
-									match status {
-										// NOTE: Currently the _extrinsic_index returned by
-										// substrate through the subscription is wrong and is always
-										// 0.
-										Ok(TransactionStatus::InBlock((block_hash, _extrinsic_index))) |
-										Ok(TransactionStatus::Finalized((block_hash, _extrinsic_index))) => {
-											return Ok(SubmissionStatus::InBlockOrFinalized { block_hash, tx_hash });
-										},
-										Ok(TransactionStatus::Future) |
-										Ok(TransactionStatus::Ready) |
-										Ok(TransactionStatus::Broadcast(_)) |
-										Ok(TransactionStatus::Retracted(_)) => {},
-										Ok(TransactionStatus::Invalid) =>
-											return Ok(SubmissionStatus::Terminated {
-												tx_hash,
-												reason: "transaction became invalid in the pool",
-											}),
-										Ok(TransactionStatus::Dropped) =>
-											return Ok(SubmissionStatus::Terminated {
-												tx_hash,
-												reason: "transaction was dropped by the pool",
-											}),
-										Ok(TransactionStatus::Usurped(_)) =>
-											return Ok(SubmissionStatus::Terminated {
-												tx_hash,
-												reason:
-													"transaction was replaced in the pool (same nonce)",
-											}),
-										Ok(TransactionStatus::FinalityTimeout(_)) =>
-											return Ok(SubmissionStatus::Terminated {
-												tx_hash,
-												reason: "transaction finality timeout",
-											}),
-										Err(error) => {
-											warn!(
-												target: "state_chain_client",
-												request_id,
-												submission_id,
-												"Error while watching submission status for tx_hash {tx_hash:?}: {error}. Marking submission as terminated."
-											);
-											return Ok(SubmissionStatus::Terminated {
-												tx_hash,
-												reason: "error while decoding submission status",
-											});
-										},
-									}
-								}
-
-								Ok(SubmissionStatus::Terminated {
-									tx_hash,
-									reason: "status stream ended before inclusion",
-								})
-							}),
-						);
-					info!(target: "state_chain_client", request_id, submission_id, "Submission succeeded");
-					request.next_submission_id += 1;
+						Some(transaction_status_stream),
+					);
+					info!(target: "state_chain_client", request_id = request.id, submission_id = submission_id, "Submission succeeded");
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
@@ -329,6 +349,14 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						// submitted. And so we can ignore the error and return
 						// the transaction hash.
 						ClientError::Call(obj) if obj.code() == POOL_ALREADY_IMPORTED => {
+							// POOL_ALREADY_IMPORTED can be returned even on a single submission due
+							// to a substrate bug (https://github.com/paritytech/polkadot-sdk/pull/11419).
+							// We track the submission here so it gets properly cleaned up when the
+							// tx appears in a finalized block. This is duplicate-tolerant,
+							// so double-tracking the same submission (e.g. on an actual
+							// resubmission) is harmless, as duplicates get cleaned up when
+							// the tx is observed in a finalized block.
+							self.track_submission(request, nonce, lifetime, tx_hash, None);
 							debug!("Already in pool with tx_hash: {tx_hash:#x}.");
 							break Ok(Ok(tx_hash))
 						},
