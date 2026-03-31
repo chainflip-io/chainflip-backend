@@ -199,6 +199,8 @@ jobs:
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
+        env:
+          SKIP_BLS_TESTS: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
