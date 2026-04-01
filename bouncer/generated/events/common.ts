@@ -487,6 +487,15 @@ export const palletCfValidatorDelegationChange = z.discriminatedUnion('__kind', 
   z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
 ]);
 
+export const cfPrimitivesWitnessingTask = simpleEnum([
+  'Ethereum',
+  'Bitcoin',
+  'Arbitrum',
+  'Solana',
+  'Assethub',
+  'Oracle',
+]);
+
 export const palletCfGovernanceGovernanceCouncil = z.object({
   members: z.array(accountId),
   threshold: z.number(),
