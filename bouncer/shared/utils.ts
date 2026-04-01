@@ -1584,6 +1584,7 @@ export async function getNodeHealthStatus(
     logger.debug(`Node health status: ${JSON.stringify(data)}`);
     return data;
   } catch (error) {
+    logger.debug(`Checking health status of node at ${nodeUrl} error ${error}`);
     return { peers: 0, isSyncing: false, shouldHavePeers: false, isResponsive: false };
   }
 }

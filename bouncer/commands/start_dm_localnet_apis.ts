@@ -14,7 +14,7 @@
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { restartDmLpBrokerApis } from 'shared/upgrade_network';
+import { restartDepositMonitorAndLpAndBrokerApi } from 'shared/upgrade_network';
 import { runWithTimeoutAndExit } from 'shared/utils';
 
 async function main(): Promise<void> {
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     })
     .help().argv;
 
-  await restartDmLpBrokerApis(argv.localnet_init, argv.bins);
+  await restartDepositMonitorAndLpAndBrokerApi(argv.localnet_init, argv.bins);
 }
 
 await runWithTimeoutAndExit(main(), 5 * 60);

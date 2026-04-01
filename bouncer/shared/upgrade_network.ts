@@ -164,7 +164,7 @@ export async function upgradeBinaries<A = []>(
   cf.info('Binary upgrade complete. binaries updated but on-chain runtime version is unchanged.');
 }
 
-export async function restartDmLpBrokerApis(
+export async function restartDepositMonitorAndLpAndBrokerApi(
   localnetInitPath: string,
   binaryPath: string,
   logger: Logger = globalLogger,
@@ -175,7 +175,7 @@ export async function restartDmLpBrokerApis(
   for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
     try {
       logger.info(`killing ${processName}`);
-      execSync(`pkill -x ${processName}`);
+      execSync(`kill $(ps -o pid -o comm | grep ${processName}| awk '{print $1}')`);
       await waitForProcessExit(processName);
     } catch {
       logger.info(`${processName} was not running, skipping`);
@@ -201,7 +201,7 @@ async function upgradeNoBuild<A = []>(
 
   await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
 
-  await restartDmLpBrokerApis(localnetInitPath, binaryPath, cf.logger);
+  await restartDepositMonitorAndLpAndBrokerApi(localnetInitPath, binaryPath, cf.logger);
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
