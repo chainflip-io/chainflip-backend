@@ -272,100 +272,120 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 		+ 'static,
 	ProcessingFut: Future<Output = ()> + Send + 'static,
 {
-	scope.spawn_with_restart("hub_witnessing", move || {
-		let hub_client = hub_client.clone();
-		let process_call = process_call.clone();
-		let state_chain_client = state_chain_client.clone();
-		let state_chain_stream = state_chain_stream.clone();
-		let db = db.clone();
-		async move {
-			cf_utilities::task_scope::task_scope(|scope| {
-				async move {
-					let epoch_source = EpochSource::builder(
-						scope,
-						state_chain_stream.clone(),
-						state_chain_client.clone(),
-					)
-					.await
-					.participating(state_chain_client.account_id())
-					.await;
-
-					let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
-						.strictly_monotonic()
-						.then(|header| async move {
-							header.data.iter().filter_map(filter_map_events).collect()
-						})
-						.shared(scope);
-
-					unfinalised_source
-						.clone()
-						.chunk_by_time(epoch_source.clone(), scope)
-						.chain_tracking(state_chain_client.clone(), hub_client.clone())
-						.logging("chain tracking")
-						.spawn(scope);
-
-					let epoch_source = epoch_source
-						.filter_map(
-							|state_chain_client, _epoch_index, hash, _info| async move {
-								state_chain_client
-									.storage_value::<pallet_cf_environment::AssethubVaultAccountId<
-										state_chain_runtime::Runtime,
-									>>(hash)
-									.await
-									.expect(STATE_CHAIN_CONNECTION)
-							},
-							|_state_chain_client, _epoch, _block_hash, historic_info| async move {
-								Some(historic_info)
-							},
-						)
-						.await;
-
-					let vaults = epoch_source.vaults::<cf_chains::Assethub>().await;
-
-					// Full witnessing
-					HubFinalisedSource::new(hub_client.clone())
-						.strictly_monotonic()
-						.logging("finalised block produced")
-						.then(|header| async move {
-							header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
-						})
-						.chunk_by_vault(vaults, scope)
-						.deposit_addresses(
+	let sos_client = state_chain_client.clone();
+	scope.spawn_with_restart(
+		"hub_witnessing",
+		move || {
+			let hub_client = hub_client.clone();
+			let process_call = process_call.clone();
+			let state_chain_client = state_chain_client.clone();
+			let state_chain_stream = state_chain_stream.clone();
+			let db = db.clone();
+			async move {
+				cf_utilities::task_scope::task_scope(|scope| {
+					async move {
+						let epoch_source = EpochSource::builder(
 							scope,
 							state_chain_stream.clone(),
 							state_chain_client.clone(),
 						)
 						.await
-						// Deposit witnessing
-						.hub_deposits(process_call.clone())
-						// Proxy added witnessing
-						.then(proxy_added_witnessing)
-						// Broadcast success
-						.egress_items(scope, state_chain_stream.clone(), state_chain_client.clone())
-						.await
-						.then({
-							let process_call = process_call.clone();
-							let hub_client = hub_client.clone();
-							move |epoch, header| {
-								process_egress(
-									epoch,
-									header,
-									process_call.clone(),
-									hub_client.clone(),
-								)
-							}
-						})
-						.continuous("Assethub".to_string(), db)
-						.logging("witnessing")
-						.spawn(scope);
+						.participating(state_chain_client.account_id())
+						.await;
 
-					Ok(())
-				}
-				.boxed()
-			})
-			.await
-		}
-	});
+						let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
+							.strictly_monotonic()
+							.then(|header| async move {
+								header.data.iter().filter_map(filter_map_events).collect()
+							})
+							.shared(scope);
+
+						unfinalised_source
+							.clone()
+							.chunk_by_time(epoch_source.clone(), scope)
+							.chain_tracking(state_chain_client.clone(), hub_client.clone())
+							.logging("chain tracking")
+							.spawn(scope);
+
+						let epoch_source = epoch_source
+							.filter_map(
+								|state_chain_client, _epoch_index, hash, _info| async move {
+									state_chain_client
+										.storage_value::<pallet_cf_environment::AssethubVaultAccountId<
+											state_chain_runtime::Runtime,
+										>>(hash)
+										.await
+										.expect(STATE_CHAIN_CONNECTION)
+								},
+								|_state_chain_client, _epoch, _block_hash, historic_info| async move {
+									Some(historic_info)
+								},
+							)
+							.await;
+
+						let vaults = epoch_source.vaults::<cf_chains::Assethub>().await;
+
+						// Full witnessing
+						HubFinalisedSource::new(hub_client.clone())
+							.strictly_monotonic()
+							.logging("finalised block produced")
+							.then(|header| async move {
+								header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
+							})
+							.chunk_by_vault(vaults, scope)
+							.deposit_addresses(
+								scope,
+								state_chain_stream.clone(),
+								state_chain_client.clone(),
+							)
+							.await
+							// Deposit witnessing
+							.hub_deposits(process_call.clone())
+							// Proxy added witnessing
+							.then(proxy_added_witnessing)
+							// Broadcast success
+							.egress_items(
+								scope,
+								state_chain_stream.clone(),
+								state_chain_client.clone(),
+							)
+							.await
+							.then({
+								let process_call = process_call.clone();
+								let hub_client = hub_client.clone();
+								move |epoch, header| {
+									process_egress(
+										epoch,
+										header,
+										process_call.clone(),
+										hub_client.clone(),
+									)
+								}
+							})
+							.continuous("Assethub".to_string(), db)
+							.logging("witnessing")
+							.spawn(scope);
+
+						Ok(())
+					}
+					.boxed()
+				})
+				.await
+			}
+		},
+		move || {
+			let sos_client = sos_client.clone();
+			async move {
+				let _ = sos_client
+					.finalize_signed_extrinsic(
+						pallet_cf_validator::Call::report_witnessing_task_restart {
+							task: cf_primitives::WitnessingTask::Assethub,
+						},
+					)
+					.await;
+			}
+		},
+	);
 }
 
 fn transaction_fee_paids(

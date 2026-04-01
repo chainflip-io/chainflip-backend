@@ -464,6 +464,8 @@ pub mod pallet {
 		/// The maximum bit of an delegator was updated. If the value is None it means that the
 		/// max_bid has been removed entirly.
 		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
+		/// A validator reported that a witnessing task crashed and was restarted.
+		WitnessingTaskRestarted { task: cf_primitives::WitnessingTask, reporter: ValidatorIdOf<T> },
 	}
 
 	#[pallet::error]
@@ -1352,6 +1354,17 @@ pub mod pallet {
 				});
 			}
 
+			Ok(())
+		}
+
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::ValidatorWeightInfo::report_witnessing_task_restart())]
+		pub fn report_witnessing_task_restart(
+			origin: OriginFor<T>,
+			task: cf_primitives::WitnessingTask,
+		) -> DispatchResult {
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::deposit_event(Event::<T>::WitnessingTaskRestarted { task, reporter: who.into() });
 			Ok(())
 		}
 	}

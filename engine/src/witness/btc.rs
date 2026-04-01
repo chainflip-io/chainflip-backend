@@ -283,36 +283,52 @@ where
 		+ Sync,
 {
 	tracing::debug!("Starting BTC witness");
-	scope.spawn_with_restart("btc_witnessing", move || {
-		let client = client.clone();
-		let state_chain_client = state_chain_client.clone();
-		async move {
-			task_scope::task_scope(|scope| {
-				async {
-					crate::elections::Voter::new(
-						scope,
-						state_chain_client,
-						CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
-							BitcoinBlockHeightWitnesserVoter { client: client.clone() },
-							GenericBwVoter::new(client.clone(), ()),
-							GenericBwVoter::new(client.clone(), ()),
-							GenericBwVoter::new(client.clone(), ()),
-							BitcoinFeeVoter { client: client.clone() },
-							BitcoinLivenessVoter { client: client.clone() },
-						)),
-						Some(client.cache_invalidation_senders),
-						"Bitcoin",
-					)
-					.continuously_vote()
-					.await;
+	let sos_client = state_chain_client.clone();
+	scope.spawn_with_restart(
+		"btc_witnessing",
+		move || {
+			let client = client.clone();
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				task_scope::task_scope(|scope| {
+					async {
+						crate::elections::Voter::new(
+							scope,
+							state_chain_client,
+							CompositeVoter::<BitcoinElectoralSystemRunner, _>::new((
+								BitcoinBlockHeightWitnesserVoter { client: client.clone() },
+								GenericBwVoter::new(client.clone(), ()),
+								GenericBwVoter::new(client.clone(), ()),
+								GenericBwVoter::new(client.clone(), ()),
+								BitcoinFeeVoter { client: client.clone() },
+								BitcoinLivenessVoter { client: client.clone() },
+							)),
+							Some(client.cache_invalidation_senders),
+							"Bitcoin",
+						)
+						.continuously_vote()
+						.await;
 
-					Ok(())
-				}
-				.boxed()
-			})
-			.await
-		}
-	});
+						Ok(())
+					}
+					.boxed()
+				})
+				.await
+			}
+		},
+		move || {
+			let sos_client = sos_client.clone();
+			async move {
+				let _ = sos_client
+					.finalize_signed_extrinsic(
+						pallet_cf_validator::Call::report_witnessing_task_restart {
+							task: cf_primitives::WitnessingTask::Bitcoin,
+						},
+					)
+					.await;
+			}
+		},
+	);
 
 	Ok(())
 }

@@ -591,4 +591,16 @@ mod benchmarks {
 
 		assert!(DelegationChoice::<T>::get(&delegator).is_none());
 	}
+
+	#[benchmark]
+	fn report_witnessing_task_restart() {
+		let caller =
+			T::AccountRoleRegistry::whitelisted_caller_with_role(AccountRole::Validator).unwrap();
+
+		#[extrinsic_call]
+		report_witnessing_task_restart(
+			RawOrigin::Signed(caller),
+			cf_primitives::WitnessingTask::Ethereum,
+		);
+	}
 }
