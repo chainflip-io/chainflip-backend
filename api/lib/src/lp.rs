@@ -28,7 +28,7 @@ use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
 	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
-	EgressId, SwapRequestId, WaitFor,
+	EgressId, OrderId, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
 	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
@@ -41,7 +41,7 @@ use engine_sc_client::{
 };
 use frame_support::{pallet_prelude::ConstU32, BoundedVec};
 use futures::{FutureExt, TryFutureExt};
-use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, OrderId, RangeOrderSize, MAX_ORDERS_DELETE};
+use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, RangeOrderSize, MAX_ORDERS_DELETE};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use std::{ops::Range, sync::Arc};
