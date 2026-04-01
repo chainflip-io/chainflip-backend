@@ -8,6 +8,7 @@ import {
   Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams } from 'shared/new_swap';
+import { AssetAndChain } from '@chainflip/utils/chainflip';
 
 function toCcmRpcParams(metadata: CcmDepositMetadata) {
   return {
@@ -25,8 +26,8 @@ function toDcaRpcParams(dcaParams: DcaParams) {
 }
 
 type VaultSwapInputRpc = {
-  source_asset: unknown;
-  destination_asset: unknown;
+  source_asset: AssetAndChain;
+  destination_asset: AssetAndChain;
   destination_address: string;
   broker_commission: number;
   boost_fee: number;
