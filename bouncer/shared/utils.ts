@@ -1626,25 +1626,31 @@ export async function waitForNodeHealthy(
   }
 }
 
-// Polls until no process matching `processName` appears in pgrep, or throws on timeout.
-// Works correctly for multi-process setups: returns only when ALL matching processes have exited.
-export async function waitForProcessExit(processName: string, timeoutMs = 15000): Promise<void> {
+async function waitForProcess(
+  processName: string,
+  condition: 'started' | 'exited',
+  timeoutMs = 15000,
+): Promise<void> {
   const intervalMs = 500;
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    try {
-      execSync(`pgrep -x ${processName}`, { stdio: 'ignore' });
-      // pgrep succeeded — at least one process still alive
-      await sleep(intervalMs);
-    } catch {
-      // pgrep returned non-zero — no matching process found
-      return;
-    }
+    const pids = execSync(`ps -o pid -o comm | grep ${processName} | awk '{print $1}'`)
+      .toString()
+      .trim();
+    const running = pids.length > 0;
+    if (condition === 'started' ? running : !running) return;
+    await sleep(intervalMs);
   }
 
-  throw new Error(`Timed out waiting for '${processName}' to exit after ${timeoutMs}ms`);
+  throw new Error(`Timed out waiting for '${processName}' to ${condition} after ${timeoutMs}ms`);
 }
+
+export const waitForProcessStart = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'started', timeoutMs);
+
+export const waitForProcessExit = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'exited', timeoutMs);
 
 export async function killEngines(logger: Logger = globalLogger) {
   logger.info('Killing engine-runner processes');

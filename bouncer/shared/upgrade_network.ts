@@ -7,10 +7,10 @@ import {
   compareSemVer,
   killEngines,
   killNodes,
-  sleep,
   startEngines,
   startNodes,
   waitForProcessExit,
+  waitForProcessStart,
 } from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
@@ -56,39 +56,22 @@ async function startBrokerAndLpApi(
   keysDir: string,
   logger: Logger = globalLogger,
 ) {
-  logger.info('Starting new broker and lp-api.');
+  logger.info(`Starting new broker and lp-api from binaryPath: ${binaryPath} and keysDir: ${keysDir}`);
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-broker-api.sh`,
-    [`${binaryPath}`],
+    [`${binaryPath}`, `${keysDir}`],
     'start-broker-api',
-    {
-      KEYS_DIR: keysDir,
-    },
   );
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-lp-api.sh`,
-    [`${binaryPath}`],
+    [`${binaryPath}`, `${keysDir}`],
     'start-lp-api',
-    {
-      KEYS_DIR: keysDir,
-    },
   );
 
-  await sleep(10000);
-
-  for (const [process, port] of [
-    ['broker-api', 10997],
-    ['lp-api', 10589],
-  ]) {
-    try {
-      const pid = execSync(`lsof -t -i:${port}`);
-      logger.info(`New ${process} PID: ${pid.toString()}`);
-    } catch (e) {
-      console.error(`Error starting ${process}: ${e}`);
-      throw e;
-    }
+  for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
+    await waitForProcessStart(processName, 40000);
   }
 }
 
