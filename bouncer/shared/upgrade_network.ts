@@ -56,18 +56,26 @@ async function startBrokerAndLpApi(
   keysDir: string,
   logger: Logger = globalLogger,
 ) {
-  logger.info(`Starting new broker and lp-api from binaryPath: ${binaryPath} and keysDir: ${keysDir}`);
+  logger.info(
+    `Starting new broker and lp-api from binaryPath: ${binaryPath} and keysDir: ${keysDir}`,
+  );
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-broker-api.sh`,
-    [`${binaryPath}`, `${keysDir}`],
+    [`${binaryPath}`],
     'start-broker-api',
+    {
+      KEYS_DIR: keysDir,
+    },
   );
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-lp-api.sh`,
-    [`${binaryPath}`, `${keysDir}`],
+    [`${binaryPath}`],
     'start-lp-api',
+    {
+      KEYS_DIR: keysDir,
+    },
   );
 
   for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
