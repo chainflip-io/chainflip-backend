@@ -660,7 +660,7 @@ impl<T> BlockWitnesserEvent<T> {
 /// Identifies a witnessing task running in the engine.
 /// Each variant maps to a `spawn_with_restart` task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub enum WitnessingTask {
+pub enum WitnessingTaskName {
 	Ethereum,
 	Bitcoin,
 	Arbitrum,

@@ -417,16 +417,10 @@ where
 			}
 		},
 		move || {
-			let sos_client = sos_client.clone();
-			async move {
-				let _ = sos_client
-					.finalize_signed_extrinsic(
-						pallet_cf_validator::Call::report_witnessing_task_restart {
-							task: cf_primitives::WitnessingTask::Arbitrum,
-						},
-					)
-					.await;
-			}
+			crate::witness::common::submit_sos_extrinsic(
+				sos_client.clone(),
+				cf_primitives::WitnessingTaskName::Arbitrum,
+			)
 		},
 	);
 

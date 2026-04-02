@@ -465,7 +465,10 @@ pub mod pallet {
 		/// max_bid has been removed entirly.
 		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
 		/// A validator reported that a witnessing task crashed and was restarted.
-		WitnessingTaskRestarted { task: cf_primitives::WitnessingTask, reporter: ValidatorIdOf<T> },
+		WitnessingTaskRestarted {
+			task: cf_primitives::WitnessingTaskName,
+			reporter: ValidatorIdOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -1361,7 +1364,7 @@ pub mod pallet {
 		#[pallet::weight(T::ValidatorWeightInfo::report_witnessing_task_restart())]
 		pub fn report_witnessing_task_restart(
 			origin: OriginFor<T>,
-			task: cf_primitives::WitnessingTask,
+			task: cf_primitives::WitnessingTaskName,
 		) -> DispatchResult {
 			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
 			Self::deposit_event(Event::<T>::WitnessingTaskRestarted { task, reporter: who.into() });

@@ -600,7 +600,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		report_witnessing_task_restart(
 			RawOrigin::Signed(caller),
-			cf_primitives::WitnessingTask::Ethereum,
+			cf_primitives::WitnessingTaskName::Ethereum,
 		);
 	}
 }
