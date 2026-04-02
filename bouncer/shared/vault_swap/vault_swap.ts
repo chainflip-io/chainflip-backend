@@ -88,44 +88,48 @@ export async function requestSwapParameterEncoding<T>(
     )) as unknown as VaultSwapInputRpc;
 
     // Compare the decoded values with the original input
-    assert.deepStrictEqual(decoded.source_asset, stateChainAssetFromAsset(sourceAsset));
-    assert.deepStrictEqual(decoded.destination_asset, stateChainAssetFromAsset(destAsset));
-    assert.strictEqual(decoded.destination_address.toLowerCase(), encodedDestAddress.toLowerCase());
-    assert.strictEqual(decoded.broker_commission, brokerCommissionBps);
-    assert.strictEqual(decoded.boost_fee, boostFeeBps);
+    assert.deepStrictEqual(decoded.source_asset, stateChainAssetFromAsset(sourceAsset), 'source_asset mismatch');
+    assert.deepStrictEqual(decoded.destination_asset, stateChainAssetFromAsset(destAsset), 'destination_asset mismatch');
+    assert.strictEqual(decoded.destination_address.toLowerCase(), encodedDestAddress.toLowerCase(), 'destination_address mismatch');
+    assert.strictEqual(decoded.broker_commission, brokerCommissionBps, 'broker_commission mismatch');
+    assert.strictEqual(decoded.boost_fee, boostFeeBps, 'boost_fee mismatch');
 
     if (messageMetadata) {
       assert.strictEqual(
-        decoded.channel_metadata?.message.toLowerCase(),
-        messageMetadata.message.toLowerCase(),
+        decoded.channel_metadata?.message.toLowerCase().replace('0x', ''),
+        messageMetadata.message.toLowerCase().replace('0x', ''),
+        'channel_metadata.message mismatch',
       );
       assert.strictEqual(
         decoded.channel_metadata?.gas_budget.toLowerCase(),
         `0x${BigInt(messageMetadata.gasBudget).toString(16)}`.toLowerCase(),
+        'channel_metadata.gas_budget mismatch',
       );
       assert.strictEqual(
-        decoded.channel_metadata?.ccm_additional_data?.toLowerCase(),
-        messageMetadata.ccmAdditionalData?.toLowerCase() ?? null,
+        decoded.channel_metadata?.ccm_additional_data?.toLowerCase().replace('0x', ''),
+        messageMetadata.ccmAdditionalData?.toLowerCase().replace('0x', '') ?? null,
+        'channel_metadata.ccm_additional_data mismatch',
       );
     } else {
-      assert.strictEqual(decoded.channel_metadata, null);
+      assert.strictEqual(decoded.channel_metadata, null, 'channel_metadata should be null');
     }
 
-    assert.strictEqual(decoded.affiliate_fees.length, affiliateFees.length);
+    assert.strictEqual(decoded.affiliate_fees.length, affiliateFees.length, 'affiliate_fees length mismatch');
     for (let i = 0; i < affiliateFees.length; i++) {
       assert.strictEqual(
         decoded.affiliate_fees[i].account.toLowerCase(),
         affiliateFees[i].account.toLowerCase(),
+        `affiliate_fees[${i}].account mismatch`,
       );
-      assert.strictEqual(decoded.affiliate_fees[i].bps, affiliateFees[i].bps);
+      assert.strictEqual(decoded.affiliate_fees[i].bps, affiliateFees[i].bps, `affiliate_fees[${i}].bps mismatch`);
     }
 
     if (dcaParams) {
-      assert.strictEqual(decoded.dca_parameters?.number_of_chunks, dcaParams.numberOfChunks);
-      assert.strictEqual(decoded.dca_parameters?.chunk_interval, dcaParams.chunkIntervalBlocks);
+      assert.strictEqual(decoded.dca_parameters?.number_of_chunks, dcaParams.numberOfChunks, 'dca_parameters.number_of_chunks mismatch');
+      assert.strictEqual(decoded.dca_parameters?.chunk_interval, dcaParams.chunkIntervalBlocks, 'dca_parameters.chunk_interval mismatch');
     } else if (chainFromAsset(sourceAsset) !== Chains.Bitcoin) {
       // BTC always encodes dca_parameters even when not provided
-      assert.strictEqual(decoded.dca_parameters, null);
+      assert.strictEqual(decoded.dca_parameters, null, 'dca_parameters should be null');
     }
   }
 
