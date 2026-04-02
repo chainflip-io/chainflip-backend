@@ -1670,11 +1670,22 @@ export const waitForProcessStart = (processName: string, timeoutMs = 15000) =>
 export const waitForProcessExit = (processName: string, timeoutMs = 15000) =>
   waitForProcess(processName, 'exited', timeoutMs);
 
+// Kills all processes that match the provided process name
+export async function killProcess(
+  processName: string,
+  logger: Logger = globalLogger,
+): Promise<void> {
+  try {
+    execSync(`kill $(ps aux | grep ${processName} | grep -v grep | awk '{print $2}')`);
+    await waitForProcessExit(processName);
+  } catch {
+    logger.info(`${processName} was not running, skipping`);
+  }
+}
+
 export async function killEngines(logger: Logger = globalLogger) {
   logger.info('Killing engine-runner processes');
-  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
-
-  await waitForProcessExit('engine-runner');
+  await killProcess('engine-runner', logger);
   logger.info('All engine-runner processes have exited');
 }
 
@@ -1709,9 +1720,7 @@ export async function startEngines(
 
 export async function killNodes(logger: Logger = globalLogger) {
   logger.info('Killing chainflip-node processes');
-  execSync(`kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`);
-
-  await waitForProcessExit('chainflip-node');
+  await killProcess('chainflip-node', logger);
   logger.info('All chainflip-node processes have exited');
 }
 

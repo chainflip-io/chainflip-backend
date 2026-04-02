@@ -7,10 +7,10 @@ import {
   compareSemVer,
   killEngines,
   killNodes,
+  killProcess,
   startEngines,
   startNodes,
   waitForPortOpen,
-  waitForProcessExit,
 } from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
@@ -164,13 +164,7 @@ export async function restartDepositMonitorAndLpAndBrokerApi(
 
   // Kill broker and lp-api processes and wait for them to exit.
   for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
-    try {
-      logger.info(`killing ${processName}`);
-      execSync(`kill $(ps -o pid -o comm | grep ${processName}| awk '{print $1}')`);
-      await waitForProcessExit(processName);
-    } catch {
-      logger.info(`${processName} was not running, skipping`);
-    }
+    await killProcess(processName, logger);
   }
   await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR, logger);
   logger.info('Started new broker and lp-api.');

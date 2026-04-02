@@ -90,7 +90,9 @@ export async function tryRuntimeUpgrade(
       const success = await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
 
       if (!success) {
-        throw new Error('Migration failed for block: ' + blockHash.toString());
+        throw new Error(
+          `Migration failed for block: ${blockHash.toString()} please check the full try-runtime log file for this block`,
+        );
       }
 
       blockNumber++;
@@ -131,7 +133,9 @@ export async function tryRuntimeUpgrade(
 
       const failed = results.filter((r) => !r.success);
       if (failed.length > 0) {
-        throw new Error(`Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')}`);
+        throw new Error(
+          `Migration failed for blocks: ${failed.map((r) => r.hash).join(', ')} please check the full try-runtime log file for these blocks`,
+        );
       }
     }
   } else if (block === 'latest') {
@@ -143,7 +147,9 @@ export async function tryRuntimeUpgrade(
     const blockHash = await httpApi.rpc.chain.getBlockHash(block);
     const success = await tryRuntimeCommand(runtimePath, `${blockHash}`, networkUrl);
     if (!success) {
-      throw new Error('Migration failed for latest block');
+      throw new Error(
+        'Migration failed for latest block please check the full try-runtime log file for this block',
+      );
     }
   }
 
