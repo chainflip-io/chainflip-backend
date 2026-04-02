@@ -2,36 +2,38 @@ import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
-import { SemVerLevel, bumpReleaseVersion } from 'shared/bump_release_version';
-import { simpleRuntimeUpgrade } from 'shared/simple_runtime_upgrade';
-import { compareSemVer, getNodesInfo, killEngines, sleep, startEngines } from 'shared/utils';
+import { bumpReleaseVersion, SemVerLevel } from 'shared/bump_release_version';
+import {
+  compareSemVer,
+  killEngines,
+  killNodes,
+  killProcess,
+  startEngines,
+  startNodes,
+  waitForPortOpen,
+} from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
 import { execWithLog } from 'shared/utils/exec_with_log';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { globalLogger as logger } from 'shared/utils/logger';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
-import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
+import { Logger } from 'pino';
+import { globalLogger } from './utils/logger';
 
 async function readPackageTomlVersion(projectRoot: string): Promise<string> {
   const data = await fs.readFile(path.join(projectRoot, '/state-chain/runtime/Cargo.toml'), 'utf8');
   const parsedData = toml.parse(data);
-  const version = parsedData.package.version;
-  return version;
-}
-
-// The javascript version of state-chain/primitives/src/lib.rs - SemVer::is_compatible_with()
-function isCompatibleWith(semVer1: string, semVer2: string) {
-  const [major1, minor1] = semVer1.split('.').map(Number);
-  const [major2, minor2] = semVer2.split('.').map(Number);
-
-  return major1 === major2 && minor1 === minor2;
+  return parsedData.package.version;
 }
 
 // Create a git workspace in the tmp/ directory and check out the specified commit.
 // Remember to delete it when you're done!
-function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string) {
+function createGitWorkspaceAt(
+  nextVersionWorkspacePath: string,
+  toGitRef: string,
+  logger: Logger = globalLogger,
+) {
   try {
     // Create a directory for the new workspace
     execSync(`mkdir -p ${nextVersionWorkspacePath}`);
@@ -48,24 +50,15 @@ function createGitWorkspaceAt(nextVersionWorkspacePath: string, toGitRef: string
   }
 }
 
-function killOldNodes() {
-  logger.info('Killing the old node.');
-
-  try {
-    const execOutput = execSync(
-      `kill $(ps -o pid -o comm | grep chainflip-node | awk '{print $1}')`,
-    );
-    logger.info('Kill node exec output:', execOutput.toString());
-  } catch (e) {
-    logger.info('Error killing node: ' + e);
-    throw e;
-  }
-
-  logger.info('Killed old node');
-}
-
-async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string, keysDir: string) {
-  logger.info('Starting new broker and lp-api.');
+async function startBrokerAndLpApi(
+  localnetInitPath: string,
+  binaryPath: string,
+  keysDir: string,
+  logger: Logger = globalLogger,
+) {
+  logger.info(
+    `Starting new broker and lp-api from binaryPath: ${binaryPath} and keysDir: ${keysDir}`,
+  );
 
   await execWithLog(
     `${localnetInitPath}/scripts/start-broker-api.sh`,
@@ -85,23 +78,12 @@ async function startBrokerAndLpApi(localnetInitPath: string, binaryPath: string,
     },
   );
 
-  await sleep(10000);
-
-  for (const [process, port] of [
-    ['broker-api', 10997],
-    ['lp-api', 10589],
-  ]) {
-    try {
-      const pid = execSync(`lsof -t -i:${port}`);
-      logger.info(`New ${process} PID: ${pid.toString()}`);
-    } catch (e) {
-      console.error(`Error starting ${process}: ${e}`);
-      throw e;
-    }
+  for (const port of [10997, 10589]) {
+    await waitForPortOpen(port, 40000);
   }
 }
 
-async function startDepositMonitor(localnetInitPath: string) {
+async function startDepositMonitor(localnetInitPath: string, logger: Logger = globalLogger) {
   logger.info('Starting up deposit-monitor.');
 
   await execWithLog(
@@ -117,189 +99,119 @@ async function startDepositMonitor(localnetInitPath: string) {
   );
 }
 
-async function compatibleUpgrade(
+/// Upgrades a running localnet from old node and engine binaries to new ones,
+/// without performing a runtime upgrade. The chain state and on-chain runtime
+/// version are preserved — only the node and engine processes are replaced.
+///
+/// This simulates a binary-only upgrade (validators update their software
+/// before a governance runtime upgrade is submitted).
+export async function upgradeBinaries<A = []>(
+  cf: ChainflipIO<A>,
   localnetInitPath: string,
-  binaryPath: string,
-  runtimePath: string,
-  numberOfNodes: 1 | 3,
+  newBinaryPath: string,
+  numberOfNodes: 1 | 3 = 1,
 ) {
-  const cf = await newChainflipIO(logger, []);
-
-  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
-
-  killOldNodes();
-
-  const KEYS_DIR = `${localnetInitPath}/keys`;
-
-  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-
-  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
-    INIT_RPC_PORT: `9944`,
-    KEYS_DIR,
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
-  });
-
-  // wait for nodes to be ready
-  await sleep(20000);
-
-  // engines crashed when node shutdown, so restart them.
-  await execWithLog(
-    `${localnetInitPath}/scripts/start-all-engines.sh`,
-    [],
-    'start-all-engines-post-upgrade',
-    {
-      INIT_RUN: 'false',
-      LOG_SUFFIX: '-post-upgrade',
-      NODE_COUNT: nodeCount,
-      SELECTED_NODES,
-      LOCALNET_INIT_DIR: localnetInitPath,
-      BINARY_ROOT_PATH: binaryPath,
-    },
-  );
-
-  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-
-  await startDepositMonitor(localnetInitPath);
-}
-
-async function incompatibleUpgradeNoBuild(
-  localnetInitPath: string,
-  binaryPath: string,
-  runtimePath: string,
-  numberOfNodes: 1 | 3,
-) {
-  const cf = await newChainflipIO(logger, []);
-
-  // We need to kill the engine process before starting the new engine (engine-runner)
-  // Since the new engine contains the old one.
-  cf.info('Killing the old engines');
-  await killEngines();
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-1');
-
-  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
-
-  cf.info('Check that the old engine has now shut down, and that the new engine is now running.');
-
-  // TODO: add some tests here. After this point. If the upgrade doesn't work.
-  // but below, we effectively restart the engine before running any tests it's possible that
-  // we don't catch the error here.
-
-  // Ensure the runtime upgrade is finalised.
-  await sleep(10000);
-
   // We're going to take down the node, so we don't want them to be suspended.
-  await submitGovernanceExtrinsic((api) =>
-    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-      reputation: 100,
-      suspension: 0,
-    }),
-  );
-
-  cf.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 0');
-  // Ensure extrinsic gets in.
-  await sleep(12000);
-
-  killOldNodes();
-
-  // let them shutdown
-  await sleep(4000);
-
-  cf.info('Old broker and LP-API have crashed since we killed the node.');
-
-  cf.info('Starting the new node');
-
-  const KEYS_DIR = `${localnetInitPath}/keys`;
-
-  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  await execWithLog(`${localnetInitPath}/scripts/start-all-nodes.sh`, [], 'start-all-nodes', {
-    CHAIN: 'dev',
-    INIT_RPC_PORT: `9944`,
-    KEYS_DIR,
-    NODE_COUNT: nodeCount,
-    SELECTED_NODES,
-    LOCALNET_INIT_DIR: localnetInitPath,
-    BINARY_ROOT_PATH: binaryPath,
+  cf.info('Setting MissedAuthorshipSlot suspension to 0 before restarting nodes.');
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+        reputation: 100,
+        suspension: 0,
+      }),
+    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
   });
 
-  await sleep(20000);
+  // Kill engines first so they don't try to submit extrinsics while the node
+  // is shutting down.
+  await killEngines(cf.logger);
 
-  // clear api caches (this seems to be required starting for node.js version >= 22.0)
+  await killNodes(cf.logger);
+
+  // start the new nodes, this also waits until they are healthy
+  await startNodes(localnetInitPath, newBinaryPath, numberOfNodes, '-binaries-upgrade');
+
+  const newNodePids = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
+  cf.info('New node PID(s): ' + newNodePids.toString().trim());
+
+  // The API connections opened against the old node are stale after a restart.
   clearChainflipApiCache();
   clearSubscribeHeadsCache();
 
-  // Set missed authorship suspension back to 100/150 after nodes back up.
-  cf.info('Setting missed authorship suspension back to 100/150 after nodes back up.');
-  await submitGovernanceExtrinsic((api) =>
-    api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-      reputation: 100,
-      suspension: 150,
-    }),
-  );
+  // Start the new engines
+  await startEngines(localnetInitPath, newBinaryPath, numberOfNodes, '-binaries-upgrade');
 
-  cf.info('Submitted extrinsic to set suspension for MissedAuthorship slot to 100/150');
+  // Set missed authorship suspension back to 120/150 after nodes back up.
+  cf.info('Restoring MissedAuthorshipSlot penalty to defaults after nodes are back up.');
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+        reputation: 120,
+        suspension: 150,
+      }),
+    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+  });
 
-  const output = execSync("ps -o pid -o comm | grep chainflip-node | awk '{print $1}'");
-  cf.info('New node PID: ' + output.toString());
-
-  // Engines crash when the node shuts down, so we need to restart them.
-  await startEngines(localnetInitPath, binaryPath, numberOfNodes, '-upgrade-test-2');
-
-  await sleep(4000);
-
-  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR);
-  cf.info('Started new broker and lp-api.');
-
-  await startDepositMonitor(localnetInitPath);
-  cf.info('Started new deposit monitor.');
+  cf.info('Binary upgrade complete. binaries updated but on-chain runtime version is unchanged.');
 }
 
-async function incompatibleUpgrade(
-  // could we pass localnet/init instead of this.
+export async function restartDepositMonitorAndLpAndBrokerApi(
   localnetInitPath: string,
-  nextVersionWorkspacePath: string,
-  numberOfNodes: 1 | 3,
+  binaryPath: string,
+  logger: Logger = globalLogger,
 ) {
-  await bumpSpecVersionAgainstNetwork(
-    logger,
-    `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
-  );
+  const KEYS_DIR = `${localnetInitPath}/keys`;
 
-  await compileBinaries('all', nextVersionWorkspacePath);
+  // Kill broker and lp-api processes and wait for them to exit.
+  for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
+    await killProcess(processName, logger);
+  }
+  await startBrokerAndLpApi(localnetInitPath, binaryPath, KEYS_DIR, logger);
+  logger.info('Started new broker and lp-api.');
 
-  await incompatibleUpgradeNoBuild(
-    localnetInitPath,
-    `${nextVersionWorkspacePath}/target/release`,
-    `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
-    numberOfNodes,
-  );
+  // No need to docker compose stop the deposit monitor because docker compose up would do
+  // it if the DM image or env have changed
+  await startDepositMonitor(localnetInitPath, logger);
+  logger.info('Started new deposit monitor.');
+}
+
+async function upgradeNoBuild<A = []>(
+  cf: ChainflipIO<A>,
+  localnetInitPath: string,
+  binaryPath: string,
+  runtimePath: string,
+  numberOfNodes: 1 | 3 = 1,
+) {
+  await upgradeBinaries(cf, localnetInitPath, binaryPath, numberOfNodes);
+
+  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
+
+  await restartDepositMonitorAndLpAndBrokerApi(localnetInitPath, binaryPath, cf.logger);
 }
 
 // Upgrades a bouncer network from the commit currently running on localnet to the provided git reference (commit, branch, tag).
 // If the version of the commit we're upgrading to is the same as the version of the commit we're upgrading from, we bump the version by the specified level.
-// Only the incompatible upgrade requires the number of nodes.
-export async function upgradeNetworkGit(
+export async function upgradeNetworkGit<A = []>(
+  cf: ChainflipIO<A>,
   toGitRef: string,
   bumpByIfEqual: SemVerLevel = 'patch',
   numberOfNodes: 1 | 3 = 1,
 ) {
-  logger.info('Upgrading network to git ref: ' + toGitRef);
+  cf.info('Upgrading network to git ref: ' + toGitRef);
 
   const currentVersionWorkspacePath = path.dirname(process.cwd());
 
   const fromTomlVersion = await readPackageTomlVersion(currentVersionWorkspacePath);
-  logger.info("Version we're upgrading from: " + fromTomlVersion);
+  cf.info("Version we're upgrading from: " + fromTomlVersion);
 
   // tmp/ is ignored in the bouncer .gitignore file.
   const nextVersionWorkspacePath = path.join(process.cwd(), 'tmp/upgrade-network');
 
-  logger.info('Creating a new git workspace at: ' + nextVersionWorkspacePath);
+  cf.info('Creating a new git workspace at: ' + nextVersionWorkspacePath);
   createGitWorkspaceAt(nextVersionWorkspacePath, toGitRef);
 
   const toTomlVersion = await readPackageTomlVersion(`${nextVersionWorkspacePath}`);
-  logger.info("Version of commit we're upgrading to: " + toTomlVersion);
+  cf.info("Version of commit we're upgrading to: " + toTomlVersion);
 
   if (compareSemVer(fromTomlVersion, toTomlVersion) === 'greater') {
     throw new Error(
@@ -309,62 +221,61 @@ export async function upgradeNetworkGit(
 
   // Now we need to bump the TOML versions if required, to ensure the `CurrentReleaseVersion` in the environment pallet is correct.
   if (fromTomlVersion === toTomlVersion) {
-    logger.info('Versions are equal, bumping by: ' + bumpByIfEqual);
+    cf.info('Versions are equal, bumping by: ' + bumpByIfEqual);
     await bumpReleaseVersion(bumpByIfEqual, nextVersionWorkspacePath);
   } else {
-    logger.info('Versions are not equal, no need to bump.');
+    cf.info('Versions are not equal, no need to bump.');
   }
 
   const newToTomlVersion = await readPackageTomlVersion(path.join(nextVersionWorkspacePath));
-  logger.info("Version we're upgrading to: " + newToTomlVersion);
-
-  const isCompatible = isCompatibleWith(fromTomlVersion, newToTomlVersion);
-  logger.info('Is compatible: ' + isCompatible);
+  cf.info("Version we're upgrading to: " + newToTomlVersion);
 
   const localnetInitPath = `${currentVersionWorkspacePath}/localnet/init`;
-  if (isCompatible) {
-    logger.info('The versions are compatible.');
-    await simpleRuntimeUpgrade(logger, nextVersionWorkspacePath, true);
 
-    // TODO: Add restart nodes support, as in the prebuilt case.
+  // Bump version and compile binaries
+  await bumpSpecVersionAgainstNetwork(
+    cf.logger,
+    `${nextVersionWorkspacePath}/state-chain/runtime/src/lib.rs`,
+  );
+  await compileBinaries('all', nextVersionWorkspacePath);
 
-    logger.info('Upgrade complete.');
-  } else if (!isCompatible) {
-    logger.info('The versions are incompatible.');
-    await incompatibleUpgrade(localnetInitPath, nextVersionWorkspacePath, numberOfNodes);
-  }
+  await upgradeNoBuild(
+    cf,
+    localnetInitPath,
+    `${nextVersionWorkspacePath}/target/release`,
+    `${nextVersionWorkspacePath}/target/release/wbuild/state-chain-runtime/state_chain_runtime.compact.compressed.wasm`,
+    numberOfNodes,
+  );
 
-  logger.info('Cleaning up...');
+  cf.info('Cleaning up...');
   execSync(`cd ${nextVersionWorkspacePath} && git worktree remove . --force`);
-  logger.info('Done.');
+  cf.info('Done.');
 }
 
-export async function upgradeNetworkPrebuilt(
+export async function upgradeNetworkPrebuilt<A = []>(
+  cf: ChainflipIO<A>,
   // Directory where the node and CFE binaries of the new version are located
   binariesPath: string,
   // Path to the runtime we will upgrade to
   runtimePath: string,
-
   localnetInitPath: string,
-
   oldVersion: string,
-
   numberOfNodes: 1 | 3 = 1,
 ) {
   const versionRegex = /\d+\.\d+\.\d+/;
 
-  logger.info("Raw version we're upgrading from: " + oldVersion);
+  cf.info("Raw version we're upgrading from: " + oldVersion);
 
   let cleanOldVersion = oldVersion;
   if (versionRegex.test(cleanOldVersion)) {
     cleanOldVersion = oldVersion.match(versionRegex)?.[0] ?? '';
   }
 
-  logger.info("Version we're upgrading from: " + cleanOldVersion);
+  cf.info("Version we're upgrading from: " + cleanOldVersion);
 
   const nodeBinaryVersion = execSync(`${binariesPath}/chainflip-node --version`).toString();
   const nodeVersion = nodeBinaryVersion.match(versionRegex)?.[0] ?? '';
-  logger.info("Node version we're upgrading to: " + nodeVersion);
+  cf.info("Node version we're upgrading to: " + nodeVersion);
 
   // We use nodeVersion as a proxy for the cfe version since they are updated together.
   // And getting the cfe version involves ensuring the dylib is available.
@@ -378,13 +289,9 @@ export async function upgradeNetworkPrebuilt(
     throw Error(
       'The versions are the same. No need to upgrade. Please provide a different version.',
     );
-  } else if (isCompatibleWith(cleanOldVersion, nodeVersion)) {
-    logger.info('The versions are compatible.');
-    await compatibleUpgrade(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   } else {
-    logger.info('The versions are incompatible.');
-    await incompatibleUpgradeNoBuild(localnetInitPath, binariesPath, runtimePath, numberOfNodes);
+    await upgradeNoBuild(cf, localnetInitPath, binariesPath, runtimePath, numberOfNodes);
   }
 
-  logger.info('Upgrade complete.');
+  cf.info('Upgrade complete.');
 }
