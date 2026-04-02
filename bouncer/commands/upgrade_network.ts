@@ -31,6 +31,8 @@ import { hideBin } from 'yargs/helpers';
 import { upgradeNetworkGit, upgradeNetworkPrebuilt } from 'shared/upgrade_network';
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { SemVerLevel } from 'shared/bump_release_version';
+import { newChainflipIO } from 'shared/utils/chainflip_io';
+import { globalLogger } from 'shared/utils/logger';
 
 async function main(): Promise<void> {
   await yargs(hideBin(process.argv))
@@ -62,7 +64,8 @@ async function main(): Promise<void> {
       async (argv) => {
         console.log('git subcommand with args: ' + argv.ref);
         try {
-          await upgradeNetworkGit(argv.ref, argv.bump as SemVerLevel, argv.nodes as 1 | 3);
+          const cf = await newChainflipIO(globalLogger, []);
+          await upgradeNetworkGit(cf, argv.ref, argv.bump as SemVerLevel, argv.nodes as 1 | 3);
         } catch (error) {
           console.error(`Error: ${error}`);
         }
@@ -108,7 +111,9 @@ async function main(): Promise<void> {
       async (args) => {
         console.log('prebuilt subcommand with args: ' + args.bins + ' ' + args.runtime);
 
+        const cf = await newChainflipIO(globalLogger, []);
         await upgradeNetworkPrebuilt(
+          cf,
           args.bins,
           args.runtime,
           args.localnet_init,
