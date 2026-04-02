@@ -1735,26 +1735,27 @@ impl<T: Config> Pallet<T> {
 		),
 		AuctionError,
 	> {
-		let (_auction_outcome, resolver, mut delegation_snapshots, auction_bids) =
-			Self::run_initial_auction(excluded)?;
-
-		let mut current_outcome = resolver.resolve_auction(auction_bids(&delegation_snapshots))?;
-		loop {
-			let old_snapshots = delegation_snapshots.clone();
-			for snapshot in delegation_snapshots.values_mut() {
-				snapshot.maybe_optimize_bid(&current_outcome);
-			}
-			if delegation_snapshots == old_snapshots {
-				break;
-			} else if let Ok(new_outcome) =
-				resolver.resolve_auction(auction_bids(&delegation_snapshots))
-			{
-				current_outcome = new_outcome;
-			} else {
-				break;
-			}
-		}
-		Ok((current_outcome, delegation_snapshots))
+		Self::run_initial_auction(excluded).map(
+			|(initial_outcome, resolver, mut delegation_snapshots, auction_bids)| {
+				let mut current_outcome = initial_outcome;
+				loop {
+					let old_snapshots = delegation_snapshots.clone();
+					for snapshot in delegation_snapshots.values_mut() {
+						snapshot.maybe_optimize_bid(&current_outcome);
+					}
+					if delegation_snapshots == old_snapshots {
+						break;
+					} else if let Ok(new_outcome) =
+						resolver.resolve_auction(auction_bids(&delegation_snapshots))
+					{
+						current_outcome = new_outcome;
+					} else {
+						break;
+					}
+				}
+				(current_outcome, delegation_snapshots)
+			},
+		)
 	}
 
 	fn start_authority_rotation() -> Weight {
