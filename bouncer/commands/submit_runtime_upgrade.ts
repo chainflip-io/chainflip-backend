@@ -1,30 +1,58 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
+// Submits a runtime upgrade to a running localnet.
 //
-// This command takes 1 mandatory argument, and 2 optional arguments.
-// Arguments:
-// 1. Path to the runtime wasm file
-// 2. Optional: A JSON string representing the semver restriction for the upgrade. If not provided, the upgrade will not be restricted by semver.
-// 3. Optional: A number representing the percentage of nodes that must be upgraded before the upgrade will be allowed to proceed. If not provided, the upgrade will not be restricted by the number of nodes that have upgraded.
+// Args:
+// --runtime <path>: Path to the runtime wasm file. (required)
+// --semver_restriction <json>: JSON semver restriction, e.g. '{"major":1,"minor":2,"patch":3}'. Optional.
+// --percent_nodes <number>: Percentage of nodes that must be on the new binary before the upgrade proceeds. Optional.
+// --try_runtime: Run try-runtime checks before submitting the upgrade. Defaults to false.
 //
-// For example: ./commands/submit_runtime_upgrade.ts /path/to/state_chain_runtime.compact.compressed.wasm '{"major": 1, "minor": 2, "patch": 3}' 50
+// Examples:
+// ./commands/submit_runtime_upgrade.ts --runtime ./state_chain_runtime.compact.compressed.wasm
+// ./commands/submit_runtime_upgrade.ts --runtime ./runtime.wasm --semver_restriction '{"major":1,"minor":2,"patch":3}' --percent_nodes 50 --try_runtime
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
-import { runWithTimeoutAndExit } from 'shared/utils';
 import { globalLogger } from 'shared/utils/logger';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
 
 async function main() {
-  const wasmPath = process.argv[2];
+  const argv = await yargs(hideBin(process.argv))
+    .option('runtime', {
+      describe: 'Path to the runtime wasm file',
+      type: 'string',
+      demandOption: true,
+      requiresArg: true,
+    })
+    .option('semver_restriction', {
+      describe: 'JSON semver restriction e.g. \'{"major":1,"minor":2,"patch":3}\'',
+      type: 'string',
+    })
+    .option('percent_nodes', {
+      describe: 'Percentage of nodes that must be on the new binary before the upgrade proceeds',
+      type: 'number',
+    })
+    .option('try_runtime', {
+      describe: 'Run try-runtime checks before submitting the upgrade',
+      type: 'boolean',
+      default: false,
+    })
+    .help().argv;
 
-  const arg3 = process.argv[3].trim();
-  const semverRestriction = arg3 ? JSON.parse(arg3) : undefined;
-
-  const arg4 = process.argv[4].trim();
-  const percentNodesUpgraded = arg4 ? Number(arg4) : undefined;
+  const semverRestriction = argv.semver_restriction
+    ? JSON.parse(argv.semver_restriction)
+    : undefined;
 
   const cf = await newChainflipIO(globalLogger, []);
-  await submitRuntimeUpgradeWithRestrictions(cf, wasmPath, semverRestriction, percentNodesUpgraded);
+  await submitRuntimeUpgradeWithRestrictions(
+    cf,
+    argv.runtime,
+    semverRestriction,
+    argv.percent_nodes,
+    argv.try_runtime,
+  );
 }
 
-await runWithTimeoutAndExit(main(), 20);
+await main();
