@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { accountId, cfPrimitivesWitnessingTask } from '../common';
+import { accountId, cfPrimitivesWitnessingTaskName } from '../common';
 
 export const validatorWitnessingTaskRestarted = z.object({
-  task: cfPrimitivesWitnessingTask,
+  task: cfPrimitivesWitnessingTaskName,
   reporter: accountId,
 });
