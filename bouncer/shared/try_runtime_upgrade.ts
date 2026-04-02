@@ -162,7 +162,11 @@ export async function tryRuntimeUpgrade(
         batch.map(async ({ hash, snapshotPath }) => {
           const blockLogger = loggerChild(logger, `block_${hash}`);
           blockLogger.info('Running try-runtime for block: ', hash);
-          const success = await tryRuntimeCommandFromSnapshot(runtimePath, snapshotPath, blockLogger);
+          const success = await tryRuntimeCommandFromSnapshot(
+            runtimePath,
+            snapshotPath,
+            blockLogger,
+          );
           return { hash, success };
         }),
       );
