@@ -262,12 +262,12 @@ fn statemachine_is_vote_needed_false_when_partial_vote_is_unchanged() {
 		);
 
 	assert!(!<SimpleBlockWitnesser as ElectoralSystem>::is_vote_needed(
-		((), partial_vote.clone(), vote_storage::AuthorityVote::Vote(vote.clone()),),
-		(partial_vote.clone(), vote.clone()),
+		((), partial_vote, vote_storage::AuthorityVote::Vote(vote.clone()),),
+		(partial_vote, vote.clone()),
 	),);
 
 	assert!(!<SimpleBlockWitnesser as ElectoralSystem>::is_vote_needed(
-		((), partial_vote.clone(), vote_storage::AuthorityVote::PartialVote(partial_vote.clone()),),
+		((), partial_vote, vote_storage::AuthorityVote::PartialVote(partial_vote),),
 		(partial_vote, vote),
 	),);
 }
