@@ -1626,6 +1626,24 @@ export async function waitForNodeHealthy(
   }
 }
 
+// Polls until a process is listening on `port` via lsof, or throws on timeout.
+// Preferred over waitForProcessStart for APIs since it confirms the service is actually ready.
+export async function waitForPortOpen(port: number, timeoutMs = 15000): Promise<void> {
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      execSync(`lsof -t -i:${port}`, { stdio: 'ignore' });
+      return;
+    } catch {
+      await sleep(intervalMs);
+    }
+  }
+
+  throw new Error(`Timed out waiting for port ${port} to open after ${timeoutMs}ms`);
+}
+
 async function waitForProcess(
   processName: string,
   condition: 'started' | 'exited',

@@ -9,8 +9,8 @@ import {
   killNodes,
   startEngines,
   startNodes,
+  waitForPortOpen,
   waitForProcessExit,
-  waitForProcessStart,
 } from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
@@ -78,8 +78,8 @@ async function startBrokerAndLpApi(
     },
   );
 
-  for (const processName of ['chainflip-broker-api', 'chainflip-lp-api']) {
-    await waitForProcessStart(processName, 40000);
+  for (const port of [10997, 10589]) {
+    await waitForPortOpen(port, 40000);
   }
 }
 
