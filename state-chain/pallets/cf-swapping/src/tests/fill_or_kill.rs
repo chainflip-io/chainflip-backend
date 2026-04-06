@@ -991,7 +991,7 @@ mod oracle_swaps {
 			MockPriceFeedApi::set_price(Asset::Usdc, Some(usdc_price));
 		}
 
-		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test> {
+		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test, Stage4> {
 			SwapState {
 				swap: Swap::new(
 					0.into(),
@@ -1008,15 +1008,14 @@ mod oracle_swaps {
 					}),
 					Default::default(),
 				),
-
-				network_fee_taken: NETWORK_FEE,
-				broker_fee_taken: BROKER_FEE,
-				intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
-				output_amount_before_fees: Some(OUTPUT_AMOUNT + BROKER_FEE),
-				output_amount_after_fees: Some(OUTPUT_AMOUNT),
-				input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
+				stage: Stage4 {
+					network_fee_taken: NETWORK_FEE,
+					broker_fee_taken: BROKER_FEE,
+					intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
+					output_amount_before_fees: OUTPUT_AMOUNT + BROKER_FEE,
+					output_amount_after_fees: OUTPUT_AMOUNT,
+					input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
+				},
 			}
 		}
 
