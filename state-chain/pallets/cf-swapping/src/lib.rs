@@ -28,7 +28,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
+	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, SwapId,
 	SwapLeg, SwapRequestId, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
@@ -76,11 +76,13 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+mod dca;
 mod fees;
 
 pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
+pub use dca::DcaState;
 pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
 
 type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
@@ -539,71 +541,6 @@ pub enum SwapRequestCompletionReason {
 	Executed,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub struct DcaState {
-	scheduled_chunks: BTreeSet<SwapId>,
-	remaining_input_amount: AssetAmount,
-	remaining_chunks: u32,
-	chunk_interval: u32,
-	accumulated_output_amount: AssetAmount,
-}
-
-impl DcaState {
-	fn new(input_amount: AssetAmount, params: Option<DcaParameters>) -> DcaState {
-		DcaState {
-			remaining_input_amount: input_amount,
-			remaining_chunks: params.as_ref().map(|p| p.number_of_chunks).unwrap_or(1),
-			// Chunk interval won't be used for non-DCA swaps but seems nicer to
-			// set a reasonable default than unwrap Option when it is needed:
-			chunk_interval: params.as_ref().map(|p| p.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS),
-			accumulated_output_amount: 0,
-			scheduled_chunks: BTreeSet::new(),
-		}
-	}
-
-	/// Calculate the amount of the next chunk to be scheduled.
-	fn calculate_next_chunk(&self) -> Option<AssetAmount> {
-		if self.remaining_chunks > 0 {
-			let chunk_input_amount = self
-				.remaining_input_amount
-				.checked_div(self.remaining_chunks as u128)
-				.unwrap_or(0);
-
-			Some(chunk_input_amount)
-		} else {
-			None
-		}
-	}
-
-	/// Called directly after a chunk has been scheduled. Records the new swap in the DCA state.
-	fn record_scheduled_chunk(
-		&mut self,
-		scheduled_chunk_swap_id: SwapId,
-		scheduled_chunk_amount: AssetAmount,
-	) {
-		// Add the new chunk to the scheduled swaps.
-		self.scheduled_chunks.insert(scheduled_chunk_swap_id);
-
-		// Update the remaining values
-		self.remaining_chunks.saturating_reduce(1);
-		self.remaining_input_amount.saturating_reduce(scheduled_chunk_amount);
-	}
-
-	/// Remove the completed chunk from the DCA state and accumulate the output amount.
-	fn record_chunk_completion(
-		&mut self,
-		completed_chunk_swap_id: SwapId,
-		completed_chunk_output_amount: AssetAmount,
-	) {
-		if self.scheduled_chunks.remove(&completed_chunk_swap_id) {
-			self.accumulated_output_amount += completed_chunk_output_amount;
-		} else {
-			log_or_panic!(
-				"Invariant violation: the completed swap id {completed_chunk_swap_id} does not match a scheduled chunk."
-			);
-		}
-	}
-}
 
 #[expect(clippy::large_enum_variant)]
 #[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
