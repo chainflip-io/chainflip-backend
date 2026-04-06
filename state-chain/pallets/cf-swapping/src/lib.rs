@@ -29,7 +29,7 @@ use cf_chains::{
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
 	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
+	SwapLeg, SwapRequestId, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
 	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
@@ -76,10 +76,12 @@ mod mock;
 mod tests;
 
 mod benchmarking;
+mod fees;
 
 pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
+pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
 
 type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
 
@@ -423,113 +425,6 @@ impl<T: Config> SwapState<T, Stage4> {
 	}
 }
 
-#[derive(
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	Default,
-	Serialize,
-	Deserialize,
-)]
-pub struct FeeRateAndMinimum {
-	pub rate: Permill,
-	pub minimum: AssetAmount,
-}
-
-#[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub struct NetworkFeeTracker {
-	/// Fee rate and minimum in input asset terms.
-	network_fee: FeeRateAndMinimum,
-	/// Total amount of the input asset that has had fees taken already
-	processed_asset_amount: AssetAmount,
-	/// Total amount of fees that has been taken already in input asset terms
-	accumulated_fee: AssetAmount,
-}
-
-impl NetworkFeeTracker {
-	pub const fn new(network_fee: FeeRateAndMinimum) -> Self {
-		Self { network_fee, processed_asset_amount: 0, accumulated_fee: 0 }
-	}
-
-	pub fn new_without_minimum(network_fee_rate: Permill) -> Self {
-		Self {
-			network_fee: FeeRateAndMinimum { rate: network_fee_rate, minimum: 0 },
-			processed_asset_amount: 0,
-			accumulated_fee: 0,
-		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	pub(crate) fn network_fee(&self) -> &FeeRateAndMinimum {
-		&self.network_fee
-	}
-
-	pub fn take_fee(&mut self, input_amount: AssetAmount) -> FeeTaken {
-		if input_amount.is_zero() {
-			return FeeTaken { remaining_amount: 0, fee: 0 };
-		}
-		self.processed_asset_amount.saturating_accrue(input_amount);
-		let calculated_fee = core::cmp::max(
-			self.network_fee.rate * self.processed_asset_amount,
-			self.network_fee.minimum,
-		);
-		let fee_taken =
-			core::cmp::min(calculated_fee.saturating_sub(self.accumulated_fee), input_amount);
-
-		self.accumulated_fee.saturating_accrue(fee_taken);
-
-		FeeTaken { remaining_amount: input_amount.saturating_sub(fee_taken), fee: fee_taken }
-	}
-}
-
-#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub struct BrokerFeesTracker<AccountId: core::fmt::Debug + Ord> {
-	pub fee_and_accumulated: BTreeMap<Beneficiary<AccountId>, AssetAmount>,
-}
-
-impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
-	pub fn new(beneficiaries: Beneficiaries<AccountId>) -> Self {
-		Self { fee_and_accumulated: beneficiaries.into_iter().map(|b| (b, 0)).collect() }
-	}
-
-	pub fn take_all_fees(&mut self, input_amount: AssetAmount) -> FeeTaken {
-		if input_amount.is_zero() {
-			return FeeTaken { remaining_amount: 0, fee: 0 };
-		}
-		if self.fee_and_accumulated.is_empty() {
-			return FeeTaken { remaining_amount: input_amount, fee: 0 };
-		}
-		// Sanity check: it should already not be possible to open a channel with broker fees
-		// this high, but if the total broker fee would exceed 100% we charge no broker fee
-		// instead (for simplicity):
-		let total_fee_bps = self
-			.fee_and_accumulated
-			.keys()
-			.fold(0u16, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps));
-
-		let mut total_fee = 0;
-		if total_fee_bps > ONE_AS_BASIS_POINTS {
-			return FeeTaken { remaining_amount: input_amount, fee: 0 }
-		} else {
-			self.fee_and_accumulated.iter_mut().for_each(
-				|(Beneficiary { bps, .. }, accumulated_fee)| {
-					let fee =
-						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
-					accumulated_fee.saturating_accrue(fee);
-					total_fee.saturating_accrue(fee)
-				},
-			);
-		}
-
-		assert!(total_fee <= input_amount, "Broker fee cannot be more than the amount");
-		FeeTaken { remaining_amount: input_amount.saturating_sub(total_fee), fee: total_fee }
-	}
-}
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
