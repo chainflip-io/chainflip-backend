@@ -29,7 +29,6 @@ use engine_sc_client::{
 	electoral_api::ElectoralApi,
 	extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
-	stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 };
 use futures::try_join;
 use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, SolanaInstance};
