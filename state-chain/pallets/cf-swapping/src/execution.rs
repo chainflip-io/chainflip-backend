@@ -79,15 +79,12 @@ impl<T: Config> Pallet<T> {
 						)
 					};
 
-					Some(SwapState {
-						swap: state.swap,
-						stage: Stage2 {
-							input_amount_after_fees: state.stage.input_amount_after_fees,
-							intermediate: intermediate_amount
+					Some(
+						state.with_intermediate(
+							intermediate_amount
 								.map(|amount| AssetAndAmount { asset: STABLE_ASSET, amount }),
-							network_fee_taken: state.stage.network_fee_taken,
-						},
-					})
+						),
+					)
 				})
 				.collect()
 		} else {
@@ -97,18 +94,9 @@ impl<T: Config> Pallet<T> {
 
 		successful_swaps
 			.into_iter()
-			.map(
-				// We only need the swaps at the stage after the first leg is complete. So we
-				// strip away the unused part of the state for the fully executed swaps.
-				|swap_state| SwapState {
-					swap: swap_state.swap,
-					stage: Stage2 {
-						input_amount_after_fees: swap_state.stage.input_amount_after_fees,
-						intermediate: swap_state.stage.intermediate,
-						network_fee_taken: swap_state.stage.network_fee_taken,
-					},
-				},
-			)
+			// We only need the swaps at the stage after the first leg is complete. So we
+			// strip away the unused part of the state for the fully executed swaps.
+			.map(SwapState::from)
 			.chain(failed_swaps)
 			.filter_map(|state| {
 				let swap_request = SwapRequests::<T>::get(state.swap_request_id())
@@ -137,7 +125,7 @@ impl<T: Config> Pallet<T> {
 							remaining_chunks,
 							chunk_interval,
 						},
-						state.swap.execute_at,
+						state.execute_at(),
 					))
 				} else if state.output_asset() != STABLE_ASSET && state.output_asset() == base_asset
 				{
@@ -162,14 +150,15 @@ impl<T: Config> Pallet<T> {
 							amount: state
 								.stage
 								.intermediate
+								.as_ref()
 								.map(|intermediate| intermediate.amount)
-								.unwrap_or(state.swap.input_amount),
+								.unwrap_or(state.input_amount_before_fees()),
 							source_asset,
 							source_amount,
 							remaining_chunks,
 							chunk_interval,
 						},
-						state.swap.execute_at,
+						state.execute_at(),
 					))
 				} else {
 					None
@@ -240,7 +229,7 @@ impl<T: Config> Pallet<T> {
 					if let Some(tracker) = fee_tracker {
 						let state = state.take_network_fee(tracker);
 						total_network_fee_taken
-							.entry(state.swap.from)
+							.entry(state.input_asset())
 							.or_default()
 							.saturating_accrue(state.stage.network_fee_taken);
 						state
@@ -324,18 +313,16 @@ impl<T: Config> Pallet<T> {
 	/// - `Ok(None)` if the oracle price is unavailable (No prices for this asset: skip the check)
 	/// - `Err(OraclePriceStale)` if the oracle price is stale
 	pub(crate) fn get_delta_from_oracle_price(
-		input_amount: AssetAmount,
-		output_amount: AssetAmount,
-		input_asset: Asset,
-		output_asset: Asset,
+		input: AssetAndAmount,
+		output: AssetAndAmount,
 	) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
-		if input_amount == 0 {
+		if input.amount == 0 {
 			// Price is undefined when input is zero (would cause division by zero).
 			return Ok(None);
 		}
-		match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
+		match T::PriceFeedApi::get_relative_price(input.asset, output.asset) {
 			Some(oracle_price) if oracle_price.stale => Err(SwapFailureReason::OraclePriceStale),
-			Some(oracle_price) => Ok(Price::sell_price(input_amount.into(), output_amount.into())
+			Some(oracle_price) => Ok(Price::sell_price(input.amount.into(), output.amount.into())
 				.map(|execution_price| {
 					execution_price.hundredth_bps_difference_from(&oracle_price.price)
 				})),
@@ -347,7 +334,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn check_swap_price_violation(
 		swap: &SwapState<T, Stage4>,
 	) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
-		if let Some(params) = &swap.swap.refund_params {
+		if let Some(params) = swap.refund_params() {
 			// Minimum price protection, aka FoK price protection
 			let min_price_output = params
 				.price_limits
@@ -361,34 +348,29 @@ impl<T: Config> Pallet<T> {
 
 		// Calculate the slippage from oracle prices for both legs of the swap (without being
 		// affected by fees).
-		let (first_leg_delta, second_leg_delta) =
-			if let Some(intermediate) = &swap.stage.intermediate {
-				(
-					Self::get_delta_from_oracle_price(
-						swap.stage.input_amount_after_fees,
-						intermediate.amount,
-						swap.input_asset(),
-						intermediate.asset,
-					)?,
-					Self::get_delta_from_oracle_price(
-						intermediate.amount,
-						swap.stage.output_amount_before_fees,
-						intermediate.asset,
-						swap.output_asset(),
-					)?,
-				)
-			} else {
-				// No intermediate asset, so must be a single leg swap.
-				(
-					Self::get_delta_from_oracle_price(
-						swap.stage.input_amount_after_fees,
-						swap.stage.output_amount_before_fees,
-						swap.input_asset(),
-						swap.swap.to,
-					)?,
-					None,
-				)
-			};
+		let (first_leg_delta, second_leg_delta) = if let Some(intermediate) =
+			&swap.stage.intermediate
+		{
+			(
+				Self::get_delta_from_oracle_price(
+					AssetAndAmount::new(swap.input_asset(), swap.stage.input_amount_after_fees),
+					*intermediate,
+				)?,
+				Self::get_delta_from_oracle_price(
+					*intermediate,
+					AssetAndAmount::new(swap.output_asset(), swap.stage.output_amount_before_fees),
+				)?,
+			)
+		} else {
+			// No intermediate asset, so must be a single leg swap.
+			(
+				Self::get_delta_from_oracle_price(
+					AssetAndAmount::new(swap.input_asset(), swap.stage.input_amount_after_fees),
+					AssetAndAmount::new(swap.output_asset(), swap.stage.output_amount_before_fees),
+				)?,
+				None,
+			)
+		};
 
 		// Sum the deltas or just use a single leg delta if the other leg doesn't have
 		// an oracle price.
@@ -400,7 +382,7 @@ impl<T: Config> Pallet<T> {
 
 		if let Some(total_delta) = total_delta {
 			// Oracle price protection, aka Live price protection (LPP)
-			if let Some(params) = &swap.swap.refund_params {
+			if let Some(params) = swap.refund_params() {
 				if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
 					// The swapper expresses the limit as a worst acceptable *sell*
 					// price, so slippage needs to be measured in the negative
@@ -440,8 +422,8 @@ impl<T: Config> Pallet<T> {
 			Ok(swap) => {
 				non_violating_swaps.push(swap);
 			},
-			Err((swap, reason)) => {
-				violating_swaps.push((swap.swap, reason));
+			Err((state, reason)) => {
+				violating_swaps.push((state.into_swap(), reason));
 			},
 		});
 
@@ -450,7 +432,10 @@ impl<T: Config> Pallet<T> {
 		} else {
 			Err(BatchExecutionError::PriceViolation {
 				violating_swaps,
-				non_violating_swaps: non_violating_swaps.into_iter().map(|ctx| ctx.swap).collect(),
+				non_violating_swaps: non_violating_swaps
+					.into_iter()
+					.map(|state| state.into_swap())
+					.collect(),
 			})
 		}
 	}
@@ -748,7 +733,7 @@ impl<T: Config> Pallet<T> {
 			network_fee: AssetAndAmount::new(swap.input_asset(), swap.stage.network_fee_taken),
 			broker_fee: AssetAndAmount::new(swap.output_asset(), swap.stage.broker_fee_taken),
 			output: AssetAndAmount::new(swap.output_asset(), swap.stage.output_amount_after_fees),
-			intermediate: swap.stage.intermediate.clone(),
+			intermediate: swap.stage.intermediate,
 			oracle_delta: swap.stage.oracle_delta,
 			oracle_delta_ex_fees: swap.stage.oracle_delta_ex_fees,
 		});

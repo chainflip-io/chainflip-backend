@@ -991,9 +991,11 @@ mod oracle_swaps {
 			MockPriceFeedApi::set_price(Asset::Usdc, Some(usdc_price));
 		}
 
-		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test, Stage4> {
-			SwapState {
-				swap: Swap::new(
+		fn test_swap_state(
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> SwapState<Test, Stage4> {
+			SwapState::new_test_state(
+				Swap::new(
 					0.into(),
 					0.into(),
 					Asset::Btc,
@@ -1008,7 +1010,7 @@ mod oracle_swaps {
 					}),
 					Default::default(),
 				),
-				stage: Stage4 {
+				Stage4 {
 					network_fee_taken: NETWORK_FEE,
 					broker_fee_taken: BROKER_FEE,
 					intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
@@ -1016,7 +1018,7 @@ mod oracle_swaps {
 					output_amount_after_fees: OUTPUT_AMOUNT,
 					input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
 				},
-			}
+			)
 		}
 
 		#[test]
@@ -1031,10 +1033,8 @@ mod oracle_swaps {
 			new_test_ext().execute_with(|| {
 				set_prices();
 				let oracle_delta = Pallet::<Test>::get_delta_from_oracle_price(
-					INPUT_AMOUNT,
-					OUTPUT_AMOUNT,
-					Asset::Btc,
-					Asset::Eth,
+					AssetAndAmount::new(Asset::Btc, INPUT_AMOUNT),
+					AssetAndAmount::new(Asset::Eth, OUTPUT_AMOUNT),
 				)
 				.unwrap()
 				.unwrap();
