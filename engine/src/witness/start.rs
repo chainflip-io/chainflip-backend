@@ -25,9 +25,7 @@ use crate::{
 };
 use cf_utilities::task_scope::Scope;
 use engine_sc_client::{
-	chain_api::ChainApi,
-	electoral_api::ElectoralApi,
-	extrinsic_api::signed::SignedExtrinsicApi,
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
 };
 use futures::try_join;
