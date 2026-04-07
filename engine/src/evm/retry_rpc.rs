@@ -570,7 +570,7 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 
 						let confirmation_client = client.clone();
 						let chain = s.clone();
-						let _ = tokio::spawn(async move {
+						tokio::spawn(async move {
 							for i in 1..=3 {
 								// 12s ethereum block time
 								tokio::time::sleep(Duration::from_millis(12_000)).await;
