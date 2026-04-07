@@ -76,7 +76,7 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
 
   await cf.all([
     // Account based rpc calls
-    (subcf) => testRpcCallForAllAccounts(subcf, 'cf_account_info_v2', knownAccounts),
+    (subcf) => testRpcCallForAllAccounts(subcf, 'cf_account_info', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_free_balances', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_lp_total_balances', lpAccounts),
 
