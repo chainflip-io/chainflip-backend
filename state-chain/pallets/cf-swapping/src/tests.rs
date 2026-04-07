@@ -38,6 +38,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	BASIS_POINTS_PER_MILLION,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -1599,10 +1600,10 @@ mod swap_batching {
 
 	impl<T: Config> Swap<T> {
 		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T, StageFailed> {
-			SwapState {
-				swap: self.clone(),
-				stage: StageFailed { swap_amount: stable_amount.unwrap_or(self.input_amount) },
-			}
+			SwapState::new_test_state(
+				self.clone(),
+				StageFailed { swap_amount: stable_amount.unwrap_or(self.input_amount) },
+			)
 		}
 	}
 

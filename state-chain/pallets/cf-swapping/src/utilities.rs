@@ -39,15 +39,13 @@ pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
 	Price::from_usd_cents(asset, price_usd_cents)
 }
 
-pub(super) fn split_off_highest_impact_swap<T: Config>(
+pub(crate) fn split_off_highest_impact_swap<T: Config>(
 	swaps: &mut Vec<Swap<T>>,
 	failed_swap_group: Vec<SwapState<T, StageFailed>>,
 ) -> Option<Swap<T>> {
 	// Check invariants:
 	if failed_swap_group.is_empty() {
-		log_or_panic!(
-			"Invariant violation: there should be at least one swap in a failed group"
-		)
+		log_or_panic!("Invariant violation: there should be at least one swap in a failed group")
 	}
 	for failed_swap in &failed_swap_group {
 		if !swaps.iter().any(|swap| swap.swap_id == failed_swap.swap_id()) {

@@ -28,9 +28,9 @@ use cf_chains::{
 };
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
-	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, SwapId, SwapLeg,
+	SwapRequestId, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -85,12 +85,12 @@ pub mod utilities;
 
 pub mod migrations;
 pub mod weights;
-pub use weights::WeightInfo;
 pub use dca::DcaState;
 pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
 pub use impls::BrokerDeregistrationCheck;
-pub use swap_state::{Stage1, Stage2, Stage3, Stage4, Stage5, StageFailed, SwapState};
 pub(crate) use swap_state::{GroupSwapState, SwapGroupPair};
+pub use swap_state::{Stage1, Stage2, Stage3, Stage4, Stage5, StageFailed, SwapState};
+pub use weights::WeightInfo;
 
 pub(crate) type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
 
@@ -143,7 +143,6 @@ pub struct SwapRefundParameters {
 	pub refund_block: cf_primitives::BlockNumber,
 	pub price_limits: PriceLimits,
 }
-
 
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
@@ -258,7 +257,6 @@ pub enum SwapRequestCompletionReason {
 	Executed,
 }
 
-
 #[expect(clippy::large_enum_variant)]
 #[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
@@ -358,7 +356,10 @@ pub mod pallet {
 		address::EncodedAddress, AnyChain, CcmChannelMetadataChecked, CcmChannelMetadataUnchecked,
 		Chain,
 	};
-	use cf_primitives::{AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId, SwapId, SwapRequestId};
+	use cf_primitives::{
+		AffiliateShortId, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters, EgressId,
+		SwapId, SwapRequestId,
+	};
 	use cf_traits::{
 		lending::LendingSystemApi, AccountRoleRegistry, AdditionalDepositAction, Chainflip,
 		EgressApi, FundAccount, PoolPriceProvider, PriceFeedApi,
@@ -1583,4 +1584,3 @@ pub mod pallet {
 		}
 	}
 }
-
