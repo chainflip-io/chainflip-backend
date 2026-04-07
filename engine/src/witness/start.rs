@@ -49,8 +49,6 @@ pub async fn start<StateChainClient>(
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
-	_unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
@@ -111,14 +109,7 @@ where
 	let start_eth =
 		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
-	super::hub::start(
-		scope,
-		hub_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream,
-		db,
-	);
+	super::hub::start(scope, hub_client, witness_call.clone(), state_chain_client.clone(), db);
 
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);

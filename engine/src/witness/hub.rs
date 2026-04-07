@@ -48,9 +48,7 @@ use crate::{
 	witness::common::chain_source::extension::ChainSourceExt,
 };
 use engine_sc_client::{
-	extrinsic_api::signed::SignedExtrinsicApi,
-	storage_api::StorageApi,
-	stream_api::{StreamApi, FINALIZED},
+	chain_api::ChainApi, extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	STATE_CHAIN_CONNECTION,
 };
 pub use hub_source::{HubFinalisedSource, HubUnfinalisedSource};
@@ -261,10 +259,9 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 	hub_client: DotRetryRpcClient,
 	process_call: ProcessCall,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StreamApi<FINALIZED> + Clone + 'static,
 	db: Arc<PersistentKeyDB>,
 ) where
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: ChainApi + StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 	ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
 		+ Send
 		+ Sync
@@ -279,19 +276,20 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 			let hub_client = hub_client.clone();
 			let process_call = process_call.clone();
 			let state_chain_client = state_chain_client.clone();
-			let state_chain_stream = state_chain_stream.clone();
 			let db = db.clone();
 			async move {
 				cf_utilities::task_scope::task_scope(|scope| {
 					async move {
-						let epoch_source = EpochSource::builder(
-							scope,
-							state_chain_stream.clone(),
-							state_chain_client.clone(),
-						)
-						.await
-						.participating(state_chain_client.account_id())
-						.await;
+						let epoch_stream = state_chain_client.finalized_block_stream().await;
+						let deposit_addresses_stream =
+							state_chain_client.finalized_block_stream().await;
+						let egress_items_stream = state_chain_client.finalized_block_stream().await;
+
+						let epoch_source =
+							EpochSource::builder(scope, epoch_stream, state_chain_client.clone())
+								.await
+								.participating(state_chain_client.account_id())
+								.await;
 
 						let unfinalised_source = HubUnfinalisedSource::new(hub_client.clone())
 							.strictly_monotonic()
@@ -335,7 +333,7 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 							.chunk_by_vault(vaults, scope)
 							.deposit_addresses(
 								scope,
-								state_chain_stream.clone(),
+								deposit_addresses_stream,
 								state_chain_client.clone(),
 							)
 							.await
@@ -344,11 +342,7 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 							// Proxy added witnessing
 							.then(proxy_added_witnessing)
 							// Broadcast success
-							.egress_items(
-								scope,
-								state_chain_stream.clone(),
-								state_chain_client.clone(),
-							)
+							.egress_items(scope, egress_items_stream, state_chain_client.clone())
 							.await
 							.then({
 								let process_call = process_call.clone();
