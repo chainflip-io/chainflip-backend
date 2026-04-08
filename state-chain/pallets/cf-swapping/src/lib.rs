@@ -132,9 +132,44 @@ pub struct SwapRefundParameters {
 	pub price_limits: PriceLimits,
 }
 
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
+pub enum FeeType {
+	Network,
+	Broker,
+}
+
+#[derive(Clone, Debug, Copy)]
+pub enum BalanceChangeReason {
+	Fee(FeeType),
+	Swap(SwapLeg),
+}
+
+#[derive(Clone, Debug)]
+pub struct ProcessedFeeDeduction {
+	fee_type: FeeType,
+	fee: AssetAndAmount,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProcessedSwapLeg {
+	input: AssetAndAmount,
+	output: AssetAndAmount,
+}
+
+#[derive(Clone, Debug)]
+pub enum BalanceChange {
+	Fee(ProcessedFeeDeduction),
+	SwapLeg(ProcessedSwapLeg),
+}
+
 #[derive(CloneNoBound, DebugNoBound)]
 pub struct SwapState<T: Config> {
 	swap: Swap<T>,
+
+	pub current_balance: AssetAndAmount,
+
+	pub balance_changes: Vec<BalanceChange>,
+
 	/// Always in terms of input asset
 	pub network_fee_taken: AssetAmount,
 	/// Always in terms of output asset
@@ -163,10 +198,13 @@ impl<T: Config> SwapState<T> {
 			output_amount_before_fees: None,
 			network_fee_taken: 0,
 			broker_fee_taken: 0,
-			swap,
+			swap: swap.clone(),
 			oracle_delta: None,
 			oracle_delta_ex_fees: None,
 			output_amount_after_fees: None,
+
+			current_balance: AssetAndAmount { asset: swap.from, amount: swap.input_amount },
+			balance_changes: Vec::new(),
 		}
 	}
 
@@ -249,6 +287,53 @@ impl<T: Config> SwapState<T> {
 		} else {
 			0
 		}
+	}
+
+	pub fn record_swap_leg(&mut self, new_balance: AssetAndAmount) {
+		let old_balance = self.current_balance.clone();
+		self.current_balance = new_balance.clone();
+		self.balance_changes.push(BalanceChange::SwapLeg(ProcessedSwapLeg {
+			input: old_balance,
+			output: new_balance,
+		}));
+	}
+
+	pub fn record_fee_deduction(
+		&mut self,
+		fee_type: FeeType,
+		mut f: impl FnMut(AssetAmount) -> FeeTaken,
+	) -> AssetAmount {
+		let AssetAndAmount { asset, amount } = self.current_balance;
+		let FeeTaken { remaining_amount, fee } = f(amount);
+		self.current_balance = AssetAndAmount { asset, amount: remaining_amount };
+		self.balance_changes.push(BalanceChange::Fee(ProcessedFeeDeduction {
+			fee_type,
+			fee: AssetAndAmount { asset, amount: fee },
+		}));
+		fee
+	}
+
+	pub fn get_processed_swap_legs(&self) -> Vec<ProcessedSwapLeg> {
+		self.balance_changes
+			.iter()
+			.filter_map(|change| match change {
+				BalanceChange::Fee(_) => None,
+				BalanceChange::SwapLeg(processed_swap_leg) => Some(processed_swap_leg),
+			})
+			.cloned()
+			.collect()
+	}
+
+	pub fn get_processed_fee_deductions(&self, fee_type: FeeType) -> Vec<ProcessedFeeDeduction> {
+		self.balance_changes
+			.iter()
+			.filter_map(|change| match change {
+				BalanceChange::Fee(processed_fee_deduction) => Some(processed_fee_deduction),
+				BalanceChange::SwapLeg(_) => None,
+			})
+			.filter(|deduction| deduction.fee_type == fee_type)
+			.cloned()
+			.collect()
 	}
 }
 
@@ -930,7 +1015,7 @@ pub mod pallet {
 			output: AssetAndAmount,
 			network_fee: AssetAndAmount,
 			broker_fee: AssetAndAmount,
-			intermediate: Option<AssetAndAmount>,
+			intermediate: Vec<AssetAndAmount>,
 			// Total difference between final swap output price and oracle price (including fees).
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
@@ -1878,7 +1963,8 @@ pub mod pallet {
 				.collect();
 
 			// Can ignore the result here because we use pool price fallback below
-			let _res = Self::swap_into_stable_taking_network_fees(&mut swaps);
+			let _res = Self::take_network_fee(&mut swaps);
+			let _res = Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable);
 
 			swaps
 				.into_iter()
@@ -1996,9 +2082,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn swap_into_stable_taking_network_fees(
-			swaps: &mut [SwapState<T>],
-		) -> Result<(), BatchExecutionError<T>> {
+		fn take_network_fee(swaps: &mut [SwapState<T>]) -> Result<(), BatchExecutionError<T>> {
 			let mut total_network_fee_taken = BTreeMap::<Asset, AssetAmount>::new();
 			for swap in swaps.iter_mut() {
 				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
@@ -2024,22 +2108,17 @@ pub mod pallet {
 						None
 					};
 
-					// Take the network fee from the input asset
+					// Take the network fee from the current balance
 					if let Some(tracker) = fee_tracker {
-						let fee = swap.take_network_fee(tracker);
+						let fee = swap.record_fee_deduction(FeeType::Network, |amount| {
+							tracker.take_fee(amount)
+						});
 						total_network_fee_taken
 							.entry(swap.input_asset())
 							.or_default()
 							.saturating_accrue(fee);
 					}
 				});
-
-				// Now that the fee is taken, we can update the swap result for a special case where
-				// the input asset is the stable asset because it will be skipped later when doing
-				// the group swap.
-				if swap.input_asset() == STABLE_ASSET {
-					swap.update_swap_result(SwapLeg::ToStable, swap.input_amount_after_fees);
-				}
 			}
 
 			// Accrue the total network fees taken in storage
@@ -2049,24 +2128,12 @@ pub mod pallet {
 				})
 			}
 
-			// Run the first leg of the swaps
-			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
-
 			Ok(())
 		}
 
-		fn swap_from_stable_taking_broker_fees(
-			swaps: &mut [SwapState<T>],
-		) -> Result<(), BatchExecutionError<T>> {
-			// Run the second leg of the swaps
-			Self::do_group_and_swap(swaps, SwapLeg::FromStable)?;
-
+		fn take_broker_fees(swaps: &mut [SwapState<T>]) -> Result<(), BatchExecutionError<T>> {
 			// Take the broker fee from the output amount
 			for swap in swaps.iter_mut() {
-				if swap.output_amount_after_fees.is_none() {
-					log_or_panic!("Final output should be set after the second leg");
-				}
-
 				// Get the broker fee tracker from the swap request
 				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
 					if let Some(swap_request) = swap_request {
@@ -2074,7 +2141,9 @@ pub mod pallet {
 						if let SwapRequestState::UserSwap { broker_fees_tracker, .. } =
 							&mut swap_request.state
 						{
-							swap.take_broker_fees(broker_fees_tracker);
+							swap.record_fee_deduction(FeeType::Broker, |amount| {
+								broker_fees_tracker.take_all_fees(amount)
+							});
 						}
 					} else {
 						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
@@ -2150,76 +2219,53 @@ pub mod pallet {
 		pub(super) fn check_swap_price_violation(
 			swap: &SwapState<T>,
 		) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
-			let Some(output_before_fees) = swap.output_amount_before_fees else {
-				log_or_panic!("Final output should be set");
-				return Err(SwapFailureReason::LogicError);
-			};
+			let swap_legs = swap.get_processed_swap_legs();
 
-			if let Some(params) = swap.refund_params() {
-				// Minimum price protection, aka FoK price protection
-				let min_price_output = params
-					.price_limits
-					.min_price
-					.output_amount_floor(swap.input_amount_before_fees())
-					.unique_saturated_into();
-				if output_before_fees < min_price_output {
-					return Err(SwapFailureReason::MinPriceViolation);
+			// This logic currently assumes that at the beginning and at the end
+			// fees are taken, and in the middle there are multiple swaps.
+			// That is, we assume the following process:
+			//   "take fees" -> multiple swap legs -> "take fees"
+			// It could certainly be adjusted to deal with more general patterns.
+			if let (Some(first_leg), Some(last_leg)) = (swap_legs.first(), swap_legs.last()) {
+				if let Some(params) = swap.refund_params() {
+					// Minimum price protection, aka FoK price protection
+					let min_price_output = params
+						.price_limits
+						.min_price
+						.output_amount_floor(first_leg.input.amount)
+						.unique_saturated_into();
+					if last_leg.output.amount < min_price_output {
+						return Err(SwapFailureReason::MinPriceViolation);
+					}
 				}
 			}
 
 			// Calculate oracle delta without fees
-			if let Some(intermediate) = &swap.intermediate {
-				// Calculate the slippage from oracle prices for both legs of the swap.
-				let to_intermediate_delta = if swap.input_asset() == intermediate.asset {
-					Some(SignedHundredthBasisPoints(0))
-				} else {
-					Self::get_delta_from_oracle_price(
-						swap.input_amount_after_fees,
-						intermediate.amount,
-						swap.input_asset(),
-						intermediate.asset,
-					)?
-				};
-				let from_intermediate_delta = if swap.output_asset() == intermediate.asset {
-					Some(SignedHundredthBasisPoints(0))
-				} else {
-					Self::get_delta_from_oracle_price(
-						intermediate.amount,
-						output_before_fees,
-						intermediate.asset,
-						swap.output_asset(),
-					)?
-				};
+			let mut total_delta: Option<SignedHundredthBasisPoints> = None;
+			for swap in swap_legs {
+				if let Some(delta) = Self::get_delta_from_oracle_price(
+					swap.input.amount,
+					swap.output.amount,
+					swap.input.asset,
+					swap.output.asset,
+				)? {
+					total_delta = Some(total_delta.unwrap_or_default().saturating_add(&delta));
+				}
+			}
 
-				// Sum the deltas or just use a single leg delta if the other leg doesn't have
-				// an oracle price.
-				let total_delta = match (to_intermediate_delta, from_intermediate_delta) {
-					(Some(to_intermediate), Some(from_intermediate)) =>
-						Some(to_intermediate.saturating_add(&from_intermediate)),
-					// Use the one sided slippage as long as that side is not the intermediate
-					// asset.
-					(Some(delta), None) if swap.input_asset() != intermediate.asset => Some(delta),
-					(None, Some(delta)) if swap.output_asset() != intermediate.asset => Some(delta),
-					_ => None,
-				};
-
-				if let Some(total_delta) = total_delta {
-					// Oracle price protection, aka Live price protection (LPP)
-					if let Some(params) = swap.refund_params() {
-						if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
-							// The swapper expresses the limit as a worst acceptable *sell*
-							// price, so slippage needs to be measured in the negative
-							// direction (lower sell price is worse).
-							if total_delta <
-								SignedBasisPoints::negative_slippage(max_slippage).into()
-							{
-								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
-							}
+			if let Some(total_delta) = total_delta {
+				// Oracle price protection, aka Live price protection (LPP)
+				if let Some(params) = swap.refund_params() {
+					if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
+						// The swapper expresses the limit as a worst acceptable *sell*
+						// price, so slippage needs to be measured in the negative
+						// direction (lower sell price is worse).
+						if total_delta < SignedBasisPoints::negative_slippage(max_slippage).into() {
+							return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 						}
 					}
-
-					return Ok(Some(total_delta.pessimistic_rounded_into()));
 				}
+				return Ok(Some(total_delta.pessimistic_rounded_into()));
 			}
 
 			Ok(None)
@@ -2230,8 +2276,11 @@ pub mod pallet {
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
-			Self::swap_into_stable_taking_network_fees(&mut swaps)?;
-			Self::swap_from_stable_taking_broker_fees(&mut swaps)?;
+
+			Self::take_network_fee(&mut swaps)?;
+			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
+			Self::take_broker_fees(&mut swaps)?;
 
 			// Successfully executed without hitting price impact limit.
 			// Now checking for FoK violations:
@@ -2560,14 +2609,48 @@ pub mod pallet {
 				return;
 			};
 
+			let all_swaps = swap.get_processed_swap_legs();
+
+			let Some(first_swap) = all_swaps.first() else {
+				log_or_panic!("Encountered swap {} without swaps!", swap.swap_id());
+				return;
+			};
+			let intermediates: Vec<_> =
+				all_swaps.iter().skip(1).map(|update| update.input.clone()).collect();
+
+			// -- network fees --
+			let network_fee_deductions = swap.get_processed_fee_deductions(FeeType::Network);
+			if network_fee_deductions.len() != 1 {
+				log_or_panic!(
+					"Encountered swap {} with {} network fee deductions",
+					swap.swap_id(),
+					network_fee_deductions.len()
+				);
+				return;
+			}
+			let network_fee_deduction = network_fee_deductions[0].clone();
+
+			// -- broker fees --
+			let broker_fee_deductions = swap.get_processed_fee_deductions(FeeType::Broker);
+			if broker_fee_deductions.len() != 1 {
+				log_or_panic!(
+					"Encountered swap {} with {} network fee deductions",
+					swap.swap_id(),
+					broker_fee_deductions.len()
+				);
+				return;
+			}
+			let broker_fee_deduction = broker_fee_deductions[0].clone();
+
+			// TODO: double check where we want to include fees and where not
 			Self::deposit_event(Event::<T>::SwapExecuted {
 				swap_request_id,
 				swap_id: swap.swap_id(),
-				input: AssetAndAmount::new(swap.input_asset(), swap.input_amount_after_fees),
-				network_fee: AssetAndAmount::new(swap.input_asset(), swap.network_fee_taken),
-				broker_fee: AssetAndAmount::new(swap.output_asset(), swap.broker_fee_taken),
-				output: AssetAndAmount::new(swap.output_asset(), output_amount),
-				intermediate: swap.intermediate.clone(),
+				input: first_swap.input.clone(),
+				network_fee: network_fee_deduction.fee,
+				broker_fee: broker_fee_deduction.fee,
+				output: swap.current_balance.clone(),
+				intermediate: intermediates,
 				oracle_delta: swap.oracle_delta,
 				oracle_delta_ex_fees: swap.oracle_delta_ex_fees,
 			});
@@ -2779,27 +2862,41 @@ pub mod pallet {
 				"The implementation of grouped_swaps ensures that the swap groups are non-empty."
 			);
 
+			// debug asserts
+			if direction == SwapLeg::ToStable {
+				for swap_state in &mut *swaps {
+					debug_assert_eq!(swap_state.swap.from, asset);
+					debug_assert_eq!(swap_state.current_balance.asset, asset);
+				}
+			}
+			if direction == SwapLeg::FromStable {
+				for swap_state in &mut *swaps {
+					debug_assert_eq!(swap_state.swap.to, asset);
+					debug_assert_eq!(swap_state.current_balance.asset, STABLE_ASSET);
+				}
+			}
+
 			let bundle_input: AssetAmount =
-				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
+				swaps.iter().map(|swap| swap.current_balance.amount).sum();
+
+			let input_asset = match direction {
+				SwapLeg::FromStable => STABLE_ASSET,
+				SwapLeg::ToStable => asset,
+			};
+			let output_asset = match direction {
+				SwapLeg::FromStable => asset,
+				SwapLeg::ToStable => STABLE_ASSET,
+			};
 
 			// Process the swap leg as a bundle
-			let bundle_output = T::SwappingApi::swap_single_leg(
-				match direction {
-					SwapLeg::FromStable => STABLE_ASSET,
-					SwapLeg::ToStable => asset,
-				},
-				match direction {
-					SwapLeg::FromStable => asset,
-					SwapLeg::ToStable => STABLE_ASSET,
-				},
-				bundle_input,
-			)
-			.map_err(|_| bundle_input)?;
+			let bundle_output =
+				T::SwappingApi::swap_single_leg(input_asset, output_asset, bundle_input)
+					.map_err(|_| bundle_input)?;
 
 			for swap in swaps.iter_mut() {
 				let swap_output = if bundle_input > 0 {
 					multiply_by_rational_with_rounding(
-						swap.swap_amount(direction).unwrap_or_default(),
+						swap.current_balance.amount,
 						bundle_output,
 						bundle_input,
 						Rounding::Down,
@@ -2811,7 +2908,9 @@ pub mod pallet {
 					0
 				};
 
-				swap.update_swap_result(direction, swap_output);
+				swap.record_swap_leg(
+					AssetAndAmount { asset: output_asset, amount: swap_output },
+				);
 
 				if swap_output == 0 {
 					// This is unlikely but theoretically possible if, for example, the initial swap
