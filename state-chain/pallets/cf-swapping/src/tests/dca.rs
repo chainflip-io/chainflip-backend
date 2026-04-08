@@ -1239,7 +1239,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 			);
 
 			// Check that the minimum network fee was collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		})
 		.then_process_blocks_until_block(CHUNK_2_BLOCK)
 		.then_execute_with(|_| {
@@ -1255,7 +1255,7 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 			);
 
 			// Confirm no additional network fee was collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		})
 		.then_process_blocks_until_block(CHUNK_3_BLOCK)
 		.then_execute_with(|_| {
@@ -1272,9 +1272,6 @@ fn dca_with_one_block_interval_with_network_fee_minimum() {
 			);
 
 			// Confirm the additional network fee was collected
-			assert_eq!(
-				CollectedNetworkFee::<Test>::get(INPUT_ASSET),
-				NETWORK_FEE_MINIMUM + expected_fee
-			);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), NETWORK_FEE_MINIMUM + expected_fee);
 		});
 }

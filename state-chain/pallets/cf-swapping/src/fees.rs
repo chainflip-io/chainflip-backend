@@ -128,7 +128,7 @@ impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
 			);
 		}
 
-		assert!(total_fee <= input_amount, "Broker fee cannot be more than the amount");
+		debug_assert!(total_fee <= input_amount, "Broker fee cannot be more than the amount");
 		FeeTaken { remaining_amount: input_amount.saturating_sub(total_fee), fee: total_fee }
 	}
 }
