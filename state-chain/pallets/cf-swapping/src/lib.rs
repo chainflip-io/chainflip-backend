@@ -170,10 +170,6 @@ pub struct SwapState<T: Config> {
 
 	pub balance_changes: Vec<BalanceChange>,
 
-	/// Always in terms of input asset
-	pub network_fee_taken: AssetAmount,
-	/// Always in terms of output asset
-	pub broker_fee_taken: AssetAmount,
 	/// Always in terms of output asset. This is the amount before broker fees have been taken.
 	pub output_amount_before_fees: Option<AssetAmount>,
 	/// Always in terms of output asset. This is the amount after broker fees have been taken.
@@ -189,8 +185,6 @@ impl<T: Config> SwapState<T> {
 		Self {
 			input_amount_after_fees: swap.input_amount,
 			output_amount_before_fees: None,
-			network_fee_taken: 0,
-			broker_fee_taken: 0,
 			swap: swap.clone(),
 			oracle_delta: None,
 			oracle_delta_ex_fees: None,
@@ -238,27 +232,6 @@ impl<T: Config> SwapState<T> {
 		}
 	}
 
-	pub fn take_network_fee(&mut self, fee_tracker: &mut NetworkFeeTracker) -> AssetAmount {
-		let FeeTaken { fee, .. } = fee_tracker.take_fee(self.input_amount_after_fees);
-		self.input_amount_after_fees.saturating_reduce(fee);
-		self.network_fee_taken.saturating_accrue(fee);
-		fee
-	}
-
-	pub fn take_broker_fees(
-		&mut self,
-		fee_tracker: &mut BrokerFeesTracker<T::AccountId>,
-	) -> AssetAmount {
-		if let Some(output) = self.output_amount_after_fees {
-			let FeeTaken { fee, remaining_amount } = fee_tracker.take_all_fees(output);
-			self.output_amount_after_fees = Some(remaining_amount);
-			self.broker_fee_taken.saturating_accrue(fee);
-			fee
-		} else {
-			0
-		}
-	}
-
 	pub fn record_swap_leg(&mut self, new_balance: AssetAndAmount) {
 		let old_balance = self.current_balance.clone();
 		self.current_balance = new_balance.clone();
@@ -294,16 +267,30 @@ impl<T: Config> SwapState<T> {
 			.collect()
 	}
 
-	pub fn get_processed_fee_deductions(&self, fee_type: FeeType) -> Vec<ProcessedFeeDeduction> {
-		self.balance_changes
+	pub fn get_fees_ensuring_asset(
+		&self,
+		fee_type: FeeType,
+		asset: Asset,
+	) -> Option<AssetAndAmount> {
+		let fees = self
+			.balance_changes
 			.iter()
 			.filter_map(|change| match change {
 				BalanceChange::Fee(processed_fee_deduction) => Some(processed_fee_deduction),
 				BalanceChange::SwapLeg(_) => None,
 			})
 			.filter(|deduction| deduction.fee_type == fee_type)
-			.cloned()
-			.collect()
+			.map(|deduction| &deduction.fee);
+
+		let mut total_fee = 0;
+		for fee in fees {
+			if fee.asset == asset {
+				total_fee += fee.amount;
+			} else {
+				return None;
+			}
+		}
+		Some(AssetAndAmount { asset, amount: total_fee })
 	}
 }
 
@@ -2585,37 +2572,30 @@ pub mod pallet {
 			let intermediates: Vec<_> =
 				all_swaps.iter().skip(1).map(|update| update.input.clone()).collect();
 
-			// -- network fees --
-			let network_fee_deductions = swap.get_processed_fee_deductions(FeeType::Network);
-			if network_fee_deductions.len() != 1 {
+			let Some(network_fee) =
+				swap.get_fees_ensuring_asset(FeeType::Network, swap.input_asset())
+			else {
 				log_or_panic!(
-					"Encountered swap {} with {} network fee deductions",
-					swap.swap_id(),
-					network_fee_deductions.len()
+					"Encountered swap {} with network fee in wrong asset",
+					swap.swap_id()
 				);
 				return;
-			}
-			let network_fee_deduction = network_fee_deductions[0].clone();
+			};
 
-			// -- broker fees --
-			let broker_fee_deductions = swap.get_processed_fee_deductions(FeeType::Broker);
-			if broker_fee_deductions.len() != 1 {
-				log_or_panic!(
-					"Encountered swap {} with {} network fee deductions",
-					swap.swap_id(),
-					broker_fee_deductions.len()
-				);
+			let Some(broker_fee) =
+				swap.get_fees_ensuring_asset(FeeType::Broker, swap.output_asset())
+			else {
+				log_or_panic!("Encountered swap {} with broker fee in wrong asset", swap.swap_id());
 				return;
-			}
-			let broker_fee_deduction = broker_fee_deductions[0].clone();
+			};
 
 			// TODO: double check where we want to include fees and where not
 			Self::deposit_event(Event::<T>::SwapExecuted {
 				swap_request_id,
 				swap_id: swap.swap_id(),
 				input: first_swap.input.clone(),
-				network_fee: network_fee_deduction.fee,
-				broker_fee: broker_fee_deduction.fee,
+				network_fee,
+				broker_fee,
 				output: swap.current_balance.clone(),
 				intermediate: intermediates,
 				oracle_delta: swap.oracle_delta,

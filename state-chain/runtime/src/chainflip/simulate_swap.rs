@@ -153,7 +153,7 @@ pub fn simulate_swap(
 	// 	.as_ref()
 	// 	.map(|AssetAndAmount { asset: _, amount }| amount * number_of_chunks);
 	let output = swap.output_amount_after_fees() * number_of_chunks;
-	let broker_fee = swap.broker_fee_taken * number_of_chunks;
+	let broker_fee = todo!(); // swap.broker_fee_taken * number_of_chunks;
 
 	let AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: egress_fee } =
 		if include_fee(FeeTypes::Egress) {
