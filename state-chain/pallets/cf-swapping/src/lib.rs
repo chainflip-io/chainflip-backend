@@ -174,8 +174,6 @@ pub struct SwapState<T: Config> {
 	pub network_fee_taken: AssetAmount,
 	/// Always in terms of output asset
 	pub broker_fee_taken: AssetAmount,
-	/// Always in terms of USDC
-	pub intermediate: Option<AssetAndAmount>,
 	/// Always in terms of output asset. This is the amount before broker fees have been taken.
 	pub output_amount_before_fees: Option<AssetAmount>,
 	/// Always in terms of output asset. This is the amount after broker fees have been taken.
@@ -189,11 +187,6 @@ pub struct SwapState<T: Config> {
 impl<T: Config> SwapState<T> {
 	fn new(swap: Swap<T>) -> Self {
 		Self {
-			intermediate: if swap.from == STABLE_ASSET {
-				Some(AssetAndAmount::new(swap.from, swap.input_amount))
-			} else {
-				None
-			},
 			input_amount_after_fees: swap.input_amount,
 			output_amount_before_fees: None,
 			network_fee_taken: 0,
@@ -234,29 +227,6 @@ impl<T: Config> SwapState<T> {
 
 	fn refund_params(&self) -> &Option<SwapRefundParameters> {
 		&self.swap.refund_params
-	}
-
-	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
-		match direction {
-			SwapLeg::ToStable => {
-				self.intermediate = Some(AssetAndAmount::new(STABLE_ASSET, output));
-				if self.output_asset() == STABLE_ASSET {
-					self.output_amount_before_fees = Some(output);
-					self.output_amount_after_fees = Some(output);
-				}
-			},
-			SwapLeg::FromStable => {
-				self.output_amount_before_fees = Some(output);
-				self.output_amount_after_fees = Some(output);
-			},
-		}
-	}
-
-	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
-		match direction {
-			SwapLeg::ToStable => Some(self.input_amount_after_fees),
-			SwapLeg::FromStable => self.intermediate.as_ref().map(|a| a.amount),
-		}
 	}
 
 	fn swap_asset(&self, direction: SwapLeg) -> Option<Asset> {
@@ -2006,28 +1976,25 @@ pub mod pallet {
 							(None, None)
 						};
 
-						let amount = state
-							.intermediate
-							.as_ref()
-							.map(|intermediate| intermediate.amount)
-							.or_else(|| {
-								// If the swap into intermediate failed, fallback to estimating the
-								// amount via pool price.
+						let amount = if state.current_balance.asset == STABLE_ASSET {
+							// if the swap to intermediate was successful
+							state.current_balance.amount
+						} else {
+							// If the swap into intermediate failed, fallback to estimating the
+							// amount via pool price.
 
-								// Should be able to successfully retrieve the price since the pool
-								// should exist as we wouldn't need to estimate if input asset
-								// was already the intermediate asset):
-								let sell_price =
-									T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
-										.ok()
-										.map(|price| price.sell)?;
+							// Should be able to successfully retrieve the price since the pool
+							// should exist as we wouldn't need to estimate if input asset
+							// was already the intermediate asset):
+							let sell_price =
+								T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
+									.ok()
+									.map(|price| price.sell)?;
 
-								Some(
-									sell_price
-										.output_amount_ceil(state.input_amount_after_fees)
-										.saturated_into(),
-								)
-							})?;
+							sell_price
+								.output_amount_ceil(state.input_amount_after_fees)
+								.saturated_into()
+						};
 
 						Some((
 							SwapLegInfo {
@@ -2908,9 +2875,7 @@ pub mod pallet {
 					0
 				};
 
-				swap.record_swap_leg(
-					AssetAndAmount { asset: output_asset, amount: swap_output },
-				);
+				swap.record_swap_leg(AssetAndAmount { asset: output_asset, amount: swap_output });
 
 				if swap_output == 0 {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -3794,7 +3759,7 @@ pub mod utilities {
 	pub(super) fn split_off_highest_impact_swap<T: Config>(
 		swaps: &mut Vec<Swap<T>>,
 		failed_swap_group: &[SwapState<T>],
-		direction: SwapLeg,
+		_direction: SwapLeg,
 	) -> Option<Swap<T>> {
 		// Check invariants:
 		if failed_swap_group.is_empty() {
@@ -3814,11 +3779,11 @@ pub mod utilities {
 		// remove nothing, which would abort the entire batch):
 		let maybe_swap_id_to_remove = failed_swap_group
 			.iter()
-			// If the direction is TO_STABLE, swap amount is in the input amount of
+			// If the direction is TO_STABLE, swap current_balance is in the input amount of
 			// *the same* asset (swaps from different assets are executed separately).
-			// If the direction is FROM_STABLE, swap amount is the amount in USDC.
+			// If the direction is FROM_STABLE, swap current_balance is the amount in USDC.
 			// Either way, the amounts are in the same asset, so we can compare them directly:
-			.max_by_key(|swap| swap.swap_amount(direction).unwrap_or_default())
+			.max_by_key(|swap| swap.current_balance.amount)
 			.map(|swap| swap.swap_id());
 
 		maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {

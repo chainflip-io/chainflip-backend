@@ -1607,13 +1607,17 @@ mod swap_batching {
 				swap: self.clone(),
 				network_fee_taken: 0,
 				broker_fee_taken: 0,
-				intermediate: stable_amount
-					.map(|amount| AssetAndAmount { asset: self.from, amount }),
 				output_amount_before_fees: None,
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
 				output_amount_after_fees: None,
 				input_amount_after_fees: self.input_amount,
+				current_balance: AssetAndAmount {
+					asset: self.from,
+					amount: stable_amount.unwrap(),
+				},
+				balance_changes: Vec::new(),
+				fees_taken: BTreeMap::new(),
 			}
 		}
 	}
