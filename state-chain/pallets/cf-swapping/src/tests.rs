@@ -87,6 +87,10 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 	));
 }
 
+fn get_collected_network_fee(asset: Asset) -> AssetAmount {
+	CollectedNetworkFee::<Test>::get().get(&asset).copied().unwrap_or(0)
+}
+
 struct TestSwapParams {
 	input_asset: Asset,
 	output_asset: Asset,
@@ -1716,10 +1720,7 @@ mod swap_batching {
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
 				// from swap 2):
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Usdc),
-					network_fee_rate * USDC_AMOUNT
-				);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), network_fee_rate * USDC_AMOUNT);
 
 				// Adding some more liquidity to make the other swap succeed:
 				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
@@ -1731,14 +1732,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Usdc),
-					network_fee_rate * USDC_AMOUNT
-				);
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Btc),
-					network_fee_rate * BTC_AMOUNT
-				);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), network_fee_rate * USDC_AMOUNT);
+				assert_eq!(get_collected_network_fee(Asset::Btc), network_fee_rate * BTC_AMOUNT);
 			});
 	}
 
@@ -1787,7 +1782,7 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 0);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), 0);
 			});
 	}
 }

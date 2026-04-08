@@ -198,7 +198,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn take_network_fees(swaps: Vec<SwapState<T, ()>>) -> Vec<SwapState<T, Stage1>> {
-		let mut total_network_fee_taken = BTreeMap::<Asset, AssetAmount>::new();
+		let mut total_network_fees = CollectedNetworkFee::<T>::get();
 		let swaps_after_network_fees: Vec<SwapState<T, Stage1>> = swaps
 			.into_iter()
 			.map(|state| {
@@ -228,7 +228,7 @@ impl<T: Config> Pallet<T> {
 					// Take the network fee from the input asset
 					if let Some(tracker) = fee_tracker {
 						let state = state.take_network_fee(tracker);
-						total_network_fee_taken
+						total_network_fees
 							.entry(state.input_asset())
 							.or_default()
 							.saturating_accrue(state.stage.network_fee_taken);
@@ -240,12 +240,8 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect();
 
-		// Accrue the total network fees taken in storage
-		for (asset, total) in total_network_fee_taken {
-			CollectedNetworkFee::<T>::mutate(asset, |collected_fee| {
-				collected_fee.saturating_accrue(total)
-			})
-		}
+		// Save the updated total network fees
+		CollectedNetworkFee::<T>::set(total_network_fees);
 
 		swaps_after_network_fees
 	}
@@ -581,7 +577,7 @@ impl<T: Config> Pallet<T> {
 				price_limits_and_expiry,
 				dca_state,
 				broker_fees_tracker,
-				..
+				network_fee_tracker,
 			} => {
 				let Some(ExpiryBehaviour::RefundIfExpires {
 					refund_address,
@@ -606,8 +602,16 @@ impl<T: Config> Pallet<T> {
 						))
 					});
 
+				// Take the network fee for the chunk that failed
+				let remaining_amount = CollectedNetworkFee::<T>::mutate(|total_fees| {
+					let FeeTaken { remaining_amount, fee } =
+						network_fee_tracker.take_fee(swap.input_amount);
+					total_fees.entry(request.input_asset).or_default().saturating_accrue(fee);
+					remaining_amount
+				});
+
 				let total_input_remaining =
-					swap.input_amount + dca_state.remaining_input_amount + canceled_swaps_amount;
+					remaining_amount + dca_state.remaining_input_amount + canceled_swaps_amount;
 
 				if total_input_remaining > 0 {
 					match refund_address {

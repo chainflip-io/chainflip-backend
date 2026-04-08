@@ -376,7 +376,7 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 
 			// This ensures that storage from the initial failure was reverted (otherwise
 			// we would see the network fee charged more than once)
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
 
 			assert_eq!(
 				MockSwappingApi::get_liquidity(&INPUT_ASSET),

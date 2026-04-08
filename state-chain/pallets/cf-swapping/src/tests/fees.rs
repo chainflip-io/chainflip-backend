@@ -81,39 +81,40 @@ fn test_buy_back_flip() {
 		const ETH_FEE: AssetAmount = 300;
 
 		// Get some network fees for 3 different assets
-		CollectedNetworkFee::<Test>::insert(Asset::Usdc, USDC_FEE);
-		CollectedNetworkFee::<Test>::insert(Asset::Btc, BTC_FEE);
-		CollectedNetworkFee::<Test>::insert(Asset::Eth, ETH_FEE);
+		CollectedNetworkFee::<Test>::mutate(|fees| {
+			fees.insert(Asset::Usdc, USDC_FEE);
+			fees.insert(Asset::Btc, BTC_FEE);
+			fees.insert(Asset::Eth, ETH_FEE);
+		});
 
 		// The default buy interval is zero. Check that buy back is disabled & on_initialize does
 		// not panic.
 		assert_eq!(FlipBuyInterval::<Test>::get(), 0);
 		Swapping::on_initialize(1);
-		assert_eq!(USDC_FEE, CollectedNetworkFee::<Test>::get(Asset::Usdc));
-		assert_eq!(BTC_FEE, CollectedNetworkFee::<Test>::get(Asset::Btc));
-		assert_eq!(ETH_FEE, CollectedNetworkFee::<Test>::get(Asset::Eth));
+		assert_eq!(get_collected_network_fee(Asset::Usdc), USDC_FEE);
+		assert_eq!(get_collected_network_fee(Asset::Btc), BTC_FEE);
+		assert_eq!(get_collected_network_fee(Asset::Eth), ETH_FEE);
 
 		// Set a non-zero buy interval
 		FlipBuyInterval::<Test>::set(INTERVAL);
 
 		// Nothing is bought if we're not at the interval.
 		Swapping::on_initialize(INTERVAL * 3 - 1);
-		assert_eq!(USDC_FEE, CollectedNetworkFee::<Test>::get(Asset::Usdc));
-		assert_eq!(BTC_FEE, CollectedNetworkFee::<Test>::get(Asset::Btc));
-		assert_eq!(ETH_FEE, CollectedNetworkFee::<Test>::get(Asset::Eth));
+		assert_eq!(get_collected_network_fee(Asset::Usdc), USDC_FEE);
+		assert_eq!(get_collected_network_fee(Asset::Btc), BTC_FEE);
+		assert_eq!(get_collected_network_fee(Asset::Eth), ETH_FEE);
 
 		// If we're at an interval, all collected fees should be cleared and swap requests
 		// scheduled for each asset.
 		Swapping::on_initialize(INTERVAL * 3);
-		assert_eq!(0, CollectedNetworkFee::<Test>::get(Asset::Usdc));
-		assert_eq!(0, CollectedNetworkFee::<Test>::get(Asset::Btc));
-		assert_eq!(0, CollectedNetworkFee::<Test>::get(Asset::Eth));
+		assert_eq!(get_collected_network_fee(Asset::Usdc), 0);
+		assert_eq!(get_collected_network_fee(Asset::Btc), 0);
+		assert_eq!(get_collected_network_fee(Asset::Eth), 0);
 
 		// Note that no network fee will be charged on these buy-back swaps:
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
-				swap_request_id: SwapRequestId(3),
 				input_asset: Asset::Usdc,
 				input_amount: USDC_FEE,
 				output_asset: Asset::Flip,
@@ -125,7 +126,6 @@ fn test_buy_back_flip() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
-				swap_request_id: SwapRequestId(1),
 				input_asset: Asset::Btc,
 				input_amount: BTC_FEE,
 				output_asset: Asset::Flip,
@@ -137,7 +137,6 @@ fn test_buy_back_flip() {
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapRequested {
-				swap_request_id: SwapRequestId(2),
 				input_asset: Asset::Eth,
 				input_amount: ETH_FEE,
 				output_asset: Asset::Flip,
@@ -146,10 +145,11 @@ fn test_buy_back_flip() {
 				..
 			})
 		);
+		// 3 network fee swap requests were initiated
 		assert_has_matching_event!(
 			Test,
 			RuntimeEvent::Swapping(Event::NetworkFeeSwapsInitiated { swap_request_ids })
-				if *swap_request_ids == vec![SwapRequestId(1), SwapRequestId(2), SwapRequestId(3)]
+				if BTreeSet::from_iter(swap_request_ids.iter().copied()) == BTreeSet::from([SwapRequestId(1), SwapRequestId(2), SwapRequestId(3)])
 		);
 	});
 }
@@ -193,8 +193,8 @@ fn normal_swap_uses_correct_network_fee() {
 			MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Btc), 0);
-			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
+			assert_eq!(get_collected_network_fee(Asset::Btc), 0);
+			assert_eq!(get_collected_network_fee(Asset::Flip), 0);
 
 			fn init_swap(asset: Asset, amount: AssetAmount) {
 				Swapping::init_swap_request(
@@ -262,11 +262,11 @@ fn normal_swap_uses_correct_network_fee() {
 
 			// Check that the network fee is actually collected
 			assert_eq!(
-				CollectedNetworkFee::<Test>::get(Asset::Btc),
+				get_collected_network_fee(Asset::Btc),
 				(NETWORK_FEE_FOR_BTC * AMOUNT) + MINIMUM_NETWORK_FEE_BTC
 			);
 			assert_eq!(
-				CollectedNetworkFee::<Test>::get(Asset::Flip),
+				get_collected_network_fee(Asset::Flip),
 				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE_FLIP
 			);
 		});
@@ -292,7 +292,7 @@ fn internal_swap_uses_correct_network_fee() {
 			SwapRate::set(1_f64);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
+			assert_eq!(get_collected_network_fee(Asset::Flip), 0);
 
 			fn init_swap(amount: AssetAmount) {
 				Swapping::init_swap_request(
@@ -334,7 +334,7 @@ fn internal_swap_uses_correct_network_fee() {
 
 			// Check that the network fee is actually collected
 			assert_eq!(
-				CollectedNetworkFee::<Test>::get(Asset::Flip),
+				get_collected_network_fee(Asset::Flip),
 				(NETWORK_FEE * AMOUNT) + MINIMUM_NETWORK_FEE
 			);
 		});
@@ -364,7 +364,7 @@ fn no_network_fee_minimum_for_gas_swaps() {
 			SwapRate::set(1_f64);
 
 			// Sanity check collected fees before any swaps
-			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), 0);
+			assert_eq!(get_collected_network_fee(Asset::Flip), 0);
 
 			Swapping::init_swap_request(
 				Asset::Flip,
@@ -389,7 +389,7 @@ fn no_network_fee_minimum_for_gas_swaps() {
 			);
 
 			// Check that the network fee is actually collected
-			assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Flip), NETWORK_FEE * AMOUNT);
+			assert_eq!(get_collected_network_fee(Asset::Flip), NETWORK_FEE * AMOUNT);
 		});
 }
 
@@ -1325,7 +1325,7 @@ fn network_fee_minimum_exceeds_input_amount() {
 			);
 
 			// The full input amount is recorded as collected network fee.
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), INPUT_AMOUNT);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), INPUT_AMOUNT);
 
 			// No egress is scheduled because the output is zero.
 			assert_has_matching_event!(
@@ -1386,7 +1386,7 @@ fn test_network_fee_tracking_when_rescheduled() {
 				SwapOrigin::Internal,
 			);
 
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), 0);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), 0);
 		})
 		.then_process_blocks(SWAP_DELAY_BLOCKS)
 		.then_execute_with(|_| {
@@ -1394,7 +1394,7 @@ fn test_network_fee_tracking_when_rescheduled() {
 			assert_has_matching_event!(Test, RuntimeEvent::Swapping(Event::SwapRescheduled { .. }),);
 
 			// Check that no network fee was taken yet
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), 0);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), 0);
 
 			// Change the swap rate so that the swap can proceed next try
 			SwapRate::set(4_f64);
@@ -1415,7 +1415,7 @@ fn test_network_fee_tracking_when_rescheduled() {
 				})
 			);
 
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), NETWORK_FEE_MINIMUM);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		});
 }
 
@@ -1612,5 +1612,51 @@ fn broker_fees_credited_directly_when_output_is_usdc() {
 
 			// The broker's USDC balance is credited directly with the fee amount.
 			assert_eq!(get_broker_balance::<Test>(&BROKER, Asset::Usdc), BROKER_FEE);
+		});
+}
+
+/// Make sure the network fee is deducted even when a swap fails on the first chunk.
+#[test]
+fn minimum_network_fee_is_deducted_from_refund_amount() {
+	const INPUT_ASSET: Asset = Asset::Usdc;
+
+	// Rate-based fee on the full amount is less than the minimum, so the minimum is enforced.
+	const NETWORK_FEE_RATE: Permill = Permill::from_percent(1);
+	const NETWORK_FEE_MINIMUM: AssetAmount = INPUT_AMOUNT / 2;
+	assert!(NETWORK_FEE_RATE * INPUT_AMOUNT < NETWORK_FEE_MINIMUM);
+
+	// The refund amount is the input minus the minimum network fee.
+	const EXPECTED_REFUND_AMOUNT: AssetAmount = INPUT_AMOUNT - NETWORK_FEE_MINIMUM;
+
+	new_test_ext()
+		.execute_with(|| {
+			NetworkFee::<Test>::set(FeeRateAndMinimum {
+				rate: NETWORK_FEE_RATE,
+				minimum: NETWORK_FEE_MINIMUM,
+			});
+
+			// Use a min_output that can never be satisfied so the swap is refunded.
+			insert_swaps(
+				&[TestSwapParams::new(
+					None,
+					Some(TestRefundParams { retry_duration: 0, min_output: AssetAmount::MAX }),
+					false,
+				)],
+				None,
+			);
+		})
+		.then_process_blocks(SWAP_DELAY_BLOCKS)
+		.then_execute_with(|_| {
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::Swapping(Event::RefundEgressScheduled {
+					asset: INPUT_ASSET,
+					amount: EXPECTED_REFUND_AMOUNT,
+					..
+				})
+			);
+
+			// The minimum network fee was collected.
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), NETWORK_FEE_MINIMUM);
 		});
 }

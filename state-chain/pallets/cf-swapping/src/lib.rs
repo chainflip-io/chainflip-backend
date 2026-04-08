@@ -479,7 +479,7 @@ pub mod pallet {
 	/// Network fees collected from the input asset of swaps.
 	#[pallet::storage]
 	pub type CollectedNetworkFee<T: Config> =
-		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+		StorageValue<_, BTreeMap<Asset, AssetAmount>, ValueQuery>;
 
 	/// The delay in blocks before retrying a previously failed swap.
 	#[pallet::storage]
@@ -897,7 +897,8 @@ pub mod pallet {
 			} else {
 				if (current_block % interval).is_zero() {
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					let swap_request_ids: Vec<_> = CollectedNetworkFee::<T>::drain()
+					let swap_request_ids: Vec<_> = CollectedNetworkFee::<T>::take()
+						.into_iter()
 						.filter_map(|(asset, amount)| {
 							if amount > 0 {
 								weight_used.saturating_accrue(
