@@ -152,6 +152,14 @@ jobs:
         run: |
           ./fast_bouncer.sh
 
+      - name: Mutex contention report 🔒
+        if: always()
+        continue-on-error: true
+        run: |
+          for f in /tmp/chainflip/mutex_report_*.md; do
+            [ -f "$f" ] && cat "$f" >> $GITHUB_STEP_SUMMARY
+          done
+
       - name: Write chain explorer to file 📝
         if: failure()
         continue-on-error: true
