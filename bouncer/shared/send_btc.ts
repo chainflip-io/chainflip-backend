@@ -1,50 +1,219 @@
 import Client from 'bitcoin-core';
 import * as bitcoinjs from 'bitcoinjs-lib';
 import * as ecc from 'tiny-secp256k1';
-import { sleep, btcClientMutex } from 'shared/utils';
-import { Logger, throwError } from 'shared/utils/logger';
+import { sleep, btcClientMutex, getBtcClient } from 'shared/utils';
+import { ILogger } from 'shared/utils/logger_interface';
+import { TrackedMutex } from 'shared/utils/tracked_mutex';
+import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
-export const btcClient = new Client({
-  host: BTC_ENDPOINT.split(':')[1].slice(2),
-  port: Number(BTC_ENDPOINT.split(':')[2]),
-  username: 'flip',
-  password: 'flip',
-  wallet: 'whale',
-});
+type WalletBalanceBuckets = {
+  trusted?: number;
+  untrusted_pending?: number;
+  immature?: number;
+  used?: number;
+};
+
+type WalletBalances = {
+  mine?: WalletBalanceBuckets;
+  watchonly?: WalletBalanceBuckets;
+};
+
+function getWalletBalanceIncludingPending(balances: WalletBalances): number {
+  return (balances.mine?.trusted ?? 0) + (balances.mine?.untrusted_pending ?? 0);
+}
+
+function formatWalletBalanceBuckets(label: string, balances?: WalletBalanceBuckets): string {
+  if (!balances) {
+    return `${label}=n/a`;
+  }
+
+  return [
+    `${label}.trusted=${balances.trusted ?? 0}`,
+    `${label}.untrusted_pending=${balances.untrusted_pending ?? 0}`,
+    `${label}.immature=${balances.immature ?? 0}`,
+    `${label}.used=${balances.used ?? 0}`,
+  ].join(', ');
+}
+
+async function logWalletBalances(
+  logger: ILogger,
+  walletName: string,
+  client: Client,
+  context: string,
+) {
+  const availableBalance = (await client.getBalance()) as number;
+  const balances = (await client.getBalances()) as WalletBalances;
+
+  logger.info(
+    `Wallet ${walletName} balances (${context}): available=${availableBalance}, ${formatWalletBalanceBuckets('mine', balances.mine)}, ${formatWalletBalanceBuckets('watchonly', balances.watchonly)}`,
+  );
+
+  return { availableBalance, balances };
+}
+
+class BtcMutexClient {
+  private readonly name: string;
+
+  private readonly client: Client;
+
+  private readonly mutex: TrackedMutex;
+
+  constructor(name: string, client: Client) {
+    this.name = name;
+    this.client = client;
+    this.mutex = new TrackedMutex(`BtcMutexClient(${name})`);
+  }
+
+  runExclusive<A>(logger: ILogger, f: (client: Client) => Promise<A>): Promise<A> {
+    return this.mutex.runExclusive(async () => {
+      await this.ensureFunded(logger);
+      return f(this.client);
+    });
+  }
+
+  getTransaction(id: string) {
+    return this.client.getTransaction(id);
+  }
+
+  getNewAddress() {
+    return this.client.getNewAddress();
+  }
+
+  unsafe_getClient(): Client {
+    return this.client;
+  }
+
+  private async ensureFunded(logger: ILogger) {
+    const { availableBalance, balances } = await logWalletBalances(
+      logger,
+      this.name,
+      this.client,
+      'ensureFunded:start',
+    );
+    const balanceIncludingPending = getWalletBalanceIncludingPending(balances);
+
+    if (this.name === 'whale') {
+      if (availableBalance <= 200.0) {
+        logger.info(
+          `The whale wallet ${this.name} is underfunded (${availableBalance} btc) waiting for btc node to mine more blocks.`,
+        );
+
+        let previousBalance = availableBalance;
+        let currentBalance = availableBalance;
+        while (currentBalance <= 200.0) {
+          await sleep(15000);
+          currentBalance = (
+            await logWalletBalances(logger, this.name, this.client, 'ensureFunded:whale-wait')
+          ).availableBalance;
+
+          if (currentBalance === previousBalance) {
+            throw new Error(
+              `Whale wallet balance didn't increase after 15s. It is currently underfunded with ${currentBalance}, and the test cannot continue.`,
+            );
+          }
+          logger.info(`Whale wallet balance is ${currentBalance}`);
+          previousBalance = currentBalance;
+        }
+        logger.info(`Whale wallet has now enough funds: ${currentBalance} btc.`);
+      }
+    } else if (balanceIncludingPending <= 50.0) {
+      logger.info(
+        `The wallet ${this.name} is underfunded, current balance including pending UTXOs is ${balanceIncludingPending} btc (available=${availableBalance} btc). Topping up from whale wallet.`,
+      );
+
+      const fundingAddresses: string[] = [];
+      for (let index = 0; index < 80; index++) {
+        fundingAddresses.push(await this.client.getNewAddress());
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const hash = await sendBtcToMultipleAddresses(
+        logger,
+        fundingAddresses.map((address) => ({ address, amount: 2.5 })),
+        1,
+      );
+
+      logger.info(`Funded with 80 outputs of 2.5 btc in tx ${hash}`);
+      await logWalletBalances(logger, this.name, this.client, 'ensureFunded:after-top-up');
+    }
+  }
+}
+
+export const globalBtcWhaleMutexClient = new BtcMutexClient(
+  'whale',
+  new Client({
+    host: BTC_ENDPOINT.split(':')[1].slice(2),
+    port: Number(BTC_ENDPOINT.split(':')[2]),
+    username: 'flip',
+    password: 'flip',
+    wallet: 'whale',
+  }),
+);
+
+const BTC_WALLET_NAMES = Array.from({ length: 15 }, (_, i) => `wallet${i}`);
+
+const btcClients: Record<string, BtcMutexClient> = Object.fromEntries(
+  BTC_WALLET_NAMES.map((name) => [name, new BtcMutexClient(name, getBtcClient(name))]),
+);
+
+async function assertCanSubmitRawTx(rawTx: string, client: Client) {
+  const check = (await client.testMempoolAccept([rawTx])) as {
+    allowed: boolean;
+    'reject-reason'?: string;
+  }[];
+  if (!check[0].allowed) {
+    throw new Error(`Bitcoin tx failed mempool accept check with '${check[0]['reject-reason']}'`);
+  }
+}
 
 export async function fundAndSendTransaction(
+  logger: ILogger,
   outputs: object[],
   changeAddress: string,
   feeRate?: number,
+  client = globalBtcWhaleMutexClient,
 ): Promise<string> {
-  return btcClientMutex.runExclusive(async () => {
-    const rawTx = await btcClient.createRawTransaction([], outputs);
-    const fundedTx = (await btcClient.fundRawTransaction(rawTx, {
+  logger.debug(`Waiting for bitcoin mutex`);
+  return client.runExclusive(logger, async (c) => {
+    await logWalletBalances(logger, 'selected-wallet', c, 'fundAndSendTransaction:before-create');
+    logger.debug(`Acquired mutex, creating raw tx`);
+    const rawTx = await c.createRawTransaction([], outputs);
+    logger.debug(`funding raw tx`);
+    const fundedTx = (await c.fundRawTransaction(rawTx, {
       changeAddress,
       feeRate: feeRate ?? 0.00001,
       lockUnspents: true,
-      changePosition: 2,
+      changePosition: outputs.length,
     })) as { hex: string };
-    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
-    const txId = (await btcClient.sendRawTransaction(signedTx.hex)) as string | undefined;
+    logger.debug(`signing raw tx`);
+    const signedTx = await c.signRawTransactionWithWallet(fundedTx.hex);
+    logger.debug(`checking that signed raw tx could be submitted`);
+    await assertCanSubmitRawTx(signedTx.hex, c);
+    logger.debug(`sending`);
+    const txId = (await c.sendRawTransaction(signedTx.hex)) as string | undefined;
 
     if (!txId) {
       throw new Error('Broadcast failed');
     }
+
+    await logWalletBalances(logger, 'selected-wallet', c, 'fundAndSendTransaction:after-send');
 
     return txId;
   });
 }
 
 export async function sendVaultTransaction(
+  logger: ILogger,
   nulldataPayload: string,
   amountBtc: number,
   depositAddress: string,
   refundAddress: string,
+  client = globalBtcWhaleMutexClient,
 ): Promise<string> {
   return fundAndSendTransaction(
+    logger,
     [
       {
         [depositAddress]: amountBtc,
@@ -54,14 +223,16 @@ export async function sendVaultTransaction(
       },
     ],
     refundAddress,
+    undefined,
+    client,
   );
 }
 
-export async function waitForBtcTransaction(
-  logger: Logger,
+async function waitForBtcTransaction(
+  logger: ILogger,
   txid: string,
-  confirmations = 1,
-  client = btcClient,
+  confirmations: number,
+  client: Client,
 ) {
   logger.trace(
     `Waiting for Btc transaction to be confirmed, txid: ${txid}, required confirmations: ${confirmations}`,
@@ -78,37 +249,58 @@ export async function waitForBtcTransaction(
       return;
     }
   }
-  throwError(
-    logger,
-    new Error(
-      `Timeout (${timeoutSeconds}s) waiting for Btc transaction to be confirmed, txid: ${txid}`,
-    ),
+  throw new Error(
+    `Timeout (${timeoutSeconds}s) waiting for Btc transaction to be confirmed, txid: ${txid}`,
   );
 }
 
-export async function sendBtc(
-  logger: Logger,
-  address: string,
-  amount: number | string,
+type BtcAddressAndAmount = {
+  address: string;
+  amount: number | string;
+};
+
+export async function sendBtcToMultipleAddresses(
+  logger: ILogger,
+  addressesAndAmounts: BtcAddressAndAmount[],
   confirmations = 1,
-  client = btcClient,
+  client = globalBtcWhaleMutexClient,
 ): Promise<string> {
+  if (addressesAndAmounts.length === 0) {
+    throw new Error('Expected at least one BTC recipient');
+  }
+
   // Btc client has a limit on the number of concurrent requests
   let txid: string;
   let attempts = 0;
   const maxAttempts = 3;
 
-  // The client will error if the amount has more than 8 decimal places
-  const roundedAmount = Math.round(Number(amount) * 1e8) / 1e8;
+  // The client will error if an amount has more than 8 decimal places
+  const roundedRecipients = addressesAndAmounts.map(({ address, amount }) => ({
+    address,
+    amount: Math.round(Number(amount) * 1e8) / 1e8,
+  }));
 
   while (attempts < maxAttempts) {
     try {
-      txid = (await btcClientMutex.runExclusive(async () =>
-        client.sendToAddress(address, roundedAmount, '', '', false, true, null, 'unset', null, 1),
-      )) as string;
+      logger.debug(
+        `Sending BTC to recipients: ${roundedRecipients.map(({ address, amount }) => `${amount}btc to ${address}`).join(', ')}.`,
+      );
+      txid = await fundAndSendTransaction(
+        logger,
+        roundedRecipients.map(({ address, amount }) => ({
+          [address]: amount,
+        })),
+        await client.getNewAddress(),
+        undefined,
+        client,
+      );
+      logger.debug(`Transaction has txhash ${txid}.`);
 
       if (confirmations > 0) {
-        await waitForBtcTransaction(logger, txid, confirmations, client);
+        await waitForBtcTransaction(logger, txid, confirmations, client.unsafe_getClient());
+        logger.debug(`Transaction confirmed with ${confirmations} confirmations`);
+      } else {
+        logger.debug(`Not waiting for confirmation`);
       }
       return txid;
     } catch (error) {
@@ -124,6 +316,68 @@ export async function sendBtc(
   return '';
 }
 
+export async function sendBtc(
+  logger: ILogger,
+  address: string,
+  amount: number | string,
+  confirmations = 1,
+  client = globalBtcWhaleMutexClient,
+): Promise<string> {
+  return sendBtcToMultipleAddresses(
+    logger,
+    [
+      {
+        address,
+        amount,
+      },
+    ],
+    confirmations,
+    client,
+  );
+}
+
+export async function setupWallet(logger: ILogger, name: string) {
+  const newClient = await globalBtcWhaleMutexClient.runExclusive(logger, async (client) => {
+    const reply = (await client.createWallet(name, false, false, '')) as {
+      name?: string;
+      warning?: string;
+    };
+    if (!reply.name) {
+      throw new Error(`Could not create btc wallet with name ${name}, with error ${reply.warning}`);
+    }
+    if (reply.name !== name) {
+      throw new Error(
+        `Expected btc wallet to be created with name ${name}, but got name ${reply.name}`,
+      );
+    }
+    logger.info(`Created new wallet: ${reply.name}`);
+    return getBtcClient(reply.name);
+  });
+
+  const btcMutexClient = new BtcMutexClient(name, newClient);
+  logger.info(`Funding wallet ${name} via ensureFunded`);
+  await btcMutexClient.runExclusive(logger, async () => undefined);
+  logger.info(`funding success!`);
+
+  return btcMutexClient;
+}
+
+export async function setupAllBtcWallets<A>(cf: ChainflipIO<A>) {
+  await cf.all(BTC_WALLET_NAMES.map((name) => (subcf: ILogger) => setupWallet(subcf, name)));
+}
+
+let btcClientCounter = 0;
+
+export async function getNextBtcClient(_logger: ILogger): Promise<BtcMutexClient> {
+  const keys = Object.keys(btcClients);
+  if (keys.length === 0) {
+    throw new Error("Expected btcClients to be populated, but it wasn't. (empty object)");
+  }
+  const chosen = keys[btcClientCounter % keys.length];
+  btcClientCounter += 1;
+  return btcClients[chosen];
+}
+
 /**
  * Creates a chain of 2 btc transactions (parent & child tx)
  *
@@ -135,24 +389,24 @@ export async function sendBtc(
  * @returns - The txids of the parent and child tx
  */
 export async function sendBtcTransactionWithParent(
-  logger: Logger,
+  logger: ILogger,
   address: string,
   amount: number,
   parentConfirmations: number,
   childConfirmations: number,
-  client = btcClient,
+  client = globalBtcWhaleMutexClient,
 ): Promise<{ parentTxid: string; childTxid: string }> {
   // Btc client has a limit on the number of concurrent requests
-  const txids = await btcClientMutex.runExclusive(async () => {
+  const txids = await client.runExclusive(logger, async (c) => {
     // create a new address in our wallet that we have the keys for
-    const intermediateAddress = await client.getNewAddress();
+    const intermediateAddress = await c.getNewAddress();
 
     // amount to use for the parent tx
     // Note: bitcoin has 8 decimal places
     const parentAmount = (amount * 1.1).toFixed(8);
 
     // send the parent tx
-    const parentTxid = (await client.sendToAddress(
+    const parentTxid = (await c.sendToAddress(
       intermediateAddress,
       parentAmount,
       '',
@@ -167,11 +421,11 @@ export async function sendBtcTransactionWithParent(
 
     // wait for inclusion in a block
     if (parentConfirmations > 0) {
-      await waitForBtcTransaction(logger, parentTxid, parentConfirmations, client);
+      await waitForBtcTransaction(logger, parentTxid, parentConfirmations, c);
     }
 
     // Create a raw transaction for the child tx
-    const childRawTx = await client.createRawTransaction(
+    const childRawTx = await c.createRawTransaction(
       [
         {
           txid: parentTxid as string,
@@ -184,23 +438,31 @@ export async function sendBtcTransactionWithParent(
     );
 
     // Fund the child tx
-    const childFundedTx = (await client.fundRawTransaction(childRawTx, {
-      changeAddress: await client.getNewAddress(),
+    const childFundedTx = (await c.fundRawTransaction(childRawTx, {
+      changeAddress: await c.getNewAddress(),
       feeRate: 0.00001,
       lockUnspents: true,
     })) as { hex: string };
 
     // Sign the child tx
-    const childSignedTx = await client.signRawTransactionWithWallet(childFundedTx.hex);
+    const childSignedTx = await c.signRawTransactionWithWallet(childFundedTx.hex);
+
+    // verify
+    await assertCanSubmitRawTx(childSignedTx.hex, c);
 
     // Send the signed tx
-    const childTxid = (await client.sendRawTransaction(childSignedTx.hex)) as string;
+    const childTxid = (await c.sendRawTransaction(childSignedTx.hex)) as string;
 
     return { parentTxid, childTxid };
   });
 
   if (childConfirmations > 0) {
-    await waitForBtcTransaction(logger, txids.childTxid, childConfirmations, client);
+    await waitForBtcTransaction(
+      logger,
+      txids.childTxid,
+      childConfirmations,
+      client.unsafe_getClient(),
+    );
   }
 
   return txids;
@@ -215,6 +477,7 @@ export async function sendBtcTransactionWithParent(
  * @returns - The txids of the parent and child tx
  */
 export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
+  logger: ILogger,
   address: string,
   fineAmounts: number[],
 ): Promise<{ txid: string }> {
@@ -230,19 +493,24 @@ export async function sendBtcTransactionWithMultipleUtxosToSameAddress(
       tx.addOutput(scriptBuffer, fineAmount);
     }
 
-    // Once we have added the outputs, all other steps (funding, signing, sending) can be done as usual with bitcoin-cli.
-    const fundedTx = (await btcClient.fundRawTransaction(tx.toHex(), {
-      changeAddress: await btcClient.getNewAddress(),
-      feeRate: 0.00001,
-      lockUnspents: true,
-    })) as { hex: string };
+    return globalBtcWhaleMutexClient.runExclusive(logger, async (client) => {
+      // Once we have added the outputs, all other steps (funding, signing, sending) can be done as usual with bitcoin-cli.
+      const fundedTx = (await client.fundRawTransaction(tx.toHex(), {
+        changeAddress: await client.getNewAddress(),
+        feeRate: 0.00001,
+        lockUnspents: true,
+      })) as { hex: string };
 
-    // Sign the tx
-    const signedTx = await btcClient.signRawTransactionWithWallet(fundedTx.hex);
+      // Sign the tx
+      const signedTx = await client.signRawTransactionWithWallet(fundedTx.hex);
 
-    // Send the tx
-    const txid = (await btcClient.sendRawTransaction(signedTx.hex)) as string;
+      // verify
+      await assertCanSubmitRawTx(signedTx.hex, client);
 
-    return { txid };
+      // Send the tx
+      const txid = (await client.sendRawTransaction(signedTx.hex)) as string;
+
+      return { txid };
+    });
   });
 }

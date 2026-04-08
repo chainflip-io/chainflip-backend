@@ -1,4 +1,3 @@
-import { Semaphore } from 'async-mutex';
 import {
   Chain,
   amountToFineAmount,
@@ -9,15 +8,16 @@ import {
 } from 'shared/utils';
 import { KeyedMutex } from 'shared/utils/keyed_mutex';
 import { Logger } from 'shared/utils/logger';
+import { TrackedSemaphore } from 'shared/utils/tracked_semaphore';
 
 // Cap in-flight EVM transactions per chain to stay under geth's default txpool
 // limit of 64 queued txs per account.
 const MAX_IN_FLIGHT_TXS = 48;
-const ethSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
-const arbSemaphore = new Semaphore(MAX_IN_FLIGHT_TXS);
+const ethSemaphore = new TrackedSemaphore('ethSemaphore', MAX_IN_FLIGHT_TXS);
+const arbSemaphore = new TrackedSemaphore('arbSemaphore', MAX_IN_FLIGHT_TXS);
 
 // Nonce tracking and mutex per (chain, account) to avoid cross-account collisions.
-const nonceMutex = new KeyedMutex();
+const nonceMutex = new KeyedMutex('nonceMutex');
 const nextEvmNonce = new Map<string, number>();
 
 function nonceKey(chain: string, address: string): string {
