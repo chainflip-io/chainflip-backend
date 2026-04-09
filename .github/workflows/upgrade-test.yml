@@ -177,6 +177,8 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           ./localnet/manage.sh
+          cd bouncer
+          ./setup_for_test.sh
           # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
           git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
@@ -210,7 +212,7 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
           git reset --hard
 
       - name: Upgrade runtime 🚀
