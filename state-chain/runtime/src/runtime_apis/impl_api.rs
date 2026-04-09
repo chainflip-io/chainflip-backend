@@ -1200,7 +1200,6 @@ impl_runtime_apis! {
 				affiliates: pallet_cf_swapping::AffiliateAccountDetails::<Runtime>::iter_prefix(&account_id).collect(),
 				bond: account_info.bond(),
 				bound_fee_withdrawal_address: Swapping::bound_broker_withdrawal_address(account_id),
-				injected_extra_type_to_cause_error: true
 			}
 		}
 
