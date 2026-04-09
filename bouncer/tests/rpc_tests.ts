@@ -61,10 +61,19 @@ type SupportedAssets = {
 
 async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
   await using chainflipApi = await getChainflipApi();
-  const all = (await chainflipApi.rpc('cf_supported_assets')) as AssetAndChain[];
-  const assets = all.filter((a) => !(a.chain === 'Ethereum' && a.asset === 'USDC'));
+  // Here we use cf_swapping_environment and parse the result instead of cf_supported_assets, because
+  // cf_supported_assets implementation doesn't work at upgrade boundaries
+  const env = (await chainflipApi.rpc('cf_swapping_environment')) as {
+    network_fees: { regular_network_fee: { rates: Record<string, Record<string, number>> } };
+  };
+  const rates = env.network_fees.regular_network_fee.rates;
+  const all: AssetAndChain[] = Object.entries(rates).flatMap(([chain, chainAssets]) =>
+    Object.keys(chainAssets).map((asset) => ({ chain, asset }) as AssetAndChain),
+  );
+  const usdcAsset: AssetAndChain = { chain: 'Ethereum', asset: 'USDC' };
+  const assets = all.filter((a) => !(a.chain === usdcAsset.chain && a.asset === usdcAsset.asset));
   return {
-    baseAsset: { chain: 'Ethereum', asset: 'USDC' },
+    baseAsset: usdcAsset,
     randomAsset: () => assets[Math.floor(Math.random() * assets.length)],
   };
 }
