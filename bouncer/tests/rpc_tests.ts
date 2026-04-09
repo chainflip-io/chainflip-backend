@@ -64,11 +64,11 @@ async function testParameterlessRpcCall<A = []>(cf: ChainflipIO<A>, rpcCallName:
   }
 }
 
-async function printNodeAndRuntimeVersion<A = []>(cf: ChainflipIO<A>) {
+async function printNodeAndRuntimeVersions<A = []>(cf: ChainflipIO<A>) {
   await using chainflipApi = await getChainflipApi();
   const runtimeVersion = await chainflipApi.rpc('state_getRuntimeVersion');
   const nodeVersion = await chainflipApi.rpc('system_version');
-  cf.info('\n-----------------------------------------------');
+  cf.info('-----------------------------------------------');
   cf.info(`Node version: ${JSON.stringify(nodeVersion)}`);
   cf.info(`Runtime spec version: ${(runtimeVersion as { specVersion: number }).specVersion}`);
   cf.info('-----------------------------------------------\n');
@@ -80,11 +80,12 @@ async function printNodeAndRuntimeVersion<A = []>(cf: ChainflipIO<A>) {
 export async function testRpcCalls(testContext: TestContext): Promise<void> {
   const cf = await newChainflipIO(testContext.logger, []);
 
+  // Print node and runtime versions
+  await printNodeAndRuntimeVersions(cf);
+
   // construct known accounts covering all possible account roles
   const knownAccounts = await setupKnownAccounts(cf);
   const lpAccounts = knownAccounts.filter((a) => a.role === AccountRole.LiquidityProvider);
-
-  await printNodeAndRuntimeVersion(cf);
 
   await cf.all([
     // Account based rpc calls
