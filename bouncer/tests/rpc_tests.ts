@@ -64,6 +64,16 @@ async function testParameterlessRpcCall<A = []>(cf: ChainflipIO<A>, rpcCallName:
   }
 }
 
+async function printNodeAndRuntimeVersion<A = []>(cf: ChainflipIO<A>) {
+  await using chainflipApi = await getChainflipApi();
+  const runtimeVersion = await chainflipApi.rpc('state_getRuntimeVersion');
+  const nodeVersion = await chainflipApi.rpc('system_version');
+  cf.info('\n-----------------------------------------------');
+  cf.info(`Node version: ${JSON.stringify(nodeVersion)}`);
+  cf.info(`Runtime spec version: ${(runtimeVersion as { specVersion: number }).specVersion}`);
+  cf.info('-----------------------------------------------\n');
+}
+
 // Verify that custom RPC endpoints remain callable across runtime upgrades. When the runtime
 // is upgraded, mismatches between what the custom rpc expects and the runtime API type encodings
 // can cause runtime decode errors that are otherwise hard to catch until a user hits them in production.
@@ -73,6 +83,8 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
   // construct known accounts covering all possible account roles
   const knownAccounts = await setupKnownAccounts(cf);
   const lpAccounts = knownAccounts.filter((a) => a.role === AccountRole.LiquidityProvider);
+
+  await printNodeAndRuntimeVersion(cf);
 
   await cf.all([
     // Account based rpc calls
