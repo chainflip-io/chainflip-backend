@@ -71,7 +71,9 @@ async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
     Object.keys(chainAssets).map((asset) => ({ chain, asset }) as AssetAndChain),
   );
   const usdcAsset: AssetAndChain = { chain: 'Ethereum', asset: 'USDC' };
-  const assets = all.filter((a) => !(a.chain === usdcAsset.chain && a.asset === usdcAsset.asset));
+  const assets = all.filter(
+    (a) => !(a.chain === usdcAsset.chain && a.asset === usdcAsset.asset) && a.chain !== 'Assethub',
+  );
   return {
     baseAsset: usdcAsset,
     randomAsset: () => assets[Math.floor(Math.random() * assets.length)],
