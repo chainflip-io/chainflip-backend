@@ -25,16 +25,11 @@ use crate::{
 };
 use cf_utilities::task_scope::Scope;
 use engine_sc_client::{
-	chain_api::ChainApi,
-	electoral_api::ElectoralApi,
-	extrinsic_api::signed::SignedExtrinsicApi,
+	chain_api::ChainApi, electoral_api::ElectoralApi, extrinsic_api::signed::SignedExtrinsicApi,
 	storage_api::StorageApi,
-	stream_api::{StreamApi, FINALIZED, UNFINALIZED},
 };
 use futures::try_join;
 use state_chain_runtime::{ArbitrumInstance, BitcoinInstance, EthereumInstance, SolanaInstance};
-
-use super::common::epoch_source::EpochSource;
 
 use anyhow::Result;
 
@@ -51,8 +46,6 @@ pub async fn start<StateChainClient>(
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: impl StreamApi<FINALIZED> + Clone,
-	_unfinalised_state_chain_stream: impl StreamApi<UNFINALIZED> + Clone,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
@@ -68,12 +61,6 @@ where
 		+ Send
 		+ Sync,
 {
-	let epoch_source =
-		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
-			.await
-			.participating(state_chain_client.account_id())
-			.await;
-
 	let witness_call = {
 		let state_chain_client = state_chain_client.clone();
 		move |call, epoch_index| {
@@ -119,20 +106,12 @@ where
 	let start_eth =
 		super::eth_elections::start(scope, eth_client.clone(), state_chain_client.clone());
 
-	let start_hub = super::hub::start(
-		scope,
-		hub_client,
-		witness_call.clone(),
-		state_chain_client.clone(),
-		state_chain_stream,
-		epoch_source,
-		db,
-	);
+	super::hub::start(scope, hub_client, witness_call.clone(), state_chain_client.clone(), db);
 
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(start_eth, start_arb, start_sol, start_btc, start_hub, start_generic_elections)?;
+	try_join!(start_eth, start_arb, start_sol, start_btc, start_generic_elections)?;
 
 	Ok(())
 }

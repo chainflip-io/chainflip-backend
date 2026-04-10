@@ -475,8 +475,8 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	/// Spawns a weak task that automatically restarts on failure with exponential backoff.
 	///
 	/// Calls `make_future()` in a loop. If the returned future errors or panics, the error is
-	/// logged, a metric is incremented, and the task is restarted after a backoff delay. The
-	/// parent scope is never affected by inner task failures.
+	/// logged, a metric is incremented, `on_restart` is called, and the task is restarted after
+	/// a backoff delay. The parent scope is never affected by inner task failures.
 	///
 	/// Backoff starts at 30 seconds and doubles up to 30 mins max. If a task runs for more
 	/// than 60 seconds before failing, the backoff is reset to the initial value.
@@ -484,10 +484,16 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 	/// If the inner future returns `Ok(())` unexpectedly, it is restarted immediately (tasks
 	/// wrapped by this method are expected to run indefinitely).
 	#[track_caller]
-	pub fn spawn_with_restart<F, Fut>(&self, task_name: &'static str, mut make_future: F)
-	where
+	pub fn spawn_with_restart<F, Fut, R, RFut>(
+		&self,
+		task_name: &'static str,
+		mut make_future: F,
+		mut on_restart: R,
+	) where
 		F: FnMut() -> Fut + Send + 'env,
 		Fut: Future<Output = Result<(), Error>> + Send + 'env,
+		R: FnMut() -> RFut + Send + 'env,
+		RFut: Future<Output = ()> + Send + 'static,
 	{
 		use std::time::Duration;
 
@@ -545,6 +551,8 @@ impl<'env, Error: Debug + Send + 'static> Scope<'env, Error> {
 
 				#[cfg(not(test))]
 				super::metrics::TASK_RESTARTS.inc(&[task_name]);
+
+				tokio::spawn(on_restart());
 
 				// Reset backoff if the task ran long enough to be considered healthy
 				if ran_for >= HEALTHY_DURATION {
@@ -987,17 +995,21 @@ mod tests {
 			async {
 				let attempt_for_check = attempt.clone();
 				let attempt_for_task = attempt.clone();
-				scope.spawn_with_restart("test_error_recovery", move || {
-					let attempt = attempt_for_task.clone();
-					async move {
-						let n: u32 = attempt.fetch_add(1, Ordering::Relaxed);
-						if n < 2 {
-							Err(anyhow!("attempt {n} failed"))
-						} else {
-							futures::future::pending::<Result<(), anyhow::Error>>().await
+				scope.spawn_with_restart(
+					"test_error_recovery",
+					move || {
+						let attempt = attempt_for_task.clone();
+						async move {
+							let n: u32 = attempt.fetch_add(1, Ordering::Relaxed);
+							if n < 2 {
+								Err(anyhow!("attempt {n} failed"))
+							} else {
+								futures::future::pending::<Result<(), anyhow::Error>>().await
+							}
 						}
-					}
-				});
+					},
+					|| async {},
+				);
 
 				// Wait for retries to complete (3 failures with ~1-4ms backoff each)
 				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -1021,16 +1033,20 @@ mod tests {
 			async {
 				let attempt_for_check = attempt.clone();
 				let attempt_for_task = attempt.clone();
-				scope.spawn_with_restart("test_panic_recovery", move || {
-					let attempt = attempt_for_task.clone();
-					async move {
-						let n = attempt.fetch_add(1, Ordering::Relaxed);
-						if n < 2 {
-							panic!("attempt {n} panicked")
+				scope.spawn_with_restart(
+					"test_panic_recovery",
+					move || {
+						let attempt = attempt_for_task.clone();
+						async move {
+							let n = attempt.fetch_add(1, Ordering::Relaxed);
+							if n < 2 {
+								panic!("attempt {n} panicked")
+							}
+							futures::future::pending::<Result<(), anyhow::Error>>().await
 						}
-						futures::future::pending::<Result<(), anyhow::Error>>().await
-					}
-				});
+					},
+					|| async {},
+				);
 
 				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
@@ -1052,9 +1068,11 @@ mod tests {
 		task_scope::<_, anyhow::Error, _>(|scope| {
 			async {
 				// Spawn a task that always fails
-				scope.spawn_with_restart("always_failing", || async {
-					Err::<(), _>(anyhow!("always fails"))
-				});
+				scope.spawn_with_restart(
+					"always_failing",
+					|| async { Err::<(), _>(anyhow!("always fails")) },
+					|| async {},
+				);
 
 				// Parent scope completes its work despite child failures
 				tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -1079,13 +1097,17 @@ mod tests {
 			async {
 				let running_for_check = running.clone();
 				let running_for_task = running.clone();
-				scope.spawn_with_restart("cancellable", move || {
-					let running = running_for_task.clone();
-					async move {
-						running.store(true, Ordering::Relaxed);
-						futures::future::pending::<Result<(), anyhow::Error>>().await
-					}
-				});
+				scope.spawn_with_restart(
+					"cancellable",
+					move || {
+						let running = running_for_task.clone();
+						async move {
+							running.store(true, Ordering::Relaxed);
+							futures::future::pending::<Result<(), anyhow::Error>>().await
+						}
+					},
+					|| async {},
+				);
 
 				// Let the task start
 				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
