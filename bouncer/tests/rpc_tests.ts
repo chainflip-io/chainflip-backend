@@ -144,7 +144,6 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_account_info', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_free_balances', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_lp_total_balances', lpAccounts),
-    (subcf) => testRpcCallForAllAccounts(subcf, 'cf_lp_total_balances', lpAccounts),
 
     // Asset based rpc calls
     (subcf) =>
@@ -174,6 +173,7 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
     (subcf) => testParameterlessRpcCall(subcf, 'cf_accounts'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_current_compatibility_version'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_lp_get_order_fills'),
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_supported_assets'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_boost_pools_depth'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_get_transaction_screening_events'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_controlled_vault_addresses'),
