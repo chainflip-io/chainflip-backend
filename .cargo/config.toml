@@ -59,6 +59,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0009: Medium severity, but only exploitable if user-provided strings are parsed into a time format by the `time` dependency.
 # - RUSTSEC-2026-0020: Wasmtime memory leak, we don't have any control over the wasmtime version.
 # - RUSTSEC-2026-0021: Wasmtime panic, we don't have any control over the wasmtime version.
+# - RUSTSEC-2026-0049: Transitive dependency and "an attacker would need to compromise a trusted issuing authority to trigger this bug". It's a dependency of `rustls`.
 #
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -85,6 +86,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0009
 	--ignore RUSTSEC-2026-0020
 	--ignore RUSTSEC-2026-0021
+	--ignore RUSTSEC-2026-0049
 '''
 
 [build]

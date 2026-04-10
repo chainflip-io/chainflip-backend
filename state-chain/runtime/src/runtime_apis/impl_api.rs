@@ -28,7 +28,7 @@ use crate::{
 	*,
 };
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -71,8 +71,8 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
-	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
+	HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
+	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
@@ -418,14 +418,18 @@ impl_runtime_apis! {
 		fn cf_btc_utxos() -> BtcUtxos {
 			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
 			let mut btc_balance = utxos.iter().fold(0, |acc, elem| acc + elem.amount);
-			//Sum the btc balance contained in the change utxos to the btc "free_balance"
-			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
-				ceremony.request_context.request_id
-			}).collect::<Vec<_>>();
-			let EpochKey { key, .. } = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
-				.expect("We should always have a key for the current epoch");
-			for ceremony in btc_ceremonies {
-				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
+			// Sum the btc balance contained in the change utxos to the btc "free_balance".
+			// RequestCallback contains all in-flight signing requests
+			let EpochKey { key, .. } =
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
+					.expect("We should always have a key for the current epoch");
+			for (_request_id, callback) in
+				pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::iter()
+			{
+				if let RuntimeCall::BitcoinBroadcaster(
+					pallet_cf_broadcast::pallet::Call::on_signature_ready { api_call, .. },
+				) = callback
+				{
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
 						for output in batch_transfer.bitcoin_transaction.outputs {
 							if [
@@ -994,8 +998,8 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			lp: Option<AccountId>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
-			LiquidityPools::pool_orders(base_asset, quote_asset, lp, filled_orders).map_err(Into::into)
+		) -> Result<PoolOrders<AccountId>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_orders(base_asset, quote_asset, &lp.map(|lp| BTreeSet::from([lp])).unwrap_or_default(), filled_orders).map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(

@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   check-blocktime:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout chainflip-backend 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

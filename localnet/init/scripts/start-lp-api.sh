@@ -2,6 +2,8 @@
 set -e
 DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 binary_location=$1
+echo $($binary_location/chainflip-lp-api --version)
+
 RUST_LOG=debug,jsonrpsee_types::params=trace $binary_location/chainflip-lp-api \
   --port=10589 \
   --state_chain.ws_endpoint=ws://localhost:9944 \

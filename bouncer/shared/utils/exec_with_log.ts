@@ -1,14 +1,14 @@
 import { spawn } from 'child_process';
 import path from 'path';
-import os from 'os';
 import fs from 'fs/promises';
 import { sleep } from 'shared/utils';
 import { globalLogger, type Logger } from 'shared/utils/logger';
 
 export const DEFAULT_LOG_ROOT = 'chainflip/logs/';
+export const DEFAULT_TMP_ROOT = '/tmp/chainflip';
 
 export async function mkTmpDir(dir: string): Promise<string> {
-  const tmpDir = path.join(os.tmpdir(), dir);
+  const tmpDir = path.join(DEFAULT_TMP_ROOT, dir);
   await fs.mkdir(tmpDir, { recursive: true });
   return tmpDir;
 }
@@ -44,7 +44,10 @@ export async function execWithLog(
       logger.info(data.toString());
     });
 
-    ls.on('exit', (code) => {
+    // Use 'close' rather than 'exit': on macOS the 'exit' event can fire before
+    // all buffered stdio data events are delivered, causing writes to an already-disposed
+    // file handle. 'close' fires only after all stdio streams are fully flushed.
+    ls.on('close', (code) => {
       running = false;
       exitCode = code ?? 0;
       logger.info('child process exited with code ' + (code?.toString() ?? 'null'));

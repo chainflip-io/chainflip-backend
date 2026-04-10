@@ -41,8 +41,7 @@ use cf_primitives::{Asset, AssetAmount, EpochIndex, ForeignChain};
 use ethers::prelude::*;
 use pallet_cf_ingress_egress::{TransferFailedWitness, VaultDepositWitness};
 use state_chain_runtime::{
-	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, EthereumInstance, Runtime,
-	RuntimeCall,
+	chainflip::witnessing::pallet_hooks::EvmVaultContractEvent, RuntimeCall,
 };
 
 abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
@@ -232,16 +231,16 @@ where
 			amount,
 			token,
 			reason: _,
-		}) => Some(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::<
-			Runtime,
-			EthereumInstance,
-		>::vault_transfer_failed {
-			asset: (*(supported_assets.get(&token).ok_or(anyhow!("Asset {token:?} not found"))?))
+		}) => Some(CallBuilder::vault_transfer_failed(
+			(*supported_assets.get(&token).ok_or(anyhow!("Asset {token:?} not found"))?)
 				.try_into()
 				.expect("Asset translated from EthereumAddress must be supported by the chain."),
-			amount: try_into_primitive(amount)?,
-			destination_address: recipient.0.into(),
-		})),
+			try_into_primitive::<_, AssetAmount>(amount)?
+				.try_into()
+				.unwrap_or_else(|_| panic!("Amount must be supported by the chain.")),
+			recipient.0.into(),
+		)),
+
 		_ => None,
 	})
 }
@@ -585,6 +584,8 @@ fn handle_vault_event<
 
 #[cfg(test)]
 mod tests {
+	use state_chain_runtime::{EthereumInstance, Runtime};
+
 	use super::*;
 
 	fn make_event(event_parameters: VaultEvents) -> Event<VaultEvents> {

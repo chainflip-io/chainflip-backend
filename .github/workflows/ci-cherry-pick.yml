@@ -13,7 +13,7 @@ run-name: Cherry pick `${{ github.event.pull_request.title }}` to release branch
 jobs:
   cherry-pick:
     if: ${{ (github.event.pull_request.merged == true) && (contains(github.event.pull_request.labels.*.name, 'non-breaking')) }}
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout branch
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

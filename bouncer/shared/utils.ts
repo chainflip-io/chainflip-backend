@@ -1387,38 +1387,6 @@ export async function getNodesInfo(numberOfNodes: 1 | 3) {
   return { SELECTED_NODES, nodeCount };
 }
 
-export async function killEngines() {
-  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
-}
-
-export async function startEngines(
-  localnetInitPath: string,
-  binaryPath: string,
-  numberOfNodes: 1 | 3,
-  logSuffix = '',
-) {
-  console.log('Starting all the engines');
-
-  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  await execWithLog(
-    `${localnetInitPath}/scripts/start-all-engines.sh`,
-    [],
-    'start-all-engines' + logSuffix,
-    {
-      INIT_RUN: 'false',
-      LOG_SUFFIX: logSuffix,
-      NODE_COUNT: nodeCount,
-      SELECTED_NODES,
-      LOCALNET_INIT_DIR: localnetInitPath,
-      BINARY_ROOT_PATH: binaryPath,
-    },
-  );
-
-  await sleep(7000);
-
-  console.log('Engines started');
-}
-
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
   testContext.info('Checking Solana Nonce Availability');
@@ -1580,4 +1548,218 @@ export async function submitExtrinsic(
     );
   }
   return eventRecord.event as unknown as Event;
+}
+
+const nodeHealthSchema = z.object({
+  peers: z.number(),
+  isSyncing: z.boolean(),
+  shouldHavePeers: z.boolean(),
+  isResponsive: z.boolean().optional().default(true),
+});
+
+export async function getNodeHealthStatus(
+  logger: Logger,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+): Promise<z.infer<typeof nodeHealthSchema>> {
+  const nodeUrl = `${nodeAddress}:${nodePort}`;
+  logger.debug(`Checking health status of node at ${nodeUrl}`);
+
+  try {
+    const response = await fetch(nodeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'system_health',
+        params: [],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const jsonResponse = await response.json();
+    const data = nodeHealthSchema.parse(jsonResponse.result);
+    logger.debug(`Node health status: ${JSON.stringify(data)}`);
+    return data;
+  } catch (error) {
+    logger.debug(`Checking health status of node at ${nodeUrl} error ${error}`);
+    return { peers: 0, isSyncing: false, shouldHavePeers: false, isResponsive: false };
+  }
+}
+
+export async function waitForNodeHealthy(
+  logger: Logger,
+  waitForSynced: boolean = true,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+  checkForPeers: boolean = true,
+): Promise<void> {
+  logger.info(`Waiting for node at ${nodeAddress}:${nodePort} to be healthy`);
+
+  const maxRetries = 30;
+  const retryIntervalMs = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const healthStatus = await getNodeHealthStatus(logger, nodeAddress, nodePort);
+
+    const isHealthy =
+      healthStatus.isResponsive &&
+      (!checkForPeers || !healthStatus.shouldHavePeers || healthStatus.peers > 0) &&
+      (!waitForSynced || !healthStatus.isSyncing);
+
+    if (isHealthy) {
+      logger.debug(`Node is healthy after ${attempt} attempt(s)`);
+      return;
+    }
+
+    if (attempt === maxRetries) {
+      throw new Error(
+        `Node at ${nodeAddress}:${nodePort} health check timed out after ${maxRetries} attempts. Status: ${JSON.stringify(healthStatus)}`,
+      );
+    }
+    logger.debug(
+      `Node not healthy yet (Attempt ${attempt}/${maxRetries}): ${JSON.stringify(healthStatus)}`,
+    );
+    await sleep(retryIntervalMs);
+  }
+}
+
+// Polls until a process is listening on `port` via lsof, or throws on timeout.
+// Preferred over waitForProcessStart for APIs since it confirms the service is actually ready.
+export async function waitForPortOpen(port: number, timeoutMs = 15000): Promise<void> {
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      execSync(`lsof -t -i:${port}`, { stdio: 'ignore' });
+      return;
+    } catch {
+      await sleep(intervalMs);
+    }
+  }
+
+  throw new Error(`Timed out waiting for port ${port} to open after ${timeoutMs}ms`);
+}
+
+async function waitForProcess(
+  processName: string,
+  condition: 'started' | 'exited',
+  timeoutMs = 15000,
+): Promise<void> {
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const pids = execSync(`ps -o pid -o comm | grep ${processName} | awk '{print $1}'`)
+      .toString()
+      .trim();
+    const running = pids.length > 0;
+    if (condition === 'started' ? running : !running) return;
+    await sleep(intervalMs);
+  }
+
+  throw new Error(`Timed out waiting for '${processName}' to ${condition} after ${timeoutMs}ms`);
+}
+
+export const waitForProcessStart = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'started', timeoutMs);
+
+export const waitForProcessExit = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'exited', timeoutMs);
+
+// Kills all processes that match the provided process name
+export async function killProcess(
+  processName: string,
+  logger: Logger = globalLogger,
+): Promise<void> {
+  try {
+    execSync(`kill $(ps aux | grep ${processName} | grep -v grep | awk '{print $2}')`);
+    await waitForProcessExit(processName);
+  } catch {
+    logger.info(`${processName} was not running, skipping`);
+  }
+}
+
+export async function killEngines(logger: Logger = globalLogger) {
+  logger.info('Killing engine-runner processes');
+  await killProcess('engine-runner', logger);
+  logger.info('All engine-runner processes have exited');
+}
+
+export async function startEngines(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+  logSuffix = '',
+  logger: Logger = globalLogger,
+) {
+  logger.info(`Starting ${numberOfNodes} engine(s) from: ${binaryPath}`);
+
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    [],
+    'start-all-engines' + logSuffix,
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: logSuffix,
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
+
+  await sleep(7000);
+
+  logger.info('Engines started');
+}
+
+export async function killNodes(logger: Logger = globalLogger) {
+  logger.info('Killing chainflip-node processes');
+  await killProcess('chainflip-node', logger);
+  logger.info('All chainflip-node processes have exited');
+}
+
+export async function startNodes(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+  logSuffix = '',
+  logger: Logger = globalLogger,
+) {
+  logger.info(`Starting ${numberOfNodes} node(s) from: ${binaryPath}`);
+
+  const KEYS_DIR = `${localnetInitPath}/keys`;
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-nodes.sh`,
+    [],
+    'start-all-nodes' + logSuffix,
+    {
+      CHAIN: 'dev',
+      INIT_RPC_PORT: '9944',
+      KEYS_DIR,
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
+
+  // wait for nodes to be ready
+  await Promise.all(
+    Array.from({ length: numberOfNodes }, (_, i) => i).map((portOffset) =>
+      // For each port offset, wait for the node to be responsive
+      waitForNodeHealthy(logger, true, 'http://localhost', 9944 + portOffset, numberOfNodes !== 1),
+    ),
+  );
+
+  logger.info('Nodes started');
 }
