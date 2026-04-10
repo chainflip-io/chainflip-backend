@@ -60,6 +60,17 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0020: Wasmtime memory leak, we don't have any control over the wasmtime version.
 # - RUSTSEC-2026-0021: Wasmtime panic, we don't have any control over the wasmtime version.
 # - RUSTSEC-2026-0049: Transitive dependency and "an attacker would need to compromise a trusted issuing authority to trigger this bug". It's a dependency of `rustls`.
+# - RUSTSEC-2026-0085: Wasmtime panic when lifting `flags` component value. Dependency of substrate.
+# - RUSTSEC-2026-0086: Wasmtime host data leakage with 64-bit tables and Winch. Dependency of substrate.
+# - RUSTSEC-2026-0087: Wasmtime segfault with `f64x2.splat` on Cranelift x86-64. Dependency of substrate.
+# - RUSTSEC-2026-0088: Wasmtime data leakage between pooling allocator instances. Dependency of substrate.
+# - RUSTSEC-2026-0089: Wasmtime host panic when Winch executes `table.fill`. Dependency of substrate.
+# - RUSTSEC-2026-0091: Wasmtime OOB write or crash when transcoding component model strings. Dependency of substrate.
+# - RUSTSEC-2026-0092: Wasmtime panic when transcoding misaligned component model UTF-16 strings. Dependency of substrate.
+# - RUSTSEC-2026-0093: Wasmtime heap OOB read in component model UTF-16 to latin1+utf16 transcoding. Dependency of substrate.
+# - RUSTSEC-2026-0094: Wasmtime improperly masked return value from `table.grow` with Winch. Dependency of substrate.
+# - RUSTSEC-2026-0095: Wasmtime with Winch may allow sandbox-escaping memory access. Dependency of substrate.
+# - RUSTSEC-2026-0096: Wasmtime miscompiled guest heap access enables sandbox escape on aarch64 Cranelift. Dependency of substrate.
 #
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -87,6 +98,17 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0020
 	--ignore RUSTSEC-2026-0021
 	--ignore RUSTSEC-2026-0049
+	--ignore RUSTSEC-2026-0085
+	--ignore RUSTSEC-2026-0086
+	--ignore RUSTSEC-2026-0087
+	--ignore RUSTSEC-2026-0088
+	--ignore RUSTSEC-2026-0089
+	--ignore RUSTSEC-2026-0091
+	--ignore RUSTSEC-2026-0092
+	--ignore RUSTSEC-2026-0093
+	--ignore RUSTSEC-2026-0094
+	--ignore RUSTSEC-2026-0095
+	--ignore RUSTSEC-2026-0096
 '''
 
 [build]
