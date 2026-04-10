@@ -177,13 +177,13 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           ./localnet/manage.sh
-          cd bouncer
-          pnpm install --frozen-lockfile
-          ./setup_for_test.sh
           # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
           git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./setup_for_test.sh
           git reset --hard
 
       - name: Upgrade binaries 💾
