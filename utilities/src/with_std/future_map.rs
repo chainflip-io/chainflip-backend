@@ -155,8 +155,7 @@ mod tests {
 		map.insert(2, ready(200));
 		map.insert(3, ready(300));
 
-		let mut removed_keys = map.remove_where(|key| *key % 2 == 0);
-		removed_keys.sort();
+		let removed_keys = map.remove_where(|key| *key % 2 == 0);
 
 		assert_eq!(removed_keys, vec![2]);
 		assert!(map.contains_key(&1));
