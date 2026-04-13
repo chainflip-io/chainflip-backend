@@ -93,7 +93,8 @@ impl pallet_cf_validator::Config for Runtime {
 		BitcoinBroadcaster,
 		ArbitrumBroadcaster,
 		SolanaBroadcaster,
-		AssethubBroadcaster
+		AssethubBroadcaster,
+		TronBroadcaster
 	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
 	type KeygenQualification = (
