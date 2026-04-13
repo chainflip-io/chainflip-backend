@@ -19,7 +19,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #![allow(clippy::allow_attributes)]
 
-use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
+use crate::submit_runtime_call::{
+	batch_all, weight_and_dispatch_class, ChainflipExtrinsic, SignatureData,
+};
 pub use crate::submit_runtime_call::{
 	build_domain_data, is_valid_signature, BatchedCalls, EthEncodingType, SolEncodingType,
 	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
@@ -105,7 +107,7 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{validate_metadata, ChainflipExtrinsic};
+	use crate::submit_runtime_call::ChainflipExtrinsic;
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum};
@@ -761,67 +763,15 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			use frame_support::sp_runtime::traits::TxBaseImplication;
-
-			if let Call::non_native_signed_call {
-				chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
-				signature_data,
-			} = call
-			{
-				let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
-					return Err(InvalidTransaction::BadSigner.into());
-				};
-				ensure!(
-					frame_system::Account::<T>::contains_key(&signer_account),
-					InvalidTransaction::BadSigner
-				);
-				T::GetTransactionPayments::get().0.validate(
-					OriginTrait::signed(signer_account.clone()),
-					inner_call,
-					&inner_call.get_dispatch_info(),
-					inner_call.encoded_size(),
-					(),
-					&TxBaseImplication(()),
-					source,
-				)?;
-				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
-
-				let runtime_version = <T as frame_system::Config>::Version::get();
-
-				match is_valid_signature(
-					(*inner_call).clone(),
-					&ChainflipNetworkName::<T>::get(),
-					transaction_metadata,
-					signature_data,
-					runtime_version.spec_version,
-				) {
-					Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
-					Err(_) => return Err(InvalidTransaction::Custom(0).into()),
-				}
-				Ok(valid_tx)
-			} else {
-				Err(InvalidTransaction::Call.into())
-			}
+			let (_, valid_tx) = Self::validate_unsigned_call(source, call)?;
+			Ok(valid_tx)
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::non_native_signed_call {
-				chainflip_extrinsic: ChainflipExtrinsic { transaction_metadata, .. },
-				signature_data,
-				..
-			} = call
-			{
-				let Ok(signer_account) = signature_data.signer_account() else {
-					return Err(InvalidTransaction::BadSigner.into());
-				};
-
-				// Signature validity already checked in `validate_unsigned`
-				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
-				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-				Ok(())
-			} else {
-				Err(InvalidTransaction::Call.into())
-			}
+			let (signer_account, _valid_tx) =
+				Self::validate_unsigned_call(TransactionSource::InBlock, call)?;
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
+			Ok(())
 		}
 	}
 
@@ -1119,6 +1069,54 @@ impl<T: Config> Pallet<T> {
 			*id += 1;
 			current_id
 		})
+	}
+
+	fn validate_unsigned_call(
+		source: TransactionSource,
+		call: &Call<T>,
+	) -> Result<(T::AccountId, ValidTransaction), TransactionValidityError> {
+		use frame_support::sp_runtime::traits::{TransactionExtension, TxBaseImplication};
+
+		if let Call::non_native_signed_call {
+			chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
+			signature_data,
+		} = call
+		{
+			let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
+				return Err(InvalidTransaction::BadSigner.into());
+			};
+			ensure!(
+				frame_system::Account::<T>::contains_key(&signer_account),
+				InvalidTransaction::BadSigner
+			);
+			T::GetTransactionPayments::get().0.validate(
+				OriginTrait::signed(signer_account.clone()),
+				inner_call,
+				&inner_call.get_dispatch_info(),
+				inner_call.encoded_size(),
+				(),
+				&TxBaseImplication(()),
+				source,
+			)?;
+			let valid_tx =
+				submit_runtime_call::validate_metadata::<T>(transaction_metadata, &signer_account)?;
+
+			let runtime_version = <T as frame_system::Config>::Version::get();
+
+			match is_valid_signature(
+				(*inner_call).clone(),
+				&ChainflipNetworkName::<T>::get(),
+				transaction_metadata,
+				signature_data,
+				runtime_version.spec_version,
+			) {
+				Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
+				Err(_) => return Err(InvalidTransaction::Custom(0).into()),
+			}
+			Ok((signer_account, valid_tx))
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
 	}
 }
 
