@@ -71,6 +71,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0094: Wasmtime improperly masked return value from `table.grow` with Winch. Dependency of substrate.
 # - RUSTSEC-2026-0095: Wasmtime with Winch may allow sandbox-escaping memory access. Dependency of substrate.
 # - RUSTSEC-2026-0096: Wasmtime miscompiled guest heap access enables sandbox escape on aarch64 Cranelift. Dependency of substrate.
+# - RUSTSEC-2026-0097: Rng issue in the rand 0.8.5 crate. Transitive dependency. Unlikely and low impact.
 #
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -109,6 +110,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0094
 	--ignore RUSTSEC-2026-0095
 	--ignore RUSTSEC-2026-0096
+	--ignore RUSTSEC-2026-0097
 '''
 
 [build]
