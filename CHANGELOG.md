@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.11] - 2026-04-13
+
+- Apply unsigned validation checks during pre-dispatch.
+
 ## [2.1.10] - 2026-03-23
 
 ### Fixes
