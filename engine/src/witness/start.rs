@@ -98,14 +98,7 @@ where
 	let start_generic_elections =
 		super::generic_elections::start(scope, arb_client, eth_client, state_chain_client);
 
-	try_join!(
-		start_eth,
-		start_arb,
-		start_sol,
-		start_btc,
-		start_tron,
-		start_generic_elections
-	)?;
+	try_join!(start_eth, start_arb, start_sol, start_btc, start_tron, start_generic_elections)?;
 
 	Ok(())
 }
