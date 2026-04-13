@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(type_changing_struct_update)]
 
 use cf_amm::{
 	common::{AssetPair, Side},
@@ -66,6 +67,7 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
 	vec::Vec,
+	fmt::Debug
 };
 
 #[cfg(test)]
@@ -163,12 +165,15 @@ pub enum BalanceChange {
 }
 
 #[derive(CloneNoBound, DebugNoBound)]
-pub struct SwapState<T: Config> {
+pub struct SwapState<T: Config, Effects: SwapEffects> {
 	swap: Swap<T>,
 
 	pub current_balance: AssetAndAmount,
 
 	pub balance_changes: Vec<BalanceChange>,
+
+	pub recorded_effects: RecordedEffects<Effects>,
+
 
 	/// Always in terms of output asset. This is the amount before broker fees have been taken.
 	pub output_amount_before_fees: Option<AssetAmount>,
@@ -180,7 +185,54 @@ pub struct SwapState<T: Config> {
 	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
 }
 
-impl<T: Config> SwapState<T> {
+
+impl<T: Config, E1: SwapEffects> SwapState<T, E1> {
+	fn map_effects<E2: SwapEffects>(self, f: impl FnOnce(RecordedEffects<E1>) -> RecordedEffects<E2>) -> SwapState<T, E2> {
+		let SwapState { swap, current_balance, balance_changes, recorded_effects, output_amount_before_fees, output_amount_after_fees, input_amount_after_fees, oracle_delta, oracle_delta_ex_fees } = self;
+		SwapState { recorded_effects: f(recorded_effects), swap, current_balance, balance_changes, output_amount_before_fees, output_amount_after_fees, input_amount_after_fees, oracle_delta, oracle_delta_ex_fees }
+	}
+}
+
+// TODO: this is actually copied from cf-elections pallet => consolidate
+pub trait Container {
+	type Of<A: Clone + Debug>: Clone + Debug;
+}
+
+pub struct Absent;
+impl Container for Absent {
+	type Of<A: Clone + Debug> = ();
+}
+pub struct Once;
+impl Container for Once {
+	type Of<A: Clone + Debug> = A;
+}
+pub struct Maybe;
+impl Container for Maybe {
+	type Of<A: Clone + Debug> = Option<A>;
+}
+
+pub trait SwapEffects {
+	type NetworkFee: Container;
+	type BrokerFee: Container;
+}
+
+#[derive(CloneNoBound, DebugNoBound)]
+pub struct RecordedEffects<E: SwapEffects> {
+	network_fee: <E::NetworkFee as Container>::Of<AssetAndAmount>,
+	broker_fee: <E::BrokerFee as Container>::Of<AssetAndAmount>,
+}
+
+impl<A: Container, B: Container> SwapEffects for (A,B) {
+	type NetworkFee = A;
+	type BrokerFee = B;
+}
+
+type NoFeesTaken = (Absent, Absent);
+type NetworkFeesTaken = (Once, Absent);
+type NetworkAndBrokerFeesTaken = (Once, Once);
+type MaybeFeesTaken = (Maybe, Maybe);
+
+impl<T: Config, E: SwapEffects<NetworkFee = Absent, BrokerFee = Absent>> SwapState<T, E> {
 	fn new(swap: Swap<T>) -> Self {
 		Self {
 			input_amount_after_fees: swap.input_amount,
@@ -192,8 +244,12 @@ impl<T: Config> SwapState<T> {
 
 			current_balance: AssetAndAmount { asset: swap.from, amount: swap.input_amount },
 			balance_changes: Vec::new(),
+			recorded_effects: RecordedEffects { network_fee: (), broker_fee: () },
 		}
 	}
+}
+
+impl<T: Config, E: SwapEffects> SwapState<T, E> {
 
 	pub fn swap_request_id(&self) -> SwapRequestId {
 		self.swap.swap_request_id
@@ -241,21 +297,6 @@ impl<T: Config> SwapState<T> {
 		}));
 	}
 
-	pub fn record_fee_deduction(
-		&mut self,
-		fee_type: FeeType,
-		mut f: impl FnMut(AssetAmount) -> FeeTaken,
-	) -> AssetAmount {
-		let AssetAndAmount { asset, amount } = self.current_balance;
-		let FeeTaken { remaining_amount, fee } = f(amount);
-		self.current_balance = AssetAndAmount { asset, amount: remaining_amount };
-		self.balance_changes.push(BalanceChange::Fee(ProcessedFeeDeduction {
-			fee_type,
-			fee: AssetAndAmount { asset, amount: fee },
-		}));
-		fee
-	}
-
 	pub fn get_processed_swap_legs(&self) -> Vec<ProcessedSwapLeg> {
 		self.balance_changes
 			.iter()
@@ -291,6 +332,28 @@ impl<T: Config> SwapState<T> {
 			}
 		}
 		Some(AssetAndAmount { asset, amount: total_fee })
+	}
+}
+
+impl<T: Config, E: SwapEffects<NetworkFee = Absent>> SwapState<T, E> {
+	pub fn record_fee_deduction(
+		mut self,
+		fee_type: FeeType,
+		mut f: impl FnMut(AssetAmount) -> FeeTaken,
+	) -> (AssetAmount, SwapState<T, (Once, E::BrokerFee)>) {
+		let AssetAndAmount { asset, amount } = self.current_balance;
+		let FeeTaken { remaining_amount, fee } = f(amount);
+		let fee = AssetAndAmount { asset, amount: fee };
+		self.current_balance = AssetAndAmount { asset, amount: remaining_amount };
+		self.balance_changes.push(BalanceChange::Fee(ProcessedFeeDeduction {
+			fee_type,
+			fee: fee.clone(),
+		}));
+		let f = |effects: RecordedEffects<E>| -> RecordedEffects<(Once, E::BrokerFee)> {
+			RecordedEffects { network_fee: fee.clone(), broker_fee: effects.broker_fee }
+		};
+		let swap = self.map_effects(f);
+		(fee.amount, swap)
 	}
 }
 
@@ -476,7 +539,7 @@ pub enum BatchExecutionError<T: Config> {
 		asset: Asset,
 		direction: SwapLeg,
 		amount: AssetAmount,
-		failed_swap_group: Vec<SwapState<T>>,
+		failed_swap_group: Vec<SwapState<T, MaybeFeesTaken>>,
 	},
 	PriceViolation {
 		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
@@ -489,7 +552,7 @@ pub enum BatchExecutionError<T: Config> {
 
 #[derive(DebugNoBound)]
 struct BatchExecutionOutcomes<T: Config> {
-	successful_swaps: Vec<SwapState<T>>,
+	successful_swaps: Vec<SwapState<T, NetworkAndBrokerFeesTaken>>,
 	failed_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 }
 
@@ -1920,7 +1983,9 @@ pub mod pallet {
 				.collect();
 
 			// Can ignore the result here because we use pool price fallback below
-			let _res = Self::take_network_fee(&mut swaps);
+			let Ok(mut swaps) = Self::take_network_fee(swaps) else {
+				return Vec::new();
+			}; // TODO <- fix
 			let _res = Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable);
 
 			swaps
@@ -2036,9 +2101,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn take_network_fee(swaps: &mut [SwapState<T>]) -> Result<(), BatchExecutionError<T>> {
+		fn take_network_fee(swaps: Vec<SwapState<T, NoFeesTaken>>) -> Result<Vec<SwapState<T, NetworkFeesTaken>>, BatchExecutionError<T>> {
 			let mut total_network_fee_taken = BTreeMap::<Asset, AssetAmount>::new();
-			for swap in swaps.iter_mut() {
+			let result = swaps.into_iter().map(|swap| {
 				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
 					// Get the network fee tracker from the swap request
 					let fee_tracker = if let Some(swap_request) = swap_request {
@@ -2064,16 +2129,22 @@ pub mod pallet {
 
 					// Take the network fee from the current balance
 					if let Some(tracker) = fee_tracker {
-						let fee = swap.record_fee_deduction(FeeType::Network, |amount| {
+						let (fee, swap) = swap.record_fee_deduction(FeeType::Network, |amount| {
 							tracker.take_fee(amount)
 						});
 						total_network_fee_taken
 							.entry(swap.input_asset())
 							.or_default()
 							.saturating_accrue(fee);
+						swap
+					} else {
+						let (_, swap) = swap.record_fee_deduction(FeeType::Network, |amount| {
+							FeeTaken { remaining_amount: amount, fee: 0}
+						});
+						swap
 					}
-				});
-			}
+				})
+			}).collect();
 
 			// Accrue the total network fees taken in storage
 			for (asset, total) in total_network_fee_taken {
@@ -2082,12 +2153,14 @@ pub mod pallet {
 				})
 			}
 
-			Ok(())
+			Ok(result)
 		}
 
-		fn take_broker_fees(swaps: &mut [SwapState<T>]) -> Result<(), BatchExecutionError<T>> {
+		fn take_broker_fees(swaps: Vec<SwapState<T, NetworkFeesTaken>>) -> Result<Vec<SwapState<T, NetworkAndBrokerFeesTaken>>, BatchExecutionError<T>> {
+
 			// Take the broker fee from the output amount
-			for swap in swaps.iter_mut() {
+			swaps.into_iter().map(
+			 {
 				// Get the broker fee tracker from the swap request
 				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
 					if let Some(swap_request) = swap_request {
@@ -2103,9 +2176,7 @@ pub mod pallet {
 						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
 					};
 				});
-			}
-
-			Ok(())
+			}).collect()
 		}
 
 		fn start_broker_fee_swaps_or_credit(
@@ -2171,7 +2242,7 @@ pub mod pallet {
 
 		/// Enforce price protections. Must be called after the final output has been set.
 		pub(super) fn check_swap_price_violation(
-			swap: &SwapState<T>,
+			swap: &SwapState<T, impl SwapEffects>,
 		) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
 			let swap_legs = swap.get_processed_swap_legs();
 
@@ -2228,13 +2299,13 @@ pub mod pallet {
 		#[transactional]
 		fn try_execute_without_violations(
 			swaps: Vec<Swap<T>>,
-		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
+		) -> Result<Vec<SwapState<T, NetworkAndBrokerFeesTaken>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
 
-			Self::take_network_fee(&mut swaps)?;
+			let mut swaps = Self::take_network_fee(swaps)?;
 			Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
 			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
-			Self::take_broker_fees(&mut swaps)?;
+			let swaps = Self::take_broker_fees(swaps)?;
 
 			// Successfully executed without hitting price impact limit.
 			// Now checking for FoK violations:
@@ -2281,7 +2352,7 @@ pub mod pallet {
 			amount: AssetAmount,
 			network_fee: FeeRateAndMinimum,
 			broker_fees: Beneficiaries<T::AccountId>,
-		) -> Result<SwapState<T>, BatchExecutionError<T>> {
+		) -> Result<SwapState<T, NetworkAndBrokerFeesTaken>, BatchExecutionError<T>> {
 			with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback({
 					const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(0);
@@ -2550,7 +2621,7 @@ pub mod pallet {
 			})
 		}
 
-		fn process_swap_outcome(swap: SwapState<T>) {
+		fn process_swap_outcome(swap: SwapState<T, NetworkAndBrokerFeesTaken>) {
 			let swap_request_id = swap.swap_request_id();
 
 			let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
@@ -2771,7 +2842,7 @@ pub mod pallet {
 		// and do the swaps of a given direction. Processed and unprocessed swaps are
 		// returned.
 		fn do_group_and_swap(
-			swaps: &mut [SwapState<T>],
+			swaps: &mut [SwapState<T, NetworkFeesTaken>],
 			direction: SwapLeg,
 		) -> Result<(), BatchExecutionError<T>> {
 			let swap_groups =
@@ -2788,7 +2859,7 @@ pub mod pallet {
 						asset,
 						direction,
 						amount,
-						failed_swap_group: swaps.into_iter().map(|swap| swap.clone()).collect(),
+						failed_swap_group: swaps.into_iter().map(|swap| swap.clone().map_effects(|effects| todo!())).collect(),
 					}
 				})?;
 			}
@@ -2798,7 +2869,7 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
 		fn execute_group_of_swaps(
-			swaps: &mut [&mut SwapState<T>],
+			swaps: &mut [&mut SwapState<T, impl SwapEffects>],
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
@@ -3738,7 +3809,7 @@ pub mod utilities {
 
 	pub(super) fn split_off_highest_impact_swap<T: Config>(
 		swaps: &mut Vec<Swap<T>>,
-		failed_swap_group: &[SwapState<T>],
+		failed_swap_group: &[SwapState<T, impl SwapEffects>],
 		_direction: SwapLeg,
 	) -> Option<Swap<T>> {
 		// Check invariants:
