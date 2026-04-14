@@ -22,6 +22,7 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod deploy_stuck_eth_channels;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
@@ -40,7 +41,8 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				log::info!("🧹 No housekeeping required for Berghain.");
+				deploy_stuck_eth_channels::Migration::on_runtime_upgrade();
+				log::info!("🧹 Berghain: scheduled deployment of 2 stuck ETH deposit channels.");
 			},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
