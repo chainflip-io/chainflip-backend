@@ -70,15 +70,14 @@ async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
   const all = Object.entries(rates).flatMap(([chain, chainAssets]) =>
     Object.keys(chainAssets).map((asset) => ({ chain, asset })),
   );
-  const usdcAsset: AssetAndChain = { chain: 'Ethereum', asset: 'USDC' };
   const assets = all.filter(
     (a) =>
-      !(a.chain === usdcAsset.chain && a.asset === usdcAsset.asset) &&
+      !(a.chain === 'Ethereum' && a.asset === 'USDC') &&
       a.chain !== 'Assethub' &&
       a.chain !== 'Polkadot',
   );
   return {
-    baseAsset: usdcAsset,
+    baseAsset: { chain: 'Ethereum', asset: 'USDC' },
     randomAsset: () => assets[Math.floor(Math.random() * assets.length)] as AssetAndChain,
   };
 }
