@@ -187,6 +187,16 @@ jobs:
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
+      - name: Setup bouncer tests initial state 📦
+        if: inputs.run-job
+        run: |
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          set -x
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./setup_for_test.sh
+          git reset --hard
+
       - name: Upgrade binaries 💾
         if: inputs.run-job
         shell: bash
@@ -214,10 +224,7 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          # TODO: This is a temporary workaround to patch the user address lookup table in the bouncer.
-          # To remove after 2.1 is released.
-          sed -i 's/2UooihWEqsL6C1aadx56ViJN3pgv4as7arJ5pXQRz45F/DqL9M6z83qk3QXDP2r9jAiyf6PSSdpSC5Ck7Rb8yWVmS/g' shared/utils.ts
-          ./fast_bouncer.sh
+          ./test_commands/all_cuncurrent_tests.sh
           git reset --hard
 
       - name: Upgrade runtime 🚀
@@ -247,10 +254,7 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          # TODO: This is a temporary workaround to setup swaps for the new assets Wbtc, ArbUsdt, and SolUsdt.
-          # To remove after 2.1 is released.
-          ./commands/setup_new_assets.ts
-          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+          ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
