@@ -1,5 +1,6 @@
 import { getChainflipApi } from 'shared/utils/substrate';
 import { createStateChainKeypair } from 'shared/utils';
+import { type AssetAndChain } from '@chainflip/utils/chainflip';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { AccountRole, setupAccount } from 'shared/setup_account';
@@ -53,6 +54,56 @@ async function testRpcCallForAllAccounts<A = []>(
   }
 }
 
+type SupportedAssets = {
+  baseAsset: AssetAndChain;
+  randomAsset: () => AssetAndChain;
+};
+
+async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
+  await using chainflipApi = await getChainflipApi();
+  // Here we use cf_swapping_environment and parse the result instead of cf_supported_assets, because
+  // cf_supported_assets implementation doesn't work at upgrade boundaries
+  const env = (await chainflipApi.rpc('cf_swapping_environment')) as {
+    network_fees: { regular_network_fee: { rates: Record<string, Record<string, number>> } };
+  };
+  const rates = env.network_fees.regular_network_fee.rates;
+  const all = Object.entries(rates).flatMap(([chain, chainAssets]) =>
+    Object.keys(chainAssets).map((asset) => ({ chain, asset })),
+  );
+  const assets = all.filter(
+    (a) =>
+      !(a.chain === 'Ethereum' && a.asset === 'USDC') &&
+      a.chain !== 'Assethub' &&
+      a.chain !== 'Polkadot',
+  );
+  return {
+    baseAsset: { chain: 'Ethereum', asset: 'USDC' },
+    randomAsset: () => assets[Math.floor(Math.random() * assets.length)] as AssetAndChain,
+  };
+}
+
+async function testRpcCallForAssetPair<A = []>(
+  cf: ChainflipIO<A>,
+  rpcCallName: string,
+  asset1: AssetAndChain,
+  asset2: AssetAndChain,
+) {
+  await using chainflipApi = await getChainflipApi();
+  try {
+    cf.info(
+      `Calling ${rpcCallName} with asset1=${JSON.stringify(asset1)} asset2=${JSON.stringify(asset2)}`,
+    );
+    const result = await chainflipApi.rpc(rpcCallName, asset1, asset2);
+    cf.debug(
+      `result of ${rpcCallName}(${JSON.stringify(asset1)}, ${JSON.stringify(asset2)}): ${JSON.stringify(result)}`,
+    );
+  } catch (e) {
+    throw new Error(
+      `${rpcCallName}(${JSON.stringify(asset1)}, ${JSON.stringify(asset2)}) failed: ${e}`,
+    );
+  }
+}
+
 async function testParameterlessRpcCall<A = []>(cf: ChainflipIO<A>, rpcCallName: string) {
   await using chainflipApi = await getChainflipApi();
   try {
@@ -83,6 +134,9 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
   // Print node and runtime versions
   await printNodeAndRuntimeVersions(cf);
 
+  // fetch supported assets before setting up accounts
+  const assets = await getRuntimeSupportedAssets();
+
   // construct known accounts covering all possible account roles
   const knownAccounts = await setupKnownAccounts(cf);
   const lpAccounts = knownAccounts.filter((a) => a.role === AccountRole.LiquidityProvider);
@@ -92,6 +146,18 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_account_info', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_free_balances', knownAccounts),
     (subcf) => testRpcCallForAllAccounts(subcf, 'cf_lp_total_balances', lpAccounts),
+
+    // Asset based rpc calls
+    (subcf) =>
+      testRpcCallForAssetPair(subcf, 'cf_pool_info', assets.randomAsset(), assets.baseAsset),
+    (subcf) =>
+      testRpcCallForAssetPair(subcf, 'cf_pool_liquidity', assets.randomAsset(), assets.baseAsset),
+    (subcf) =>
+      testRpcCallForAssetPair(subcf, 'cf_pool_orders', assets.randomAsset(), assets.baseAsset),
+    (subcf) =>
+      testRpcCallForAssetPair(subcf, 'cf_pool_price_v2', assets.randomAsset(), assets.baseAsset),
+    (subcf) =>
+      testRpcCallForAssetPair(subcf, 'cf_scheduled_swaps', assets.randomAsset(), assets.baseAsset),
 
     // read only rpc calls, often change
     (subcf) => testParameterlessRpcCall(subcf, 'cf_safe_mode_statuses'),
