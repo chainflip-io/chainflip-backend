@@ -181,6 +181,13 @@ jobs:
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
           git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
+          git reset --hard
+
+      - name: Setup bouncer tests initial state 📦
+        if: inputs.run-job
+        run: |
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          set -x
           cd bouncer
           pnpm install --frozen-lockfile
           ./setup_for_test.sh
