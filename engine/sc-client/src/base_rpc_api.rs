@@ -24,7 +24,6 @@ use sp_core::{
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
-use cf_rpc_apis::grandpa::GrandpaExtApiClient;
 use codec::Encode;
 use custom_rpc::CustomApiClient;
 use sc_rpc_api::{
@@ -46,7 +45,6 @@ pub trait RawRpcApi:
 	ClientT
 	+ SubscriptionClientT
 	+ CustomApiClient
-	+ GrandpaExtApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
 	+ AuthorApiClient<
@@ -69,7 +67,6 @@ impl<
 		T: SubscriptionClientT
 			+ ClientT
 			+ CustomApiClient
-			+ GrandpaExtApiClient
 			+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 			+ StateApiClient<state_chain_runtime::Hash>
 			+ AuthorApiClient<
