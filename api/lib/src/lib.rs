@@ -362,7 +362,6 @@ pub trait OperatorApi:
 	}
 
 	async fn delegate_grandpa_vote(&self) -> Result<H256> {
-		use codec::Encode;
 		use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
 
 		let block_hash = self.latest_finalized_block().hash;
@@ -378,21 +377,6 @@ pub trait OperatorApi:
 			.map(|keys: SessionKeys| GrandpaAuthorityId::from(keys.grandpa))
 			.ok_or_else(|| anyhow!("No session keys registered. Run 'rotate' first."))?;
 
-		// Get or create the GRND delegate key via the node's keystore RPC.
-		let delegate_key_bytes = self
-			.raw_rpc_client()
-			.get_or_create_delegate_key()
-			.await
-			.map_err(|e| anyhow!("Failed to get or create GRND delegate key: {e}"))?;
-		let delegate_key_arr: [u8; 32] = delegate_key_bytes
-			.0
-			.try_into()
-			.map_err(|_| anyhow!("GRND delegate key has unexpected length"))?;
-		let delegate_key =
-			GrandpaAuthorityId::from(sp_core::ed25519::Public::from_raw(delegate_key_arr));
-
-		println!("Using GRND delegate key: 0x{}", hex::encode(delegate_key_arr));
-
 		// Query current session index.
 		let session_index: u32 = self
 			.storage_value::<pallet_session::pallet::CurrentIndex<state_chain_runtime::Runtime>>(
@@ -400,20 +384,21 @@ pub trait OperatorApi:
 			)
 			.await?;
 
-		// Sign the proof: (account_id, session_index) signed by the delegate key via node RPC.
-		let payload = Bytes((account_id, session_index).encode());
-		let sig_bytes = self
+		// Have the node's keystore sign the proof: (account_id, session_index). The node creates
+		// a GRND delegate key on demand if one doesn't already exist.
+		let signed_proof = self
 			.raw_rpc_client()
-			.sign_with_delegate_key(payload)
+			.sign_delegation_proof(cf_rpc_apis::grandpa::DelegationPayload {
+				account_id,
+				session_index,
+			})
 			.await
-			.map_err(|e| anyhow!("Failed to sign with GRND delegate key: {e}"))?;
-		let sig_arr: [u8; 64] = sig_bytes
-			.0
-			.try_into()
-			.map_err(|_| anyhow!("GRND delegate key signature has unexpected length"))?;
-		let proof = sp_consensus_grandpa::AuthoritySignature::from(
-			sp_core::ed25519::Signature::from_raw(sig_arr),
-		);
+			.map_err(|e| anyhow!("Failed to sign GRND delegation proof: {e}"))?;
+
+		let delegate_key = GrandpaAuthorityId::from(signed_proof.delegate_key);
+		let proof = sp_consensus_grandpa::AuthoritySignature::from(signed_proof.signature);
+
+		println!("Using GRND delegate key: 0x{}", hex::encode(signed_proof.delegate_key.0));
 
 		Ok(self
 			.submit_signed_extrinsic(pallet_cf_validator::Call::delegate_grandpa_vote {

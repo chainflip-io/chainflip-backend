@@ -14,9 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_rpc_apis::grandpa::GrandpaExtApiServer;
+use cf_rpc_apis::grandpa::{DelegationPayload, GrandpaExtApiServer, SignedDelegationProof};
+use codec::Encode;
 use jsonrpsee::{core::async_trait, types::ErrorObjectOwned};
-use sp_core::Bytes;
 use sp_keystore::KeystorePtr;
 
 /// Key type identifier for GRANDPA delegate keys stored in the keystore.
@@ -34,10 +34,13 @@ impl GrandpaExtRpc {
 
 #[async_trait]
 impl GrandpaExtApiServer for GrandpaExtRpc {
-	async fn get_or_create_delegate_key(&self) -> Result<Bytes, ErrorObjectOwned> {
-		let existing_keys = self.keystore.ed25519_public_keys(GRND_KEY_TYPE);
-
-		let public_key = if let Some(key) = existing_keys.into_iter().next() {
+	async fn sign_delegation_proof(
+		&self,
+		payload: DelegationPayload,
+	) -> Result<SignedDelegationProof, ErrorObjectOwned> {
+		let delegate_key = if let Some(key) =
+			self.keystore.ed25519_public_keys(GRND_KEY_TYPE).into_iter().next()
+		{
 			key
 		} else {
 			self.keystore.ed25519_generate_new(GRND_KEY_TYPE, None).map_err(|e| {
@@ -49,39 +52,25 @@ impl GrandpaExtApiServer for GrandpaExtRpc {
 			})?
 		};
 
-		Ok(Bytes(public_key.0.to_vec()))
-	}
-
-	async fn sign_with_delegate_key(&self, payload: Bytes) -> Result<Bytes, ErrorObjectOwned> {
-		let existing_keys = self.keystore.ed25519_public_keys(GRND_KEY_TYPE);
-		let public_key = existing_keys.into_iter().next().ok_or_else(|| {
-			ErrorObjectOwned::owned(
-				-32001,
-				"No GRND delegate key found in keystore. Call grandpa_ext_getOrCreateDelegateKey \
-				 first.",
-				None::<()>,
-			)
-		})?;
-
+		let encoded = (payload.account_id, payload.session_index).encode();
 		let signature = self
 			.keystore
-			.ed25519_sign(GRND_KEY_TYPE, &public_key, &payload.0)
+			.ed25519_sign(GRND_KEY_TYPE, &delegate_key, &encoded)
 			.map_err(|e| {
 				ErrorObjectOwned::owned(
 					-32000,
 					format!("Failed to sign with GRND delegate key: {e}"),
 					None::<()>,
 				)
+			})?
+			.ok_or_else(|| {
+				ErrorObjectOwned::owned(
+					-32001,
+					"GRND delegate key found in keystore but signing failed (key may be corrupt).",
+					None::<()>,
+				)
 			})?;
 
-		let signature = signature.ok_or_else(|| {
-			ErrorObjectOwned::owned(
-				-32001,
-				"GRND delegate key found in keystore but signing failed (key may be corrupt).",
-				None::<()>,
-			)
-		})?;
-
-		Ok(Bytes(signature.0.to_vec()))
+		Ok(SignedDelegationProof { delegate_key, signature })
 	}
 }
