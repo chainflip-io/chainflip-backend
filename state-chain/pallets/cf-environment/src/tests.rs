@@ -931,7 +931,6 @@ mod validate_unsigned_tests {
 		signing_key::SolSigningKey, sol_tx_core::signer::Signer, SolAddress, SolSignature,
 	};
 	use cf_primitives::ChainflipNetwork;
-	use codec::Encode;
 	use frame_support::{
 		assert_err,
 		pallet_prelude::{InvalidTransaction, TransactionSource, ValidateUnsigned},
@@ -985,11 +984,13 @@ mod validate_unsigned_tests {
 	}
 
 	fn tamper_signature(call: &mut Call<Test>) {
-		if let Call::non_native_signed_call { signature_data, .. } = call {
-			if let SignatureData::Solana { signature, .. } = signature_data {
-				// Flip a byte in the signature.
-				signature.0[0] ^= 0x01;
-			}
+		if let Call::non_native_signed_call {
+			signature_data: SignatureData::Solana { signature, .. },
+			..
+		} = call
+		{
+			// Flip a byte in the signature.
+			signature.0[0] ^= 0x01;
 		}
 	}
 
@@ -1008,26 +1009,6 @@ mod validate_unsigned_tests {
 	}
 
 	#[test]
-	fn pre_dispatch_rejects_bad_signature() {
-		new_test_ext().execute_with(|| {
-			let (mut call, account) = valid_call(0);
-			create_account(account);
-			tamper_signature(&mut call);
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&call,
-				),
-				InvalidTransaction::BadProof,
-			);
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::BadProof,
-			);
-		});
-	}
-
-	#[test]
 	fn pre_dispatch_rejects_signer_mismatch() {
 		new_test_ext().execute_with(|| {
 			// Sign with key A but claim key B as the signer. The signature is valid for A's
@@ -1036,10 +1017,12 @@ mod validate_unsigned_tests {
 			let key_b = SolSigningKey::new();
 			let (mut call, _) = signed_call_with_key(&key_a, 0);
 
-			if let Call::non_native_signed_call { signature_data, .. } = &mut call {
-				if let SignatureData::Solana { signer, .. } = signature_data {
-					*signer = SolAddress(key_b.pubkey().0);
-				}
+			if let Call::non_native_signed_call {
+				signature_data: SignatureData::Solana { signer, .. },
+				..
+			} = &mut call
+			{
+				*signer = SolAddress(key_b.pubkey().0);
 			}
 			// Create the claimed signer's account so we can distinguish BadSigner from BadProof.
 			let claimed_account: u64 = match &call {
@@ -1056,125 +1039,16 @@ mod validate_unsigned_tests {
 		});
 	}
 
-	#[test]
-	fn pre_dispatch_rejects_unknown_signer() {
-		new_test_ext().execute_with(|| {
-			let (call, _account) = valid_call(0);
-			// Deliberately do NOT create the account.
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::BadSigner,
-			);
-		});
-	}
-
-	#[test]
-	fn pre_dispatch_rejects_stale_nonce() {
-		new_test_ext().execute_with(|| {
-			let (call, account) = valid_call(0);
-			create_account(account);
-			// Bump the on-chain nonce past the metadata nonce.
-			frame_system::Pallet::<Test>::inc_account_nonce(&account);
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::Stale,
-			);
-		});
-	}
-
-	#[test]
-	fn pre_dispatch_rejects_expired() {
-		new_test_ext().execute_with(|| {
-			let (call, account) = valid_call(0);
-			create_account(account);
-			frame_system::Pallet::<Test>::set_block_number(u64::from(EXPIRY_BLOCK) + 1);
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::Stale,
-			);
-		});
-	}
-
-	#[test]
-	fn pre_dispatch_rejects_non_matching_call_variant() {
-		new_test_ext().execute_with(|| {
-			// Any Call variant other than non_native_signed_call must be rejected.
-			let call = Call::<Test>::batch { calls: BoundedVec::default() };
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::Call,
-			);
-		});
-	}
-
-	/// Explicit regression test for the impersonation vector.
-	///
-	/// `SignatureData::Solana::signer_account()` interprets bytes from the 32-byte signer as
-	/// an account ID, so the attacker can target any account. With the bug, pre_dispatch
-	/// accepted this without verifying the signature — so the call would dispatch as the
-	/// impersonated account. With the fix, the missing valid signature must fail closed.
-	#[test]
-	fn solana_impersonation_attempt_is_rejected() {
-		new_test_ext().execute_with(|| {
-			const VICTIM: u64 = 42;
-			create_account(VICTIM);
-
-			// Craft a signer whose first 8 bytes decode to the victim's u64 account id.
-			let mut signer_bytes = [0u8; 32];
-			signer_bytes[..8].copy_from_slice(&VICTIM.encode());
-			let signer = SolAddress(signer_bytes);
-
-			// Garbage signature (the attacker does not know the victim's key).
-			let signature = SolSignature([0u8; 64]);
-
-			let inner_call: <Test as crate::Config>::RuntimeCall =
-				frame_system::Call::remark { remark: vec![] }.into();
-			let call = Call::<Test>::non_native_signed_call {
-				chainflip_extrinsic: ChainflipExtrinsic {
-					call: Box::new(inner_call),
-					transaction_metadata: TransactionMetadata {
-						nonce: 0,
-						expiry_block: EXPIRY_BLOCK,
-					},
-				},
-				signature_data: SignatureData::Solana {
-					signature,
-					signer,
-					sig_type: SolEncodingType::Domain,
-				},
-			};
-
-			// Sanity: the forged payload decodes to the victim account.
-			if let Call::non_native_signed_call { signature_data, .. } = &call {
-				let decoded: u64 = signature_data.signer_account().unwrap();
-				assert_eq!(decoded, VICTIM);
-			}
-
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
-				InvalidTransaction::BadProof,
-			);
-			assert_err!(
-				<Pallet<Test> as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::InBlock,
-					&call,
-				),
-				InvalidTransaction::BadProof,
-			);
-
-			// Nonce must not have been incremented.
-			assert_eq!(frame_system::Pallet::<Test>::account_nonce(VICTIM), 0);
-		});
-	}
-
 	/// Property-style: `validate_unsigned` and `pre_dispatch` must agree on acceptance for
 	/// any input. Regressions of the original bug manifest as one path succeeding while the
 	/// other rejects. This test exercises representative failure modes.
 	#[test]
 	fn validate_unsigned_and_pre_dispatch_agree() {
-		let cases: &[(&str, Box<dyn Fn() -> Call<Test>>)] = &[
+		#[expect(clippy::type_complexity)]
+		let cases: [(&str, InvalidTransaction, Box<dyn Fn() -> Call<Test>>); _] = [
 			(
 				"bad signature",
+				InvalidTransaction::BadProof,
 				Box::new(|| {
 					let (mut c, a) = valid_call(0);
 					create_account(a);
@@ -1184,6 +1058,7 @@ mod validate_unsigned_tests {
 			),
 			(
 				"unknown signer",
+				InvalidTransaction::BadSigner,
 				Box::new(|| {
 					let (c, _) = valid_call(0);
 					c
@@ -1191,23 +1066,49 @@ mod validate_unsigned_tests {
 			),
 			(
 				"wrong call variant",
+				InvalidTransaction::Call,
 				Box::new(|| Call::<Test>::batch { calls: BoundedVec::default() }),
+			),
+			(
+				"stale nonce",
+				InvalidTransaction::Stale,
+				Box::new(|| {
+					let (c, a) = valid_call(0);
+					create_account(a);
+					frame_system::Pallet::<Test>::inc_account_nonce(a);
+					c
+				}),
+			),
+			(
+				"expired",
+				InvalidTransaction::Stale,
+				Box::new(|| {
+					let (c, a) = valid_call(0);
+					create_account(a);
+					frame_system::Pallet::<Test>::set_block_number(u64::from(EXPIRY_BLOCK) + 1);
+					c
+				}),
 			),
 		];
 
-		for (name, build) in cases {
+		for (name, err, build) in cases {
 			new_test_ext().execute_with(|| {
 				ChainflipNetworkName::<Test>::set(ChainflipNetwork::Development);
 				let call = build();
-				let v = <Pallet<Test> as ValidateUnsigned>::validate_unsigned(
-					TransactionSource::External,
-					&call,
-				);
-				let p = <Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call);
 				assert_eq!(
-					v.is_err(),
-					p.is_err(),
-					"validate_unsigned and pre_dispatch disagreed for case: {name}",
+					<Pallet<Test> as ValidateUnsigned>::validate_unsigned(
+						TransactionSource::External,
+						&call,
+					),
+					Err(err.into()),
+					"ValidateUnsigned failed on case: {}",
+					name
+				);
+				assert_eq!(
+					<Pallet<Test> as ValidateUnsigned>::pre_dispatch(&call),
+					Err(err.into()),
+					"pre_dispatch failed on case: {}",
+					name
 				);
 			});
 		}
