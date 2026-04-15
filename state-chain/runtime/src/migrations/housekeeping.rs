@@ -57,7 +57,24 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
+			log::info!("🧹 Pre-migration check for Berghain housekeeping.");
+			deploy_stuck_eth_channels::Migration::pre_upgrade()
+		} else {
+			log::info!("🧹 No pre-migration checks required for this network.");
+			Ok(Default::default())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
+			log::info!("🧹 Post-migration check for Berghain housekeeping.");
+			deploy_stuck_eth_channels::Migration::post_upgrade(state)?;
+		} else {
+			log::info!("🧹 No post-migration checks required for this network.");
+		}
 		Ok(())
 	}
 }
