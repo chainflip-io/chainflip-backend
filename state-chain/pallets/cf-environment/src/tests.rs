@@ -1109,8 +1109,8 @@ mod validate_unsigned_tests {
 
 	/// Explicit regression test for the impersonation vector.
 	///
-	/// `SignatureData::Solana::signer_account()` copies the 32-byte signer directly into an
-	/// AccountId32, so the attacker picks any account's bytes. With the bug, pre_dispatch
+	/// `SignatureData::Solana::signer_account()` interprets bytes from the 32-byte signer as
+	/// an account ID, so the attacker can target any account. With the bug, pre_dispatch
 	/// accepted this without verifying the signature — so the call would dispatch as the
 	/// impersonated account. With the fix, the missing valid signature must fail closed.
 	#[test]
@@ -1197,7 +1197,6 @@ mod validate_unsigned_tests {
 
 		for (name, build) in cases {
 			new_test_ext().execute_with(|| {
-				// ChainflipNetworkName default is Development; keep it aligned with the helper.
 				ChainflipNetworkName::<Test>::set(ChainflipNetwork::Development);
 				let call = build();
 				let v = <Pallet<Test> as ValidateUnsigned>::validate_unsigned(
