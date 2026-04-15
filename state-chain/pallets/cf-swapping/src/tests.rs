@@ -1363,24 +1363,10 @@ fn test_get_scheduled_swap_legs_fallback() {
 			Price::from_usd_fine_amount(PRICE),
 		);
 
+		// The order changed due to failed swaps being put after successful ones, but thats fine.
 		assert_eq!(
 			Swapping::get_scheduled_swap_legs(Asset::Eth),
 			vec![
-				(
-					SwapLegInfo {
-						swap_id: SwapId(1),
-						swap_request_id: SwapRequestId(1),
-						base_asset: Asset::Eth,
-						quote_asset: Asset::Usdc,
-						side: Side::Buy,
-						amount: INIT_AMOUNT * PRICE,
-						source_asset: Some(Asset::Flip),
-						source_amount: Some(INIT_AMOUNT),
-						remaining_chunks: 0,
-						chunk_interval: SWAP_DELAY_BLOCKS,
-					},
-					BLOCK
-				),
 				(
 					SwapLegInfo {
 						swap_id: SwapId(2),
@@ -1391,6 +1377,21 @@ fn test_get_scheduled_swap_legs_fallback() {
 						amount: INIT_AMOUNT,
 						source_asset: None,
 						source_amount: None,
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(1),
+						swap_request_id: SwapRequestId(1),
+						base_asset: Asset::Eth,
+						quote_asset: Asset::Usdc,
+						side: Side::Buy,
+						amount: INIT_AMOUNT * PRICE,
+						source_asset: Some(Asset::Flip),
+						source_amount: Some(INIT_AMOUNT),
 						remaining_chunks: 0,
 						chunk_interval: SWAP_DELAY_BLOCKS,
 					},

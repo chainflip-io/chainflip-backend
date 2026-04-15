@@ -330,6 +330,18 @@ impl<T: Config> Swap<T> {
 	) -> Self {
 		Self { swap_id, swap_request_id, from, to, input_amount, refund_params, execute_at }
 	}
+
+	pub fn without_refund_params(self) -> Self {
+		Self {
+			swap_id: self.swap_id,
+			swap_request_id: self.swap_request_id,
+			from: self.from,
+			to: self.to,
+			input_amount: self.input_amount,
+			refund_params: None,
+			execute_at: self.execute_at,
+		}
+	}
 }
 
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq)]
@@ -1779,18 +1791,24 @@ pub mod pallet {
 				return vec![];
 			}
 
-			let mut swaps: Vec<_> = ScheduledSwaps::<T>::get()
+			let swaps: Vec<_> = ScheduledSwaps::<T>::get()
 				.values()
 				.filter(|swap| swap.from == base_asset || swap.to == base_asset)
 				.cloned()
-				.map(SwapState::new)
+				// Remove refund parameters for swap simulation to avoid price violations.
+				.map(|swap| swap.without_refund_params())
 				.collect();
 
-			// Can ignore the result here because we use pool price fallback below
-			let _res = Self::swap_into_stable_taking_fees(&mut swaps);
+			// Run the full execution logic
+			let BatchExecutionOutcomes { successful_swaps, failed_swaps } =
+				Self::execute_batch(swaps);
 
-			swaps
+			// Map the swaps to SwapLegInfo
+			successful_swaps
 				.into_iter()
+				// Turn the failed swaps into fresh swap states. Pool price fallback will be used
+				// for these swaps.
+				.chain(failed_swaps.into_iter().map(|(swap, _)| SwapState::new(swap)))
 				.filter_map(|state| {
 					let swap_request = SwapRequests::<T>::get(state.swap_request_id())
 						.expect("Swap request should exist");
