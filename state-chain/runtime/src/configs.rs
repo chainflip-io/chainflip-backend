@@ -602,7 +602,7 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type MaxDelegatorsPerGrandpaAuthority = ConstU32<20>;
+	type MaxDelegatorsPerGrandpaAuthority = ConstU32<5>;
 	type KeyOwnerProof =
 		<CurrentSessionProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
