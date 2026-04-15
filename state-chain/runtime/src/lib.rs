@@ -26,7 +26,7 @@ pub mod constants;
 pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
-#[cfg(all(feature = "std", feature = "mocks"))]
+#[cfg(any(test, all(feature = "std", feature = "mocks")))]
 pub mod test_runner;
 mod weights;
 
