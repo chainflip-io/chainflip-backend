@@ -86,7 +86,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
 
 use serde::{Deserialize, Serialize};
 
@@ -123,10 +123,6 @@ pub struct PalletSafeMode {
 	pub add_lender_funds: SafeModeSet<Asset>,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
 	pub withdraw_lender_funds: SafeModeSet<Asset>,
-	// whether borrowers can add collateral
-	pub add_collateral: SafeModeSet<Asset>,
-	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	pub remove_collateral: SafeModeSet<Asset>,
 	// whether liquidations can be started, both voluntarily and system-initiated
 	pub liquidations_enabled: bool,
 }
@@ -139,8 +135,6 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			borrowing: SafeModeSet::code_red(),
 			add_lender_funds: SafeModeSet::code_red(),
 			withdraw_lender_funds: SafeModeSet::code_red(),
-			add_collateral: SafeModeSet::code_red(),
-			remove_collateral: SafeModeSet::code_red(),
 			liquidations_enabled: false,
 		}
 	}
@@ -152,8 +146,6 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			borrowing: SafeModeSet::code_green(),
 			add_lender_funds: SafeModeSet::code_green(),
 			withdraw_lender_funds: SafeModeSet::code_green(),
-			add_collateral: SafeModeSet::code_green(),
-			remove_collateral: SafeModeSet::code_green(),
 			liquidations_enabled: true,
 		}
 	}
@@ -211,12 +203,12 @@ pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
-/// Indicates how the action of adding collateral was triggered.
+/// Indicates how the action of supplying funds was triggered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub enum CollateralAddedActionType {
-	/// Triggered manually by the user. Collateral is taken from the user's free balance.
+pub enum SupplyAddedActionType {
+	/// Triggered manually by the user. Funds are taken from the user's free balance.
 	Manual,
-	/// Triggered by the protocol due to high LTV. Collateral is taken from the user's free
+	/// Triggered by the protocol due to high LTV. Funds are taken from the user's free
 	/// balance.
 	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
@@ -449,20 +441,12 @@ pub mod pallet {
 			lender_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+			action_type: SupplyAddedActionType,
 		},
 		LendingFundsRemoved {
 			lender_id: T::AccountId,
 			asset: Asset,
 			unlocked_amount: AssetAmount,
-		},
-		CollateralAdded {
-			borrower_id: T::AccountId,
-			collateral: BTreeMap<Asset, AssetAmount>,
-			action_type: CollateralAddedActionType,
-		},
-		CollateralRemoved {
-			borrower_id: T::AccountId,
-			collateral: BTreeMap<Asset, AssetAmount>,
 		},
 		LoanCreated {
 			loan_id: LoanId,
@@ -553,10 +537,6 @@ pub mod pallet {
 		AddLenderFundsDisabled,
 		/// Removing lending funds is disabled due to safe mode.
 		RemoveLenderFundsDisabled,
-		/// Adding collateral is disabled due to safe mode.
-		AddingCollateralDisabled,
-		/// Removing collateral is disabled due to safe mode.
-		RemovingCollateralDisabled,
 		/// Creating general loans is disabled due to safe mode.
 		LoanCreationDisabled,
 		/// Requested loan not found
@@ -855,23 +835,22 @@ pub mod pallet {
 
 			let config = LendingConfig::<T>::get();
 
+			// Note that we allow stale prices as it is more important that the user can top up
+			// their supply (used as collateral) to avoid liquidation:
 			ensure!(
-				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
+				OraclePriceCache::<T>::default().usd_value_of_allow_stale(asset, amount)? >=
 					config.minimum_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
 
 			T::Balance::try_debit_account(&lender_id, asset, amount)?;
 
-			GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
-
-				pool.add_funds(&lender_id, amount);
-
-				Ok::<_, DispatchError>(())
-			})?;
-
-			Self::deposit_event(Event::<T>::LendingFundsAdded { lender_id, asset, amount });
+			general_lending::supply_funds::<T>(
+				lender_id,
+				asset,
+				amount,
+				SupplyAddedActionType::Manual,
+			)?;
 
 			Ok(())
 		}
@@ -893,34 +872,6 @@ pub mod pallet {
 			general_lending::remove_lender_funds::<T>(lender_id, asset, amount)
 		}
 
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::add_collateral())]
-		pub fn add_collateral(
-			origin: OriginFor<T>,
-			collateral_topup_asset: Option<Asset>,
-			collateral: BTreeMap<Asset, AssetAmount>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			ensure!(
-				Whitelist::<T>::get().is_allowed(&borrower_id),
-				Error::<T>::AccountNotWhitelisted
-			);
-
-			<Self as LendingApi>::add_collateral(&borrower_id, collateral_topup_asset, collateral)
-		}
-
-		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::remove_collateral())]
-		pub fn remove_collateral(
-			origin: OriginFor<T>,
-			collateral: BTreeMap<Asset, AssetAmount>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			<Self as LendingApi>::remove_collateral(&borrower_id, collateral)
-		}
-
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::request_loan())]
 		pub fn request_loan(
@@ -928,7 +879,6 @@ pub mod pallet {
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
 			collateral_topup_asset: Option<Asset>,
-			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -937,13 +887,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			Self::new_loan(
-				borrower_id,
-				loan_asset,
-				loan_amount,
-				collateral_topup_asset,
-				extra_collateral,
-			)?;
+			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset)?;
 
 			Ok(())
 		}
@@ -968,16 +912,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_id: LoanId,
 			extra_amount_to_borrow: AssetAmount,
-			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::expand_loan(
-				borrower_id,
-				loan_id,
-				extra_amount_to_borrow,
-				extra_collateral,
-			)
+			<Self as LendingApi>::expand_loan(borrower_id, loan_id, extra_amount_to_borrow)
 		}
 
 		#[pallet::call_index(12)]

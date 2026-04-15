@@ -57,8 +57,6 @@ pub trait WeightInfo {
 	fn create_lending_pool() -> Weight;
 	fn add_lender_funds() -> Weight;
 	fn remove_lender_funds() -> Weight;
-	fn add_collateral() -> Weight;
-	fn remove_collateral() -> Weight;
 	fn request_loan() -> Weight;
 	fn expand_loan() -> Weight;
 	fn make_repayment() -> Weight;
@@ -233,52 +231,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		//  Estimated: `47327`
 		// Minimum execution time: 506_546_000 picoseconds.
 		Weight::from_parts(552_109_000, 47327)
-			.saturating_add(T::DbWeight::get().reads(6_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::Whitelist` (r:1 w:0)
-	/// Proof: `LendingPools::Whitelist` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
-	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn add_collateral() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1936`
-		//  Estimated: `5401`
-		// Minimum execution time: 72_658_000 picoseconds.
-		Weight::from_parts(73_544_000, 5401)
-			.saturating_add(T::DbWeight::get().reads(8_u64))
-			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
-	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn remove_collateral() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `4025`
-		//  Estimated: `7490`
-		// Minimum execution time: 117_469_000 picoseconds.
-		Weight::from_parts(146_138_000, 7490)
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -673,52 +625,6 @@ impl WeightInfo for () {
 		//  Estimated: `47327`
 		// Minimum execution time: 506_546_000 picoseconds.
 		Weight::from_parts(552_109_000, 47327)
-			.saturating_add(ParityDbWeight::get().reads(6_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::Whitelist` (r:1 w:0)
-	/// Proof: `LendingPools::Whitelist` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
-	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `LiquidityPools::Pools` (r:1 w:0)
-	/// Proof: `LiquidityPools::Pools` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn add_collateral() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `1936`
-		//  Estimated: `5401`
-		// Minimum execution time: 72_658_000 picoseconds.
-		Weight::from_parts(73_544_000, 5401)
-			.saturating_add(ParityDbWeight::get().reads(8_u64))
-			.saturating_add(ParityDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
-	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
-	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `Environment::RuntimeSafeMode` (r:1 w:0)
-	/// Proof: `Environment::RuntimeSafeMode` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:1)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn remove_collateral() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `4025`
-		//  Estimated: `7490`
-		// Minimum execution time: 117_469_000 picoseconds.
-		Weight::from_parts(146_138_000, 7490)
 			.saturating_add(ParityDbWeight::get().reads(6_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
 	}

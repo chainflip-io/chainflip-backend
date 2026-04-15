@@ -1653,12 +1653,16 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		const USER_LOAN_ID: LoanId = LoanId(1);
 		MockBalance::credit_account(&LP, Asset::Btc, BTC_COLLATERAL);
 		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LP),
+			Asset::Btc,
+			BTC_COLLATERAL,
+		));
 		assert_ok!(LendingPools::new_loan(
 			LP,
 			BOOST_ASSET,
 			PRINCIPAL,
 			None,
-			BTreeMap::from([(Asset::Btc, BTC_COLLATERAL)]),
 		));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =

@@ -494,7 +494,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = ();
+type MigrationsForV2_2 = (migrations::safe_mode::SafeModeMigration,);
 
 #[cfg(test)]
 mod test {

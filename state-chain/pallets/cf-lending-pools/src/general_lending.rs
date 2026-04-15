@@ -88,9 +88,8 @@ pub enum LiquidationCompletionReason {
 #[derive(Clone, DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct LoanAccount<T: Config> {
-	borrower_id: T::AccountId,
-	collateral_topup_asset: Option<Asset>,
-	collateral: BTreeMap<Asset, AssetAmount>,
+	pub(super) borrower_id: T::AccountId,
+	pub(super) collateral_topup_asset: Option<Asset>,
 	pub(super) loans: BTreeMap<LoanId, GeneralLoan<T>>,
 	pub(super) liquidation_status: LiquidationStatus,
 	pub(super) voluntary_liquidation_requested: bool,
@@ -119,12 +118,35 @@ pub enum LoanType<AccountId> {
 	Boost(PrewitnessedDepositId),
 }
 
+pub fn supply_funds<T: Config>(
+	lp: T::AccountId,
+	asset: Asset,
+	amount: AssetAmount,
+	action_type: SupplyAddedActionType,
+) -> DispatchResult {
+	GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
+		let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		pool.add_funds(&lp, amount);
+
+		Ok::<_, DispatchError>(())
+	})?;
+
+	Pallet::deposit_event(Event::<T>::LendingFundsAdded {
+		lender_id: lp,
+		asset,
+		amount,
+		action_type,
+	});
+
+	Ok(())
+}
+
 impl<T: Config> LoanAccount<T> {
 	pub fn new(borrower_id: T::AccountId) -> Self {
 		Self {
 			borrower_id,
 			collateral_topup_asset: None,
-			collateral: BTreeMap::new(),
 			loans: BTreeMap::new(),
 			liquidation_status: LiquidationStatus::NoLiquidation,
 			voluntary_liquidation_requested: false,
@@ -153,9 +175,8 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	pub fn get_collateral_not_in_liquidation(&self) -> BTreeMap<Asset, AssetAmount> {
-		// Start with any collateral that may be sitting in the account:
-		let mut collateral = self.collateral.clone();
+	pub fn get_collateral_in_supply_pools(&self) -> BTreeMap<Asset, AssetAmount> {
+		let mut collateral = BTreeMap::<Asset, AssetAmount>::new();
 
 		// Add any funds supplied in lending pools
 		for (asset, pool) in GeneralLendingPools::<T>::iter() {
@@ -172,10 +193,10 @@ impl<T: Config> LoanAccount<T> {
 		// Note that in order to keep things simple we don't guarantee that all of the
 		// all collateral is being liquidated (e.g. it is possible for the user to top
 		// up collateral during liquidation in which case we currently don't update the
-		// liquidation swaps), but we *do* include any collateral sitting in the account
+		// liquidation swaps), but we *do* include collateral that is not in liquidation
 		// when determining account's collateralisation ratio.
 
-		let mut total_collateral = self.get_collateral_not_in_liquidation();
+		let mut total_collateral = self.get_collateral_in_supply_pools();
 
 		// Add any collateral in liquidation swaps:
 		if let LiquidationStatus::Liquidating { liquidation_swaps, .. } = &self.liquidation_status {
@@ -196,46 +217,16 @@ impl<T: Config> LoanAccount<T> {
 		total_collateral
 	}
 
-	/// Adds collateral to the account from borrower's free balance as long as it's enabled by
-	/// safe mode.
-	fn try_adding_collateral_from_free_balance(
-		&mut self,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError> {
-		for (asset, amount) in &collateral {
-			ensure!(
-				T::SafeMode::get().add_collateral.enabled(asset),
-				Error::<T>::AddingCollateralDisabled
-			);
-			T::Balance::try_debit_account(&self.borrower_id, *asset, *amount)?;
-		}
-
-		self.add_new_collateral(collateral, CollateralAddedActionType::Manual);
-
-		Ok(())
-	}
-
-	/// Add to the user's collateral and emit the corresponding event.
-	fn add_new_collateral(
-		&mut self,
-		collateral: BTreeMap<Asset, AssetAmount>,
-		action_type: CollateralAddedActionType,
-	) {
-		for (asset, amount) in &collateral {
-			self.collateral.entry(*asset).or_default().saturating_accrue(*amount);
-		}
-
-		Pallet::<T>::deposit_event(Event::CollateralAdded {
-			borrower_id: self.borrower_id.clone(),
-			collateral,
-			action_type,
-		});
-	}
-
 	/// Return user's existing collateral (what hasn't been swapped during liquidation).
-	/// Unlike [add_new_collateral], we don't emit an event when collateral is returned.
-	fn return_collateral(&mut self, asset: Asset, amount: AssetAmount) {
-		self.collateral.entry(asset).or_default().saturating_accrue(amount);
+	/// Unlike [supply_funds], we don't emit an event when collateral is returned.
+	fn return_supplied_funds(&mut self, asset: Asset, amount: AssetAmount) {
+		GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
+			if let Ok(pool) = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist) {
+				pool.add_funds(&self.borrower_id, amount);
+			} else {
+				log_or_panic!("Pool must exist for a previously supplied asset: {}", asset);
+			}
+		});
 	}
 
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
@@ -460,19 +451,24 @@ impl<T: Config> LoanAccount<T> {
 
 				if excess_amount > 0 {
 					// In case we have liquidated more than necessary the excess amount
-					// is added to the account's collateral balance:
-					self.add_new_collateral(
-						BTreeMap::from([(to_asset, excess_amount)]),
-						CollateralAddedActionType::SystemLiquidationExcessAmount {
+					// is re-supplied.
+
+					if let Err(err) = supply_funds::<T>(
+						self.borrower_id.clone(),
+						to_asset,
+						excess_amount,
+						SupplyAddedActionType::SystemLiquidationExcessAmount {
 							loan_id,
 							swap_request_id,
 						},
-					);
+					) {
+						log_or_panic!("Failed to supply funds: {:?}", err);
+					}
 				}
 
 				// Any input funds not yet liquidated are returned to the
 				// account's collateral balance.
-				self.return_collateral(from_asset, swap_progress.remaining_input_amount);
+				self.return_supplied_funds(from_asset, swap_progress.remaining_input_amount);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
 			}
@@ -582,7 +578,7 @@ impl<T: Config> LoanAccount<T> {
 	/// Checks if a top up is required and if so, performs it. Returns
 	/// boolean indicating whether a topup has been performed.
 	#[transactional]
-	pub fn process_auto_top_up(
+	pub fn check_and_process_auto_top_up(
 		&mut self,
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
@@ -612,10 +608,12 @@ impl<T: Config> LoanAccount<T> {
 					log_or_panic!("Unable to debit after checking balance");
 				})?;
 
-			self.add_new_collateral(
-				BTreeMap::from([(collateral_topup_asset, top_up_amount)]),
-				CollateralAddedActionType::SystemTopup,
-			);
+			supply_funds::<T>(
+				borrower_id.clone(),
+				collateral_topup_asset,
+				top_up_amount,
+				SupplyAddedActionType::SystemTopup,
+			)?;
 
 			Ok(true)
 		} else {
@@ -679,12 +677,13 @@ impl<T: Config> LoanAccount<T> {
 		&mut self,
 		price_cache: &OraclePriceCache<T>,
 	) -> Result<Vec<AssetCollateralForLoan>, Error<T>> {
-		let mut collateral_to_liquidate = core::mem::take(&mut self.collateral);
+		let mut collateral_to_liquidate = BTreeMap::<Asset, AssetAmount>::new();
 
 		// Gather collateral from supply side of liquidity pools if available:
 		for asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>().iter() {
 			GeneralLendingPools::<T>::mutate(asset, |pool| {
 				if let Some(pool) = pool.as_mut() {
+					// TODO: emit an event here?
 					// Remove as much as possible:
 					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
 						pool.remove_funds(&self.borrower_id, None)
@@ -869,7 +868,6 @@ impl<T: Config> LoanAccount<T> {
 		&mut self,
 		mut loan: GeneralLoan<T>,
 		extra_principal: AssetAmount,
-		extra_collateral: BTreeMap<Asset, AssetAmount>,
 		price_cache: &OraclePriceCache<T>,
 	) -> Result<(), DispatchError> {
 		let config = LendingConfig::<T>::get();
@@ -887,10 +885,6 @@ impl<T: Config> LoanAccount<T> {
 			self.liquidation_status == LiquidationStatus::NoLiquidation,
 			Error::<T>::LiquidationInProgress
 		);
-
-		if !extra_collateral.is_empty() {
-			self.try_adding_collateral_from_free_balance(extra_collateral)?;
-		}
 
 		let origination_fee_total = config.origination_fee(loan.asset) * extra_principal;
 
@@ -1223,7 +1217,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					&mut weight_used,
 				);
 
-				let new_ltv = if let Ok(true) = loan_account.process_auto_top_up(
+				let new_ltv = if let Ok(true) = loan_account.check_and_process_auto_top_up(
 					borrower_id,
 					ltv,
 					&price_cache,
@@ -1347,7 +1341,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
 		collateral_topup_asset: Option<Asset>,
-		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError> {
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
 			.map_err(|_| Error::<T>::NoRefundAddressSet)?;
@@ -1380,7 +1373,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				principal_amount: amount_to_borrow,
 			});
 
-			account.expand_loan_inner(loan, amount_to_borrow, extra_collateral, &price_cache)?;
+			account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -1396,7 +1389,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		borrower_id: Self::AccountId,
 		loan_id: LoanId,
 		extra_amount_to_borrow: AssetAmount,
-		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<(), DispatchError> {
 		let price_cache = OraclePriceCache::<T>::default();
 
@@ -1420,12 +1412,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 				Error::<T>::AmountBelowMinimum
 			);
 
-			loan_account.expand_loan_inner(
-				loan,
-				extra_amount_to_borrow,
-				extra_collateral,
-				&price_cache,
-			)?;
+			loan_account.expand_loan_inner(loan, extra_amount_to_borrow, &price_cache)?;
 
 			Ok::<_, DispatchError>(())
 		})?;
@@ -1490,116 +1477,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 			}
 
 			// NOTE: even if we settle the last loan here, we don't remove
-			// the account as there must still be collateral in the account (it is not
-			// released automatically).
+			// the account as it must still have collateral in the supply pool
+			// (keeping the account is not strictly necessary for that but it does
+			// record the choice of topup asset, for example).
 
 			Ok::<_, DispatchError>(())
-		})
-	}
-
-	#[transactional]
-	fn add_collateral(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError> {
-		ensure!(!is_zero_collateral(&collateral), Error::<T>::EmptyCollateral);
-
-		let price_cache = OraclePriceCache::<T>::default();
-
-		ensure!(
-			price_cache.total_usd_value_of_allow_stale(&collateral,)? >=
-				LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
-			Error::<T>::AmountBelowMinimum
-		);
-
-		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
-			let loan_account = Self::create_or_update_loan_account(
-				borrower_id.clone(),
-				maybe_account,
-				collateral_topup_asset,
-			)?;
-
-			loan_account.try_adding_collateral_from_free_balance(collateral)?;
-
-			Ok(())
-		})
-	}
-
-	#[transactional]
-	fn remove_collateral(
-		borrower_id: &Self::AccountId,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> Result<(), DispatchError> {
-		let price_cache = OraclePriceCache::<T>::default();
-
-		LoanAccounts::<T>::mutate(borrower_id, |maybe_account| {
-			let config = LendingConfig::<T>::get();
-
-			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
-
-			ensure!(
-				loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
-				Error::<T>::LiquidationInProgress
-			);
-
-			// If a larger than or equal amount of collateral is being removed from all collateral
-			// assets, then we are removing all collateral and do not need to check the minimum
-			// amount. Being able to specify a large (eg u128::MAX) amount for all assets lets the
-			// user avoid exact values (useful because of fees).
-			if !loan_account.collateral.iter().all(|(asset, collateral_amount)| {
-				collateral
-					.get(asset)
-					.map(|remove_amount| remove_amount >= collateral_amount)
-					.unwrap_or(false)
-			}) {
-				let total_collateral_usd = price_cache.total_usd_value_of(&collateral)?;
-				ensure!(
-					total_collateral_usd >=
-						LendingConfig::<T>::get().minimum_update_collateral_amount_usd,
-					Error::<T>::AmountBelowMinimum
-				);
-			}
-
-			for (asset, amount) in &collateral {
-				ensure!(
-					T::SafeMode::get().remove_collateral.enabled(asset),
-					Error::<T>::RemovingCollateralDisabled
-				);
-
-				let current_amount = loan_account
-					.collateral
-					.get_mut(asset)
-					.ok_or(Error::<T>::InsufficientCollateral)?;
-
-				*current_amount = current_amount
-					.checked_sub(*amount)
-					.ok_or(Error::<T>::InsufficientCollateral)?;
-
-				if *current_amount == 0 {
-					loan_account.collateral.remove(asset);
-				}
-
-				T::Balance::credit_account(borrower_id, *asset, *amount);
-			}
-
-			// Only check LTV if there are loans:
-			if !loan_account.loans.is_empty() &&
-				loan_account.derive_ltv(&price_cache)? > config.ltv_thresholds.target.into()
-			{
-				fail!(Error::<T>::LtvTooHigh);
-			}
-
-			Self::deposit_event(Event::CollateralRemoved {
-				borrower_id: borrower_id.clone(),
-				collateral,
-			});
-
-			if loan_account.collateral.is_empty() && loan_account.loans.is_empty() {
-				*maybe_account = None;
-			}
-
-			Ok(())
 		})
 	}
 
@@ -1647,7 +1529,8 @@ pub fn remove_lender_funds<T: Config>(
 
 	if let Some(amount) = amount {
 		ensure!(
-			price_cache.usd_value_of(asset, amount)? >= config.minimum_supply_amount_usd,
+			price_cache.usd_value_of_allow_stale(asset, amount)? >=
+				config.minimum_supply_amount_usd,
 			Error::<T>::AmountBelowMinimum
 		);
 	}
@@ -1655,6 +1538,11 @@ pub fn remove_lender_funds<T: Config>(
 	// Check if account also has loans: if it does, check "ltv surplus", i.e. the max amount
 	// that can be withdrawn without LTV spiking above the target threshold.
 	let ltv_surplus_asset = if let Some(loan_account) = LoanAccounts::<T>::get(&lender_id) {
+		ensure!(
+			loan_account.liquidation_status == LiquidationStatus::NoLiquidation,
+			Error::<T>::LiquidationInProgress
+		);
+
 		let surplus_usd = match loan_account
 			.calculate_collateral_surplus_or_deficit(config.ltv_thresholds.target, &price_cache)?
 		{
@@ -1691,7 +1579,7 @@ pub fn remove_lender_funds<T: Config>(
 		// accumulating):
 		ensure!(
 			remaining_amount == 0 ||
-				price_cache.usd_value_of(asset, remaining_amount)? >=
+				price_cache.usd_value_of_allow_stale(asset, remaining_amount)? >=
 					config.minimum_supply_amount_usd,
 			Error::<T>::RemainingAmountBelowMinimum
 		);
@@ -1808,14 +1696,21 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 					// Any amount left after repaying the loan is added to the borrower's
 					// collateral balance:
 					if excess_amount > 0 {
-						loan_account.add_new_collateral(
-							BTreeMap::from([(liquidation_swap.to_asset, excess_amount)]),
-							CollateralAddedActionType::SystemLiquidationExcessAmount {
+						if let Err(err) = supply_funds::<T>(
+							borrower_id.clone(),
+							liquidation_swap.to_asset,
+							excess_amount,
+							SupplyAddedActionType::SystemLiquidationExcessAmount {
 								loan_id,
 								swap_request_id,
 							},
-						);
+						) {
+							log_or_panic!("Failed to supply funds: {:?}", err);
+						}
 					}
+
+					let no_collateral_left =
+						is_zero_collateral(&loan_account.get_collateral_in_supply_pools());
 
 					// If this swap is the last liquidation swap for the loan, we should
 					// "settle" it (even if it hasn't been repaid in full):
@@ -1827,9 +1722,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							} else {
 								// Otherwise, only settle (write-off) the loan if the user has
 								// no other funds that may become available for liquidation later:
-								if is_zero_collateral(
-									&loan_account.get_collateral_not_in_liquidation(),
-								) {
+								if no_collateral_left {
 									loan_account
 										.settle_loan(loan_id, true /* via liquidation */);
 								}
@@ -1837,7 +1730,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						}
 
 						// If account has no loans and no collateral, it should now be removed
-						if loan_account.loans.is_empty() && loan_account.collateral.is_empty() {
+						if loan_account.loans.is_empty() && no_collateral_left {
 							*maybe_account = None;
 						}
 					}
@@ -1894,6 +1787,6 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-fn is_zero_collateral(collateral: &BTreeMap<Asset, AssetAmount>) -> bool {
+pub fn is_zero_collateral(collateral: &BTreeMap<Asset, AssetAmount>) -> bool {
 	collateral.values().all(|amount| *amount == 0)
 }
