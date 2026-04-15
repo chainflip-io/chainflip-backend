@@ -24,9 +24,12 @@ use jsonrpsee::types::ErrorObject;
 use sc_transaction_pool_api::TransactionStatus;
 use sp_core::storage::StorageData;
 use sp_runtime::traits::Header as _;
-use std::sync::{
-	atomic::{AtomicU8, Ordering},
-	Arc,
+use std::{
+	sync::{
+		atomic::{AtomicU8, Ordering},
+		Arc,
+	},
+	time::Duration,
 };
 
 use crate::{base_rpc_api::MockBaseRpcApi, SIGNED_EXTRINSIC_LIFETIME};
@@ -38,54 +41,58 @@ const INITIAL_NONCE: state_chain_runtime::Nonce = 10;
 /// If the tx fails due to a bad proof, it should fetch the runtime version and retry.
 #[tokio::test]
 async fn should_update_version_on_bad_proof() {
-	task_scope(|scope| {
-		async {
-			let mut mock_rpc_api = MockBaseRpcApi::new();
+	tokio::time::timeout(
+		Duration::from_secs(5),
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
 
-			mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
-			mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).returning(move |_| {
-				Err(ErrorObject::owned(
-					1010,
-					"Invalid Transaction",
-					Some("Transaction has a bad signature"),
-				)
-				.into())
-			});
+				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
+				mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).returning(move |_| {
+					Err(ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some("Transaction has a bad signature"),
+					)
+					.into())
+				});
 
-			mock_rpc_api.expect_runtime_version().times(1).returning(move |_| {
-				let new_runtime_version = sp_version::RuntimeVersion {
-					spec_name: "test".into(),
-					impl_name: "test".into(),
-					authoring_version: 0,
-					spec_version: 0,
-					impl_version: 0,
-					apis: vec![].into(),
-					transaction_version: 0,
-					system_version: 0,
-				};
-				assert_ne!(
-				new_runtime_version,
-				Default::default(),
-				"The new runtime version must be different from the version that the watcher started with"
-			);
+				mock_rpc_api.expect_runtime_version().times(1).returning(move |_| {
+					let new_runtime_version = sp_version::RuntimeVersion {
+						spec_name: "test".into(),
+						impl_name: "test".into(),
+						authoring_version: 0,
+						spec_version: 0,
+						impl_version: 0,
+						apis: vec![].into(),
+						transaction_version: 0,
+						system_version: 0,
+					};
+					assert_ne!(
+						new_runtime_version,
+						Default::default(),
+						"The new runtime version must be different from the version that the watcher started with"
+					);
 
-				Ok(new_runtime_version)
-			});
+					Ok(new_runtime_version)
+				});
 
-			// On the retry, return a success.
-			mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
+				// On the retry, return a success.
+				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
 
-			mock_rpc_api
-				.expect_submit_and_watch_extrinsic()
-				.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
+				mock_rpc_api
+					.expect_submit_and_watch_extrinsic()
+					.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
 
-			let _watcher = new_watcher_and_submit_test_extrinsic(scope, mock_rpc_api).await;
+				let _watcher = new_watcher_and_submit_test_extrinsic(scope, mock_rpc_api).await;
 
-			Ok(())
-		}
-		.boxed()
-	})
+				Ok(())
+			}
+			.boxed()
+		}),
+	)
 	.await
+	.expect("runtime version refresh path should not hang")
 	.unwrap();
 }
 
@@ -264,7 +271,7 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 		.boxed()
 	})
 	.await
-	.unwrap();
+	.expect("runtime version refresh path should not hang");
 }
 
 fn test_call() -> state_chain_runtime::RuntimeCall {
