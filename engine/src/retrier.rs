@@ -1078,6 +1078,8 @@ mod tests {
 	async fn retrier_preserves_in_flight_requests_across_primary_failure() {
 		task_scope(|scope| {
 			async move {
+				// Use this any time we expect stuff to happen in the background, to ensure the
+				// tokio executor has a chance to run the relevant tasks.
 				async fn drain_ready_tasks() {
 					for _ in 0..3 {
 						tokio::task::yield_now().await;
@@ -1178,11 +1180,17 @@ mod tests {
 					}
 				});
 
+				// Let the spawned request and retrier loop run far enough to dequeue `request_1`
+				// and submit its first attempt on the primary.
 				drain_ready_tasks().await;
 				tokio::time::advance(REQUEST_DELAY).await;
+				// Let the completed primary attempt be observed by the retrier so it records the
+				// failure and increments `request_1_attempts`.
 				drain_ready_tasks().await;
 				assert_eq!(request_1_attempts.load(Ordering::SeqCst), 1);
 				tokio::time::advance(Duration::from_millis(1)).await;
+				// Let the retrier finish reacting to that failure: switch preference to backup and
+				// schedule the delayed retry for `request_1`.
 				drain_ready_tasks().await;
 
 				let request_2_handle = tokio::spawn({
@@ -1200,15 +1208,21 @@ mod tests {
 					}
 				});
 
+				// Let the retrier accept `request_2`, which should now see backup as preferred.
 				drain_ready_tasks().await;
 				tokio::time::advance(REQUEST_DELAY).await;
+				// Let `request_2`'s backup attempt complete and send its successful result back to
+				// the awaiting task.
 				drain_ready_tasks().await;
 
 				assert_eq!(request_2_handle.await.unwrap(), RequestResult::Request2Success);
 
 				tokio::time::advance(INITIAL_TIMEOUT * 2).await;
+				// Let the retry delay for `request_1` expire and give the retrier a chance to
+				// submit the next attempt on the backup.
 				drain_ready_tasks().await;
 				tokio::time::advance(REQUEST_DELAY).await;
+				// Let that backup retry finish and propagate its success back through the retrier.
 				drain_ready_tasks().await;
 
 				assert_eq!(request_1_handle.await.unwrap(), RequestResult::Request1Success);
