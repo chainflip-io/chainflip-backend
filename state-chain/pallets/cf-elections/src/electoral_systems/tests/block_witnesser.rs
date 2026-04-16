@@ -18,7 +18,7 @@ use core::ops::{Range, RangeInclusive};
 
 use super::{mocks::Check, register_checks};
 use crate::{
-	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystemTypes},
+	electoral_system::{ConsensusVote, ConsensusVotes, ElectoralSystem, ElectoralSystemTypes},
 	electoral_systems::{
 		block_height_witnesser::{primitives::Header, ChainProgress, ChainTypes},
 		block_witnesser::{
@@ -250,6 +250,48 @@ fn block_witnesser_consensus() {
 	let consensus = bw_consensus
 		.check_consensus(&(SuccessThreshold { success_threshold: 3 }, MOCK_BW_ELECTION_PROPERTIES));
 	assert_eq!(consensus, Some((vec![1, 3, 5], Some(2))));
+}
+
+#[test]
+fn statemachine_is_vote_needed_false_when_partial_vote_is_unchanged() {
+	let vote = (vec![1, 3, 5], Some(2));
+	let partial_vote =
+		<<SimpleBlockWitnesser as ElectoralSystemTypes>::VoteStorage as vote_storage::VoteStorage>::vote_into_partial_vote(
+			&vote,
+			|shared_data| crate::SharedDataHash::of(&shared_data),
+		);
+
+	assert!(!<SimpleBlockWitnesser as ElectoralSystem>::is_vote_needed(
+		((), partial_vote, vote_storage::AuthorityVote::Vote(vote.clone()),),
+		(partial_vote, vote.clone()),
+	),);
+
+	assert!(!<SimpleBlockWitnesser as ElectoralSystem>::is_vote_needed(
+		((), partial_vote, vote_storage::AuthorityVote::PartialVote(partial_vote),),
+		(partial_vote, vote),
+	),);
+}
+
+#[test]
+fn statemachine_is_vote_needed_true_when_partial_vote_changes() {
+	let current_vote = (vec![1, 3, 5], Some(2));
+	let proposed_vote = (vec![1, 3, 5, 8], Some(2));
+	let current_partial =
+		<<SimpleBlockWitnesser as ElectoralSystemTypes>::VoteStorage as vote_storage::VoteStorage>::vote_into_partial_vote(
+			&current_vote,
+			|shared_data| crate::SharedDataHash::of(&shared_data),
+		);
+	let proposed_partial =
+		<<SimpleBlockWitnesser as ElectoralSystemTypes>::VoteStorage as vote_storage::VoteStorage>::vote_into_partial_vote(
+			&proposed_vote,
+			|shared_data| crate::SharedDataHash::of(&shared_data),
+		);
+
+	assert_ne!(current_partial, proposed_partial);
+	assert!(<SimpleBlockWitnesser as ElectoralSystem>::is_vote_needed(
+		((), current_partial, vote_storage::AuthorityVote::Vote(current_vote),),
+		(proposed_partial, proposed_vote),
+	),);
 }
 
 // We start an election for a block, receive it and emit PreWitness events for it. The base case.
