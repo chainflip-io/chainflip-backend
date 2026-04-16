@@ -35,7 +35,6 @@ jobs:
       - name: Remove non production binaries 🗑
         run: |
           rm -f assets/bin/chainflip-engine-databases
-          rm -f assets/bin/chainflip-ingress-egress-tracker
           rm -f assets/bin/generate-genesis-keys
 
       - name: Move .dylib files 📂
