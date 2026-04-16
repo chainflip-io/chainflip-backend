@@ -50,14 +50,14 @@ pub enum RpcTransactionId {
 	Evm { signature: cf_chains::evm::SchnorrVerificationComponents },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DepositDetails {
 	Bitcoin { tx_id: Txid, vout: u32 },
 	Evm { tx_hashes: Vec<cf_chains::evm::H256> },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RpcDepositWitnessInfo {
 	pub deposit_chain_block_height: u64,
 	pub deposit_address: AddressString,
@@ -74,7 +74,7 @@ pub struct BroadcastWitnessInfo {
 	pub tx_ref: RpcTransactionRef,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RpcVaultDepositWitnessInfo {
 	pub tx_id: String,
 	pub deposit_chain_block_height: u64,
@@ -97,6 +97,17 @@ pub struct RpcWitnessedEventsResponse {
 	pub deposits: Vec<RpcDepositWitnessInfo>,
 	pub broadcasts: Vec<BroadcastWitnessInfo>,
 	pub vault_deposits: Vec<RpcVaultDepositWitnessInfo>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RpcIngressEventsResponse {
+	pub deposits: Vec<RpcDepositWitnessInfo>,
+	pub vault_deposits: Vec<RpcVaultDepositWitnessInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RpcEgressEventsResponse {
+	pub broadcasts: Vec<BroadcastWitnessInfo>,
 }
 
 pub(crate) fn convert_deposit_witness<C: Chain>(
@@ -260,14 +271,13 @@ impl IntoRpcDepositDetails for cf_chains::evm::DepositDetails {
 	}
 }
 
-pub(crate) fn convert_raw_witnessed_events(
-	raw: state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents,
+pub(crate) fn convert_raw_ingress_events(
+	raw: state_chain_runtime::runtime_apis::custom_api::RawIngressEvents,
 	network: NetworkEnvironment,
-) -> RpcWitnessedEventsResponse {
+) -> RpcIngressEventsResponse {
 	match raw {
-		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Bitcoin {
+		state_chain_runtime::runtime_apis::custom_api::RawIngressEvents::Bitcoin {
 			deposits,
-			broadcasts,
 			vault_deposits,
 		} => {
 			let deposits = deposits
@@ -276,26 +286,14 @@ pub(crate) fn convert_raw_witnessed_events(
 					convert_deposit_witness::<cf_chains::Bitcoin>(&witness, height, network)
 				})
 				.collect();
-
-			let converted_vault_deposits = vault_deposits
+			let vault_deposits = vault_deposits
 				.into_iter()
 				.map(|(height, witness)| convert_vault_deposit_witness(&witness, height, network))
 				.collect();
-
-			let broadcasts_vec = broadcasts
-				.into_iter()
-				.filter_map(|(height, tx)| convert_bitcoin_broadcast(tx, height))
-				.collect();
-
-			RpcWitnessedEventsResponse {
-				deposits,
-				broadcasts: broadcasts_vec,
-				vault_deposits: converted_vault_deposits,
-			}
+			RpcIngressEventsResponse { deposits, vault_deposits }
 		},
-		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Ethereum {
+		state_chain_runtime::runtime_apis::custom_api::RawIngressEvents::Ethereum {
 			deposits,
-			broadcasts,
 			vault_deposits,
 		} => {
 			let deposits = deposits
@@ -304,29 +302,17 @@ pub(crate) fn convert_raw_witnessed_events(
 					convert_deposit_witness::<cf_chains::Ethereum>(&witness, height, network)
 				})
 				.collect();
-
-			let converted_vault_deposits = vault_deposits
+			let vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
 					extract_vault_deposit_from_event(&event)
 						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
 				})
 				.collect();
-
-			let broadcasts_vec = broadcasts
-				.into_iter()
-				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
-				.collect();
-
-			RpcWitnessedEventsResponse {
-				deposits,
-				broadcasts: broadcasts_vec,
-				vault_deposits: converted_vault_deposits,
-			}
+			RpcIngressEventsResponse { deposits, vault_deposits }
 		},
-		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Arbitrum {
+		state_chain_runtime::runtime_apis::custom_api::RawIngressEvents::Arbitrum {
 			deposits,
-			broadcasts,
 			vault_deposits,
 		} => {
 			let deposits = deposits
@@ -335,25 +321,42 @@ pub(crate) fn convert_raw_witnessed_events(
 					convert_deposit_witness::<cf_chains::Arbitrum>(&witness, height, network)
 				})
 				.collect();
-
-			let converted_vault_deposits = vault_deposits
+			let vault_deposits = vault_deposits
 				.into_iter()
 				.filter_map(|(height, event)| {
 					extract_vault_deposit_from_event(&event)
 						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
 				})
 				.collect();
+			RpcIngressEventsResponse { deposits, vault_deposits }
+		},
+	}
+}
 
-			let broadcasts_vec = broadcasts
+pub(crate) fn convert_raw_egress_events(
+	raw: state_chain_runtime::runtime_apis::custom_api::RawEgressEvents,
+) -> RpcEgressEventsResponse {
+	match raw {
+		state_chain_runtime::runtime_apis::custom_api::RawEgressEvents::Bitcoin { broadcasts } => {
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, tx)| convert_bitcoin_broadcast(tx, height))
+				.collect();
+			RpcEgressEventsResponse { broadcasts }
+		},
+		state_chain_runtime::runtime_apis::custom_api::RawEgressEvents::Ethereum { broadcasts } => {
+			let broadcasts = broadcasts
 				.into_iter()
 				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
 				.collect();
-
-			RpcWitnessedEventsResponse {
-				deposits,
-				broadcasts: broadcasts_vec,
-				vault_deposits: converted_vault_deposits,
-			}
+			RpcEgressEventsResponse { broadcasts }
+		},
+		state_chain_runtime::runtime_apis::custom_api::RawEgressEvents::Arbitrum { broadcasts } => {
+			let broadcasts = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
+			RpcEgressEventsResponse { broadcasts }
 		},
 	}
 }

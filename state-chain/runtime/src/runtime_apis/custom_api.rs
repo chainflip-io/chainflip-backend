@@ -16,7 +16,7 @@
 
 pub mod types;
 
-pub use types::RawWitnessedEvents;
+pub use types::{before_version_17::RawWitnessedEvents, RawEgressEvents, RawIngressEvents};
 
 use crate::runtime_apis::types::*;
 
@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(16)]
+	#[api_version(17)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -371,12 +371,32 @@ decl_runtime_apis!(
 		#[changed_in(16)]
 		fn cf_default_oracle_price_protection();
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
-		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
-		/// from the block witnesser election's unsynchronized state.
+		/// Returns the witnessed ingress and egress events for a given chain from the block
+		/// witnesser election's unsynchronized state.
+		/// In v16 this returned a combined `RawWitnessedEvents`; in v17 it was split into the
+		/// separate `(RawIngressEvents, RawEgressEvents)` tuple.
 		#[changed_in(16)]
 		fn cf_ingress_egress_events();
+		#[changed_in(17)]
 		fn cf_ingress_egress_events(
 			chain: ForeignChain,
-		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
+		) -> Result<before_version_17::RawWitnessedEvents, DispatchErrorWithMessage>;
+		fn cf_ingress_egress_events(
+			chain: ForeignChain,
+		) -> Result<(RawIngressEvents, RawEgressEvents), DispatchErrorWithMessage>;
+		/// Returns the witnessed ingress events (deposits, vault deposits) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(17)]
+		fn cf_ingress_events();
+		fn cf_ingress_events(
+			chain: ForeignChain,
+		) -> Result<RawIngressEvents, DispatchErrorWithMessage>;
+		/// Returns the witnessed egress events (broadcasts) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(17)]
+		fn cf_egress_events();
+		fn cf_egress_events(
+			chain: ForeignChain,
+		) -> Result<RawEgressEvents, DispatchErrorWithMessage>;
 	}
 );

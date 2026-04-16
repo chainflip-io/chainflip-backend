@@ -327,6 +327,7 @@ pub struct RuntimeApiPenalty {
 pub mod before_version_10;
 pub mod before_version_15;
 pub mod before_version_16;
+pub mod before_version_17;
 pub mod before_version_3;
 pub mod before_version_9;
 
@@ -603,22 +604,26 @@ mod serialize_vanity_name {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub enum RawWitnessedEvents {
+pub enum RawIngressEvents {
 	Bitcoin {
 		deposits: Vec<(u64, DepositWitness<Bitcoin>)>,
 		vault_deposits: Vec<(u64, VaultDepositWitness<Runtime, BitcoinInstance>)>,
-		broadcasts: Vec<(u64, TransactionConfirmation<Runtime, BitcoinInstance>)>,
 	},
 	Ethereum {
 		deposits: Vec<(u64, DepositWitness<Ethereum>)>,
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, EthereumInstance>)>,
-		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, EthereumInstance>)>,
 	},
 	Arbitrum {
 		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, ArbitrumInstance>)>,
-		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)>,
 	},
+}
+
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
+pub enum RawEgressEvents {
+	Bitcoin { broadcasts: Vec<(u64, TransactionConfirmation<Runtime, BitcoinInstance>)> },
+	Ethereum { broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, EthereumInstance>)> },
+	Arbitrum { broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)> },
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};

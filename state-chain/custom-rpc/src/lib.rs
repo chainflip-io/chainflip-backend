@@ -818,10 +818,11 @@ type BoostPoolDepthResponse = Vec<BoostPoolDepth>;
 type BoostPoolDetailsResponse = Vec<boost_pool_rpc::BoostPoolDetailsRpc>;
 type BoostPoolFeesResponse = Vec<boost_pool_rpc::BoostPoolFeesRpc>;
 
-pub(crate) use ingress_egress_tracker::convert_raw_witnessed_events;
+pub(crate) use ingress_egress_tracker::{convert_raw_egress_events, convert_raw_ingress_events};
 pub use ingress_egress_tracker::{
-	BroadcastWitnessInfo, DepositDetails, RpcDepositWitnessInfo, RpcTransactionId,
-	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
+	BroadcastWitnessInfo, DepositDetails, RpcDepositWitnessInfo, RpcEgressEventsResponse,
+	RpcIngressEventsResponse, RpcTransactionId, RpcTransactionRef, RpcVaultDepositWitnessInfo,
+	RpcWitnessedEventsResponse,
 };
 
 #[rpc(server, client, namespace = "cf")]
@@ -1395,6 +1396,10 @@ pub trait CustomApi {
 		chain: ForeignChain,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcWitnessedEventsResponse>;
+	/// Subscribes to witnessed ingress events (deposits, vault deposits) for a given chain,
+	/// emitting a new value on every block.
+	#[subscription(name = "subscribe_ingress_events", item = BlockUpdate<RpcIngressEventsResponse>)]
+	async fn cf_subscribe_ingress_events(&self, chain: ForeignChain);
 }
 
 /// An RPC extension for the state chain node.
@@ -3145,17 +3150,57 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcWitnessedEventsResponse> {
 		let hash = self.rpc_backend.unwrap_or_best(at);
-		let raw = self
-			.rpc_backend
-			.with_runtime_api(Some(hash), |api, hash| api.cf_ingress_egress_events(hash, chain))?
-			.map_err(CfApiError::from)?;
 		let network = self
 			.rpc_backend
 			.with_runtime_api(Some(hash), |api, hash| api.cf_network_environment(hash))?;
-
 		let storage_query = StorageQueryApi::new(&self.rpc_backend.client);
-		storage_query
-			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
+
+		let (raw_ingress, raw_egress) =
+			self.rpc_backend
+				.with_versioned_runtime_api(Some(hash), |api, hash, api_version| {
+					if api_version < 17 {
+						let raw = api
+							.cf_ingress_egress_events(hash, chain)
+							.map_err(CfApiError::from)?
+							.map_err(CfApiError::from)?;
+						Ok(raw)
+					} else {
+						api.cf_ingress_egress_events(hash, chain)
+							.map_err(CfApiError::from)?
+							.map_err(CfApiError::from)
+					}
+				})?;
+
+		let ingress = storage_query.with_state_backend(hash, || {
+			convert_raw_ingress_events(raw_ingress.clone(), network)
+		})?;
+		let egress = convert_raw_egress_events(raw_egress);
+		Ok(RpcWitnessedEventsResponse {
+			deposits: ingress.deposits,
+			vault_deposits: ingress.vault_deposits,
+			broadcasts: egress.broadcasts,
+		})
+	}
+
+	async fn cf_subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		self.rpc_backend
+			.new_subscription(Default::default(), false, true, pending_sink, move |client, hash| {
+				let raw = (*client.runtime_api())
+					.cf_ingress_events(hash, chain)
+					.map_err(CfApiError::from)?
+					.map_err(CfApiError::from)?;
+				let network = (*client.runtime_api())
+					.cf_network_environment(hash)
+					.map_err(CfApiError::from)?;
+				StorageQueryApi::new(client)
+					.with_state_backend(hash, || convert_raw_ingress_events(raw.clone(), network))
+					.map_err(RpcApiError::from)
+			})
+			.await;
 	}
 }
 
