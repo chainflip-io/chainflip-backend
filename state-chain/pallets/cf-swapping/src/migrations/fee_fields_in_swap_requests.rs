@@ -216,12 +216,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			{
 				total_network_fee_ppm +=
 					network_fee_tracker.network_fee().rate.deconstruct() as u64;
-				total_beneficiary_count += broker_fees_tracker.fee_and_accumulated.len() as u64;
-				total_broker_fee_bps += broker_fees_tracker
-					.fee_and_accumulated
-					.keys()
-					.map(|b| b.bps as u64)
-					.sum::<u64>();
+				total_beneficiary_count += broker_fees_tracker.iter().count() as u64;
+				total_broker_fee_bps += broker_fees_tracker.sum_fee_bps() as u64;
 			}
 		}
 
