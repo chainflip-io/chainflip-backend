@@ -40,15 +40,15 @@ pub fn hard_coded_price_for_asset(asset: Asset) -> Price {
 }
 
 pub(crate) fn split_off_highest_impact_swap<T: Config>(
-	swaps: &mut Vec<Swap<T>>,
-	failed_swap_group: Vec<SwapState<T, StageFailed>>,
+	swaps: &mut BTreeMap<SwapId, Swap<T>>,
+	failed_swap_group: Vec<FailedSwapState<T>>,
 ) -> Option<Swap<T>> {
 	// Check invariants:
 	if failed_swap_group.is_empty() {
 		log_or_panic!("Invariant violation: there should be at least one swap in a failed group")
 	}
 	for failed_swap in &failed_swap_group {
-		if !swaps.iter().any(|swap| swap.swap_id == failed_swap.swap_id()) {
+		if !swaps.iter().any(|(swap_id, _)| *swap_id == failed_swap.swap_id()) {
 			log_or_panic!(
 				"Invariant violation: failed group must be a subset of all executed swaps"
 			)
@@ -67,6 +67,9 @@ pub(crate) fn split_off_highest_impact_swap<T: Config>(
 		.map(|swap| swap.swap_id());
 
 	maybe_swap_id_to_remove.and_then(|swap_id_to_remove| {
-		swaps.extract_if(.., |swap| swap.swap_id == swap_id_to_remove).next()
+		swaps
+			.extract_if(.., |swap_id, _| *swap_id == swap_id_to_remove)
+			.map(|(_, swap)| swap)
+			.next()
 	})
 }

@@ -1600,10 +1600,12 @@ fn can_handle_input_and_output_being_the_stable_asset() {
 #[cfg(test)]
 mod swap_batching {
 
+	use crate::swap_state::{StageFailed, SwapState};
+
 	use super::*;
 
 	impl<T: Config> Swap<T> {
-		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T, StageFailed> {
+		fn to_state(&self, stable_amount: Option<AssetAmount>) -> FailedSwapState<T> {
 			SwapState::new_test_state(
 				self.clone(),
 				StageFailed { swap_amount: stable_amount.unwrap_or(self.input_amount) },
@@ -1614,7 +1616,7 @@ mod swap_batching {
 	#[test]
 	fn single_swap() {
 		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, 1);
-		let mut swaps = vec![swap1.clone()];
+		let mut swaps = BTreeMap::from([(swap1.swap_id, swap1.clone())]);
 
 		let swap_states = vec![swap1.to_state(None)];
 
@@ -1622,7 +1624,7 @@ mod swap_batching {
 			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_states,),
 			Some(swap1)
 		);
-		assert_eq!(swaps, vec![]);
+		assert_eq!(swaps, BTreeMap::new());
 	}
 
 	#[test]
@@ -1631,7 +1633,11 @@ mod swap_batching {
 		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, 1);
 		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, 1);
 
-		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = BTreeMap::from([
+			(swap1.swap_id, swap1.clone()),
+			(swap2.swap_id, swap2.clone()),
+			(swap3.swap_id, swap3.clone()),
+		]);
 
 		// The test assumes the BTC->USDC leg failed (so swap3 is excluded from `swap_states`)
 		let swap_states = vec![swap1.to_state(None), swap2.to_state(None)];
@@ -1640,7 +1646,7 @@ mod swap_batching {
 			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_states,),
 			Some(swap2)
 		);
-		assert_eq!(swaps, vec![swap1, swap3]);
+		assert_eq!(swaps, BTreeMap::from([(swap1.swap_id, swap1), (swap3.swap_id, swap3)]));
 	}
 
 	#[test]
@@ -1651,7 +1657,11 @@ mod swap_batching {
 		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, 1);
 		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, 1);
 
-		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = BTreeMap::from([
+			(swap1.swap_id, swap1.clone()),
+			(swap2.swap_id, swap2.clone()),
+			(swap3.swap_id, swap3.clone()),
+		]);
 
 		// The test assumes the USDC->ETH leg failed (so swap3 is excluded from `swap_states`)
 		let swap_state = vec![swap1.to_state(Some(60000)), swap2.to_state(Some(3000))];
@@ -1660,7 +1670,7 @@ mod swap_batching {
 			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_state,),
 			Some(swap1)
 		);
-		assert_eq!(swaps, vec![swap2, swap3]);
+		assert_eq!(swaps, BTreeMap::from([(swap2.swap_id, swap2), (swap3.swap_id, swap3)]));
 	}
 
 	#[test]

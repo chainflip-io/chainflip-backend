@@ -26,6 +26,38 @@ use super::{
 	SwapFailureReason, SwapRefundParameters,
 };
 
+#[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct SuccessfulSwap {
+	pub swap_id: SwapId,
+	pub swap_request_id: SwapRequestId,
+	pub input_asset: Asset,
+	pub output_asset: Asset,
+	pub input_amount_after_fees: AssetAmount,
+	/// Always in terms of input asset
+	pub network_fee_taken: AssetAmount,
+	pub intermediate: Option<AssetAndAmount>,
+	pub output_amount_after_fees: AssetAmount,
+	/// Always in terms of output asset
+	pub broker_fee_taken: AssetAmount,
+	pub oracle_delta: Option<SignedBasisPoints>,
+	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
+}
+
+impl SuccessfulSwap {
+	/// Downgrades a completed swap state to a Stage2. Used in the 'get_scheduled_swaps' RPC's
+	pub(crate) fn into_stage_2<T: Config>(self, swap: Swap<T>) -> SwapState<T, Stage2> {
+		SwapState {
+			swap,
+			stage: Stage2 {
+				input_amount_after_fees: self.input_amount_after_fees,
+				network_fee_taken: self.network_fee_taken,
+				intermediate: self.intermediate,
+			},
+		}
+	}
+}
+
 #[derive(DebugNoBound)]
 /// A swap is bundled with a swap stage to track the progress through the swapping process.
 pub struct SwapState<T: Config, Stage: Debug> {
@@ -37,14 +69,14 @@ pub struct SwapState<T: Config, Stage: Debug> {
 	pub stage: Stage,
 }
 
-#[derive(DebugNoBound)]
-/// The initial stage after taking network fees from the input amount
+#[derive(Debug)]
+/// The stage after taking network fees from the input amount
 pub struct Stage1 {
 	pub input_amount_after_fees: AssetAmount,
 	pub network_fee_taken: AssetAmount,
 }
 
-#[derive(DebugNoBound)]
+#[derive(Debug)]
 /// The stage after the first leg of the swap is done (to the intermediate asset)
 pub struct Stage2 {
 	pub input_amount_after_fees: AssetAmount,
@@ -52,7 +84,7 @@ pub struct Stage2 {
 	pub intermediate: Option<AssetAndAmount>,
 }
 
-#[derive(DebugNoBound)]
+#[derive(Debug)]
 /// The stage after the second leg of the swap is done (to the output asset)
 pub struct Stage3 {
 	pub input_amount_after_fees: AssetAmount,
@@ -61,7 +93,7 @@ pub struct Stage3 {
 	pub output_amount_before_fees: AssetAmount,
 }
 
-#[derive(DebugNoBound)]
+#[derive(Debug)]
 /// The stage after broker fees have been taken from the output amount
 pub struct Stage4 {
 	pub input_amount_after_fees: AssetAmount,
@@ -72,22 +104,7 @@ pub struct Stage4 {
 	pub broker_fee_taken: AssetAmount,
 }
 
-#[derive(DebugNoBound)]
-/// The final stage after the price violation checks have passed
-pub struct Stage5 {
-	pub input_amount_after_fees: AssetAmount,
-	/// Always in terms of input asset
-	pub network_fee_taken: AssetAmount,
-	pub intermediate: Option<AssetAndAmount>,
-	pub output_amount_before_fees: AssetAmount,
-	pub output_amount_after_fees: AssetAmount,
-	/// Always in terms of output asset
-	pub broker_fee_taken: AssetAmount,
-	pub oracle_delta: Option<SignedBasisPoints>,
-	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
-}
-
-#[derive(DebugNoBound)]
+#[derive(Debug)]
 /// A stage representing a failed swap, used in the execution loop to return information about the
 /// failed swaps.
 pub struct StageFailed {
@@ -105,17 +122,17 @@ pub(crate) struct SwapGroupPair {
 pub(crate) trait GroupSwapState<T: Config> {
 	type OutputState;
 
-	/// The input amount that is being swapped for this single leg swap.
+	/// The input amount that is being swapped for the next leg.
 	fn swap_amount(&self) -> AssetAmount;
 	/// Returns the "to" and "from" assets as a swap pair to allow grouping of swaps. Returns None
 	/// if the asset does not need to be swapped for this leg (e.g. if the input or output asset is
 	/// already the intermediate asset).
 	fn swap_group(&self) -> Option<SwapGroupPair>;
 	/// Updates the swap state with the output amount of a swap for this single leg.
-	fn update_swap_result(self, amount: AssetAmount) -> Self::OutputState;
+	fn advance_swap_result(self, amount: AssetAmount) -> Self::OutputState;
 	/// Used when the asset does not need to be swapped for this leg, just passes through the input
 	/// amount as the output amount.
-	fn update_no_swap(self) -> Self::OutputState;
+	fn advance_no_swap(self) -> Self::OutputState;
 	/// Strip away the swap state details and just return the swap with some failure information
 	fn failed_swap(self) -> SwapState<T, StageFailed>;
 }
@@ -135,7 +152,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
 		}
 	}
 
-	fn update_swap_result(self, output: AssetAmount) -> Self::OutputState {
+	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
 			stage: Stage2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
@@ -149,7 +166,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
 		}
 	}
 
-	fn update_no_swap(self) -> Self::OutputState {
+	fn advance_no_swap(self) -> Self::OutputState {
 		SwapState {
 			stage: Stage2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
@@ -184,7 +201,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage2> {
 		}
 	}
 
-	fn update_swap_result(self, output: AssetAmount) -> Self::OutputState {
+	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
 			swap: self.swap,
 			stage: Stage3 {
@@ -196,7 +213,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage2> {
 		}
 	}
 
-	fn update_no_swap(self) -> Self::OutputState {
+	fn advance_no_swap(self) -> Self::OutputState {
 		SwapState {
 			stage: Stage3 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
@@ -338,10 +355,9 @@ impl<T: Config> SwapState<T, Stage3> {
 impl<T: Config> SwapState<T, Stage4> {
 	/// The final step of the swapping process. Checks for price violations and then sets the oracle
 	/// delta values in the swap state.
-	#[expect(clippy::result_large_err)]
 	pub(crate) fn check_for_price_violation(
 		self,
-	) -> Result<SwapState<T, Stage5>, (Self, SwapFailureReason)> {
+	) -> Result<SuccessfulSwap, (Swap<T>, SwapFailureReason)> {
 		match Pallet::<T>::check_swap_price_violation(&self) {
 			Ok(oracle_delta_ex_fees) => {
 				// Now calculate the overall oracle delta. Only used for display purposes.
@@ -360,35 +376,21 @@ impl<T: Config> SwapState<T, Stage4> {
 					None
 				};
 
-				Ok(SwapState {
-					swap: self.swap,
-					stage: Stage5 {
-						input_amount_after_fees: self.stage.input_amount_after_fees,
-						network_fee_taken: self.stage.network_fee_taken,
-						intermediate: self.stage.intermediate,
-						output_amount_before_fees: self.stage.output_amount_before_fees,
-						output_amount_after_fees: self.stage.output_amount_after_fees,
-						broker_fee_taken: self.stage.broker_fee_taken,
-						oracle_delta,
-						oracle_delta_ex_fees,
-					},
+				Ok(SuccessfulSwap {
+					swap_id: self.swap_id(),
+					swap_request_id: self.swap_request_id(),
+					input_asset: self.input_asset(),
+					output_asset: self.output_asset(),
+					input_amount_after_fees: self.stage.input_amount_after_fees,
+					network_fee_taken: self.stage.network_fee_taken,
+					intermediate: self.stage.intermediate,
+					output_amount_after_fees: self.stage.output_amount_after_fees,
+					broker_fee_taken: self.stage.broker_fee_taken,
+					oracle_delta,
+					oracle_delta_ex_fees,
 				})
 			},
-			Err(reason) => Err((self, reason)),
-		}
-	}
-}
-
-impl<T: Config> From<SwapState<T, Stage5>> for SwapState<T, Stage2> {
-	/// Downgrades a Stage5 swap state to a Stage2. Used in the 'get_scheduled_swaps' RPC's
-	fn from(state: SwapState<T, Stage5>) -> Self {
-		SwapState {
-			swap: state.swap,
-			stage: Stage2 {
-				input_amount_after_fees: state.stage.input_amount_after_fees,
-				network_fee_taken: state.stage.network_fee_taken,
-				intermediate: state.stage.intermediate,
-			},
+			Err(reason) => Err((self.into_swap(), reason)),
 		}
 	}
 }
