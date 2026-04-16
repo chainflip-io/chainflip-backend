@@ -3198,7 +3198,6 @@ where
 					.map_err(CfApiError::from)?;
 				StorageQueryApi::new(client)
 					.with_state_backend(hash, || convert_raw_ingress_events(raw.clone(), network))
-					.map_err(RpcApiError::from)
 			})
 			.await;
 	}
