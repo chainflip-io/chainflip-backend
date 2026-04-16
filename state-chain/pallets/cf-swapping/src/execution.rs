@@ -22,6 +22,8 @@ use cf_traits::{
 use core::cmp::max;
 use sp_runtime::{FixedPointNumber, FixedU64, SaturatedConversion};
 
+use crate::swap_state::{Stage1, Stage2, Stage3, Stage4, SuccessfulSwap, SwapState};
+
 use super::{
 	pallet::{Config, Event, Pallet, SwapRequests},
 	*,
@@ -33,12 +35,12 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// Get all of the swaps that are scheduled to swap from or to the given asset.
-		let swaps: Vec<_> = ScheduledSwaps::<T>::get()
-			.values()
-			.filter_map(|swap| {
+		let swaps: BTreeMap<_, _> = ScheduledSwaps::<T>::get()
+			.into_iter()
+			.filter_map(|(swap_id, swap)| {
 				if swap.from == base_asset || swap.to == base_asset {
 					// We ignore price protection for the simulation
-					Some(swap.clone().without_price_protection())
+					Some((swap_id, swap.clone().without_price_protection()))
 				} else {
 					None
 				}
@@ -94,9 +96,12 @@ impl<T: Config> Pallet<T> {
 
 		successful_swaps
 			.into_iter()
-			// We only need the swaps at the stage after the first leg is complete. So we
-			// strip away the unused part of the state for the fully executed swaps.
-			.map(SwapState::from)
+			.map(|swap_result| {
+				// We only need the swaps at the stage after the first leg is complete. So we
+				// strip away the unused part of the state for the fully executed swaps.
+				let swap_id = swap_result.swap_id;
+				swap_result.into_stage_2(swaps.get(&swap_id).unwrap().clone())
+			})
 			.chain(failed_swaps)
 			.filter_map(|state| {
 				let swap_request = SwapRequests::<T>::get(state.swap_request_id())
@@ -396,29 +401,29 @@ impl<T: Config> Pallet<T> {
 
 	#[transactional]
 	pub(crate) fn try_execute_without_violations(
-		swaps: Vec<Swap<T>>,
-	) -> Result<Vec<SwapState<T, Stage5>>, BatchExecutionError<T>> {
+		swaps: BTreeMap<SwapId, Swap<T>>,
+	) -> Result<Vec<SuccessfulSwap>, BatchExecutionError<T>> {
 		// Bundle each swap with a fresh swap state
-		let swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
+		let swap_states: Vec<_> = swaps.values().cloned().map(SwapState::new).collect();
 		// Take the network fee
-		let swaps = Self::take_network_fees(swaps);
+		let swap_states = Self::take_network_fees(swap_states);
 		// Run the first leg of the swaps
-		let swaps = Self::do_group_and_swap(swaps)?;
+		let swap_states = Self::do_group_and_swap(swap_states)?;
 		// Run the second leg of the swaps
-		let swaps = Self::do_group_and_swap(swaps)?;
+		let swap_states = Self::do_group_and_swap(swap_states)?;
 		// Take the broker fees
-		let swaps = Self::take_broker_fees(swaps);
+		let swap_states = Self::take_broker_fees(swap_states);
 
 		// Successfully executed without hitting price impact limit.
 		// Now check for price violations (oracle and minimum price).
 		let mut non_violating_swaps = vec![];
 		let mut violating_swaps = vec![];
-		swaps.into_iter().for_each(|swap| match swap.check_for_price_violation() {
+		swap_states.into_iter().for_each(|swap| match swap.check_for_price_violation() {
 			Ok(swap) => {
 				non_violating_swaps.push(swap);
 			},
 			Err((state, reason)) => {
-				violating_swaps.push((state.into_swap(), reason));
+				violating_swaps.push((state, reason));
 			},
 		});
 
@@ -429,7 +434,15 @@ impl<T: Config> Pallet<T> {
 				violating_swaps,
 				non_violating_swaps: non_violating_swaps
 					.into_iter()
-					.map(|state| state.into_swap())
+					.map(|successful_swap| {
+						(
+							successful_swap.swap_id,
+							swaps
+								.get(&successful_swap.swap_id)
+								.expect("must be subset of given swaps")
+								.clone(),
+						)
+					})
 					.collect(),
 			})
 		}
@@ -441,7 +454,7 @@ impl<T: Config> Pallet<T> {
 		amount: AssetAmount,
 		network_fee: FeeRateAndMinimum,
 		broker_fees: Beneficiaries<T::AccountId>,
-	) -> Result<SwapState<T, Stage5>, BatchExecutionError<T>> {
+	) -> Result<SuccessfulSwap, BatchExecutionError<T>> {
 		with_transaction_unchecked(|| {
 			TransactionOutcome::Rollback({
 				const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(0);
@@ -483,12 +496,13 @@ impl<T: Config> Pallet<T> {
 				);
 
 				// We expect to get exactly one swap back if the execution is successful.
-				Self::try_execute_without_violations(vec![swap]).and_then(|swaps| {
-					swaps
-						.into_iter()
-						.next()
-						.ok_or(DispatchError::Other("Unexpected empty swap result").into())
-				})
+				Self::try_execute_without_violations(BTreeMap::from([(swap.swap_id, swap)]))
+					.and_then(|swaps| {
+						swaps
+							.into_iter()
+							.next()
+							.ok_or(DispatchError::Other("Unexpected empty swap result").into())
+					})
 			})
 		})
 	}
@@ -496,7 +510,9 @@ impl<T: Config> Pallet<T> {
 	/// Attempts to find (and execute) a batch of swaps that wouldn't result in hitting the
 	/// price impact limit, starting with the given batch, and taking swaps out of the batch if
 	/// needed.
-	pub(crate) fn execute_batch(mut swaps_to_execute: Vec<Swap<T>>) -> BatchExecutionOutcomes<T> {
+	pub(crate) fn execute_batch(
+		mut swaps_to_execute: BTreeMap<SwapId, Swap<T>>,
+	) -> BatchExecutionOutcomes<T> {
 		let mut failed_swaps = vec![];
 
 		loop {
@@ -554,7 +570,7 @@ impl<T: Config> Pallet<T> {
 		// If we are here, consider all swaps as failed:
 		failed_swaps.extend(
 			swaps_to_execute
-				.into_iter()
+				.into_values()
 				.map(|swap| (swap, SwapFailureReason::PriceImpactLimit)),
 		);
 		BatchExecutionOutcomes { successful_swaps: vec![], failed_swaps }
@@ -721,8 +737,8 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub(crate) fn process_swap_outcome(swap: SwapState<T, Stage5>) {
-		let swap_request_id = swap.swap_request_id();
+	pub(crate) fn process_swap_outcome(swap: SuccessfulSwap) {
+		let swap_request_id = swap.swap_request_id;
 
 		let Some(mut request) = SwapRequests::<T>::take(swap_request_id) else {
 			log_or_panic!("Swap request {swap_request_id} not found");
@@ -731,14 +747,14 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::SwapExecuted {
 			swap_request_id,
-			swap_id: swap.swap_id(),
-			input: AssetAndAmount::new(swap.input_asset(), swap.stage.input_amount_after_fees),
-			network_fee: AssetAndAmount::new(swap.input_asset(), swap.stage.network_fee_taken),
-			broker_fee: AssetAndAmount::new(swap.output_asset(), swap.stage.broker_fee_taken),
-			output: AssetAndAmount::new(swap.output_asset(), swap.stage.output_amount_after_fees),
-			intermediate: swap.stage.intermediate,
-			oracle_delta: swap.stage.oracle_delta,
-			oracle_delta_ex_fees: swap.stage.oracle_delta_ex_fees,
+			swap_id: swap.swap_id,
+			input: AssetAndAmount::new(swap.input_asset, swap.input_amount_after_fees),
+			network_fee: AssetAndAmount::new(swap.input_asset, swap.network_fee_taken),
+			broker_fee: AssetAndAmount::new(swap.output_asset, swap.broker_fee_taken),
+			output: AssetAndAmount::new(swap.output_asset, swap.output_amount_after_fees),
+			intermediate: swap.intermediate,
+			oracle_delta: swap.oracle_delta,
+			oracle_delta_ex_fees: swap.oracle_delta_ex_fees,
 		});
 
 		let (request_completed, broker_fee_swaps) = match &mut request.state {
@@ -764,19 +780,13 @@ impl<T: Config> Pallet<T> {
 					);
 
 					dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
-					dca_state.record_chunk_completion(
-						swap.swap_id(),
-						swap.stage.output_amount_after_fees,
-					);
+					dca_state.record_chunk_completion(swap.swap_id, swap.output_amount_after_fees);
 
 					(false, Default::default())
 				} else {
 					debug_assert!(dca_state.remaining_input_amount == 0);
 
-					dca_state.record_chunk_completion(
-						swap.swap_id(),
-						swap.stage.output_amount_after_fees,
-					);
+					dca_state.record_chunk_completion(swap.swap_id, swap.output_amount_after_fees);
 
 					// This may or may not be the last chunk (some may already be scheduled)
 					if dca_state.scheduled_chunks.is_empty() {
@@ -785,7 +795,7 @@ impl<T: Config> Pallet<T> {
 								Self::egress_for_swap(
 									swap_request_id,
 									dca_state.accumulated_output_amount,
-									swap.output_asset(),
+									swap.output_asset,
 									output_address.clone(),
 									ccm_deposit_metadata.clone(),
 									EgressType::Regular,
@@ -817,7 +827,7 @@ impl<T: Config> Pallet<T> {
 								flip_to_subtract_from_swap_output,
 							} =>
 								if request.output_asset == Asset::Flip {
-									if swap.stage.output_amount_after_fees <
+									if swap.output_amount_after_fees <
 										*flip_to_subtract_from_swap_output
 									{
 										// In the rare event that this occurs we will track the
@@ -825,9 +835,7 @@ impl<T: Config> Pallet<T> {
 										FlipToBurn::<T>::mutate(|total| {
 											total.saturating_reduce(
 												flip_to_subtract_from_swap_output
-													.saturating_sub(
-														swap.stage.output_amount_after_fees,
-													)
+													.saturating_sub(swap.output_amount_after_fees)
 													.try_into()
 													.unwrap_or(i128::MAX),
 											);
@@ -840,16 +848,13 @@ impl<T: Config> Pallet<T> {
 									} else {
 										T::FundAccount::fund_account(
 											account_id.clone(),
-											swap.stage
-												.output_amount_after_fees
+											swap.output_amount_after_fees
 												.saturating_sub(*flip_to_subtract_from_swap_output)
 												.into(),
 											FundingSource::Swap { swap_request_id },
 										);
 										FlipToBeSentToGateway::<T>::mutate(|total| {
-											total.saturating_accrue(
-												swap.stage.output_amount_after_fees,
-											);
+											total.saturating_accrue(swap.output_amount_after_fees);
 										});
 									}
 								} else {
@@ -869,30 +874,30 @@ impl<T: Config> Pallet<T> {
 					}
 				},
 			SwapRequestState::NetworkFee => {
-				if swap.output_asset() == Asset::Flip {
+				if swap.output_asset == Asset::Flip {
 					FlipToBurn::<T>::mutate(|total| {
 						total.saturating_accrue(
-							swap.stage.output_amount_after_fees.try_into().unwrap_or(i128::MAX),
+							swap.output_amount_after_fees.try_into().unwrap_or(i128::MAX),
 						);
 					});
 				} else {
 					log_or_panic!(
 						"NetworkFee burning should not be in asset: {:?}",
-						swap.output_asset()
+						swap.output_asset
 					);
 				}
 				(true, Default::default())
 			},
 			SwapRequestState::IngressEgressFee => {
-				if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
+				if swap.output_asset == ForeignChain::from(swap.output_asset).gas_asset() {
 					T::IngressEgressFeeHandler::accrue_withheld_fee(
-						swap.output_asset(),
-						swap.stage.output_amount_after_fees,
+						swap.output_asset,
+						swap.output_amount_after_fees,
 					);
 				} else {
 					log_or_panic!(
 						"IngressEgressFee swap should not be to non-gas asset: {:?}",
-						swap.output_asset()
+						swap.output_asset
 					);
 				}
 
@@ -901,8 +906,8 @@ impl<T: Config> Pallet<T> {
 			SwapRequestState::BrokerFee { account_id } => {
 				T::BalanceApi::credit_account(
 					account_id,
-					swap.output_asset(),
-					swap.stage.output_amount_after_fees,
+					swap.output_asset,
+					swap.output_amount_after_fees,
 				);
 
 				(true, Default::default())
@@ -936,7 +941,7 @@ impl<T: Config> Pallet<T> {
 			} else {
 				// If the swap doesn't need to be swapped because its already in the correct
 				// asset, then we can just update the swap state and leave it be.
-				outcome_swaps.push(swap.update_no_swap());
+				outcome_swaps.push(swap.advance_no_swap());
 			}
 		}
 
@@ -950,7 +955,7 @@ impl<T: Config> Pallet<T> {
 						failed_swap_group: failed_swaps
 							.into_iter()
 							.map(|swap| swap.failed_swap())
-							.collect::<Vec<SwapState<T, StageFailed>>>(),
+							.collect::<Vec<FailedSwapState<T>>>(),
 					},
 				)?,
 			);
@@ -984,7 +989,7 @@ impl<T: Config> Pallet<T> {
 					if index == number_of_swaps - 1 {
 						// Give the dust to the last swap to ensure all output is assigned
 						let swap_output = bundle_output.saturating_sub(total_assigned_output);
-						swap.update_swap_result(swap_output)
+						swap.advance_swap_result(swap_output)
 					} else {
 						let swap_output = if bundle_input > 0 {
 							multiply_by_rational_with_rounding(
@@ -1001,7 +1006,7 @@ impl<T: Config> Pallet<T> {
 						};
 
 						total_assigned_output.saturating_accrue(swap_output);
-						swap.update_swap_result(swap_output)
+						swap.advance_swap_result(swap_output)
 					}
 				})
 				.collect())

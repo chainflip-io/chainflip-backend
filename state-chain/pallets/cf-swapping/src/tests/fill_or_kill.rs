@@ -969,6 +969,8 @@ mod oracle_swaps {
 	mod oracle_swap_calculations_with_real_world_values {
 		use cf_primitives::basis_points::SignedHundredthBasisPoints;
 
+		use crate::swap_state::{Stage4, SwapState};
+
 		use super::*;
 
 		// Values from an actual swap

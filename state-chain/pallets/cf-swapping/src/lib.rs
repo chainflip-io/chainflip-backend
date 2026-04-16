@@ -88,9 +88,11 @@ pub mod weights;
 pub use dca::DcaState;
 pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
 pub(crate) use swap_state::{GroupSwapState, SwapGroupPair};
-pub use swap_state::{Stage1, Stage2, Stage3, Stage4, Stage5, StageFailed, SwapState};
 pub use weights::WeightInfo;
 
+use crate::swap_state::SuccessfulSwap;
+
+pub(crate) type FailedSwapState<T> = swap_state::SwapState<T, swap_state::StageFailed>;
 pub(crate) type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
 
 pub const STORAGE_VERSION_U16: u16 = 18;
@@ -222,11 +224,11 @@ pub enum BatchExecutionError<T: Config> {
 		from_asset: Asset,
 		to_asset: Asset,
 		amount: AssetAmount,
-		failed_swap_group: Vec<SwapState<T, StageFailed>>,
+		failed_swap_group: Vec<FailedSwapState<T>>,
 	},
 	PriceViolation {
 		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
-		non_violating_swaps: Vec<Swap<T>>,
+		non_violating_swaps: BTreeMap<SwapId, Swap<T>>,
 	},
 	DispatchError {
 		error: DispatchError,
@@ -235,7 +237,7 @@ pub enum BatchExecutionError<T: Config> {
 
 #[derive(DebugNoBound)]
 pub(crate) struct BatchExecutionOutcomes<T: Config> {
-	pub(crate) successful_swaps: Vec<SwapState<T, Stage5>>,
+	pub(crate) successful_swaps: Vec<SuccessfulSwap>,
 	pub(crate) failed_swaps: Vec<(Swap<T>, SwapFailureReason)>,
 }
 
@@ -928,14 +930,14 @@ pub mod pallet {
 
 				*swaps = remaining_swap_ids;
 
-				swaps_to_execute.into_values().collect::<Vec<_>>()
+				swaps_to_execute
 			});
 
 			let retry_delay = max(SwapRetryDelay::<T>::get(), 1u32.into());
 
 			if !T::SafeMode::get().swaps_enabled {
 				// Since we won't be executing swaps at this block, we need to reschedule them:
-				for swap in swaps_to_execute {
+				for (_, swap) in swaps_to_execute {
 					Self::reschedule_swap(swap, retry_delay, SwapFailureReason::SafeModeActive);
 				}
 
