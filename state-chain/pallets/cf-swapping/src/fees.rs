@@ -91,12 +91,25 @@ impl NetworkFeeTracker {
 
 #[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BrokerFeesTracker<AccountId: core::fmt::Debug + Ord> {
-	pub fee_and_accumulated: BTreeMap<Beneficiary<AccountId>, AssetAmount>,
+	/// A map of beneficiaries and their accumulated broker fee. The amount is in
+	/// terms of the output asset. Used to pay out the brokers at the end of a swap request.
+	fee_and_accumulated: BTreeMap<Beneficiary<AccountId>, AssetAmount>,
 }
 
 impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
 	pub fn new(beneficiaries: Beneficiaries<AccountId>) -> Self {
-		Self { fee_and_accumulated: beneficiaries.into_iter().map(|b| (b, 0)).collect() }
+		// Sanity check: it should already not be possible to open a channel with broker fees
+		// this high, but if the total broker fee would exceed 100% we charge no broker fee
+		// instead (for simplicity):
+		let total_fee_bps = beneficiaries
+			.iter()
+			.fold(0u16, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps));
+
+		if total_fee_bps > ONE_AS_BASIS_POINTS {
+			Self { fee_and_accumulated: Default::default() }
+		} else {
+			Self { fee_and_accumulated: beneficiaries.into_iter().map(|b| (b, 0)).collect() }
+		}
 	}
 
 	pub fn take_all_fees(&mut self, input_amount: AssetAmount) -> FeeTaken {
@@ -106,29 +119,30 @@ impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
 		if self.fee_and_accumulated.is_empty() {
 			return FeeTaken { remaining_amount: input_amount, fee: 0 };
 		}
-		// Sanity check: it should already not be possible to open a channel with broker fees
-		// this high, but if the total broker fee would exceed 100% we charge no broker fee
-		// instead (for simplicity):
-		let total_fee_bps = self
-			.fee_and_accumulated
-			.keys()
-			.fold(0u16, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps));
 
 		let mut total_fee = 0;
-		if total_fee_bps > ONE_AS_BASIS_POINTS {
-			return FeeTaken { remaining_amount: input_amount, fee: 0 }
-		} else {
-			self.fee_and_accumulated.iter_mut().for_each(
-				|(Beneficiary { bps, .. }, accumulated_fee)| {
-					let fee =
-						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
-					accumulated_fee.saturating_accrue(fee);
-					total_fee.saturating_accrue(fee)
-				},
-			);
-		}
+
+		self.fee_and_accumulated.iter_mut().for_each(
+			|(Beneficiary { bps, .. }, accumulated_fee)| {
+				let fee =
+					Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
+				accumulated_fee.saturating_accrue(fee);
+				total_fee.saturating_accrue(fee)
+			},
+		);
 
 		debug_assert!(total_fee <= input_amount, "Broker fee cannot be more than the amount");
 		FeeTaken { remaining_amount: input_amount.saturating_sub(total_fee), fee: total_fee }
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (&Beneficiary<AccountId>, &AssetAmount)> {
+		self.fee_and_accumulated.iter()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn sum_fee_bps(&self) -> cf_primitives::BasisPoints {
+		self.fee_and_accumulated
+			.keys()
+			.fold(0, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps))
 	}
 }

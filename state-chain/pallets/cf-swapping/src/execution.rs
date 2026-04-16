@@ -277,7 +277,7 @@ impl<T: Config> Pallet<T> {
 	) -> BTreeMap<T::AccountId, SwapRequestId> {
 		if fee_asset == Asset::Usdc {
 			// No need to swap if the fee asset is already in usdc, just credit directly.
-			for (Beneficiary { account, .. }, amount) in &fee_tracker.fee_and_accumulated {
+			for (Beneficiary { account, .. }, amount) in fee_tracker.iter() {
 				T::BalanceApi::credit_account(account, fee_asset, *amount)
 			}
 			return BTreeMap::new();
@@ -285,7 +285,6 @@ impl<T: Config> Pallet<T> {
 
 		// For each beneficiary start a swap to convert the fee into usdc.
 		fee_tracker
-			.fee_and_accumulated
 			.iter()
 			.filter_map(|(Beneficiary { account, .. }, amount)| {
 				if *amount > 0 {
