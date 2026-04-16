@@ -51,6 +51,7 @@ where
 		.map_err(|e| anyhow!(e))
 }
 
+
 macro_rules! vault_deposit_witness {
 	($source_asset: expr, $deposit_amount: expr, $dest_asset: expr, $dest_address: expr, $metadata: expr, $tx_id: expr, $params: expr) => {
 		VaultDepositWitness {
@@ -76,6 +77,9 @@ macro_rules! vault_deposit_witness {
 		}
 	}
 }
+
+pub(crate) use vault_deposit_witness;
+
 
 fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 	from: Primitive,
