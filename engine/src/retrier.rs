@@ -569,7 +569,14 @@ where
 
 #[cfg(test)]
 mod tests {
-	use std::{any::Any, collections::BTreeSet};
+	use std::{
+		any::Any,
+		collections::BTreeSet,
+		sync::{
+			atomic::{AtomicU32, Ordering},
+			Arc, Mutex,
+		},
+	};
 
 	use cf_utilities::task_scope::task_scope;
 	use fmt::Debug;
@@ -937,6 +944,18 @@ mod tests {
 		}
 	}
 
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+	enum RequestResult {
+		Request1Success,
+		Request2Success,
+	}
+
+	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+	enum AttemptOutcome {
+		Failure,
+		Success,
+	}
+
 	#[tokio::test]
 	async fn backup_rpc_succeeds_if_primary_not_ready() {
 		task_scope(|scope| {
@@ -985,133 +1004,235 @@ mod tests {
 
 	#[tokio::test(start_paused = true)]
 	async fn backup_used_for_next_request_if_primary_fails() {
-		async fn get_client_primary_or_backup(
-			primary_or_backup: PrimaryOrBackup,
-		) -> PrimaryOrBackup {
-			primary_or_backup
-		}
-
-		thread_local! {
-			pub static ATTEMPTED: std::cell::RefCell<u32> = std::cell::RefCell::new(0);
-			pub static TRIED_CLIENTS: std::cell::RefCell<Vec<PrimaryOrBackup >> = std::cell::RefCell::new(Vec::new());
-		}
-
-		fn specific_fut_closure_err_after_one(
-			timeout: Duration,
-		) -> TypedFutureGenerator<(), PrimaryOrBackup> {
-			Box::pin(move |client| {
-				Box::pin(async move {
-					// We need to delay in the tests, else we'll resolve immediately, meaning the
-					// channel is sent down, and can theoretically be replaced using the same
-					// request id and the tests will still work despite there potentially being a
-					// bug in the implementation.
-					tokio::time::sleep(timeout).await;
-
-					let attempts = ATTEMPTED.with(|cell| *cell.borrow());
-
-					let return_val = if attempts == 0 || attempts == 6 {
-						Err(anyhow::anyhow!("Sorry, this just doesn't work."))
-					} else {
-						Ok(())
-					};
-
-					// Update attempt after attempted
-					ATTEMPTED.with(|cell| {
-						let mut attempted = cell.borrow_mut();
-						*attempted += 1;
-					});
-
-					TRIED_CLIENTS.with(|cell| {
-						let mut tried_clients = cell.borrow_mut();
-						tried_clients.push(client);
-					});
-
-					return_val
-				})
-			})
-		}
-
-		// === TEST ===
-
 		task_scope(|scope| {
 			async move {
-				const INITIAL_TIMEOUT: Duration = Duration::from_millis(300);
+				let mut client_selector = ClientSelector::new(
+					scope,
+					std::future::ready(PrimaryOrBackup::Primary),
+					Some(std::future::ready(PrimaryOrBackup::Backup)),
+				);
+
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Primary, PrimaryOrBackup::Primary)),
+				);
+
+				client_selector.request_failed(PrimaryOrBackup::Primary);
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Backup, PrimaryOrBackup::Backup)),
+				);
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Backup, PrimaryOrBackup::Backup)),
+				);
+
+				tokio::time::advance(TRY_PRIMARY_AFTER * 2).await;
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Primary, PrimaryOrBackup::Primary)),
+				);
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Primary, PrimaryOrBackup::Primary)),
+				);
+
+				client_selector.request_failed(PrimaryOrBackup::Primary);
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Backup, PrimaryOrBackup::Backup)),
+				);
+
+				tokio::time::advance(TRY_PRIMARY_AFTER * 2).await;
+				assert_eq!(
+					client_selector.select_client(RetryLimit::NoLimit).await,
+					Some((PrimaryOrBackup::Primary, PrimaryOrBackup::Primary)),
+				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	/// Covers the full retrier pipeline without depending on the flaky
+	/// `TRY_PRIMARY_AFTER` timing behavior from the old test.
+	///
+	/// Motivation:
+	/// - keep coverage of request bookkeeping in `RequestHolder`
+	/// - prove an in-flight request is not lost when the primary fails
+	/// - prove a later request observes the updated client preference and goes to backup
+	///
+	/// How it works:
+	/// 1. `request_1` is sent to the primary and fails on its first attempt.
+	/// 2. The test yields and advances paused time until the retrier has processed that failure,
+	///    switched preference to backup, and scheduled the retry.
+	/// 3. `request_2` is then submitted and should complete on the backup.
+	/// 4. Finally, `request_1` retries on the backup and succeeds.
+	///
+	/// The final `tried_clients` sequence asserts that both requests kept their identity and that
+	/// the earlier request was retried rather than dropped or mismatched with the later one.
+	#[tokio::test(start_paused = true)]
+	async fn retrier_preserves_in_flight_requests_across_primary_failure() {
+		task_scope(|scope| {
+			async move {
+				// Use this any time we expect stuff to happen in the background, to ensure the
+				// tokio executor has a chance to run the relevant tasks.
+				async fn drain_ready_tasks() {
+					for _ in 0..3 {
+						tokio::task::yield_now().await;
+					}
+				}
+
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
+				const REQUEST_DELAY: Duration = Duration::from_millis(10);
 
 				let retrier_client = RetrierClient::new(
 					scope,
 					"test",
-					get_client_primary_or_backup(PrimaryOrBackup::Primary),
-					Some(get_client_primary_or_backup(PrimaryOrBackup::Backup)),
+					std::future::ready(PrimaryOrBackup::Primary),
+					Some(std::future::ready(PrimaryOrBackup::Backup)),
 					INITIAL_TIMEOUT,
 					MAX_RPC_RETRY_DELAY,
 					100,
 				);
 
-				// The first request will fail, and the second request will succeed using the
-				// backup. Then the next two requests will use the backup.
-				for request in 0..=3 {
-					retrier_client
-						.request_with_limit(
-							RequestLog::new(request.to_string(), None),
-							specific_fut_closure_err_after_one(INITIAL_TIMEOUT),
-							5,
-						)
-						.await
-						.unwrap();
+				let tried_clients =
+					Arc::new(Mutex::new(
+						Vec::<(&'static str, PrimaryOrBackup, AttemptOutcome)>::new(),
+					));
+				let request_1_attempts = Arc::new(AtomicU32::new(0));
+
+				fn request_1_future(
+					tried_clients: Arc<Mutex<Vec<(&'static str, PrimaryOrBackup, AttemptOutcome)>>>,
+					request_1_attempts: Arc<AtomicU32>,
+					timeout: Duration,
+				) -> TypedFutureGenerator<RequestResult, PrimaryOrBackup> {
+					Box::pin(move |client| {
+						let tried_clients = Arc::clone(&tried_clients);
+						let request_1_attempts = Arc::clone(&request_1_attempts);
+						Box::pin(async move {
+							// We need to delay in the tests, else we'll resolve immediately,
+							// meaning the channel is sent down, and can theoretically be
+							// replaced using the same request id and the tests will still
+							// work despite there potentially being a bug in the
+							// implementation.
+							tokio::time::sleep(timeout).await;
+
+							if request_1_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+								tried_clients.lock().unwrap().push((
+									"request_1",
+									client,
+									AttemptOutcome::Failure,
+								));
+								Err(anyhow::anyhow!("Sorry, this just doesn't work."))
+							} else {
+								tried_clients.lock().unwrap().push((
+									"request_1",
+									client,
+									AttemptOutcome::Success,
+								));
+								Ok(RequestResult::Request1Success)
+							}
+						})
+					})
 				}
 
-				// We want to advance time so that we can try the primary again.
-				tokio::time::advance(TRY_PRIMARY_AFTER * 2).await;
-				tokio::time::resume();
+				fn request_2_future(
+					tried_clients: Arc<Mutex<Vec<(&'static str, PrimaryOrBackup, AttemptOutcome)>>>,
+					timeout: Duration,
+				) -> TypedFutureGenerator<RequestResult, PrimaryOrBackup> {
+					Box::pin(move |client| {
+						let tried_clients = Arc::clone(&tried_clients);
+						Box::pin(async move {
+							// We need to delay in the tests, else we'll resolve immediately,
+							// meaning the channel is sent down, and can theoretically be
+							// replaced using the same request id and the tests will still
+							// work despite there potentially being a bug in the
+							// implementation.
+							tokio::time::sleep(timeout).await;
 
-				for request in 4..6 {
-					retrier_client
-						.request_with_limit(
-							RequestLog::new(request.to_string(), None),
-							specific_fut_closure_err_after_one(INITIAL_TIMEOUT),
-							5,
-						)
-						.await
-						.unwrap();
+							tried_clients.lock().unwrap().push((
+								"request_2",
+								client,
+								AttemptOutcome::Success,
+							));
+							Ok(RequestResult::Request2Success)
+						})
+					})
 				}
 
-				// We want to advance time so that we can try the primary again.
-				tokio::time::pause();
-				tokio::time::advance(TRY_PRIMARY_AFTER * 2).await;
-				tokio::time::resume();
+				let request_1_handle = tokio::spawn({
+					let retrier_client = retrier_client.clone();
+					let tried_clients = Arc::clone(&tried_clients);
+					let request_1_attempts = Arc::clone(&request_1_attempts);
+					async move {
+						retrier_client
+							.request_with_limit(
+								RequestLog::new("request 1".to_string(), None),
+								request_1_future(tried_clients, request_1_attempts, REQUEST_DELAY),
+								5,
+							)
+							.await
+							.unwrap()
+					}
+				});
 
-				retrier_client
-					.request_with_limit(
-						RequestLog::new(7.to_string(), None),
-						specific_fut_closure_err_after_one(INITIAL_TIMEOUT),
-						5,
-					)
-					.await
-					.unwrap();
+				// Let the spawned request and retrier loop run far enough to dequeue `request_1`
+				// and submit its first attempt on the primary.
+				drain_ready_tasks().await;
+				tokio::time::advance(REQUEST_DELAY).await;
+				// Let the completed primary attempt be observed by the retrier so it records the
+				// failure and increments `request_1_attempts`.
+				drain_ready_tasks().await;
+				assert_eq!(request_1_attempts.load(Ordering::SeqCst), 1);
+				tokio::time::advance(Duration::from_millis(1)).await;
+				// Let the retrier finish reacting to that failure: switch preference to backup and
+				// schedule the delayed retry for `request_1`.
+				drain_ready_tasks().await;
 
-				// Assert the tried clients is what we expect:
+				let request_2_handle = tokio::spawn({
+					let retrier_client = retrier_client.clone();
+					let tried_clients = Arc::clone(&tried_clients);
+					async move {
+						retrier_client
+							.request_with_limit(
+								RequestLog::new("request 2".to_string(), None),
+								request_2_future(tried_clients, REQUEST_DELAY),
+								5,
+							)
+							.await
+							.unwrap()
+					}
+				});
+
+				// Let the retrier accept `request_2`, which should now see backup as preferred.
+				drain_ready_tasks().await;
+				tokio::time::advance(REQUEST_DELAY).await;
+				// Let `request_2`'s backup attempt complete and send its successful result back to
+				// the awaiting task.
+				drain_ready_tasks().await;
+
+				assert_eq!(request_2_handle.await.unwrap(), RequestResult::Request2Success);
+
+				tokio::time::advance(INITIAL_TIMEOUT * 2).await;
+				// Let the retry delay for `request_1` expire and give the retrier a chance to
+				// submit the next attempt on the backup.
+				drain_ready_tasks().await;
+				tokio::time::advance(REQUEST_DELAY).await;
+				// Let that backup retry finish and propagate its success back through the retrier.
+				drain_ready_tasks().await;
+
+				assert_eq!(request_1_handle.await.unwrap(), RequestResult::Request1Success);
 				assert_eq!(
-					TRIED_CLIENTS.with(|cell| cell.borrow().clone()),
+					tried_clients.lock().unwrap().clone(),
 					vec![
-						// first request fails
-						PrimaryOrBackup::Primary,
-						// first request succeeds on second attempt
-						PrimaryOrBackup::Backup,
-						// second succeeds
-						PrimaryOrBackup::Backup,
-						// third succeeds
-						PrimaryOrBackup::Backup,
-						// fourth succeeds
-						PrimaryOrBackup::Backup,
-						// try primary again, and succeeds, so no further items in this list
-						PrimaryOrBackup::Primary,
-						// primary should still be favoured after it succeeds
-						PrimaryOrBackup::Primary,
-						// primary fails again, so seocondary is used
-						PrimaryOrBackup::Backup,
-						// time elapsed, primary again
-						PrimaryOrBackup::Primary,
-					]
+						("request_1", PrimaryOrBackup::Primary, AttemptOutcome::Failure),
+						("request_2", PrimaryOrBackup::Backup, AttemptOutcome::Success),
+						("request_1", PrimaryOrBackup::Backup, AttemptOutcome::Success),
+					],
 				);
 
 				Ok(())
