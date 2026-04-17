@@ -61,8 +61,8 @@ export async function send(
       return sendHubAsset(logger, asset, address, amount);
     case 'Trx':
       return sendTrx(logger, address, amount);
-    case 'TronUsdt':
-      return sendTrc20(logger, address, getContractAddress('Tron', 'TronUsdt'), amount);
+    case 'TrxUsdt':
+      return sendTrc20(logger, address, getContractAddress('Tron', 'TrxUsdt'), amount);
     default:
       throw new Error(`Unsupported asset type: ${asset}`);
   }

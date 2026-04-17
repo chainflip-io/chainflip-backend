@@ -345,7 +345,7 @@ pub const ETH_SC_UTILS_ADDRESS: evm::Address = H160([9u8; 20]);
 
 pub const TRON_KEY_MANAGER_ADDRESS: evm::Address = H160([10u8; 20]);
 pub const TRON_VAULT_ADDRESS: evm::Address = H160([11u8; 20]);
-pub const TRON_USDT_TOKEN_ADDRESS: evm::Address = H160([12u8; 20]);
+pub const TRX_USDT_TOKEN_ADDRESS: evm::Address = H160([12u8; 20]);
 pub const TRON_CHAIN_ID: u64 = 3;
 
 cf_test_utilities::impl_test_helpers! {
@@ -367,7 +367,7 @@ cf_test_utilities::impl_test_helpers! {
 			arbitrum_chain_id: ARB_CHAIN_ID,
 			tron_key_manager_address: TRON_KEY_MANAGER_ADDRESS,
 			tron_vault_address: TRON_VAULT_ADDRESS,
-			tron_usdt_address: TRON_USDT_TOKEN_ADDRESS,
+			trx_usdt_address: TRX_USDT_TOKEN_ADDRESS,
 			tron_chain_id: TRON_CHAIN_ID,
 			flip_token_address: [0u8; 20].into(),
 			eth_usdc_address: [0x2; 20].into(),
@@ -464,7 +464,7 @@ pub mod benchmarks_mock {
 				arbitrum_chain_id: ARB_CHAIN_ID,
 				tron_key_manager_address: TRON_KEY_MANAGER_ADDRESS,
 				tron_vault_address: TRON_VAULT_ADDRESS,
-				tron_usdt_address: TRON_USDT_TOKEN_ADDRESS,
+				trx_usdt_address: TRX_USDT_TOKEN_ADDRESS,
 				tron_chain_id: TRON_CHAIN_ID,
 				flip_token_address: [0u8; 20].into(),
 				eth_usdc_address: [0x2; 20].into(),

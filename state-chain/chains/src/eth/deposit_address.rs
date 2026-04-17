@@ -157,7 +157,7 @@ mod test_super {
 	const TRON_VAULT_ADDRESS: EthereumAddress =
 		EthereumAddress(hex_literal::hex!("adeecfa46eb3579c0f733085ba69a296ae9ee743"));
 
-	const TRON_USDT_ADDRESS: EthereumAddress =
+	const TRX_USDT_ADDRESS: EthereumAddress =
 		EthereumAddress(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"));
 
 	#[test]
@@ -214,7 +214,7 @@ mod test_super {
 	#[test]
 	fn test_tron_token() {
 		assert_eq!(
-			get_create_2_address_tron(TRON_VAULT_ADDRESS, Some(TRON_USDT_ADDRESS), 0),
+			get_create_2_address_tron(TRON_VAULT_ADDRESS, Some(TRX_USDT_ADDRESS), 0),
 			EthereumAddress(hex_literal::hex!("73cf16c2bba473aec4ac5c17156a4c0e67f0fa10"))
 		);
 

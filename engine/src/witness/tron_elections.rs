@@ -468,7 +468,7 @@ where
 		.context("Failed to fetch Tron supported assets")?;
 
 	let usdt_contract_address =
-		*supported_erc20_tokens.get(&TronAsset::TronUsdt).context("USDT not supported")?;
+		*supported_erc20_tokens.get(&TronAsset::TrxUsdt).context("USDT not supported")?;
 
 	let usdt_event_source = EvmEventSource::new::<UsdtEvents>(usdt_contract_address);
 
@@ -476,13 +476,13 @@ where
 
 	let deposit_channel_config = TronDepositChannelWitnessingConfig {
 		vault_contract: vault_event_source.clone(),
-		supported_assets: [(TronAsset::TronUsdt, usdt_event_source.clone())].into_iter().collect(),
+		supported_assets: [(TronAsset::TrxUsdt, usdt_event_source.clone())].into_iter().collect(),
 	};
 
 	let vault_deposit_config = VaultDepositWitnessingConfig {
 		vault: vault_address,
 		vault_events: vault_event_source,
-		supported_assets: [(TronAsset::TronUsdt, usdt_event_source)].into_iter().collect(),
+		supported_assets: [(TronAsset::TrxUsdt, usdt_event_source)].into_iter().collect(),
 	};
 
 	let key_manager_config = TronKeyManagerWitnessingConfig {

@@ -177,12 +177,12 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 				let energy = ENERGY_BASE_COST_PER_BATCH +
 					match asset {
 						assets::tron::Asset::Trx => ENERGY_COST_PER_FETCH_NATIVE,
-						assets::tron::Asset::TronUsdt => ENERGY_COST_PER_FETCH_TOKEN,
+						assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_FETCH_TOKEN,
 					};
 				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
 					match asset {
 						assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_FETCH,
-						assets::tron::Asset::TronUsdt => BANDWITH_BASE_COST_PER_FETCH,
+						assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_FETCH,
 					};
 
 				energy
@@ -199,12 +199,12 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 				let energy = ENERGY_BASE_COST_PER_BATCH +
 					match asset {
 						assets::tron::Asset::Trx => ENERGY_COST_PER_TRANSFER_NATIVE,
-						assets::tron::Asset::TronUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
+						assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
 					};
 				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
 					match asset {
 						assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_TRANSFER,
-						assets::tron::Asset::TronUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
+						assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
 					};
 
 				energy
@@ -574,7 +574,7 @@ mod lifecycle_tests {
 	use crate::ChannelLifecycleHooks;
 
 	const TRX: assets::tron::Asset = assets::tron::Asset::Trx;
-	const USDT: assets::tron::Asset = assets::tron::Asset::TronUsdt;
+	const USDT: assets::tron::Asset = assets::tron::Asset::TrxUsdt;
 
 	macro_rules! expect_deposit_state {
 		( $state:expr, $asset:expr, $pat:pat ) => {

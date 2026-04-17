@@ -19,7 +19,7 @@ export const deposits = new Map<Asset, number>([
   ['SolUsdc', 100000],
   ['SolUsdt', 100000],
   ['Trx', 1000000],
-  ['TronUsdt', 100000],
+  ['TrxUsdt', 100000],
 ]);
 
 export const price = new Map<Asset, number>([
@@ -36,7 +36,7 @@ export const price = new Map<Asset, number>([
   ['SolUsdc', 1],
   ['SolUsdt', 1],
   ['Trx', 1],
-  ['TronUsdt', 1],
+  ['TrxUsdt', 1],
 ]);
 
 export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
@@ -55,7 +55,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
     createLpPool(cf.logger, 'SolUsdc', price.get('SolUsdc')!),
     createLpPool(cf.logger, 'SolUsdt', price.get('SolUsdt')!),
     createLpPool(cf.logger, 'Trx', price.get('Trx')!),
-    createLpPool(cf.logger, 'TronUsdt', price.get('Trx')!),
+    createLpPool(cf.logger, 'TrxUsdt', price.get('Trx')!),
   ]);
 
   // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
@@ -107,7 +107,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => depositLiquidity(subcf, 'SolUsdc', deposits.get('SolUsdc')!),
         (subcf) => depositLiquidity(subcf, 'SolUsdt', deposits.get('SolUsdt')!),
         (subcf) => depositLiquidity(subcf, 'Trx', deposits.get('Trx')!),
-        (subcf) => depositLiquidity(subcf, 'TronUsdt', deposits.get('TronUsdt')!),
+        (subcf) => depositLiquidity(subcf, 'TrxUsdt', deposits.get('TrxUsdt')!),
       ]);
 
   const lpApiDeposits = (parentCf: ChainflipIO<A>) =>
@@ -127,7 +127,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => depositLiquidity(subcf, 'SolUsdc', 1000),
         (subcf) => depositLiquidity(subcf, 'SolUsdt', 1000),
         (subcf) => depositLiquidity(subcf, 'Trx', 10000),
-        (subcf) => depositLiquidity(subcf, 'TronUsdt', 1000),
+        (subcf) => depositLiquidity(subcf, 'TrxUsdt', 1000),
       ]);
 
   cf.info('Depositing liquidity');
@@ -149,7 +149,7 @@ export async function setupSwaps<A = []>(cf: ChainflipIO<A>): Promise<void> {
         (subcf) => rangeOrder(subcf, 'SolUsdc', deposits.get('SolUsdc')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'SolUsdt', deposits.get('SolUsdt')! * 0.9999),
         (subcf) => rangeOrder(subcf, 'Trx', deposits.get('Trx')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'TronUsdt', deposits.get('TronUsdt')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'TrxUsdt', deposits.get('TrxUsdt')! * 0.9999),
       ]);
 
   cf.info('Setting up range orders');
