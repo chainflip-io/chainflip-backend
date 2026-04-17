@@ -1014,36 +1014,43 @@ impl pallet_cf_asset_balances::Config for Runtime {
 
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {
 	type TargetChain = Ethereum;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance2> for Runtime {
 	type TargetChain = Polkadot;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
 	type TargetChain = Bitcoin;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 	type TargetChain = Arbitrum;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 	type TargetChain = Solana;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
 	type TargetChain = Assethub;
+	type FeeMultiplierProvider = pallet_cf_chain_tracking::DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance7> for Runtime {
 	type TargetChain = Tron;
+	type FeeMultiplierProvider = chainflip::TronFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
