@@ -73,7 +73,7 @@ where
 		fetch_params: Vec<FetchAssetParams<Tron>>,
 		transfer_params: Vec<(TransferAssetParams<Tron>, EgressId)>,
 	) -> Result<Vec<(Self, Vec<EgressId>)>, AllBatchError> {
-		let (transfer_params, egress_ids) = transfer_params.iter().cloned().unzip();
+		let (transfer_params, egress_ids) = transfer_params.into_iter().unzip();
 		Ok(vec![(
 			Self::AllBatch(evm_all_batch_builder(
 				fetch_params,
