@@ -134,12 +134,12 @@ impl TronRpcClient {
 }
 
 #[derive(Clone)]
-pub struct TronRpcSigningClient {
+pub struct TronRpcSigningClient<RpcClient> {
 	wallet: LocalWallet,
-	rpc_client: TronRpcClient,
+	rpc_client: RpcClient,
 }
 
-impl TronRpcSigningClient {
+impl TronRpcSigningClient<TronRpcClient> {
 	pub fn new(
 		private_key_file: PathBuf,
 		http_endpoint: SecretUrl,
@@ -442,10 +442,8 @@ pub trait TronSigningRpcApi: TronRpcApi {
 	fn sign_raw_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<Signature>;
 }
 
-// TronRpcSigningClient wraps a TronRpcClient, so it can also satisfy EvmRpcApi by delegation.
-// This allows TronCachingClient<TronRpcSigningClient> to be constructed.
 #[async_trait::async_trait]
-impl EvmRpcApi for TronRpcSigningClient {
+impl<RpcClient: EvmRpcApi> EvmRpcApi for TronRpcSigningClient<RpcClient> {
 	async fn estimate_gas(
 		&self,
 		req: &ethers::types::Eip1559TransactionRequest,
@@ -514,7 +512,7 @@ impl EvmRpcApi for TronRpcSigningClient {
 }
 
 #[async_trait::async_trait]
-impl TronSigningRpcApi for TronRpcSigningClient {
+impl<RpcClient: TronRpcApi> TronSigningRpcApi for TronRpcSigningClient<RpcClient> {
 	fn address(&self) -> H160 {
 		self.wallet.address()
 	}
@@ -540,7 +538,7 @@ impl TronSigningRpcApi for TronRpcSigningClient {
 }
 
 #[async_trait::async_trait]
-impl TronRpcApi for TronRpcSigningClient {
+impl<RpcClient: TronRpcApi> TronRpcApi for TronRpcSigningClient<RpcClient> {
 	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
 		self.rpc_client.get_transaction_info_by_id(tx_id).await
 	}

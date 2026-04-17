@@ -19,7 +19,7 @@ use crate::{
 	evm::event::{Event, EvmEventSource},
 	tron::{
 		cached_rpc::{TronCachingClient, TronRetryRpcApiWithResult},
-		rpc::TronRpcSigningClient,
+		rpc::{TronRpcClient, TronRpcSigningClient},
 		rpc_client_api::TransactionInfo,
 	},
 	witness::{
@@ -85,11 +85,11 @@ use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct TronVoter {
-	client: TronCachingClient<TronRpcSigningClient>,
+	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 }
 
 impl TronVoter {
-	pub fn new(client: TronCachingClient<TronRpcSigningClient>) -> Self {
+	pub fn new(client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>) -> Self {
 		Self { client }
 	}
 
@@ -411,7 +411,7 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 
 #[derive(Clone)]
 pub struct TronLivenessVoter {
-	client: TronCachingClient<TronRpcSigningClient>,
+	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 }
 
 #[async_trait::async_trait]
@@ -432,7 +432,7 @@ impl VoterApi<TronLiveness> for TronLivenessVoter {
 
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
-	client: TronCachingClient<TronRpcSigningClient>,
+	client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<()>
 where

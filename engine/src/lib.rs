@@ -57,7 +57,7 @@ use self::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
-	tron::{retry_rpc::TronRetryRpcClient, rpc::TronRpcSigningClient},
+	tron::{retry_rpc::TronRetryRpcClient, rpc::{TronRpcClient, TronRpcSigningClient}},
 };
 use anyhow::Context;
 use cf_chains::{evm::U256, Chain};
@@ -355,7 +355,7 @@ async fn run_main(
 				);
 				TronCachingClient::new(
 					scope,
-					TronRetryRpcClient::<TronRpcSigningClient>::new(
+					TronRetryRpcClient::<TronRpcSigningClient<TronRpcClient>>::new(
 						scope,
 						settings.tron.nodes,
 						expected_tron_chain_id,
