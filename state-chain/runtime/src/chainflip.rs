@@ -568,6 +568,25 @@ impl EvmEnvironmentProvider<Tron> for EvmEnvironment {
 	}
 }
 
+/// Tron-specific fee multiplier: bypasses the multiplier for CCM transactions because we can't
+/// control the energy a CCM transaction spends, only the TRX burnt. For all other transaction
+/// types the multiplier is applied normally.
+pub struct TronFeeMultiplier;
+
+impl pallet_cf_chain_tracking::FeeMultiplierProvider<Tron> for TronFeeMultiplier {
+	fn adjust_fee(
+		estimated_fee: <Tron as cf_chains::Chain>::ChainAmount,
+		fee_multiplier: sp_runtime::FixedU128,
+		ingress_or_egress: &cf_primitives::IngressOrEgress,
+	) -> <Tron as cf_chains::Chain>::ChainAmount {
+		if matches!(ingress_or_egress, cf_primitives::IngressOrEgress::EgressCcm { .. }) {
+			estimated_fee
+		} else {
+			sp_runtime::FixedPointNumber::saturating_mul_int(fee_multiplier, estimated_fee)
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct DotEnvironment;
 

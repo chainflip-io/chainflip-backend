@@ -46,6 +46,7 @@ impl_mock_chainflip!(Test);
 
 impl Config for Test {
 	type TargetChain = MockEthereum;
+	type FeeMultiplierProvider = crate::DefaultFeeMultiplier;
 	type WeightInfo = ();
 }
 
