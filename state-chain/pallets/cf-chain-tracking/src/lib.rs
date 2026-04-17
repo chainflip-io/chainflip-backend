@@ -58,6 +58,9 @@ pub mod pallet {
 		/// A marker trait identifying the chain whose state we are tracking.
 		type TargetChain: Chain;
 
+		/// Controls how the fee multiplier is applied to fee estimates.
+		type FeeMultiplierProvider: FeeMultiplierProvider<Self::TargetChain>;
+
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
@@ -223,29 +226,43 @@ impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
+/// Trait for adjusting the fee estimate with the fee multiplier.
+/// Different chains can provide different implementations to customize fee adjustment behavior.
+pub trait FeeMultiplierProvider<C: Chain> {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount;
+}
+
+/// Default implementation: always applies the fee multiplier.
+pub struct DefaultFeeMultiplier;
+
+impl<C: Chain> FeeMultiplierProvider<C> for DefaultFeeMultiplier {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		_ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount {
+		fee_multiplier.saturating_mul_int(estimated_fee)
+	}
+}
+
 impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pallet<T, I> {
 	fn estimate_fee(
 		asset: <T::TargetChain as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
 	) -> <T::TargetChain as Chain>::ChainAmount {
-		let chain: cf_primitives::ForeignChain = asset.into();
 		let estimated_fee = CurrentChainState::<T, I>::get()
 			.expect(NO_CHAIN_STATE)
 			.tracked_data
 			.estimate_fee(asset, ingress_or_egress.clone());
 
-		// For Tron we will use the multiplier to account for energy availability so we
-		// can adjust the fee according to the energy that the protocol can subsidize.
-		// However, for TRON CCM we want to charge users the maximum fee that the transaction
-		// can cost because we can't control the amount of energy the transaction can spend, we
-		// can only control the TRX burnt. Therefore we charge full TRX burnt for CCM
-		// bypassing the multiplier. Alternatively a whitelist for CCM receivers would be needed.
-		if chain == cf_primitives::ForeignChain::Tron &&
-			matches!(ingress_or_egress, IngressOrEgress::EgressCcm { .. })
-		{
-			estimated_fee
-		} else {
-			FeeMultiplier::<T, I>::get().saturating_mul_int(estimated_fee)
-		}
+		T::FeeMultiplierProvider::adjust_fee(
+			estimated_fee,
+			FeeMultiplier::<T, I>::get(),
+			&ingress_or_egress,
+		)
 	}
 }
