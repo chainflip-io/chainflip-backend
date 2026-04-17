@@ -14,20 +14,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{basis_points::SignedHundredthBasisPoints, DcaParameters};
+use super::*;
+use crate::{
+	swap_state::{AfterBrokerFee4, AfterFirstLeg2, AfterNetworkFee1, AfterSecondLeg3, SwapState},
+	utilities::split_off_highest_impact_swap,
+};
+use cf_chains::{AccountOrAddress, CcmDepositMetadataChecked};
+use cf_primitives::{
+	basis_points::SignedHundredthBasisPoints, DcaParameters, ONE_AS_BASIS_POINTS, STABLE_ASSET,
+};
 use cf_traits::{
-	lending::LendingSystemApi, EgressApi, FundAccount, PoolPriceProvider, ScheduledEgressDetails,
-	SwapExecutionProgress,
+	lending::LendingSystemApi, AssetConverter, EgressApi, ExpiryBehaviour, FundAccount,
+	FundingSource, PoolPriceProvider, ScheduledEgressDetails, SwapExecutionProgress,
+	SwapRequestType,
 };
-use core::cmp::max;
-use sp_runtime::{FixedPointNumber, FixedU64, SaturatedConversion};
-
-use crate::swap_state::{Stage1, Stage2, Stage3, Stage4, SuccessfulSwap, SwapState};
-
-use super::{
-	pallet::{Config, Event, Pallet, SwapRequests},
-	*,
+use frame_support::{storage::with_transaction_unchecked, transactional};
+use sp_runtime::{
+	helpers_128bit::multiply_by_rational_with_rounding, traits::UniqueSaturatedInto,
+	FixedPointNumber, FixedU64, Rounding, SaturatedConversion, TransactionOutcome,
 };
+use sp_std::{cmp::max, collections::btree_set::BTreeSet};
+
 impl<T: Config> Pallet<T> {
 	pub fn get_scheduled_swap_legs(base_asset: Asset) -> Vec<(SwapLegInfo, BlockNumberFor<T>)> {
 		if !T::SafeMode::get().swaps_enabled {
@@ -53,7 +60,7 @@ impl<T: Config> Pallet<T> {
 			Self::execute_batch(swaps.clone());
 
 		// For all failed swaps, we can use price pool fallback to estimate the amounts
-		let failed_swaps: Vec<SwapState<T, Stage2>> = if !failed_swaps.is_empty() {
+		let failed_swaps: Vec<SwapState<T, AfterFirstLeg2>> = if !failed_swaps.is_empty() {
 			let swaps = failed_swaps.into_iter().map(|(swap, _)| SwapState::new(swap)).collect();
 
 			// Manually execute the fist step of the swap logic to get the input amount
@@ -106,14 +113,11 @@ impl<T: Config> Pallet<T> {
 			.filter_map(|state| {
 				let swap_request = SwapRequests::<T>::get(state.swap_request_id())
 					.expect("Swap request should exist");
-				let dca_state = match swap_request.state {
-					SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
-					_ => None,
+				let (remaining_chunks, chunk_interval) = match swap_request.state {
+					SwapRequestState::UserSwap { dca_state, .. } =>
+						(dca_state.remaining_chunks, dca_state.chunk_interval),
+					_ => (0, SWAP_DELAY_BLOCKS),
 				};
-				let remaining_chunks =
-					dca_state.as_ref().map(|dca| dca.remaining_chunks).unwrap_or(0);
-				let chunk_interval =
-					dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
 
 				if state.input_asset() != STABLE_ASSET && state.input_asset() == base_asset {
 					Some((
@@ -172,39 +176,11 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
-	pub(crate) fn trigger_withdrawal(
-		account_id: &T::AccountId,
-		asset: Asset,
-		destination_address: ForeignChainAddress,
-	) -> DispatchResult {
-		let earned_fees = T::BalanceApi::get_balance(account_id, asset);
-		ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
-		T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
-
-		let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
-			T::EgressHandler::schedule_egress(
-				asset,
-				earned_fees,
-				destination_address.clone(),
-				None,
-			)
-			.map_err(Into::into)?;
-
-		Self::deposit_event(Event::<T>::WithdrawalRequested {
-			account_id: account_id.clone(),
-			egress_amount,
-			egress_asset: asset,
-			egress_fee: fee_withheld,
-			destination_address: T::AddressConverter::to_encoded_address(destination_address),
-			egress_id,
-		});
-
-		Ok(())
-	}
-
-	pub(crate) fn take_network_fees(swaps: Vec<SwapState<T, ()>>) -> Vec<SwapState<T, Stage1>> {
+	pub(crate) fn take_network_fees(
+		swaps: Vec<SwapState<T, ()>>,
+	) -> Vec<SwapState<T, AfterNetworkFee1>> {
 		let mut total_network_fees = CollectedNetworkFee::<T>::get();
-		let swaps_after_network_fees: Vec<SwapState<T, Stage1>> = swaps
+		let swaps_after_network_fees: Vec<SwapState<T, AfterNetworkFee1>> = swaps
 			.into_iter()
 			.map(|state| {
 				SwapRequests::<T>::mutate(state.swap_request_id(), |swap_request| {
@@ -251,7 +227,9 @@ impl<T: Config> Pallet<T> {
 		swaps_after_network_fees
 	}
 
-	pub(crate) fn take_broker_fees(swaps: Vec<SwapState<T, Stage3>>) -> Vec<SwapState<T, Stage4>> {
+	fn take_broker_fees(
+		swaps: Vec<SwapState<T, AfterSecondLeg3>>,
+	) -> Vec<SwapState<T, AfterBrokerFee4>> {
 		// Take the broker fee from the output amount
 		swaps
 			.into_iter()
@@ -276,7 +254,7 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 
-	pub(crate) fn start_broker_fee_swaps_or_credit(
+	fn start_broker_fee_swaps_or_credit(
 		fee_tracker: &BrokerFeesTracker<T::AccountId>,
 		fee_asset: Asset,
 	) -> BTreeMap<T::AccountId, SwapRequestId> {
@@ -330,9 +308,10 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Enforce price protections. Must be called after the final output has been set.
+	/// Enforce price protections (minimum price and oracle price) and return the price delta from
+	/// oracle (excluding fees) if available.
 	pub(crate) fn check_swap_price_violation(
-		swap: &SwapState<T, Stage4>,
+		swap: &SwapState<T, AfterBrokerFee4>,
 	) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
 		if let Some(params) = swap.refund_params() {
 			// Minimum price protection, aka FoK price protection
@@ -542,10 +521,9 @@ impl<T: Config> Pallet<T> {
 					// Find the largest swap from the failing pool/direction and remove it
 					// so we can try the remaining swaps again. We should always be able to
 					// find a swap to remove, but if we can't for some reason, abort.
-					if let Some(removed_swap) = utilities::split_off_highest_impact_swap(
-						&mut swaps_to_execute,
-						failed_swap_group,
-					) {
+					if let Some(removed_swap) =
+						split_off_highest_impact_swap(&mut swaps_to_execute, failed_swap_group)
+					{
 						failed_swaps.push((removed_swap, SwapFailureReason::PriceImpactLimit));
 					} else {
 						break;
@@ -993,14 +971,14 @@ impl<T: Config> Pallet<T> {
 					} else {
 						let swap_output = if bundle_input > 0 {
 							multiply_by_rational_with_rounding(
-					swap.swap_amount(),
-					bundle_output,
-					bundle_input,
-					Rounding::Down,
-				)
-				.expect(
-					"bundle_input >= swap_amount && bundle_input != 0 ∴ result can't overflow",
-				)
+								swap.swap_amount(),
+								bundle_output,
+								bundle_input,
+								Rounding::Down,
+							)
+							.expect(
+								"bundle_input >= swap_amount && bundle_input != 0 ∴ result can't overflow",
+							)
 						} else {
 							0
 						};
@@ -1125,7 +1103,7 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	pub fn estimate_usdc_price_using_simulated_swap_or_fallback(asset: Asset, side: Side) -> Price {
+	fn estimate_usdc_price_using_simulated_swap_or_fallback(asset: Asset, side: Side) -> Price {
 		const ESTIMATION_AMOUNT_USDC: u128 = 20_000_000; // 20 USDC
 		match side {
 			// Buy means we buy Asset and sell USDC
@@ -1170,7 +1148,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub(crate) fn egress_for_swap(
+	fn egress_for_swap(
 		swap_request_id: SwapRequestId,
 		amount: AssetAmount,
 		asset: Asset,
@@ -1215,79 +1193,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	pub fn assemble_and_validate_broker_fees(
-		broker_id: T::AccountId,
-		broker_commission: BasisPoints,
-		affiliate_fees: Affiliates<T::AccountId>,
-	) -> Result<Beneficiaries<T::AccountId>, DispatchError> {
-		let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
-			.into_iter()
-			.chain(affiliate_fees.iter().cloned())
-			.collect::<Vec<_>>()
-			.try_into()
-			.expect(
-				"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
-			);
-		Pallet::<T>::validate_broker_fees(&beneficiaries)?;
-		Ok(beneficiaries)
-	}
-
-	/// Gets the network fee rate and minimum in usdc terms for a swap between the given input
-	/// and output assets, taking into account whether it's an internal swap or not.
-	pub(crate) fn get_network_fee(
-		input_asset: Asset,
-		output_asset: Asset,
-		is_internal_swap: bool,
-	) -> FeeRateAndMinimum {
-		let (input_asset_fee, output_asset_fee, usdc_minimum) = if is_internal_swap {
-			let default_fee = InternalSwapNetworkFee::<T>::get();
-			(
-				InternalSwapNetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
-				InternalSwapNetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
-				default_fee.minimum,
-			)
-		} else {
-			let default_fee = NetworkFee::<T>::get();
-			(
-				NetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
-				NetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
-				default_fee.minimum,
-			)
-		};
-
-		FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum: usdc_minimum }
-	}
-
-	pub fn get_network_fee_rate_for_swap(
-		input_asset: Asset,
-		output_asset: Asset,
-		is_internal_swap: bool,
-	) -> Permill {
-		Self::get_network_fee(input_asset, output_asset, is_internal_swap).rate
-	}
-
-	/// Gets the network fee rate and minimum in the input asset terms.
-	pub fn get_network_fee_for_swap(
-		input_asset: Asset,
-		output_asset: Asset,
-		is_internal_swap: bool,
-	) -> FeeRateAndMinimum {
-		// Find the correct fee values in USDC
-		let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
-			Self::get_network_fee(input_asset, output_asset, is_internal_swap);
-
-		// Convert the minimum amount to the input asset
-		let minimum = Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
-			input_asset,
-			Asset::Usdc,
-			usdc_minimum,
-			false, // no network fee
-			false, // not internal
-		);
-
-		FeeRateAndMinimum { rate, minimum }
-	}
-
 	/// Returns the configured default oracle price slippage protection for a single pool leg.
 	/// Returns `None` if the asset has no oracle price feed or no valid pool pair.
 	pub fn default_oracle_lpp_for_asset(asset: Asset) -> Option<BasisPoints> {
@@ -1301,7 +1206,7 @@ impl<T: Config> Pallet<T> {
 	/// meaningful protection can be applied). For two-leg swaps where only one leg
 	/// has an oracle, the other leg contributes zero to the total limit so that
 	/// the oracle-priced leg is still protected.
-	pub(crate) fn get_default_oracle_price_protection(
+	fn get_default_oracle_price_protection(
 		input_asset: Asset,
 		output_asset: Asset,
 	) -> Option<BasisPoints> {

@@ -33,12 +33,12 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
 	evm::Hash as H256,
-	AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
+	AccountOrAddress, AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked,
+	CcmDepositMetadata, CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
-	BASIS_POINTS_PER_MILLION,
+	BASIS_POINTS_PER_MILLION, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -51,8 +51,8 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
-	INITIAL_FLIP_FUNDING,
+	AccountRoleRegistry, AssetConverter, Chainflip, ExpiryBehaviour, SetSafeMode,
+	SwapExecutionProgress, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,

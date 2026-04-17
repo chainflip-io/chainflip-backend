@@ -17,6 +17,7 @@
 use cf_primitives::AssetAndAmount;
 use cf_test_utilities::assert_no_matching_event;
 use cf_traits::mocks::price_feed_api::MockPriceFeedApi;
+use sp_std::collections::btree_set::BTreeSet;
 
 use super::*;
 
