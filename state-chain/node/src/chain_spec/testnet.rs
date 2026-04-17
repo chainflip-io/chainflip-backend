@@ -65,7 +65,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	// TODO: Add the actual addresses for the TRON contracts once we have a final localnet image
 	tron_key_manager_address: hex_literal::hex!("9df3e70fc7ea8128d6d0634664118d16bc856e1c"),
 	tron_vault_address: hex_literal::hex!("a0e915df8a24a4718061461a41f303c6d3353e51"),
-	tron_usdt_token_address: hex_literal::hex!("874dabe2d179dd5060b48881872b5851458c9fe0"),
+	trx_usdt_token_address: hex_literal::hex!("874dabe2d179dd5060b48881872b5851458c9fe0"),
 
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,

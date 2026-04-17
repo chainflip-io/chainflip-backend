@@ -56,8 +56,8 @@ export async function getBalance(asset: Asset, address: string): Promise<string>
     case 'Trx':
       result = await getTrxBalance(address);
       break;
-    case 'TronUsdt': {
-      const contractAddress = getContractAddress('Tron', 'TronUsdt');
+    case 'TrxUsdt': {
+      const contractAddress = getContractAddress('Tron', 'TrxUsdt');
       result = await getTrc20Balance(address, contractAddress);
       break;
     }

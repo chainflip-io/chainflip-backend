@@ -3568,7 +3568,7 @@ pub mod utilities {
 			Asset::SolUsdt |
 			Asset::HubUsdc |
 			Asset::HubUsdt |
-			Asset::TronUsdt => 100, // $1
+			Asset::TrxUsdt => 100, // $1
 			Asset::Flip => 40,                     // ~$0.40
 			Asset::Eth | Asset::ArbEth => 280_000, // ~$2,800
 			Asset::Dot | Asset::HubDot => 200,     // ~$2

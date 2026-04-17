@@ -548,7 +548,7 @@ impl EvmEnvironmentProvider<Tron> for EvmEnvironment {
 	fn token_address(asset: assets::tron::Asset) -> Option<EvmAddress> {
 		match asset {
 			assets::tron::Asset::Trx => Some(ETHEREUM_ETH_ADDRESS),
-			assets::tron::Asset::TronUsdt => Environment::supported_tron_assets(asset),
+			assets::tron::Asset::TrxUsdt => Environment::supported_tron_assets(asset),
 		}
 	}
 
