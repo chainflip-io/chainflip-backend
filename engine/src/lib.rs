@@ -57,7 +57,10 @@ use self::{
 	evm::{retry_rpc::EvmRetryRpcClient, rpc::EvmRpcSigningClient},
 	settings::{CommandLineOptions, Settings, DEFAULT_SETTINGS_DIR},
 	sol::retry_rpc::SolRetryRpcClient,
-	tron::{retry_rpc::TronRetryRpcClient, rpc::{TronRpcClient, TronRpcSigningClient}},
+	tron::{
+		retry_rpc::TronRetryRpcClient,
+		rpc::{TronRpcClient, TronRpcSigningClient},
+	},
 };
 use anyhow::Context;
 use cf_chains::{evm::U256, Chain};
