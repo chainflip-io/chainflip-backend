@@ -249,8 +249,8 @@ export function getContractAddress(chain: Chain, contract: string): string {
           return '419df3e70fc7ea8128d6d0634664118d16bc856e1c';
         case 'Trx':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-        case 'TronUsdt':
-          return process.env.TRON_USDT_ADDRESS ?? '41874dabe2d179dd5060b48881872b5851458c9fe0';
+        case 'TrxUsdt':
+          return process.env.TRX_USDT_ADDRESS ?? '41874dabe2d179dd5060b48881872b5851458c9fe0';
         case 'CFTESTER':
           return '0x09464271134799e67f7026eedb1aac4c5087b9a7';
         default:
@@ -303,7 +303,7 @@ export function shortChainFromAsset(asset: Asset) {
     case 'HubUsdt':
       return 'Hub';
     case 'Trx':
-    case 'TronUsdt':
+    case 'TrxUsdt':
       return 'Tron';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
@@ -337,7 +337,7 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
-    case 'TronUsdt':
+    case 'TrxUsdt':
       return '1000';
     case 'Sol':
       return '100';
@@ -781,7 +781,7 @@ export async function newAddress(
     case Assets.ArbUsdc:
     case Assets.ArbUsdt:
     case Assets.Trx:
-    case Assets.TronUsdt:
+    case Assets.TrxUsdt:
       rawAddress = newEvmAddress(seed);
       break;
     case Assets.HubDot:
@@ -1218,8 +1218,8 @@ export async function observeFetch(asset: Asset, address: string): Promise<void>
   for (let i = 0; i < 360; i++) {
     const balance = await getBalance(asset, address);
     // In TRON the fetches will leave 1 dust amount of USDT to make deposits cheaper.
-    if (asset === Assets.TronUsdt) {
-      if (balance === fineAmountToAmount('1', assetDecimals(Assets.TronUsdt))) {
+    if (asset === Assets.TrxUsdt) {
+      if (balance === fineAmountToAmount('1', assetDecimals(Assets.TrxUsdt))) {
         const tronWeb = getTronWebClient();
         const contract = await tronWeb.trx.getContract(getEncodedTronAddress(address));
         if (!(contract && contract.code_hash)) {

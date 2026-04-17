@@ -150,7 +150,7 @@ export const cfPrimitivesChainsAssetsAnyAsset = simpleEnum([
   'ArbUsdt',
   'SolUsdt',
   'Trx',
-  'TronUsdt',
+  'TrxUsdt',
 ]);
 
 export const cfTraitsSafeModeSafeModeSet = z.discriminatedUnion('__kind', [
@@ -2018,7 +2018,7 @@ export const cfChainsTronTronTransaction = z.object({
   functionSelector: hexString,
 });
 
-export const cfPrimitivesChainsAssetsTronAsset = simpleEnum(['Trx', 'TronUsdt']);
+export const cfPrimitivesChainsAssetsTronAsset = simpleEnum(['Trx', 'TrxUsdt']);
 
 export const palletCfTronIngressEgressRefundReason = simpleEnum([
   'InvalidBrokerFees',

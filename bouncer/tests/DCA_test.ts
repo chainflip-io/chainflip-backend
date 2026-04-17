@@ -149,6 +149,6 @@ export async function testDCASwaps(testContext: TestContext) {
     (subcf) => testDCASwap(subcf, Assets.Sol, 10, 2, 3, true),
     (subcf) => testDCASwap(subcf, Assets.SolUsdc, 10, 2, 1, true),
     (subcf) => testDCASwap(subcf, Assets.Trx, 100, 2, 2),
-    (subcf) => testDCASwap(subcf, Assets.TronUsdt, 10, 2, 4, true),
+    (subcf) => testDCASwap(subcf, Assets.TrxUsdt, 10, 2, 4, true),
   ]);
 }

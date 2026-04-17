@@ -50,11 +50,11 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Vault Setup completed');
 
   // Setup swaps
-  cf.info('Setting up swaps for new assets: Trx and TronUsdt');
+  cf.info('Setting up swaps for new assets: Trx and TrxUsdt');
 
   await Promise.all([
     createLpPool(cf.logger, 'Trx', price.get('Trx')!),
-    createLpPool(cf.logger, 'TronUsdt', price.get('TronUsdt')!),
+    createLpPool(cf.logger, 'TrxUsdt', price.get('TrxUsdt')!),
   ]);
 
   // Set permissive default oracle slippage (100%) for all pools to prevent swap failures in tests.
@@ -89,7 +89,7 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
       .all([
         (subcf) => depositLiquidity(subcf, 'Trx', deposits.get('Trx')!),
-        (subcf) => depositLiquidity(subcf, 'TronUsdt', deposits.get('TronUsdt')!),
+        (subcf) => depositLiquidity(subcf, 'TrxUsdt', deposits.get('TrxUsdt')!),
       ]);
 
   const lpApiDeposits = (parentCf: ChainflipIO<A>) =>
@@ -97,7 +97,7 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
       .with({ account: fullAccountFromUri('//LP_API', 'LP') })
       .all([
         (subcf) => depositLiquidity(subcf, 'Trx', 10000),
-        (subcf) => depositLiquidity(subcf, 'TronUsdt', 1000),
+        (subcf) => depositLiquidity(subcf, 'TrxUsdt', 1000),
       ]);
 
   cf.info('Depositing Tron liquidity');
@@ -108,10 +108,10 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
       .with({ account: fullAccountFromUri('//LP_1', 'LP') })
       .all([
         (subcf) => rangeOrder(subcf, 'Trx', deposits.get('Trx')! * 0.9999),
-        (subcf) => rangeOrder(subcf, 'TronUsdt', deposits.get('TronUsdt')! * 0.9999),
+        (subcf) => rangeOrder(subcf, 'TrxUsdt', deposits.get('TrxUsdt')! * 0.9999),
       ]);
 
-  cf.info('Setting up Trx and TronUsdt range orders');
+  cf.info('Setting up Trx and TrxUsdt range orders');
   await cf.all([lp1RangeOrders]);
 
   cf.debug('Range orders placed');

@@ -847,7 +847,7 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
-		pub tron_usdt_address: EvmAddress,
+		pub trx_usdt_address: EvmAddress,
 		pub tron_key_manager_address: EvmAddress,
 		pub tron_vault_address: EvmAddress,
 		pub tron_chain_id: u64,
@@ -894,7 +894,7 @@ pub mod pallet {
 			TronKeyManagerAddress::<T>::set(self.tron_key_manager_address);
 			TronVaultAddress::<T>::set(self.tron_vault_address);
 			TronChainId::<T>::set(self.tron_chain_id);
-			TronSupportedAssets::<T>::insert(TrxAsset::TronUsdt, self.tron_usdt_address);
+			TronSupportedAssets::<T>::insert(TrxAsset::TrxUsdt, self.trx_usdt_address);
 
 			SolanaGenesisHash::<T>::set(self.sol_genesis_hash);
 			SolanaApiEnvironment::<T>::set(self.sol_api_env.clone());

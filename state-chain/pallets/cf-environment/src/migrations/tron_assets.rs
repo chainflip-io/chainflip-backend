@@ -9,7 +9,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 	fn on_runtime_upgrade() -> Weight {
 		log::info!("🔧 Running Environment pallet Tron migration...");
 
-		let (chain_id, tron_usdt_address, key_manager_address, vault_address) =
+		let (chain_id, trx_usdt_address, key_manager_address, vault_address) =
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
 				// TODO: Replace with actual mainnet addresses
 				cf_runtime_utilities::genesis_hashes::BERGHAIN => (
@@ -42,7 +42,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			};
 
 		TronChainId::<T>::set(chain_id);
-		TronSupportedAssets::<T>::insert(TrxAsset::TronUsdt, tron_usdt_address);
+		TronSupportedAssets::<T>::insert(TrxAsset::TrxUsdt, trx_usdt_address);
 		TronKeyManagerAddress::<T>::set(key_manager_address);
 		TronVaultAddress::<T>::set(vault_address);
 
@@ -57,7 +57,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			cf_runtime_utilities::genesis_hashes::BERGHAIN => {
 				assert_eq!(TronChainId::<T>::get(), cf_chains::tron::CHAIN_ID_MAINNET);
 				assert_eq!(
-					TronSupportedAssets::<T>::get(TrxAsset::TronUsdt),
+					TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt),
 					Some(EvmAddress::default()) // TODO: update when real address is known
 				);
 				// TODO: update when real addresses are known
@@ -67,7 +67,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
 				assert_eq!(TronChainId::<T>::get(), cf_chains::tron::CHAIN_ID_NILE_TESTNET);
 				assert_eq!(
-					TronSupportedAssets::<T>::get(TrxAsset::TronUsdt),
+					TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt),
 					Some(EvmAddress::default()) // TODO: update when real address is known
 				);
 				// TODO: update when real addresses are known
@@ -77,7 +77,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			cf_runtime_utilities::genesis_hashes::SISYPHOS => {
 				assert_eq!(TronChainId::<T>::get(), cf_chains::tron::CHAIN_ID_NILE_TESTNET);
 				assert_eq!(
-					TronSupportedAssets::<T>::get(TrxAsset::TronUsdt),
+					TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt),
 					Some(EvmAddress::default()) // TODO: update when real address is known
 				);
 				// TODO: update when real addresses are known
@@ -86,7 +86,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			},
 			_ => {
 				assert_eq!(TronChainId::<T>::get(), 4271970548);
-				assert!(TronSupportedAssets::<T>::get(TrxAsset::TronUsdt).is_some());
+				assert!(TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt).is_some());
 				assert_eq!(
 					TronKeyManagerAddress::<T>::get(),
 					EvmAddress::from(hex_literal::hex!("9df3e70fc7ea8128d6d0634664118d16bc856e1c"))

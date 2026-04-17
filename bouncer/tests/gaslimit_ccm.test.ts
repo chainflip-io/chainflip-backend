@@ -588,7 +588,7 @@ describe('GasLimitCcmSwaps', async () => {
 
   for (const pair of [
     ['ArbEth', 'Trx'],
-    ['Sol', 'TronUsdt'],
+    ['Sol', 'TrxUsdt'],
   ]) {
     concurrentTest(
       `EVM Insufficient Gas CCM swap ${pair[0]} to ${pair[1]}`,

@@ -911,17 +911,17 @@ assets!(
 				string: "TRX" (aliases: ["Trx", "trx"]),
 				json: "TRX",
 				gas: true,
-				index: 19,
+				index: 17,
 				usd_stablecoin: false,
 				decimals: 6,
 			},
 			Asset {
-				variant: TronUsdt,
+				variant: TrxUsdt,
 				member: usdt,
 				string: "USDT" (aliases: ["Usdt", "usdt"]),
 				json: "USDT",
 				gas: false,
-				index: 20,
+				index: 18,
 				usd_stablecoin: true,
 				decimals: 6,
 			},
@@ -966,8 +966,8 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(14).unwrap(), any::Asset::Wbtc);
 		assert_eq!(any::Asset::try_from(15).unwrap(), any::Asset::ArbUsdt);
 		assert_eq!(any::Asset::try_from(16).unwrap(), any::Asset::SolUsdt);
-		assert_eq!(any::Asset::try_from(19).unwrap(), any::Asset::Trx);
-		assert_eq!(any::Asset::try_from(20).unwrap(), any::Asset::TronUsdt);
+		assert_eq!(any::Asset::try_from(17).unwrap(), any::Asset::Trx);
+		assert_eq!(any::Asset::try_from(18).unwrap(), any::Asset::TrxUsdt);
 	}
 
 	#[test]
@@ -987,7 +987,7 @@ mod test_assets {
 		assert_conversion!(sol, SolUsdt);
 		assert_conversion!(hub, HubDot);
 		assert_conversion!(tron, Trx);
-		assert_conversion!(tron, TronUsdt);
+		assert_conversion!(tron, TrxUsdt);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
