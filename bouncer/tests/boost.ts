@@ -228,6 +228,7 @@ export async function testBoostingSwap(testContext: TestContext) {
             minimumAddFundsAmount: new Map(
               minimums.map(([asset, amount]) => [{ [asset]: {} }, amount]),
             ),
+            minLendingPoolShare: 30,
           },
         },
       },

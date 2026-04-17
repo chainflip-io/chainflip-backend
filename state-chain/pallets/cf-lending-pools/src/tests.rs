@@ -48,6 +48,7 @@ fn setup_lending_pool_for_boost() {
 	BoostConfig::<Test>::set(BoostConfiguration {
 		network_fee_deduction_from_boost_percent: Percent::from_percent(0),
 		minimum_add_funds_amount: BTreeMap::default(),
+		min_lending_pool_share: Percent::from_percent(30),
 	});
 
 	MockBalance::credit_account(&BOOSTER_1, Asset::Eth, INIT_BOOSTER_ETH_BALANCE);
@@ -69,6 +70,7 @@ fn setup_legacy_boost_pools() {
 	BoostConfig::<Test>::set(BoostConfiguration {
 		network_fee_deduction_from_boost_percent: Percent::from_percent(0),
 		minimum_add_funds_amount: BTreeMap::default(),
+		min_lending_pool_share: Percent::from_percent(30),
 	});
 
 	<Test as crate::Config>::Balance::credit_account(
@@ -112,6 +114,7 @@ fn can_update_all_config_items() {
 		let new_boost_config = BoostConfiguration {
 			network_fee_deduction_from_boost_percent: NEW_NETWORK_FEE_DEDUCTION,
 			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 15000_u128)]),
+			min_lending_pool_share: Percent::from_percent(50),
 		};
 
 		const NEW_LENDING_POOL_CONFIG: LendingPoolConfiguration = LendingPoolConfiguration {
@@ -484,6 +487,7 @@ fn basic_boosting() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
 			minimum_add_funds_amount: Default::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		assert_ok!(LendingPools::add_lender_funds(
@@ -585,6 +589,7 @@ fn boosted_deposit_is_lost() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(NETWORK_FEE_PCT as u8),
 			minimum_add_funds_amount: BTreeMap::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		assert_ok!(LendingPools::add_lender_funds(
@@ -673,6 +678,7 @@ fn stop_boosting_with_legacy_pool() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(0),
 			minimum_add_funds_amount: BTreeMap::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		MockBalance::credit_account(&BOOSTER_1, Asset::Eth, INIT_BOOSTER_ETH_BALANCE);
@@ -741,6 +747,7 @@ fn add_legacy_boost_funds_below_minimum() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Default::default(),
 			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, MINIMUM_ADD_FUNDS_AMOUNT)]),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		assert_noop!(
@@ -1028,6 +1035,7 @@ fn boost_pool_details() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: NETWORK_FEE_DEDUCTION,
 			minimum_add_funds_amount: BTreeMap::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		assert_ok!(LendingPools::add_boost_funds(
@@ -1096,6 +1104,7 @@ mod hybrid_boosting {
 				NETWORK_FEE_PERCENT as u8,
 			),
 			minimum_add_funds_amount: BTreeMap::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 		assert_ok!(LendingPools::update_whitelist(
 			RuntimeOrigin::root(),
@@ -1113,7 +1122,7 @@ mod hybrid_boosting {
 	#[test]
 	fn both_pools_participate() {
 		new_test_ext().execute_with(|| {
-			// Lending pool has exactly half the required amount; boost pool covers the rest.
+			// Both pools have equal available liquidity, so the required amount is split 50/50.
 			const DEPOSIT_AMOUNT: AssetAmount = 200_000_000;
 			const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 			const LOAN_ID: LoanId = LoanId(0);
@@ -1121,9 +1130,9 @@ mod hybrid_boosting {
 			const TOTAL_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000; // 100_000
 			const REQUIRED_AMOUNT: AssetAmount = DEPOSIT_AMOUNT - TOTAL_FEE; // 199_900_000
 
-			// Each pool contributes exactly half: lending_pool_fee / total_fee = 1/2 exactly.
+			// Equal liquidity in both pools produces a clean 50/50 split.
 			const LENDING_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
-			const LEGACY_POOL_FUNDS: AssetAmount = DEPOSIT_AMOUNT;
+			const LEGACY_POOL_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
 
 			// Total fee is split 50/50 between the two pools (each contributes half the principal).
 			const LENDING_FEE_TOTAL: AssetAmount = TOTAL_FEE / 2; // 50_000
@@ -1245,7 +1254,7 @@ mod hybrid_boosting {
 	#[test]
 	fn only_lending_pool_participates() {
 		new_test_ext().execute_with(|| {
-			// Lending pool has more than enough funds; boost pool exists but is not used.
+			// Boost pool exists but has no funds; lending pool covers everything.
 			const DEPOSIT_AMOUNT: AssetAmount = 200_000_000;
 			const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
 			const LOAN_ID: LoanId = LoanId(0);
@@ -1255,7 +1264,6 @@ mod hybrid_boosting {
 
 			// Lending pool is funded with the full deposit amount — more than enough.
 			const LENDING_FUNDS: AssetAmount = DEPOSIT_AMOUNT; // 200_000_000
-			const BOOST_FUNDS: AssetAmount = DEPOSIT_AMOUNT;
 
 			// Lending pool covers everything; boost pool contributes nothing.
 			const LENDING_FEE_TOTAL: AssetAmount = TOTAL_FEE; // 100_000
@@ -1265,7 +1273,7 @@ mod hybrid_boosting {
 
 			setup_both_pools();
 
-			// 1. Fund the lending pool with more than required_amount.
+			// Fund only the lending pool; leave the boost pool empty.
 			MockBalance::credit_account(&BOOSTER_1, Asset::Eth, LENDING_FUNDS);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
@@ -1273,18 +1281,9 @@ mod hybrid_boosting {
 				LENDING_FUNDS,
 			));
 
-			// 2. Fund the legacy boost pool (it won't be used).
-			MockBalance::credit_account(&BOOSTER_2, Asset::Eth, BOOST_FUNDS);
-			assert_ok!(LendingPools::add_boost_funds(
-				RuntimeOrigin::signed(BOOSTER_2),
-				Asset::Eth,
-				BOOST_FUNDS,
-				BOOST_FEE_BPS,
-			));
-
 			frame_system::Pallet::<Test>::reset_events();
 
-			// 3. Boost deposit — lending pool covers the full required_amount.
+			// Boost deposit — lending pool covers the full required_amount.
 			assert_ok!(LendingPools::try_boosting(
 				DEPOSIT_ID,
 				Asset::Eth,
@@ -1347,8 +1346,6 @@ mod hybrid_boosting {
 				get_supply_position(Asset::Eth, BOOSTER_1),
 				Some(LENDING_FUNDS + LENDING_POOL_FEE)
 			);
-			// Boost pool booster's balance is unchanged (boost pool was not used).
-			assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_2), Some(BOOST_FUNDS));
 		});
 	}
 
@@ -1477,9 +1474,9 @@ mod hybrid_boosting {
 			const TOTAL_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000; // 100_000
 			const REQUIRED_AMOUNT: AssetAmount = DEPOSIT_AMOUNT - TOTAL_FEE; // 199_900_000
 
-			// Expecting 50/50 split between pools:
+			// Equal liquidity in both pools => 50/50 split.
 			const LENDING_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
-			const LEGACY_POOL_FUNDS: AssetAmount = DEPOSIT_AMOUNT;
+			const LEGACY_POOL_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
 
 			const LENDING_FEE_TOTAL: AssetAmount = TOTAL_FEE / 2; // 50_000
 
@@ -1566,6 +1563,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(0),
 			minimum_add_funds_amount: BTreeMap::default(),
+			min_lending_pool_share: Percent::from_percent(30),
 		});
 		MockPriceFeedApi::set_price_usd_fine(Asset::Btc, BTC_PRICE);
 		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, ETH_PRICE);

@@ -19,6 +19,7 @@ use frame_support::migrations::VersionedMigration;
 
 use crate::Pallet;
 
+mod add_min_lending_pool_share;
 mod boost_refactor_migration;
 
 pub type PalletMigration<T> = (
@@ -29,5 +30,12 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<3, Pallet<T>>,
+	VersionedMigration<
+		3,
+		4,
+		add_min_lending_pool_share::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<4, Pallet<T>>,
 );

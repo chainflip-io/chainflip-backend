@@ -126,7 +126,9 @@ async function lendingTestForAsset<A = []>(
       ),
     expectedEvent: {
       name: 'LendingPools.LoanCreated',
-      schema: lendingPoolsLoanCreated.refine((event) => event.borrowerId === lp.address),
+      schema: lendingPoolsLoanCreated.refine(
+        (event) => event.loanType.__kind === 'User' && event.loanType.value === lp.address,
+      ),
     },
   });
 

@@ -1794,6 +1794,7 @@ export const palletCfTradingStrategyPalletConfigUpdate = z.discriminatedUnion('_
 export const palletCfLendingPoolsBoostConfiguration = z.object({
   networkFeeDeductionFromBoostPercent: z.number(),
   minimumAddFundsAmount: z.array(z.tuple([cfPrimitivesChainsAssetsAnyAsset, numberOrHex])),
+  minLendingPoolShare: z.number(),
 });
 
 export const palletCfLendingPoolsGeneralLendingConfigInterestRateConfiguration = z.object({

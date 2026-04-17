@@ -149,6 +149,7 @@ mod benchmarks {
 				config: BoostConfiguration {
 					network_fee_deduction_from_boost_percent: Percent::from_percent(10),
 					minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 1_000u128)]),
+					min_lending_pool_share: Percent::from_percent(30),
 				},
 			};
 			n as usize

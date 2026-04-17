@@ -86,7 +86,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 use serde::{Deserialize, Serialize};
 
@@ -96,6 +96,10 @@ pub struct BoostConfiguration {
 	pub network_fee_deduction_from_boost_percent: Percent,
 	/// The minimum amount that can be added to the boost pool.
 	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+	/// Minimum share of the borrowed amount that must come from the lending pool
+	/// (when it has enough available liquidity to cover it). The remainder is split
+	/// proportionally to each pool's available liquidity.
+	pub min_lending_pool_share: Percent,
 }
 
 #[derive(
@@ -239,6 +243,7 @@ impl Get<BoostConfiguration> for BoostConfigDefault {
 		BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
 			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 11000_u128)]), // ~$10 usd
+			min_lending_pool_share: Percent::from_percent(30),
 		}
 	}
 }

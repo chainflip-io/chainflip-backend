@@ -182,9 +182,12 @@ impl<T: Config> BoostApi for Pallet<T> {
 			Error::<T>::InsufficientBoostLiquidity
 		);
 
-		// Lending pool has priority: use it up to its available capacity.
-		let lending_pool_principal = lending_available.min(required_amount);
-		let boost_pool_principal = required_amount.saturating_sub(lending_pool_principal);
+		let (lending_pool_principal, boost_pool_principal) = split_required_amount(
+			required_amount,
+			lending_available,
+			boost_available,
+			BoostConfig::<T>::get().min_lending_pool_share,
+		);
 
 		let lending_pool_fee =
 			Permill::from_rational(lending_pool_principal, required_amount) * total_fee;
@@ -400,6 +403,126 @@ fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetA
 	let fee_permill = Permill::from_parts(fee_bps as u32 * BASIS_POINTS_PER_MILLION);
 
 	fee_permill * amount_to_boost
+}
+
+/// Split `required_amount` between the lending pool and the legacy boost pool
+/// proportionally to their available liquidity, with the lending pool guaranteed
+/// to cover at least `min_lending_share` of `required_amount` whenever it has
+/// enough capacity to do so. Neither pool is ever asked for more than its
+/// available liquidity, and the two returned values always sum to
+/// `required_amount`.
+///
+/// Assumes `lending_available + boost_available >= required_amount`.
+fn split_required_amount(
+	required_amount: AssetAmount,
+	lending_available: AssetAmount,
+	boost_available: AssetAmount,
+	min_lending_share: Percent,
+) -> (AssetAmount, AssetAmount) {
+	let total_available = lending_available.saturating_add(boost_available);
+	if total_available == 0 || required_amount == 0 {
+		return (0, 0);
+	}
+
+	// Proportional split (rounds down in favour of the boost pool).
+	let proportional_lending =
+		Permill::from_rational(lending_available, total_available) * required_amount;
+
+	// Floor on the lending pool's share. `proportional_lending` is always
+	// `<= lending_available` (since `required_amount <= lending + boost`), so the
+	// final `.min(lending_available)` is what enforces the cap when the floor exceeds it.
+	let min_lending = min_lending_share * required_amount;
+
+	let lending_pool_principal = proportional_lending.max(min_lending).min(lending_available);
+	let boost_pool_principal =
+		required_amount.saturating_sub(lending_pool_principal).min(boost_available);
+	// Handle any rounding shortfall (or lending slack freed up by the boost-pool clamp)
+	// by pushing the remainder back to the lending pool. Guaranteed to be within
+	// `lending_available` because total liquidity is at least `required_amount`.
+	let lending_pool_principal = required_amount.saturating_sub(boost_pool_principal);
+
+	(lending_pool_principal, boost_pool_principal)
+}
+
+#[cfg(test)]
+mod split_tests {
+	use super::*;
+
+	const MIN_LENDING_SHARE: Percent = Percent::from_percent(30);
+
+	fn split(
+		required: AssetAmount,
+		lending: AssetAmount,
+		boost: AssetAmount,
+	) -> (AssetAmount, AssetAmount) {
+		split_required_amount(required, lending, boost, MIN_LENDING_SHARE)
+	}
+
+	#[test]
+	fn proportional_split_when_both_pools_have_slack() {
+		// 100 + 100 available, need 150 -> 75/75 split (50% each).
+		assert_eq!(split(150, 100, 100), (75, 75));
+	}
+
+	#[test]
+	fn min_lending_share_enforced_when_lending_is_small_relative_to_boost() {
+		// Proportional would give lending only 200 (= 20%) but the 30% minimum kicks
+		// in and lending covers 300 while boost covers the remaining 700.
+		assert_eq!(split(1000, 500, 2000), (300, 700));
+	}
+
+	#[test]
+	fn lending_dominates_but_boost_still_gets_its_proportional_share() {
+		// Proportional: lending ~99%, boost ~1%.
+		assert_eq!(split(100, 990, 10), (99, 1));
+	}
+
+	#[test]
+	fn lending_falls_below_min_when_it_lacks_liquidity() {
+		// Lending has only 50, which is below 30% of 1000 = 300. It still contributes
+		// everything it has and the boost pool covers the remainder.
+		assert_eq!(split(1000, 50, 10_000), (50, 950));
+	}
+
+	#[test]
+	fn boost_pool_only_when_lending_is_empty() {
+		assert_eq!(split(1000, 0, 1000), (0, 1000));
+	}
+
+	#[test]
+	fn lending_pool_only_when_boost_is_empty() {
+		assert_eq!(split(1000, 1000, 0), (1000, 0));
+	}
+
+	#[test]
+	fn zero_required_amount() {
+		assert_eq!(split(0, 500, 500), (0, 0));
+	}
+
+	#[test]
+	fn rounding_shortfall_pushed_back_to_lending() {
+		// `Permill::from_rational(1, 999_999)` rounds down to 1 ppm, so proportional
+		// is 0. min_lending is 30% * 999_999 = 299_999 (capped at lending_available=1),
+		// so lending contributes 1 and boost covers the remaining 999_998.
+		assert_eq!(split(999_999, 1, 999_998), (1, 999_998));
+	}
+
+	#[test]
+	fn principals_never_exceed_available_liquidity() {
+		// Stress with exact-fit liquidity: total == required.
+		assert_eq!(split(1_000, 300, 700), (300, 700));
+		assert_eq!(split(1_000, 700, 300), (700, 300));
+		assert_eq!(split(1_000, 1_000, 0), (1_000, 0));
+		assert_eq!(split(1_000, 0, 1_000), (0, 1_000));
+	}
+
+	#[test]
+	fn min_lending_share_is_configurable() {
+		// With a 50% minimum, lending must cover 500 even though proportional is ~230.
+		assert_eq!(split_required_amount(1000, 600, 2000, Percent::from_percent(50)), (500, 500));
+		// With a 0% minimum, only proportional applies.
+		assert_eq!(split_required_amount(1000, 200, 2000, Percent::from_percent(0)), (91, 909));
+	}
 }
 
 #[test]
