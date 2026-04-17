@@ -23,32 +23,28 @@ use cf_amm::{
 use cf_chains::{
 	address::{AddressConverter, AddressError, ForeignChainAddress},
 	evm::Address as EthereumAddress,
-	AccountOrAddress, CcmDepositMetadataChecked, ChannelRefundParametersUncheckedEncoded,
-	SwapOrigin,
+	ChannelRefundParametersUncheckedEncoded, SwapOrigin,
 };
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
 	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, SwapId, SwapLeg,
-	SwapRequestId, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
-	SWAP_DELAY_BLOCKS,
+	SwapRequestId, FLIPPERINOS_PER_FLIP, SECONDS_PER_BLOCK, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
-	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
-	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
-	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
-	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChainflipNetworkInfo,
+	ChannelIdAllocator, DepositApi, DeregistrationCheck, FundingInfo, GetMinimumFunding,
+	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{ConstU16, Get, Saturating},
-		DispatchError, Permill, TransactionOutcome,
+		DispatchError, Permill,
 	},
-	storage::with_transaction_unchecked,
 	traits::HandleLifetime,
-	transactional, Hashable,
+	Hashable,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -56,18 +52,9 @@ use pallet_cf_environment::submit_runtime_call::{
 	is_valid_signature, SignatureData, TransactionMetadata,
 };
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational_with_rounding,
-	traits::{UniqueSaturatedInto, Zero},
-	Rounding,
-};
+use sp_arithmetic::traits::Zero;
 use sp_runtime::traits::TrailingZeroInput;
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	fmt::Debug,
-	vec,
-	vec::Vec,
-};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, vec, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -76,7 +63,7 @@ mod mock;
 mod tests;
 
 mod benchmarking;
-mod dca;
+mod dca_state;
 mod execution;
 mod fees;
 mod impls;
@@ -85,7 +72,7 @@ pub mod utilities;
 
 pub mod migrations;
 pub mod weights;
-pub use dca::DcaState;
+pub use dca_state::DcaState;
 pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
 pub(crate) use swap_state::{GroupSwapState, SwapGroupPair};
 pub use weights::WeightInfo;

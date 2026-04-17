@@ -46,10 +46,10 @@ pub struct SuccessfulSwap {
 
 impl SuccessfulSwap {
 	/// Downgrades a completed swap state to a Stage2. Used in the 'get_scheduled_swaps' RPC's
-	pub(crate) fn into_stage_2<T: Config>(self, swap: Swap<T>) -> SwapState<T, Stage2> {
+	pub(crate) fn into_stage_2<T: Config>(self, swap: Swap<T>) -> SwapState<T, AfterFirstLeg2> {
 		SwapState {
 			swap,
-			stage: Stage2 {
+			stage: AfterFirstLeg2 {
 				input_amount_after_fees: self.input_amount_after_fees,
 				network_fee_taken: self.network_fee_taken,
 				intermediate: self.intermediate,
@@ -71,14 +71,14 @@ pub struct SwapState<T: Config, Stage: Debug> {
 
 #[derive(Debug)]
 /// The stage after taking network fees from the input amount
-pub struct Stage1 {
+pub struct AfterNetworkFee1 {
 	pub input_amount_after_fees: AssetAmount,
 	pub network_fee_taken: AssetAmount,
 }
 
 #[derive(Debug)]
 /// The stage after the first leg of the swap is done (to the intermediate asset)
-pub struct Stage2 {
+pub struct AfterFirstLeg2 {
 	pub input_amount_after_fees: AssetAmount,
 	pub network_fee_taken: AssetAmount,
 	pub intermediate: Option<AssetAndAmount>,
@@ -86,7 +86,7 @@ pub struct Stage2 {
 
 #[derive(Debug)]
 /// The stage after the second leg of the swap is done (to the output asset)
-pub struct Stage3 {
+pub struct AfterSecondLeg3 {
 	pub input_amount_after_fees: AssetAmount,
 	pub network_fee_taken: AssetAmount,
 	pub intermediate: Option<AssetAndAmount>,
@@ -95,7 +95,7 @@ pub struct Stage3 {
 
 #[derive(Debug)]
 /// The stage after broker fees have been taken from the output amount
-pub struct Stage4 {
+pub struct AfterBrokerFee4 {
 	pub input_amount_after_fees: AssetAmount,
 	pub network_fee_taken: AssetAmount,
 	pub intermediate: Option<AssetAndAmount>,
@@ -137,8 +137,8 @@ pub(crate) trait GroupSwapState<T: Config> {
 	fn failed_swap(self) -> SwapState<T, StageFailed>;
 }
 
-impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
-	type OutputState = SwapState<T, Stage2>;
+impl<T: Config> GroupSwapState<T> for SwapState<T, AfterNetworkFee1> {
+	type OutputState = SwapState<T, AfterFirstLeg2>;
 
 	fn swap_amount(&self) -> AssetAmount {
 		self.stage.input_amount_after_fees
@@ -154,7 +154,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
 
 	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
-			stage: Stage2 {
+			stage: AfterFirstLeg2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate: Some(AssetAndAmount::new(
@@ -168,7 +168,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
 
 	fn advance_no_swap(self) -> Self::OutputState {
 		SwapState {
-			stage: Stage2 {
+			stage: AfterFirstLeg2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate: None,
@@ -182,8 +182,8 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage1> {
 	}
 }
 
-impl<T: Config> GroupSwapState<T> for SwapState<T, Stage2> {
-	type OutputState = SwapState<T, Stage3>;
+impl<T: Config> GroupSwapState<T> for SwapState<T, AfterFirstLeg2> {
+	type OutputState = SwapState<T, AfterSecondLeg3>;
 
 	fn swap_amount(&self) -> AssetAmount {
 		self.stage
@@ -204,7 +204,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage2> {
 	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
 			swap: self.swap,
-			stage: Stage3 {
+			stage: AfterSecondLeg3 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate: self.stage.intermediate,
@@ -215,7 +215,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, Stage2> {
 
 	fn advance_no_swap(self) -> Self::OutputState {
 		SwapState {
-			stage: Stage3 {
+			stage: AfterSecondLeg3 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				output_amount_before_fees: self.swap_amount(),
@@ -270,16 +270,16 @@ impl<T: Config, Stage: Debug> SwapState<T, Stage> {
 	}
 }
 
-impl<T: Config> SwapState<T, Stage1> {
+impl<T: Config> SwapState<T, AfterNetworkFee1> {
 	/// Transition to Stage2 with a given intermediate amount. Used when the intermediate is
 	/// computed via a pool price estimate rather than an actual swap.
 	pub(crate) fn with_intermediate(
 		self,
 		intermediate: Option<AssetAndAmount>,
-	) -> SwapState<T, Stage2> {
+	) -> SwapState<T, AfterFirstLeg2> {
 		SwapState {
 			swap: self.swap,
-			stage: Stage2 {
+			stage: AfterFirstLeg2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate,
@@ -297,18 +297,21 @@ impl<T: Config> SwapState<T, ()> {
 	pub(crate) fn take_network_fee(
 		self,
 		fee_tracker: &mut NetworkFeeTracker,
-	) -> SwapState<T, Stage1> {
+	) -> SwapState<T, AfterNetworkFee1> {
 		let FeeTaken { fee, remaining_amount } =
 			fee_tracker.take_fee(self.input_amount_before_fees());
 		SwapState {
 			swap: self.swap,
-			stage: Stage1 { input_amount_after_fees: remaining_amount, network_fee_taken: fee },
+			stage: AfterNetworkFee1 {
+				input_amount_after_fees: remaining_amount,
+				network_fee_taken: fee,
+			},
 		}
 	}
 
-	pub(crate) fn no_network_fee(self) -> SwapState<T, Stage1> {
+	pub(crate) fn no_network_fee(self) -> SwapState<T, AfterNetworkFee1> {
 		SwapState {
-			stage: Stage1 {
+			stage: AfterNetworkFee1 {
 				input_amount_after_fees: self.input_amount_before_fees(),
 				network_fee_taken: 0,
 			},
@@ -317,16 +320,16 @@ impl<T: Config> SwapState<T, ()> {
 	}
 }
 
-impl<T: Config> SwapState<T, Stage3> {
+impl<T: Config> SwapState<T, AfterSecondLeg3> {
 	pub(crate) fn take_broker_fees(
 		self,
 		fee_tracker: &mut BrokerFeesTracker<T::AccountId>,
-	) -> SwapState<T, Stage4> {
+	) -> SwapState<T, AfterBrokerFee4> {
 		let FeeTaken { fee, remaining_amount } =
 			fee_tracker.take_all_fees(self.stage.output_amount_before_fees);
 		SwapState {
 			swap: self.swap,
-			stage: Stage4 {
+			stage: AfterBrokerFee4 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate: self.stage.intermediate,
@@ -337,10 +340,10 @@ impl<T: Config> SwapState<T, Stage3> {
 		}
 	}
 
-	pub(crate) fn no_broker_fee(self) -> SwapState<T, Stage4> {
+	pub(crate) fn no_broker_fee(self) -> SwapState<T, AfterBrokerFee4> {
 		SwapState {
 			swap: self.swap,
-			stage: Stage4 {
+			stage: AfterBrokerFee4 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
 				network_fee_taken: self.stage.network_fee_taken,
 				intermediate: self.stage.intermediate,
@@ -352,7 +355,7 @@ impl<T: Config> SwapState<T, Stage3> {
 	}
 }
 
-impl<T: Config> SwapState<T, Stage4> {
+impl<T: Config> SwapState<T, AfterBrokerFee4> {
 	/// The final step of the swapping process. Checks for price violations and then sets the oracle
 	/// delta values in the swap state.
 	pub(crate) fn check_for_price_violation(

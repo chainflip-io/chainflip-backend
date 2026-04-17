@@ -969,7 +969,7 @@ mod oracle_swaps {
 	mod oracle_swap_calculations_with_real_world_values {
 		use cf_primitives::basis_points::SignedHundredthBasisPoints;
 
-		use crate::swap_state::{Stage4, SwapState};
+		use crate::swap_state::{AfterBrokerFee4, SwapState};
 
 		use super::*;
 
@@ -995,7 +995,7 @@ mod oracle_swaps {
 
 		fn test_swap_state(
 			max_oracle_price_slippage: Option<BasisPoints>,
-		) -> SwapState<Test, Stage4> {
+		) -> SwapState<Test, AfterBrokerFee4> {
 			SwapState::new_test_state(
 				Swap::new(
 					0.into(),
@@ -1012,7 +1012,7 @@ mod oracle_swaps {
 					}),
 					Default::default(),
 				),
-				Stage4 {
+				AfterBrokerFee4 {
 					network_fee_taken: NETWORK_FEE,
 					broker_fee_taken: BROKER_FEE,
 					intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),

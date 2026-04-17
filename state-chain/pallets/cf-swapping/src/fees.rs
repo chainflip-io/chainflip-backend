@@ -14,16 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_primitives::{
-	AssetAmount, Beneficiaries, Beneficiary, BASIS_POINTS_PER_MILLION, ONE_AS_BASIS_POINTS,
-};
-use frame_support::{pallet_prelude::*, DebugNoBound};
-use serde::{Deserialize, Serialize};
-use sp_arithmetic::traits::Zero;
-use sp_runtime::{Permill, Saturating};
-use sp_std::collections::btree_map::BTreeMap;
-
-use super::FeeTaken;
+use super::*;
+use cf_primitives::{BASIS_POINTS_PER_MILLION, ONE_AS_BASIS_POINTS};
+use cf_traits::{AssetConverter, EgressApi, ScheduledEgressDetails};
 
 #[derive(
 	Clone,
@@ -144,5 +137,115 @@ impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
 		self.fee_and_accumulated
 			.keys()
 			.fold(0, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps))
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	pub(crate) fn trigger_withdrawal(
+		account_id: &T::AccountId,
+		asset: Asset,
+		destination_address: ForeignChainAddress,
+	) -> DispatchResult {
+		let earned_fees = T::BalanceApi::get_balance(account_id, asset);
+		ensure!(earned_fees != 0, Error::<T>::NoFundsAvailable);
+		T::BalanceApi::try_debit_account(account_id, asset, earned_fees)?;
+
+		let ScheduledEgressDetails { egress_id, egress_amount, fee_withheld } =
+			T::EgressHandler::schedule_egress(
+				asset,
+				earned_fees,
+				destination_address.clone(),
+				None,
+			)
+			.map_err(Into::into)?;
+
+		Self::deposit_event(Event::<T>::WithdrawalRequested {
+			account_id: account_id.clone(),
+			egress_amount,
+			egress_asset: asset,
+			egress_fee: fee_withheld,
+			destination_address: T::AddressConverter::to_encoded_address(destination_address),
+			egress_id,
+		});
+
+		Ok(())
+	}
+
+	pub fn assemble_and_validate_broker_fees(
+		broker_id: T::AccountId,
+		broker_commission: BasisPoints,
+		affiliate_fees: Affiliates<T::AccountId>,
+	) -> Result<Beneficiaries<T::AccountId>, DispatchError> {
+		let beneficiaries = [Beneficiary { account: broker_id, bps: broker_commission }]
+			.into_iter()
+			.chain(affiliate_fees.iter().cloned())
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect(
+				"We are pushing affiliates + 1 which is exactly the maximum Beneficiaries size",
+			);
+		Pallet::<T>::validate_broker_fees(&beneficiaries)?;
+		Ok(beneficiaries)
+	}
+
+	/// Gets the network fee rate and minimum in usdc terms for a swap between the given input
+	/// and output assets, taking into account whether it's an internal swap or not.
+	pub(crate) fn get_network_fee(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> FeeRateAndMinimum {
+		let (input_asset_fee, output_asset_fee, usdc_minimum) = if is_internal_swap {
+			let default_fee = InternalSwapNetworkFee::<T>::get();
+			(
+				InternalSwapNetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
+				InternalSwapNetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
+				default_fee.minimum,
+			)
+		} else {
+			let default_fee = NetworkFee::<T>::get();
+			(
+				NetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
+				NetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
+				default_fee.minimum,
+			)
+		};
+
+		FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum: usdc_minimum }
+	}
+
+	pub fn get_network_fee_rate_for_swap(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> Permill {
+		Self::get_network_fee(input_asset, output_asset, is_internal_swap).rate
+	}
+
+	/// Gets the network fee rate and minimum in the input asset terms.
+	pub fn get_network_fee_for_swap(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+		with_minimum: bool,
+	) -> FeeRateAndMinimum {
+		// Find the correct fee values in USDC
+		let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
+			Self::get_network_fee(input_asset, output_asset, is_internal_swap);
+
+		// Convert the minimum amount to the input asset
+		let minimum = if with_minimum {
+			Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
+				input_asset,
+				Asset::Usdc,
+				usdc_minimum,
+				false, // no network fee
+				false, // not internal
+			)
+		} else {
+			0
+		};
+
+		FeeRateAndMinimum { rate, minimum }
 	}
 }
