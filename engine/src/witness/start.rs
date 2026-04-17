@@ -22,7 +22,7 @@ use crate::{
 	dot::retry_rpc::DotRetryRpcClient,
 	evm::{cached_rpc::EvmCachingClient, rpc::EvmRpcSigningClient},
 	sol::retry_rpc::SolRetryRpcClient,
-	tron::{cached_rpc::TronCachingClient, rpc::TronRpcSigningClient},
+	tron::{cached_rpc::TronCachingClient, rpc::{TronRpcClient, TronRpcSigningClient}},
 };
 use cf_utilities::task_scope::Scope;
 use engine_sc_client::{
@@ -48,7 +48,7 @@ pub async fn start<StateChainClient>(
 	btc_client: BtcCachingClient,
 	sol_client: SolRetryRpcClient,
 	hub_client: DotRetryRpcClient,
-	tron_client: TronCachingClient<TronRpcSigningClient>,
+	tron_client: TronCachingClient<TronRpcSigningClient<TronRpcClient>>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
