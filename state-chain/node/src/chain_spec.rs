@@ -131,7 +131,7 @@ pub struct StateChainEnvironment {
 	// Tron related
 	tron_key_manager_address: [u8; 20],
 	tron_vault_address: [u8; 20],
-	tron_usdt_token_address: [u8; 20],
+	trx_usdt_token_address: [u8; 20],
 	tron_chain_id: u64,
 	ethereum_deployment_block: u64,
 	genesis_funding_amount: u128,
@@ -195,7 +195,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_hex_address, ARB_ADDRESS_CHECKER, arb_address_checker_address);
 	from_env_var!(clean_hex_address, TRON_KEY_MANAGER_ADDRESS, tron_key_manager_address);
 	from_env_var!(clean_hex_address, TRON_VAULT_ADDRESS, tron_vault_address);
-	from_env_var!(clean_hex_address, TRON_USDT_TOKEN_ADDRESS, tron_usdt_token_address);
+	from_env_var!(clean_hex_address, TRX_USDT_TOKEN_ADDRESS, trx_usdt_token_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
@@ -303,7 +303,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		arb_address_checker_address,
 		tron_key_manager_address,
 		tron_vault_address,
-		tron_usdt_token_address,
+		trx_usdt_token_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		tron_chain_id,
@@ -394,7 +394,7 @@ pub fn inner_cf_development_chain_spec(
 		arb_address_checker_address,
 		tron_key_manager_address,
 		tron_vault_address,
-		tron_usdt_token_address,
+		trx_usdt_token_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
 		tron_chain_id,
@@ -454,7 +454,7 @@ pub fn inner_cf_development_chain_spec(
 				arb_usdt_address: arb_usdt_token_address.into(),
 				tron_key_manager_address: tron_key_manager_address.into(),
 				tron_vault_address: tron_vault_address.into(),
-				tron_usdt_address: tron_usdt_token_address.into(),
+				trx_usdt_address: trx_usdt_token_address.into(),
 				ethereum_chain_id,
 				arbitrum_chain_id,
 				tron_chain_id,
@@ -581,7 +581,7 @@ macro_rules! network_spec {
 					arb_address_checker_address,
 					tron_key_manager_address,
 					tron_vault_address,
-					tron_usdt_token_address,
+					trx_usdt_token_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
 					tron_chain_id,
@@ -671,7 +671,7 @@ macro_rules! network_spec {
 							arb_usdt_address: arb_usdt_token_address.into(),
 							tron_key_manager_address: tron_key_manager_address.into(),
 							tron_vault_address: tron_vault_address.into(),
-							tron_usdt_address: tron_usdt_token_address.into(),
+							trx_usdt_address: trx_usdt_token_address.into(),
 							ethereum_chain_id,
 							arbitrum_chain_id,
 							tron_chain_id,

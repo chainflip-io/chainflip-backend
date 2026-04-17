@@ -242,7 +242,7 @@ pub fn evm_vault_swap<A>(
 			}
 		},
 		Asset::Trx => Ok(vec![]),
-		Asset::TronUsdt => Ok(cf_chains::evm::api::transfer_token::TransferToken::new(
+		Asset::TrxUsdt => Ok(cf_chains::evm::api::transfer_token::TransferToken::new(
 			Environment::tron_vault_address(),
 			amount,
 		)
@@ -282,7 +282,7 @@ pub fn evm_vault_swap<A>(
 			if source_asset != Asset::Trx {
 				source_token_address = Some(
 					<EvmEnvironment as EvmEnvironmentProvider<cf_chains::Tron>>::token_address(
-						source_asset.try_into().expect("Only TronUsdt asset is processed here"),
+						source_asset.try_into().expect("Only TrxUsdt asset is processed here"),
 					)
 					.ok_or(DispatchErrorWithMessage::from(
 						"Failed to look up Tron token address",
