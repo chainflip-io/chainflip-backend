@@ -2,6 +2,27 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.16] - 2026-05-06
+
+### Features
+
+- Impl is_vote_needed for state machine ES ([#6511](https://github.com/chainflip-io/chainflip-backend/issues/6511))
+- Simplify nonce tracking & timeout after ImmediatelyDropped ([#6500](https://github.com/chainflip-io/chainflip-backend/issues/6500))
+- Follow up on transaction submission ([#6474](https://github.com/chainflip-io/chainflip-backend/issues/6474))
+- Add spawn_with_restart + use it for election witnessing tasks ([#6453](https://github.com/chainflip-io/chainflip-backend/issues/6453))
+
+### Fixes
+
+- Properly track submissions in case of POOL_ALREADY_IMPORTED error ([#6488](https://github.com/chainflip-io/chainflip-backend/issues/6488))
+- Extrinsic submitter sometimes not finding events  ([#6494](https://github.com/chainflip-io/chainflip-backend/issues/6494))
+- cf_btc_utxos RPC checks all the available callbacks ([#6506](https://github.com/chainflip-io/chainflip-backend/issues/6506))
+- Handle all TransactionStatus ([#6503](https://github.com/chainflip-io/chainflip-backend/issues/6503))
+- GRANDPA RPC initialization ([#6495](https://github.com/chainflip-io/chainflip-backend/issues/6495))
+- Scheduled swaps takes safe mode into account ([#6484](https://github.com/chainflip-io/chainflip-backend/issues/6484))
+- Unify evm tx sending and add semaphore ([#6458](https://github.com/chainflip-io/chainflip-backend/issues/6458))
+- Don't report order fills if prev pool could not be decoded ([#6485](https://github.com/chainflip-io/chainflip-backend/issues/6485))
+- Ignore bad vault swap data instead of propagating the error ([#6479](https://github.com/chainflip-io/chainflip-backend/issues/6479))
+
 ## [2.1.15] - 2026-05-05
 
 ### Fixes
