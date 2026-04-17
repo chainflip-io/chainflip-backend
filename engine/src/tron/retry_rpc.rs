@@ -109,7 +109,7 @@ impl TronRetryRpcClient<TronRpcClient> {
 	}
 }
 
-impl TronRetryRpcClient<TronRpcSigningClient> {
+impl TronRetryRpcClient<TronRpcSigningClient<TronRpcClient>> {
 	pub async fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		nodes: NodeContainer<TronEndpoints>,
@@ -561,7 +561,7 @@ mod tests {
 					PathBuf::from("/home/albert/work/backend_tron/chainflip-backend/tron_private_key");
 
 				// Tron Mainnet endpoints
-				let tron_signing_client = TronRetryRpcClient::<TronRpcSigningClient>::new(
+				let tron_signing_client = TronRetryRpcClient::<TronRpcSigningClient<TronRpcClient>>::new(
 					scope,
 					crate::settings::NodeContainer {
 						primary: TronEndpoints {
