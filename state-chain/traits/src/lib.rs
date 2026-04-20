@@ -66,7 +66,8 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-		BoundedVec, DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
+		Percent, RuntimeDebug,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	weights::Weight,
@@ -1067,6 +1068,29 @@ pub trait AuthoritiesCfeVersions {
 
 pub trait AdjustedFeeEstimationApi<C: Chain> {
 	fn estimate_fee(asset: C::ChainAsset, ingress_or_egress: IngressOrEgress) -> C::ChainAmount;
+}
+
+/// Trait for adjusting the fee estimate with the fee multiplier.
+/// Different chains can provide different implementations to customize fee adjustment behavior.
+pub trait FeeMultiplierProvider<C: Chain> {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount;
+}
+
+/// Default implementation: always applies the fee multiplier.
+pub struct DefaultFeeMultiplier;
+
+impl<C: Chain> FeeMultiplierProvider<C> for DefaultFeeMultiplier {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		_ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount {
+		fee_multiplier.saturating_mul_int(estimated_fee)
+	}
 }
 
 pub trait CallDispatchFilter<RuntimeCall> {
