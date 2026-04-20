@@ -36,14 +36,15 @@ use sp_runtime::Permill;
 type AccountId = u64;
 
 const BOOST_FEE_BPS: BoostPoolTier = 5;
+const BOOST_ASSET: Asset = Asset::Eth;
 
 const INIT_BOOSTER_ETH_BALANCE: AssetAmount = 1_000_000_000;
 const INIT_BOOSTER_FLIP_BALANCE: AssetAmount = 1_000_000_000;
 
 fn setup_lending_pool_for_boost() {
-	assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), Asset::Eth));
+	assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), BOOST_ASSET));
 	assert_ok!(LendingPools::update_whitelist(RuntimeOrigin::root(), WhitelistUpdate::SetAllowAll));
-	MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 1_000_000);
+	MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, 1_000_000);
 
 	BoostConfig::<Test>::set(BoostConfiguration {
 		network_fee_deduction_from_boost_percent: Percent::from_percent(0),
@@ -51,18 +52,18 @@ fn setup_lending_pool_for_boost() {
 		min_lending_pool_share: Percent::from_percent(30),
 	});
 
-	MockBalance::credit_account(&BOOSTER_1, Asset::Eth, INIT_BOOSTER_ETH_BALANCE);
+	MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, INIT_BOOSTER_ETH_BALANCE);
 
-	MockBalance::credit_account(&BOOSTER_2, Asset::Eth, INIT_BOOSTER_ETH_BALANCE);
+	MockBalance::credit_account(&BOOSTER_2, BOOST_ASSET, INIT_BOOSTER_ETH_BALANCE);
 
-	assert_eq!(MockBalance::get_balance(&BOOSTER_1, Asset::Eth), INIT_BOOSTER_ETH_BALANCE);
+	assert_eq!(MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET), INIT_BOOSTER_ETH_BALANCE);
 }
 
 fn setup_legacy_boost_pools() {
 	assert_ok!(LendingPools::create_boost_pools(
 		RuntimeOrigin::root(),
 		vec![
-			BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS },
+			BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS },
 			BoostPoolId { asset: Asset::Flip, tier: BOOST_FEE_BPS },
 		]
 	));
@@ -75,7 +76,7 @@ fn setup_legacy_boost_pools() {
 
 	<Test as crate::Config>::Balance::credit_account(
 		&BOOSTER_1,
-		Asset::Eth,
+		BOOST_ASSET,
 		INIT_BOOSTER_ETH_BALANCE,
 	);
 
@@ -87,11 +88,11 @@ fn setup_legacy_boost_pools() {
 
 	<Test as crate::Config>::Balance::credit_account(
 		&BOOSTER_2,
-		Asset::Eth,
+		BOOST_ASSET,
 		INIT_BOOSTER_ETH_BALANCE,
 	);
 
-	assert_eq!(MockBalance::get_balance(&BOOSTER_1, Asset::Eth), INIT_BOOSTER_ETH_BALANCE);
+	assert_eq!(MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET), INIT_BOOSTER_ETH_BALANCE);
 }
 
 fn get_available_amount_for_booster(asset: Asset, booster: AccountId) -> Option<AssetAmount> {
@@ -404,7 +405,7 @@ fn can_update_config_for_specific_asset() {
 		);
 
 		assert_eq!(
-			LendingConfig::<Test>::get().get_config_for_asset(Asset::Eth),
+			LendingConfig::<Test>::get().get_config_for_asset(BOOST_ASSET),
 			&NEW_LENDING_POOL_CONFIG
 		);
 
@@ -435,14 +436,14 @@ fn test_add_funds_to_legacy_boost_pool() {
 		setup_legacy_boost_pools();
 
 		// Should have all funds in the lp account and non in the pool yet.
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), None);
-		assert_eq!(MockBalance::get_balance(&BOOSTER_1, Asset::Eth), INIT_BOOSTER_ETH_BALANCE);
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), None);
+		assert_eq!(MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET), INIT_BOOSTER_ETH_BALANCE);
 
 		// Should not be able to add zero funds
 		assert_noop!(
 			LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				0,
 				BOOST_FEE_BPS
 			),
@@ -452,21 +453,21 @@ fn test_add_funds_to_legacy_boost_pool() {
 		// Add some of the LP funds to the boost pool
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FUNDS,
 			BOOST_FEE_BPS
 		));
 
 		// Should see some of the funds in the pool now and some funds missing from the LP account
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), Some(BOOST_FUNDS));
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), Some(BOOST_FUNDS));
 		assert_eq!(
-			MockBalance::get_balance(&BOOSTER_1, Asset::Eth),
+			MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET),
 			INIT_BOOSTER_ETH_BALANCE - BOOST_FUNDS
 		);
 
 		System::assert_last_event(RuntimeEvent::LendingPools(Event::BoostFundsAdded {
 			booster_id: BOOSTER_1,
-			boost_pool: BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS },
+			boost_pool: BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS },
 			amount: BOOST_FUNDS,
 		}));
 	});
@@ -492,7 +493,7 @@ fn basic_boosting() {
 
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FUNDS,
 		));
 
@@ -500,7 +501,7 @@ fn basic_boosting() {
 
 		assert_ok!(LendingPools::try_boosting(
 			DEPOSIT_ID,
-			Asset::Eth,
+			BOOST_ASSET,
 			DEPOSIT_AMOUNT,
 			BOOST_FEE_BPS
 		));
@@ -515,7 +516,7 @@ fn basic_boosting() {
 			RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 				loan_id: LOAN_ID,
 				loan_type: LoanType::Boost(DEPOSIT_ID),
-				asset: Asset::Eth,
+				asset: BOOST_ASSET,
 				principal_amount: REQUIRED_AMOUNT,
 			}),
 			RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
@@ -530,7 +531,7 @@ fn basic_boosting() {
 			BoostLoans::<Test>::get(LOAN_ID),
 			Some(GeneralLoan {
 				id: LOAN_ID,
-				asset: Asset::Eth,
+				asset: BOOST_ASSET,
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
@@ -538,7 +539,7 @@ fn basic_boosting() {
 		);
 
 		assert_eq!(
-			BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID),
+			BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID),
 			Some(BoostedDeposit {
 				deposit_amount: DEPOSIT_AMOUNT,
 				lending_loan_id: Some(LOAN_ID),
@@ -550,7 +551,7 @@ fn basic_boosting() {
 
 		// Network fee was paid at loan creation, so finalise_boost returns no additional
 		// network fee.
-		LendingPools::finalise_boost(DEPOSIT_ID, Asset::Eth);
+		LendingPools::finalise_boost(DEPOSIT_ID, BOOST_ASSET);
 
 		assert_event_sequence!(
 			Test,
@@ -567,13 +568,13 @@ fn basic_boosting() {
 		);
 
 		assert_eq!(BoostLoans::<Test>::get(LOAN_ID), None);
-		assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+		assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 
-		assert_eq!(get_supply_position(Asset::Eth, BOOSTER_1), Some(BOOST_FUNDS + POOL_FEE));
+		assert_eq!(get_supply_position(BOOST_ASSET, BOOSTER_1), Some(BOOST_FUNDS + POOL_FEE));
 	});
 }
 
-/// Uses BTC lending pool only
+/// Uses BTC lending pool only (no legacy boost pool)
 #[test]
 fn boosted_deposit_is_lost() {
 	new_test_ext().execute_with(|| {
@@ -594,7 +595,7 @@ fn boosted_deposit_is_lost() {
 
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FUNDS,
 		));
 
@@ -602,7 +603,7 @@ fn boosted_deposit_is_lost() {
 
 		assert_ok!(LendingPools::try_boosting(
 			DEPOSIT_ID,
-			Asset::Eth,
+			BOOST_ASSET,
 			DEPOSIT_AMOUNT,
 			BOOST_FEE_BPS
 		));
@@ -617,7 +618,7 @@ fn boosted_deposit_is_lost() {
 			RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 				loan_id: LOAN_ID,
 				loan_type: LoanType::Boost(DEPOSIT_ID),
-				asset: Asset::Eth,
+				asset: BOOST_ASSET,
 				principal_amount: REQUIRED_AMOUNT,
 			}),
 			RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
@@ -632,7 +633,7 @@ fn boosted_deposit_is_lost() {
 			BoostLoans::<Test>::get(LOAN_ID),
 			Some(GeneralLoan {
 				id: LOAN_ID,
-				asset: Asset::Eth,
+				asset: BOOST_ASSET,
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
@@ -640,13 +641,13 @@ fn boosted_deposit_is_lost() {
 		);
 
 		assert!(
-			BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID).is_some(),
+			BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID).is_some(),
 			"deposit must be boosted"
 		);
 
 		frame_system::Pallet::<Test>::reset_events();
 
-		LendingPools::process_deposit_as_lost(DEPOSIT_ID, Asset::Eth);
+		LendingPools::process_deposit_as_lost(DEPOSIT_ID, BOOST_ASSET);
 
 		assert_event_sequence!(
 			Test,
@@ -658,11 +659,11 @@ fn boosted_deposit_is_lost() {
 		);
 
 		assert_eq!(BoostLoans::<Test>::get(LOAN_ID), None);
-		assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+		assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 
 		// Lender loses the deposit amount (excluding the pool fee portion that it didn't provide)
 		assert_eq!(
-			get_supply_position(Asset::Eth, BOOSTER_1),
+			get_supply_position(BOOST_ASSET, BOOSTER_1),
 			Some(BOOST_FUNDS - DEPOSIT_AMOUNT + POOL_FEE)
 		);
 	});
@@ -681,57 +682,57 @@ fn stop_boosting_with_legacy_pool() {
 			min_lending_pool_share: Percent::from_percent(30),
 		});
 
-		MockBalance::credit_account(&BOOSTER_1, Asset::Eth, INIT_BOOSTER_ETH_BALANCE);
+		MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, INIT_BOOSTER_ETH_BALANCE);
 
 		assert_ok!(LendingPools::create_boost_pools(
 			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }],
+			vec![BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS }],
 		));
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOSTER_AMOUNT_1,
 			BOOST_FEE_BPS
 		));
 
 		assert_ok!(LendingPools::try_boosting(
 			DEPOSIT_ID,
-			Asset::Eth,
+			BOOST_ASSET,
 			DEPOSIT_AMOUNT,
 			BOOST_FEE_BPS
 		));
 
 		assert_eq!(
-			MockBalance::get_balance(&BOOSTER_1, Asset::Eth),
+			MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET),
 			INIT_BOOSTER_ETH_BALANCE - BOOSTER_AMOUNT_1
 		);
 
 		// Booster stops boosting and get the available portion of their funds immediately:
 		assert_ok!(LendingPools::stop_boosting(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FEE_BPS
 		));
 
 		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
 		const AVAILABLE_BOOST_AMOUNT: AssetAmount = BOOSTER_AMOUNT_1 - (DEPOSIT_AMOUNT - BOOST_FEE);
 		assert_eq!(
-			MockBalance::get_balance(&BOOSTER_1, Asset::Eth),
+			MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET),
 			INIT_BOOSTER_ETH_BALANCE - BOOSTER_AMOUNT_1 + AVAILABLE_BOOST_AMOUNT
 		);
 
 		System::assert_last_event(RuntimeEvent::LendingPools(Event::StoppedBoosting {
 			booster_id: BOOSTER_1,
-			boost_pool: BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS },
+			boost_pool: BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS },
 			unlocked_amount: AVAILABLE_BOOST_AMOUNT,
 			pending_boosts: BTreeSet::from_iter(vec![DEPOSIT_ID]),
 		}));
 
 		// Deposit is finalised, the booster gets their remaining funds from the pool:
-		LendingPools::finalise_boost(DEPOSIT_ID, Asset::Eth);
+		LendingPools::finalise_boost(DEPOSIT_ID, BOOST_ASSET);
 		assert_eq!(
-			MockBalance::get_balance(&BOOSTER_1, Asset::Eth),
+			MockBalance::get_balance(&BOOSTER_1, BOOST_ASSET),
 			INIT_BOOSTER_ETH_BALANCE + BOOST_FEE
 		);
 	});
@@ -778,25 +779,25 @@ fn add_boost_funds_is_disabled_by_safe_mode() {
 		assert_noop!(
 			LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				BOOST_FUNDS,
 				BOOST_FEE_BPS
 			),
 			crate::Error::<Test>::AddBoostFundsDisabled
 		);
 
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), None);
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), None);
 
 		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
 
 		// Should be able to add funds to the boost pool now that the safe mode is turned off
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FUNDS,
 			BOOST_FEE_BPS
 		));
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), Some(BOOST_FUNDS));
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), Some(BOOST_FUNDS));
 	});
 }
 
@@ -809,7 +810,7 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FUNDS,
 			BOOST_FEE_BPS
 		));
@@ -823,23 +824,23 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 		assert_noop!(
 			LendingPools::stop_boosting(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				BOOST_FEE_BPS
 			),
 			crate::Error::<Test>::StopBoostingDisabled
 		);
 
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), Some(BOOST_FUNDS));
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), Some(BOOST_FUNDS));
 
 		MockRuntimeSafeMode::set_safe_mode(PalletSafeMode::code_green());
 
 		// Should be able to stop boosting now that the safe mode is turned off
 		assert_ok!(LendingPools::stop_boosting(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FEE_BPS
 		));
-		assert_eq!(get_available_amount_for_booster(Asset::Eth, BOOSTER_1), None);
+		assert_eq!(get_available_amount_for_booster(BOOST_ASSET, BOOSTER_1), None);
 	});
 }
 
@@ -847,27 +848,27 @@ fn stop_boosting_is_disabled_by_safe_mode() {
 fn test_create_boost_pools() {
 	new_test_ext().execute_with(|| {
 		// Make sure the pools do not exists already
-		assert!(BoostPools::<Test>::get(Asset::Eth, BOOST_FEE_BPS).is_none());
+		assert!(BoostPools::<Test>::get(BOOST_ASSET, BOOST_FEE_BPS).is_none());
 		assert!(BoostPools::<Test>::get(Asset::Flip, BOOST_FEE_BPS).is_none());
 
 		// Create all 3 pools in one go
 		assert_ok!(Pallet::<Test>::create_boost_pools(
 			RuntimeOrigin::root(),
 			vec![
-				BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS },
+				BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS },
 				BoostPoolId { asset: Asset::Flip, tier: BOOST_FEE_BPS },
 			]
 		));
 
 		// // Check they now exist
-		assert!(BoostPools::<Test>::get(Asset::Eth, BOOST_FEE_BPS).is_some());
+		assert!(BoostPools::<Test>::get(BOOST_ASSET, BOOST_FEE_BPS).is_some());
 		assert!(BoostPools::<Test>::get(Asset::Flip, BOOST_FEE_BPS).is_some());
 
 		// Check that all 2 emitted the creation event
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::LendingPools(Event::BoostPoolCreated {
-				boost_pool: BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS },
+				boost_pool: BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS },
 			}),
 			RuntimeEvent::LendingPools(Event::BoostPoolCreated {
 				boost_pool: BoostPoolId { asset: Asset::Flip, tier: BOOST_FEE_BPS },
@@ -878,19 +879,19 @@ fn test_create_boost_pools() {
 		assert_noop!(
 			Pallet::<Test>::create_boost_pools(
 				RuntimeOrigin::root(),
-				vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }]
+				vec![BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS }]
 			),
 			crate::Error::<Test>::PoolAlreadyExists
 		);
 
 		// Make sure it did not remove the existing boost pool
-		assert!(BoostPools::<Test>::get(Asset::Eth, BOOST_FEE_BPS).is_some());
+		assert!(BoostPools::<Test>::get(BOOST_ASSET, BOOST_FEE_BPS).is_some());
 
 		// Should not be able to create a pool with a tier of 0
 		assert_noop!(
 			Pallet::<Test>::create_boost_pools(
 				RuntimeOrigin::root(),
-				vec![BoostPoolId { asset: Asset::Eth, tier: 0 }]
+				vec![BoostPoolId { asset: BOOST_ASSET, tier: 0 }]
 			),
 			crate::Error::<Test>::InvalidBoostPoolTier
 		);
@@ -899,7 +900,7 @@ fn test_create_boost_pools() {
 		assert_noop!(
 			Pallet::<Test>::create_boost_pools(
 				RuntimeOrigin::root(),
-				vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS + 1 }]
+				vec![BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS + 1 }]
 			),
 			crate::Error::<Test>::InvalidBoostPoolTier
 		);
@@ -924,7 +925,7 @@ fn boost_account_balance() {
 		// Add funds to two different pools:
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			ETH_AMOUNT_1,
 			BOOST_FEE_BPS
 		));
@@ -942,7 +943,7 @@ fn boost_account_balance() {
 		// don't affect the result for BOOSTER_1:
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_2),
-			Asset::Eth,
+			BOOST_ASSET,
 			ETH_AMOUNT_1,
 			BOOST_FEE_BPS
 		));
@@ -950,7 +951,7 @@ fn boost_account_balance() {
 		// A portion of the funds will is pending due to an unfinalised boost
 		assert_ok!(LendingPools::try_boosting(
 			PrewitnessedDepositId(0),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOSTED_AMOUNT,
 			BOOST_FEE_BPS
 		));
@@ -963,7 +964,7 @@ fn boost_account_balance() {
 		// Check that we collect funds from all pools and include funds from unfinalised boosts,
 		// ignoring other accounts and assets:
 		assert_eq!(
-			LendingPools::boost_pool_account_balance(&BOOSTER_1, Asset::Eth),
+			LendingPools::boost_pool_account_balance(&BOOSTER_1, BOOST_ASSET),
 			booster_2_expected_balance
 		);
 	});
@@ -976,12 +977,12 @@ fn deregistration_check_requires_no_lending_storage_keys() {
 
 		assert_ok!(LendingPools::create_boost_pools(
 			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }],
+			vec![BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS }],
 		));
-		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Eth, BOOST_AMOUNT);
+		<Test as crate::Config>::Balance::credit_account(&LP, BOOST_ASSET, BOOST_AMOUNT);
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(LP),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_AMOUNT,
 			BOOST_FEE_BPS
 		));
@@ -993,20 +994,20 @@ fn deregistration_check_requires_no_lending_storage_keys() {
 
 		assert_ok!(LendingPools::stop_boosting(
 			RuntimeOrigin::signed(LP),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FEE_BPS
 		));
 
 		let mut lending_pool = LendingPool::new();
 		lending_pool.add_funds(&LP, 1);
-		GeneralLendingPools::<Test>::insert(Asset::Eth, lending_pool);
+		GeneralLendingPools::<Test>::insert(BOOST_ASSET, lending_pool);
 
 		assert_noop!(
 			PoolsDeregistrationCheck::<Test>::check(&LP),
 			Error::<Test>::LendingFundsRemaining
 		);
 
-		GeneralLendingPools::<Test>::remove(Asset::Eth);
+		GeneralLendingPools::<Test>::remove(BOOST_ASSET);
 
 		// Borrower loan-account storage keyed by account.
 		LoanAccounts::<Test>::insert(LP, LoanAccount::<Test>::new(LP));
@@ -1040,33 +1041,33 @@ fn boost_pool_details() {
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_1),
-			Asset::Eth,
+			BOOST_ASSET,
 			ETH_AMOUNT_1,
 			BOOST_FEE_BPS
 		));
 
 		assert_ok!(LendingPools::add_boost_funds(
 			RuntimeOrigin::signed(BOOSTER_2),
-			Asset::Eth,
+			BOOST_ASSET,
 			ETH_AMOUNT_2,
 			BOOST_FEE_BPS
 		));
 
 		assert_ok!(LendingPools::try_boosting(
 			DEPOSIT_ID,
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOSTED_AMOUNT,
 			BOOST_FEE_BPS
 		));
 
 		assert_ok!(LendingPools::stop_boosting(
 			RuntimeOrigin::signed(BOOSTER_2),
-			Asset::Eth,
+			BOOST_ASSET,
 			BOOST_FEE_BPS
 		));
 
 		assert_eq!(
-			get_boost_pool_details::<Test>(Asset::Eth).get(&BOOST_FEE_BPS).cloned().unwrap(),
+			get_boost_pool_details::<Test>(BOOST_ASSET).get(&BOOST_FEE_BPS).cloned().unwrap(),
 			BoostPoolDetails {
 				available_amounts: BTreeMap::from_iter([(BOOSTER_1, 30_010)]),
 				pending_boosts: BTreeMap::from_iter([(
@@ -1098,7 +1099,7 @@ mod hybrid_boosting {
 	const NETWORK_FEE_PERCENT: u128 = 20;
 
 	fn setup_both_pools() {
-		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 1_000_000);
+		MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, 1_000_000);
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(
 				NETWORK_FEE_PERCENT as u8,
@@ -1111,11 +1112,11 @@ mod hybrid_boosting {
 			WhitelistUpdate::SetAllowAll
 		));
 
-		assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), Asset::Eth));
+		assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), BOOST_ASSET));
 
 		assert_ok!(LendingPools::create_boost_pools(
 			RuntimeOrigin::root(),
-			vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }],
+			vec![BoostPoolId { asset: BOOST_ASSET, tier: BOOST_FEE_BPS }],
 		));
 	}
 
@@ -1146,18 +1147,18 @@ mod hybrid_boosting {
 			setup_both_pools();
 
 			// 1. Fund the lending pool (won't be enough to cover the full required amount).
-			MockBalance::credit_account(&BOOSTER_1, Asset::Eth, LENDING_FUNDS);
+			MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, LENDING_FUNDS);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				LENDING_FUNDS,
 			));
 
 			// 2. Fund the legacy boost pool.
-			MockBalance::credit_account(&BOOSTER_2, Asset::Eth, LEGACY_POOL_FUNDS);
+			MockBalance::credit_account(&BOOSTER_2, BOOST_ASSET, LEGACY_POOL_FUNDS);
 			assert_ok!(LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_2),
-				Asset::Eth,
+				BOOST_ASSET,
 				LEGACY_POOL_FUNDS,
 				BOOST_FEE_BPS,
 			));
@@ -1167,7 +1168,7 @@ mod hybrid_boosting {
 			// 3. Boost deposit.
 			assert_ok!(LendingPools::try_boosting(
 				DEPOSIT_ID,
-				Asset::Eth,
+				BOOST_ASSET,
 				DEPOSIT_AMOUNT,
 				BOOST_FEE_BPS,
 			));
@@ -1177,7 +1178,7 @@ mod hybrid_boosting {
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					loan_type: LoanType::Boost(DEPOSIT_ID),
-					asset: Asset::Eth,
+					asset: BOOST_ASSET,
 					principal_amount: LENDING_FUNDS,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
@@ -1189,17 +1190,17 @@ mod hybrid_boosting {
 			);
 
 			// Boost should have consumed all available funds:
-			assert_eq!(GeneralLendingPools::<Test>::get(Asset::Eth).unwrap().available_amount, 0);
+			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().available_amount, 0);
 
 			// Because lending pool has 0 available funds, its network fee portion is recorded
 			// but not yet credited to the network:
 			assert_eq!(
-				GeneralLendingPools::<Test>::get(Asset::Eth).unwrap().owed_to_network,
+				GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network,
 				LENDING_NETWORK_FEE
 			);
 
 			assert_eq!(
-				BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID),
+				BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID),
 				Some(BoostedDeposit {
 					deposit_amount: DEPOSIT_AMOUNT,
 					lending_loan_id: Some(LOAN_ID),
@@ -1217,7 +1218,7 @@ mod hybrid_boosting {
 			// 4. Finalise deposit: legacy boost pool's portion of the network fee
 			// will be returned to the ingress-egress pallet where it will be swapped into FLIP
 			assert_eq!(
-				LendingPools::finalise_boost(DEPOSIT_ID, Asset::Eth),
+				LendingPools::finalise_boost(DEPOSIT_ID, BOOST_ASSET),
 				BoostFinalisationOutcome { network_fee: LEGACY_NETWORK_FEE }
 			);
 
@@ -1236,16 +1237,16 @@ mod hybrid_boosting {
 				}),
 			);
 
-			assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+			assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 
 			// Lending pool earns the lending pool's portion of the fee (excludes the network fee).
 			assert_eq!(
-				get_supply_position(Asset::Eth, BOOSTER_1),
+				get_supply_position(BOOST_ASSET, BOOSTER_1),
 				Some(LENDING_FUNDS + LENDING_POOL_FEE)
 			);
 			// Boost pool earns the boost pool's portion of the fee (excludes the network fee).
 			assert_eq!(
-				get_available_amount_for_booster(Asset::Eth, BOOSTER_2),
+				get_available_amount_for_booster(BOOST_ASSET, BOOSTER_2),
 				Some(LEGACY_POOL_FUNDS + LEGACY_POOL_FEE)
 			);
 		});
@@ -1274,10 +1275,10 @@ mod hybrid_boosting {
 			setup_both_pools();
 
 			// Fund only the lending pool; leave the boost pool empty.
-			MockBalance::credit_account(&BOOSTER_1, Asset::Eth, LENDING_FUNDS);
+			MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, LENDING_FUNDS);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				LENDING_FUNDS,
 			));
 
@@ -1286,7 +1287,7 @@ mod hybrid_boosting {
 			// Boost deposit — lending pool covers the full required_amount.
 			assert_ok!(LendingPools::try_boosting(
 				DEPOSIT_ID,
-				Asset::Eth,
+				BOOST_ASSET,
 				DEPOSIT_AMOUNT,
 				BOOST_FEE_BPS,
 			));
@@ -1296,7 +1297,7 @@ mod hybrid_boosting {
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					loan_type: LoanType::Boost(DEPOSIT_ID),
-					asset: Asset::Eth,
+					asset: BOOST_ASSET,
 					principal_amount: REQUIRED_AMOUNT,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
@@ -1308,7 +1309,7 @@ mod hybrid_boosting {
 			);
 
 			assert_eq!(
-				BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID),
+				BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID),
 				Some(BoostedDeposit {
 					deposit_amount: DEPOSIT_AMOUNT,
 					lending_loan_id: Some(LOAN_ID),
@@ -1318,12 +1319,12 @@ mod hybrid_boosting {
 
 			// Lending pool had slack (LENDING_FUNDS > REQUIRED_AMOUNT), so the network fee
 			// was collected immediately at boost time.
-			assert_eq!(PendingNetworkFees::<Test>::get(Asset::Eth), LENDING_NETWORK_FEE);
+			assert_eq!(PendingNetworkFees::<Test>::get(BOOST_ASSET), LENDING_NETWORK_FEE);
 
 			frame_system::Pallet::<Test>::reset_events();
 
 			// 4. Finalise deposit — full deposit amount repays the lending loan.
-			LendingPools::finalise_boost(DEPOSIT_ID, Asset::Eth);
+			LendingPools::finalise_boost(DEPOSIT_ID, BOOST_ASSET);
 
 			assert_event_sequence!(
 				Test,
@@ -1339,11 +1340,11 @@ mod hybrid_boosting {
 				}),
 			);
 
-			assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+			assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 
 			// Lending pool lender earns the net pool fee.
 			assert_eq!(
-				get_supply_position(Asset::Eth, BOOSTER_1),
+				get_supply_position(BOOST_ASSET, BOOSTER_1),
 				Some(LENDING_FUNDS + LENDING_POOL_FEE)
 			);
 		});
@@ -1369,10 +1370,10 @@ mod hybrid_boosting {
 			setup_both_pools();
 
 			// Fund only the boost pool; leave the lending pool empty.
-			MockBalance::credit_account(&BOOSTER_2, Asset::Eth, BOOST_FUNDS);
+			MockBalance::credit_account(&BOOSTER_2, BOOST_ASSET, BOOST_FUNDS);
 			assert_ok!(LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_2),
-				Asset::Eth,
+				BOOST_ASSET,
 				BOOST_FUNDS,
 				BOOST_FEE_BPS,
 			));
@@ -1382,7 +1383,7 @@ mod hybrid_boosting {
 			// Boost deposit — boost pool covers the full required_amount.
 			assert_ok!(LendingPools::try_boosting(
 				DEPOSIT_ID,
-				Asset::Eth,
+				BOOST_ASSET,
 				DEPOSIT_AMOUNT,
 				BOOST_FEE_BPS,
 			));
@@ -1391,7 +1392,7 @@ mod hybrid_boosting {
 			assert_eq!(frame_system::Pallet::<Test>::events().len(), 0);
 
 			assert_eq!(
-				BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID),
+				BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID),
 				Some(BoostedDeposit {
 					deposit_amount: DEPOSIT_AMOUNT,
 					lending_loan_id: None,
@@ -1409,20 +1410,20 @@ mod hybrid_boosting {
 			// Finalise deposit. Network fee is returned
 			// to the ingress-egress pallet.
 			assert_eq!(
-				LendingPools::finalise_boost(DEPOSIT_ID, Asset::Eth),
+				LendingPools::finalise_boost(DEPOSIT_ID, BOOST_ASSET),
 				BoostFinalisationOutcome { network_fee: BOOST_NETWORK_FEE }
 			);
 
 			// No loan events — only boost pool was involved.
 			assert_eq!(frame_system::Pallet::<Test>::events().len(), 0);
 
-			assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+			assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 
 			// Lending pool lender has nothing (it didn't participate).
-			assert_eq!(get_supply_position(Asset::Eth, BOOSTER_1), None);
+			assert_eq!(get_supply_position(BOOST_ASSET, BOOSTER_1), None);
 			// Boost pool booster earns the net pool fee.
 			assert_eq!(
-				get_available_amount_for_booster(Asset::Eth, BOOSTER_2),
+				get_available_amount_for_booster(BOOST_ASSET, BOOSTER_2),
 				Some(BOOST_FUNDS + BOOST_POOL_FEE)
 			);
 		});
@@ -1443,22 +1444,22 @@ mod hybrid_boosting {
 
 			setup_both_pools();
 
-			MockBalance::credit_account(&BOOSTER_1, Asset::Eth, LENDING_FUNDS);
+			MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, LENDING_FUNDS);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				LENDING_FUNDS,
 			));
-			MockBalance::credit_account(&BOOSTER_2, Asset::Eth, BOOST_FUNDS);
+			MockBalance::credit_account(&BOOSTER_2, BOOST_ASSET, BOOST_FUNDS);
 			assert_ok!(LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_2),
-				Asset::Eth,
+				BOOST_ASSET,
 				BOOST_FUNDS,
 				BOOST_FEE_BPS,
 			));
 
 			assert_noop!(
-				LendingPools::try_boosting(DEPOSIT_ID, Asset::Eth, DEPOSIT_AMOUNT, BOOST_FEE_BPS),
+				LendingPools::try_boosting(DEPOSIT_ID, BOOST_ASSET, DEPOSIT_AMOUNT, BOOST_FEE_BPS),
 				Error::<Test>::InsufficientBoostLiquidity,
 			);
 		});
@@ -1489,30 +1490,30 @@ mod hybrid_boosting {
 
 			setup_both_pools();
 
-			MockBalance::credit_account(&BOOSTER_1, Asset::Eth, LENDING_FUNDS);
+			MockBalance::credit_account(&BOOSTER_1, BOOST_ASSET, LENDING_FUNDS);
 			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Eth,
+				BOOST_ASSET,
 				LENDING_FUNDS,
 			));
-			MockBalance::credit_account(&BOOSTER_2, Asset::Eth, LEGACY_POOL_FUNDS);
+			MockBalance::credit_account(&BOOSTER_2, BOOST_ASSET, LEGACY_POOL_FUNDS);
 			assert_ok!(LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_2),
-				Asset::Eth,
+				BOOST_ASSET,
 				LEGACY_POOL_FUNDS,
 				BOOST_FEE_BPS,
 			));
 
 			assert_ok!(LendingPools::try_boosting(
 				DEPOSIT_ID,
-				Asset::Eth,
+				BOOST_ASSET,
 				DEPOSIT_AMOUNT,
 				BOOST_FEE_BPS,
 			));
 
 			frame_system::Pallet::<Test>::reset_events();
 
-			LendingPools::process_deposit_as_lost(DEPOSIT_ID, Asset::Eth);
+			LendingPools::process_deposit_as_lost(DEPOSIT_ID, BOOST_ASSET);
 
 			// Lending pool loan is settled with full owed_principal written off.
 			assert_event_sequence!(
@@ -1524,23 +1525,23 @@ mod hybrid_boosting {
 				}),
 			);
 
-			assert_eq!(BoostedDeposits::<Test>::get(Asset::Eth, DEPOSIT_ID), None);
+			assert_eq!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID), None);
 			assert_eq!(BoostLoans::<Test>::get(LOAN_ID), None);
 
 			// Lending pool lost all its funds:
-			assert_eq!(get_supply_position(Asset::Eth, BOOSTER_1), Some(0));
+			assert_eq!(get_supply_position(BOOST_ASSET, BOOSTER_1), Some(0));
 
 			// The pool additionally owes some funds to the network (a side effect from
 			// optimistically crediting network at the time of boosting):
 			assert_eq!(
-				GeneralLendingPools::<Test>::get(Asset::Eth).unwrap().owed_to_network,
+				GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network,
 				LENDING_NETWORK_FEE
 			);
 
 			// Boost pool booster lost the funds it provided for boosting (no network fee
 			// had been taken):
 			assert_eq!(
-				get_available_amount_for_booster(Asset::Eth, BOOSTER_2),
+				get_available_amount_for_booster(BOOST_ASSET, BOOSTER_2),
 				Some(LEGACY_POOL_FUNDS - LEGACY_PRINCIPAL),
 			);
 		});
@@ -1566,7 +1567,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 			min_lending_pool_share: Percent::from_percent(30),
 		});
 		MockPriceFeedApi::set_price_usd_fine(Asset::Btc, BTC_PRICE);
-		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, ETH_PRICE);
+		MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, ETH_PRICE);
 
 		// BTC pool funded for boost loans.
 		const BOOST_DEPOSIT_AMOUNT: AssetAmount = 100_000_000;
@@ -1586,11 +1587,11 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		// ETH pool funded for user loans.
 		const PRINCIPAL: AssetAmount = 10_000_000_000;
 		const ETH_LENDER_FUNDS: AssetAmount = PRINCIPAL * 2;
-		assert_ok!(LendingPools::new_lending_pool(Asset::Eth));
-		<Test as crate::Config>::Balance::credit_account(&BOOSTER_2, Asset::Eth, ETH_LENDER_FUNDS);
+		assert_ok!(LendingPools::new_lending_pool(BOOST_ASSET));
+		<Test as crate::Config>::Balance::credit_account(&BOOSTER_2, BOOST_ASSET, ETH_LENDER_FUNDS);
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(BOOSTER_2),
-			Asset::Eth,
+			BOOST_ASSET,
 			ETH_LENDER_FUNDS,
 		));
 
@@ -1612,7 +1613,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
 		assert_ok!(LendingPools::new_loan(
 			LP,
-			Asset::Eth,
+			BOOST_ASSET,
 			PRINCIPAL,
 			None,
 			BTreeMap::from([(Asset::Btc, BTC_COLLATERAL)]),
@@ -1642,7 +1643,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 				RpcLoan {
 					loan_id: USER_LOAN_ID,
 					loan_type: LoanType::User(LP),
-					asset: Asset::Eth,
+					asset: BOOST_ASSET,
 					created_at: 1,
 					principal_amount: USER_PRINCIPAL,
 				},
@@ -1674,11 +1675,11 @@ fn deregistration_check() {
 		));
 
 		// Set oracle prices for the assets
-		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 1_000_000);
+		MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, 1_000_000);
 		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1_000_000);
 
 		// Credit LP with funds for both boost and lending
-		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Eth, BOOST_FUNDS);
+		<Test as crate::Config>::Balance::credit_account(&LP, BOOST_ASSET, BOOST_FUNDS);
 		<Test as crate::Config>::Balance::credit_account(&LP, Asset::Flip, LENDER_FUNDS);
 
 		assert_ok!(PoolsDeregistrationCheck::<Test>::check(&LP));
