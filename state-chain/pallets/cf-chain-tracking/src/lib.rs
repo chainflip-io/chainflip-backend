@@ -28,11 +28,11 @@ pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
 use cf_primitives::IngressOrEgress;
-use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
+use cf_traits::{AdjustedFeeEstimationApi, Chainflip, FeeMultiplierProvider, GetBlockHeight};
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::{FixedPointNumber, FixedU128};
+use sp_runtime::FixedU128;
 use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
@@ -223,29 +223,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
 		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
-	}
-}
-
-/// Trait for adjusting the fee estimate with the fee multiplier.
-/// Different chains can provide different implementations to customize fee adjustment behavior.
-pub trait FeeMultiplierProvider<C: Chain> {
-	fn adjust_fee(
-		estimated_fee: C::ChainAmount,
-		fee_multiplier: FixedU128,
-		ingress_or_egress: &IngressOrEgress,
-	) -> C::ChainAmount;
-}
-
-/// Default implementation: always applies the fee multiplier.
-pub struct DefaultFeeMultiplier;
-
-impl<C: Chain> FeeMultiplierProvider<C> for DefaultFeeMultiplier {
-	fn adjust_fee(
-		estimated_fee: C::ChainAmount,
-		fee_multiplier: FixedU128,
-		_ingress_or_egress: &IngressOrEgress,
-	) -> C::ChainAmount {
-		fee_multiplier.saturating_mul_int(estimated_fee)
 	}
 }
 
