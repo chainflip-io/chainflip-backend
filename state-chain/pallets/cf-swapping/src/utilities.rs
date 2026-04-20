@@ -66,5 +66,5 @@ pub(crate) fn split_off_highest_impact_swap<T: Config>(
 		.max_by_key(|swap| swap.stage.swap_amount)
 		.map(|swap| swap.swap_id());
 
-	maybe_swap_id_to_remove.and_then(|swap_id_to_remove| swaps.get(&swap_id_to_remove).cloned())
+	maybe_swap_id_to_remove.and_then(|swap_id_to_remove| swaps.remove(&swap_id_to_remove))
 }
