@@ -1387,6 +1387,39 @@ fn validator_registration_operator_binding_and_deregistration() {
 }
 
 #[test]
+fn deregister_as_validator_emits_validator_removed_from_operator_event() {
+	new_test_ext().execute_with(|| {
+		const OPERATOR: u64 = 1001;
+		const VALIDATOR: u64 = 2001;
+
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(OPERATOR),
+			OPERATOR_SETTINGS,
+			vanity()
+		));
+
+		assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(VALIDATOR)));
+
+		assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OPERATOR), VALIDATOR));
+		assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(VALIDATOR), OPERATOR));
+
+		assert_eq!(OperatorChoice::<Test>::get(VALIDATOR), Some(OPERATOR));
+		assert!(ManagedValidators::<Test>::get(OPERATOR).contains(&VALIDATOR));
+
+		assert_ok!(ValidatorPallet::deregister_as_validator(RuntimeOrigin::signed(VALIDATOR)));
+
+		// Storage should be cleaned up.
+		assert_eq!(OperatorChoice::<Test>::get(VALIDATOR), None);
+		assert!(!ManagedValidators::<Test>::get(OPERATOR).contains(&VALIDATOR));
+
+		// ValidatorRemovedFromOperator must be emitted, same as remove_validator does.
+		cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+			Event::ValidatorRemovedFromOperator { validator: VALIDATOR, operator: OPERATOR },
+		));
+	});
+}
+
+#[test]
 fn test_start_and_stop_bidding() {
 	new_test_ext().execute_with(|| {
 		MockEpochInfo::add_authorities(ALICE);

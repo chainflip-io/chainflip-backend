@@ -887,11 +887,7 @@ pub mod pallet {
 				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 			}
 
-			if let Some(operator) = OperatorChoice::<T>::take(&account_id) {
-				ManagedValidators::<T>::mutate(&operator, |validators| {
-					validators.remove(&account_id);
-				});
-			}
+			Self::do_remove_from_operator(account_id.clone());
 
 			ClaimedValidators::<T>::remove(&account_id);
 
@@ -1005,12 +1001,7 @@ pub mod pallet {
 			let operator =
 				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			OperatorChoice::<T>::remove(&validator);
-			ManagedValidators::<T>::mutate(&operator, |validators| {
-				validators.remove(&validator);
-			});
-
-			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
+			Self::do_remove_from_operator(validator);
 
 			Ok(())
 		}
@@ -1506,6 +1497,18 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 }
 
 impl<T: Config> Pallet<T> {
+	/// Removes a validator from an operator's managed pool, cleaning up both storage items and
+	/// emitting the `ValidatorRemovedFromOperator` event. This is the single source of truth for
+	/// this operation, called from both `remove_validator` and `deregister_as_validator`.
+	fn do_remove_from_operator(validator: T::AccountId) {
+		if let Some(operator) = OperatorChoice::<T>::take(&validator) {
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.remove(&validator);
+			});
+			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
+		}
+	}
+
 	/// Makes the transition to the next epoch.
 	///
 	/// Among other things, updates the authority, historical and backup sets.
