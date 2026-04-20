@@ -1,7 +1,8 @@
 use super::*;
-use cf_primitives::{AssetAndAmount, SwapRequestId};
+use cf_primitives::{AssetAmount, AssetAndAmount, SwapRequestId};
 use cf_traits::lending::LoanId;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 
 pub mod before_v12;
 
@@ -68,6 +69,31 @@ pub struct RpcLoanAccount<AccountId, Amount> {
 	pub collateral: Vec<AssetAndAmount<Amount>>,
 	pub loans: Vec<RpcLoan<AccountId, Amount>>,
 	pub liquidation_status: Option<RpcLiquidationStatus>,
+}
+
+impl<AccountId> From<RpcLoan<AccountId, AssetAmount>> for RpcLoan<AccountId, U256> {
+	fn from(loan: RpcLoan<AccountId, AssetAmount>) -> Self {
+		Self {
+			loan_id: loan.loan_id,
+			loan_type: loan.loan_type,
+			asset: loan.asset,
+			created_at: loan.created_at,
+			principal_amount: loan.principal_amount.into(),
+		}
+	}
+}
+
+impl<AccountId> From<RpcLoanAccount<AccountId, AssetAmount>> for RpcLoanAccount<AccountId, U256> {
+	fn from(acc: RpcLoanAccount<AccountId, AssetAmount>) -> Self {
+		Self {
+			account: acc.account,
+			collateral_topup_asset: acc.collateral_topup_asset,
+			ltv_ratio: acc.ltv_ratio,
+			collateral: acc.collateral.into_iter().map(Into::into).collect(),
+			loans: acc.loans.into_iter().map(Into::into).collect(),
+			liquidation_status: acc.liquidation_status,
+		}
+	}
 }
 
 fn build_rpc_loan_account<T: Config>(

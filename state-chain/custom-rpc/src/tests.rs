@@ -16,7 +16,7 @@ use cf_rpc_apis::{
 };
 use codec::Encode;
 use pallet_cf_lending_pools::{
-	BoostPoolDetails, LtvThresholds, NetworkFeeContributions, OwedAmount,
+	BoostPoolDetails, LoanType, LtvThresholds, NetworkFeeContributions, OwedAmount,
 };
 use pallet_cf_pools::{
 	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,

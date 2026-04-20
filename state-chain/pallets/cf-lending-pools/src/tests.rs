@@ -574,6 +574,38 @@ fn basic_boosting() {
 	});
 }
 
+/// Boosting does not depend on oracle prices for the deposit asset (no LTV check is
+/// required to open a boost loan), so a stale price must not block the boost.
+#[test]
+fn boost_succeeds_with_stale_oracle_price() {
+	new_test_ext().execute_with(|| {
+		const BOOST_FUNDS: AssetAmount = 500_000_000;
+		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
+		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);
+		const LOAN_ID: LoanId = LoanId(0);
+
+		setup_lending_pool_for_boost();
+
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			BOOST_ASSET,
+			BOOST_FUNDS,
+		));
+
+		MockPriceFeedApi::set_stale(BOOST_ASSET, true);
+
+		assert_ok!(LendingPools::try_boosting(
+			DEPOSIT_ID,
+			BOOST_ASSET,
+			DEPOSIT_AMOUNT,
+			BOOST_FEE_BPS
+		));
+
+		assert!(BoostLoans::<Test>::get(LOAN_ID).is_some());
+		assert!(BoostedDeposits::<Test>::get(BOOST_ASSET, DEPOSIT_ID).is_some());
+	});
+}
+
 /// Uses BTC lending pool only (no legacy boost pool)
 #[test]
 fn boosted_deposit_is_lost() {
@@ -747,19 +779,26 @@ fn add_legacy_boost_funds_below_minimum() {
 
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Default::default(),
-			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, MINIMUM_ADD_FUNDS_AMOUNT)]),
+			minimum_add_funds_amount: BTreeMap::from([(BOOST_ASSET, MINIMUM_ADD_FUNDS_AMOUNT)]),
 			min_lending_pool_share: Percent::from_percent(30),
 		});
 
 		assert_noop!(
 			LendingPools::add_boost_funds(
 				RuntimeOrigin::signed(BOOSTER_1),
-				Asset::Btc,
+				BOOST_ASSET,
 				MINIMUM_ADD_FUNDS_AMOUNT - 1,
 				BOOST_FEE_BPS
 			),
 			crate::Error::<Test>::AmountBelowMinimum
 		);
+
+		assert_ok!(LendingPools::add_boost_funds(
+			RuntimeOrigin::signed(BOOSTER_1),
+			BOOST_ASSET,
+			MINIMUM_ADD_FUNDS_AMOUNT,
+			BOOST_FEE_BPS
+		));
 	});
 }
 
@@ -1067,7 +1106,10 @@ fn boost_pool_details() {
 		));
 
 		assert_eq!(
-			get_boost_pool_details::<Test>(BOOST_ASSET).get(&BOOST_FEE_BPS).cloned().unwrap(),
+			get_boost_pool_details::<Test>(BOOST_ASSET)
+				.get(&BOOST_FEE_BPS)
+				.cloned()
+				.unwrap(),
 			BoostPoolDetails {
 				available_amounts: BTreeMap::from_iter([(BOOSTER_1, 30_010)]),
 				pending_boosts: BTreeMap::from_iter([(

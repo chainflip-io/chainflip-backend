@@ -177,17 +177,13 @@ impl<T: Config> BoostApi for Pallet<T> {
 			.and_then(|pool| CorePools::<T>::get(asset, pool.core_pool_id))
 			.map_or(0, |p| p.available_amount.into_asset_amount());
 
-		ensure!(
-			lending_available.saturating_add(boost_available) >= required_amount,
-			Error::<T>::InsufficientBoostLiquidity
-		);
-
-		let (lending_pool_principal, boost_pool_principal) = split_required_amount(
+		let (lending_pool_principal, boost_pool_principal) = try_split_required_amount(
 			required_amount,
 			lending_available,
 			boost_available,
 			BoostConfig::<T>::get().min_lending_pool_share,
-		);
+		)
+		.map_err(Error::<T>::from)?;
 
 		let lending_pool_fee =
 			Permill::from_rational(lending_pool_principal, required_amount) * total_fee;
@@ -405,6 +401,15 @@ fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetA
 	fee_permill * amount_to_boost
 }
 
+#[derive(Debug)]
+struct SplitRequiredAmountError;
+
+impl<T: Config> From<SplitRequiredAmountError> for Error<T> {
+	fn from(_: SplitRequiredAmountError) -> Self {
+		Error::<T>::InsufficientBoostLiquidity
+	}
+}
+
 /// Split `required_amount` between the lending pool and the legacy boost pool
 /// proportionally to their available liquidity, with the lending pool guaranteed
 /// to cover at least `min_lending_share` of `required_amount` whenever it has
@@ -412,16 +417,20 @@ fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetA
 /// available liquidity, and the two returned values always sum to
 /// `required_amount`.
 ///
-/// Assumes `lending_available + boost_available >= required_amount`.
-fn split_required_amount(
+/// Returns `SplitRequiredAmountError` if the combined liquidity of both pools
+/// is insufficient to cover `required_amount`.
+fn try_split_required_amount(
 	required_amount: AssetAmount,
 	lending_available: AssetAmount,
 	boost_available: AssetAmount,
 	min_lending_share: Percent,
-) -> (AssetAmount, AssetAmount) {
+) -> Result<(AssetAmount, AssetAmount), SplitRequiredAmountError> {
 	let total_available = lending_available.saturating_add(boost_available);
+
+	ensure!(total_available >= required_amount, SplitRequiredAmountError);
+
 	if total_available == 0 || required_amount == 0 {
-		return (0, 0);
+		return Ok((0, 0));
 	}
 
 	// Proportional split (rounds down in favour of the boost pool).
@@ -441,7 +450,7 @@ fn split_required_amount(
 	// `lending_available` because total liquidity is at least `required_amount`.
 	let lending_pool_principal = required_amount.saturating_sub(boost_pool_principal);
 
-	(lending_pool_principal, boost_pool_principal)
+	Ok((lending_pool_principal, boost_pool_principal))
 }
 
 #[cfg(test)]
@@ -455,7 +464,7 @@ mod split_tests {
 		lending: AssetAmount,
 		boost: AssetAmount,
 	) -> (AssetAmount, AssetAmount) {
-		split_required_amount(required, lending, boost, MIN_LENDING_SHARE)
+		try_split_required_amount(required, lending, boost, MIN_LENDING_SHARE).unwrap()
 	}
 
 	#[test]
@@ -519,9 +528,30 @@ mod split_tests {
 	#[test]
 	fn min_lending_share_is_configurable() {
 		// With a 50% minimum, lending must cover 500 even though proportional is ~230.
-		assert_eq!(split_required_amount(1000, 600, 2000, Percent::from_percent(50)), (500, 500));
+		assert_eq!(
+			try_split_required_amount(1000, 600, 2000, Percent::from_percent(50)).unwrap(),
+			(500, 500)
+		);
 		// With a 0% minimum, only proportional applies.
-		assert_eq!(split_required_amount(1000, 200, 2000, Percent::from_percent(0)), (91, 909));
+		assert_eq!(
+			try_split_required_amount(1000, 200, 2000, Percent::from_percent(0)).unwrap(),
+			(91, 909)
+		);
+		// With a 100% minimum, lending covers everything when it has the liquidity.
+		assert_eq!(
+			try_split_required_amount(1000, 1200, 2000, Percent::from_percent(100)).unwrap(),
+			(1000, 0)
+		);
+		assert_eq!(
+			try_split_required_amount(1000, 999, 1000, Percent::from_percent(100)).unwrap(),
+			(999, 1)
+		);
+	}
+
+	#[test]
+	fn errors_when_total_liquidity_is_insufficient() {
+		assert!(try_split_required_amount(1000, 400, 500, MIN_LENDING_SHARE).is_err());
+		assert!(try_split_required_amount(1, 0, 0, MIN_LENDING_SHARE).is_err());
 	}
 }
 

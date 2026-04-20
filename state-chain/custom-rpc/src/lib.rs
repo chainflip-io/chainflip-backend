@@ -62,7 +62,7 @@ use pallet_cf_elections::electoral_systems::oracle_price::{
 use pallet_cf_environment::TransactionMetadata;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_lending_pools::{
-	LendingPoolAndSupplyPositions, LendingSupplyPosition, LoanType, RpcLoan, RpcLoanAccount,
+	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
 };
 use pallet_cf_pools::{
 	AskBidMap, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
@@ -1335,6 +1335,12 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 
+	#[method(name = "all_loans")]
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>>;
+
 	#[method(name = "lending_pool_supply_balances")]
 	fn cf_lending_pool_supply_balances(
 		&self,
@@ -1731,53 +1737,23 @@ where
 			if api_version < 17 {
 				#[expect(deprecated)]
 				api.cf_loan_accounts_before_version_17(hash, borrower_id.clone())
-					.map(|accounts| {
-						accounts
-							.into_iter()
-							.map(|acc| RpcLoanAccount::<_, U256> {
-								account: acc.account.clone(),
-								collateral_topup_asset: acc.collateral_topup_asset,
-								ltv_ratio: acc.ltv_ratio,
-								collateral: acc.collateral.into_iter().map(Into::into).collect(),
-								loans: acc
-									.loans
-									.into_iter()
-									.map(|loan| RpcLoan {
-										loan_id: loan.loan_id,
-										asset: loan.asset,
-										created_at: loan.created_at,
-										loan_type: LoanType::User(acc.account.clone()),
-										principal_amount: loan.principal_amount.into(),
-									})
-									.collect(),
-								liquidation_status: acc.liquidation_status,
-							})
-							.collect()
-					})
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
 			} else {
-				api.cf_loan_accounts(hash, borrower_id.clone()).map(|accounts| {
-					accounts
-						.into_iter()
-						.map(|acc| RpcLoanAccount::<_, U256> {
-							account: acc.account.clone(),
-							collateral_topup_asset: acc.collateral_topup_asset,
-							ltv_ratio: acc.ltv_ratio,
-							collateral: acc.collateral.into_iter().map(Into::into).collect(),
-							loans: acc
-								.loans
-								.into_iter()
-								.map(|loan| RpcLoan {
-									loan_id: loan.loan_id,
-									asset: loan.asset,
-									created_at: loan.created_at,
-									loan_type: loan.loan_type,
-									principal_amount: loan.principal_amount.into(),
-								})
-								.collect(),
-							liquidation_status: acc.liquidation_status,
-						})
-						.collect()
-				})
+				api.cf_loan_accounts(hash, borrower_id.clone())
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			}
+		})
+	}
+
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 17 {
+				Ok(Vec::new())
+			} else {
+				api.cf_all_loans(hash).map(|loans| loans.into_iter().map(Into::into).collect())
 			}
 		})
 	}

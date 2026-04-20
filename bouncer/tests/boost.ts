@@ -13,7 +13,6 @@ import {
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { requestNewSwap } from 'shared/perform_swap';
-import { createBoostPools } from 'shared/setup_boost_pools';
 import { jsonRpc } from 'shared/json_rpc';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
@@ -208,12 +207,7 @@ export async function testBoostingSwap(testContext: TestContext) {
     await chainflip.query.lendingPools.boostPools(Assets.Btc, boostPoolTier)
   ).toJSON();
 
-  // Create the boost pool if it doesn't exist
-  if (!boostPool?.feeBps) {
-    await createBoostPools(cf, [{ asset: Assets.Btc, tier: boostPoolTier }]);
-  } else {
-    cf.trace(`Boost pool already exists for tier ${boostPoolTier}`);
-  }
+  assert(boostPool?.feeBps, `Boost pool for tier ${boostPoolTier} does not exist`);
 
   // Set the config. Only the network fee deduction really matters, as it will effect the expected earnings.
   // Setting them to the same as the default values, Just in case they are different (eg. upgrade test).
