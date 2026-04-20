@@ -101,8 +101,8 @@ use cf_primitives::{
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
 	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
-	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
+	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -573,7 +573,7 @@ impl EvmEnvironmentProvider<Tron> for EvmEnvironment {
 /// types the multiplier is applied normally.
 pub struct TronFeeMultiplier;
 
-impl pallet_cf_chain_tracking::FeeMultiplierProvider<Tron> for TronFeeMultiplier {
+impl FeeMultiplierProvider<Tron> for TronFeeMultiplier {
 	fn adjust_fee(
 		estimated_fee: <Tron as cf_chains::Chain>::ChainAmount,
 		fee_multiplier: sp_runtime::FixedU128,

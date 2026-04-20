@@ -20,7 +20,7 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_chain_tracking, Config};
 use cf_chains::mocks::MockEthereum;
-use cf_traits::{self, impl_mock_chainflip};
+use cf_traits::{self, impl_mock_chainflip, DefaultFeeMultiplier};
 use frame_support::derive_impl;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -46,7 +46,7 @@ impl_mock_chainflip!(Test);
 
 impl Config for Test {
 	type TargetChain = MockEthereum;
-	type FeeMultiplierProvider = crate::DefaultFeeMultiplier;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = ();
 }
 
