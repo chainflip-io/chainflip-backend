@@ -419,7 +419,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 									energy_estimate.result.message,
 								));
 							},
-						}.min(i64::MAX as u128) as i64;
+						}.try_into()?;
 
 						// Iff the energy estimation above is reliable in both logic revertions AND energy exceed
 						// scenarios, then we could skip this step and just rely on the estimate energy. It should
