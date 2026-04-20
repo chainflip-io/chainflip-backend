@@ -15,7 +15,7 @@ permissions:
   contents: read
 jobs:
   prerelease:
-    runs-on: namespace-profile-default
+    runs-on: namespace-profile-default-light
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -35,7 +35,6 @@ jobs:
       - name: Remove non production binaries 🗑
         run: |
           rm -f assets/bin/chainflip-engine-databases
-          rm -f assets/bin/chainflip-ingress-egress-tracker
           rm -f assets/bin/generate-genesis-keys
 
       - name: Move .dylib files 📂

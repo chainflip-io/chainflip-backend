@@ -235,26 +235,16 @@ pub fn new_full<
 		);
 	}
 
-	// [CF] Required for Grandpa RPC.
-	let (shared_voter_state, shared_authority_set, justification_stream, finality_provider) = {
-		let (_grandpa_block_import, grandpa_link) = sc_consensus_grandpa::block_import(
-			client.clone(),
-			GRANDPA_JUSTIFICATION_PERIOD,
-			&(client.clone() as Arc<_>),
-			select_chain.clone(),
-			telemetry.as_ref().map(|x| x.handle()),
-		)?;
-
-		(
-			sc_consensus_grandpa::SharedVoterState::empty(),
-			grandpa_link.shared_authority_set().clone(),
-			grandpa_link.justification_stream(),
-			sc_consensus_grandpa::FinalityProofProvider::new_for_service(
-				backend.clone(),
-				Some(grandpa_link.shared_authority_set().clone()),
-			),
-		)
-	};
+	// Extract RPC-facing handles from the same grandpa_link used by the voter,
+	// so the RPC reflects the real authority set, justification stream, and voter state.
+	let shared_voter_state = SharedVoterState::empty();
+	let shared_voter_state_for_grandpa = shared_voter_state.clone();
+	let shared_authority_set = grandpa_link.shared_authority_set().clone();
+	let justification_stream = grandpa_link.justification_stream();
+	let finality_provider = sc_consensus_grandpa::FinalityProofProvider::new_for_service(
+		backend.clone(),
+		Some(shared_authority_set.clone()),
+	);
 
 	let role = config.role;
 	let force_authoring = config.force_authoring;
@@ -477,7 +467,7 @@ pub fn new_full<
 			notification_service: grandpa_notification_service,
 			voting_rule: sc_consensus_grandpa::VotingRulesBuilder::default().build(),
 			prometheus_registry,
-			shared_voter_state: SharedVoterState::empty(),
+			shared_voter_state: shared_voter_state_for_grandpa,
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
 			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool),
 		};

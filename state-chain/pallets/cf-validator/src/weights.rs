@@ -72,6 +72,7 @@ pub trait WeightInfo {
 	fn deregister_as_operator() -> Weight;
 	fn delegate() -> Weight;
 	fn undelegate() -> Weight;
+	fn report_witnessing_task_restart() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -620,6 +621,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+	// Placeholder weight — needs benchmarking.
+	fn report_witnessing_task_restart() -> Weight {
+		Weight::from_parts(10_000_000, 1500)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -1166,5 +1172,10 @@ impl WeightInfo for () {
 		Weight::from_parts(22_026_000, 3944)
 			.saturating_add(ParityDbWeight::get().reads(1_u64))
 			.saturating_add(ParityDbWeight::get().writes(1_u64))
+	}
+	// Placeholder weight — needs benchmarking.
+	fn report_witnessing_task_restart() -> Weight {
+		Weight::from_parts(10_000_000, 1500)
+			.saturating_add(ParityDbWeight::get().reads(1_u64))
 	}
 }

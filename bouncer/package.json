@@ -23,7 +23,7 @@
     "@solana/web3.js": "^1.98.2",
     "@types/yargs": "^17.0.33",
     "async-mutex": "^0.4.1",
-    "axios": "^1.10.0",
+    "axios": "^1.15.0",
     "bignumber.js": "^9.3.0",
     "bitcoin-core": "^4.2.0",
     "bitcoinjs-lib": "^6.1.7",
@@ -40,7 +40,7 @@
     "scale-ts": "1.6.0",
     "tiny-secp256k1": "^2.2.4",
     "toml": "^3.0.0",
-    "vitest": "3.0.3",
+    "vitest": "3.0.5",
     "web3": "^1.10.4",
     "yargs": "^17.7.2",
     "zod": "3.25.75"

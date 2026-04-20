@@ -1,7 +1,7 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { decodeDispatchError } from 'shared/utils';
+import { decodeDispatchError, sleep } from 'shared/utils';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
@@ -60,6 +60,9 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
     const reason = decodeDispatchError(resultEvent.data, await getChainflipApi());
     throwError(cf.logger, new Error(`Runtime upgrade failed: ${reason}`));
   }
+
+  // waiting for some time so that the new runtime version is reflected through the rpc layer
+  await sleep(20000);
 
   cf.info('Runtime upgrade completed.');
 }

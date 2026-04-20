@@ -29,12 +29,11 @@ use cf_chains::{
 	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, Polkadot, Solana,
 };
 pub use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
-	SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
+	SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
 };
 use cf_traits::{
 	ChainflipWithTargetChain, DummyEgressSuccessWitnesser, DummyIngressSource, NoLimit,
@@ -1032,6 +1031,7 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type LpRegistrationApi = LiquidityProvider;
+	type PriceFeedApi = ChainlinkOracle;
 }
 
 impl pallet_cf_lending_pools::Config for Runtime {

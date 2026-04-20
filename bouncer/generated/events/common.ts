@@ -487,6 +487,15 @@ export const palletCfValidatorDelegationChange = z.discriminatedUnion('__kind', 
   z.object({ __kind: z.literal('Decrease'), value: numberOrHex }),
 ]);
 
+export const cfPrimitivesWitnessingTaskName = simpleEnum([
+  'Ethereum',
+  'Bitcoin',
+  'Arbitrum',
+  'Solana',
+  'Assethub',
+  'Oracle',
+]);
+
 export const palletCfGovernanceGovernanceCouncil = z.object({
   members: z.array(accountId),
   threshold: z.number(),
@@ -1770,6 +1779,15 @@ export const palletCfTradingStrategyTradingStrategy = z.discriminatedUnion('__ki
     minSellTick: z.number(),
     maxSellTick: z.number(),
     baseAsset: cfPrimitivesChainsAssetsAnyAsset,
+  }),
+  z.object({
+    __kind: z.literal('OracleTracking'),
+    minBuyOffsetTick: z.number(),
+    maxBuyOffsetTick: z.number(),
+    minSellOffsetTick: z.number(),
+    maxSellOffsetTick: z.number(),
+    baseAsset: cfPrimitivesChainsAssetsAnyAsset,
+    quoteAsset: cfPrimitivesChainsAssetsAnyAsset,
   }),
 ]);
 

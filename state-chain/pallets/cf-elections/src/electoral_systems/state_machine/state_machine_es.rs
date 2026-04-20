@@ -9,7 +9,8 @@ use sp_std::{fmt::Debug, vec::Vec};
 use crate::{
 	electoral_system::{ElectionReadAccess, ElectionWriteAccess, ElectoralSystem},
 	vote_storage::VoteStorage,
-	AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VotePropertiesOf,
+	AuthorityVoteOf, CorruptStorageError, ElectoralSystemTypes, PartialVoteOf, VoteOf,
+	VotePropertiesOf,
 };
 
 use super::{
@@ -159,6 +160,17 @@ impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElect
 		Ok(Default::default())
 	}
 
+	fn is_vote_needed(
+		(_, current_partial_vote, _): (
+			VotePropertiesOf<Self>,
+			PartialVoteOf<Self>,
+			AuthorityVoteOf<Self>,
+		),
+		(proposed_partial_vote, _): (PartialVoteOf<Self>, VoteOf<Self>),
+	) -> bool {
+		current_partial_vote != proposed_partial_vote
+	}
+
 	fn on_finalize<
 		ElectoralAccess: crate::electoral_system::ElectoralWriteAccess<ElectoralSystem = Self> + 'static,
 	>(
@@ -254,7 +266,10 @@ impl<ES: StatemachineElectoralSystemTypes> ElectoralSystem for StatemachineElect
 			{
 				consensus.insert_vote(vote);
 			} else {
-				log::debug!("Received invalid vote: response ({:?}) didn't match with the query {properties:?}", vote);
+				log::debug!(
+					"Received invalid vote: response ({:?}) didn't match with the query {properties:?}",
+					vote
+				);
 			}
 		}
 

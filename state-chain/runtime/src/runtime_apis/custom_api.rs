@@ -22,7 +22,7 @@ use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -48,7 +48,7 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
@@ -174,7 +174,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
+		) -> Result<PoolOrders<AccountId32>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -193,6 +193,10 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_9::LiquidityProviderInfo;
+		#[changed_in(16)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_16::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
@@ -204,7 +208,13 @@ decl_runtime_apis!(
 		) -> before_version_15::BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_broker_info(account_id: AccountId32) -> BrokerInfo<<Bitcoin as Chain>::ChainAccount>;
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
+		#[changed_in(16)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
+		#[changed_in(16)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_16::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -298,7 +308,11 @@ decl_runtime_apis!(
 		fn cf_get_trading_strategies(
 			lp_id: Option<AccountId32>,
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
+		#[changed_in(16)]
+		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
+		#[changed_in(16)]
+		fn cf_network_fees() -> before_version_16::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(12)]
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;
@@ -332,6 +346,10 @@ decl_runtime_apis!(
 		fn cf_evm_calldata();
 		#[changed_in(7)]
 		fn cf_common_account_info();
+		#[changed_in(16)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;

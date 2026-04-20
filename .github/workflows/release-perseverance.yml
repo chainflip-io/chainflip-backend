@@ -51,7 +51,7 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "perseverance"
-      ci-runner: "rust-builder-no-cache"
+      ci-runner: "rust-builder-light-no-cache"
     secrets: inherit
   publish:
     needs: [package]

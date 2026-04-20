@@ -229,11 +229,6 @@ build-localnet() {
   echo "🗂️ Starting Indexer ..."
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
-  if [[ $START_TRACKER == "y" ]]; then
-    echo "👁 Starting Ingress-Egress-tracker ..."
-    KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
   echo "📐 Updating event schemas ..."
   cd bouncer && ./commands/generate_event_schemas.ts && cd ..
 
@@ -298,7 +293,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker deposit-monitor; do
+  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all deposit-monitor; do
     if [[ $SERVICE == "all" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
@@ -344,9 +339,6 @@ logs() {
     if [[ $SERVICE == "lp" ]]; then
       tail -f $CHAINFLIP_BASE_PATH/chainflip-lp-api.*log
     fi
-    if [[ $SERVICE == "ingress-egress-tracker" ]]; then
-      tail -f $CHAINFLIP_BASE_PATH/chainflip-ingress-egress-tracker.*log
-    fi
     if [[ $SERVICE == "solana" ]]; then
       tail -f $SOLANA_BASE_PATH/solana.*log
     fi
@@ -371,7 +363,6 @@ function save_settings() {
 cat <<EOF > $CHAINFLIP_BASE_PATH/settings.sh
 export NODE_COUNT=${NODE_COUNT}
 export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
-export START_TRACKER=${START_TRACKER}
 export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
 EOF
 }

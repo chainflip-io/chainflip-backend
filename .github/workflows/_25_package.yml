@@ -6,7 +6,7 @@ on:
         required: true
         type: string
       ci-runner:
-        default: rust-builder
+        default: rust-builder-light
         description: The CI runner to use
         type: string
 

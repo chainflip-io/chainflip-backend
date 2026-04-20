@@ -424,7 +424,7 @@ pub mod pallet {
 		/// The fee paid for broadcasting a transaction has been refused.
 		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
 		/// A Call has been re-threshold-signed, and its signature data is inserted into storage.
-		CallResigned { broadcast_id: BroadcastId },
+		CallResigned { broadcast_id: BroadcastId, transaction_payload: TransactionFor<T, I> },
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
 		/// A signature/broadcast with a historical (expired) key was requested via governance.
@@ -567,7 +567,8 @@ pub mod pallet {
 					let signed_api_call = api_call.signed(&signature, signer);
 
 					PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
-
+					let transaction_payload =
+						T::TransactionBuilder::build_transaction(&signed_api_call);
 					// If a signed call already exists, update the storage and do not broadcast.
 					if should_broadcast {
 						let transaction_out_id = signed_api_call.transaction_out_id();
@@ -591,9 +592,7 @@ pub mod pallet {
 
 						let broadcast_data = BroadcastData::<T, I> {
 							broadcast_id,
-							transaction_payload: T::TransactionBuilder::build_transaction(
-								&signed_api_call,
-							),
+							transaction_payload,
 							threshold_signature_payload,
 							transaction_out_id,
 							nominee: None,
@@ -608,7 +607,10 @@ pub mod pallet {
 							Self::start_broadcast_attempt(broadcast_data);
 						}
 					} else {
-						Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
+						Self::deposit_event(Event::<T, I>::CallResigned {
+							broadcast_id,
+							transaction_payload,
+						});
 					}
 				},
 				Err(_offenders) => {

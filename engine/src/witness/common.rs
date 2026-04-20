@@ -21,10 +21,13 @@ pub mod chunked_chain_source;
 pub mod epoch_source;
 pub mod traits;
 
+use std::sync::Arc;
+
 use cf_chains::{
 	instances::{ChainInstanceAlias, ChainInstanceFor, CryptoInstanceFor},
 	Chain,
 };
+use engine_sc_client::extrinsic_api::signed::SignedExtrinsicApi;
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
 
@@ -118,4 +121,15 @@ pub trait ExternalChainSource:
 	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>
 {
 	type Chain: ExternalChain;
+}
+
+pub async fn submit_sos_extrinsic<StateChainClient: SignedExtrinsicApi>(
+	sos_client: Arc<StateChainClient>,
+	task_name: cf_primitives::WitnessingTaskName,
+) {
+	let _ = sos_client
+		.finalize_signed_extrinsic(pallet_cf_validator::Call::report_witnessing_task_restart {
+			task: task_name,
+		})
+		.await;
 }

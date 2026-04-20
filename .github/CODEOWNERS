@@ -1,6 +1,5 @@
 .github @chainflip-io/platform
 
-/api/bin/chainflip-ingress-egress-tracker @chainflip-io/web
 /api/ @nmammeri
 
 /bouncer/ @albert-llimos

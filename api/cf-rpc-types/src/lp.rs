@@ -18,10 +18,10 @@ use anyhow::anyhow;
 use cf_chains::{address::AddressString, AnyChain, Arbitrum, Chain, Solana};
 use cf_primitives::{
 	chains::{assets::any, Bitcoin, Ethereum, Polkadot},
-	*,
+	OrderId, *,
 };
 use cf_utilities::rpc::NumberOrHex;
-use pallet_cf_pools::{OrderId, RangeOrderSize};
+use pallet_cf_pools::RangeOrderSize;
 use sp_core::serde::{Deserialize, Serialize};
 use std::ops::Range;
 

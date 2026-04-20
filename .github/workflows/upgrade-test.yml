@@ -183,9 +183,36 @@ jobs:
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
+      - name: Setup bouncer tests initial state 📦
+        if: inputs.run-job
+        run: |
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          set -x
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./setup_for_test.sh
+          git reset --hard
+
+      - name: Upgrade binaries 💾
+        if: inputs.run-job
+        shell: bash
+        id: upgrade-binaries
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/upgrade_binaries.ts \
+            --bins ./../upgrade-to-bins \
+            --localnet_init ./../localnet/init
+          # Remove after 2.2 is release because the new rpc_tests are already part of fast-bouncer
+          ./commands/run_test.ts  ./tests/rpc_tests.ts
+
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
+        env:
+          SKIP_BLS_TESTS: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
@@ -193,25 +220,24 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          ./test_commands/all_cuncurrent_tests.sh
           git reset --hard
 
-      - name: Upgrade network 🚀
+      - name: Upgrade runtime 🚀
         if: inputs.run-job
         shell: bash
-        id: upgrade-network
-        env:
-          SKIP_BLS_TESTS: "true"
+        id: upgrade-runtime
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/upgrade_network.ts prebuilt \
+          ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
+            --try_runtime
+          ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
-            --localnet_init ./../localnet/init \
-            --oldVersion "${{ env.OLD_BIN_VERSION }}"
+            --localnet_init ./../localnet/init
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
@@ -224,7 +250,7 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+          ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
@@ -290,6 +316,9 @@ jobs:
           name: localnet-logs-upgrade-test
           path: |
             /tmp/chainflip/*/chainflip-*.*log
+            /tmp/chainflip/chainflip-*.*log
+            /tmp/chainflip/debug.*log
+            /tmp/solana/*.*log
 
       - name: Upload Chainflip Logs 💾
         if: inputs.run-job || failure() || cancelled()

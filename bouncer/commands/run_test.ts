@@ -77,8 +77,13 @@ if (!matchingTestName) {
   console.error('No matching test function found');
   process.exit(1);
 } else {
-  execSync(
-    `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
-    { stdio: 'inherit' },
-  );
+  try {
+    execSync(
+      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
+      { stdio: 'inherit' },
+    );
+  } catch (err) {
+    console.error(`Test "${matchingTestName}" failed:`, err);
+    process.exit(1);
+  }
 }

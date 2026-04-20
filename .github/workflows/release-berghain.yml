@@ -41,7 +41,7 @@ jobs:
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "berghain"
-      ci-runner: "rust-builder-no-cache"
+      ci-runner: "rust-builder-light-no-cache"
     secrets: inherit
   docker:
     needs: [build]
