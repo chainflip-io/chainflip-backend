@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.12] - 2026-04-20
+
+### Fixes
+
+- Handle edge case when bitcoin OP_RETURN contains invalid script.
+- Graceful recovery when Solana SPL address is owned by System program.
+
 ## [2.1.11] - 2026-04-13
 
 - Apply unsigned validation checks during pre-dispatch.
