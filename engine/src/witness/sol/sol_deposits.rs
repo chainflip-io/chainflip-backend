@@ -235,10 +235,10 @@ fn parse_account_amount_from_data(
 			Ok(deposit_channel_info.lamports as u128)
 		},
 		DepositChannelType::TokenDepositChannel(deposit_channel_address, _, token_mint_pubkey) => {
-			ensure!(
-				owner_pub_key == TOKEN_PROGRAM_ID,
-				"Unexpected owner for token deposit channel"
-			);
+			// ATA not initialized as a token account but it could be owned by the System Program.
+			if owner_pub_key != TOKEN_PROGRAM_ID {
+				return Ok(0);
+			}
 
 			// Fetch data and ensure it's encoding is JsonParsed
 			match deposit_channel_info.data {
