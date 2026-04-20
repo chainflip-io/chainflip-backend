@@ -67,10 +67,8 @@ fn with_initialised_block<R>(f: impl FnOnce() -> R) -> R {
 		.unwrap();
 
 	let mut digest = sp_runtime::Digest::default();
-	digest.push(sp_runtime::DigestItem::PreRuntime(
-		sp_consensus_aura::AURA_ENGINE_ID,
-		slot.encode(),
-	));
+	digest
+		.push(sp_runtime::DigestItem::PreRuntime(sp_consensus_aura::AURA_ENGINE_ID, slot.encode()));
 
 	System::reset_events();
 	System::initialize(&block_number, &System::block_hash(block_number), &digest);
@@ -108,10 +106,7 @@ fn executive_rejects_forged_non_native_signed_call() {
 			pallet_cf_environment::Call::<Runtime>::non_native_signed_call {
 				chainflip_extrinsic: ChainflipExtrinsic {
 					call: Box::new(inner_call),
-					transaction_metadata: TransactionMetadata {
-						nonce: 0,
-						expiry_block: 10_000,
-					},
+					transaction_metadata: TransactionMetadata { nonce: 0, expiry_block: 10_000 },
 				},
 				signature_data: SignatureData::Solana {
 					signature: SolSignature([0u8; 64]),
