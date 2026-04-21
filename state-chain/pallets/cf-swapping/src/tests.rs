@@ -24,6 +24,7 @@ use std::sync::LazyLock;
 
 use super::*;
 use crate::{
+	impls::BrokerDeregistrationCheck,
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };

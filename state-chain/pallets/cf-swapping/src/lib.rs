@@ -47,6 +47,7 @@ use frame_support::{
 	Hashable,
 };
 use frame_system::pallet_prelude::*;
+pub use impls::BrokerDeregistrationCheck;
 pub use pallet::*;
 use pallet_cf_environment::submit_runtime_call::{
 	is_valid_signature, SignatureData, TransactionMetadata,
@@ -215,7 +216,7 @@ pub enum BatchExecutionError<T: Config> {
 	},
 	PriceViolation {
 		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
-		non_violating_swaps: BTreeMap<SwapId, Swap<T>>,
+		non_violating_swaps: Vec<Swap<T>>,
 	},
 	DispatchError {
 		error: DispatchError,

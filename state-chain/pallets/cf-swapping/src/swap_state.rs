@@ -40,8 +40,8 @@ pub struct SuccessfulSwap {
 	pub output_amount_after_fees: AssetAmount,
 	/// Always in terms of output asset
 	pub broker_fee_taken: AssetAmount,
-	pub oracle_delta: Option<SignedBasisPoints>,
 	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
+	pub oracle_delta: Option<SignedBasisPoints>,
 }
 
 impl SuccessfulSwap {
@@ -105,6 +105,18 @@ pub struct AfterBrokerFee4 {
 }
 
 #[derive(Debug)]
+/// The stage after price protection checks have been passed (minimum price and LPP).
+pub struct AfterPriceProtection5 {
+	pub input_amount_after_fees: AssetAmount,
+	pub network_fee_taken: AssetAmount,
+	pub intermediate: Option<AssetAndAmount>,
+	pub output_amount_before_fees: AssetAmount,
+	pub output_amount_after_fees: AssetAmount,
+	pub broker_fee_taken: AssetAmount,
+	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
+}
+
+#[derive(Debug)]
 /// A stage representing a failed swap, used in the execution loop to return information about the
 /// failed swaps.
 pub struct StageFailed {
@@ -129,7 +141,7 @@ pub(crate) trait GroupSwapState<T: Config> {
 	/// already the intermediate asset).
 	fn swap_group(&self) -> Option<SwapGroupPair>;
 	/// Updates the swap state with the output amount of a swap for this single leg.
-	fn advance_swap_result(self, amount: AssetAmount) -> Self::OutputState;
+	fn advance_with_swap_result(self, amount: AssetAmount) -> Self::OutputState;
 	/// Used when the asset does not need to be swapped for this leg, just passes through the input
 	/// amount as the output amount.
 	fn advance_no_swap(self) -> Self::OutputState;
@@ -152,7 +164,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, AfterNetworkFee1> {
 		}
 	}
 
-	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
+	fn advance_with_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
 			stage: AfterFirstLeg2 {
 				input_amount_after_fees: self.stage.input_amount_after_fees,
@@ -201,7 +213,7 @@ impl<T: Config> GroupSwapState<T> for SwapState<T, AfterFirstLeg2> {
 		}
 	}
 
-	fn advance_swap_result(self, output: AssetAmount) -> Self::OutputState {
+	fn advance_with_swap_result(self, output: AssetAmount) -> Self::OutputState {
 		SwapState {
 			swap: self.swap,
 			stage: AfterSecondLeg3 {
@@ -360,40 +372,54 @@ impl<T: Config> SwapState<T, AfterBrokerFee4> {
 	/// delta values in the swap state.
 	pub(crate) fn check_for_price_violation(
 		self,
-	) -> Result<SuccessfulSwap, (Swap<T>, SwapFailureReason)> {
+	) -> Result<SwapState<T, AfterPriceProtection5>, (Swap<T>, SwapFailureReason)> {
 		match Pallet::<T>::check_swap_price_violation(&self) {
-			Ok(oracle_delta_ex_fees) => {
-				// Now calculate the overall oracle delta. Only used for display purposes.
-				let oracle_delta = if oracle_delta_ex_fees.is_some() {
-					Pallet::<T>::get_delta_from_oracle_price(
-						AssetAndAmount::new(self.input_asset(), self.input_amount_before_fees()),
-						AssetAndAmount::new(
-							self.output_asset(),
-							self.stage.output_amount_after_fees,
-						),
-					)
-					.ok()
-					.flatten()
-					.map(|delta| delta.pessimistic_rounded_into())
-				} else {
-					None
-				};
-
-				Ok(SuccessfulSwap {
-					swap_id: self.swap_id(),
-					swap_request_id: self.swap_request_id(),
-					input_asset: self.input_asset(),
-					output_asset: self.output_asset(),
+			Ok(oracle_delta_ex_fees) => Ok(SwapState {
+				swap: self.swap,
+				stage: AfterPriceProtection5 {
 					input_amount_after_fees: self.stage.input_amount_after_fees,
 					network_fee_taken: self.stage.network_fee_taken,
 					intermediate: self.stage.intermediate,
+					output_amount_before_fees: self.stage.output_amount_before_fees,
 					output_amount_after_fees: self.stage.output_amount_after_fees,
 					broker_fee_taken: self.stage.broker_fee_taken,
-					oracle_delta,
 					oracle_delta_ex_fees,
-				})
-			},
+				},
+			}),
 			Err(reason) => Err((self.into_swap(), reason)),
+		}
+	}
+}
+
+impl<T: Config> SwapState<T, AfterPriceProtection5> {
+	/// Calculate the overall oracle delta. Only used for display purposes.
+	pub(crate) fn calculate_oracle_delta(self) -> SuccessfulSwap {
+		// If the oracle_delta_ex_fees is None, then we can skip the oracle delta calculation since
+		// it will also fail.
+		let oracle_delta = if self.stage.oracle_delta_ex_fees.is_some() {
+			Pallet::<T>::get_delta_from_oracle_price(
+				AssetAndAmount::new(self.input_asset(), self.input_amount_before_fees()),
+				AssetAndAmount::new(self.output_asset(), self.stage.output_amount_after_fees),
+			)
+			.ok()
+			.flatten()
+			.map(|delta| delta.pessimistic_rounded_into())
+		} else {
+			None
+		};
+
+		SuccessfulSwap {
+			swap_id: self.swap_id(),
+			swap_request_id: self.swap_request_id(),
+			input_asset: self.input_asset(),
+			output_asset: self.output_asset(),
+			input_amount_after_fees: self.stage.input_amount_after_fees,
+			network_fee_taken: self.stage.network_fee_taken,
+			intermediate: self.stage.intermediate,
+			output_amount_after_fees: self.stage.output_amount_after_fees,
+			broker_fee_taken: self.stage.broker_fee_taken,
+			oracle_delta_ex_fees: self.stage.oracle_delta_ex_fees,
+			oracle_delta,
 		}
 	}
 }
