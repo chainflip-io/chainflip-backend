@@ -216,7 +216,7 @@ pub enum BatchExecutionError<T: Config> {
 	},
 	PriceViolation {
 		violating_swaps: Vec<(Swap<T>, SwapFailureReason)>,
-		non_violating_swaps: BTreeMap<SwapId, Swap<T>>,
+		non_violating_swaps: Vec<Swap<T>>,
 	},
 	DispatchError {
 		error: DispatchError,

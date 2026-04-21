@@ -407,21 +407,17 @@ impl<T: Config> Pallet<T> {
 		});
 
 		if violating_swaps.is_empty() {
-			Ok(non_violating_swaps)
+			// Final step of the swapping process is to calculate the oracle delta.
+			Ok(non_violating_swaps
+				.into_iter()
+				.map(|swap| swap.calculate_oracle_delta())
+				.collect())
 		} else {
 			Err(BatchExecutionError::PriceViolation {
 				violating_swaps,
 				non_violating_swaps: non_violating_swaps
 					.into_iter()
-					.map(|successful_swap| {
-						(
-							successful_swap.swap_id,
-							swaps
-								.get(&successful_swap.swap_id)
-								.expect("must be subset of given swaps")
-								.clone(),
-						)
-					})
+					.map(SwapState::into_swap)
 					.collect(),
 			})
 		}
@@ -534,7 +530,18 @@ impl<T: Config> Pallet<T> {
 					non_violating_swaps,
 				}) => {
 					failed_swaps.extend(violating_swaps);
-					swaps_to_execute = non_violating_swaps;
+					swaps_to_execute = non_violating_swaps
+						.into_iter()
+						.map(|swap| {
+							(
+								swap.swap_id,
+								swaps_to_execute
+									.get(&swap.swap_id)
+									.expect("must be subset of given swaps")
+									.clone(),
+							)
+						})
+						.collect();
 				},
 				Err(BatchExecutionError::DispatchError { error }) => {
 					// This should only happen when the transaction nested too deep,
@@ -967,7 +974,7 @@ impl<T: Config> Pallet<T> {
 					if index == number_of_swaps - 1 {
 						// Give the dust to the last swap to ensure all output is assigned
 						let swap_output = bundle_output.saturating_sub(total_assigned_output);
-						swap.advance_swap_result(swap_output)
+						swap.advance_with_swap_result(swap_output)
 					} else {
 						let swap_output = if bundle_input > 0 {
 							multiply_by_rational_with_rounding(
@@ -984,7 +991,7 @@ impl<T: Config> Pallet<T> {
 						};
 
 						total_assigned_output.saturating_accrue(swap_output);
-						swap.advance_swap_result(swap_output)
+						swap.advance_with_swap_result(swap_output)
 					}
 				})
 				.collect())
@@ -1226,6 +1233,62 @@ impl<T: Config> Pallet<T> {
 				(None, None) => None,
 			},
 		}
+	}
+
+	/// Gets the network fee rate and minimum in usdc terms for a swap between the given input
+	/// and output assets, taking into account whether it's an internal swap or not.
+	fn get_network_fee(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> FeeRateAndMinimum {
+		let (input_asset_fee, output_asset_fee, usdc_minimum) = if is_internal_swap {
+			let default_fee = InternalSwapNetworkFee::<T>::get();
+			(
+				InternalSwapNetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
+				InternalSwapNetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
+				default_fee.minimum,
+			)
+		} else {
+			let default_fee = NetworkFee::<T>::get();
+			(
+				NetworkFeeForAsset::<T>::get(input_asset).unwrap_or(default_fee.rate),
+				NetworkFeeForAsset::<T>::get(output_asset).unwrap_or(default_fee.rate),
+				default_fee.minimum,
+			)
+		};
+
+		FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum: usdc_minimum }
+	}
+
+	fn get_network_fee_rate_for_swap(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> Permill {
+		Self::get_network_fee(input_asset, output_asset, is_internal_swap).rate
+	}
+
+	/// Gets the network fee rate and minimum in the input asset terms.
+	pub fn get_network_fee_for_swap(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> FeeRateAndMinimum {
+		// Find the correct fee values in USDC
+		let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
+			Self::get_network_fee(input_asset, output_asset, is_internal_swap);
+
+		// Convert the minimum amount to the input asset
+		let minimum = Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
+			input_asset,
+			Asset::Usdc,
+			usdc_minimum,
+			false, // no network fee
+			false, // not internal
+		);
+
+		FeeRateAndMinimum { rate, minimum }
 	}
 }
 
