@@ -561,7 +561,7 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 }
 
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressString(String);
 
 #[cfg(feature = "std")]

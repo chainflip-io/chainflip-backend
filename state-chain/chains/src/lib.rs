@@ -1088,7 +1088,18 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-#[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
+#[derive(
+	Debug,
+	Clone,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	PartialEq,
+	Eq,
+	Serialize,
+	Deserialize,
+)]
 pub enum TransactionInIdForAnyChain {
 	Evm(H256),
 	Bitcoin(H256),

@@ -25,7 +25,7 @@ use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefu
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
-use cf_primitives::{AffiliateShortId, Affiliates, Asset, BasisPoints, ChannelId};
+use cf_primitives::{AffiliateShortId, Affiliates, Asset, BasisPoints, ChannelId, ForeignChain};
 use cf_rpc_apis::{
 	broker::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
@@ -520,6 +520,27 @@ where
 				move |client, hash| {
 					Ok((*client.runtime_api())
 						.cf_transaction_screening_events(hash)
+						.map_err(CfApiError::from)?)
+				},
+			)
+			.await;
+	}
+
+	async fn subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Finalized,
+				false,
+				true,
+				pending_sink,
+				move |client, hash| {
+					Ok((*client.runtime_api())
+						.cf_ingress_events(hash, chain)
+						.map_err(CfApiError::from)?
 						.map_err(CfApiError::from)?)
 				},
 			)

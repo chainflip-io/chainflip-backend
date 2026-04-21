@@ -17,10 +17,13 @@
 use crate::RpcResult;
 
 use cf_chains::{evm::Address as EthereumAddress, CcmChannelMetadataUnchecked};
-use cf_rpc_types::{AccountId32, BlockUpdate, OpenedDepositChannels, RefundParametersRpc, H256};
+use cf_rpc_types::{
+	AccountId32, BlockUpdate, IngressEvents, OpenedDepositChannels, RefundParametersRpc, H256,
+};
 use jsonrpsee::proc_macros::rpc;
 
 pub use cf_primitives::DcaParameters;
+use cf_primitives::ForeignChain;
 pub use cf_rpc_types::broker::*;
 pub use pallet_cf_environment::submit_runtime_call::{SignatureData, TransactionMetadata};
 
@@ -98,6 +101,9 @@ pub trait BrokerRpcApi {
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn subscribe_transaction_screening_events(&self);
+
+	#[subscription(name = "subscribe_ingress_events", item = BlockUpdate<IngressEvents>)]
+	async fn subscribe_ingress_events(&self, chain: ForeignChain);
 
 	#[method(name = "open_private_btc_channel", aliases = ["broker_openPrivateBtcChannel"])]
 	async fn open_private_btc_channel(&self) -> RpcResult<ChannelId>;
