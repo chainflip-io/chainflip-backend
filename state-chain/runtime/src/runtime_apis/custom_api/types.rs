@@ -39,8 +39,8 @@ use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
-	before_v12, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition, LoanType,
-	RpcLendingPool, RpcLiquidationStatus, RpcLoan, RpcLoanAccount,
+	before_v12, BoostConfiguration, BoostPoolDetails, LendingPoolAndSupplyPositions,
+	LendingSupplyPosition, LoanType, RpcLendingPool, RpcLiquidationStatus, RpcLoan, RpcLoanAccount,
 };
 pub use pallet_cf_pools::{
 	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,

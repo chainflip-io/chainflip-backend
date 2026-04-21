@@ -1,5 +1,22 @@
 use super::*;
 use cf_traits::lending::LoanId;
+use frame_support::sp_runtime::Percent;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub struct BoostConfiguration {
+	pub network_fee_deduction_from_boost_percent: Percent,
+	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+}
+
+impl From<BoostConfiguration> for super::BoostConfiguration {
+	fn from(old: BoostConfiguration) -> Self {
+		Self {
+			network_fee_deduction_from_boost_percent: old.network_fee_deduction_from_boost_percent,
+			minimum_add_funds_amount: old.minimum_add_funds_amount,
+			min_lending_pool_share: Percent::from_percent(30),
+		}
+	}
+}
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct RpcLoan<Amount> {

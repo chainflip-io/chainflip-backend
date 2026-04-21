@@ -366,6 +366,8 @@ decl_runtime_apis!(
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
 		fn cf_boost_config();
+		#[changed_in(17)]
+		fn cf_boost_config() -> before_version_17::BoostConfiguration;
 		fn cf_boost_config() -> BoostConfiguration;
 		#[changed_in(9)]
 		fn cf_encode_non_native_call();

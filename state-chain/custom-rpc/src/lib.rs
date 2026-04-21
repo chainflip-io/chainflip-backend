@@ -1844,12 +1844,8 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>> {
-		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
-			if api_version < 17 {
-				Ok(Vec::new())
-			} else {
-				api.cf_all_loans(hash).map(|loans| loans.into_iter().map(Into::into).collect())
-			}
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_all_loans(hash).map(|loans| loans.into_iter().map(Into::into).collect())
 		})
 	}
 
@@ -2322,16 +2318,15 @@ where
 				ingress_delays,
 				boost_delays,
 				boost_minimum_add_funds_amounts: if version >= 14 {
-					any::AssetMap::try_from_fn(|asset| {
-						api.cf_boost_config(hash).map(|config| {
-							config
-								.minimum_add_funds_amount
-								.get(&asset)
-								.cloned()
-								.unwrap_or(1_u128)
-								.into()
-						})
-					})?
+					let minimum_add_funds_amount = if version < 17 {
+						#[expect(deprecated)]
+						api.cf_boost_config_before_version_17(hash)?.minimum_add_funds_amount
+					} else {
+						api.cf_boost_config(hash)?.minimum_add_funds_amount
+					};
+					any::AssetMap::from_fn(|asset| {
+						minimum_add_funds_amount.get(&asset).cloned().unwrap_or(1_u128).into()
+					})
 				} else {
 					any::AssetMap::default()
 				},
