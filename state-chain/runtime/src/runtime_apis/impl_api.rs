@@ -2093,13 +2093,22 @@ impl_runtime_apis! {
 		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}
+
+		fn cf_ingress_events(chain: ForeignChain) -> Result<IngressEvents, DispatchErrorWithMessage> {
+			witnessed_events::extract_ingress_events(chain)
+		}
 	}
 }
 
 mod witnessed_events {
 	use super::*;
-	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance};
+	use crate::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
+	use cf_chains::{
+		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+		ChainCrypto, IntoTransactionInIdForAnyChain,
+	};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
+	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 
 	pub fn extract_witnessed_events(
 		chain: ForeignChain,
@@ -2211,5 +2220,135 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Tron { deposits, vault_deposits, broadcasts })
+	}
+
+	fn convert_deposit_witness<C: Chain>(
+		items: Vec<(u64, DepositWitness<C>)>,
+		to_deposit_details: impl Fn(<C as Chain>::DepositDetails) -> DepositDetails,
+		network: NetworkEnvironment,
+	) -> Vec<DepositWitnessInfo> {
+		items
+			.into_iter()
+			.map(|(height, witness)| DepositWitnessInfo {
+				deposit_chain_block_height: height,
+				deposit_address: witness
+					.deposit_address
+					.into_foreign_chain_address()
+					.to_encoded_address(network),
+				amount: witness.amount.into(),
+				asset: witness.asset.into(),
+				deposit_details: to_deposit_details(witness.deposit_details),
+			})
+			.collect()
+	}
+
+	fn convert_vault_deposit_witness<T, I>(
+		items: Vec<(u64, VaultDepositWitness<T, I>)>,
+		to_deposit_details: impl Fn(<T::TargetChain as Chain>::DepositDetails) -> DepositDetails,
+	) -> Vec<VaultDepositWitnessInfo>
+	where
+		T: pallet_cf_ingress_egress::Config<I>,
+		I: 'static,
+	{
+		items.into_iter().map(|(height, witness)| VaultDepositWitnessInfo {
+			tx_id:<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id),
+			deposit_chain_block_height: height,
+			input_asset: witness.input_asset.into(),
+			output_asset: witness.output_asset,
+			amount: witness.deposit_amount.into(),
+			deposit_details: to_deposit_details(witness.deposit_details),
+			destination_address: witness.destination_address,
+		}).collect()
+	}
+
+	pub fn extract_ingress_events(
+		chain: ForeignChain,
+	) -> Result<IngressEvents, DispatchErrorWithMessage> {
+		match chain {
+			ForeignChain::Bitcoin => {
+				let state = ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Bitcoin electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h);
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Bitcoin,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						DepositDetails::Bitcoin,
+					),
+				})
+			},
+			ForeignChain::Ethereum => {
+				let state = ElectoralUnsynchronisedState::<Runtime, EthereumInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Ethereum electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h)
+					.into_iter()
+					.filter_map(|(height, event)| match event {
+						EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+						_ => None,
+					})
+					.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Ethereum,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						DepositDetails::Ethereum,
+					),
+				})
+			},
+			ForeignChain::Arbitrum => {
+				let state = ElectoralUnsynchronisedState::<Runtime, ArbitrumInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Arbitrum electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(
+					&state.1,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root()
+				);
+				let vault_deposits = extract_block_data!(
+					&state.2,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root()
+				)
+				.into_iter()
+				.filter_map(|(height, event)| match event {
+					EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+					_ => None,
+				})
+				.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Arbitrum,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						DepositDetails::Arbitrum,
+					),
+				})
+			},
+			_ => Err(DispatchErrorWithMessage::RawMessage(
+				b"Chain not supported for witnessed events".to_vec(),
+			)),
+		}
 	}
 }

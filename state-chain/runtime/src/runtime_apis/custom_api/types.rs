@@ -24,7 +24,8 @@ use cf_chains::{
 	evm::Address as EvmAddress,
 	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, Tron,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
+	TransactionInIdForAnyChain, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
@@ -638,6 +639,39 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub enum DepositDetails {
+	Bitcoin(<Bitcoin as Chain>::DepositDetails),
+	Ethereum(<Ethereum as Chain>::DepositDetails),
+	Arbitrum(<Arbitrum as Chain>::DepositDetails),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub struct DepositWitnessInfo {
+	pub deposit_chain_block_height: u64,
+	pub deposit_address: EncodedAddress,
+	pub amount: U256,
+	pub asset: Asset,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub struct VaultDepositWitnessInfo {
+	pub tx_id: TransactionInIdForAnyChain,
+	pub deposit_chain_block_height: u64,
+	pub input_asset: Asset,
+	pub output_asset: Asset,
+	pub amount: U256,
+	pub destination_address: EncodedAddress,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+pub struct IngressEvents {
+	pub deposits: Vec<DepositWitnessInfo>,
+	pub vault_deposits: Vec<VaultDepositWitnessInfo>,
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};

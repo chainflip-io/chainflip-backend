@@ -14,12 +14,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::CcmChannelMetadataUnchecked;
+use cf_chains::{CcmChannelMetadataUnchecked, ForeignChain};
 use cf_rpc_apis::{
 	broker::{
-		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
-		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
-		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
+		AccountCreationDepositAddress, BrokerRpcApiClient, BrokerRpcApiServer, DcaParameters,
+		DeregisteredAffiliate, GetOpenDepositChannelsQuery, RpcBytes, SignatureData,
+		SwapDepositAddress, TransactionInId, TransactionMetadata, VaultSwapExtraParametersRpc,
+		VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
@@ -228,6 +229,34 @@ impl BrokerRpcApiServer for RpcServerImpl {
 	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
 		// pipe results through from custom-rpc subscription
 		match self.api.raw_client().cf_subscribe_transaction_screening_events().await {
+			Ok(subscription) => {
+				let stream = stream::unfold(subscription, move |mut sub| async move {
+					match sub.next().await {
+						Some(Ok(block_update)) => Some((block_update, sub)),
+						_ => None,
+					}
+				})
+				.boxed();
+
+				tokio::spawn(async move {
+					PendingSubscription::from(pending_sink)
+						.pipe_from_stream(stream, BoundedVecDeque::default())
+						.await;
+				});
+			},
+			Err(e) => {
+				pending_sink.reject(RpcApiError::ClientError(e)).await;
+			},
+		}
+	}
+
+	async fn subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		// pipe results through from custom-rpc subscription
+		match self.api.raw_client().subscribe_ingress_events(chain).await {
 			Ok(subscription) => {
 				let stream = stream::unfold(subscription, move |mut sub| async move {
 					match sub.next().await {
