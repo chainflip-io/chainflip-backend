@@ -17,7 +17,7 @@ Chainflip Labs is committed to ensuring the security and integrity of the Chainf
 - Third-party dependencies
 - The Chainflip website or email configuration
 - Physical security or social engineering attacks
-- Denial of service (DoS) attacks
+- Denial of service (DoS) attacks - this includes ANY attack which causes service disruption until fixed but no financial benefit to the attacker (such as engine or node panics).
 - Issues already reported by another researcher or identified internally
 
 ## Responsible Disclosure
@@ -33,11 +33,11 @@ If you discover a potential security vulnerability, please report it to Chainfli
 
 Chainflip Labs has rewarded several researchers over the years for their efforts and responsible disclosure. 
 
-Chainflip Labs will reward security researchers for responsibly disclosing security vulnerabilities based on the severity and impact of the issue. Rewards will be provided at the discretion of Chainflip Labs.
+Chainflip Labs will reward security researchers for responsibly disclosing security vulnerabilities based on the severity and impact of the issue. Rewards are provided at the discretion of Chainflip Labs.
 
 The severity of the issue will be assessed according to expected impacts of the issue, using other similar programs as a baseline, though Chainflip will assess severity and corresponding reward size on a case by case basis.
 
-Issues in which an attacker has no direct financial incentive to conduct the attack are automatically downgraded in terms of their severity.
+Issues in which an attacker has no direct financial incentive to conduct the attack are automatically heavily downgraded in terms of their severity and impact, and are generally classed as out of scope DoS vectors, though there may be exceptions.
 
 Rewards will be issued in FLIP tokens unless otherwise agreed upon with the researcher.
 
