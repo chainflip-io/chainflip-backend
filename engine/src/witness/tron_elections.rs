@@ -306,15 +306,13 @@ fn parse_tron_tx_fee(tx_info: &TransactionInfo) -> TronTransactionFee {
 	// energy estimates in the future.
 	TronTransactionFee {
 		fee: tx_info.fee.unwrap_or(0).try_into().unwrap_or(0),
-		energy_usage: Some(receipt.energy_usage.unwrap_or(0).try_into().unwrap_or(0)),
-		energy_fee: Some(receipt.energy_fee.unwrap_or(0).try_into().unwrap_or(0)),
-		origin_energy_usage: Some(receipt.origin_energy_usage.unwrap_or(0).try_into().unwrap_or(0)),
-		energy_usage_total: Some(receipt.energy_usage_total.unwrap_or(0).try_into().unwrap_or(0)),
-		net_usage: Some(receipt.net_usage.unwrap_or(0).try_into().unwrap_or(0)),
-		net_fee: Some(receipt.net_fee.unwrap_or(0).try_into().unwrap_or(0)),
-		energy_penalty_total: Some(
-			receipt.energy_penalty_total.unwrap_or(0).try_into().unwrap_or(0),
-		),
+		energy_usage: receipt.energy_usage.map(|f| f.try_into().unwrap_or(0)),
+		energy_fee: receipt.energy_fee.map(|f| f.try_into().unwrap_or(0)),
+		origin_energy_usage: receipt.origin_energy_usage.map(|f| f.try_into().unwrap_or(0)),
+		energy_usage_total: receipt.energy_usage_total.map(|f| f.try_into().unwrap_or(0)),
+		net_usage: receipt.net_usage.map(|f| f.try_into().unwrap_or(0)),
+		net_fee: receipt.net_fee.map(|f| f.try_into().unwrap_or(0)),
+		energy_penalty_total: receipt.energy_penalty_total.map(|f| f.try_into().unwrap_or(0)),
 	}
 }
 
@@ -489,31 +487,57 @@ where
 		key_manager: EvmEventSource::new::<KeyManagerEvents>(key_manager_address),
 	};
 
-	scope.spawn(async move {
-		task_scope::task_scope(|scope| {
-			async {
-				crate::elections::Voter::new(
-					scope,
-					state_chain_client,
-					CompositeVoter::<TronElectoralSystemRunner, _>::new((
-						TronVoter::new(client.clone()),
-						GenericBwVoter::new(TronVoter::new(client.clone()), deposit_channel_config),
-						GenericBwVoter::new(TronVoter::new(client.clone()), vault_deposit_config),
-						GenericBwVoter::new(TronVoter::new(client.clone()), key_manager_config),
-						TronLivenessVoter { client: client.clone() },
-					)),
-					Some(client.cache_invalidation_senders),
-					"Tron",
-				)
-				.continuously_vote()
-				.await;
+	let sos_client = state_chain_client.clone();
+	scope.spawn_with_restart(
+		"tron_witnessing",
+		move || {
+			let client = client.clone();
+			let state_chain_client = state_chain_client.clone();
+			let deposit_channel_config = deposit_channel_config.clone();
+			let vault_deposit_config = vault_deposit_config.clone();
+			let key_manager_config = key_manager_config.clone();
+			async move {
+				task_scope::task_scope(|scope| {
+					async {
+						crate::elections::Voter::new(
+							scope,
+							state_chain_client,
+							CompositeVoter::<TronElectoralSystemRunner, _>::new((
+								TronVoter::new(client.clone()),
+								GenericBwVoter::new(
+									TronVoter::new(client.clone()),
+									deposit_channel_config,
+								),
+								GenericBwVoter::new(
+									TronVoter::new(client.clone()),
+									vault_deposit_config,
+								),
+								GenericBwVoter::new(
+									TronVoter::new(client.clone()),
+									key_manager_config,
+								),
+								TronLivenessVoter { client: client.clone() },
+							)),
+							Some(client.cache_invalidation_senders),
+							"Tron",
+						)
+						.continuously_vote()
+						.await;
 
-				Ok(())
+						Ok(())
+					}
+					.boxed()
+				})
+				.await
 			}
-			.boxed()
-		})
-		.await
-	});
+		},
+		move || {
+			crate::witness::common::submit_sos_extrinsic(
+				sos_client.clone(),
+				cf_primitives::WitnessingTaskName::Tron,
+			)
+		},
+	);
 
 	Ok(())
 }
