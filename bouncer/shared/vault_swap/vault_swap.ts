@@ -88,10 +88,26 @@ export async function requestSwapParameterEncoding<T>(
     )) as unknown as VaultSwapInputRpc;
 
     // Compare the decoded values with the original input
-    assert.deepStrictEqual(decoded.source_asset, stateChainAssetFromAsset(sourceAsset), 'source_asset mismatch');
-    assert.deepStrictEqual(decoded.destination_asset, stateChainAssetFromAsset(destAsset), 'destination_asset mismatch');
-    assert.strictEqual(decoded.destination_address.toLowerCase(), encodedDestAddress.toLowerCase(), 'destination_address mismatch');
-    assert.strictEqual(decoded.broker_commission, brokerCommissionBps, 'broker_commission mismatch');
+    assert.deepStrictEqual(
+      decoded.source_asset,
+      stateChainAssetFromAsset(sourceAsset),
+      'source_asset mismatch',
+    );
+    assert.deepStrictEqual(
+      decoded.destination_asset,
+      stateChainAssetFromAsset(destAsset),
+      'destination_asset mismatch',
+    );
+    assert.strictEqual(
+      decoded.destination_address.toLowerCase(),
+      encodedDestAddress.toLowerCase(),
+      'destination_address mismatch',
+    );
+    assert.strictEqual(
+      decoded.broker_commission,
+      brokerCommissionBps,
+      'broker_commission mismatch',
+    );
     assert.strictEqual(decoded.boost_fee, boostFeeBps, 'boost_fee mismatch');
 
     if (messageMetadata) {
@@ -114,19 +130,35 @@ export async function requestSwapParameterEncoding<T>(
       assert.strictEqual(decoded.channel_metadata, null, 'channel_metadata should be null');
     }
 
-    assert.strictEqual(decoded.affiliate_fees.length, affiliateFees.length, 'affiliate_fees length mismatch');
+    assert.strictEqual(
+      decoded.affiliate_fees.length,
+      affiliateFees.length,
+      'affiliate_fees length mismatch',
+    );
     for (let i = 0; i < affiliateFees.length; i++) {
       assert.strictEqual(
         decoded.affiliate_fees[i].account.toLowerCase(),
         affiliateFees[i].account.toLowerCase(),
         `affiliate_fees[${i}].account mismatch`,
       );
-      assert.strictEqual(decoded.affiliate_fees[i].bps, affiliateFees[i].bps, `affiliate_fees[${i}].bps mismatch`);
+      assert.strictEqual(
+        decoded.affiliate_fees[i].bps,
+        affiliateFees[i].bps,
+        `affiliate_fees[${i}].bps mismatch`,
+      );
     }
 
     if (dcaParams) {
-      assert.strictEqual(decoded.dca_parameters?.number_of_chunks, dcaParams.numberOfChunks, 'dca_parameters.number_of_chunks mismatch');
-      assert.strictEqual(decoded.dca_parameters?.chunk_interval, dcaParams.chunkIntervalBlocks, 'dca_parameters.chunk_interval mismatch');
+      assert.strictEqual(
+        decoded.dca_parameters?.number_of_chunks,
+        dcaParams.numberOfChunks,
+        'dca_parameters.number_of_chunks mismatch',
+      );
+      assert.strictEqual(
+        decoded.dca_parameters?.chunk_interval,
+        dcaParams.chunkIntervalBlocks,
+        'dca_parameters.chunk_interval mismatch',
+      );
     } else if (chainFromAsset(sourceAsset) !== Chains.Bitcoin) {
       // BTC always encodes dca_parameters even when not provided
       assert.strictEqual(decoded.dca_parameters, null, 'dca_parameters should be null');
