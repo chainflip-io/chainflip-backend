@@ -1,6 +1,13 @@
-use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
+use cf_traits::lending::BoostFinalisationOutcome;
+
+use crate::{
+	core_lending_pool::{CoreLendingPool, CoreLoanId},
+	general_lending::{create_new_loan, fund_loan},
+};
 
 use super::*;
+
+pub const BOOST_FEE: BasisPoints = 5;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct BoostPool {
@@ -15,6 +22,17 @@ pub struct BoostPoolContribution {
 	pub loan_id: CoreLoanId,
 	pub boosted_amount: AssetAmount,
 	pub network_fee: AssetAmount,
+}
+
+/// Represents a deposit that was boosted and now awaits finalisation
+#[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Debug, PartialEq, Eq, Clone)]
+pub struct BoostedDeposit {
+	/// Full deposit amount. We expect to receive this much when deposit is finalised.
+	pub deposit_amount: AssetAmount,
+	/// Loan from the general lending pool, if it contributed to the boost.
+	pub lending_loan_id: Option<LoanId>,
+	/// Boost pool's contribution in case it was used for this deposit.
+	pub boost_pool_contribution: Option<BoostPoolContribution>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -36,6 +54,15 @@ pub struct BoostPoolDetails<AccountId> {
 		BTreeMap<PrewitnessedDepositId, BTreeMap<AccountId, OwedAmount<AssetAmount>>>,
 	pub pending_withdrawals: BTreeMap<AccountId, BTreeSet<PrewitnessedDepositId>>,
 	pub network_fee_deduction_percent: Percent,
+}
+
+/// Splits boost fee into two amounts (network fee, pool fee) according to boost config
+fn split_between_network_and_pool<T: Config>(fee: AssetAmount) -> (AssetAmount, AssetAmount) {
+	let network_fee_portion = BoostConfig::<T>::get().network_fee_deduction_from_boost_percent;
+	let network_fee = network_fee_portion * fee;
+	let pool_fee = fee.saturating_sub(network_fee);
+
+	(network_fee, pool_fee)
 }
 
 pub fn boost_pools_iter<T: Config>(
@@ -69,13 +96,12 @@ pub fn get_boost_pool_details<T: Config>(
 					(deposit_id, loan)
 				})
 				.map(|(deposit_id, loan)| {
-					let Some(contribution) = BoostedDeposits::<T>::get(asset, deposit_id)
-						.and_then(|pools| pools.get(&tier).cloned())
+					let Some(BoostPoolContribution { boosted_amount, network_fee, .. }) =
+						BoostedDeposits::<T>::get(asset, deposit_id)
+							.and_then(|d| d.boost_pool_contribution)
 					else {
 						return (deposit_id, BTreeMap::default());
 					};
-
-					let BoostPoolContribution { boosted_amount, network_fee, .. } = contribution;
 
 					let total_owed_amount = boosted_amount.saturating_sub(network_fee);
 
@@ -138,128 +164,191 @@ impl<T: Config> BoostApi for Pallet<T> {
 		deposit_amount: AssetAmount,
 		max_boost_fee_bps: BasisPoints,
 	) -> Result<BoostOutcome, DispatchError> {
-		let mut remaining_amount = deposit_amount;
-		let mut total_fee_amount: AssetAmount = 0;
+		ensure!(BOOST_FEE <= max_boost_fee_bps, "max boost fee violation");
 
-		let mut used_pools = BTreeMap::new();
+		// Derive the total fee and the amount that needs to be funded:
+		let total_fee = fee_from_boosted_amount(deposit_amount, BOOST_FEE);
+		let required_amount = deposit_amount.saturating_sub(total_fee);
 
-		let network_fee_portion = BoostConfig::<T>::get().network_fee_deduction_from_boost_percent;
+		// Check available liquidity from both sources:
+		let lending_available =
+			GeneralLendingPools::<T>::get(asset).map_or(0, |p| p.available_amount);
+		let boost_available = BoostPools::<T>::get(asset, BOOST_FEE)
+			.and_then(|pool| CorePools::<T>::get(asset, pool.core_pool_id))
+			.map_or(0, |p| p.available_amount.into_asset_amount());
 
-		let sorted_boost_pools = BoostPools::<T>::iter_prefix(asset)
-			.map(|(tier, pool)| (tier, pool.core_pool_id))
-			.collect::<BTreeMap<_, _>>();
+		let (lending_pool_principal, boost_pool_principal) = try_split_required_amount(
+			required_amount,
+			lending_available,
+			boost_available,
+			BoostConfig::<T>::get().min_lending_pool_share,
+		)
+		.map_err(Error::<T>::from)?;
 
-		for (boost_tier, core_pool_id) in sorted_boost_pools {
-			if boost_tier > max_boost_fee_bps {
-				break
-			}
+		let lending_pool_fee =
+			Permill::from_rational(lending_pool_principal, required_amount) * total_fee;
 
-			let Some((loan_id, boosted_amount, fee)) =
-				CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-					let core_pool: &mut CoreLendingPool<_> = match pool {
-						Some(pool) if pool.get_available_amount() == Zero::zero() => {
-							return Ok::<_, DispatchError>(None);
-						},
-						None => {
-							// Pool not existing for some reason is equivalent to not having funds:
-							return Ok::<_, DispatchError>(None);
-						},
-						Some(pool) => pool,
-					};
+		let boost_pool_fee = total_fee.saturating_sub(lending_pool_fee);
 
-					// 1. Derive the amount that needs to be borrowed:
-					let full_amount_fee = fee_from_boosted_amount(remaining_amount, boost_tier);
-					let required_amount = remaining_amount.saturating_sub(full_amount_fee);
+		// Allocate from the lending pool (if possible):
+		let lending_loan_id = if lending_pool_principal > 0 {
+			let (network_fee, pool_fee) = split_between_network_and_pool::<T>(lending_pool_fee);
 
-					let available_amount = core_pool.get_available_amount();
+			let mut loan = create_new_loan::<T>(asset);
+			let loan_id = loan.id;
 
-					let (amount_to_provide, fee_amount) = if available_amount >= required_amount {
-						// Will borrow full required amount
-						(required_amount, full_amount_fee)
-					} else {
-						// Will only borrow what is available
-						let amount_to_provide = available_amount;
-						let fee = fee_from_provided_amount(amount_to_provide, boost_tier)?;
+			Self::deposit_event(Event::LoanCreated {
+				loan_id,
+				loan_type: LoanType::Boost(deposit_id),
+				asset,
+				principal_amount: lending_pool_principal,
+			});
 
-						(amount_to_provide, fee)
-					};
+			fund_loan::<T>(&mut loan, lending_pool_principal, pool_fee, network_fee)?;
+			BoostLoans::<T>::insert(loan_id, loan);
+			Some(loan_id)
+		} else {
+			None
+		};
 
-					let loan_id =
-						core_pool.new_loan(amount_to_provide, LoanUsage::Boost(deposit_id))?;
+		// Allocate from the boost pool (if the lending pool couldn't cover everything):
+		let boost_pool_contribution = if boost_pool_principal > 0 {
+			let boost_pool =
+				BoostPools::<T>::get(asset, BOOST_FEE).ok_or(Error::<T>::PoolDoesNotExist)?;
 
-					Ok(Some((loan_id, amount_to_provide.saturating_add(fee_amount), fee_amount)))
-				})?
-			else {
-				// Can't use the current pool, moving on to the next
-				continue;
-			};
+			let core_loan_id =
+				CorePools::<T>::try_mutate(asset, boost_pool.core_pool_id, |maybe_pool| {
+					let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-			// NOTE: A portion of the boost pool fees will be charged as network fee:
-			let network_fee = network_fee_portion * fee;
-			used_pools.insert(
-				boost_tier,
-				BoostPoolContribution { core_pool_id, loan_id, boosted_amount, network_fee },
-			);
+					pool.new_loan(boost_pool_principal, LoanUsage::Boost(deposit_id))
+						.map_err(|_| Error::<T>::InsufficientBoostLiquidity)
+				})?;
 
-			remaining_amount.saturating_reduce(boosted_amount);
-			total_fee_amount.saturating_accrue(fee);
+			let (network_fee, _pool_fee) = split_between_network_and_pool::<T>(boost_pool_fee);
 
-			if remaining_amount == 0u32.into() {
-				let boost_output = BoostOutcome {
-					used_pools: used_pools
-						.iter()
-						.map(|(tier, pool)| (*tier, pool.boosted_amount))
-						.collect(),
-					total_fee: total_fee_amount,
-				};
+			Some(BoostPoolContribution {
+				core_pool_id: boost_pool.core_pool_id,
+				loan_id: core_loan_id,
+				boosted_amount: boost_pool_principal.saturating_add(boost_pool_fee),
+				network_fee,
+			})
+		} else {
+			None
+		};
 
-				BoostedDeposits::<T>::insert(asset, deposit_id, used_pools);
-				return Ok(boost_output);
-			}
+		BoostedDeposits::<T>::insert(
+			asset,
+			deposit_id,
+			BoostedDeposit { deposit_amount, lending_loan_id, boost_pool_contribution },
+		);
+
+		let mut amounts = BTreeMap::new();
+		if lending_pool_principal > 0 {
+			amounts.insert(BoostSource::LendingPool, lending_pool_principal + lending_pool_fee);
+		}
+		if boost_pool_principal > 0 {
+			amounts.insert(BoostSource::BoostPool, boost_pool_principal + boost_pool_fee);
 		}
 
-		Err(Error::<T>::InsufficientBoostLiquidity.into())
+		Ok(BoostOutcome { total_fee, amounts })
 	}
 
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome {
-		let Some(pool_contributions) = BoostedDeposits::<T>::take(asset, deposit_id) else {
+		let Some(BoostedDeposit { deposit_amount, lending_loan_id, boost_pool_contribution }) =
+			BoostedDeposits::<T>::take(asset, deposit_id)
+		else {
+			log_or_panic!("Boost record for a finalised deposit not found: {}", deposit_id);
 			return Default::default();
 		};
 
-		let mut total_network_fee = 0;
-
-		for BoostPoolContribution { core_pool_id, loan_id, boosted_amount, network_fee } in
-			pool_contributions.values()
+		// Settle boost pool loan (if any):
+		let network_fee_from_legacy_pool = if let Some(BoostPoolContribution {
+			core_pool_id,
+			loan_id,
+			boosted_amount,
+			network_fee,
+		}) = &boost_pool_contribution
 		{
-			total_network_fee += network_fee;
+			CorePools::<T>::mutate(asset, core_pool_id, |maybe_pool| {
+				let Some(pool) = maybe_pool.as_mut() else {
+					log_or_panic!(
+						"Core pool not found for boost pool on finalisation (asset: {:?})",
+						asset
+					);
+					return;
+				};
 
-			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-				if let Some(pool) = pool {
-					for (booster_id, unlocked_amount) in
-						pool.make_repayment(*loan_id, boosted_amount.saturating_sub(*network_fee))
-					{
-						T::Balance::credit_account(&booster_id, asset, unlocked_amount);
-					}
-					pool.finalise_loan(*loan_id);
+				for (booster_id, unlocked_amount) in
+					pool.make_repayment(*loan_id, boosted_amount.saturating_sub(*network_fee))
+				{
+					T::Balance::credit_account(&booster_id, asset, unlocked_amount);
 				}
+
+				pool.finalise_loan(*loan_id);
 			});
+			*network_fee
+		} else {
+			0
+		};
+
+		// Settle lending pool loan (if any):
+		if let Some(loan_id) = lending_loan_id {
+			if let Some(mut loan) = BoostLoans::<T>::take(loan_id) {
+				// The lending pool is repaid with the deposit amount minus the boost pool's
+				// boosted amount (principal + fee), since that goes back to the boost pool.
+				let boost_pool_total = boost_pool_contribution.map_or(0, |c| c.boosted_amount);
+				let lending_repayment = deposit_amount.saturating_sub(boost_pool_total);
+
+				loan.repay_principal(lending_repayment, LoanRepaidActionType::BoostFinalisation);
+
+				if loan.owed_principal > 0 {
+					log_or_panic!(
+						"Boost loan is not fully repaid on finalisation (loan_id: {:?})",
+						loan_id
+					);
+				}
+
+				loan.settle(false /* via liquidation */);
+			} else {
+				log_or_panic!("Boost loan not found for (loan_id: {:?})", loan_id);
+			}
 		}
 
-		BoostFinalisationOutcome { network_fee: total_network_fee }
+		// Only legacy portion of the network fee is returned here (the lending pool's portion has
+		// already been credited to the network at boost time).
+		BoostFinalisationOutcome { network_fee: network_fee_from_legacy_pool }
 	}
 
 	fn process_deposit_as_lost(deposit_id: PrewitnessedDepositId, asset: Asset) {
-		let Some(pool_contributions) = BoostedDeposits::<T>::take(asset, deposit_id) else {
+		let Some(BoostedDeposit { lending_loan_id, boost_pool_contribution, .. }) =
+			BoostedDeposits::<T>::take(asset, deposit_id)
+		else {
 			log_or_panic!("Boost record for a lost deposit not found: {}", deposit_id);
 			return;
 		};
 
-		for BoostPoolContribution { core_pool_id, loan_id, .. } in pool_contributions.values() {
-			CorePools::<T>::mutate(asset, core_pool_id, |pool| {
-				if let Some(pool) = pool {
-					pool.finalise_loan(*loan_id);
-				}
+		// Boost pool absorbs the loss (loan finalised without repayment):
+		if let Some(contribution) = boost_pool_contribution {
+			CorePools::<T>::mutate(asset, contribution.core_pool_id, |maybe_pool| {
+				let Some(pool) = maybe_pool.as_mut() else {
+					log_or_panic!(
+						"Core pool not found for boost pool on loss (asset: {:?})",
+						asset
+					);
+					return;
+				};
+
+				pool.finalise_loan(contribution.loan_id);
 			});
+		}
+
+		// Lending pool settles its loan (loss socialised across lenders):
+		if let Some(loan_id) = lending_loan_id {
+			if let Some(loan) = BoostLoans::<T>::take(loan_id) {
+				loan.settle(false /* via_liquidation */);
+			} else {
+				log_or_panic!("Boost loan not found for (loan_id: {:?})", loan_id);
+			}
 		}
 	}
 }
@@ -275,32 +364,26 @@ impl<T: Config> Pallet<T> {
 		});
 
 		let in_all_boosted_deposits =
-			BoostedDeposits::<T>::iter_prefix(asset).fold(0, |acc, (_, pool_contributions)| {
-				let in_boosted_deposit = pool_contributions.iter().fold(
-					0,
-					|acc,
-					 (
-						_,
-						BoostPoolContribution {
-							core_pool_id,
-							loan_id,
-							boosted_amount,
-							network_fee,
-						},
-					)| {
-						let Some(core_pool) = CorePools::<T>::get(asset, core_pool_id) else {
-							return 0;
-						};
+			BoostedDeposits::<T>::iter_prefix(asset).fold(0, |acc, (_, deposit)| {
+				let Some(BoostPoolContribution {
+					core_pool_id,
+					loan_id,
+					boosted_amount,
+					network_fee,
+				}) = deposit.boost_pool_contribution
+				else {
+					return acc;
+				};
 
-						let Some(loan) = core_pool.pending_loans.get(loan_id) else { return 0 };
+				let Some(core_pool) = CorePools::<T>::get(asset, core_pool_id) else {
+					return acc;
+				};
 
-						let Some(share) = loan.shares.get(who) else { return 0 };
+				let Some(loan) = core_pool.pending_loans.get(&loan_id) else { return acc };
 
-						acc + *share * boosted_amount.saturating_sub(*network_fee)
-					},
-				);
+				let Some(share) = loan.shares.get(who) else { return acc };
 
-				acc + in_boosted_deposit
+				acc + *share * boosted_amount.saturating_sub(network_fee)
 			});
 
 		available + in_all_boosted_deposits
@@ -318,36 +401,161 @@ fn fee_from_boosted_amount(amount_to_boost: AssetAmount, fee_bps: u16) -> AssetA
 	fee_permill * amount_to_boost
 }
 
-/// Unlike `fee_from_boosted_amount`, the boosted amount is not known here
-/// so we have to calculate it first from the provided amount in order to
-/// calculate the boost fee amount.
-fn fee_from_provided_amount(
-	provided_amount: AssetAmount,
-	fee_bps: u16,
-) -> Result<AssetAmount, &'static str> {
-	// Compute `boosted = provided / (1 - fee)`
-	let boosted_amount = {
-		const BASIS_POINTS_MAX: u16 = 10_000;
+#[derive(Debug)]
+struct SplitRequiredAmountError;
 
-		let inverse_fee = BASIS_POINTS_MAX.saturating_sub(fee_bps);
+impl<T: Config> From<SplitRequiredAmountError> for Error<T> {
+	fn from(_: SplitRequiredAmountError) -> Self {
+		Error::<T>::InsufficientBoostLiquidity
+	}
+}
 
-		multiply_by_rational_with_rounding(
-			provided_amount,
-			BASIS_POINTS_MAX as u128,
-			inverse_fee as u128,
-			Rounding::Down,
-		)
-		.ok_or("invalid fee")?
-	};
+/// Split `required_amount` between the lending pool and the legacy boost pool
+/// proportionally to their available liquidity, with the lending pool guaranteed
+/// to cover at least `min_lending_share` of `required_amount` whenever it has
+/// enough capacity to do so. Neither pool is ever asked for more than its
+/// available liquidity, and the two returned values always sum to
+/// `required_amount`.
+///
+/// Returns `SplitRequiredAmountError` if the combined liquidity of both pools
+/// is insufficient to cover `required_amount`.
+fn try_split_required_amount(
+	required_amount: AssetAmount,
+	lending_available: AssetAmount,
+	boost_available: AssetAmount,
+	min_lending_share: Percent,
+) -> Result<(AssetAmount, AssetAmount), SplitRequiredAmountError> {
+	let total_available = lending_available.saturating_add(boost_available);
 
-	let fee_amount = boosted_amount.checked_sub(provided_amount).ok_or("invalid fee")?;
+	ensure!(total_available >= required_amount, SplitRequiredAmountError);
 
-	Ok(fee_amount)
+	if total_available == 0 || required_amount == 0 {
+		return Ok((0, 0));
+	}
+
+	// Proportional split (rounds down in favour of the boost pool).
+	let proportional_lending =
+		Permill::from_rational(lending_available, total_available) * required_amount;
+
+	// Floor on the lending pool's share. `proportional_lending` is always
+	// `<= lending_available` (since `required_amount <= lending + boost`), so the
+	// final `.min(lending_available)` is what enforces the cap when the floor exceeds it.
+	let min_lending = min_lending_share * required_amount;
+
+	let lending_pool_principal = proportional_lending.max(min_lending).min(lending_available);
+	let boost_pool_principal =
+		required_amount.saturating_sub(lending_pool_principal).min(boost_available);
+	// Handle any rounding shortfall (or lending slack freed up by the boost-pool clamp)
+	// by pushing the remainder back to the lending pool. Guaranteed to be within
+	// `lending_available` because total liquidity is at least `required_amount`.
+	let lending_pool_principal = required_amount.saturating_sub(boost_pool_principal);
+
+	Ok((lending_pool_principal, boost_pool_principal))
+}
+
+#[cfg(test)]
+mod split_tests {
+	use super::*;
+
+	const MIN_LENDING_SHARE: Percent = Percent::from_percent(30);
+
+	fn split(
+		required: AssetAmount,
+		lending: AssetAmount,
+		boost: AssetAmount,
+	) -> (AssetAmount, AssetAmount) {
+		try_split_required_amount(required, lending, boost, MIN_LENDING_SHARE).unwrap()
+	}
+
+	#[test]
+	fn proportional_split_when_both_pools_have_slack() {
+		// 100 + 100 available, need 150 -> 75/75 split (50% each).
+		assert_eq!(split(150, 100, 100), (75, 75));
+	}
+
+	#[test]
+	fn min_lending_share_enforced_when_lending_is_small_relative_to_boost() {
+		// Proportional would give lending only 200 (= 20%) but the 30% minimum kicks
+		// in and lending covers 300 while boost covers the remaining 700.
+		assert_eq!(split(1000, 500, 2000), (300, 700));
+	}
+
+	#[test]
+	fn lending_dominates_but_boost_still_gets_its_proportional_share() {
+		// Proportional: lending ~99%, boost ~1%.
+		assert_eq!(split(100, 990, 10), (99, 1));
+	}
+
+	#[test]
+	fn lending_falls_below_min_when_it_lacks_liquidity() {
+		// Lending has only 50, which is below 30% of 1000 = 300. It still contributes
+		// everything it has and the boost pool covers the remainder.
+		assert_eq!(split(1000, 50, 10_000), (50, 950));
+	}
+
+	#[test]
+	fn boost_pool_only_when_lending_is_empty() {
+		assert_eq!(split(1000, 0, 1000), (0, 1000));
+	}
+
+	#[test]
+	fn lending_pool_only_when_boost_is_empty() {
+		assert_eq!(split(1000, 1000, 0), (1000, 0));
+	}
+
+	#[test]
+	fn zero_required_amount() {
+		assert_eq!(split(0, 500, 500), (0, 0));
+	}
+
+	#[test]
+	fn rounding_shortfall_pushed_back_to_lending() {
+		// `Permill::from_rational(1, 999_999)` rounds down to 1 ppm, so proportional
+		// is 0. min_lending is 30% * 999_999 = 299_999 (capped at lending_available=1),
+		// so lending contributes 1 and boost covers the remaining 999_998.
+		assert_eq!(split(999_999, 1, 999_998), (1, 999_998));
+	}
+
+	#[test]
+	fn principals_never_exceed_available_liquidity() {
+		// Stress with exact-fit liquidity: total == required.
+		assert_eq!(split(1_000, 300, 700), (300, 700));
+		assert_eq!(split(1_000, 700, 300), (700, 300));
+		assert_eq!(split(1_000, 1_000, 0), (1_000, 0));
+		assert_eq!(split(1_000, 0, 1_000), (0, 1_000));
+	}
+
+	#[test]
+	fn min_lending_share_is_configurable() {
+		// With a 50% minimum, lending must cover 500 even though proportional is ~230.
+		assert_eq!(
+			try_split_required_amount(1000, 600, 2000, Percent::from_percent(50)).unwrap(),
+			(500, 500)
+		);
+		// With a 0% minimum, only proportional applies.
+		assert_eq!(
+			try_split_required_amount(1000, 200, 2000, Percent::from_percent(0)).unwrap(),
+			(91, 909)
+		);
+		// With a 100% minimum, lending covers everything when it has the liquidity.
+		assert_eq!(
+			try_split_required_amount(1000, 1200, 2000, Percent::from_percent(100)).unwrap(),
+			(1000, 0)
+		);
+		assert_eq!(
+			try_split_required_amount(1000, 999, 1000, Percent::from_percent(100)).unwrap(),
+			(999, 1)
+		);
+	}
+
+	#[test]
+	fn errors_when_total_liquidity_is_insufficient() {
+		assert!(try_split_required_amount(1000, 400, 500, MIN_LENDING_SHARE).is_err());
+		assert!(try_split_required_amount(1, 0, 0, MIN_LENDING_SHARE).is_err());
+	}
 }
 
 #[test]
 fn test_fee_math() {
 	assert_eq!(fee_from_boosted_amount(1_000_000, 10), 1_000);
-
-	assert_eq!(fee_from_provided_amount(1_000_000, 10), Ok(1_001));
 }

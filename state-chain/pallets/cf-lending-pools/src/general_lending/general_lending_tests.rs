@@ -351,7 +351,7 @@ fn basic_general_lending() {
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
-					borrower_id: BORROWER,
+					loan_type: LoanType::User(BORROWER),
 					asset: LOAN_ASSET,
 					principal_amount: PRINCIPAL,
 				}),
@@ -4792,6 +4792,7 @@ mod rpcs {
 						}],
 						loans: vec![RpcLoan {
 							loan_id: LOAN_ID,
+							loan_type: LoanType::User(BORROWER),
 							asset: LOAN_ASSET,
 							created_at: INIT_BLOCK as u32,
 							principal_amount: PRINCIPAL + ORIGINATION_FEE,
@@ -4877,6 +4878,7 @@ mod rpcs {
 							}],
 							loans: vec![RpcLoan {
 								loan_id: LOAN_ID_2,
+								loan_type: LoanType::User(BORROWER_2),
 								asset: LOAN_ASSET_2,
 								created_at: INIT_BLOCK as u32,
 								// NOTE: we account for the principal asset already swapped in
@@ -4904,6 +4906,7 @@ mod rpcs {
 							}],
 							loans: vec![RpcLoan {
 								loan_id: LOAN_ID,
+								loan_type: LoanType::User(BORROWER),
 								asset: LOAN_ASSET,
 								created_at: INIT_BLOCK as u32,
 								principal_amount: PRINCIPAL +

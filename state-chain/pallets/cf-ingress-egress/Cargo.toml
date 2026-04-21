@@ -55,6 +55,7 @@ std = [
 	"cf-chains/std",
 	"cf-primitives/std",
 	"cf-traits/std",
+	"pallet-cf-swapping/std",
 	"cf-runtime-utilities/std",
 	"codec/std",
 	"frame-benchmarking?/std",

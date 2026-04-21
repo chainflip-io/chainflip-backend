@@ -2,7 +2,7 @@ use super::*;
 use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 
 /// Distributes exactly `total_to_distribute` proportionally to the `distribution` map.
-pub(super) fn distribute_proportionally<'a, K, N, I>(
+pub(crate) fn distribute_proportionally<'a, K, N, I>(
 	total_to_distribute: N,
 	distribution: I,
 ) -> BTreeMap<&'a K, N>

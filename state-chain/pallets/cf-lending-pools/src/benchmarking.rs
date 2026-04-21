@@ -31,7 +31,7 @@ mod benchmarks {
 	use cf_chains::{btc::ScriptPubkey, ForeignChainAddress};
 	use frame_support::sp_runtime::FixedU64;
 
-	const TIER_5_BPS: BoostPoolTier = 5;
+	const BOOST_FEE_BPS: BoostPoolTier = 5;
 	const COLLATERAL_ASSET: Asset = Asset::Eth;
 	const LOAN_ASSET: Asset = Asset::Btc;
 	const NUMBER_OF_LENDERS: u32 = 1000;
@@ -44,7 +44,7 @@ mod benchmarks {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 		assert_ok!(Pallet::<T>::create_boost_pools(
 			origin,
-			vec![BoostPoolId { asset: Asset::Eth, tier: TIER_5_BPS }]
+			vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }]
 		));
 	}
 
@@ -149,6 +149,7 @@ mod benchmarks {
 				config: BoostConfiguration {
 					network_fee_deduction_from_boost_percent: Percent::from_percent(10),
 					minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 1_000u128)]),
+					min_lending_pool_share: Percent::from_percent(30),
 				},
 			};
 			n as usize
@@ -198,9 +199,9 @@ mod benchmarks {
 		let lp_account = setup_lp_account::<T>(asset, 0);
 
 		#[extrinsic_call]
-		add_boost_funds(RawOrigin::Signed(lp_account.clone()), asset, amount, TIER_5_BPS);
+		add_boost_funds(RawOrigin::Signed(lp_account.clone()), asset, amount, BOOST_FEE_BPS);
 
-		let boost_pool = BoostPools::<T>::get(asset, TIER_5_BPS).unwrap();
+		let boost_pool = BoostPools::<T>::get(asset, BOOST_FEE_BPS).unwrap();
 
 		assert_eq!(
 			CorePools::<T>::get(asset, boost_pool.core_pool_id)
@@ -217,6 +218,15 @@ mod benchmarks {
 		const ASSET: Asset = Asset::Eth;
 		const DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(0);
 
+		// Set up a lending pool so try_boosting uses both pools:
+		disable_whitelist::<T>();
+		set_asset_price_in_usd::<T>(ASSET, 100_000_000_000);
+		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), ASSET));
+		let lender = setup_lp_account::<T>(ASSET, 1000);
+		assert_ok!(
+			Pallet::<T>::add_lender_funds(RawOrigin::Signed(lender).into(), ASSET, 500u128,)
+		);
+
 		let boosters: Vec<_> = (0..n).map(|i| setup_lp_account::<T>(ASSET, i)).collect();
 
 		for booster_id in &boosters {
@@ -224,11 +234,11 @@ mod benchmarks {
 				RawOrigin::Signed(booster_id.clone()).into(),
 				ASSET,
 				1_000_000u32.into(),
-				TIER_5_BPS
+				BOOST_FEE_BPS
 			));
 		}
 
-		assert_ok!(Pallet::<T>::try_boosting(DEPOSIT_ID, ASSET, 1000, TIER_5_BPS));
+		assert_ok!(Pallet::<T>::try_boosting(DEPOSIT_ID, ASSET, 1000, BOOST_FEE_BPS));
 
 		// Worst-case scenario is when all boosters withdraw funds while
 		// waiting for the deposit to be finalised:
@@ -236,7 +246,7 @@ mod benchmarks {
 			assert_ok!(Pallet::<T>::stop_boosting(
 				RawOrigin::Signed(booster_id.clone()).into(),
 				ASSET,
-				TIER_5_BPS
+				BOOST_FEE_BPS
 			));
 		}
 
@@ -258,7 +268,7 @@ mod benchmarks {
 			RawOrigin::Signed(lp_account.clone()).into(),
 			asset,
 			1_000_000u32.into(),
-			TIER_5_BPS
+			BOOST_FEE_BPS
 		));
 
 		// `stop_boosting` has linear complexity w.r.t. the number of pending boosts,
@@ -270,14 +280,14 @@ mod benchmarks {
 				PrewitnessedDepositId(deposit_id as u64),
 				asset,
 				1000,
-				TIER_5_BPS
+				BOOST_FEE_BPS
 			));
 		}
 
 		#[extrinsic_call]
-		stop_boosting(RawOrigin::Signed(lp_account), asset, TIER_5_BPS);
+		stop_boosting(RawOrigin::Signed(lp_account), asset, BOOST_FEE_BPS);
 
-		let boost_pool = BoostPools::<T>::get(asset, TIER_5_BPS).unwrap();
+		let boost_pool = BoostPools::<T>::get(asset, BOOST_FEE_BPS).unwrap();
 
 		assert_eq!(
 			CorePools::<T>::get(asset, boost_pool.core_pool_id)
@@ -291,7 +301,7 @@ mod benchmarks {
 	fn create_boost_pools() {
 		let origin = gov_origin::<T>();
 
-		let new_pools = vec![BoostPoolId { asset: Asset::Eth, tier: TIER_5_BPS }];
+		let new_pools = vec![BoostPoolId { asset: Asset::Eth, tier: BOOST_FEE_BPS }];
 
 		assert_eq!(BoostPools::<T>::iter().count(), 0);
 

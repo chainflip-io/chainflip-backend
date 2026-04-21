@@ -91,15 +91,14 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
-			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
+			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
+			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
+			RpcLendingPool, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+			SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
+			TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -700,12 +699,13 @@ type TradingStrategyInfoHexAmounts = TradingStrategyInfo<NumberOrHex>;
 
 mod boost_pool_rpc {
 
-	use std::collections::BTreeSet;
-
 	use cf_primitives::PrewitnessedDepositId;
+	use pallet_cf_lending_pools::BoostPoolDetails;
 	use sp_runtime::AccountId32;
 
 	use super::*;
+
+	use std::collections::BTreeSet;
 
 	#[derive(Serialize, Deserialize, Clone)]
 	struct AccountAndAmount {
@@ -1339,6 +1339,12 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
 
+	#[method(name = "all_loans")]
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>>;
+
 	#[method(name = "lending_pool_supply_balances")]
 	fn cf_lending_pool_supply_balances(
 		&self,
@@ -1822,29 +1828,24 @@ where
 		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 17 {
+				#[expect(deprecated)]
+				api.cf_loan_accounts_before_version_17(hash, borrower_id.clone())
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			} else {
+				api.cf_loan_accounts(hash, borrower_id.clone())
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			}
+		})
+	}
+
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_loan_accounts(hash, borrower_id).map(|accounts| {
-				accounts
-					.into_iter()
-					.map(|acc| RpcLoanAccount::<_, U256> {
-						account: acc.account,
-						collateral_topup_asset: acc.collateral_topup_asset,
-						ltv_ratio: acc.ltv_ratio,
-						collateral: acc.collateral.into_iter().map(Into::into).collect(),
-						loans: acc
-							.loans
-							.into_iter()
-							.map(|loan| RpcLoan {
-								loan_id: loan.loan_id,
-								asset: loan.asset,
-								created_at: loan.created_at,
-								principal_amount: loan.principal_amount.into(),
-							})
-							.collect(),
-						liquidation_status: acc.liquidation_status,
-					})
-					.collect()
-			})
+			api.cf_all_loans(hash).map(|loans| loans.into_iter().map(Into::into).collect())
 		})
 	}
 
@@ -2317,16 +2318,15 @@ where
 				ingress_delays,
 				boost_delays,
 				boost_minimum_add_funds_amounts: if version >= 14 {
-					any::AssetMap::try_from_fn(|asset| {
-						api.cf_boost_config(hash).map(|config| {
-							config
-								.minimum_add_funds_amount
-								.get(&asset)
-								.cloned()
-								.unwrap_or(1_u128)
-								.into()
-						})
-					})?
+					let minimum_add_funds_amount = if version < 17 {
+						#[expect(deprecated)]
+						api.cf_boost_config_before_version_17(hash)?.minimum_add_funds_amount
+					} else {
+						api.cf_boost_config(hash)?.minimum_add_funds_amount
+					};
+					any::AssetMap::from_fn(|asset| {
+						minimum_add_funds_amount.get(&asset).cloned().unwrap_or(1_u128).into()
+					})
 				} else {
 					any::AssetMap::default()
 				},

@@ -26,12 +26,12 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{
-		before_v12, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
-		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
-		RpcLoanAccount,
+		before_v12, get_all_loans, get_lending_pools, get_loan_accounts,
+		LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus,
+		RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
 	},
-	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
-	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+	LendingPool, LiquidationCompletionReason, LiquidationType, LoanType, OraclePriceCache,
+	WhitelistStatus, WhitelistUpdate, WithdrawnAndRemainingAmounts,
 };
 
 pub use general_lending::config::{
@@ -40,7 +40,7 @@ pub use general_lending::config::{
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
-use boost::{BoostPool, BoostPoolContribution, BoostPoolId};
+use boost::{BoostPool, BoostPoolId};
 
 pub mod migrations;
 pub mod weights;
@@ -71,14 +71,13 @@ use frame_support::{
 	transactional,
 };
 
-use cf_traits::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LoanId};
+use cf_traits::lending::{BoostApi, BoostOutcome, BoostSource, LoanId};
 
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::*;
 use weights::WeightInfo;
 
-pub use core_lending_pool::{CoreLendingPool, CoreLoanId};
-
+use crate::{boost::BOOST_FEE, core_lending_pool::CoreLendingPool};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
@@ -87,7 +86,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
 
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +96,10 @@ pub struct BoostConfiguration {
 	pub network_fee_deduction_from_boost_percent: Percent,
 	/// The minimum amount that can be added to the boost pool.
 	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+	/// Minimum share of the borrowed amount that must come from the lending pool
+	/// (when it has enough available liquidity to cover it). The remainder is split
+	/// proportionally to each pool's available liquidity.
+	pub min_lending_pool_share: Percent,
 }
 
 #[derive(
@@ -229,6 +232,8 @@ pub enum LoanRepaidActionType {
 	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
 	/// swap's output.
 	Liquidation { swap_request_id: SwapRequestId },
+	/// Triggered when a boosted deposit is finalised. Loan is repaid from the deposit amount.
+	BoostFinalisation,
 }
 
 pub struct BoostConfigDefault {}
@@ -238,6 +243,7 @@ impl Get<BoostConfiguration> for BoostConfigDefault {
 		BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
 			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 11000_u128)]), // ~$10 usd
+			min_lending_pool_share: Percent::from_percent(30),
 		}
 	}
 }
@@ -304,6 +310,12 @@ pub mod pallet {
 
 	use cf_primitives::SwapRequestId;
 
+	use crate::{
+		boost::{BoostPool, BoostedDeposit, BOOST_FEE},
+		core_lending_pool::CoreLendingPool,
+		general_lending::{GeneralLoan, LoanType},
+	};
+
 	use super::*;
 
 	#[pallet::config]
@@ -356,6 +368,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Loans created as a result of boosting deposits. These loans a short-lived and will be
+	/// settled upon deposit finalisation.
+	#[pallet::storage]
+	pub type BoostLoans<T: Config> =
+		StorageMap<_, Twox64Concat, LoanId, GeneralLoan<T>, OptionQuery>;
+
 	#[pallet::storage]
 	pub type BoostedDeposits<T: Config> = StorageDoubleMap<
 		_,
@@ -363,7 +381,7 @@ pub mod pallet {
 		Asset,
 		Twox64Concat,
 		PrewitnessedDepositId,
-		BTreeMap<BoostPoolTier, BoostPoolContribution>,
+		BoostedDeposit,
 		OptionQuery,
 	>;
 
@@ -449,7 +467,7 @@ pub mod pallet {
 		LoanCreated {
 			loan_id: LoanId,
 			asset: Asset,
-			borrower_id: T::AccountId,
+			loan_type: LoanType<T::AccountId>,
 			principal_amount: AssetAmount,
 		},
 		LoanUpdated {
@@ -720,6 +738,9 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().add_boost_funds_enabled, Error::<T>::AddBoostFundsDisabled);
 
+			// We no longer support boost pools other than the 5bps one:
+			ensure!(pool_tier == BOOST_FEE, Error::<T>::PoolDoesNotExist);
+
 			let minimum = BoostConfig::<T>::get()
 				.minimum_add_funds_amount
 				.get(&asset)
@@ -742,7 +763,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::BoostFundsAdded {
 				booster_id,
-				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				boost_pool: BoostPoolId { asset, tier: BOOST_FEE },
 				amount,
 			});
 
@@ -1017,7 +1038,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn new_boost_pool(pool_id: BoostPoolId) -> DispatchResult {
-		ensure!(pool_id.tier != 0, Error::<T>::InvalidBoostPoolTier);
+		ensure!(pool_id.tier == BOOST_FEE, Error::<T>::InvalidBoostPoolTier);
 		Ok(BoostPools::<T>::try_mutate_exists(pool_id.asset, pool_id.tier, |pool| {
 			ensure!(pool.is_none(), Error::<T>::PoolAlreadyExists);
 

@@ -1,13 +1,15 @@
 use super::*;
-use cf_primitives::{AssetAndAmount, SwapRequestId};
+use cf_primitives::{AssetAmount, AssetAndAmount, SwapRequestId};
 use cf_traits::lending::LoanId;
 use serde::{Deserialize, Serialize};
+use sp_core::U256;
 
 pub mod before_v12;
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-pub struct RpcLoan<Amount> {
+pub struct RpcLoan<AccountId, Amount> {
 	pub loan_id: LoanId,
+	pub loan_type: LoanType<AccountId>,
 	pub asset: Asset,
 	pub created_at: u32,
 	pub principal_amount: Amount,
@@ -65,8 +67,33 @@ pub struct RpcLoanAccount<AccountId, Amount> {
 	pub collateral_topup_asset: Option<Asset>,
 	pub ltv_ratio: Option<FixedU64>,
 	pub collateral: Vec<AssetAndAmount<Amount>>,
-	pub loans: Vec<RpcLoan<Amount>>,
+	pub loans: Vec<RpcLoan<AccountId, Amount>>,
 	pub liquidation_status: Option<RpcLiquidationStatus>,
+}
+
+impl<AccountId> From<RpcLoan<AccountId, AssetAmount>> for RpcLoan<AccountId, U256> {
+	fn from(loan: RpcLoan<AccountId, AssetAmount>) -> Self {
+		Self {
+			loan_id: loan.loan_id,
+			loan_type: loan.loan_type,
+			asset: loan.asset,
+			created_at: loan.created_at,
+			principal_amount: loan.principal_amount.into(),
+		}
+	}
+}
+
+impl<AccountId> From<RpcLoanAccount<AccountId, AssetAmount>> for RpcLoanAccount<AccountId, U256> {
+	fn from(acc: RpcLoanAccount<AccountId, AssetAmount>) -> Self {
+		Self {
+			account: acc.account,
+			collateral_topup_asset: acc.collateral_topup_asset,
+			ltv_ratio: acc.ltv_ratio,
+			collateral: acc.collateral.into_iter().map(Into::into).collect(),
+			loans: acc.loans.into_iter().map(Into::into).collect(),
+			liquidation_status: acc.liquidation_status,
+		}
+	}
 }
 
 fn build_rpc_loan_account<T: Config>(
@@ -95,7 +122,7 @@ fn build_rpc_loan_account<T: Config>(
 	}
 
 	RpcLoanAccount {
-		account: borrower_id,
+		account: borrower_id.clone(),
 		collateral_topup_asset: loan_account.collateral_topup_asset,
 		ltv_ratio: loan_account.derive_ltv(price_cache).ok(),
 		collateral: loan_account
@@ -107,6 +134,7 @@ fn build_rpc_loan_account<T: Config>(
 			.into_iter()
 			.map(|(loan_id, loan)| RpcLoan {
 				loan_id,
+				loan_type: LoanType::User(borrower_id.clone()),
 				asset: loan.asset,
 				created_at: loan.created_at_block.unique_saturated_into(),
 				principal_amount: loan.owed_principal,
@@ -171,6 +199,33 @@ fn build_rpc_lending_pool<T: Config>(
 		current_interest_rate,
 		config: config.get_config_for_asset(asset).clone(),
 	}
+}
+
+pub fn get_all_loans<T: Config>() -> Vec<RpcLoan<T::AccountId, AssetAmount>> {
+	let boost_loans =
+		BoostedDeposits::<T>::iter().filter_map(|(_, deposit_id, boosted_deposit)| {
+			let loan_id = boosted_deposit.lending_loan_id?;
+			let loan = BoostLoans::<T>::get(loan_id)?;
+			Some(RpcLoan {
+				loan_id: loan.id,
+				loan_type: LoanType::Boost(deposit_id),
+				asset: loan.asset,
+				created_at: loan.created_at_block.unique_saturated_into(),
+				principal_amount: loan.owed_principal,
+			})
+		});
+
+	let user_loans = LoanAccounts::<T>::iter().flat_map(|(borrower_id, loan_account)| {
+		loan_account.loans.into_values().map(move |loan| RpcLoan {
+			loan_id: loan.id,
+			loan_type: LoanType::User(borrower_id.clone()),
+			asset: loan.asset,
+			created_at: loan.created_at_block.unique_saturated_into(),
+			principal_amount: loan.owed_principal,
+		})
+	});
+
+	boost_loans.chain(user_loans).collect()
 }
 
 pub fn get_lending_pools<T: Config>(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {

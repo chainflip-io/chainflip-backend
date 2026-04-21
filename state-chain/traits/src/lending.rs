@@ -15,8 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
-	SwapRequestId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
@@ -28,10 +27,30 @@ use frame_support::pallet_prelude::DispatchError;
 
 use crate::LendingSwapType;
 
-#[derive(Debug)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum BoostSource {
+	LendingPool,
+	BoostPool,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct BoostOutcome {
-	pub used_pools: BTreeMap<BoostPoolTier, AssetAmount>,
 	pub total_fee: AssetAmount,
+	/// Per-source principal amounts funded (entries present only if that source contributed).
+	pub amounts: BTreeMap<BoostSource, AssetAmount>,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
