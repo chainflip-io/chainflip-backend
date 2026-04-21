@@ -111,7 +111,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 	}
 }
 
-pub fn try_start_keygen<T: RuntimeConfig>(
+pub fn start_keygen_attempt<T: RuntimeConfig>(
 	primary_candidates: u32,
 	secondary_candidates: u32,
 	epoch: u32,
@@ -121,10 +121,12 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 	init_bidders::<T>(primary_candidates, epoch, 100_000u128);
 	init_bidders::<T>(secondary_candidates, epoch + LARGE_OFFSET, 90_000u128);
 
-	Pallet::<T>::try_start_keygen(RotationState::from_auction_outcome::<T>(AuctionOutcome {
-		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
-		bond: 100u32.into(),
-	}));
+	let _ = Pallet::<T>::start_keygen_attempt(RotationState::from_auction_outcome::<T>(
+		AuctionOutcome {
+			winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
+			bond: 100u32.into(),
+		},
+	));
 
 	assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
 }
@@ -296,7 +298,7 @@ mod benchmarks {
 
 		// Set up a vault rotation with a primary candidates and 50 auction losers (the losers just
 		// have to be enough to fill up available secondary slots).
-		try_start_keygen::<T>(a, 50, 1);
+		start_keygen_attempt::<T>(a, 50, 1);
 
 		// Simulate success.
 		T::KeyRotator::set_status(AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete));
@@ -328,7 +330,7 @@ mod benchmarks {
 	fn rotation_phase_activating_keys(a: Linear<3, 150>) {
 		// a = authority set target size
 
-		try_start_keygen::<T>(a, 50, 1);
+		start_keygen_attempt::<T>(a, 50, 1);
 
 		let block = frame_system::Pallet::<T>::current_block_number();
 
