@@ -218,7 +218,7 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          ./test_commands/all_cuncurrent_tests.sh
           git reset --hard
 
       # TODO: This is a temporary workaround to setup Tron in the upgrade test.
