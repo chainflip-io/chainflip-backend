@@ -670,4 +670,5 @@ pub enum WitnessingTaskName {
 	Solana,
 	Assethub,
 	Oracle,
+	Tron,
 }
