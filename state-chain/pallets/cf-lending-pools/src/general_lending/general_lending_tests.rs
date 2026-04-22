@@ -240,6 +240,7 @@ fn lender_basic_adding_and_removing_funds() {
 			lender_id: LENDER,
 			asset: LOAN_ASSET,
 			unlocked_amount: INIT_POOL_AMOUNT / 4,
+			action_type: SupplyRemovedActionType::Manual,
 		}));
 
 		// Remove the remaining 75% of the funds (by setting the amount to None):
@@ -254,6 +255,7 @@ fn lender_basic_adding_and_removing_funds() {
 			lender_id: LENDER,
 			asset: LOAN_ASSET,
 			unlocked_amount: 3 * INIT_POOL_AMOUNT / 4,
+			action_type: SupplyRemovedActionType::Manual,
 		}));
 	});
 }
@@ -2991,6 +2993,12 @@ fn adding_collateral_during_liquidation() {
 
 			assert_event_sequence!(
 				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+					lender_id: BORROWER,
+					asset: COLLATERAL_ASSET,
+					unlocked_amount: INIT_COLLATERAL,
+					action_type: SupplyRemovedActionType::SystemLiquidation
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
@@ -3050,6 +3058,10 @@ fn adding_collateral_during_liquidation() {
 				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Soft, .. }
 			);
 
+			// All added collateral less what has been swapped in the first swap
+			const INPUT_AMOUNT: AssetAmount =
+				INIT_COLLATERAL + EXTRA_COLLATERAL + EXTRA_COLLATERAL_2 - SWAPPED_COLLATERAL_1;
+
 			assert_event_sequence!(
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
@@ -3061,16 +3073,24 @@ fn adding_collateral_during_liquidation() {
 					amount: RECOVERED_PRINCIPAL_1,
 					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 }
 				}),
+				RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
+					lender_id: BORROWER,
+					asset: COLLATERAL_ASSET,
+					amount,
+					action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+				}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+				RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+					lender_id: BORROWER,
+					asset: COLLATERAL_ASSET,
+					unlocked_amount: INPUT_AMOUNT,
+					action_type: SupplyRemovedActionType::SystemLiquidation
+				}),
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
 					liquidation_type: LiquidationType::Soft,
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])])
 			);
-
-			// All added collateral less what has been swapped in the first swap
-			const INPUT_AMOUNT: AssetAmount =
-				INIT_COLLATERAL + EXTRA_COLLATERAL + EXTRA_COLLATERAL_2 - SWAPPED_COLLATERAL_1;
 
 			// This time the extra collateral does get included in the swap:
 			assert_eq!(
@@ -3505,6 +3525,12 @@ mod voluntary_liquidation {
 						action_type: SupplyAddedActionType::SystemLiquidationExcessAmount { .. },
 						..
 					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
+						lender_id: BORROWER,
+						asset: COLLATERAL_ASSET,
+						amount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL,
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
 						outstanding_principal: 0,
@@ -3703,6 +3729,18 @@ mod voluntary_liquidation {
 							swap_request_id: LIQUIDATION_SWAP_1
 						}
 					}),
+					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
+						lender_id: BORROWER,
+						asset: COLLATERAL_ASSET,
+						amount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+						lender_id: BORROWER,
+						asset: COLLATERAL_ASSET,
+						unlocked_amount,
+						action_type: SupplyRemovedActionType::SystemLiquidation
+					}) if unlocked_amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
 						liquidation_type: LiquidationType::Soft,
@@ -3793,6 +3831,18 @@ mod voluntary_liquidation {
 						},
 						amount,
 					}) if amount == SWAPPED_PRINCIPAL_2 - liquidation_fee,
+					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsAdded {
+						lender_id: BORROWER,
+						asset: COLLATERAL_ASSET,
+						amount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
+						lender_id: BORROWER,
+						asset: COLLATERAL_ASSET,
+						unlocked_amount,
+						action_type: SupplyRemovedActionType::SystemLiquidation
+					}) if unlocked_amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
 						liquidation_type: LiquidationType::SoftVoluntary,
@@ -5595,6 +5645,7 @@ mod supply_as_collateral {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						unlocked_amount: INIT_COLLATERAL - REQUIRED_COLLATERAL,
+						action_type: SupplyRemovedActionType::Manual,
 					},
 				));
 			});

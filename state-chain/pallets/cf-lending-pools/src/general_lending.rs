@@ -214,12 +214,26 @@ impl<T: Config> LoanAccount<T> {
 		total_collateral
 	}
 
-	/// Return user's existing collateral (what hasn't been swapped during liquidation).
-	/// Unlike [supply_funds], we don't emit an event when collateral is returned.
-	fn return_supplied_funds(&mut self, asset: Asset, amount: AssetAmount) {
-		Pallet::<T>::mutate_existing_pool(asset, |pool| {
-			pool.add_funds(&self.borrower_id, amount);
-		});
+	/// Supply funds after liquidation (either from unused input amount or from
+	/// excess output amount).
+	fn supply_from_liquidation(
+		&mut self,
+		asset: Asset,
+		amount: AssetAmount,
+		action_type: SupplyAddedActionType,
+	) {
+		if amount > 0 {
+			Pallet::deposit_event(Event::<T>::LendingFundsAdded {
+				lender_id: self.borrower_id.clone(),
+				asset,
+				amount,
+				action_type,
+			});
+
+			Pallet::<T>::mutate_existing_pool(asset, |pool| {
+				pool.add_funds(&self.borrower_id, amount);
+			});
+		}
 	}
 
 	/// Computes account's total collateral value in USD, including what's in liquidation swaps.
@@ -442,26 +456,24 @@ impl<T: Config> LoanAccount<T> {
 					None => swap_progress.accumulated_output_amount,
 				};
 
-				if excess_amount > 0 {
-					// In case we have liquidated more than necessary the excess amount
-					// is re-supplied.
-
-					if let Err(err) = supply_funds::<T>(
-						self.borrower_id.clone(),
-						to_asset,
-						excess_amount,
-						SupplyAddedActionType::SystemLiquidationExcessAmount {
-							loan_id,
-							swap_request_id,
-						},
-					) {
-						log_or_panic!("Failed to supply funds: {:?}", err);
-					}
-				}
+				// In case we have liquidated more than necessary the excess amount
+				// is added to the supply pool:
+				self.supply_from_liquidation(
+					to_asset,
+					excess_amount,
+					SupplyAddedActionType::SystemLiquidationExcessAmount {
+						loan_id,
+						swap_request_id,
+					},
+				);
 
 				// Any input funds not yet liquidated are returned to the
-				// account's collateral balance.
-				self.return_supplied_funds(from_asset, swap_progress.remaining_input_amount);
+				// supply pool:
+				self.supply_from_liquidation(
+					from_asset,
+					swap_progress.remaining_input_amount,
+					SupplyAddedActionType::SystemLiquidationUnusedAmount,
+				);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
 			}
@@ -684,6 +696,13 @@ impl<T: Config> LoanAccount<T> {
 							.entry(*asset)
 							.or_default()
 							.saturating_accrue(withdrawn_amount);
+
+						Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
+							lender_id: self.borrower_id.clone(),
+							asset: *asset,
+							unlocked_amount: withdrawn_amount,
+							action_type: SupplyRemovedActionType::SystemLiquidation,
+						});
 					}
 				}
 			});
@@ -1585,6 +1604,7 @@ pub fn remove_lender_funds<T: Config>(
 		lender_id,
 		asset,
 		unlocked_amount,
+		action_type: SupplyRemovedActionType::Manual,
 	});
 
 	Ok(())
@@ -1687,19 +1707,14 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 					// Any amount left after repaying the loan is added to the borrower's
 					// collateral balance:
-					if excess_amount > 0 {
-						if let Err(err) = supply_funds::<T>(
-							borrower_id.clone(),
-							liquidation_swap.to_asset,
-							excess_amount,
-							SupplyAddedActionType::SystemLiquidationExcessAmount {
-								loan_id,
-								swap_request_id,
-							},
-						) {
-							log_or_panic!("Failed to supply funds: {:?}", err);
-						}
-					}
+					loan_account.supply_from_liquidation(
+						liquidation_swap.to_asset,
+						excess_amount,
+						SupplyAddedActionType::SystemLiquidationExcessAmount {
+							loan_id,
+							swap_request_id,
+						},
+					);
 
 					let no_collateral_left =
 						is_zero_collateral(&loan_account.get_collateral_in_supply_pools());

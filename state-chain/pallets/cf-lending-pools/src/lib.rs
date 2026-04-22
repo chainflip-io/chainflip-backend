@@ -214,6 +214,18 @@ pub enum SupplyAddedActionType {
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
 	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
+	/// Triggered by the protocol when liquidation did not swap all of input amount.
+	SystemLiquidationUnusedAmount,
+}
+
+/// Indicates how the action of supplying funds was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum SupplyRemovedActionType {
+	/// Triggered manually by the user. Funds are taken from the user's free balance.
+	Manual,
+	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
+	/// than was required.
+	SystemLiquidation,
 }
 
 /// Indicates how the action of repaying a loan was triggered.
@@ -447,6 +459,7 @@ pub mod pallet {
 			lender_id: T::AccountId,
 			asset: Asset,
 			unlocked_amount: AssetAmount,
+			action_type: SupplyRemovedActionType,
 		},
 		LoanCreated {
 			loan_id: LoanId,
