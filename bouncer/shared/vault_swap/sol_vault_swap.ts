@@ -29,7 +29,7 @@ import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import { throwError } from 'shared/utils/logger';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
+import { SwapEndpoint } from '../../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
 import { requestSwapParameterEncoding } from './vault_swap';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
