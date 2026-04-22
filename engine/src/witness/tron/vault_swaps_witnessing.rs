@@ -82,11 +82,10 @@ where
 	for ((asset, amount, tx_id), transaction_info_result) in
 		vault_ingress_transactions.into_iter().zip(transactions_info_result)
 	{
-		let tx_id_str = format!("{:x}", tx_id);
 		let transaction = match transaction_info_result {
 			Ok(tx) => tx,
 			Err(e) => {
-				tracing::warn!("Failed to get transaction {:?}: {:?}", tx_id_str, e);
+				tracing::warn!("Failed to get transaction {:#x}: {:#}", tx_id, e);
 				continue;
 			},
 		};
@@ -95,8 +94,8 @@ where
 		// have changed but check anyway.
 		if transaction.status() != TransactionResultStatus::Success {
 			tracing::warn!(
-				"Transaction skipped because of the result status not being success even if we expect it to have been successful: {:?}, status={:?}",
-				tx_id_str,
+				"Transaction skipped because of the result status not being success even if we expect it to have been successful: {:#x}, status={:?}",
+				tx_id,
 				transaction.status()
 			);
 			continue;

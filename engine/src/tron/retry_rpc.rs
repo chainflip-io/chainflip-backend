@@ -404,7 +404,7 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 											"Estimated fee limit: {} SUN, is greater than the transaction fee limit {} SUN", estimated_fee_limit_sun, fee_limit_u128
 										));
 									}
-									estimated_fee_limit_sun
+									fee_limit_u128
 								} else {
 									// Apply a 33% buffer on top of the estimated fee limit for non-CCM transactions
 									estimated_fee_limit_sun
