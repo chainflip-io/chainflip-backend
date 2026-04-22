@@ -506,6 +506,7 @@ export const cfPrimitivesWitnessingTaskName = simpleEnum([
   'Solana',
   'Assethub',
   'Oracle',
+  'Tron',
 ]);
 
 export const palletCfGovernanceGovernanceCouncil = z.object({
