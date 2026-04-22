@@ -11,8 +11,8 @@ mod old {
 	pub struct LoanAccount<T: Config> {
 		pub borrower_id: T::AccountId,
 		pub collateral_topup_asset: Option<Asset>,
-		pub collateral: BTreeMap<Asset, AssetAmount>,
 		// This field is being removed:
+		pub collateral: BTreeMap<Asset, AssetAmount>,
 		pub loans: BTreeMap<cf_traits::lending::LoanId, GeneralLoan<T>>,
 		pub liquidation_status: LiquidationStatus,
 		pub voluntary_liquidation_requested: bool,
@@ -35,7 +35,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				}
 
 				// Ensure the lending pool exists, creating it if needed.
-				if GeneralLendingPools::<T>::get(asset).is_none() {
+				if !GeneralLendingPools::<T>::contains_key(asset) {
 					if let Err(e) = Pallet::<T>::new_lending_pool(*asset) {
 						log::error!(
 							"Failed to create lending pool for {:?} during migration: {:?}",

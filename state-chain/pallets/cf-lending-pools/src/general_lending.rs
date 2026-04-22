@@ -176,16 +176,13 @@ impl<T: Config> LoanAccount<T> {
 	}
 
 	pub fn get_collateral_in_supply_pools(&self) -> BTreeMap<Asset, AssetAmount> {
-		let mut collateral = BTreeMap::<Asset, AssetAmount>::new();
-
-		// Add any funds supplied in lending pools
-		for (asset, pool) in GeneralLendingPools::<T>::iter() {
-			if let Ok(amount) = pool.get_supply_position_for_account(&self.borrower_id) {
-				collateral.entry(asset).or_default().saturating_accrue(amount);
-			}
-		}
-
-		collateral
+		GeneralLendingPools::<T>::iter()
+			.filter_map(|(asset, pool)| {
+				pool.get_supply_position_for_account(&self.borrower_id)
+					.ok()
+					.map(|amount| (asset, amount))
+			})
+			.collect()
 	}
 
 	/// Returns the account's collateral including any amounts that are in liquidation swaps.
@@ -220,12 +217,8 @@ impl<T: Config> LoanAccount<T> {
 	/// Return user's existing collateral (what hasn't been swapped during liquidation).
 	/// Unlike [supply_funds], we don't emit an event when collateral is returned.
 	fn return_supplied_funds(&mut self, asset: Asset, amount: AssetAmount) {
-		GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
-			if let Ok(pool) = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist) {
-				pool.add_funds(&self.borrower_id, amount);
-			} else {
-				log_or_panic!("Pool must exist for a previously supplied asset: {}", asset);
-			}
+		Pallet::<T>::mutate_existing_pool(asset, |pool| {
+			pool.add_funds(&self.borrower_id, amount);
 		});
 	}
 
@@ -683,7 +676,6 @@ impl<T: Config> LoanAccount<T> {
 		for asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>().iter() {
 			GeneralLendingPools::<T>::mutate(asset, |pool| {
 				if let Some(pool) = pool.as_mut() {
-					// TODO: emit an event here?
 					// Remove as much as possible:
 					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
 						pool.remove_funds(&self.borrower_id, None)
