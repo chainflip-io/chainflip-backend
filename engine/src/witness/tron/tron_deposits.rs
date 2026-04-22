@@ -36,7 +36,7 @@ pub async fn trx_ingress_transactions<Client>(
 	client: &Client,
 	monitored_addresses: HashSet<H160>,
 	block_number: i64,
-	block_hash: &str,
+	block_hash: H256,
 ) -> Result<Vec<(H160, u64, H256)>, anyhow::Error>
 where
 	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
@@ -47,10 +47,11 @@ where
 
 	let block_balance = client.get_block_balances(block_number, block_hash).await?;
 
-	// Check that block identifiers matches
+	// Check that block identifiers matches. The API returns the hash as a lowercase hex
+	// string without a `0x` prefix.
 	ensure!(
-		block_balance.block_identifier.hash == block_hash,
-		"Block hash mismatch: expected {}, got {}",
+		block_balance.block_identifier.hash == format!("{:x}", block_hash),
+		"Block hash mismatch: expected {:x}, got {}",
 		block_hash,
 		block_balance.block_identifier.hash
 	);
@@ -137,10 +138,9 @@ pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send +
 	let block_number = i64::try_from(block_number_u64).map_err(|_| {
 		anyhow::anyhow!("Block number conversion to i64 failed: value too large or negative")
 	})?;
-	let block_hash = format!("{:064x}", query.block_hash);
-
 	let deposit_channel_changes =
-		trx_ingress_transactions(client, trx_deposit_addresses, block_number, &block_hash).await?;
+		trx_ingress_transactions(client, trx_deposit_addresses, block_number, query.block_hash)
+			.await?;
 
 	// --- ERC20 deposit channel witnessing ---
 	let mut erc20_ingresses: Vec<DepositWitness<Tron>> = Vec::new();
@@ -197,7 +197,7 @@ mod tests {
 		witness::tron::tron_deposits::trx_ingress_transactions,
 	};
 	use cf_utilities::{redact_endpoint_secret::SecretUrl, task_scope};
-	use ethers::types::H160;
+	use ethers::types::{H160, H256};
 	use futures_util::FutureExt;
 	use std::collections::HashSet;
 
@@ -228,7 +228,10 @@ mod tests {
 
 				// Test block - update these values
 				let block_num = 64843264;
-				let block_hash = "0000000003dd6e006934d46981dab0f3cf1863b6d7b0a50577e198e06bb8560b";
+				let block_hash: H256 =
+					"0000000003dd6e006934d46981dab0f3cf1863b6d7b0a50577e198e06bb8560b"
+						.parse()
+						.unwrap();
 
 				// Example address that is unused
 				let deposit_channels_tron = [TronAddress(
@@ -288,7 +291,10 @@ mod tests {
 
 				// Test block from mainnet
 				let block_num = 80079354i64;
-				let block_hash = "0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945";
+				let block_hash: H256 =
+					"0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945"
+						.parse()
+						.unwrap();
 
 				// Example deposit channels - Tron addresses (21 bytes, with 0x41 prefix)
 				let deposit_channels_tron = [
