@@ -162,28 +162,24 @@ pub trait TronRetrySigningRpcApi {
 #[async_trait::async_trait]
 impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClient<Rpc> {
 	// Tron HTTP API
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
-		let tx_id = tx_id.to_owned();
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo> {
 		self.rpc_retry_client
 			.request_with_limit(
-				RequestLog::new("getTransactionInfoById".to_string(), Some(tx_id.clone())),
+				RequestLog::new("getTransactionInfoById".to_string(), Some(format!("{tx_id:?}"))),
 				Box::pin(move |client| {
-					let tx_id = tx_id.clone();
-					Box::pin(async move { client.get_transaction_info_by_id(&tx_id).await })
+					Box::pin(async move { client.get_transaction_info_by_id(tx_id).await })
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
 			)
 			.await
 	}
 
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<Transaction> {
-		let tx_id = tx_id.to_owned();
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<Transaction> {
 		self.rpc_retry_client
 			.request_with_limit(
-				RequestLog::new("getTransactionById".to_string(), Some(tx_id.clone())),
+				RequestLog::new("getTransactionById".to_string(), Some(format!("{tx_id:?}"))),
 				Box::pin(move |client| {
-					let tx_id = tx_id.clone();
-					Box::pin(async move { client.get_transaction_by_id(&tx_id).await })
+					Box::pin(async move { client.get_transaction_by_id(tx_id).await })
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
 			)
@@ -193,18 +189,16 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronRetryRpcClie
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance> {
-		let hash = hash.to_owned();
 		self.rpc_retry_client
 			.request_with_limit(
 				RequestLog::new(
 					"getBlockBalance".to_string(),
-					Some(format!("num: {block_number}, hash: {hash}")),
+					Some(format!("num: {block_number}, hash: {hash:?}")),
 				),
 				Box::pin(move |client| {
-					let hash = hash.clone();
-					Box::pin(async move { client.get_block_balances(block_number, &hash).await })
+					Box::pin(async move { client.get_block_balances(block_number, hash).await })
 				}),
 				MAX_RETRY_FOR_WITH_RESULT,
 			)

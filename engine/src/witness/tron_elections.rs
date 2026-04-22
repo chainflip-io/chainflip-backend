@@ -350,28 +350,27 @@ impl WitnessClientForBlockData<TronChain, Vec<EvmKeyManagerEvent<Runtime, TronIn
 					sig_data,
 					..
 				}) => {
-					let tx_hash_str = format!("{:x}", tx_hash);
-
-					let tx_receipt =
-						self.client.transaction_receipt(tx_hash).await.with_context(|| {
-							format!("Failed to get receipt for tx {tx_hash_str}")
-						})?;
+					let tx_receipt = self
+						.client
+						.transaction_receipt(tx_hash)
+						.await
+						.with_context(|| format!("Failed to get receipt for tx {tx_hash:x}"))?;
 
 					// Compared to other EVMs we need to get the energy (fees) information via
 					// `get_transaction_info_by_id` and the `get_transaction_by_id` to get the
 					// `energy_limit` metadata.
 					let tx_info =
-						self.client.get_transaction_info_by_id(&tx_hash_str).await.with_context(
-							|| format!("Failed to get transaction info for tx {tx_hash_str}"),
+						self.client.get_transaction_info_by_id(tx_hash).await.with_context(
+							|| format!("Failed to get transaction info for tx {tx_hash:x}"),
 						)?;
 					let tron_tx =
-						self.client.get_transaction_by_id(&tx_hash_str).await.with_context(
-							|| format!("Failed to get transaction by id for tx {tx_hash_str}"),
-						)?;
+						self.client.get_transaction_by_id(tx_hash).await.with_context(|| {
+							format!("Failed to get transaction by id for tx {tx_hash:x}")
+						})?;
 
 					let signer_id = tx_receipt.from;
 					let contract = tx_receipt.to.ok_or_else(|| {
-						anyhow::anyhow!("No to address in receipt for tx {tx_hash_str}")
+						anyhow::anyhow!("No to address in receipt for tx {tx_hash:x}")
 					})?;
 					let fee_limit = tron_tx.raw_data.fee_limit.and_then(|fee| fee.try_into().ok());
 
