@@ -510,15 +510,18 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = (
-	migrations::safe_mode::SafeModeMigration,
-	frame_support::migrations::VersionedMigration<
+type MigrationsForV2_2 = (migrations::safe_mode::SafeModeMigration,
+		frame_support::migrations::VersionedMigration<
 		5,
 		6,
 		NoopMigration,
 		pallet_grandpa::Pallet<Runtime>,
 		DbWeight,
 	>,
+	migrations::tron_integration::TronSafeModeUpdate,
+	migrations::tron_integration::TronElectionsInit,
+	migrations::tron_integration::TronIngressEgressInit,
+	migrations::tron_integration::TronChainstate,
 );
 
 #[cfg(test)]
