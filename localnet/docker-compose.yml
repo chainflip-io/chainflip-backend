@@ -18,7 +18,7 @@ services:
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
   tron-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-test-23-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-1-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: tron-init
     platform: linux/amd64
