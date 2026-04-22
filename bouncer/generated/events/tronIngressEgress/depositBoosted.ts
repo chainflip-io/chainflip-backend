@@ -3,6 +3,7 @@ import {
   cfChainsDepositOriginType,
   cfChainsEvmDepositDetails,
   cfPrimitivesChainsAssetsTronAsset,
+  cfTraitsLendingBoostSource,
   hexString,
   numberOrHex,
   palletCfTronIngressEgressDepositAction,
@@ -11,7 +12,7 @@ import {
 export const tronIngressEgressDepositBoosted = z.object({
   depositAddress: hexString.nullish(),
   asset: cfPrimitivesChainsAssetsTronAsset,
-  amounts: z.array(z.tuple([z.number(), numberOrHex])),
+  amounts: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   depositDetails: cfChainsEvmDepositDetails,
   prewitnessedDepositId: numberOrHex,
   channelId: numberOrHex.nullish(),
