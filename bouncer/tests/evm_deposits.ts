@@ -420,6 +420,11 @@ export async function dotestEvmDeposits<A = []>(
       (subcf) => testEncodeCfParameters(subcf, 'Eth', 'Flip'),
     ]);
 
+  // TODO: Test Tron DEX Aggregation using similar logic to what we do in `testTxMultipleVaultSwaps`
+  // using the CfTester's logic. We can consider doing 1 or 2 swaps in the same transaction. Doing
+  // two with Trx will test both the DEX aggregation and also the same-tx balance logic in the engine,
+  // they should both be credited as the same swap.
+
   await cf.all([
     depositTests,
     noDuplicatedWitnessingTest,
