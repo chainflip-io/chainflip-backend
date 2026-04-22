@@ -71,10 +71,9 @@ where
 	}
 
 	// Fetch all transactions in parallel for efficiency
-	let get_tx_futures = vault_ingress_transactions.iter().map(|(_, _, tx_id)| {
-		let tx_id_str = format!("{:x}", tx_id);
-		async move { client.get_transaction_by_id(&tx_id_str).await }
-	});
+	let get_tx_futures = vault_ingress_transactions
+		.iter()
+		.map(|(_, _, tx_id)| async move { client.get_transaction_by_id(*tx_id).await });
 	let transactions_info_result = future::join_all(get_tx_futures).await;
 
 	let mut vault_swaps = Vec::new();
@@ -189,27 +188,29 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 	let block_number = i64::try_from(block_number_u64).map_err(|_| {
 		anyhow::anyhow!("Block number conversion to i64 failed: value too large or negative")
 	})?;
-	let block_hash = format!("{:064x}", query.block_hash);
-
 	let vault_address = config.vault;
 
-	let mut vault_ingress_transactions: Vec<(TronAsset, u64, H256)> =
-		trx_ingress_transactions(client, HashSet::from([vault_address]), block_number, &block_hash)
-			.await?
-			.into_iter()
-			.filter_map(|(addr, amount, tx_id)| {
-				if addr == vault_address {
-					Some((TronAsset::Trx, amount, tx_id))
-				} else {
-					tracing::warn!(
-						"TRX ingress address mismatch: expected {:?}, got {:?}",
-						vault_address,
-						addr
-					);
-					None
-				}
-			})
-			.collect();
+	let mut vault_ingress_transactions: Vec<(TronAsset, u64, H256)> = trx_ingress_transactions(
+		client,
+		HashSet::from([vault_address]),
+		block_number,
+		query.block_hash,
+	)
+	.await?
+	.into_iter()
+	.filter_map(|(addr, amount, tx_id)| {
+		if addr == vault_address {
+			Some((TronAsset::Trx, amount, tx_id))
+		} else {
+			tracing::warn!(
+				"TRX ingress address mismatch: expected {:?}, got {:?}",
+				vault_address,
+				addr
+			);
+			None
+		}
+	})
+	.collect();
 
 	// --- ERC20 Vault swap witnessing ---
 
@@ -272,7 +273,10 @@ mod tests {
 
 				// Test block from mainnet
 				let block_num = 80079354i64;
-				let block_hash = "0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945";
+				let block_hash: H256 =
+					"0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945"
+						.parse()
+						.unwrap();
 
 				// Test with vault address that has positive change
 				let vault_address = TronAddress(
@@ -360,7 +364,10 @@ mod tests {
 
 				// Test block - update these values
 				let block_num = 64843264;
-				let block_hash = "0000000003dd6e006934d46981dab0f3cf1863b6d7b0a50577e198e06bb8560b";
+				let block_hash: H256 =
+					"0000000003dd6e006934d46981dab0f3cf1863b6d7b0a50577e198e06bb8560b"
+						.parse()
+						.unwrap();
 
 				// Test vault address
 				let vault_address = TronAddress(
@@ -400,7 +407,9 @@ mod tests {
 					&retry_client,
 					HashSet::from([vault_address]),
 					block_num,
-					"0000000003dd7632dd9fcdfcbe8008f7e534191ff5d1ceedb05ac5affdf76b32",
+					"0000000003dd7632dd9fcdfcbe8008f7e534191ff5d1ceedb05ac5affdf76b32"
+						.parse()
+						.unwrap(),
 				)
 				.await
 				.unwrap();

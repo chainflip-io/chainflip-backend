@@ -38,12 +38,12 @@ pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 #[async_trait::async_trait]
 pub trait TronRetryRpcApiWithResult: Clone {
 	// Tron HTTP API
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo>;
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<TronTransaction>;
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo>;
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<TronTransaction>;
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance>;
 
 	// EVM-compatible JSON-RPC (via Tron's JSON-RPC endpoint)
@@ -65,10 +65,9 @@ pub trait TronRetryRpcApiWithResult: Clone {
 #[derive(Clone)]
 pub struct TronCachingClient<Rpc: TronRpcApi> {
 	retry_client: TronRetryRpcClient<Rpc>,
-	get_transaction_info_by_id: CachingRequest<String, TransactionInfo, TronRetryRpcClient<Rpc>>,
-	get_transaction_by_id: CachingRequest<String, TronTransaction, TronRetryRpcClient<Rpc>>,
-	get_block_balances:
-		CachingRequest<(BlockNumber, String), BlockBalance, TronRetryRpcClient<Rpc>>,
+	get_transaction_info_by_id: CachingRequest<H256, TransactionInfo, TronRetryRpcClient<Rpc>>,
+	get_transaction_by_id: CachingRequest<H256, TronTransaction, TronRetryRpcClient<Rpc>>,
+	get_block_balances: CachingRequest<(BlockNumber, H256), BlockBalance, TronRetryRpcClient<Rpc>>,
 	chain_id: CachingRequest<(), U256, TronRetryRpcClient<Rpc>>,
 	get_logs: CachingRequest<(H256, H160), Vec<Log>, TronRetryRpcClient<Rpc>>,
 	transaction_receipt: CachingRequest<H256, TransactionReceipt, TronRetryRpcClient<Rpc>>,
@@ -83,17 +82,17 @@ pub struct TronCachingClient<Rpc: TronRpcApi> {
 impl<Rpc: TronRpcApi + EvmRpcApi> TronCachingClient<Rpc> {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, client: TronRetryRpcClient<Rpc>) -> Self {
 		let (get_transaction_info_by_id, get_transaction_info_by_id_cache) =
-			CachingRequest::<String, TransactionInfo, TronRetryRpcClient<Rpc>>::new(
+			CachingRequest::<H256, TransactionInfo, TronRetryRpcClient<Rpc>>::new(
 				scope,
 				client.clone(),
 			);
 		let (get_transaction_by_id, get_transaction_by_id_cache) = CachingRequest::<
-			String,
+			H256,
 			TronTransaction,
 			TronRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
 		let (get_block_balances, get_block_balances_cache) = CachingRequest::<
-			(BlockNumber, String),
+			(BlockNumber, H256),
 			BlockBalance,
 			TronRetryRpcClient<Rpc>,
 		>::new(scope, client.clone());
@@ -161,33 +160,23 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronCachingClient<Rpc> {
 
 #[async_trait::async_trait]
 impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClient<Rpc> {
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
-		let tx_id = tx_id.to_owned();
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo> {
 		self.get_transaction_info_by_id
 			.get_or_fetch(
-				{
-					let tx_id = tx_id.clone();
-					Box::pin(move |client| {
-						let tx_id = tx_id.clone();
-						Box::pin(async move { client.get_transaction_info_by_id(&tx_id).await })
-					})
-				},
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_transaction_info_by_id(tx_id).await })
+				}),
 				tx_id,
 			)
 			.await
 	}
 
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<TronTransaction> {
-		let tx_id = tx_id.to_owned();
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<TronTransaction> {
 		self.get_transaction_by_id
 			.get_or_fetch(
-				{
-					let tx_id = tx_id.clone();
-					Box::pin(move |client| {
-						let tx_id = tx_id.clone();
-						Box::pin(async move { client.get_transaction_by_id(&tx_id).await })
-					})
-				},
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_transaction_by_id(tx_id).await })
+				}),
 				tx_id,
 			)
 			.await
@@ -196,20 +185,13 @@ impl<Rpc: TronRpcApi + EvmRpcApi> TronRetryRpcApiWithResult for TronCachingClien
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance> {
-		let hash = hash.to_owned();
 		self.get_block_balances
 			.get_or_fetch(
-				{
-					let hash = hash.clone();
-					Box::pin(move |client| {
-						let hash = hash.clone();
-						Box::pin(
-							async move { client.get_block_balances(block_number, &hash).await },
-						)
-					})
-				},
+				Box::pin(move |client| {
+					Box::pin(async move { client.get_block_balances(block_number, hash).await })
+				}),
 				(block_number, hash),
 			)
 			.await

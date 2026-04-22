@@ -88,7 +88,7 @@ impl TronRpcClient {
 				.context("Failed to get block during startup check")?;
 			let block_hash = block.hash.context("Block has no hash during startup check")?;
 			client
-				.get_block_balances(block_number.low_u64() as i64, &format!("{:x}", block_hash))
+				.get_block_balances(block_number.low_u64() as i64, block_hash)
 				.await
 				.context("HTTP API node does not support getBlockBalance — ensure the node has the historical balance query feature enabled")?;
 
@@ -167,12 +167,12 @@ impl TronRpcSigningClient<TronRpcClient> {
 #[async_trait::async_trait]
 pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	// HTTP API specific methods (Tron-specific, not available via JSON-RPC)
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo>;
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<Transaction>;
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo>;
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<Transaction>;
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance>;
 	async fn trigger_constant_contract(
 		&self,
@@ -270,7 +270,8 @@ impl EvmRpcApi for TronRpcClient {
 
 #[async_trait::async_trait]
 impl TronRpcApi for TronRpcClient {
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo> {
+		let tx_id = format!("{:x}", tx_id);
 		let response = self
 			.call_http_api("/gettransactioninfobyid", Some(serde_json::json!({"value": tx_id})))
 			.await?;
@@ -293,7 +294,8 @@ impl TronRpcApi for TronRpcClient {
 		Ok(transaction_info)
 	}
 
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<Transaction> {
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<Transaction> {
+		let tx_id = format!("{:x}", tx_id);
 		let response = self
 			.call_http_api(
 				"/gettransactionbyid",
@@ -322,8 +324,9 @@ impl TronRpcApi for TronRpcClient {
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance> {
+		let hash = format!("{:x}", hash);
 		let response = self
 			.call_http_api(
 				"/getblockbalance",
@@ -539,18 +542,18 @@ impl<RpcClient: TronRpcApi> TronSigningRpcApi for TronRpcSigningClient<RpcClient
 
 #[async_trait::async_trait]
 impl<RpcClient: TronRpcApi> TronRpcApi for TronRpcSigningClient<RpcClient> {
-	async fn get_transaction_info_by_id(&self, tx_id: &str) -> anyhow::Result<TransactionInfo> {
+	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo> {
 		self.rpc_client.get_transaction_info_by_id(tx_id).await
 	}
 
-	async fn get_transaction_by_id(&self, tx_id: &str) -> anyhow::Result<Transaction> {
+	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<Transaction> {
 		self.rpc_client.get_transaction_by_id(tx_id).await
 	}
 
 	async fn get_block_balances(
 		&self,
 		block_number: BlockNumber,
-		hash: &str,
+		hash: H256,
 	) -> anyhow::Result<BlockBalance> {
 		self.rpc_client.get_block_balances(block_number, hash).await
 	}
@@ -651,7 +654,9 @@ mod tests {
 		.unwrap();
 
 		// Test getTransactionInfoById with a transaction ID
-		let tx_id = "0360ad178013e9722e689956cd64b7af3296b722325cbf3a5f3f1a97731aa297";
+		let tx_id: H256 = "0360ad178013e9722e689956cd64b7af3296b722325cbf3a5f3f1a97731aa297"
+			.parse()
+			.unwrap();
 		let result = tron_rpc_client.get_transaction_info_by_id(tx_id).await.unwrap();
 		println!("Transaction info query result: {:#?}", result);
 	}
@@ -671,12 +676,14 @@ mod tests {
 		.unwrap();
 
 		// Test getTransactionById with a transaction ID
-		let tx_id = "bd17efdc7bd30e3887a3af59454bbe219ba53a4d91040aae4c0948edda586c0f";
+		let tx_id: H256 = "bd17efdc7bd30e3887a3af59454bbe219ba53a4d91040aae4c0948edda586c0f"
+			.parse()
+			.unwrap();
 		let result = tron_rpc_client.get_transaction_by_id(tx_id).await.unwrap();
 		println!("Transaction query result: {:#?}", result);
 
 		// Verify the transaction ID matches
-		assert_eq!(result.tx_id, tx_id.parse().unwrap());
+		assert_eq!(result.tx_id, tx_id);
 		assert_eq!(result.status(), TransactionResultStatus::Success);
 	}
 
@@ -695,12 +702,14 @@ mod tests {
 		.unwrap();
 
 		// Test getTransactionById with a transaction ID
-		let tx_id = "7a89015e99a64e1731efe6da8ae705384a51592e38e715a0b045809b62ccd31d";
+		let tx_id: H256 = "7a89015e99a64e1731efe6da8ae705384a51592e38e715a0b045809b62ccd31d"
+			.parse()
+			.unwrap();
 		let result = tron_rpc_client.get_transaction_by_id(tx_id).await.unwrap();
 		println!("Transaction query result: {:#?}", result);
 
 		// Verify the transaction ID matches
-		assert_eq!(result.tx_id, tx_id.parse().unwrap());
+		assert_eq!(result.tx_id, tx_id);
 
 		// Verify raw_data.data exists and contains the expected hex string
 		assert_eq!(result.raw_data.data, Some("48656c6c6f20436861696e666c69702100".to_string()));
@@ -722,7 +731,9 @@ mod tests {
 
 		// Test getBlockBalance with block number and hash
 		let block_num = 80079354;
-		let block_hash = "0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945";
+		let block_hash: H256 = "0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945"
+			.parse()
+			.unwrap();
 		let balance = tron_rpc_client.get_block_balances(block_num, block_hash).await.unwrap();
 		println!("Block balance query result: {:?}", balance);
 	}
@@ -926,7 +937,7 @@ mod tests {
 
 		// Query block balances using the HTTP API
 		let balance = tron_rpc_client
-			.get_block_balances(block_number.low_u64() as i64, &format!("{:x}", block_hash))
+			.get_block_balances(block_number.low_u64() as i64, block_hash)
 			.await
 			.unwrap();
 		println!("Block balance: {:?}", balance);
