@@ -1972,10 +1972,7 @@ mod operator {
 			for v in &validators[..MAX_VALIDATORS_PER_OPERATOR] {
 				assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(*v), OP));
 			}
-			assert_eq!(
-				ManagedValidators::<Test>::get(OP).len(),
-				MAX_VALIDATORS_PER_OPERATOR
-			);
+			assert_eq!(ManagedValidators::<Test>::get(OP).len(), MAX_VALIDATORS_PER_OPERATOR);
 
 			// The one past the cap must be rejected at accept time.
 			assert_noop!(
@@ -1985,10 +1982,7 @@ mod operator {
 				),
 				Error::<Test>::TooManyValidators
 			);
-			assert_eq!(
-				ManagedValidators::<Test>::get(OP).len(),
-				MAX_VALIDATORS_PER_OPERATOR
-			);
+			assert_eq!(ManagedValidators::<Test>::get(OP).len(), MAX_VALIDATORS_PER_OPERATOR);
 		});
 	}
 
