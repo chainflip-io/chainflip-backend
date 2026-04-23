@@ -912,11 +912,16 @@ pub mod pallet {
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
-					caller_account_id.clone(),
-					amount.into(),
-					FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
-				),
+				EthereumDeposit::FlipToSCGateway { amount } =>
+					if !frame_system::Pallet::<T>::account_exists(&caller_account_id) &&
+						amount >= MinimumFunding::<T>::get().into()
+					{
+						Self::fund_account(
+							caller_account_id.clone(),
+							amount.into(),
+							FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
+						)
+					},
 
 				// nothing to do
 				EthereumDeposit::NoDeposit => {},
