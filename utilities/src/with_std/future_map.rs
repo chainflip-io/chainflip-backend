@@ -16,6 +16,7 @@
 
 use futures::{Future, Stream};
 use std::{collections::BTreeSet, iter::IntoIterator};
+use tracing::debug;
 
 #[pin_project::pin_project]
 struct Wrapper<Key, Fut> {
@@ -86,7 +87,8 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> FutureMap<Key, Fut> {
 
 		for future in futures {
 			if predicate(&future.key) {
-				assert!(self.keys.remove(&future.key));
+				let was_present = self.keys.remove(&future.key);
+				debug_assert!(was_present);
 				removed_keys.push(future.key);
 			} else {
 				self.futures.push(future);
