@@ -8,6 +8,8 @@ All notable changes included in each Chainflip release will be documented in thi
 
 - Update Assethub metadata.
 - Unify Assethub channel ID source across swap and ccm channels.
+- Consistent account derivation within assethub ccm calls.
+- Correctly Enforce max Validators per operator.
 
 ## [2.1.12] - 2026-04-20
 

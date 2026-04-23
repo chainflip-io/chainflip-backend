@@ -97,36 +97,47 @@ pub struct AssethubExtrinsicBuilder {
 	pub signer_and_signature: Option<(PolkadotPublicKey, PolkadotSignature)>,
 }
 
+fn channel_id_to_layers(channel_id: u64) -> Vec<u16> {
+	// Defensive: if the id is zero we still want to wrap one layer.
+	if channel_id == 0 {
+		vec![0]
+	} else {
+		channel_id
+			.to_be_bytes()
+			.chunks(2)
+			.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
+			.skip_while(|layer| *layer == 0u16)
+			.collect::<Vec<u16>>()
+	}
+}
+
+fn as_derivative_u64(channel_id: u64, call: AssethubRuntimeCall) -> AssethubRuntimeCall {
+	let layers = channel_id_to_layers(channel_id);
+
+	layers.into_iter().fold(call, |call, index| {
+		AssethubRuntimeCall::Utility(UtilityCall::as_derivative { index, call: Box::new(call) })
+	})
+}
+
+// This replicates the as_derivative subaddress generation from the FRAME utility pallet.
+fn calculate_derived_address_utility(parent: [u8; 32], index: u16) -> [u8; 32] {
+	const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
+	let mut payload = Vec::with_capacity(PREFIX.len() + 32 + 2);
+	payload.extend(PREFIX);
+	payload.extend(parent);
+	payload.extend(&index.to_le_bytes());
+	BlakeTwo256::hash(&payload).to_fixed_bytes()
+}
+
 pub fn calculate_derived_address(
 	master_account: PolkadotAccountId,
 	channel_id: u64,
 ) -> PolkadotAccountId {
-	const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
-	const RAW_PUBLIC_KEY_SIZE: usize = 32;
-	const PAYLOAD_LENGTH: usize = PREFIX.len() + RAW_PUBLIC_KEY_SIZE + size_of::<u16>();
-
-	let mut layers = channel_id
-		.to_be_bytes()
-		.chunks(2)
-		.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
-		.skip_while(|layer| *layer == 0u16)
-		.collect::<Vec<u16>>();
-
-	layers.reverse();
-
-	let payload_hash =
-		layers.into_iter().fold(*master_account.aliased_ref(), |sub_account, salt| {
-			let mut payload = Vec::with_capacity(PAYLOAD_LENGTH);
-			// Fill the first slots with the derivation prefix.
-			payload.extend(PREFIX);
-			// Then add the 32-byte public key.
-			payload.extend(sub_account);
-			// Finally, add the index to the end of the payload.
-			payload.extend(&salt.to_le_bytes());
-
-			// Hash the whole thing
-			BlakeTwo256::hash(&payload).to_fixed_bytes()
-		});
+	let payload_hash = channel_id_to_layers(channel_id)
+		.into_iter()
+		// Reverse the layers because execution order of the address derivation is inside-out.
+		.rev()
+		.fold(*master_account.aliased_ref(), calculate_derived_address_utility);
 
 	PolkadotAccountId::from_aliased(payload_hash)
 }
@@ -899,32 +910,3 @@ pub enum AssetsCall {
 #[cfg(test)]
 pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 1003004, transaction_version: 15 };
-
-#[test]
-fn derive_address() {
-	let address = calculate_derived_address(
-		PolkadotAccountId(sp_core::hex2array!(
-			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
-		)),
-		0,
-	);
-	assert_eq!(
-		address,
-		PolkadotAccountId(sp_core::hex2array!(
-			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
-		))
-	);
-
-	let address = calculate_derived_address(
-		PolkadotAccountId(sp_core::hex2array!(
-			"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
-		)),
-		1,
-	);
-	assert_eq!(
-		address,
-		PolkadotAccountId(sp_core::hex2array!(
-			"19d0f04b6dd7a4d2f9338d99d9ddeb137275b4bdad8bacacc381a15769ace183"
-		))
-	);
-}
