@@ -132,23 +132,6 @@ pub struct BroadcastResponse {
 	pub code: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TriggerConstantContractRequest {
-	pub owner_address: TronAddress,
-	pub contract_address: TronAddress,
-	pub function_selector: String,
-	pub parameter: Vec<u8>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TriggerSmartContractRequest {
-	pub owner_address: TronAddress,
-	pub contract_address: TronAddress,
-	pub function_selector: String,
-	pub parameter: Vec<u8>,
-	pub fee_limit: i64,
-}
-
 /// Response from triggersmartcontract - contains unsigned transaction data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionExtention {

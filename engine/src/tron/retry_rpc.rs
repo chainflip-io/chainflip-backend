@@ -33,10 +33,7 @@ use anyhow::{anyhow, Context, Result};
 
 use super::{
 	rpc::{TronRpcApi, TronRpcClient, TronRpcSigningClient},
-	rpc_client_api::{
-		BlockBalance, BlockNumber, Transaction, TransactionInfo, TriggerConstantContractRequest,
-		TriggerSmartContractRequest, TronAddress,
-	},
+	rpc_client_api::{BlockBalance, BlockNumber, Transaction, TransactionInfo, TronAddress},
 };
 
 #[derive(Clone)]
@@ -364,20 +361,17 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						};
 
 
-						let constant_request = TriggerConstantContractRequest {
-							owner_address: signer_address,
-							contract_address,
-							function_selector: function_selector.clone(),
-							parameter: parameter.clone(),
-						};
-
-
 						// We estimate the energy needed for the transaction to determine the fee limit. If the transaction
 						// reverts due to a logic error, this estimation should fail with a code and message. Then we
 						// determine the fee limit depending on whether transaction has a set fee limit (CCM) or
 						// if it has one and then we apply a multiplier for safety.
 						let energy_estimate = client
-							.estimate_energy(constant_request.clone())
+							.estimate_energy(
+								signer_address,
+								contract_address,
+								function_selector.clone(),
+								parameter.clone(),
+							)
 							.await
 							.context("Failed to estimate energy rpc call failed")?;
 
@@ -420,7 +414,12 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						// be the case but for now we have this just as an extra sanity check.
 						let transaction_simulation_result =
 							client
-								.trigger_constant_contract(constant_request)
+								.trigger_constant_contract(
+									signer_address,
+									contract_address,
+									function_selector.clone(),
+									parameter.clone(),
+								)
 								.await
 								.context("Failed to simulate the transaction")?.transaction;
 
@@ -441,17 +440,15 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						// Build the actual transaction with triggerSmartContract (includes fee_limit).
 						// This is needed because the raw_hex_data from the triggerConstantContract does
 						// not contain all the data for the valid transaction (e.g. energy limit).
-						let trigger_request = TriggerSmartContractRequest {
-							owner_address: signer_address,
-							contract_address,
-							function_selector: function_selector.clone(),
-							parameter: parameter.clone(),
-							fee_limit,
-						};
-
 						let transaction =
 							client
-								.trigger_contract(trigger_request)
+								.trigger_contract(
+									signer_address,
+									contract_address,
+									function_selector.clone(),
+									parameter.clone(),
+									fee_limit,
+								)
 								.await
 								.context("Failed to build the unsigned transaction")?.transaction;
 
