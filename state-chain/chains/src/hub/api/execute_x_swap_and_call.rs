@@ -98,11 +98,10 @@ pub fn extrinsic_builder(
 
 #[cfg(test)]
 mod test_xcm_call {
-
 	use super::*;
 	use crate::{
 		dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2},
-		hub::TEST_RUNTIME_VERSION,
+		hub::test::TEST_RUNTIME_VERSION,
 	};
 	use cf_primitives::chains::assets;
 

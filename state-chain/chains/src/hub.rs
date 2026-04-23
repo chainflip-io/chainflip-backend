@@ -908,5 +908,79 @@ pub enum AssetsCall {
 }
 
 #[cfg(test)]
-pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: 1003004, transaction_version: 15 };
+mod test {
+	use crate::{
+		dot::{PolkadotAccountId, RuntimeVersion},
+		hub::calculate_derived_address,
+	};
+	use codec::{Decode, Encode};
+	use sp_core::blake2_256;
+	use sp_runtime::{traits::TrailingZeroInput, AccountId32};
+
+	pub(crate) const TEST_RUNTIME_VERSION: RuntimeVersion =
+		RuntimeVersion { spec_version: 1003004, transaction_version: 15 };
+
+	#[test]
+	fn derive_address() {
+		let address = calculate_derived_address(
+			PolkadotAccountId(sp_core::hex2array!(
+				"690dc0d83d5c7d19cda8299412279fc519ad1872fdb0bf733b64d16333fb5463"
+			)),
+			1,
+		);
+		assert_eq!(
+			address,
+			PolkadotAccountId(sp_core::hex2array!(
+				"19d0f04b6dd7a4d2f9338d99d9ddeb137275b4bdad8bacacc381a15769ace183"
+			))
+		);
+	}
+
+	// Used to simulate the assethub Utility::as_derivative call.
+	enum Utility {
+		AsDerivative { index: u16, call: Box<Self> },
+		Return,
+	}
+
+	// Copied verbatim from FRAME utility pallet.
+	fn derivative_account_id(who: AccountId32, index: u16) -> AccountId32 {
+		let entropy = (b"modlpy/utilisuba", who, index).using_encoded(blake2_256);
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
+	}
+
+	// Copied from implementation of as_derivative, with weight calculations and origin stripped
+	// out.
+	impl Utility {
+		pub fn dispatch(self, account: AccountId32) -> AccountId32 {
+			match self {
+				Utility::AsDerivative { index, call } =>
+					call.dispatch(derivative_account_id(account, index)),
+				Utility::Return => account,
+			}
+		}
+	}
+
+	#[test]
+	fn test_call_origin_equivalence() {
+		let assethub_derived = Utility::AsDerivative {
+			index: 0x0001,
+			call: Box::new(Utility::AsDerivative {
+				index: 0x0002,
+				call: Box::new(Utility::AsDerivative {
+					index: 0x0003,
+					call: Box::new(Utility::AsDerivative {
+						index: 0x0004,
+						call: Box::new(Utility::Return),
+					}),
+				}),
+			}),
+		}
+		.dispatch(AccountId32::new([1u8; 32]));
+		let chainflip_derived = calculate_derived_address(
+			PolkadotAccountId::from_aliased([1u8; 32]),
+			0x0004_0003_0002_0001,
+		);
+		assert_eq!(assethub_derived, AccountId32::new(chainflip_derived.0));
+	}
+}

@@ -107,7 +107,7 @@ mod test_batch_fetch {
 	use super::*;
 	use crate::{
 		dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2},
-		hub::TEST_RUNTIME_VERSION,
+		hub::test::TEST_RUNTIME_VERSION,
 	};
 	use cf_primitives::chains::assets;
 
@@ -205,7 +205,10 @@ mod test_batch_fetch {
 				})),
 			})
 		);
+	}
 
+	#[test]
+	fn asset_is_passed_through() {
 		let fetch_param = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 1,
 			asset: assets::hub::Asset::HubUsdc,
