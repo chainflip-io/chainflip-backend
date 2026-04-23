@@ -76,7 +76,7 @@ pub struct TronVaultSwapData {
 pub async fn fetch_and_decode_transactions<Client>(
 	client: &Client,
 	vault_ingress_transactions: Vec<(TronAsset, u64, H256)>,
-	block_number: i64,
+	block_number: u64,
 ) -> Vec<Result<VaultDepositWitness<Runtime, TronInstance>, TronFetchAndDecodeError>>
 where
 	Client: TronRetryRpcApiWithResult + Send + Sync + Clone,
@@ -135,7 +135,7 @@ where
 					let (vault_swap_params, ccm_additional_data) =
 						match decode_cf_parameters::<EvmAddress, CcmAdditionalData>(
 							&details.cf_parameters,
-							block_number as u64,
+							block_number,
 						) {
 							Ok(result) => result,
 							Err(e) =>
@@ -158,7 +158,7 @@ where
 				} else {
 					let (vault_swap_params, ()) = match decode_cf_parameters::<EvmAddress, ()>(
 						&details.cf_parameters,
-						block_number as u64,
+						block_number,
 					) {
 						Ok(result) => result,
 						Err(e) =>
@@ -187,10 +187,7 @@ pub async fn witness_vault_swaps<Client: TronRetryRpcApiWithResult + Send + Sync
 	config: &VaultDepositWitnessingConfig,
 	query: &EvmSingleBlockQuery,
 ) -> Result<Vec<VaultDepositWitness<Runtime, TronInstance>>, anyhow::Error> {
-	let block_number_u64 = query.get_lowest_block_height_of_query();
-	let block_number = i64::try_from(block_number_u64).map_err(|_| {
-		anyhow::anyhow!("Block number conversion to i64 failed: value too large or negative")
-	})?;
+	let block_number = query.get_lowest_block_height_of_query();
 	let vault_address = config.vault;
 
 	let mut vault_ingress_transactions: Vec<(TronAsset, u64, H256)> = trx_ingress_transactions(
@@ -286,7 +283,7 @@ mod tests {
 				.unwrap();
 
 				// Test block from mainnet
-				let block_num = 80079354i64;
+				let block_num = 80079354u64;
 				let block_hash: H256 =
 					"0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945"
 						.parse()
@@ -407,7 +404,7 @@ mod tests {
 
 				// This cointains a TRX Vault Swap with valid data
 				// https://nile.tronscan.org/#/transaction/b8042280e6a813d65ad01a0555e1e9a9497bf69d012b58cdc5d925c21df35972
-				let block_num = 64845362;
+				let block_num: u64 = 64845362;
 				let trx_ingresses = trx_ingress_transactions(
 					&retry_client,
 					HashSet::from([vault_address]),
