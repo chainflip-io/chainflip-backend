@@ -1211,8 +1211,8 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	{
 		// Not being able to process a loan account is acceptable (expected when oracle
 		// prices are down).
-		let _ = LoanAccounts::<T>::try_mutate(borrower_id, |loan_account| {
-			let loan_account = loan_account.as_mut().expect("Using keys read just above");
+		let _ = LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
+			let loan_account = maybe_account.as_mut().expect("Using keys read just above");
 
 			loan_account.derive_and_charge_interest(&mut weight_used);
 
@@ -1220,7 +1220,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
 			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-			loan_account.derive_ltv(&price_cache).and_then(|ltv| {
+			let result = loan_account.derive_ltv(&price_cache).and_then(|ltv| {
 				loan_account.check_low_ltv_penalty_and_collect_interest(
 					ltv,
 					&price_cache,
@@ -1251,7 +1251,17 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 						&mut weight_used,
 					)
 				})
-			})
+			});
+
+			// If all loans are repaid manually while in liquidation, liquidation swaps will be
+			// aborted above and we need to delete the account:
+			if loan_account.loans.is_empty() &&
+				loan_account.liquidation_status == LiquidationStatus::NoLiquidation
+			{
+				*maybe_account = None;
+			}
+
+			result
 		});
 	}
 
@@ -1487,10 +1497,13 @@ impl<T: Config> LendingApi for Pallet<T> {
 				);
 			}
 
-			// NOTE: even if we settle the last loan here, we don't remove
-			// the account as it must still have collateral in the supply pool
-			// (keeping the account is not strictly necessary for that but it does
-			// record the choice of topup asset, for example).
+			// Only remove account if it has no ongoing liquidation swaps (it will be removed
+			// after the liquidation swaps have been aborted as a result of having no debt).
+			if loan_account.loans.is_empty() &&
+				loan_account.liquidation_status == LiquidationStatus::NoLiquidation
+			{
+				*maybe_account = None;
+			}
 
 			Ok::<_, DispatchError>(())
 		})
@@ -1736,8 +1749,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							}
 						}
 
-						// If account has no loans and no collateral, it should now be removed
-						if loan_account.loans.is_empty() && no_collateral_left {
+						if loan_account.loans.is_empty() &&
+							loan_account.liquidation_status == LiquidationStatus::NoLiquidation
+						{
 							*maybe_account = None;
 						}
 					}

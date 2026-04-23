@@ -604,18 +604,8 @@ fn basic_general_lending() {
 				}
 			);
 
-			// NOTE: the account is not removed yet as it has supplied funds
-
-			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER),
-				Some(LoanAccount {
-					borrower_id: BORROWER,
-					collateral_topup_asset: None,
-					liquidation_status: LiquidationStatus::NoLiquidation,
-					voluntary_liquidation_requested: false,
-					loans: Default::default(),
-				})
-			);
+			// Account is removed once the last loan is repaid:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 		});
 }
 
@@ -1329,16 +1319,8 @@ fn basic_liquidation() {
 				origination_fee_network + liquidation_fee_network_1 + liquidation_fee_network_2
 			);
 
-			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER),
-				Some(LoanAccount {
-					borrower_id: BORROWER,
-					collateral_topup_asset: None,
-					liquidation_status: LiquidationStatus::NoLiquidation,
-					voluntary_liquidation_requested: false,
-					loans: Default::default(),
-				})
-			);
+			// Account is removed once the last loan is settled:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 			// Excess principal is now supplied to the loan asset pool:
 			assert_eq!(
@@ -1578,29 +1560,23 @@ fn liquidation_fully_repays_loan_when_aborted() {
 			let liquidation_fee =
 				CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
 
-			// The loan has been repaid, the remaining collateral amount and the excess loan asset
-			// amount are credited to supply pools:
-			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
-			assert_eq!(
-				account,
-				LoanAccount {
-					borrower_id: BORROWER,
-					collateral_topup_asset: None,
-					liquidation_status: LiquidationStatus::NoLiquidation,
-					voluntary_liquidation_requested: false,
-					loans: Default::default(),
-				}
-			);
+			// The loan has been repaid, the account is removed, and the remaining collateral amount
+			// and the excess loan asset amount are credited to supply pools:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 			assert_eq!(
-				account.get_collateral_in_supply_pools(),
-				BTreeMap::from([
-					(COLLATERAL_ASSET, REMAINING_COLLATERAL),
-					(
-						LOAN_ASSET,
-						RECOVERED_LOAN_ASSET - PRINCIPAL - ORIGINATION_FEE - liquidation_fee
-					)
-				])
+				GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				REMAINING_COLLATERAL
+			);
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(LOAN_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				RECOVERED_LOAN_ASSET - PRINCIPAL - ORIGINATION_FEE - liquidation_fee
 			);
 
 			// Making sure account's free balance is unaffected:
@@ -1955,19 +1931,24 @@ mod multi_asset_collateral_liquidation {
 				);
 			})
 			.then_execute_at_next_block(|_| {
-				// The remaining liquidation swap should be aborted here:
-				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
-
-				// The loan has been settled:
-				assert_eq!(get_loan_account().loans, Default::default());
+				// The remaining liquidation swap should be aborted here, the loan has been
+				// settled, and the account has been removed:
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 				// Collateral from both swaps should be returned to supply pools:
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
-					BTreeMap::from([
-						(LOAN_ASSET, EXCESS_AMOUNT - total_liquidation_fee),
-						(COLLATERAL_ASSET, SWAP_1_REMAINING_INPUT)
-					])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					EXCESS_AMOUNT - total_liquidation_fee
+				);
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					SWAP_1_REMAINING_INPUT
 				);
 			});
 	}
@@ -2043,19 +2024,24 @@ mod multi_asset_collateral_liquidation {
 				);
 			})
 			.then_execute_at_next_block(|_| {
-				// The remaining liquidation swap should be aborted here:
-				assert_eq!(get_loan_account().liquidation_status, LiquidationStatus::NoLiquidation);
-
-				// The loan has been settled:
-				assert_eq!(get_loan_account().loans, Default::default());
+				// The remaining liquidation swap should be aborted here, the loan has been
+				// settled, and the account has been removed:
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 				// Collateral from both swaps should be returned to supply pools:
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
-					BTreeMap::from([
-						(LOAN_ASSET, EXCESS_AMOUNT + SWAP_2_OUTPUT_AMOUNT),
-						(OTHER_COLLATERAL_ASSET, SWAP_2_REMAINING_INPUT_AMOUNT)
-					])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					EXCESS_AMOUNT + SWAP_2_OUTPUT_AMOUNT
+				);
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(OTHER_COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					SWAP_2_REMAINING_INPUT_AMOUNT
 				);
 			});
 	}
@@ -2554,9 +2540,15 @@ fn making_loan_repayment() {
 				RepaymentAmount::Full
 			));
 
-			assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().loans, Default::default());
-			// Note that collateral isn't automatically released upon repayment:
-			assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(), BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)]));
+			// Account is removed once the last loan is repaid; supplied collateral stays in the pool:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				INIT_COLLATERAL
+			);
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
 
 			assert_event_sequence!(
@@ -2618,12 +2610,16 @@ fn repaying_more_than_necessary() {
 			);
 			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
-			assert_eq!(LoanAccounts::<Test>::get(BORROWER).unwrap().loans, Default::default());
+			// Account is removed once the last loan is repaid:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 			// Check that excess amount isn't erroneously added to collateral or the pool:
 			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
-				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
+				GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				INIT_COLLATERAL
 			);
 
 			assert_eq!(
@@ -3272,20 +3268,15 @@ fn full_loan_repayment_followed_by_full_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken { .. })
 			);
 
+			// The account is removed as the loan is settled and liquidation is done.
 			// All of swap output amount goes towards user's supply:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER).unwrap(),
-				LoanAccount {
-					borrower_id: BORROWER,
-					collateral_topup_asset: None,
-					loans: Default::default(),
-					liquidation_status: LiquidationStatus::NoLiquidation,
-					voluntary_liquidation_requested: false
-				}
-			);
-			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
-				BTreeMap::from([(LOAN_ASSET, SWAP_OUTPUT_AMOUNT)])
+				GeneralLendingPools::<Test>::get(LOAN_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				SWAP_OUTPUT_AMOUNT
 			);
 
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), 0);
@@ -3383,23 +3374,21 @@ fn full_loan_repayment_during_partial_liquidation() {
 		})
 		.then_execute_at_next_block(|_| {
 			// Liquidation swap should have been aborted at the beginning of this block with all
-			// funds returned to supply pools:
+			// funds returned to supply pools, and the account removed:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER).unwrap(),
-				LoanAccount {
-					borrower_id: BORROWER,
-					collateral_topup_asset: None,
-					loans: Default::default(),
-					liquidation_status: LiquidationStatus::NoLiquidation,
-					voluntary_liquidation_requested: false
-				}
+				GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				INIT_COLLATERAL - EXECUTED_COLLATERAL
 			);
 			assert_eq!(
-				LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
-				BTreeMap::from([
-					(COLLATERAL_ASSET, INIT_COLLATERAL - EXECUTED_COLLATERAL),
-					(LOAN_ASSET, SWAP_OUTPUT_AMOUNT)
-				])
+				GeneralLendingPools::<Test>::get(LOAN_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				SWAP_OUTPUT_AMOUNT
 			);
 
 			assert_event_sequence!(
@@ -3488,23 +3477,21 @@ mod voluntary_liquidation {
 			.then_execute_at_next_block(|_| {
 				const EXCESS_PRINCIPAL: AssetAmount = SWAPPED_PRINCIPAL - TOTAL_TO_REPAY;
 
+				// The account is removed once the loan is settled and voluntary liquidation ends:
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap(),
-					LoanAccount {
-						borrower_id: BORROWER,
-						collateral_topup_asset: None,
-						loans: Default::default(),
-						liquidation_status: LiquidationStatus::NoLiquidation,
-						// The flag has been reset:
-						voluntary_liquidation_requested: false
-					}
+					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					INIT_COLLATERAL - SWAPPED_COLLATERAL
 				);
 				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
-					BTreeMap::from([
-						(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL),
-						(LOAN_ASSET, EXCESS_PRINCIPAL)
-					])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					EXCESS_PRINCIPAL
 				);
 
 				assert_event_sequence!(
@@ -3859,20 +3846,14 @@ mod voluntary_liquidation {
 					owed_after_liquidation_2 + SWAPPED_PRINCIPAL_EXTRA,
 				);
 
+				// The account is removed once the loan is settled and voluntary liquidation ends:
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap(),
-					LoanAccount {
-						borrower_id: BORROWER,
-						collateral_topup_asset: None,
-						loans: Default::default(),
-						liquidation_status: LiquidationStatus::NoLiquidation,
-						// The flag has been reset:
-						voluntary_liquidation_requested: false
-					}
-				);
-				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
-					BTreeMap::from([(LOAN_ASSET, SWAPPED_PRINCIPAL_EXTRA)])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					SWAPPED_PRINCIPAL_EXTRA
 				);
 
 				assert_event_sequence!(
@@ -3912,18 +3893,18 @@ mod voluntary_liquidation {
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
 			.execute_with(|| {
-				// Fully repay the loan so the account exists but has no loans:
+				// Fully repay the loan; the account is removed along with the last loan:
 				MockBalance::credit_account(&BORROWER, LOAN_ASSET, ORIGINATION_FEE);
 				assert_ok!(LendingPools::try_making_repayment(
 					&BORROWER,
 					LOAN_ID,
 					RepaymentAmount::Full
 				));
-				assert!(LoanAccounts::<Test>::get(BORROWER).unwrap().loans.is_empty());
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
 				assert_noop!(
 					LendingPools::initiate_voluntary_liquidation(RuntimeOrigin::signed(BORROWER)),
-					Error::<Test>::AccountHasNoLoans
+					Error::<Test>::LoanAccountNotFound
 				);
 			});
 	}
@@ -5200,15 +5181,18 @@ fn same_asset_loan() {
 				outstanding_principal: 0,
 				via_liquidation: true,
 			}));
-			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
-			assert!(account.loans.is_empty());
+			// Loan settled and account removed, with the remaining loan asset supplied back:
+			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 			let origination_fee =
 				portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL + EXPANDED_PRINCIPAL);
 			let expected_collateral_left =
 				SWAP_OUTPUT_AMOUNT - (PRINCIPAL + EXPANDED_PRINCIPAL + origination_fee);
 			assert_eq!(
-				account.get_collateral_in_supply_pools(),
-				BTreeMap::from([(LOAN_ASSET, expected_collateral_left)])
+				GeneralLendingPools::<Test>::get(LOAN_ASSET)
+					.unwrap()
+					.get_supply_position_for_account(&BORROWER)
+					.unwrap(),
+				expected_collateral_left
 			);
 		});
 }
@@ -5340,22 +5324,15 @@ mod supply_as_collateral {
 				assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 				assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 
-				// The excess funds after liquidation go into the user's supply pool:
-				let account = get_account();
+				// Loan settled and account removed. Excess funds after liquidation go into the
+				// user's supply pool:
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 				assert_eq!(
-					account,
-					LoanAccount {
-						borrower_id: BORROWER,
-						collateral_topup_asset: None,
-						// No more loans:
-						loans: BTreeMap::default(),
-						liquidation_status: LiquidationStatus::NoLiquidation,
-						voluntary_liquidation_requested: false,
-					}
-				);
-				assert_eq!(
-					account.get_collateral_in_supply_pools(),
-					BTreeMap::from([(LOAN_ASSET, EXCESS_AMOUNT - liquidation_fee)])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					EXCESS_AMOUNT - liquidation_fee
 				);
 			});
 	}
@@ -5569,22 +5546,15 @@ mod supply_as_collateral {
 					swapped_principal_2,
 				);
 
-				// The loan is fully repaid and the excess swapped amount goes to the user's
-				// supply pool.
-				let account = get_account();
+				// The loan is fully repaid, the account is removed, and the excess swapped amount
+				// goes to the user's supply pool.
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 				assert_eq!(
-					account,
-					LoanAccount {
-						borrower_id: BORROWER,
-						collateral_topup_asset: None,
-						loans: BTreeMap::default(),
-						liquidation_status: LiquidationStatus::NoLiquidation,
-						voluntary_liquidation_requested: false,
-					}
-				);
-				assert_eq!(
-					account.get_collateral_in_supply_pools(),
-					BTreeMap::from([(LOAN_ASSET, EXCESS_AMOUNT)])
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					EXCESS_AMOUNT
 				);
 			});
 	}
