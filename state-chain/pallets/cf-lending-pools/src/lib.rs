@@ -186,7 +186,7 @@ pub enum PalletConfigUpdate {
 	SetMinimumAmounts {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
-		minimum_update_collateral_amount_usd: AssetAmount,
+		minimum_update_supply_amount_usd: AssetAmount,
 		minimum_supply_amount_usd: AssetAmount,
 	},
 }
@@ -297,10 +297,10 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	hard_liquidation_swap_chunk_size_usd: 50_000_000_000, //50k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
-	minimum_loan_amount_usd: 100_000_000,             // 100 USD
-	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
-	minimum_supply_amount_usd: 100_000_000,           // 100 USD
-	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
+	minimum_loan_amount_usd: 100_000_000,         // 100 USD
+	minimum_update_loan_amount_usd: 10_000_000,   // 10 USD
+	minimum_supply_amount_usd: 100_000_000,       // 100 USD
+	minimum_update_supply_amount_usd: 10_000_000, // 10 USD
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -698,7 +698,7 @@ pub mod pallet {
 						PalletConfigUpdate::SetMinimumAmounts {
 							minimum_loan_amount_usd,
 							minimum_update_loan_amount_usd,
-							minimum_update_collateral_amount_usd,
+							minimum_update_supply_amount_usd,
 							minimum_supply_amount_usd,
 						} => {
 							ensure!(
@@ -707,8 +707,8 @@ pub mod pallet {
 							);
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
-							config.minimum_update_collateral_amount_usd =
-								*minimum_update_collateral_amount_usd;
+							config.minimum_update_supply_amount_usd =
+								*minimum_update_supply_amount_usd;
 							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
 						},
 					}
@@ -829,6 +829,7 @@ pub mod pallet {
 
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::add_lender_funds())]
+		#[transactional]
 		pub fn add_lender_funds(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -847,23 +848,35 @@ pub mod pallet {
 			);
 
 			let config = LendingConfig::<T>::get();
+			let price_cache = OraclePriceCache::<T>::default();
 
 			// Note that we allow stale prices as it is more important that the user can top up
 			// their supply (used as collateral) to avoid liquidation:
 			ensure!(
-				OraclePriceCache::<T>::default().usd_value_of_allow_stale(asset, amount)? >=
-					config.minimum_supply_amount_usd,
+				price_cache.usd_value_of_allow_stale(asset, amount)? >=
+					config.minimum_update_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
 
 			T::Balance::try_debit_account(&lender_id, asset, amount)?;
 
 			general_lending::supply_funds::<T>(
-				lender_id,
+				lender_id.clone(),
 				asset,
 				amount,
 				SupplyAddedActionType::Manual,
 			)?;
+
+			// Ensure the lender's resulting supply position is at least the minimum supply amount
+			// (to avoid dust positions accumulating):
+			let resulting_position = GeneralLendingPools::<T>::get(asset)
+				.and_then(|pool| pool.get_supply_position_for_account(&lender_id).ok())
+				.unwrap_or(0);
+			ensure!(
+				price_cache.usd_value_of_allow_stale(asset, resulting_position)? >=
+					config.minimum_supply_amount_usd,
+				Error::<T>::AmountBelowMinimum
+			);
 
 			Ok(())
 		}

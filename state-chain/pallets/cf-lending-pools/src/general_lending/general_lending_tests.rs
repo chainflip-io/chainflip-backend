@@ -4778,6 +4778,7 @@ fn loan_minimum_is_enforced() {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: 0,
 			minimum_supply_amount_usd: 0,
+			minimum_update_supply_amount_usd: 0,
 			..LendingConfigDefault::get()
 		});
 
@@ -4839,17 +4840,20 @@ fn loan_minimum_is_enforced() {
 	});
 }
 
-#[test]
-fn supply_minimum_is_enforced() {
+mod supply_minimum_is_enforced {
+	use super::*;
+
 	const MIN_SUPPLY_AMOUNT_USD: AssetAmount = 1_000_000;
+	const MIN_SUPPLY_UPDATE_AMOUNT_USD: AssetAmount = 100_000;
 
 	// Min amount that can be supplied in pool's asset
 	const MIN_SUPPLY_AMOUNT: AssetAmount = MIN_SUPPLY_AMOUNT_USD / SWAP_RATE;
+	const MIN_SUPPLY_UPDATE_AMOUNT: AssetAmount = MIN_SUPPLY_UPDATE_AMOUNT_USD / SWAP_RATE;
 
-	new_test_ext().execute_with(|| {
-		// Set the minimum supply amount
+	fn setup() {
 		LendingConfig::<Test>::set(LendingConfiguration {
 			minimum_supply_amount_usd: MIN_SUPPLY_AMOUNT_USD,
+			minimum_update_supply_amount_usd: MIN_SUPPLY_UPDATE_AMOUNT_USD,
 			..LendingConfigDefault::get()
 		});
 
@@ -4860,72 +4864,133 @@ fn supply_minimum_is_enforced() {
 		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
 
 		MockBalance::credit_account(&LENDER, LOAN_ASSET, 2 * MIN_SUPPLY_AMOUNT);
+	}
 
-		// Can't supply below minimum
-		assert_noop!(
-			LendingPools::add_lender_funds(
+	#[test]
+	fn initial_add_must_reach_minimum_supply_amount() {
+		new_test_ext().execute_with(|| {
+			setup();
+
+			// Can't supply below the minimum supply amount:
+			assert_noop!(
+				LendingPools::add_lender_funds(
+					RuntimeOrigin::signed(LENDER),
+					LOAN_ASSET,
+					MIN_SUPPLY_AMOUNT - 1
+				),
+				Error::<Test>::AmountBelowMinimum
+			);
+
+			// Can supply exactly the minimum amount:
+			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(LENDER),
 				LOAN_ASSET,
-				MIN_SUPPLY_AMOUNT / 2
-			),
-			Error::<Test>::AmountBelowMinimum
-		);
+				MIN_SUPPLY_AMOUNT
+			));
+		});
+	}
 
-		// Can supply the minimum amount
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			MIN_SUPPLY_AMOUNT
-		));
+	#[test]
+	fn subsequent_add_must_meet_minimum_update_amount() {
+		new_test_ext().execute_with(|| {
+			setup();
 
-		// Add some more to test removing funds
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			MIN_SUPPLY_AMOUNT
-		));
-
-		// Can't leave less than the minimum in the pool
-		assert_noop!(
-			LendingPools::remove_lender_funds(
+			// Bring the lender's supply to the minimum:
+			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(LENDER),
 				LOAN_ASSET,
-				Some(3 * MIN_SUPPLY_AMOUNT / 2)
-			),
-			Error::<Test>::RemainingAmountBelowMinimum
-		);
+				MIN_SUPPLY_AMOUNT
+			));
 
-		// Can remove funds partially (leaves more than the min in the pool):
-		assert_ok!(LendingPools::remove_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			Some(MIN_SUPPLY_AMOUNT)
-		));
+			// Can't update with an amount smaller than the minimum update:
+			assert_noop!(
+				LendingPools::add_lender_funds(
+					RuntimeOrigin::signed(LENDER),
+					LOAN_ASSET,
+					MIN_SUPPLY_UPDATE_AMOUNT - 1
+				),
+				Error::<Test>::AmountBelowMinimum
+			);
 
-		// Add some more to test removing funds
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			MIN_SUPPLY_AMOUNT
-		));
-
-		// Cant remove an amount less than the minimum
-		assert_noop!(
-			LendingPools::remove_lender_funds(
+			// Can update with exactly the minimum update amount:
+			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(LENDER),
 				LOAN_ASSET,
-				Some(MIN_SUPPLY_AMOUNT - 1)
-			),
-			Error::<Test>::AmountBelowMinimum
-		);
+				MIN_SUPPLY_UPDATE_AMOUNT
+			));
+		});
+	}
 
-		// Can remove all funds:
-		assert_ok!(LendingPools::remove_lender_funds(
-			RuntimeOrigin::signed(LENDER),
-			LOAN_ASSET,
-			None
-		));
-	});
+	#[test]
+	fn remove_must_leave_at_least_minimum_supply_amount() {
+		new_test_ext().execute_with(|| {
+			setup();
+
+			// Supply enough so we can remove part of it:
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				MIN_SUPPLY_AMOUNT + MIN_SUPPLY_UPDATE_AMOUNT
+			));
+
+			// Can't leave less than the minimum in the pool:
+			assert_noop!(
+				LendingPools::remove_lender_funds(
+					RuntimeOrigin::signed(LENDER),
+					LOAN_ASSET,
+					Some(MIN_SUPPLY_UPDATE_AMOUNT + 1)
+				),
+				Error::<Test>::RemainingAmountBelowMinimum
+			);
+
+			// Can remove partially when the remaining amount is still at the minimum:
+			assert_ok!(LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				Some(MIN_SUPPLY_UPDATE_AMOUNT)
+			));
+
+			// Can always remove all funds:
+			assert_ok!(LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				None
+			));
+		});
+	}
+
+	#[test]
+	fn can_remove_all_funds_event_even_when_smaller_than_min_update() {
+		new_test_ext().execute_with(|| {
+			setup();
+
+			// Bring the lender's supply to the minimum:
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				MIN_SUPPLY_AMOUNT
+			));
+
+			const NEW_SWAP_RATE: u128 = 1;
+
+			const {
+				assert!(
+					MIN_SUPPLY_AMOUNT * NEW_SWAP_RATE < MIN_SUPPLY_UPDATE_AMOUNT_USD,
+					"test requires total supplied amount to be smaller"
+				);
+			}
+
+			// Price of the asset goes way down:
+			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+
+			// Can still remove all funds:
+			assert_ok!(LendingPools::remove_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				None
+			));
+		});
+	}
 }
 
 #[test]
@@ -4943,6 +5008,7 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 			minimum_loan_amount_usd: MIN_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: MIN_UPDATE_USD,
 			minimum_supply_amount_usd: 0,
+			minimum_update_supply_amount_usd: 0,
 			..LendingConfigDefault::get()
 		});
 

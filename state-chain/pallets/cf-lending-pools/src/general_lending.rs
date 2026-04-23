@@ -1554,7 +1554,7 @@ pub fn remove_lender_funds<T: Config>(
 	if let Some(amount) = amount {
 		ensure!(
 			price_cache.usd_value_of_allow_stale(asset, amount)? >=
-				config.minimum_supply_amount_usd,
+				config.minimum_update_supply_amount_usd,
 			Error::<T>::AmountBelowMinimum
 		);
 	}
@@ -1590,7 +1590,7 @@ pub fn remove_lender_funds<T: Config>(
 
 		if let Some(amount) = amount {
 			ensure!(
-				price_cache.usd_value_of(asset, amount)? >= config.minimum_supply_amount_usd,
+				price_cache.usd_value_of(asset, amount)? >= config.minimum_update_supply_amount_usd,
 				Error::<T>::InsufficientLtvHeadroom
 			);
 		}
