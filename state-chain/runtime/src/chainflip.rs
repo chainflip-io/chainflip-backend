@@ -549,9 +549,11 @@ impl Get<RuntimeVersion> for HubEnvironment {
 	}
 }
 
-impl Get<OutputAccountId> for HubEnvironment {
-	fn get() -> OutputAccountId {
-		Environment::next_assethub_output_account_id()
+impl Get<Option<OutputAccountId>> for HubEnvironment {
+	fn get() -> Option<OutputAccountId> {
+		// Use deposit channel ids without opening a deposit channel, to prevent
+		// collisions.
+		AssethubIngressEgress::allocate_next_channel_id().ok()
 	}
 }
 
