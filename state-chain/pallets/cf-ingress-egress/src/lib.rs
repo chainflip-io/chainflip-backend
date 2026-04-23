@@ -3465,7 +3465,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
+	pub fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
 		ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
 			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 			Ok(*id)
