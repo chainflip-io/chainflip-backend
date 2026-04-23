@@ -47,11 +47,10 @@ where
 
 	let block_balance = client.get_block_balances(block_number, block_hash).await?;
 
-	// Check that block identifiers matches. The API returns the hash as a lowercase hex
-	// string without a `0x` prefix.
+	// Check that block identifiers matches.
 	ensure!(
-		block_balance.block_identifier.hash == format!("{:x}", block_hash),
-		"Block hash mismatch: expected {:x}, got {}",
+		block_balance.block_identifier.hash == block_hash,
+		"Block hash mismatch: expected {:x}, got {:x}",
 		block_hash,
 		block_balance.block_identifier.hash
 	);
@@ -90,9 +89,7 @@ where
 		// It's technically possible that an AllBatch transaction transfers to a deposit channel
 		// but in reality that never happens. It just seems safer to just skip all `AllBatch` txs.
 		for operation in tx_trace.operation {
-			let evm_addr = operation.address.to_evm_address().map_err(|e| {
-				anyhow::anyhow!("Failed to convert Tron address to EVM address: {}", e)
-			})?;
+			let evm_addr = operation.address.to_evm_address();
 
 			if monitored_addresses.contains(&evm_addr) {
 				if operation.amount < 0 {
@@ -234,16 +231,12 @@ mod tests {
 						.unwrap();
 
 				// Example address that is unused
-				let deposit_channels_tron = [TronAddress(
-					hex::decode("41a7bd91a81449253dd0ee8c51c04e0578be6c4a90")
-						.unwrap()
-						.try_into()
-						.unwrap(),
-				)];
-				let deposit_channels: HashSet<_> = deposit_channels_tron
-					.iter()
-					.map(|addr| addr.to_evm_address().unwrap())
-					.collect();
+				let deposit_channels_tron = [TronAddress::try_from(
+					hex::decode("41a7bd91a81449253dd0ee8c51c04e0578be6c4a90").unwrap(),
+				)
+				.unwrap()];
+				let deposit_channels: HashSet<_> =
+					deposit_channels_tron.iter().map(|addr| addr.to_evm_address()).collect();
 
 				let deposit_channel_changes = trx_ingress_transactions(
 					&retry_client,
@@ -298,35 +291,25 @@ mod tests {
 
 				// Example deposit channels - Tron addresses (21 bytes, with 0x41 prefix)
 				let deposit_channels_tron = [
-					TronAddress(
-						hex::decode("41b7bd91a81449253dd0ee8c51c04e0578be6c4a91")
-							.unwrap()
-							.try_into()
-							.unwrap(),
-					),
-					TronAddress(
-						hex::decode("41ac0d9820078d714da8fc6e6d9c214329f7c9daeb")
-							.unwrap()
-							.try_into()
-							.unwrap(),
-					),
-					TronAddress(
-						hex::decode("41004a9fd60192d8b1776cb872c09603781633431b")
-							.unwrap()
-							.try_into()
-							.unwrap(),
-					),
-					TronAddress(
-						hex::decode("41595aeac7a37b75c0abe0561e1390c748b5dc4ca2")
-							.unwrap()
-							.try_into()
-							.unwrap(),
-					),
+					TronAddress::try_from(
+						hex::decode("41b7bd91a81449253dd0ee8c51c04e0578be6c4a91").unwrap(),
+					)
+					.unwrap(),
+					TronAddress::try_from(
+						hex::decode("41ac0d9820078d714da8fc6e6d9c214329f7c9daeb").unwrap(),
+					)
+					.unwrap(),
+					TronAddress::try_from(
+						hex::decode("41004a9fd60192d8b1776cb872c09603781633431b").unwrap(),
+					)
+					.unwrap(),
+					TronAddress::try_from(
+						hex::decode("41595aeac7a37b75c0abe0561e1390c748b5dc4ca2").unwrap(),
+					)
+					.unwrap(),
 				];
-				let deposit_channels: HashSet<_> = deposit_channels_tron
-					.iter()
-					.map(|addr| addr.to_evm_address().unwrap())
-					.collect();
+				let deposit_channels: HashSet<_> =
+					deposit_channels_tron.iter().map(|addr| addr.to_evm_address()).collect();
 
 				let deposit_channel_changes = trx_ingress_transactions(
 					&retry_client,

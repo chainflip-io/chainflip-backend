@@ -751,32 +751,26 @@ mod tests {
 		.await
 		.unwrap();
 
-		let unfunded_owner = TronAddress(
-			hex::decode("41b7bd91a81449253dd0ee8c51c04e0578be6c4a91")
-				.unwrap()
-				.try_into()
-				.unwrap(),
-		);
-		let funded_owner = TronAddress(
-			hex::decode("41f10b2b8efd89cb89c3c43b54d628b4f15302233e")
-				.unwrap()
-				.try_into()
-				.unwrap(),
-		);
-		let contract_address = TronAddress(
-			hex::decode("41eca9bc828a3005b9a3b909f2cc5c2a54794de05f")
-				.unwrap()
-				.try_into()
-				.unwrap(),
-		);
+		let unfunded_owner = TronAddress::try_from(
+			hex::decode("41b7bd91a81449253dd0ee8c51c04e0578be6c4a91").unwrap(),
+		)
+		.unwrap();
+		let funded_owner = TronAddress::try_from(
+			hex::decode("41f10b2b8efd89cb89c3c43b54d628b4f15302233e").unwrap(),
+		)
+		.unwrap();
+		let contract_address = TronAddress::try_from(
+			hex::decode("41eca9bc828a3005b9a3b909f2cc5c2a54794de05f").unwrap(),
+		)
+		.unwrap();
 		let function_selector = "transfer(address,uint256)".to_string();
 		let parameter = hex::decode("00000000000000000000004115208EF33A926919ED270E2FA61367B2DA3753DA0000000000000000000000000000000000000000000000000000000000000032").unwrap();
 		let fee_limit = 1000000000;
 
 		// Test with unfunded account (expect failure)
 		let constant_request_fail = TriggerConstantContractRequest {
-			owner_address: unfunded_owner.clone(),
-			contract_address: contract_address.clone(),
+			owner_address: unfunded_owner,
+			contract_address,
 			function_selector: function_selector.clone(),
 			parameter: parameter.clone(),
 		};
@@ -787,7 +781,7 @@ mod tests {
 
 		let trigger_request_fail = TriggerSmartContractRequest {
 			owner_address: unfunded_owner,
-			contract_address: contract_address.clone(),
+			contract_address,
 			function_selector: function_selector.clone(),
 			parameter: parameter.clone(),
 			fee_limit,
@@ -799,8 +793,8 @@ mod tests {
 
 		// Test with funded account (expect success)
 		let constant_request_success = TriggerConstantContractRequest {
-			owner_address: funded_owner.clone(),
-			contract_address: contract_address.clone(),
+			owner_address: funded_owner,
+			contract_address,
 			function_selector: function_selector.clone(),
 			parameter: parameter.clone(),
 		};
@@ -848,19 +842,15 @@ mod tests {
 		.unwrap();
 
 		// THPvaUhoh2Qn2y9THCZML3H815hhFhn5YC
-		let owner_address = TronAddress(
-			hex::decode("414578065e2a26889bfab1da855e1c3268c7a10f2c")
-				.unwrap()
-				.try_into()
-				.unwrap(),
-		);
+		let owner_address = TronAddress::try_from(
+			hex::decode("414578065e2a26889bfab1da855e1c3268c7a10f2c").unwrap(),
+		)
+		.unwrap();
 		// TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t (mainnet USDT)
-		let contract_address = TronAddress(
-			hex::decode("41a614f803b6fd780986a42c78ec9c7f77e6ded13c")
-				.unwrap()
-				.try_into()
-				.unwrap(),
-		);
+		let contract_address = TronAddress::try_from(
+			hex::decode("41a614f803b6fd780986a42c78ec9c7f77e6ded13c").unwrap(),
+		)
+		.unwrap();
 
 		let request = TriggerConstantContractRequest {
 			owner_address,
@@ -891,18 +881,14 @@ mod tests {
 		.unwrap();
 
 		let request = TriggerSmartContractRequest {
-			owner_address: TronAddress(
-				hex::decode("41076d3803349fd5fb48863c5fc33483cb2243c0df")
-					.unwrap()
-					.try_into()
-					.unwrap(),
-			),
-			contract_address: TronAddress(
-				hex::decode("41d754a07f437c275457686cbf0c6eb7d28b0dadbd")
-					.unwrap()
-					.try_into()
-					.unwrap(),
-			),
+			owner_address: TronAddress::try_from(
+				hex::decode("41076d3803349fd5fb48863c5fc33483cb2243c0df").unwrap(),
+			)
+			.unwrap(),
+			contract_address: TronAddress::try_from(
+				hex::decode("41d754a07f437c275457686cbf0c6eb7d28b0dadbd").unwrap(),
+			)
+			.unwrap(),
 			function_selector: "allBatch((uint256,uint256,address),(bytes32,address)[],(address,address)[],(address,address,uint256)[])".to_string(),
 			parameter: hex::decode("35236817dbd2c0614726e46142ee3404955afd92284ed98061b17dda09c9fb860000000000000000000000000000000000000000000000000000000000000001000000000000000000000000a558b33409044a9802c0b94680816ce8dbdab07400000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap(),
 			fee_limit: 50_000_000,

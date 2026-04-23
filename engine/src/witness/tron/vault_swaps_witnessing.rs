@@ -279,14 +279,11 @@ mod tests {
 						.unwrap();
 
 				// Test with vault address that has positive change
-				let vault_address = TronAddress(
-					hex::decode("4199b3b56213cd4d852cd85bf0049d2abaed17682d")
-						.unwrap()
-						.try_into()
-						.unwrap(),
+				let vault_address = TronAddress::try_from(
+					hex::decode("4199b3b56213cd4d852cd85bf0049d2abaed17682d").unwrap(),
 				)
-				.to_evm_address()
-				.unwrap();
+				.unwrap()
+				.to_evm_address();
 
 				let trx_ingresses = trx_ingress_transactions(
 					&retry_client,
@@ -309,14 +306,11 @@ mod tests {
 				);
 
 				// Test with vault address that has negative change (should be skipped)
-				let vault_address = TronAddress(
-					hex::decode("4104c5b113f9b4d5c836b03adcaec583be67876076")
-						.unwrap()
-						.try_into()
-						.unwrap(),
+				let vault_address = TronAddress::try_from(
+					hex::decode("4104c5b113f9b4d5c836b03adcaec583be67876076").unwrap(),
 				)
-				.to_evm_address()
-				.unwrap();
+				.unwrap()
+				.to_evm_address();
 
 				let trx_ingresses = trx_ingress_transactions(
 					&retry_client,
@@ -370,14 +364,11 @@ mod tests {
 						.unwrap();
 
 				// Test vault address
-				let vault_address = TronAddress(
-					hex::decode("41c34856cadd5524892907d8a34126053447740375")
-						.unwrap()
-						.try_into()
-						.unwrap(),
+				let vault_address = TronAddress::try_from(
+					hex::decode("41c34856cadd5524892907d8a34126053447740375").unwrap(),
 				)
-				.to_evm_address()
-				.unwrap();
+				.unwrap()
+				.to_evm_address();
 
 				let trx_ingresses = trx_ingress_transactions(
 					&retry_client,
