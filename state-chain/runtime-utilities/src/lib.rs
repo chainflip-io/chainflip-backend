@@ -332,7 +332,13 @@ where
 }
 
 impl<const MIGRATION_FROM: u16, const MIGRATION_TO: u16, Inner, Pallet, Weight> MigrationSequence
-	for frame_support::migrations::VersionedMigration<MIGRATION_FROM, MIGRATION_TO, Inner, Pallet, Weight>
+	for frame_support::migrations::VersionedMigration<
+		MIGRATION_FROM,
+		MIGRATION_TO,
+		Inner,
+		Pallet,
+		Weight,
+	>
 {
 	const FROM: u16 = MIGRATION_FROM;
 	const TO: u16 = MIGRATION_TO;
