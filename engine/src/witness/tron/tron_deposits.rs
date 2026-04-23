@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 pub async fn trx_ingress_transactions<Client>(
 	client: &Client,
 	monitored_addresses: HashSet<H160>,
-	block_number: i64,
+	block_number: u64,
 	block_hash: H256,
 ) -> Result<Vec<(H160, u64, H256)>, anyhow::Error>
 where
@@ -45,7 +45,8 @@ where
 		return Ok(Vec::new());
 	}
 
-	let block_balance = client.get_block_balances(block_number, block_hash).await?;
+	let block_number_i64 = i64::try_from(block_number)?;
+	let block_balance = client.get_block_balances(block_number_i64, block_hash).await?;
 
 	// Check that block identifiers matches.
 	ensure!(
@@ -56,9 +57,9 @@ where
 	);
 	if let Some(number) = block_balance.block_identifier.number {
 		ensure!(
-			number == block_number,
+			number == block_number_i64,
 			"Block number mismatch: expected {}, got {}",
-			block_number,
+			block_number_i64,
 			number
 		);
 	}
@@ -95,7 +96,8 @@ where
 				if operation.amount < 0 {
 					continue 'transaction_loop;
 				}
-				*balance_changes.entry(evm_addr).or_insert(0) += operation.amount as u64;
+				let entry = balance_changes.entry(evm_addr).or_insert(0);
+				*entry = entry.saturating_add(operation.amount.try_into()?);
 			}
 		}
 
@@ -131,10 +133,7 @@ pub async fn witness_deposit_channels<Client: TronRetryRpcApiWithResult + Send +
 			},
 		);
 
-	let block_number_u64 = query.get_lowest_block_height_of_query();
-	let block_number = i64::try_from(block_number_u64).map_err(|_| {
-		anyhow::anyhow!("Block number conversion to i64 failed: value too large or negative")
-	})?;
+	let block_number = query.get_lowest_block_height_of_query();
 	let deposit_channel_changes =
 		trx_ingress_transactions(client, trx_deposit_addresses, block_number, query.block_hash)
 			.await?;
@@ -283,7 +282,7 @@ mod tests {
 				.unwrap();
 
 				// Test block from mainnet
-				let block_num = 80079354i64;
+				let block_num = 80079354u64;
 				let block_hash: H256 =
 					"0000000004c5e9fa0b5bff64330976a20f1e5007f66f3f0524168a782d998945"
 						.parse()

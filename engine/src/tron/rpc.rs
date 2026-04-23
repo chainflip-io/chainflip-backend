@@ -87,7 +87,7 @@ impl TronRpcClient {
 				.context("Failed to get block during startup check")?;
 			let block_hash = block.hash.context("Block has no hash during startup check")?;
 			client
-				.get_block_balances(block_number.low_u64() as i64, block_hash)
+				.get_block_balances(i64::try_from(block_number.low_u64())?, block_hash)
 				.await
 				.context("HTTP API node does not support getBlockBalance — ensure the node has the historical balance query feature enabled")?;
 

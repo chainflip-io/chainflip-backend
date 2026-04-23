@@ -381,7 +381,8 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 									return Err(anyhow::anyhow!("estimated_energy must be greater than 0, got {}", estimated_energy));
 								}
 
-								let estimated_fee_limit_sun = (estimated_energy as u128)
+								let estimated_energy_u128: u128 = estimated_energy.try_into()?;
+								let estimated_fee_limit_sun = estimated_energy_u128
 									.saturating_mul(cf_chains::tron::fees::SUN_PER_TRX)
 									.saturating_div(cf_chains::tron::fees::ENERGY_PER_TX_TRX_BURN);
 
