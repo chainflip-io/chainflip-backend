@@ -174,16 +174,14 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 
 		match ingress_or_egress {
 			IngressOrEgress::IngressDepositChannel => {
-				let energy = ENERGY_BASE_COST_PER_BATCH +
-					match asset {
-						assets::tron::Asset::Trx => ENERGY_COST_PER_FETCH_NATIVE,
-						assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_FETCH_TOKEN,
-					};
-				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
-					match asset {
-						assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_FETCH,
-						assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_FETCH,
-					};
+				let energy = ENERGY_BASE_COST_PER_BATCH.saturating_add(match asset {
+					assets::tron::Asset::Trx => ENERGY_COST_PER_FETCH_NATIVE,
+					assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_FETCH_TOKEN,
+				});
+				let bandwidth = BANDWITH_BASE_COST_PER_BATCH.saturating_add(match asset {
+					assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_FETCH,
+					assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_FETCH,
+				});
 
 				energy
 					.saturating_mul(SUN_PER_TRX)
@@ -196,16 +194,14 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 			},
 			IngressOrEgress::IngressVaultSwap => 0,
 			IngressOrEgress::Egress => {
-				let energy = ENERGY_BASE_COST_PER_BATCH +
-					match asset {
-						assets::tron::Asset::Trx => ENERGY_COST_PER_TRANSFER_NATIVE,
-						assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
-					};
-				let bandwidth = BANDWITH_BASE_COST_PER_BATCH +
-					match asset {
-						assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_TRANSFER,
-						assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
-					};
+				let energy = ENERGY_BASE_COST_PER_BATCH.saturating_add(match asset {
+					assets::tron::Asset::Trx => ENERGY_COST_PER_TRANSFER_NATIVE,
+					assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
+				});
+				let bandwidth = BANDWITH_BASE_COST_PER_BATCH.saturating_add(match asset {
+					assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_TRANSFER,
+					assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
+				});
 
 				energy
 					.saturating_mul(SUN_PER_TRX)
