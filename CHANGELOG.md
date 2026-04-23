@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.13] - 2026-04-23
+
+### Fixes
+
+- Update Assethub metadata.
+- Unify Assethub channel ID source across swap and ccm channels.
+
 ## [2.1.12] - 2026-04-20
 
 ### Fixes
