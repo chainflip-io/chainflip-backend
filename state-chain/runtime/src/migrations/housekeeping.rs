@@ -22,6 +22,7 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod deploy_stuck_eth_channels;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
 pub mod solana_remove_unused_channels_state;
@@ -40,7 +41,8 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN => {
-				log::info!("🧹 No housekeeping required for Berghain.");
+				deploy_stuck_eth_channels::Migration::on_runtime_upgrade();
+				log::info!("🧹 Berghain: scheduled deployment of 2 stuck ETH deposit channels.");
 			},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
@@ -55,7 +57,24 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
+	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
+			log::info!("🧹 Pre-migration check for Berghain housekeeping.");
+			deploy_stuck_eth_channels::Migration::pre_upgrade()
+		} else {
+			log::info!("🧹 No pre-migration checks required for this network.");
+			Ok(Default::default())
+		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
+			log::info!("🧹 Post-migration check for Berghain housekeeping.");
+			deploy_stuck_eth_channels::Migration::post_upgrade(state)?;
+		} else {
+			log::info!("🧹 No post-migration checks required for this network.");
+		}
 		Ok(())
 	}
 }
