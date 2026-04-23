@@ -36,7 +36,7 @@ pub struct BlockBalance {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockIdentifier {
-	pub hash: String,
+	pub hash: H256,
 	pub number: Option<BlockNumber>,
 }
 

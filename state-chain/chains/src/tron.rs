@@ -373,34 +373,38 @@ fn double_sha256(data: &[u8]) -> [u8; 32] {
 	Sha256::digest(hash1).into()
 }
 
-/// A Tron address: 0x41 prefix + 20-byte EVM address.
+/// A Tron address: the constant `0x41` prefix + 20-byte EVM address. Only the 20-byte payload
+/// is stored; the prefix is prepended on demand for display and wire-format encodings.
 ///
 /// Display/FromStr use base58check encoding (always starts with 'T').
 /// Serde uses hex encoding (42 hex chars: "41" + 40 hex digits) for Tron HTTP API compatibility.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TronAddress(pub [u8; 21]);
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TronAddress(pub Address);
 
 impl TronAddress {
-	pub fn from_evm_address(evm_address: Address) -> Self {
-		let mut tron_address = [0u8; 21];
-		tron_address[0] = TRON_PREFIX_BYTE;
-		tron_address[1..].copy_from_slice(evm_address.as_bytes());
-		TronAddress(tron_address)
+	/// Build the canonical 21-byte representation (0x41 prefix + EVM address).
+	fn to_tron_bytes(self) -> [u8; 21] {
+		let mut bytes = [0u8; 21];
+		bytes[0] = TRON_PREFIX_BYTE;
+		bytes[1..].copy_from_slice(self.0.as_bytes());
+		bytes
 	}
 
-	pub fn to_evm_address(&self) -> Result<Address, &'static str> {
-		if self.0[0] != TRON_PREFIX_BYTE {
-			return Err("Invalid Tron address: expected 0x41 prefix");
-		}
-		Ok(Address::from_slice(&self.0[1..]))
+	pub fn from_evm_address(evm_address: Address) -> Self {
+		Self(evm_address)
+	}
+
+	pub fn to_evm_address(self) -> Address {
+		self.0
 	}
 
 	/// Encode as a base58check string.
-	pub fn to_base58check(&self) -> String {
-		let checksum = double_sha256(&self.0);
-		let mut with_checksum = Vec::with_capacity(25);
-		with_checksum.extend_from_slice(&self.0);
-		with_checksum.extend_from_slice(&checksum[..4]);
+	pub fn to_base58check(self) -> String {
+		let bytes = self.to_tron_bytes();
+		let checksum = double_sha256(&bytes);
+		let mut with_checksum = [0u8; 25];
+		with_checksum[..21].copy_from_slice(&bytes);
+		with_checksum[21..].copy_from_slice(&checksum[..4]);
 		bs58::encode(with_checksum).into_string()
 	}
 
@@ -421,9 +425,7 @@ impl TronAddress {
 			return Err("Invalid Tron address checksum");
 		}
 
-		let mut inner = [0u8; 21];
-		inner.copy_from_slice(&bytes[..21]);
-		Ok(TronAddress(inner))
+		Ok(TronAddress(Address::from_slice(&bytes[1..21])))
 	}
 }
 
@@ -436,10 +438,15 @@ impl TryFrom<Vec<u8>> for TronAddress {
 		if inner[0] != TRON_PREFIX_BYTE {
 			return Err("Invalid Tron address: expected 0x41 prefix");
 		}
-		Ok(TronAddress(inner))
+		Ok(TronAddress(Address::from_slice(&inner[1..])))
 	}
 }
 
+// String conversion is used to convert between base58 encoded String addresses and TronAddress
+// for human-readability e.g. converting from string addressess passed externally. On the other
+// hand, the serialize/deserialize is being used in the rpc layer to convert 20-byte addresses
+// to hex bytes. That is because we use the `visibility=false` in the engine rpcs to avoid
+// doing extra address conversions to/from base58 strings.
 impl core::str::FromStr for TronAddress {
 	type Err = &'static str;
 
@@ -459,7 +466,7 @@ impl Serialize for TronAddress {
 	where
 		S: serde::Serializer,
 	{
-		serializer.serialize_str(&hex::encode(self.0))
+		serializer.serialize_str(&hex::encode(self.to_tron_bytes()))
 	}
 }
 
@@ -481,9 +488,11 @@ impl<'de> Deserialize<'de> for TronAddress {
 		let bytes = hex::decode(hex_str)
 			.map_err(|e| serde::de::Error::custom(format!("Failed to decode hex: {e}")))?;
 
-		let mut address = [0u8; 21];
-		address.copy_from_slice(&bytes);
-		Ok(TronAddress(address))
+		if bytes[0] != TRON_PREFIX_BYTE {
+			return Err(serde::de::Error::custom("Invalid Tron address: expected 0x41 prefix"));
+		}
+
+		Ok(TronAddress(Address::from_slice(&bytes[1..])))
 	}
 }
 
@@ -520,15 +529,15 @@ mod tests {
 	fn evm_address_roundtrip() {
 		let evm_addr = Address::from([0xABu8; 20]);
 		let tron_addr = TronAddress::from_evm_address(evm_addr);
-		assert_eq!(tron_addr.to_evm_address().unwrap(), evm_addr);
-		assert_eq!(tron_addr.0[0], 0x41);
+		assert_eq!(tron_addr.to_evm_address(), evm_addr);
+		assert_eq!(tron_addr.to_tron_bytes()[0], 0x41);
 	}
 
 	#[test]
 	fn base58check_to_evm_bytes() {
 		let base58 = "TQNPGpohiZLiWQvc6wTWjHCae8VoxaXnej";
 		let tron_addr = TronAddress::from_base58check(base58).unwrap();
-		let evm = tron_addr.to_evm_address().unwrap();
+		let evm = tron_addr.to_evm_address();
 		assert_eq!(hex::encode(evm.as_bytes()), "9df3e70fc7ea8128d6d0634664118d16bc856e1c");
 	}
 
@@ -556,7 +565,7 @@ mod tests {
 		let mut bytes = vec![0x41u8];
 		bytes.extend_from_slice(&[0xAB; 20]);
 		let tron_addr = TronAddress::try_from(bytes).unwrap();
-		assert_eq!(tron_addr.to_evm_address().unwrap(), Address::from([0xAB; 20]));
+		assert_eq!(tron_addr.to_evm_address(), Address::from([0xAB; 20]));
 
 		// Invalid: wrong prefix
 		let mut bad_prefix = vec![0x00u8];
@@ -565,6 +574,24 @@ mod tests {
 
 		// Invalid: wrong length
 		assert!(TronAddress::try_from(vec![0x41, 0x01, 0x02]).is_err());
+	}
+
+	#[test]
+	fn serde_roundtrip_preserves_wire_format() {
+		let evm_addr = Address::from([0xABu8; 20]);
+		let tron_addr = TronAddress::from_evm_address(evm_addr);
+		let json = serde_json::to_string(&tron_addr).unwrap();
+		// 42-hex-char wire format, 0x41 prefix + 20 bytes of 0xAB.
+		assert_eq!(json, "\"41abababababababababababababababababababab\"");
+		let decoded: TronAddress = serde_json::from_str(&json).unwrap();
+		assert_eq!(decoded, tron_addr);
+	}
+
+	#[test]
+	fn deserialize_rejects_bad_prefix() {
+		// Same length (42 hex chars) but leading byte is 0x00 instead of 0x41.
+		let bad = "\"00abababababababababababababababababababab\"";
+		assert!(serde_json::from_str::<TronAddress>(bad).is_err());
 	}
 }
 

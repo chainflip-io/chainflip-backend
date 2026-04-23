@@ -365,8 +365,8 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 
 
 						let constant_request = TriggerConstantContractRequest {
-							owner_address: signer_address.clone(),
-							contract_address: contract_address.clone(),
+							owner_address: signer_address,
+							contract_address,
 							function_selector: function_selector.clone(),
 							parameter: parameter.clone(),
 						};
@@ -442,8 +442,8 @@ impl<Rpc: TronSigningRpcApi> TronRetrySigningRpcApi for TronRetryRpcClient<Rpc> 
 						// This is needed because the raw_hex_data from the triggerConstantContract does
 						// not contain all the data for the valid transaction (e.g. energy limit).
 						let trigger_request = TriggerSmartContractRequest {
-							owner_address: signer_address.clone(),
-							contract_address: contract_address.clone(),
+							owner_address: signer_address,
+							contract_address,
 							function_selector: function_selector.clone(),
 							parameter: parameter.clone(),
 							fee_limit,
