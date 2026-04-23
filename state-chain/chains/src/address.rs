@@ -632,16 +632,12 @@ pub fn clean_foreign_chain_address(
 			EncodedAddress::Hub(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
 		// Support Tron string addresses and EVM addresses with and without the 0x41 prefix
 		ForeignChain::Tron => match TronAddress::from_str(address) {
-			Ok(tron_addr) => EncodedAddress::Tron(
-				tron_addr.to_evm_address().map_err(|e| anyhow::anyhow!(e))?.into(),
-			),
+			Ok(tron_addr) => EncodedAddress::Tron(tron_addr.to_evm_address().into()),
 			Err(_) => {
 				// Try 21-byte hex (0x41 prefix + 20 bytes), then fall back to raw
 				// 20-byte EVM hex.
 				if let Ok(tron_addr) = clean_hex_address::<TronAddress>(address) {
-					EncodedAddress::Tron(
-						tron_addr.to_evm_address().map_err(|e| anyhow::anyhow!(e))?.into(),
-					)
+					EncodedAddress::Tron(tron_addr.to_evm_address().into())
 				} else {
 					EncodedAddress::Tron(clean_hex_address(address)?)
 				}
