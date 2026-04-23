@@ -256,6 +256,56 @@ impl UncheckedOnRuntimeUpgrade for NoopRuntimeUpgrade {
 	}
 }
 
+/// Wraps a migration that should run unconditionally on every runtime upgrade, without
+/// participating in the version chain. Must be the last element in a `PalletMigration` tuple.
+///
+/// `AlwaysRunMigration` does not implement `MigrationSequence` on its own; only tuples ending
+/// with it do. This ensures at compile time that it appears last.
+pub struct AlwaysRunMigration<M: OnRuntimeUpgrade>(PhantomData<M>);
+
+impl<M: OnRuntimeUpgrade> OnRuntimeUpgrade for AlwaysRunMigration<M> {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		M::on_runtime_upgrade()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, frame_support::sp_runtime::TryRuntimeError> {
+		M::pre_upgrade()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(
+		state: sp_std::vec::Vec<u8>,
+	) -> Result<(), frame_support::pallet_prelude::DispatchError> {
+		M::post_upgrade(state)
+	}
+}
+
+impl<X: MigrationSequence, M: OnRuntimeUpgrade> MigrationSequence for (X, AlwaysRunMigration<M>) {
+	const FROM: u16 = X::FROM;
+	const TO: u16 = X::TO;
+}
+
+macro_rules! impl_migration_sequence_ending_with_always_run {
+	($first:ident, $($rest:ident),+) => {
+		impl<$first: MigrationSequence, $($rest: MigrationSequence),+, Inner__: OnRuntimeUpgrade>
+			MigrationSequence for ($first, $($rest),+, AlwaysRunMigration<Inner__>)
+		where
+			($first, $($rest),+): MigrationSequence,
+		{
+			const FROM: u16 = <($first, $($rest),+) as MigrationSequence>::FROM;
+			const TO: u16 = <($first, $($rest),+) as MigrationSequence>::TO;
+		}
+	};
+}
+
+impl_migration_sequence_ending_with_always_run!(A, B);
+impl_migration_sequence_ending_with_always_run!(A, B, C);
+impl_migration_sequence_ending_with_always_run!(A, B, C, D);
+impl_migration_sequence_ending_with_always_run!(A, B, C, D, E);
+impl_migration_sequence_ending_with_always_run!(A, B, C, D, E, F);
+impl_migration_sequence_ending_with_always_run!(A, B, C, D, E, F, G);
+
 /// Verifies that a sequence of migrations forms a contiguous version chain.
 ///
 /// Implementations for tuples check at compile time that each step's `TO` version equals
