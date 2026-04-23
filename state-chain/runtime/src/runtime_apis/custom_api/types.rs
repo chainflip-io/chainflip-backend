@@ -646,6 +646,7 @@ pub enum DepositDetails {
 	Bitcoin(<Bitcoin as Chain>::DepositDetails),
 	Ethereum(<Ethereum as Chain>::DepositDetails),
 	Arbitrum(<Arbitrum as Chain>::DepositDetails),
+	Tron(<Tron as Chain>::DepositDetails),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]

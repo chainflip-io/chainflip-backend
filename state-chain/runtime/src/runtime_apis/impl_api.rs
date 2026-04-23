@@ -2346,6 +2346,33 @@ mod witnessed_events {
 					),
 				})
 			},
+			ForeignChain::Tron => {
+				let state = ElectoralUnsynchronisedState::<Runtime, TronInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Tron electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h)
+					.into_iter()
+					.filter_map(|(height, event)| match event {
+						EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+						_ => None,
+					})
+					.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Tron,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						DepositDetails::Tron,
+					),
+				})
+			},
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
