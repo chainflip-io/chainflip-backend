@@ -255,3 +255,91 @@ impl UncheckedOnRuntimeUpgrade for NoopRuntimeUpgrade {
 		Default::default()
 	}
 }
+
+/// Verifies that a sequence of migrations forms a contiguous version chain.
+///
+/// Implementations for tuples check at compile time that each step's `TO` version equals
+/// the next step's `FROM` version. `check` accesses `FROM`, triggering this evaluation.
+///
+/// Each pallet's `migrations.rs` should include:
+/// ```ignore
+/// #[test]
+/// fn migration_chain_is_current() {
+///     <PalletMigration<mock::Test> as MigrationSequence>::check(PALLET_VERSION);
+/// }
+/// ```
+pub trait MigrationSequence {
+	const FROM: u16;
+	const TO: u16;
+}
+
+impl<const AT: u16, P> MigrationSequence for PlaceholderMigration<AT, P>
+where
+	P: PalletInfoAccess + GetStorageVersion<InCodeStorageVersion = StorageVersion>,
+{
+	const FROM: u16 = AT;
+	const TO: u16 = AT;
+}
+
+impl<const MIGRATION_FROM: u16, const MIGRATION_TO: u16, Inner, Pallet, Weight> MigrationSequence
+	for frame_support::migrations::VersionedMigration<MIGRATION_FROM, MIGRATION_TO, Inner, Pallet, Weight>
+{
+	const FROM: u16 = MIGRATION_FROM;
+	const TO: u16 = MIGRATION_TO;
+}
+
+impl<A: MigrationSequence> MigrationSequence for (A,) {
+	const FROM: u16 = A::FROM;
+	const TO: u16 = A::TO;
+}
+
+macro_rules! impl_migration_sequence_for_tuple {
+	($first:ident, $($rest:ident),+) => {
+		impl<$first: MigrationSequence, $($rest: MigrationSequence),+> MigrationSequence
+			for ($first, $($rest),+)
+		{
+			const FROM: u16 = {
+				impl_migration_sequence_for_tuple!(@checks $first, $($rest),+);
+				$first::FROM
+			};
+			const TO: u16 = impl_migration_sequence_for_tuple!(@last $($rest),+);
+		}
+	};
+
+	(@last $only:ident) => { $only::TO };
+	(@last $_head:ident, $($rest:ident),+) => {
+		impl_migration_sequence_for_tuple!(@last $($rest),+)
+	};
+
+	(@checks $prev:ident, $next:ident) => {
+		if $prev::TO != $next::FROM {
+			panic!(concat!(
+				"Migration sequence not contiguous: ",
+				stringify!($prev),
+				"::TO != ",
+				stringify!($next),
+				"::FROM",
+			));
+		}
+	};
+	(@checks $prev:ident, $next:ident, $($rest:ident),+) => {
+		if $prev::TO != $next::FROM {
+			panic!(concat!(
+				"Migration sequence not contiguous: ",
+				stringify!($prev),
+				"::TO != ",
+				stringify!($next),
+				"::FROM",
+			));
+		}
+		impl_migration_sequence_for_tuple!(@checks $next, $($rest),+);
+	};
+}
+
+impl_migration_sequence_for_tuple!(A, B);
+impl_migration_sequence_for_tuple!(A, B, C);
+impl_migration_sequence_for_tuple!(A, B, C, D);
+impl_migration_sequence_for_tuple!(A, B, C, D, E);
+impl_migration_sequence_for_tuple!(A, B, C, D, E, F);
+impl_migration_sequence_for_tuple!(A, B, C, D, E, F, G);
+impl_migration_sequence_for_tuple!(A, B, C, D, E, F, G, H);
