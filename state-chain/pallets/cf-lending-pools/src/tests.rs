@@ -1658,12 +1658,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 			Asset::Btc,
 			BTC_COLLATERAL,
 		));
-		assert_ok!(LendingPools::new_loan(
-			LP,
-			BOOST_ASSET,
-			PRINCIPAL,
-			None,
-		));
+		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None,));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =
 		// BOOST_DEPOSIT_AMOUNT.
