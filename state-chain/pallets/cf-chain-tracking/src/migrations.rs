@@ -14,7 +14,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Pallet;
+use crate::{Pallet, PALLET_VERSION};
 use cf_runtime_utilities::PlaceholderMigration;
 
-pub type PalletMigration<T, I> = PlaceholderMigration<4, Pallet<T, I>>;
+pub type PalletMigration<T, I> = PlaceholderMigration<{ PALLET_VERSION }, Pallet<T, I>>;
+
+#[cfg(test)]
+const _: u16 = <PalletMigration<crate::mock::Test, ()> as cf_runtime_utilities::MigrationSequence>::FROM;

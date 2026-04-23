@@ -72,7 +72,8 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
+pub const PALLET_VERSION: u16 = 22;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -206,7 +207,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 

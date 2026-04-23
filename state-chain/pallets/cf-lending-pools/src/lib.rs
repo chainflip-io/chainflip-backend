@@ -86,7 +86,8 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: u16 = 5;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
 
 use serde::{Deserialize, Serialize};
 
@@ -343,7 +344,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 

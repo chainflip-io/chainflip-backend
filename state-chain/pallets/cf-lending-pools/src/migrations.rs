@@ -17,7 +17,7 @@
 use cf_runtime_utilities::PlaceholderMigration;
 use frame_support::migrations::VersionedMigration;
 
-use crate::Pallet;
+use crate::{Pallet, PALLET_VERSION};
 
 mod add_min_lending_pool_share;
 mod boost_refactor_migration;
@@ -45,5 +45,9 @@ pub type PalletMigration<T> = (
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
-	PlaceholderMigration<5, Pallet<T>>,
+	PlaceholderMigration<{ PALLET_VERSION }, Pallet<T>>,
 );
+
+#[cfg(test)]
+const _: u16 =
+	<PalletMigration<crate::mocks::Test> as cf_runtime_utilities::MigrationSequence>::FROM;

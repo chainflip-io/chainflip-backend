@@ -155,7 +155,8 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const PALLET_VERSION: u16 = 9;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
 
 pub use pallet::UniqueMonotonicIdentifier;
 
@@ -451,7 +452,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

@@ -55,7 +55,8 @@ use weights::WeightInfo;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const PALLET_VERSION: u16 = 1;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
 
 // Note that strategies can only create a limited number of orders per asset/side so we can just
 // have fixed order ids (at least until we develop more advanced strategies).
@@ -286,7 +287,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 

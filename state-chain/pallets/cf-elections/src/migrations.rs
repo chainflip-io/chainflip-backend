@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Pallet;
+use crate::{Pallet, PALLET_VERSION};
 use cf_runtime_utilities::PlaceholderMigration;
 
 mod vote_storage_migration;
@@ -22,5 +22,5 @@ mod vote_storage_migration;
 pub type PalletMigration<T, I> = (
 	// NOTE: Keep this migration. It clears out old votes that may be invalid after the upgrade.
 	vote_storage_migration::VoteStorageMigration<T, I>,
-	PlaceholderMigration<9, Pallet<T, I>>,
+	PlaceholderMigration<{ PALLET_VERSION }, Pallet<T, I>>,
 );
