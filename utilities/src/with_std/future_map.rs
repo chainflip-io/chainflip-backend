@@ -16,7 +16,6 @@
 
 use futures::{Future, Stream};
 use std::{collections::BTreeSet, iter::IntoIterator};
-use tracing::debug;
 
 #[pin_project::pin_project]
 struct Wrapper<Key, Fut> {
