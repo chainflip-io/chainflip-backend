@@ -115,7 +115,7 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION_U16: u16 = 10;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
