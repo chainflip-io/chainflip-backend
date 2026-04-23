@@ -970,6 +970,10 @@ pub mod pallet {
 				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
+			);
 
 			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {
 				if claimed_by.remove(&operator) {
