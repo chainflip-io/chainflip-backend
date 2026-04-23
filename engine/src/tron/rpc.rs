@@ -29,8 +29,7 @@ use cf_utilities::{read_clean_and_decode_hex_str_file, redact_endpoint_secret::S
 
 use super::rpc_client_api::{
 	BlockBalance, BlockNumber, BroadcastResponse, EstimateEnergyResult, Transaction,
-	TransactionExtention, TransactionInfo, TriggerConstantContractRequest,
-	TriggerSmartContractRequest, TronBlockRpc,
+	TransactionExtention, TransactionInfo, TronAddress, TronBlockRpc,
 };
 use crate::{
 	evm::rpc::{EvmRpcApi, EvmRpcClient},
@@ -176,15 +175,25 @@ pub trait TronRpcApi: Send + Sync + Clone + 'static {
 	) -> anyhow::Result<BlockBalance>;
 	async fn trigger_constant_contract(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<TriggerConstantContractResult>;
 	async fn trigger_contract(
 		&self,
-		request: TriggerSmartContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
+		fee_limit: i64,
 	) -> anyhow::Result<TransactionExtention>;
 	async fn estimate_energy(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<EstimateEnergyResult>;
 	async fn broadcast_transaction(
 		&self,
@@ -345,13 +354,16 @@ impl TronRpcApi for TronRpcClient {
 
 	async fn trigger_constant_contract(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<TriggerConstantContractResult> {
 		let body = serde_json::json!({
-			"owner_address": request.owner_address,
-			"contract_address": request.contract_address,
-			"function_selector": request.function_selector,
-			"parameter": hex::encode(&request.parameter),
+			"owner_address": owner_address,
+			"contract_address": contract_address,
+			"function_selector": function_selector,
+			"parameter": hex::encode(&parameter),
 			"visible": false
 		});
 
@@ -369,14 +381,18 @@ impl TronRpcApi for TronRpcClient {
 
 	async fn trigger_contract(
 		&self,
-		request: TriggerSmartContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
+		fee_limit: i64,
 	) -> anyhow::Result<TransactionExtention> {
 		let body = serde_json::json!({
-			"owner_address": request.owner_address,
-			"contract_address": request.contract_address,
-			"function_selector": request.function_selector,
-			"parameter": hex::encode(&request.parameter),
-			"fee_limit": request.fee_limit,
+			"owner_address": owner_address,
+			"contract_address": contract_address,
+			"function_selector": function_selector,
+			"parameter": hex::encode(&parameter),
+			"fee_limit": fee_limit,
 			"visible": false
 		});
 
@@ -392,13 +408,16 @@ impl TronRpcApi for TronRpcClient {
 
 	async fn estimate_energy(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<EstimateEnergyResult> {
 		let body = serde_json::json!({
-			"owner_address": request.owner_address,
-			"contract_address": request.contract_address,
-			"function_selector": request.function_selector,
-			"parameter": hex::encode(&request.parameter),
+			"owner_address": owner_address,
+			"contract_address": contract_address,
+			"function_selector": function_selector,
+			"parameter": hex::encode(&parameter),
 			"visible": false
 		});
 
@@ -560,23 +579,50 @@ impl<RpcClient: TronRpcApi> TronRpcApi for TronRpcSigningClient<RpcClient> {
 
 	async fn trigger_constant_contract(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<TriggerConstantContractResult> {
-		self.rpc_client.trigger_constant_contract(request).await
+		self.rpc_client
+			.trigger_constant_contract(
+				owner_address,
+				contract_address,
+				function_selector,
+				parameter,
+			)
+			.await
 	}
 
 	async fn trigger_contract(
 		&self,
-		request: TriggerSmartContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
+		fee_limit: i64,
 	) -> anyhow::Result<TransactionExtention> {
-		self.rpc_client.trigger_contract(request).await
+		self.rpc_client
+			.trigger_contract(
+				owner_address,
+				contract_address,
+				function_selector,
+				parameter,
+				fee_limit,
+			)
+			.await
 	}
 
 	async fn estimate_energy(
 		&self,
-		request: TriggerConstantContractRequest,
+		owner_address: TronAddress,
+		contract_address: TronAddress,
+		function_selector: String,
+		parameter: Vec<u8>,
 	) -> anyhow::Result<EstimateEnergyResult> {
-		self.rpc_client.estimate_energy(request).await
+		self.rpc_client
+			.estimate_energy(owner_address, contract_address, function_selector, parameter)
+			.await
 	}
 
 	async fn broadcast_transaction(
@@ -768,52 +814,49 @@ mod tests {
 		let fee_limit = 1000000000;
 
 		// Test with unfunded account (expect failure)
-		let constant_request_fail = TriggerConstantContractRequest {
-			owner_address: unfunded_owner,
-			contract_address,
-			function_selector: function_selector.clone(),
-			parameter: parameter.clone(),
-		};
-		let simulation_fail =
-			tron_rpc_client.trigger_constant_contract(constant_request_fail).await.unwrap();
+		let simulation_fail = tron_rpc_client
+			.trigger_constant_contract(
+				unfunded_owner,
+				contract_address,
+				function_selector.clone(),
+				parameter.clone(),
+			)
+			.await
+			.unwrap();
 		println!("Trigger constant contract (fail) {:?}", simulation_fail);
 		assert!(simulation_fail.transaction.status() != TransactionResultStatus::Success);
 
-		let trigger_request_fail = TriggerSmartContractRequest {
-			owner_address: unfunded_owner,
-			contract_address,
-			function_selector: function_selector.clone(),
-			parameter: parameter.clone(),
-			fee_limit,
-		};
-		let result_fail = tron_rpc_client.trigger_contract(trigger_request_fail).await.unwrap();
+		let result_fail = tron_rpc_client
+			.trigger_contract(
+				unfunded_owner,
+				contract_address,
+				function_selector.clone(),
+				parameter.clone(),
+				fee_limit,
+			)
+			.await
+			.unwrap();
 		println!("Trigger smart contract (fail) {:?}", result_fail);
 		assert!(!result_fail.transaction.raw_data_hex.is_empty());
 		assert!(result_fail.transaction.status() != TransactionResultStatus::Success);
 
 		// Test with funded account (expect success)
-		let constant_request_success = TriggerConstantContractRequest {
-			owner_address: funded_owner,
-			contract_address,
-			function_selector: function_selector.clone(),
-			parameter: parameter.clone(),
-		};
 		let simulation_success = tron_rpc_client
-			.trigger_constant_contract(constant_request_success)
+			.trigger_constant_contract(
+				funded_owner,
+				contract_address,
+				function_selector.clone(),
+				parameter.clone(),
+			)
 			.await
 			.unwrap();
 		println!("Trigger constant contract (success) {:?}", simulation_success);
 		assert_eq!(simulation_success.transaction.status(), TransactionResultStatus::Success);
 
-		let trigger_request_success = TriggerSmartContractRequest {
-			owner_address: funded_owner,
-			contract_address,
-			function_selector,
-			parameter,
-			fee_limit: 1,
-		};
-		let result_success =
-			tron_rpc_client.trigger_contract(trigger_request_success).await.unwrap();
+		let result_success = tron_rpc_client
+			.trigger_contract(funded_owner, contract_address, function_selector, parameter, 1)
+			.await
+			.unwrap();
 		println!("Trigger smart contract (success) {:?}", result_success);
 		assert!(!result_success.transaction.raw_data_hex.is_empty());
 		assert!(
@@ -852,17 +895,16 @@ mod tests {
 		)
 		.unwrap();
 
-		let request = TriggerConstantContractRequest {
-			owner_address,
-			contract_address,
-			function_selector: "balanceOf(address)".to_string(),
-			parameter: hex::decode(
-				"000000000000000000000000a614f803b6fd780986a42c78ec9c7f77e6ded13c",
+		let result = tron_rpc_client
+			.estimate_energy(
+				owner_address,
+				contract_address,
+				"balanceOf(address)".to_string(),
+				hex::decode("000000000000000000000000a614f803b6fd780986a42c78ec9c7f77e6ded13c")
+					.unwrap(),
 			)
-			.unwrap(),
-		};
-
-		let result = tron_rpc_client.estimate_energy(request).await.unwrap();
+			.await
+			.unwrap();
 		println!("Estimate energy result: {:?}", result);
 		assert!(result.energy_required.unwrap() > 0);
 	}
@@ -880,21 +922,27 @@ mod tests {
 		.await
 		.unwrap();
 
-		let request = TriggerSmartContractRequest {
-			owner_address: TronAddress::try_from(
-				hex::decode("41076d3803349fd5fb48863c5fc33483cb2243c0df").unwrap(),
-			)
-			.unwrap(),
-			contract_address: TronAddress::try_from(
-				hex::decode("41d754a07f437c275457686cbf0c6eb7d28b0dadbd").unwrap(),
-			)
-			.unwrap(),
-			function_selector: "allBatch((uint256,uint256,address),(bytes32,address)[],(address,address)[],(address,address,uint256)[])".to_string(),
-			parameter: hex::decode("35236817dbd2c0614726e46142ee3404955afd92284ed98061b17dda09c9fb860000000000000000000000000000000000000000000000000000000000000001000000000000000000000000a558b33409044a9802c0b94680816ce8dbdab07400000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-			fee_limit: 50_000_000,
-		};
+		let owner_address = TronAddress::try_from(
+			hex::decode("41076d3803349fd5fb48863c5fc33483cb2243c0df").unwrap(),
+		)
+		.unwrap();
+		let contract_address = TronAddress::try_from(
+			hex::decode("41d754a07f437c275457686cbf0c6eb7d28b0dadbd").unwrap(),
+		)
+		.unwrap();
+		let function_selector = "allBatch((uint256,uint256,address),(bytes32,address)[],(address,address)[],(address,address,uint256)[])".to_string();
+		let parameter = hex::decode("35236817dbd2c0614726e46142ee3404955afd92284ed98061b17dda09c9fb860000000000000000000000000000000000000000000000000000000000000001000000000000000000000000a558b33409044a9802c0b94680816ce8dbdab07400000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000160000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap();
 
-		let result = tron_rpc_client.trigger_contract(request).await.unwrap();
+		let result = tron_rpc_client
+			.trigger_contract(
+				owner_address,
+				contract_address,
+				function_selector,
+				parameter,
+				50_000_000,
+			)
+			.await
+			.unwrap();
 		println!("Trigger smart contract result: {:?}", result);
 		assert!(!result.transaction.raw_data_hex.is_empty());
 	}
