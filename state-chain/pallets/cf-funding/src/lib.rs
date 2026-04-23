@@ -914,8 +914,11 @@ pub mod pallet {
 			match deposit_and_call.deposit {
 				EthereumDeposit::FlipToSCGateway { amount } =>
 					if !frame_system::Pallet::<T>::account_exists(&caller_account_id) &&
-						amount >= MinimumFunding::<T>::get().into()
+						amount < MinimumFunding::<T>::get().into()
 					{
+						// we ignore dust deposits and dont create a state chain account if the
+						// account doesnt already exist
+					} else {
 						Self::fund_account(
 							caller_account_id.clone(),
 							amount.into(),
