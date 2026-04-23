@@ -872,6 +872,13 @@ pub trait DepositMonitorApi:
 					),
 				)
 				.await,
+			TransactionInId::Tron(tx_id) =>
+				self.simple_submission_with_dry_run(
+					state_chain_runtime::RuntimeCall::TronIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
+				)
+				.await,
 		}
 	}
 }

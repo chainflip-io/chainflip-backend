@@ -475,6 +475,9 @@ where
 								deposit_address,
 							},
 						),
+					TransactionInId::Tron(tx_id) => RuntimeCall::TronIngressEgress(
+						pallet_cf_ingress_egress::Call::mark_transaction_for_rejection { tx_id },
+					),
 				},
 				false,
 				true,
