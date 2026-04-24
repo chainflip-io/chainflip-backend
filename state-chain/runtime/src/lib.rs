@@ -514,8 +514,8 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = (migrations::safe_mode::SafeModeMigration,
-	migrations::tron_integration::TronSafeModeUpdate,
+type MigrationsForV2_2 = (
+	migrations::safe_mode::SafeModeMigration,
 	migrations::tron_integration::TronElectionsInit,
 	migrations::tron_integration::TronIngressEgressInit,
 	migrations::tron_integration::TronChainstate,
