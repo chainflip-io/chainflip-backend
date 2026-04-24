@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { sendVaultTransaction } from 'shared/send_btc';
+import { getRandomBtcClient, sendVaultTransaction } from 'shared/send_btc';
 import {
   Asset,
   assetDecimals,
@@ -145,10 +145,12 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
 
   cf.trace('Sending BTC vault swap transaction');
   const txid = await sendVaultTransaction(
+    cf,
     BtcVaultSwapDetails.nulldata_payload,
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
+    await getRandomBtcClient(cf),
   );
 
   return txid;
@@ -195,11 +197,13 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
   const txid = await sendVaultTransaction(
+    cf,
     // wrong encoded payload
     '0x6a3a0101701b90c687681727ada344f4e440f1a82ae548f66400602b04924ddf21970000000000000000ff010002001e02003d7c6c69666949c04689',
     depositAmountBtc,
     BtcVaultSwapDetails.deposit_address,
     refundAddress,
+    await getRandomBtcClient(cf),
   );
 
   return txid;
