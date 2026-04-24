@@ -577,7 +577,7 @@ pub fn decode_sol_instruction_data(
 	let (
 		amount,
 		src_asset,
-		src_token_from_account,
+		from_token_account,
 		dst_chain,
 		dst_address,
 		dst_token,
@@ -637,9 +637,16 @@ pub fn decode_sol_instruction_data(
 			)
 			.map_err(|_| "Failed to deserialize SolInstruction")?;
 
-			let token_mint_pubkey: SolAddress = instruction
+			let from_token_account: SolAddress = instruction
 				.accounts
 				.get(sol_tx_core::consts::X_SWAP_TOKEN_FROM_TOKEN_ACC_IDX as usize)
+				.ok_or("Invalid accounts in SolInstruction")?
+				.pubkey
+				.into();
+
+			let token_mint_pubkey: SolAddress = instruction
+				.accounts
+				.get(sol_tx_core::consts::X_SWAP_TOKEN_MINT_ACC_IDX as usize)
 				.ok_or("Invalid accounts in SolInstruction")?
 				.pubkey
 				.into();
@@ -655,7 +662,7 @@ pub fn decode_sol_instruction_data(
 			Ok((
 				amount,
 				src_asset,
-				Some(token_mint_pubkey),
+				Some(from_token_account),
 				dst_chain,
 				dst_address,
 				dst_token,
@@ -708,7 +715,7 @@ pub fn decode_sol_instruction_data(
 			.ok_or("Invalid accounts in SolInstruction")?
 			.pubkey
 			.into(),
-		from_token_account: src_token_from_account,
+		from_token_account,
 		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
 		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
 		refund_parameters: refund_params.map_address(Into::into),
@@ -739,7 +746,8 @@ mod test {
 			instruction_builder::SolanaInstructionBuilder,
 			sol_tx_core::{
 				address_derivation::{
-					derive_swap_endpoint_native_vault_account, derive_vault_swap_account,
+					derive_associated_token_account, derive_swap_endpoint_native_vault_account,
+					derive_vault_swap_account,
 				},
 				sol_test_values,
 			},
@@ -948,7 +956,11 @@ mod test {
 		let destination_asset = Asset::Sol;
 		let destination_address = EncodedAddress::Sol([0xF0; 32]);
 		let from = SolPubkey([0xF1; 32]);
-		let from_token_account = SolPubkey::from(sol_test_values::USDC_TOKEN_MINT_PUB_KEY);
+		let from_token_account: SolPubkey =
+			derive_associated_token_account(from.into(), sol_test_values::USDC_TOKEN_MINT_PUB_KEY)
+				.unwrap()
+				.address
+				.into();
 		let seed: &[u8] = &[0xF2; 32];
 		let event_data_account =
 			derive_vault_swap_account(sol_test_values::SWAP_ENDPOINT_PROGRAM, from.into(), seed)

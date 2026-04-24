@@ -26,9 +26,9 @@ import {
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
-import { executeSolVaultSwap } from 'shared/sol_vault_swap';
-import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
+import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
+import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
+import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
 import { throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
