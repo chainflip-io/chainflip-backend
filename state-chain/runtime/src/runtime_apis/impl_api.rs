@@ -1905,7 +1905,7 @@ impl_runtime_apis! {
 				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
 				minimum_supply_amount_usd: config.minimum_supply_amount_usd.into(),
 				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
-				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
+				minimum_update_supply_amount_usd: config.minimum_update_supply_amount_usd.into(),
 			}
 		}
 
