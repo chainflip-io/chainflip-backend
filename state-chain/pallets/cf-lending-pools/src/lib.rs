@@ -591,6 +591,8 @@ pub mod pallet {
 		BoostedFundsRemaining,
 		/// Can't removed funds due to LTV check
 		InsufficientLtvHeadroom,
+		/// The new loan would push pool utilisation above the liquidation-coverage cap.
+		UtilisationCapExceeded,
 	}
 
 	#[pallet::hooks]

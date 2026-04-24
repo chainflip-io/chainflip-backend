@@ -3,7 +3,10 @@ use cf_primitives::{DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
-	sp_runtime::{traits::Bounded, FixedI64, FixedPointNumber, FixedU64, PerThing},
+	sp_runtime::{
+		helpers_128bit::multiply_by_rational_with_rounding, traits::Bounded, FixedI64,
+		FixedPointNumber, FixedU64, PerThing, Rounding,
+	},
 	DefaultNoBound,
 };
 
@@ -904,7 +907,13 @@ impl<T: Config> LoanAccount<T> {
 
 		let origination_fee_pool = origination_fee_total.saturating_sub(origination_fee_network);
 
-		fund_loan::<T>(&mut loan, extra_principal, origination_fee_pool, origination_fee_network)?;
+		fund_loan::<T>(
+			&mut loan,
+			extra_principal,
+			origination_fee_pool,
+			origination_fee_network,
+			price_cache,
+		)?;
 
 		self.loans.insert(loan.id, loan);
 
@@ -1320,11 +1329,17 @@ pub fn fund_loan<T: Config>(
 	principal: AssetAmount,
 	origination_fee_pool: AssetAmount,
 	origination_fee_network: AssetAmount,
+	price_cache: &OraclePriceCache<T>,
 ) -> Result<(), DispatchError> {
+	let utilisation_cap =
+		compute_utilisation_cap::<T>(loan.asset, Percent::from_percent(100), price_cache)?;
+
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
+
+		ensure!(pool.get_utilisation() <= utilisation_cap, Error::<T>::UtilisationCapExceeded);
 
 		pool.record_pool_fee(origination_fee_pool);
 
@@ -1621,6 +1636,79 @@ pub fn remove_lender_funds<T: Config>(
 	});
 
 	Ok(())
+}
+
+/// Computes the maximum utilisation ratio allowed for `asset`'s lending pool such that
+/// enough of the pool's asset is still available to fully liquidate `coverage_factor`
+/// of all outstanding loans at current oracle prices.
+///
+/// For each loan account, the share of its collateral (by USD value) held in `asset` is
+/// multiplied by `coverage_factor * total_loans_usd` (capped by total collateral USD
+/// value for undercollateralised accounts). The sum across accounts is the amount of
+/// `asset` that may need to be released from the pool during liquidation; the cap is
+/// `1 - required / pool.total_amount`, saturating at zero.
+///
+/// Returns `Permill::one()` if the pool does not exist or is empty. Allows stale oracle
+/// prices (since we still want the cap to hold during price outages), and propagates
+/// an error only when a price is completely unavailable.
+pub fn compute_utilisation_cap<T: Config>(
+	asset: Asset,
+	coverage_factor: Percent,
+	price_cache: &OraclePriceCache<T>,
+) -> Result<Permill, DispatchError> {
+	let Some(pool) = GeneralLendingPools::<T>::get(asset) else {
+		fail!(Error::<T>::PoolDoesNotExist);
+	};
+
+	if pool.total_amount == 0 {
+		return Ok(Permill::one());
+	}
+
+	// For each loan account, compute the amount of `asset` needed to cover
+	// `coverage_factor` of its loans. When the account holds multiple collateral
+	// assets, we attribute the required amount in proportion to each asset's USD
+	// share of the collateral.
+	let total_required_amount_across_accounts = LoanAccounts::<T>::iter().try_fold(
+		0 as AssetAmount,
+		|acc, (_borrower_id, loan_account)| {
+			let collateral = loan_account.get_total_collateral();
+
+			let collateral_in_asset = collateral.get(&asset).copied().unwrap_or_default();
+
+			let total_collateral_usd = price_cache.total_usd_value_of_allow_stale(&collateral)?;
+			if total_collateral_usd == 0 {
+				return Ok(acc);
+			}
+
+			let total_loans_usd =
+				loan_account.loans.values().try_fold(0 as AssetAmount, |sum, loan| {
+					price_cache
+						.usd_value_of_allow_stale(loan.asset, loan.owed_principal)
+						.map(|usd| sum.saturating_add(usd))
+				})?;
+
+			// For undercollateralised accounts we can extract at most the full collateral value.
+			let target_liquidation_usd =
+				core::cmp::min(coverage_factor * total_loans_usd, total_collateral_usd);
+
+			// How much of the asset is actually required is determined by accounts loan to
+			// collateral/value ratio:
+			let required_in_asset = multiply_by_rational_with_rounding(
+				collateral_in_asset,
+				target_liquidation_usd,
+				total_collateral_usd,
+				Rounding::Up,
+			)
+			.unwrap_or(u128::MAX);
+
+			Ok::<_, DispatchError>(acc.saturating_add(required_in_asset))
+		},
+	)?;
+
+	let required_fraction =
+		Permill::from_rational(total_required_amount_across_accounts, pool.total_amount);
+
+	Ok(Permill::one().saturating_sub(required_fraction))
 }
 
 pub fn create_new_loan<T: Config>(asset: Asset) -> GeneralLoan<T> {
