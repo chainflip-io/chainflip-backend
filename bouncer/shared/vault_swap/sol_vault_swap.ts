@@ -30,7 +30,7 @@ import { TestContext } from 'shared/utils/test_context';
 import { throwError } from 'shared/utils/logger';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { SwapEndpoint } from '../../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
-import { requestSwapParameterEncoding } from './vault_swap';
+import { ChannelRefundParameters, requestSwapParameterEncoding } from './vault_swap';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
@@ -55,20 +55,6 @@ interface SolanaVaultSwapExtraParameters {
   refund_parameters: ChannelRefundParameters;
   from_token_account?: string;
 }
-
-export type ChannelRefundParameters = {
-  retry_duration: number;
-  refund_address: string;
-  min_price: string;
-  refund_ccm_metadata:
-    | {
-        message: string;
-        gas_budget: string;
-        ccm_additional_data: string | undefined;
-      }
-    | undefined;
-  max_oracle_price_slippage: number | undefined;
-};
 
 export async function executeSolVaultSwap<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,

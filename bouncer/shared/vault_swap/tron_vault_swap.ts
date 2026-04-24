@@ -8,10 +8,15 @@ import {
   getEncodedTronAddress,
   getTronWebClient,
   getTronWhaleKeyPair,
+  newAssetAddress,
 } from 'shared/utils';
+import BigNumber from 'bignumber.js';
+import { randomBytes } from 'crypto';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
-import { requestEvmSwapParameterEncoding } from 'shared/evm_vault_swap';
-import { ChainflipIO, WithBrokerAccount } from './utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
+import { getChainflipApi } from 'shared/utils/substrate';
+import { ChannelRefundParameters, requestSwapParameterEncoding } from './vault_swap';
+import { EvmVaultSwapExtraParameters } from './evm_vault_swap';
 
 interface TronVaultSwapDetails {
   chain: 'Tron';
@@ -39,20 +44,51 @@ export async function executeTronVaultSwap<A extends WithBrokerAccount>(
   }[] = [],
   optionalRefundAddress?: string,
 ) {
+  const srcChain = chainFromAsset(sourceAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
-  const vaultSwapDetails = await requestEvmSwapParameterEncoding<A, TronVaultSwapDetails>(
-    cf,
+  const refundAddress =
+    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: '0',
+  };
+  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+  await using chainflip = await getChainflipApi();
+
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: fokParams.retryDurationBlocks,
+    refund_address: fokParams.refundAddress,
+    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
+    max_oracle_price_slippage: undefined,
+  };
+
+  const extraParameters: EvmVaultSwapExtraParameters = {
+    chain: srcChain as 'Ethereum' | 'Arbitrum',
+    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
+    refund_parameters: refundParams,
+  };
+
+  cf.debug('Requesting vault swap parameter encoding');
+  const vaultSwapDetails = await requestSwapParameterEncoding<TronVaultSwapDetails>(
+    chainflip,
+    cf.requirements.account.keypair.address,
     sourceAsset,
     destAsset,
     destAddress,
     brokerCommissionBps,
+    extraParameters,
     messageMetadata,
     boostFeeBps ?? 0,
-    affiliateFees,
+    affiliateFees.map((fee) => ({ account: fee.accountAddress, bps: fee.commissionBps })),
     dcaParams,
-    fillOrKillParams,
-    amountToSwap,
-    optionalRefundAddress,
   );
 
   const tronWeb = getTronWebClient();
