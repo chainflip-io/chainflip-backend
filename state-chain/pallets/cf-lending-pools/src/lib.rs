@@ -189,6 +189,7 @@ pub enum PalletConfigUpdate {
 		minimum_update_supply_amount_usd: AssetAmount,
 		minimum_supply_amount_usd: AssetAmount,
 	},
+	SetLiquidationCoverageFactor(Percent),
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -301,6 +302,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	minimum_update_loan_amount_usd: 10_000_000,   // 10 USD
 	minimum_supply_amount_usd: 100_000_000,       // 100 USD
 	minimum_update_supply_amount_usd: 10_000_000, // 10 USD
+	liquidation_coverage_factor: Percent::from_percent(100),
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -712,6 +714,9 @@ pub mod pallet {
 							config.minimum_update_supply_amount_usd =
 								*minimum_update_supply_amount_usd;
 							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
+						},
+						PalletConfigUpdate::SetLiquidationCoverageFactor(coverage_factor) => {
+							config.liquidation_coverage_factor = *coverage_factor;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });

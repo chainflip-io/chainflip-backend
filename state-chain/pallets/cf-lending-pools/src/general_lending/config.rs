@@ -180,6 +180,10 @@ pub struct LendingConfiguration {
 	pub minimum_update_loan_amount_usd: AssetAmount,
 	/// Minimum equivalent amount that can be added to or removed from a lending pool supply.
 	pub minimum_update_supply_amount_usd: AssetAmount,
+	/// Fraction of outstanding loans the pool must remain able to liquidate with available (i.e.
+	/// not borrowed liquidity) at current oracle prices. Used when computing the utilisation cap
+	/// enforced on new borrows.
+	pub liquidation_coverage_factor: Percent,
 }
 
 impl LendingConfiguration {

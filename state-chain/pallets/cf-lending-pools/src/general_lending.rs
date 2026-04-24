@@ -1331,8 +1331,11 @@ pub fn fund_loan<T: Config>(
 	origination_fee_network: AssetAmount,
 	price_cache: &OraclePriceCache<T>,
 ) -> Result<(), DispatchError> {
-	let utilisation_cap =
-		compute_utilisation_cap::<T>(loan.asset, Percent::from_percent(100), price_cache)?;
+	let utilisation_cap = compute_utilisation_cap::<T>(
+		loan.asset,
+		LendingConfig::<T>::get().liquidation_coverage_factor,
+		price_cache,
+	)?;
 
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
