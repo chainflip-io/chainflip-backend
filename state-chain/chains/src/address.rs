@@ -480,6 +480,16 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 	}
 }
 
+impl ToHumanreadableAddress for TronAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = String;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.to_base58check()
+	}
+}
+
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
@@ -496,7 +506,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 	Hub(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
-	Tron(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
+	Tron(<TronAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
 #[cfg(feature = "std")]
@@ -504,12 +514,12 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			ForeignChainAddressHumanreadable::Eth(address) |
-			ForeignChainAddressHumanreadable::Arb(address) |
-			ForeignChainAddressHumanreadable::Tron(address) => write!(f, "{:#x}", address),
+			ForeignChainAddressHumanreadable::Arb(address) => write!(f, "{:#x}", address),
 			ForeignChainAddressHumanreadable::Dot(address) |
 			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) |
-			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Sol(address) |
+			ForeignChainAddressHumanreadable::Tron(address) => write!(f, "{}", address),
 		}
 	}
 }
@@ -544,7 +554,7 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 			ForeignChainAddress::Hub(address) =>
 				ForeignChainAddressHumanreadable::Hub(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Tron(address) => ForeignChainAddressHumanreadable::Tron(
-				address.to_humanreadable(network_environment),
+				TronAddress::from_evm_address(*address).to_humanreadable(network_environment),
 			),
 		}
 	}
