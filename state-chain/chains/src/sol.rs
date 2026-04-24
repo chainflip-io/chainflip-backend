@@ -577,7 +577,7 @@ pub fn decode_sol_instruction_data(
 	let (
 		amount,
 		src_asset,
-		src_token_from_account,
+		from_token_account,
 		dst_chain,
 		dst_address,
 		dst_token,
@@ -715,7 +715,7 @@ pub fn decode_sol_instruction_data(
 			.ok_or("Invalid accounts in SolInstruction")?
 			.pubkey
 			.into(),
-		from_token_account: src_token_from_account,
+		from_token_account,
 		dst_address: EncodedAddress::from_chain_bytes(chain, dst_address)?,
 		dst_token: AnyChainAsset::try_from(dst_token).map_err(|_| "Invalid dst_token")?,
 		refund_parameters: refund_params.map_address(Into::into),
