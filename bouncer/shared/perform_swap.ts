@@ -53,7 +53,7 @@ import { tronIngressEgressCcmBroadcastRequested } from 'generated/events/tronIng
 import { tronIngressEgressCcmEgressInvalid } from 'generated/events/tronIngressEgress/ccmEgressInvalid';
 import { tronIngressEgressCcmBroadcastFailed } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
 import { tronBroadcasterBroadcastSuccess } from 'generated/events/tronBroadcaster/broadcastSuccess';
-import { executeTronVaultSwap } from './tron_vault_swap';
+import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {
   sourceAsset: Asset;

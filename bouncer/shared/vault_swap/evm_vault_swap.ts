@@ -16,8 +16,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { ChannelRefundParameters } from './sol_vault_swap';
-import { requestSwapParameterEncoding } from './vault_swap';
+import { ChannelRefundParameters, requestSwapParameterEncoding } from './vault_swap';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -28,26 +27,30 @@ interface EvmVaultSwapDetails {
   to: string;
 }
 
-interface VaultSwapExtraParameters {
-  chain: string;
+export interface EvmVaultSwapExtraParameters {
+  chain: 'Ethereum' | 'Arbitrum' | 'Tron';
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
 }
 
-export async function requestEvmSwapParameterEncoding<A extends WithBrokerAccount, T>(
+export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  brokerCommissionBps: number,
-  messageMetadata: CcmDepositMetadata | undefined,
-  boostFeeBps: number,
-  affiliateFees: { accountAddress: string; commissionBps: number }[],
-  dcaParams: DcaParams | undefined,
-  fillOrKillParams: FillOrKillParamsX128 | undefined,
-  amount: string | undefined,
-  optionalRefundAddress: string | undefined,
-): Promise<T> {
+  brokerCommissionBps: number = 0,
+  messageMetadata?: CcmDepositMetadata,
+  amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+  wallet?: HDNodeWallet,
+  affiliateFees: {
+    accountAddress: string;
+    commissionBps: number;
+  }[] = [],
+  optionalRefundAddress?: string,
+) {
   const srcChain = chainFromAsset(sourceAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
   const refundAddress =
@@ -58,6 +61,19 @@ export async function requestEvmSwapParameterEncoding<A extends WithBrokerAccoun
     minPriceX128: '0',
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+  cf.debug('Creating evm wallet ...');
+  const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset, amount));
+
+  if (erc20Assets.includes(sourceAsset)) {
+    cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
+    // Doing effectively infinite approvals to make sure it doesn't fail.
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    await approveEvmTokenVault(
+      sourceAsset,
+      (BigInt(amountToFineAmount(amountToSwap, assetDecimals(sourceAsset))) * 100n).toString(),
+      evmWallet,
+    );
+  }
 
   await using chainflip = await getChainflipApi();
 
@@ -75,8 +91,8 @@ export async function requestEvmSwapParameterEncoding<A extends WithBrokerAccoun
     max_oracle_price_slippage: undefined,
   };
 
-  const extraParameters: VaultSwapExtraParameters = {
-    chain: srcChain,
+  const extraParameters: EvmVaultSwapExtraParameters = {
+    chain: srcChain as 'Ethereum' | 'Arbitrum',
     input_amount: '0x' + new BigNumber(fineAmount).toString(16),
     refund_parameters: refundParams,
   };
