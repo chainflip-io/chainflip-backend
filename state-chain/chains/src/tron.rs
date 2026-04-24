@@ -45,7 +45,7 @@ pub mod fees {
 }
 
 use crate::{
-	evm::{Address, DeploymentStatus, EvmFetchId, H256, Uint},
+	evm::{Address, DeploymentStatus, EvmFetchId, Uint, H256},
 	ChainWitnessConfig, FeeEstimationApi, *,
 };
 use cf_primitives::chains::assets;
