@@ -1,21 +1,12 @@
 import assert from 'assert';
 import { sendVaultTransaction } from 'shared/send_btc';
-import {
-  Asset,
-  assetDecimals,
-  Assets,
-  cfMutex,
-  chainFromAsset,
-  Chains,
-  decodeDotAddressForContract,
-  fineAmountToAmount,
-  stateChainAssetFromAsset,
-} from 'shared/utils';
+import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistration } from 'generated/events/swapping/affiliateRegistration';
 import { swappingPrivateBrokerChannelOpened } from 'generated/events/swapping/privateBrokerChannelOpened';
+import { requestSwapParameterEncoding } from './vault_swap';
 
 interface BtcVaultSwapDetails {
   chain: string;
@@ -125,21 +116,19 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.trace('Requesting vault swap parameter encoding');
-  const BtcVaultSwapDetails = (await chainflip.rpc(
-    `cf_request_swap_parameter_encoding`,
+  const BtcVaultSwapDetails = await requestSwapParameterEncoding<BtcVaultSwapDetails>(
+    chainflip,
     broker.address,
-    stateChainAssetFromAsset(Assets.Btc),
-    stateChainAssetFromAsset(destinationAsset),
-    chainFromAsset(destinationAsset) === Chains.Assethub
-      ? decodeDotAddressForContract(destinationAddress)
-      : destinationAddress,
+    Assets.Btc,
+    destinationAsset,
+    destinationAddress,
     brokerFee,
     extraParameters,
-    null, // channel_metadata
+    undefined, // channel_metadata
     0, // boost_fee
     affiliateFees,
-    null, // dca_params
-  )) as unknown as BtcVaultSwapDetails;
+    undefined, // dca_params
+  );
 
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
@@ -176,21 +165,19 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
     retry_duration: 0,
   };
 
-  const BtcVaultSwapDetails = (await chainflip.rpc(
-    `cf_request_swap_parameter_encoding`,
+  const BtcVaultSwapDetails = await requestSwapParameterEncoding<BtcVaultSwapDetails>(
+    chainflip,
     broker.address,
-    stateChainAssetFromAsset(Assets.Btc),
-    stateChainAssetFromAsset(destinationAsset),
-    chainFromAsset(destinationAsset) === Chains.Assethub
-      ? decodeDotAddressForContract(destinationAddress)
-      : destinationAddress,
+    Assets.Btc,
+    destinationAsset,
+    destinationAddress,
     brokerFee,
     extraParameters,
-    null, // channel_metadata
+    undefined, // channel_metadata
     0, // boost_fee
     affiliateFees,
-    null, // dca_params
-  )) as unknown as BtcVaultSwapDetails;
+    undefined, // dca_params
+  );
 
   assert.strictEqual(BtcVaultSwapDetails.chain, 'Bitcoin');
 
