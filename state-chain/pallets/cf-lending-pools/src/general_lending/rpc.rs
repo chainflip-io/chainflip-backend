@@ -4,8 +4,6 @@ use cf_traits::lending::LoanId;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
-pub mod before_v12;
-
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcLoan<AccountId, Amount> {
 	pub loan_id: LoanId,
@@ -29,6 +27,10 @@ pub struct RpcLendingPool<Amount> {
 	/// network is expected to collect the fees when `available_amount` becomes > 0.
 	pub owed_to_network: Amount,
 	pub utilisation_rate: Permill,
+	/// Maximum utilisation allowed when opening new loans: borrows that would push utilisation
+	/// above this cap are rejected so the pool retains enough liquidity to liquidate the configured
+	/// fraction of outstanding loans at current oracle prices.
+	pub utilisation_cap: Permill,
 	pub current_interest_rate: Permill,
 	#[serde(flatten)]
 	pub config: LendingPoolConfiguration,
@@ -181,6 +183,7 @@ pub fn get_loan_accounts<T: Config>(
 fn build_rpc_lending_pool<T: Config>(
 	asset: Asset,
 	pool: &LendingPool<T::AccountId>,
+	price_cache: &OraclePriceCache<T>,
 ) -> RpcLendingPool<AssetAmount> {
 	let config = LendingConfig::<T>::get();
 
@@ -190,12 +193,19 @@ fn build_rpc_lending_pool<T: Config>(
 	let current_interest_rate = config.derive_interest_rate_per_year(asset, utilisation) +
 		config.network_fee_contributions.extra_interest;
 
+	// Report the cap as `Permill::one()` when it can't be computed (e.g. a missing oracle price
+	// for a collateral asset) so the RPC stays informative rather than failing.
+	let utilisation_cap =
+		compute_utilisation_cap::<T>(asset, config.liquidation_coverage_factor, price_cache)
+			.unwrap_or(Permill::one());
+
 	RpcLendingPool {
 		asset,
 		total_amount: pool.total_amount,
 		available_amount: pool.available_amount,
 		owed_to_network: pool.owed_to_network,
 		utilisation_rate: utilisation,
+		utilisation_cap,
 		current_interest_rate,
 		config: config.get_config_for_asset(asset).clone(),
 	}
@@ -229,14 +239,16 @@ pub fn get_all_loans<T: Config>() -> Vec<RpcLoan<T::AccountId, AssetAmount>> {
 }
 
 pub fn get_lending_pools<T: Config>(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>> {
+	let price_cache = OraclePriceCache::<T>::default();
+
 	if let Some(asset) = asset {
 		GeneralLendingPools::<T>::get(asset)
 			.iter()
-			.map(|pool| build_rpc_lending_pool::<T>(asset, pool))
+			.map(|pool| build_rpc_lending_pool::<T>(asset, pool, &price_cache))
 			.collect()
 	} else {
 		GeneralLendingPools::<T>::iter()
-			.map(|(asset, pool)| build_rpc_lending_pool::<T>(asset, &pool))
+			.map(|(asset, pool)| build_rpc_lending_pool::<T>(asset, &pool, &price_cache))
 			.collect()
 	}
 }
