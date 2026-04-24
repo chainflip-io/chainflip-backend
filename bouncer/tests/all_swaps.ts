@@ -80,36 +80,32 @@ export function testAllSwaps(timeoutPerSwap: number) {
     (id) => chainFromAsset(id) !== 'Assethub' && chainFromAsset(id) !== 'Bsc',
   );
 
-  // AssetsWithoutAssethub.sort().forEach((sourceAsset) => {
-  //   AssetsWithoutAssethub.sort()
-  //     .filter((destAsset) => sourceAsset !== destAsset)
-  //     .forEach((destAsset) => {
-  //       // Regular swaps
-  //       appendSwap(sourceAsset, destAsset, testSwap);
+  AssetsWithoutAssethub.sort().forEach((sourceAsset) => {
+    AssetsWithoutAssethub.sort()
+      .filter((destAsset) => sourceAsset !== destAsset)
+      .forEach((destAsset) => {
+        // Regular swaps
+        appendSwap(sourceAsset, destAsset, testSwap);
 
-  //       const sourceChain = chainFromAsset(sourceAsset);
-  //       const destChain = chainFromAsset(destAsset);
-  //       if (vaultSwapSupportedChains.includes(sourceChain)) {
-  //         // Vault Swaps
-  //         appendSwap(sourceAsset, destAsset, testVaultSwap);
+        const sourceChain = chainFromAsset(sourceAsset);
+        const destChain = chainFromAsset(destAsset);
+        if (vaultSwapSupportedChains.includes(sourceChain)) {
+          // Vault Swaps
+          appendSwap(sourceAsset, destAsset, testVaultSwap);
 
-  //         // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
-  //         if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
-  //           // CCM Vault swaps
-  //           appendSwap(sourceAsset, destAsset, testVaultSwap, true);
-  //         }
-  //       }
+          // Bitcoin doesn't support CCM Vault swaps due to transaction length limits
+          if (ccmSupportedChains.includes(destChain) && sourceChain !== 'Bitcoin') {
+            // CCM Vault swaps
+            appendSwap(sourceAsset, destAsset, testVaultSwap, true);
+          }
+        }
 
-  //       if (ccmSupportedChains.includes(destChain)) {
-  //         // CCM swaps
-  //         appendSwap(sourceAsset, destAsset, testSwap, true);
-  //       }
-  //     });
-  // });
-
-  // appendSwap('Eth', 'Btc', testVaultSwap);
-  // appendSwap('ArbUsdc', 'Btc', testVaultSwap);
-  appendSwap('Trx', 'Btc', testVaultSwap);
+        if (ccmSupportedChains.includes(destChain)) {
+          // CCM swaps
+          appendSwap(sourceAsset, destAsset, testSwap, true);
+        }
+      });
+  });
 
   for (const swap of allSwaps) {
     concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
