@@ -45,16 +45,12 @@ pub mod fees {
 }
 
 use crate::{
-	evm::{DeploymentStatus, EvmFetchId},
+	evm::{Address, DeploymentStatus, EvmFetchId, H256, Uint},
 	ChainWitnessConfig, FeeEstimationApi, *,
 };
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Tron;
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H160, H256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
 use frame_support::sp_runtime::RuntimeDebug;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
@@ -80,7 +76,7 @@ impl Chain for Tron {
 	const GAS_ASSET: Self::ChainAsset = assets::tron::Asset::Trx;
 	const WITNESS_PERIOD: Self::ChainBlockNumber = 1;
 	const FINE_AMOUNT_PER_UNIT: Self::ChainAmount = 1_000_000u128;
-	const BURN_ADDRESS: Self::ChainAccount = H160([0; 20]);
+	const BURN_ADDRESS: Self::ChainAccount = Address::zero();
 	const IS_EVM_CHAIN: bool = true;
 
 	type ChainCrypto = EvmCrypto;
@@ -92,7 +88,7 @@ impl Chain for Tron {
 	type ChainAssetMap<
 		T: Member + Parameter + MaxEncodedLen + Copy + BenchmarkValue + FullCodec + Unpin,
 	> = assets::tron::AssetMap<T>;
-	type ChainAccount = evm::Address;
+	type ChainAccount = Address;
 	type DepositFetchId = EvmFetchId;
 	type DepositChannelState = DeploymentStatus;
 	type DepositDetails = evm::DepositDetails;
