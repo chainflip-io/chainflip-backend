@@ -60,7 +60,7 @@ use state_chain_runtime::{
 
 use sp_core::{H160, H256};
 use sp_runtime::{AccountId32, FixedU64};
-
+use cf_primitives::chains::Tron;
 /*
 	changing any of these serialization tests signifies a breaking change in the
 	API. please make sure to get approval from the product team before merging
@@ -1180,6 +1180,22 @@ fn transaction_screening_events_serialization() {
 			BrokerRejectionEventFor::<Solana>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
 				deposit_details: VaultSwapOrDepositChannelId::Channel(SolAddress([0xe3; 32])),
+			},
+		],
+		tron_events: vec![
+			BrokerRejectionEventFor::<Tron>::TransactionRejectionRequestReceived {
+				account_id: ID_1,
+				tx_id: H256([0xe0; 32]),
+			},
+			BrokerRejectionEventFor::<Tron>::TransactionRejectionRequestExpired {
+				account_id: ID_2,
+				tx_id: H256([0xe1; 32]),
+			},
+			BrokerRejectionEventFor::<Tron>::TransactionRejectedByBroker {
+				refund_broadcast_id: 3u32,
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
 			},
 		],
 	};

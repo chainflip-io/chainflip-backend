@@ -1805,12 +1805,15 @@ impl_runtime_apis! {
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
 			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
 			let mut sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>> = Default::default();
+			let mut tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>> = Default::default();
+
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),
 					RuntimeEvent::EthereumIngressEgress(event) => eth_events.extend(extract_screening_events::<Runtime, EthereumInstance>(event)),
 					RuntimeEvent::ArbitrumIngressEgress(event) => arb_events.extend(extract_screening_events::<Runtime, ArbitrumInstance>(event)),
 					RuntimeEvent::SolanaIngressEgress(event) => sol_events.extend(extract_screening_events::<Runtime, SolanaInstance>(event)),
+					RuntimeEvent::TronIngressEgress(event) => tron_events.extend(extract_screening_events::<Runtime, TronInstance>(event)),
 					_ => {},
 				}
 			}
@@ -1820,6 +1823,7 @@ impl_runtime_apis! {
 				eth_events,
 				arb_events,
 				sol_events,
+				tron_events
 			}
 		}
 
