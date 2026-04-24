@@ -14,20 +14,17 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use cf_traits::SafeMode;
+use frame_support::{instances::Instance7, traits::OnRuntimeUpgrade, weights::Weight};
 
 use crate::Runtime;
 
 pub struct SafeModeMigration;
 
 mod old {
-	use crate::{
-		chainflip::witnessing::{
-			arbitrum_elections::ArbitrumElectionsSafeMode,
-			ethereum_elections::EthereumElectionsSafeMode,
-			generic_elections::GenericElectionsSafeMode,
-		},
-		safe_mode::WitnesserCallPermission,
+	use crate::chainflip::witnessing::{
+		arbitrum_elections::ArbitrumElectionsSafeMode,
+		ethereum_elections::EthereumElectionsSafeMode, generic_elections::GenericElectionsSafeMode,
 	};
 	use cf_chains::instances::{
 		ArbitrumInstance, AssethubInstance, BitcoinCryptoInstance, BitcoinInstance,
@@ -36,7 +33,7 @@ mod old {
 	};
 	use cf_primitives::Asset;
 	use cf_traits::SafeModeSet;
-	use codec::{Decode, Encode};
+	use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 	use scale_info::TypeInfo;
 	use sp_core::RuntimeDebug;
 
@@ -51,6 +48,56 @@ mod old {
 		pub add_collateral: SafeModeSet<Asset>,
 		pub remove_collateral: SafeModeSet<Asset>,
 		pub liquidations_enabled: bool,
+	}
+
+	/// The pre-Tron WitnesserCallPermission (no tron_* fields).
+	#[derive(
+		serde::Serialize,
+		serde::Deserialize,
+		Encode,
+		Decode,
+		DecodeWithMemTracking,
+		MaxEncodedLen,
+		TypeInfo,
+		Default,
+		Copy,
+		Clone,
+		PartialEq,
+		Eq,
+		RuntimeDebug,
+	)]
+	pub struct WitnesserCallPermission {
+		pub governance: bool,
+		pub funding: bool,
+		pub swapping: bool,
+
+		pub ethereum_broadcast: bool,
+		pub ethereum_chain_tracking: bool,
+		pub ethereum_ingress_egress: bool,
+		pub ethereum_vault: bool,
+
+		pub polkadot_broadcast: bool,
+		pub polkadot_chain_tracking: bool,
+		pub polkadot_ingress_egress: bool,
+		pub polkadot_vault: bool,
+
+		pub bitcoin_broadcast: bool,
+		pub bitcoin_chain_tracking: bool,
+		pub bitcoin_ingress_egress: bool,
+		pub bitcoin_vault: bool,
+
+		pub arbitrum_broadcast: bool,
+		pub arbitrum_chain_tracking: bool,
+		pub arbitrum_ingress_egress: bool,
+		pub arbitrum_vault: bool,
+
+		pub solana_broadcast: bool,
+		pub solana_vault: bool,
+
+		pub assethub_broadcast: bool,
+		pub assethub_chain_tracking: bool,
+		pub assethub_ingress_egress: bool,
+		pub assethub_vault: bool,
 	}
 
 	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
@@ -95,45 +142,94 @@ impl OnRuntimeUpgrade for SafeModeMigration {
 	fn on_runtime_upgrade() -> Weight {
 		let _ = pallet_cf_environment::RuntimeSafeMode::<Runtime>::translate(
 			|maybe_old: Option<old::RuntimeSafeMode>| {
-				maybe_old.map(|old| crate::safe_mode::RuntimeSafeMode {
-					emissions: old.emissions,
-					funding: old.funding,
-					swapping: old.swapping,
-					liquidity_provider: old.liquidity_provider,
-					validator: old.validator,
-					pools: old.pools,
-					trading_strategies: old.trading_strategies,
-					lending_pools: pallet_cf_lending_pools::PalletSafeMode {
-						add_boost_funds_enabled: old.lending_pools.add_boost_funds_enabled,
-						stop_boosting_enabled: old.lending_pools.stop_boosting_enabled,
-						borrowing: old.lending_pools.borrowing,
-						add_lender_funds: old.lending_pools.add_lender_funds,
-						withdraw_lender_funds: old.lending_pools.withdraw_lender_funds,
-						// add_collateral and remove_collateral are dropped
-						liquidations_enabled: old.lending_pools.liquidations_enabled,
-					},
-					reputation: old.reputation,
-					asset_balances: old.asset_balances,
-					threshold_signature_evm: old.threshold_signature_evm,
-					threshold_signature_bitcoin: old.threshold_signature_bitcoin,
-					threshold_signature_polkadot: old.threshold_signature_polkadot,
-					threshold_signature_solana: old.threshold_signature_solana,
-					broadcast_ethereum: old.broadcast_ethereum,
-					broadcast_bitcoin: old.broadcast_bitcoin,
-					broadcast_polkadot: old.broadcast_polkadot,
-					broadcast_arbitrum: old.broadcast_arbitrum,
-					broadcast_solana: old.broadcast_solana,
-					broadcast_assethub: old.broadcast_assethub,
-					witnesser: old.witnesser,
-					ingress_egress_ethereum: old.ingress_egress_ethereum,
-					ingress_egress_bitcoin: old.ingress_egress_bitcoin,
-					ingress_egress_polkadot: old.ingress_egress_polkadot,
-					ingress_egress_arbitrum: old.ingress_egress_arbitrum,
-					ingress_egress_solana: old.ingress_egress_solana,
-					ingress_egress_assethub: old.ingress_egress_assethub,
-					elections_generic: old.elections_generic,
-					ethereum_elections: old.ethereum_elections,
-					arbitrum_elections: old.arbitrum_elections,
+				maybe_old.map(|old| {
+					let witnesser = match old.witnesser {
+						pallet_cf_witnesser::PalletSafeMode::CodeGreen =>
+							pallet_cf_witnesser::PalletSafeMode::CodeGreen,
+						pallet_cf_witnesser::PalletSafeMode::CodeRed =>
+							pallet_cf_witnesser::PalletSafeMode::CodeRed,
+						pallet_cf_witnesser::PalletSafeMode::CodeAmber(old_perms) =>
+							pallet_cf_witnesser::PalletSafeMode::CodeAmber(
+								crate::safe_mode::WitnesserCallPermission {
+									governance: old_perms.governance,
+									funding: old_perms.funding,
+									swapping: old_perms.swapping,
+									ethereum_broadcast: old_perms.ethereum_broadcast,
+									ethereum_chain_tracking: old_perms.ethereum_chain_tracking,
+									ethereum_ingress_egress: old_perms.ethereum_ingress_egress,
+									ethereum_vault: old_perms.ethereum_vault,
+									polkadot_broadcast: old_perms.polkadot_broadcast,
+									polkadot_chain_tracking: old_perms.polkadot_chain_tracking,
+									polkadot_ingress_egress: old_perms.polkadot_ingress_egress,
+									polkadot_vault: old_perms.polkadot_vault,
+									bitcoin_broadcast: old_perms.bitcoin_broadcast,
+									bitcoin_chain_tracking: old_perms.bitcoin_chain_tracking,
+									bitcoin_ingress_egress: old_perms.bitcoin_ingress_egress,
+									bitcoin_vault: old_perms.bitcoin_vault,
+									arbitrum_broadcast: old_perms.arbitrum_broadcast,
+									arbitrum_chain_tracking: old_perms.arbitrum_chain_tracking,
+									arbitrum_ingress_egress: old_perms.arbitrum_ingress_egress,
+									arbitrum_vault: old_perms.arbitrum_vault,
+									solana_broadcast: old_perms.solana_broadcast,
+									solana_vault: old_perms.solana_vault,
+									assethub_broadcast: old_perms.assethub_broadcast,
+									assethub_chain_tracking: old_perms.assethub_chain_tracking,
+									assethub_ingress_egress: old_perms.assethub_ingress_egress,
+									assethub_vault: old_perms.assethub_vault,
+									tron_broadcast: true,
+									tron_chain_tracking: true,
+									tron_ingress_egress: true,
+									tron_vault: true,
+								},
+							),
+					};
+
+					crate::safe_mode::RuntimeSafeMode {
+						emissions: old.emissions,
+						funding: old.funding,
+						swapping: old.swapping,
+						liquidity_provider: old.liquidity_provider,
+						validator: old.validator,
+						pools: old.pools,
+						trading_strategies: old.trading_strategies,
+						lending_pools: pallet_cf_lending_pools::PalletSafeMode {
+							add_boost_funds_enabled: old.lending_pools.add_boost_funds_enabled,
+							stop_boosting_enabled: old.lending_pools.stop_boosting_enabled,
+							borrowing: old.lending_pools.borrowing,
+							add_lender_funds: old.lending_pools.add_lender_funds,
+							withdraw_lender_funds: old.lending_pools.withdraw_lender_funds,
+							// add_collateral and remove_collateral are dropped
+							liquidations_enabled: old.lending_pools.liquidations_enabled,
+						},
+						reputation: old.reputation,
+						asset_balances: old.asset_balances,
+						threshold_signature_evm: old.threshold_signature_evm,
+						threshold_signature_bitcoin: old.threshold_signature_bitcoin,
+						threshold_signature_polkadot: old.threshold_signature_polkadot,
+						threshold_signature_solana: old.threshold_signature_solana,
+						broadcast_ethereum: old.broadcast_ethereum,
+						broadcast_bitcoin: old.broadcast_bitcoin,
+						broadcast_polkadot: old.broadcast_polkadot,
+						broadcast_arbitrum: old.broadcast_arbitrum,
+						broadcast_solana: old.broadcast_solana,
+						broadcast_assethub: old.broadcast_assethub,
+						broadcast_tron:
+							<pallet_cf_broadcast::PalletSafeMode<Instance7> as SafeMode>::code_green(),
+						witnesser,
+						ingress_egress_ethereum: old.ingress_egress_ethereum,
+						ingress_egress_bitcoin: old.ingress_egress_bitcoin,
+						ingress_egress_polkadot: old.ingress_egress_polkadot,
+						ingress_egress_arbitrum: old.ingress_egress_arbitrum,
+						ingress_egress_solana: old.ingress_egress_solana,
+						ingress_egress_assethub: old.ingress_egress_assethub,
+						ingress_egress_tron:
+							<pallet_cf_ingress_egress::PalletSafeMode<Instance7> as SafeMode>::code_green(),
+						elections_generic: old.elections_generic,
+						ethereum_elections: old.ethereum_elections,
+						arbitrum_elections: old.arbitrum_elections,
+						tron_elections:
+							<crate::chainflip::witnessing::tron_elections::TronElectionsSafeMode as SafeMode>::code_green(),
+					}
 				})
 			},
 		)
