@@ -17,10 +17,10 @@ import { TestContext } from 'shared/utils/test_context';
 import { setupLendingPools } from 'shared/lending';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
-import { lendingPoolsCollateralAdded } from 'generated/events/lendingPools/collateralAdded';
+import { lendingPoolsLendingFundsAdded } from 'generated/events/lendingPools/lendingFundsAdded';
 import { lendingPoolsLoanCreated } from 'generated/events/lendingPools/loanCreated';
 import { lendingPoolsLoanSettled } from 'generated/events/lendingPools/loanSettled';
-import { lendingPoolsCollateralRemoved } from 'generated/events/lendingPools/collateralRemoved';
+import { lendingPoolsLendingFundsRemoved } from 'generated/events/lendingPools/lendingFundsRemoved';
 
 export interface Loan {
   loan_id: number;
@@ -75,30 +75,26 @@ async function lendingTestForAsset<A = []>(
     (subcf) => depositLiquidity(subcf, collateralAsset, collateralAmount * 1.05),
   ]);
 
-  // Add collateral to the account
+  // Supply the collateral asset to the lending pool (this is what the loan will be collateralised by)
   const collateralAssetFreeBalance1 = await getFreeBalance(lp.address, collateralAsset);
   cf.debug(`Current free balance of collateral asset: ${collateralAssetFreeBalance1}`);
-  cf.debug(`Adding collateral`);
-  const collateral: [Asset, string][] = [
-    [
-      collateralAsset,
-      amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset)),
-    ],
-  ];
+  cf.debug(`Supplying collateral`);
 
-  const collateralAddedEvent = await cf.submitExtrinsic({
+  const fundsAddedEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.lendingPools.addCollateral(
+      api.tx.lendingPools.addLenderFunds(
         collateralAsset,
-        new Map(collateral.map(([asset, amount]) => [{ [asset]: {} }, amount])),
+        amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset)),
       ),
     expectedEvent: {
-      name: 'LendingPools.CollateralAdded',
-      schema: lendingPoolsCollateralAdded.refine((event) => event.borrowerId === lp.address),
+      name: 'LendingPools.LendingFundsAdded',
+      schema: lendingPoolsLendingFundsAdded.refine(
+        (event) => event.lenderId === lp.address && event.asset === collateralAsset,
+      ),
     },
   });
   cf.debug(
-    `Collateral ${collateralAddedEvent.collateral} successfully added for LP: ${collateralAddedEvent.borrowerId}`,
+    `Supplied ${fundsAddedEvent.amount} of ${fundsAddedEvent.asset} for LP: ${fundsAddedEvent.lenderId}`,
   );
 
   // Check that our collateral is gone
@@ -122,7 +118,6 @@ async function lendingTestForAsset<A = []>(
         loanAsset,
         amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
         collateralAsset,
-        [], // No extra collateral needed
       ),
     expectedEvent: {
       name: 'LendingPools.LoanCreated',
@@ -202,23 +197,18 @@ async function lendingTestForAsset<A = []>(
   });
   cf.debug(`Loan successfully settled loanId: ${loanSettledEvent.loanId}`);
 
-  // Recover the collateral
-  const collateralAmountToRemove = (await getLoanAccount(lp.address)).collateral[0]
-    .amount as string;
-  const collateralToRemove: [Asset, string][] = [[collateralAsset, collateralAmountToRemove]];
-
-  const collateralRemovedEvent = await cf.submitExtrinsic({
-    extrinsic: (api) =>
-      api.tx.lendingPools.removeCollateral(
-        new Map(collateralToRemove.map(([asset, amount]) => [{ [asset]: {} }, amount])),
-      ),
+  // Recover the supplied collateral by withdrawing all lender funds
+  const fundsRemovedEvent = await cf.submitExtrinsic({
+    extrinsic: (api) => api.tx.lendingPools.removeLenderFunds(collateralAsset, null),
     expectedEvent: {
-      name: 'LendingPools.CollateralRemoved',
-      schema: lendingPoolsCollateralRemoved.refine((event) => event.borrowerId === lp.address),
+      name: 'LendingPools.LendingFundsRemoved',
+      schema: lendingPoolsLendingFundsRemoved.refine(
+        (event) => event.lenderId === lp.address && event.asset === collateralAsset,
+      ),
     },
   });
   cf.debug(
-    `Collateral ${collateralRemovedEvent.collateral} successfully removed for LP: ${collateralRemovedEvent.borrowerId}`,
+    `Removed ${fundsRemovedEvent.unlockedAmount} of ${fundsRemovedEvent.asset} for LP: ${fundsRemovedEvent.lenderId}`,
   );
 
   // Check balances
