@@ -7,19 +7,17 @@ import {
   defaultAssetAmounts,
   chainFromAsset,
   assetDecimals,
-  stateChainAssetFromAsset,
   createEvmWalletAndFund,
   newAssetAddress,
-  decodeDotAddressForContract,
-  Chains,
   Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { ChannelRefundParameters } from 'shared/sol_vault_swap';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { signAndSendTxEvm } from 'shared/send_evm';
+import { ChannelRefundParameters } from './sol_vault_swap';
+import { requestSwapParameterEncoding } from './vault_swap';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -55,7 +53,6 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   optionalRefundAddress?: string,
 ) {
   const srcChain = chainFromAsset(sourceAsset);
-  const destChain = chainFromAsset(destAsset);
   const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
   const refundAddress =
     optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
@@ -102,29 +99,19 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.debug('Requesting vault swap parameter encoding');
-  const vaultSwapDetails = (await chainflip.rpc(
-    `cf_request_swap_parameter_encoding`,
+  const vaultSwapDetails = await requestSwapParameterEncoding<EvmVaultSwapDetails>(
+    chainflip,
     cf.requirements.account.keypair.address,
-    stateChainAssetFromAsset(sourceAsset),
-    stateChainAssetFromAsset(destAsset),
-    destChain === Chains.Assethub ? decodeDotAddressForContract(destAddress) : destAddress,
+    sourceAsset,
+    destAsset,
+    destAddress,
     brokerCommissionBps,
     extraParameters,
-    messageMetadata && {
-      message: messageMetadata.message as `0x${string}`,
-      gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.ccmAdditionalData,
-    },
+    messageMetadata,
     boostFeeBps ?? 0,
-    affiliateFees.map((fee) => ({
-      account: fee.accountAddress,
-      bps: fee.commissionBps,
-    })),
-    dcaParams && {
-      number_of_chunks: dcaParams.numberOfChunks,
-      chunk_interval: dcaParams.chunkIntervalBlocks,
-    },
-  )) as unknown as EvmVaultSwapDetails;
+    affiliateFees.map((fee) => ({ account: fee.accountAddress, bps: fee.commissionBps })),
+    dcaParams,
+  );
 
   const tx = {
     to: vaultSwapDetails.to,
