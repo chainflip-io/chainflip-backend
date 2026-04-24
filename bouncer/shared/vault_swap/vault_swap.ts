@@ -10,6 +10,20 @@ import {
 import { CcmDepositMetadata, DcaParams } from 'shared/new_swap';
 import { AssetAndChain } from '@chainflip/utils/chainflip';
 
+export type ChannelRefundParameters = {
+  retry_duration: number;
+  refund_address: string;
+  min_price: string;
+  refund_ccm_metadata:
+    | {
+        message: string;
+        gas_budget: string;
+        ccm_additional_data: string | undefined;
+      }
+    | undefined;
+  max_oracle_price_slippage: number | undefined;
+};
+
 function toCcmRpcParams(metadata: CcmDepositMetadata) {
   return {
     message: metadata.message,
@@ -40,7 +54,7 @@ type VaultSwapInputRpc = {
   dca_parameters: { number_of_chunks: number; chunk_interval: number } | null;
 };
 
-const evmChains: ReadonlySet<string> = new Set([Chains.Ethereum, Chains.Arbitrum]);
+const evmChains: ReadonlySet<string> = new Set([Chains.Ethereum, Chains.Arbitrum, Chains.Tron]);
 
 /**
  * Requests the encoded vault swap parameters using the `cf_request_swap_parameter_encoding` RPC.
