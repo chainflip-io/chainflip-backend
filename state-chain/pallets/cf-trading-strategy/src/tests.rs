@@ -1618,6 +1618,84 @@ mod oracle_strategy {
 			});
 	}
 
+	/// Tests that a strategy can be created while the oracle price is stale, it does not place any
+	/// orders at first, and that it resumes normal operation (placing orders) once the price
+	/// becomes fresh again.
+	#[test]
+	fn stale_price_on_deploy_resumes_on_fresh_price() {
+		const MIN_BUY_TICK_OFFSET: Tick = -10;
+		const MAX_BUY_TICK_OFFSET: Tick = -6;
+		const MIN_SELL_TICK_OFFSET: Tick = 6;
+		const MAX_SELL_TICK_OFFSET: Tick = 10;
+
+		const AVERAGE_BUY_OFFSET_TICK: Tick = -8;
+		const AVERAGE_SELL_OFFSET_TICK: Tick = 8;
+
+		new_test_ext()
+			.then_execute_at_next_block(|_| {
+				set_thresholds(0);
+
+				// Set price as stale before deploying the strategy
+				MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
+				MockPriceFeedApi::set_price_usd(QUOTE_ASSET, 1);
+				MockPriceFeedApi::set_stale(BASE_ASSET, true);
+
+				let initial_amounts: BTreeMap<_, _> =
+					[(BASE_ASSET, BASE_AMOUNT), (QUOTE_ASSET, BASE_AMOUNT)].into();
+				for (asset, amount) in initial_amounts.clone() {
+					MockLpRegistration::register_refund_address(LP, asset.into());
+					MockBalance::credit_account(&LP, asset, amount);
+				}
+
+				assert_ok!(TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::OracleTracking {
+						min_buy_offset_tick: MIN_BUY_TICK_OFFSET,
+						max_buy_offset_tick: MAX_BUY_TICK_OFFSET,
+						min_sell_offset_tick: MIN_SELL_TICK_OFFSET,
+						max_sell_offset_tick: MAX_SELL_TICK_OFFSET,
+						base_asset: BASE_ASSET,
+						quote_asset: QUOTE_ASSET,
+					},
+					initial_amounts,
+				));
+			})
+			.then_execute_at_next_block(|_| {
+				// No orders should have been placed while the price is stale
+				assert!(MockPoolApi::<AccountId>::get_limit_orders().is_empty());
+
+				// Now mark the price as fresh
+				MockPriceFeedApi::set_stale(BASE_ASSET, false);
+			})
+			.then_execute_at_next_block(|_| {
+				// The strategy should now have placed its limit orders
+				let (_, strategy_id, _) = Strategies::<Test>::iter().next().unwrap();
+				assert_eq!(
+					MockPoolApi::get_limit_orders(),
+					vec![
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Buy,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_BUY_OFFSET_TICK,
+							amount: BASE_AMOUNT,
+						},
+						MockLimitOrder {
+							base_asset: BASE_ASSET,
+							quote_asset: QUOTE_ASSET,
+							account_id: strategy_id,
+							side: Side::Sell,
+							order_id: STRATEGY_ORDER_ID_1,
+							tick: AVERAGE_SELL_OFFSET_TICK,
+							amount: BASE_AMOUNT,
+						},
+					]
+				);
+			});
+	}
+
 	/// Tests that the oracle strategy produces correct ticks and amounts when
 	/// the base and quote assets have different numbers of decimals.
 	/// Uses Btc (8 decimals) as base and Usdc (6 decimals) as quote.
