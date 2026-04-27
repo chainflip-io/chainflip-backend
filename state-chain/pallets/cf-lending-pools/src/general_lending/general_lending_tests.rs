@@ -5415,13 +5415,14 @@ mod supply_as_collateral {
 
 		const LOAN_2_ID: LoanId = LoanId(1);
 
-		// Someone will borrow 50% of our supplied collateral
-		const PRINCIPAL_2: AssetAmount = INIT_COLLATERAL / 2;
+		// Someone will borrow 20% of our supplied collateral
+		const PRINCIPAL_2: AssetAmount = INIT_COLLATERAL / 5;
 
 		const ORIGINATION_FEE_2: AssetAmount =
 			portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL_2);
 
-		const SWAPPED_PRINCIPAL_1: AssetAmount = 3 * PRINCIPAL / 5;
+		// Selling 80% of collateral will recover 80% of principal
+		const SWAPPED_PRINCIPAL_1: AssetAmount = 4 * PRINCIPAL / 5;
 
 		let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * SWAPPED_PRINCIPAL_1;
 
@@ -5497,12 +5498,13 @@ mod supply_as_collateral {
 					LiquidationStatus::Liquidating { .. }
 				);
 
-				// Supplied funds should have been automatically withdrawn (partially):
+				// Supplied funds should have been automatically withdrawn (except for the part
+				// that's borrowed):
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER),
-					Ok(INIT_COLLATERAL / 2 + ORIGINATION_FEE_2)
+					Ok(PRINCIPAL_2 + ORIGINATION_FEE_2)
 				);
 
 				let liquidation_swap = MockSwapRequestHandler::<Test>::get_swap_requests()
@@ -5602,7 +5604,7 @@ mod supply_as_collateral {
 								to_asset: LOAN_ASSET
 							}
 						)]),
-						liquidation_type: LiquidationType::Soft
+						liquidation_type: LiquidationType::Hard
 					}
 				);
 
