@@ -72,7 +72,7 @@ mod test_rotate_vault_proxy {
 	use super::*;
 	use crate::{
 		dot::{PolkadotPair, NONCE_2, RAW_SEED_2, RAW_SEED_3},
-		hub::TEST_RUNTIME_VERSION,
+		hub::test::TEST_RUNTIME_VERSION,
 	};
 
 	#[test]

@@ -20,8 +20,8 @@ use crate::{
 		PolkadotAccountId, PolkadotAccountIdLookup, PolkadotProxyType, PolkadotReplayProtection,
 	},
 	hub::{
-		Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall, BalancesCall,
-		ProxyCall, UtilityCall,
+		as_derivative_u64, Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall,
+		BalancesCall, ProxyCall, UtilityCall,
 	},
 	TransferAssetParams,
 };
@@ -63,9 +63,9 @@ pub fn extrinsic_builder(
 								value: transfer_params.amount,
 							}),
 					},
-					AssethubRuntimeCall::Utility(UtilityCall::as_derivative {
-						index: derivative_index as u16,
-						call: Box::new(AssethubRuntimeCall::Utility(UtilityCall::force_batch {
+					as_derivative_u64(
+						derivative_index,
+						AssethubRuntimeCall::Utility(UtilityCall::force_batch {
 							calls: vec![
 								xcm_call,
 								match transfer_params.asset {
@@ -88,8 +88,8 @@ pub fn extrinsic_builder(
 										}),
 								},
 							],
-						})),
-					}),
+						}),
+					),
 				],
 			})),
 		}),
@@ -98,11 +98,10 @@ pub fn extrinsic_builder(
 
 #[cfg(test)]
 mod test_xcm_call {
-
 	use super::*;
 	use crate::{
 		dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2},
-		hub::TEST_RUNTIME_VERSION,
+		hub::test::TEST_RUNTIME_VERSION,
 	};
 	use cf_primitives::chains::assets;
 
@@ -148,5 +147,110 @@ mod test_xcm_call {
 		builder
 			.insert_signer_and_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
+	}
+
+	fn simulated_origin(
+		vault: PolkadotAccountId,
+		mut call: &AssethubRuntimeCall,
+	) -> PolkadotAccountId {
+		let mut origin = vault;
+		while let AssethubRuntimeCall::Utility(UtilityCall::as_derivative { index, call: inner }) =
+			call
+		{
+			origin = {
+				PolkadotAccountId::from_aliased(crate::hub::calculate_derived_address_utility(
+					*origin.aliased_ref(),
+					*index,
+				))
+			};
+			call = inner.as_ref();
+		}
+		origin
+	}
+
+	// For every derivative index, the account that `extrinsic_builder` funds must equal the
+	// account the runtime would execute the user call from. Walks the built `as_derivative`
+	// chain in-process using the same `blake2_256("modlpy/utilisuba" || parent || index_le)`
+	// that pallet-utility uses on Assethub, and compares against `calculate_derived_address`.
+	//
+	// Uniform `any::<u64>()` sampling would rarely hit the small-id boundaries where the
+	// original truncation bug lived, so `prop_oneof!` biases the strategy toward single-,
+	// two-, and three-layer ranges plus the specific cutover points.
+	proptest::proptest! {
+		#[test]
+		fn funded_address_matches_execution_origin_for_all_ids(
+			id in proptest::prop_oneof![
+				1 => proptest::prelude::Just(0u64),
+				1 => proptest::prelude::Just(1u64),
+				1 => proptest::prelude::Just(0xFFFFu64),
+				1 => proptest::prelude::Just(0x0001_0000u64),
+				1 => proptest::prelude::Just(u64::MAX),
+				3 => 0u64..=0xFFFFu64,
+				3 => 0x0001_0000u64..=0x000F_FFFFu64,
+				2 => 0x0001_0000_0000u64..=0x000F_FFFF_FFFFu64,
+				4 => proptest::prelude::any::<u64>(),
+			],
+		) {
+			use crate::hub::as_derivative_u64;
+			use proptest::{prop_assert_eq, prop_assert_ne};
+
+			let vault = PolkadotAccountId::from_aliased([1u8; 32]);
+			let recipient = PolkadotAccountId::from_aliased([2u8; 32]);
+			let dummy_user_call = AssethubRuntimeCall::Balances(BalancesCall::transfer_allow_death {
+				dest: PolkadotAccountIdLookup::from(recipient),
+				value: 0,
+			});
+
+			let builder = super::extrinsic_builder(
+				PolkadotReplayProtection {
+					nonce: NONCE_1,
+					signer: PolkadotAccountId::from_aliased([9u8; 32]),
+					genesis_hash: Default::default(),
+				},
+				id,
+				TransferAssetParams::<Assethub> {
+					to: recipient,
+					amount: 1_000,
+					asset: assets::hub::Asset::HubDot,
+				},
+				vault,
+				dummy_user_call.clone(),
+			);
+
+			let outer_batch = match &builder.extrinsic_call {
+				AssethubRuntimeCall::Proxy(ProxyCall::proxy { call, .. }) => match call.as_ref() {
+					AssethubRuntimeCall::Utility(UtilityCall::force_batch { calls }) => calls,
+					other => panic!("unexpected inner of proxy: {other:?}"),
+				},
+				other => panic!("unexpected outer call: {other:?}"),
+			};
+			prop_assert_eq!(outer_batch.len(), 2);
+
+			let funded_dest = match &outer_batch[0] {
+				AssethubRuntimeCall::Balances(BalancesCall::transfer_allow_death {
+					dest, ..
+				}) => dest.clone(),
+				other => panic!("expected funding transfer, got {other:?}"),
+			};
+
+			let execution_origin = simulated_origin(vault, &outer_batch[1]);
+
+			prop_assert_eq!(
+				PolkadotAccountIdLookup::from(execution_origin),
+				funded_dest,
+				"funded destination and execution origin disagree for id {:#018x}", id,
+			);
+			prop_assert_eq!(
+				execution_origin,
+				crate::hub::calculate_derived_address(vault, id),
+				"execution origin doesn't match calculate_derived_address for id {:#018x}", id,
+			);
+			prop_assert_ne!(execution_origin, vault,
+				"execution origin should never be the vault, id {:#018x}", id);
+
+			// Sanity: the same id fed through as_derivative_u64 in isolation agrees too.
+			let standalone = as_derivative_u64(id, dummy_user_call.clone());
+			prop_assert_eq!(simulated_origin(vault, &standalone), execution_origin);
+		}
 	}
 }

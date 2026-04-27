@@ -940,6 +940,7 @@ export const cfChainsExecutexSwapAndCallError = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('DispatchError'), value: spRuntimeDispatchError }),
   z.object({ __kind: z.literal('NoVault') }),
   z.object({ __kind: z.literal('AuxDataNotReady') }),
+  z.object({ __kind: z.literal('NoChannelAvailable') }),
 ]);
 
 export const palletCfEthereumIngressEgressDepositFailedReason = z.discriminatedUnion('__kind', [
