@@ -1,22 +1,46 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
-// This command takes one argument.
-// It will find and run the test function (using vitest) in the test file provided as an argument.
+// This command takes one argument: either a test file or a swap number.
 //
-// For example: ./commands/run_test.ts ./tests/boost.ts
-// This is the equivalent of running `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
+// To run a test file:
+//   ./commands/run_test.ts ./tests/boost.ts
+//   This is the equivalent of running:
+//  `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
+//
+// To run a single swap test by number:
+//   ./commands/run_test.ts 287
+//   This is the equivalent of running:
+// `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "Swap 287:"`
 
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { testInfoFile } from 'shared/utils';
 
-// Check that a test file was provided as an argument
-const testFile = process.argv[2];
-if (!testFile) {
+const arg = process.argv[2];
+if (!arg) {
   console.error('Usage: ./commands/run_test.ts ./tests/<test_file>');
+  console.error('       ./commands/run_test.ts <swap_number>');
   process.exit(1);
-} else if (!existsSync(testFile)) {
+}
+
+// If a swap number is given, run just that single swap test directly.
+if (/^\d+$/.test(arg)) {
+  const testFilter = `Swap ${arg}:`;
+  try {
+    execSync(
+      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run tests/fast_bouncer.test.ts -t "${testFilter}"`,
+      { stdio: 'inherit' },
+    );
+  } catch (err) {
+    console.error(`Swap test ${arg} failed:`, err);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+const testFile = arg;
+if (!existsSync(testFile)) {
   console.error(`Test file ${testFile} not found`);
   process.exit(1);
 }

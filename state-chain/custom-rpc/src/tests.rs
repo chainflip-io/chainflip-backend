@@ -1414,7 +1414,7 @@ fn lending_config_serialization() {
 		minimum_loan_amount_usd: U256::from(100_000),
 		minimum_supply_amount_usd: U256::from(100_000),
 		minimum_update_loan_amount_usd: U256::from(50_000),
-		minimum_update_collateral_amount_usd: U256::from(25_000),
+		minimum_update_supply_amount_usd: U256::from(25_000),
 	};
 
 	insta::assert_json_snapshot!(config);

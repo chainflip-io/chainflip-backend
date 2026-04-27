@@ -97,9 +97,9 @@ pub mod presigner {
 	}
 }
 
-#[cfg(feature = "runtime-integration-tests")]
+#[cfg(any(feature = "test", feature = "runtime-integration-tests"))]
 pub struct TestSigners<S>(pub Vec<S>);
-#[cfg(feature = "runtime-integration-tests")]
+#[cfg(any(feature = "test", feature = "runtime-integration-tests"))]
 impl<S: Signer> TestSigners<S> {
 	pub fn pubkeys(&self) -> Vec<Pubkey> {
 		self.0.iter().map(|keypair| keypair.pubkey()).collect()
@@ -130,7 +130,7 @@ impl<S: Signer> TestSigners<S> {
 	}
 }
 
-#[cfg(feature = "runtime-integration-tests")]
+#[cfg(any(feature = "test", feature = "runtime-integration-tests"))]
 impl<S> From<Vec<S>> for TestSigners<S> {
 	fn from(s: Vec<S>) -> Self {
 		Self(s)

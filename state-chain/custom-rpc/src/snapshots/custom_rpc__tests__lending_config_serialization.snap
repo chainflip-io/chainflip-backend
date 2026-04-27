@@ -30,5 +30,5 @@ expression: config
   "minimum_loan_amount_usd": "0x186a0",
   "minimum_supply_amount_usd": "0x186a0",
   "minimum_update_loan_amount_usd": "0xc350",
-  "minimum_update_collateral_amount_usd": "0x61a8"
+  "minimum_update_supply_amount_usd": "0x61a8"
 }

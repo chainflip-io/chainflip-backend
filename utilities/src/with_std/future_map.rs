@@ -77,6 +77,26 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> FutureMap<Key, Fut> {
 		self.keys.contains(key)
 	}
 
+	pub fn remove_where<Predicate>(&mut self, mut predicate: Predicate) -> Vec<Key>
+	where
+		Predicate: FnMut(&Key) -> bool,
+	{
+		let mut removed_keys = Vec::new();
+		let futures = std::mem::take(&mut self.futures).into_iter();
+
+		for future in futures {
+			if predicate(&future.key) {
+				let was_present = self.keys.remove(&future.key);
+				debug_assert!(was_present);
+				removed_keys.push(future.key);
+			} else {
+				self.futures.push(future);
+			}
+		}
+
+		removed_keys
+	}
+
 	pub fn len(&self) -> usize {
 		self.keys.len()
 	}
@@ -126,5 +146,35 @@ mod tests {
 		assert!(removed_future.is_some());
 		assert_eq!(removed_future.unwrap().now_or_never(), Some(FUT_OUTPUT));
 		assert!(map.is_empty());
+	}
+
+	#[test]
+	fn test_remove_where_removes_matching_keys() {
+		let mut map: FutureMap<i32, _> = Default::default();
+
+		map.insert(1, ready(100));
+		map.insert(2, ready(200));
+		map.insert(3, ready(300));
+
+		let removed_keys = map.remove_where(|key| *key % 2 == 0);
+
+		assert_eq!(removed_keys, vec![2]);
+		assert!(map.contains_key(&1));
+		assert!(!map.contains_key(&2));
+		assert!(map.contains_key(&3));
+	}
+
+	#[test]
+	fn test_remove_where_no_matches() {
+		let mut map: FutureMap<i32, _> = Default::default();
+
+		map.insert(1, ready(100));
+		map.insert(2, ready(200));
+
+		let removed_keys = map.remove_where(|_| false);
+
+		assert!(removed_keys.is_empty());
+		assert!(map.contains_key(&1));
+		assert!(map.contains_key(&2));
 	}
 }
