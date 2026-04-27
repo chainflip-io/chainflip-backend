@@ -32,7 +32,9 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Slashing};
+use cf_traits::{
+	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Issuance, Slashing,
+};
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
 pub use on_charge_transaction::{
@@ -583,9 +585,7 @@ impl<T: Config> DeregistrationCheck for Bonder<T> {
 	}
 }
 
-pub struct FlipIssuance<T>(PhantomData<T>);
-
-impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
+impl<T: Config> Issuance for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
@@ -600,6 +600,25 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 
 	fn burn_offchain(amount: Self::Balance) {
 		let _remainder = Pallet::<T>::burn(amount).offset(Pallet::<T>::bridge_in(amount));
+	}
+}
+
+pub struct FlipIssuance<T>(PhantomData<T>);
+
+impl<T: Config> Issuance for FlipIssuance<T> {
+	type AccountId = <Pallet<T> as Issuance>::AccountId;
+	type Balance = <Pallet<T> as Issuance>::Balance;
+
+	fn mint(beneficiary: &Self::AccountId, amount: Self::Balance) {
+		<Pallet<T> as Issuance>::mint(beneficiary, amount);
+	}
+
+	fn total_issuance() -> Self::Balance {
+		<Pallet<T> as Issuance>::total_issuance()
+	}
+
+	fn burn_offchain(amount: Self::Balance) {
+		<Pallet<T> as Issuance>::burn_offchain(amount);
 	}
 }
 

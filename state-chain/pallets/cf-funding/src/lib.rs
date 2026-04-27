@@ -320,7 +320,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::RedemptionCheck;
+	use cf_traits::{Issuance, RedemptionCheck};
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -386,7 +386,8 @@ pub mod pallet {
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
 			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
-			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
+			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>
+			+ Issuance<Balance = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -916,8 +917,14 @@ pub mod pallet {
 					if !frame_system::Pallet::<T>::account_exists(&caller_account_id) &&
 						amount < MinimumFunding::<T>::get().into()
 					{
-						// we ignore dust deposits and dont create a state chain account if the
-						// account doesnt already exist
+						// Insufficient funds to create an account.
+						T::Flip::burn_offchain(amount.into());
+						Self::deposit_event(Event::FailedFundingAttempt {
+							account_id: caller_account_id,
+							withdrawal_address: caller,
+							amount: amount.into(),
+						});
+						return Ok(())
 					} else {
 						Self::fund_account(
 							caller_account_id.clone(),
