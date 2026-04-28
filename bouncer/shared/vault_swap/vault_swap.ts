@@ -4,6 +4,7 @@ import {
   stateChainAssetFromAsset,
   chainFromAsset,
   decodeDotAddressForContract,
+  getEncodedTronAddress,
   Chains,
   Asset,
 } from 'shared/utils';
@@ -73,10 +74,12 @@ export async function requestSwapParameterEncoding<T>(
   affiliateFees: { account: string; bps: number }[],
   dcaParams: DcaParams | undefined,
 ): Promise<T> {
-  const encodedDestAddress =
-    chainFromAsset(destAsset) === Chains.Assethub
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress;
+  let encodedDestAddress = destAddress;
+  if (chainFromAsset(destAsset) === Chains.Assethub) {
+    encodedDestAddress = decodeDotAddressForContract(destAddress);
+  } else if (chainFromAsset(destAsset) === Chains.Tron) {
+    encodedDestAddress = getEncodedTronAddress(destAddress);
+  }
 
   // Encode the payload
   const encoded = (await chainflip.rpc(
