@@ -24,6 +24,7 @@ import { globalLogger, Logger } from 'shared/utils/logger';
 import { afterAll, beforeAll, describe } from 'vitest';
 import { concurrentTest } from 'shared/utils/vitest';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { tronBroadcasterBroadcastAborted } from 'generated/events/tronBroadcaster/broadcastAborted';
 
 // Minimum and maximum gas consumption values to be in a useful range for testing. Not using very low numbers
 // to avoid flakiness in the tests expecting a broadcast abort due to not having enough gas.
@@ -426,9 +427,10 @@ async function testTronInsufficientGas<A = []>(
       throw new Error(`$CCM event emitted. Transaction should not have been broadcasted!`);
     }
   });
-  await observeEvent(cf.logger, `${destChain.toLowerCase()}Broadcaster:BroadcastAborted`, {
-    test: (event) => event.data.broadcastId === broadcastId,
-  }).event;
+  await cf.stepUntilEvent(
+    'TronBroadcaster.BroadcastAborted',
+    tronBroadcasterBroadcastAborted.refine((data) => data.broadcastId === broadcastId),
+  );
   stopObservingCcmReceived = true;
   cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
 }
