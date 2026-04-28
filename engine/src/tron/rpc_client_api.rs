@@ -231,11 +231,8 @@ impl TransactionExtentionResult {
 /// result bool is not existent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionExtentionEnergyResult {
-	// #[serde(skip_serializing_if = "Option::is_none")]
 	pub result: Option<bool>,
-	// #[serde(skip_serializing_if = "Option::is_none")]
 	pub code: Option<Value>,
-	// #[serde(skip_serializing_if = "Option::is_none")]
 	pub message: Option<String>,
 }
 
