@@ -28,8 +28,8 @@ pub struct RpcLendingPool<Amount> {
 	pub owed_to_network: Amount,
 	pub utilisation_rate: Permill,
 	/// Maximum utilisation allowed when opening new loans: borrows that would push utilisation
-	/// above this cap are rejected so the pool retains enough liquidity to liquidate the configured
-	/// fraction of outstanding loans at current oracle prices.
+	/// above this cap are rejected so the pool retains enough liquidity to liquidate the
+	/// configured fraction of outstanding loans at current oracle prices.
 	pub utilisation_cap: Permill,
 	pub current_interest_rate: Permill,
 	#[serde(flatten)]
