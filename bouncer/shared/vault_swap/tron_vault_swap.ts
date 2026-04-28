@@ -42,7 +42,7 @@ export async function executeTronVaultSwap<A extends WithBrokerAccount>(
     cf,
     sourceAsset,
     destAsset,
-    destAddress,
+    getEncodedTronAddress(destAddress),
     brokerCommissionBps,
     messageMetadata,
     amount,
