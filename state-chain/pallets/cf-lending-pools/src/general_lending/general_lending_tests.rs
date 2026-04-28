@@ -5780,6 +5780,7 @@ mod utilisation_cap {
 			asset,
 			COVERAGE_FACTOR,
 			&OraclePriceCache::<Test>::default(),
+			None,
 		)
 		.unwrap()
 	}
@@ -5822,6 +5823,7 @@ mod utilisation_cap {
 					COLLATERAL_ASSET,
 					Percent::from_percent(100),
 					&price_cache,
+					None,
 				)
 				.unwrap();
 				assert_eq!(utilisation_cap, expected_cap);
@@ -5872,7 +5874,7 @@ mod utilisation_cap {
 		//
 		//     Loan A (BORROWER_A): borrows 180_000 USDT, collateral 3 BTC
 		//     Loan B (BORROWER_B): borrows 500_000 USDC, collateral 7 BTC + 100_000 USDT
-		//     Loan C (BORROWER_C): borrows 1 BTC,        collateral 80_000 USDT + 40_000 USDC
+		//     Loan C (BORROWER_C): borrows 1 BTC,        collateral 130_000 USDT + 40_000 USDC
 		//
 		// Borrower collateral is held inside the lending pools (shared storage with
 		// lender deposits), so each pool's `total_amount` is the sum of lender and
@@ -5885,7 +5887,7 @@ mod utilisation_cap {
 		const USD_PRICE: AssetAmount = 1;
 
 		const USDC_LENDER: AssetAmount = 760_000 * WHOLE;
-		const USDT_LENDER: AssetAmount = 20_000 * WHOLE;
+		const USDT_LENDER: AssetAmount = 120_000 * WHOLE;
 
 		const LOAN_A_USDT: AssetAmount = 180_000 * WHOLE;
 		const LOAN_A_BTC_COL: AssetAmount = 3 * WHOLE;
@@ -5895,7 +5897,7 @@ mod utilisation_cap {
 		const LOAN_B_USDT_COL: AssetAmount = 100_000 * WHOLE;
 
 		const LOAN_C_BTC: AssetAmount = WHOLE;
-		const LOAN_C_USDT_COL: AssetAmount = 80_000 * WHOLE;
+		const LOAN_C_USDT_COL: AssetAmount = 130_000 * WHOLE;
 		const LOAN_C_USDC_COL: AssetAmount = 40_000 * WHOLE;
 
 		const BORROWER_A: u64 = 201;
@@ -6044,9 +6046,110 @@ mod utilisation_cap {
 			// we want to demonstrate that the values exactly match a previously discussed example
 			// (see https://discord.com/channels/775961728608895008/1494300574622023792/1494301004449976401).
 			assert_eq!(get_utilisation_cap(Asset::Btc), Permill::from_parts(382_500)); // 38.25%
-			assert_eq!(get_utilisation_cap(Asset::Usdc), Permill::from_parts(958_334)); // ~96%
-			assert_eq!(get_utilisation_cap(Asset::Usdt), Permill::from_parts(354_167)); // ~35.4%?
+			assert_eq!(get_utilisation_cap(Asset::Usdc), Permill::from_parts(970_589)); // ~97%
+			assert_eq!(get_utilisation_cap(Asset::Usdt), Permill::from_parts(602942)); // ~60.3%
 
+		});
+	}
+
+	/// Verifies that a new loan is rejected when it would push the utilisation cap of one of
+	/// the borrower's collateral pools below that pool's current utilisation, even though the
+	/// loan's own pool stays within its cap.
+	///
+	/// Scenario (all assets priced at $1, origination fee zero):
+	///   1. User A supplies 100 USDC.
+	///   2. User B supplies 100 BTC.
+	///   3. User B borrows 80 USDC, supplying 100 USDT as additional collateral. USDC utilisation
+	///      jumps to 80%, USDC cap stays at 100% (B has no USDC collateral).
+	///   4. User A borrows 40 BTC against their existing 100 USDC supply. This must fail: A's new
+	///      $40 of loans drops USDC's cap to 40% (100 * 40 / 100 = 40 USDC required), which is
+	///      below USDC's current 80% utilisation.
+	#[test]
+	fn cap_checked_for_collateral_assets() {
+		const USER_A: u64 = 301;
+		const USER_B: u64 = 302;
+
+		const WHOLE: AssetAmount = 1_000_000;
+
+		const SUPPLY: AssetAmount = 100 * WHOLE;
+		const BORROW_A: AssetAmount = 40 * WHOLE;
+		const BORROW_B: AssetAmount = 80 * WHOLE;
+
+		new_test_ext().execute_with(|| {
+			disable_whitelist();
+
+			MockPriceFeedApi::set_price_usd_fine(Asset::Btc, 1);
+			MockPriceFeedApi::set_price_usd_fine(Asset::Usdt, 1);
+			MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
+
+			LendingConfig::<Test>::set(CONFIG);
+
+			// Update config to simplify testing:
+			assert_ok!(Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::root(),
+				bounded_vec![
+					PalletConfigUpdate::SetMinimumAmounts {
+						minimum_loan_amount_usd: 1,
+						minimum_update_loan_amount_usd: 1,
+						minimum_update_supply_amount_usd: 1,
+						minimum_supply_amount_usd: 1,
+					},
+					PalletConfigUpdate::SetLendingPoolConfiguration {
+						asset: None,
+						config: Some(LendingPoolConfiguration {
+							origination_fee: Permill::zero(),
+							..CONFIG.default_pool_config
+						}),
+					},
+				],
+			));
+
+			assert_ok!(LendingPools::new_lending_pool(Asset::Btc));
+			assert_ok!(LendingPools::new_lending_pool(Asset::Usdt));
+			assert_ok!(LendingPools::new_lending_pool(Asset::Usdc));
+
+			for acc in &[USER_A, USER_B] {
+				assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(acc));
+				MockLpRegistration::register_refund_address(*acc, ForeignChain::Bitcoin);
+				MockLpRegistration::register_refund_address(*acc, ForeignChain::Ethereum);
+			}
+
+			// Step 1: A supplies 100 USDC.
+			MockBalance::credit_account(&USER_A, Asset::Usdc, SUPPLY);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(USER_A),
+				Asset::Usdc,
+				SUPPLY,
+			));
+
+			// Step 2: B supplies 100 BTC.
+			MockBalance::credit_account(&USER_B, Asset::Btc, SUPPLY);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(USER_B),
+				Asset::Btc,
+				SUPPLY,
+			));
+
+			// Step 3: B takes 80 USDC with 100 USDT extra collateral. Should succeed.
+			MockBalance::credit_account(&USER_B, Asset::Usdt, SUPPLY);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(USER_B),
+				Asset::Usdt,
+				SUPPLY,
+			));
+			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None));
+
+			assert_eq!(
+				GeneralLendingPools::<Test>::get(Asset::Usdc).unwrap().get_utilisation(),
+				Permill::from_percent(80),
+			);
+
+			// Step 4: A borrows 40 BTC. The new collateral-pool cap check rejects this because
+			// USDC's cap drops below USDC's existing 80% utilisation.
+			assert_noop!(
+				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None),
+				Error::<Test>::CollateralPoolUtilisationCapExceeded,
+			);
 		});
 	}
 }

@@ -196,7 +196,7 @@ fn build_rpc_lending_pool<T: Config>(
 	// Report the cap as `Permill::one()` when it can't be computed (e.g. a missing oracle price
 	// for a collateral asset) so the RPC stays informative rather than failing.
 	let utilisation_cap =
-		compute_utilisation_cap::<T>(asset, config.liquidation_coverage_factor, price_cache)
+		compute_utilisation_cap::<T>(asset, config.liquidation_coverage_factor, price_cache, None)
 			.unwrap_or(Permill::one());
 
 	RpcLendingPool {
