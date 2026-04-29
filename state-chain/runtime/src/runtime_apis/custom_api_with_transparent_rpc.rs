@@ -37,13 +37,14 @@ decl_runtime_apis_with_transparent_rpc! {
 	trait TransparentCustomRuntimeApi {
 		#[method(name = "mytest")]
 		#[changed_in()]
-		fn mytest(arg:()) -> ();
+		fn mytest(arg:u8) -> u8;
 
 		#[method(name = "mytest2")]
 		#[changed_in()]
 		fn mytest2(arg: BrokerInfo::Struct<AtRuntime>) -> BrokerInfo::Struct<AtRuntime>;
 	}
 }
+
 
 
 

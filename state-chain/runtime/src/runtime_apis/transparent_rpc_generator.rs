@@ -193,7 +193,7 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 									// convert arguments to runtime layer types
 									let runtime_args = (
 										$(
-											<$$migration as TypedMigration< <$arg_ty as HasVariant<AtRpc>>::Get, $arg_ty >>::backwards($arg_name),
+											<$$migration as TypedMigration< <$arg_ty as HasVariant<AtRpc>>::Get, $arg_ty >>::forwards($arg_name),
 											// <<$arg_ty as HasMigrationFrom<AtRpc>>::GetMigration as Migration>::backwards($arg_name),
 										)*
 									);
@@ -203,7 +203,7 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 
 									// convert result back to rpc layer variant
 									runtime_result.map(|value| 
-										<$$migration as TypedMigration< <$result_ty as HasVariant<AtRpc>>::Get, $result_ty >>::forwards(value)
+										<$$migration as TypedMigration< <$result_ty as HasVariant<AtRpc>>::Get, $result_ty >>::backwards(value)
 									)
 								}
 							)

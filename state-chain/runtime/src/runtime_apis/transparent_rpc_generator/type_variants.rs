@@ -1,4 +1,5 @@
 
+use sp_std::vec::Vec;
 
 
 // ---------- definition of migrations ------------
@@ -154,7 +155,7 @@ pub trait VariantName {}
 pub trait HasMigrationFrom<V: VariantName> {
 	type GetMigration: Migration<To = Self>;
 }
-pub type GetVariant<V: VariantName, X> = <X as HasMigrationFrom<V>>::GetMigration;
+pub type GetVariant<V: VariantName, X> = <X as HasVariant<V>>::Get;
 
 
 // ---------- concrete variants ------------
