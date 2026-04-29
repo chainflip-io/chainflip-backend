@@ -573,6 +573,10 @@ pub fn decode_sol_instruction_data(
 	instruction: &SolInstruction,
 	api_environment: &SolApiEnvironment,
 ) -> Result<DecodedXSwapParams, &'static str> {
+	if SolAddress::from(instruction.program_id) != api_environment.swap_endpoint_program {
+		return Err("Instruction program id is not the Chainflip swap endpoint program");
+	}
+
 	let data = instruction.data.clone();
 	let (
 		amount,
