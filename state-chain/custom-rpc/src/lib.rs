@@ -85,7 +85,9 @@ use sp_runtime::{
 };
 use sp_state_machine::InspectState;
 use state_chain_runtime::{
-	Hash, chainflip::{BlockUpdate, Offence}, constants::common::TX_FEE_MULTIPLIER, runtime_apis::{
+	chainflip::{BlockUpdate, Offence},
+	constants::common::TX_FEE_MULTIPLIER,
+	runtime_apis::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
@@ -98,8 +100,11 @@ use state_chain_runtime::{
 			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
 			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
 			VaultSwapDetails,
-		}, versioned_product_api::generate_versioned_product_custom_rpc_trait,
-	}, safe_mode::RuntimeSafeMode
+		},
+		versioned_product_api::generate_versioned_product_custom_rpc_trait,
+	},
+	safe_mode::RuntimeSafeMode,
+	Hash,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, HashMap},
@@ -820,10 +825,9 @@ pub use ingress_egress_tracker::{
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
 
-
-
-use state_chain_runtime::runtime_apis::versioned_product_api::VersionedProductRuntimeApi;
-
+use state_chain_runtime::runtime_apis::versioned_product_api::{
+	AtRpcLayer, GetVariant, HasVariant, Test, TestRpc, VersionedProductRuntimeApi,
+};
 
 generate_versioned_product_custom_rpc_trait! {
 	#[rpc(server, client, namespace = "cf")]
@@ -833,12 +837,6 @@ generate_versioned_product_custom_rpc_trait! {
 		client = trait CustomProductApiClient,
 	}
 }
-
-
-
-
-
-
 
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
@@ -3173,7 +3171,6 @@ where
 		storage_query
 			.with_state_backend(hash, || convert_raw_witnessed_events(raw.clone(), network))
 	}
-	
 }
 
 /// Execute f (which returns a Vec of results) for `asset`. If `asset` is `None`

@@ -15,21 +15,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::types::*;
+use cf_utilities::define_empty_struct;
 use sp_api::decl_runtime_apis;
 
 // ------------------ versions ---------------------
 
-trait Version {}
-struct V2_2; impl Version for V2_2 {}
-struct V2_1; impl Version for V2_1 {}
-struct V2_0; impl Version for V2_0 {}
+pub trait VariantName {}
+pub struct V2_2;
+impl VariantName for V2_2 {}
+pub struct V2_1;
+impl VariantName for V2_1 {}
+pub struct V2_0;
+impl VariantName for V2_0 {}
+pub struct AtRpcLayer;
+impl VariantName for AtRpcLayer {}
 
-trait AtVersion<V: Version> {
+pub trait HasVariant<V: VariantName> {
 	type Get;
+	fn to_variant(self) -> Self::Get;
+	fn from_variant(at_version: Self::Get) -> Self;
 }
+pub type GetVariant<V: VariantName, X> = <X as HasVariant<V>>::Get;
 
 // ------------------ migrations --------------------
-
 
 struct IdentityMigration<X>(sp_std::marker::PhantomData<X>);
 
@@ -51,45 +59,68 @@ trait Versioned {
 type Source<M: Migration> = M::From;
 type Target<M: Migration> = M::To;
 
-trait Migrations: Sized
-{
-	type To_V_2_0: Migration<To = Source<Self::To_V_2_1>> = IdentityMigration<Source<Self::To_V_2_1>>;
-	type To_V_2_1: Migration<To = Source<Self::To_V_2_2>> = IdentityMigration<Source<Self::To_V_2_2>>;
+trait Migrations: Sized {
+	type To_V_2_0: Migration<To = Source<Self::To_V_2_1>> =
+		IdentityMigration<Source<Self::To_V_2_1>>;
+	type To_V_2_1: Migration<To = Source<Self::To_V_2_2>> =
+		IdentityMigration<Source<Self::To_V_2_2>>;
 	type To_V_2_2: Migration<To = Self> = IdentityMigration<Self>;
 }
 
-// impl<X: Migrations> AtVersion<V2_1> for X {
-// 	type Get = <X::To_V_2_2 as Migration>::From;
-// }
-
-// impl<X: Migrations> AtVersion<V2_2> for X {
-// 	type Get = X;
-// }
-
-impl<V: Version> AtVersion<V> for () {
-	type Get = ();
+define_empty_struct! {
+	pub struct Test;
+}
+define_empty_struct! {
+	pub struct TestRpc;
 }
 
-impl<V: Version, A: AtVersion<V>> AtVersion<V> for (A,) {
-	type Get = (A::Get,);
-}
+impl HasVariant<AtRpcLayer> for Test {
+	type Get = TestRpc;
 
-trait ApiVersion<const N: usize> {
-	type AsVersion: Version;
-}
+	fn from_variant(at_version: Self::Get) -> Self {
+		Test {}
+	}
 
-macro_rules! expand_changed_fns {
-	(
-		#[changed_in($($changed_version: literal),*)]
-		fn $fn_name:ident($arg_name:ident : $arg_ty:ty) -> $result_ty:ty;
-	) => {
-		$(
-			#[changed_in($changed_version)]
-			fn $fn_name(arg : AtApiVersion<$changed_version, $arg_ty>) -> AtApiVersion<$changed_version, $result_ty>;
-		)*
+	fn to_variant(self) -> Self::Get {
+		TestRpc {}
 	}
 }
 
+// impl<X: Migrations> HasVariant<V2_1> for X {
+// 	type Get = <X::To_V_2_2 as Migration>::From;
+// }
+
+// impl<X: Migrations> HasVariant<V2_2> for X {
+// 	type Get = X;
+// }
+
+impl<V: VariantName> HasVariant<V> for () {
+	type Get = ();
+
+	fn to_variant(self) -> Self::Get {
+		()
+	}
+
+	fn from_variant(at_version: Self::Get) -> Self {
+		()
+	}
+}
+
+impl<V: VariantName, A: HasVariant<V>> HasVariant<V> for (A,) {
+	type Get = (A::Get,);
+
+	fn to_variant(self) -> Self::Get {
+		(self.0.to_variant(),)
+	}
+
+	fn from_variant(at_version: Self::Get) -> Self {
+		todo!()
+	}
+}
+
+trait ApiVersion<const N: usize> {
+	type AsVersion: VariantName;
+}
 
 macro_rules! decl_versioned_runtime_api_and_rpc {
     (
@@ -120,7 +151,7 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
 				type AsVersion = $runtime_version_ty;
 			}
 		)*
-		type AtApiVersion<const N: usize, X> = <X as AtVersion< <() as ApiVersion<N>>::AsVersion >>::Get;
+		type AtApiVersion<const N: usize, X> = <X as HasVariant< <() as ApiVersion<N>>::AsVersion >>::Get;
 
 		// defining the trait for runtime apis
 		decl_versioned_runtime_apis!{
@@ -160,10 +191,10 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
 						fn $fn_name(
 							&self,
 							$(
-								$arg_name: $arg_ty,
+								$arg_name: GetVariant<AtRpcLayer, $arg_ty>,
 							)*
 							at: Option<state_chain_runtime::Hash>
-						) -> cf_rpc_apis::RpcResult<$result_ty>;
+						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpcLayer, $result_ty>>;
 					)*
 				}
 
@@ -190,12 +221,26 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
 						fn $fn_name(
 							&self,
 							$(
-								$arg_name: $arg_ty,
+								$arg_name: GetVariant<AtRpcLayer, $arg_ty>,
 							)*
 							at: Option<state_chain_runtime::Hash>
-						) -> cf_rpc_apis::RpcResult<$result_ty> {
+						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpcLayer, $result_ty>> {
 							self.rpc_backend.with_versioned_runtime_api(
-								at, |api, hash, _version| api.$fn_name(hash, ($($arg_name,)*))
+								at,
+								|api, hash, _version| {
+									// convert arguments to runtime layer types
+									let runtime_args = (
+										$(
+											<$arg_ty as HasVariant<AtRpcLayer>>::from_variant($arg_name),
+										)*
+									);
+
+									// call runtime call
+									let runtime_result = api.$fn_name(hash, runtime_args);
+
+									// convert result back to rpc layer variant
+									runtime_result.map(|value| <$result_ty as HasVariant<AtRpcLayer>>::to_variant(value))
+								}
 							)
 						}
 					)*
@@ -246,7 +291,6 @@ macro_rules! decl_versioned_runtime_apis {
     };
 }
 
-
 // decl_runtime_apis!(
 // 	#[api_version(1)]
 // 	pub trait VersionedProductRuntimeApi {
@@ -254,21 +298,25 @@ macro_rules! decl_versioned_runtime_apis {
 // 	}
 // );
 
-decl_versioned_runtime_api_and_rpc!{
-    versions {
-        1 => V2_1,
+decl_versioned_runtime_api_and_rpc! {
+	versions {
+		1 => V2_1,
 		2 => V2_2,
-    }
+	}
 
 	trait macro generate_versioned_product_custom_rpc_trait;
 	impl macro generate_versioned_product_custom_rpc_impl;
 
-    #[api_version(2)]
-    trait VersionedProductRuntimeApi {
+	#[api_version(2)]
+	trait VersionedProductRuntimeApi {
 		#[method(name = "mytest")]
 		#[changed_in(1,2)]
 		fn mytest(arg:()) -> ();
-    }
+
+		#[method(name = "mytest2")]
+		#[changed_in()]
+		fn mytest2(arg: Test) -> Test;
+	}
 }
 
 decl_runtime_apis!(
