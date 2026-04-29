@@ -193,7 +193,7 @@ async function testTronTxMultipleVaultSwaps<A = []>(
   sourceAsset: Asset,
   destAsset: Asset,
 ) {
-  let sourceChain = chainFromAsset(sourceAsset);
+  const sourceChain = chainFromAsset(sourceAsset);
   assert.strictEqual(
     sourceChain,
     Chains.Tron,
