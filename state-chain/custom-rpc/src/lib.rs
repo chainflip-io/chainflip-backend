@@ -101,7 +101,7 @@ use state_chain_runtime::{
 			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
 			VaultSwapDetails,
 		},
-		versioned_product_api::generate_versioned_product_custom_rpc_trait,
+		custom_api_with_transparent_rpc::generate_transparent_custom_rpc,
 	},
 	safe_mode::RuntimeSafeMode,
 	Hash,
@@ -113,6 +113,7 @@ use std::{
 	time::Duration,
 };
 
+pub mod transparent_rpcs;
 pub mod backend;
 pub mod broker;
 pub mod ingress_egress_tracker;
@@ -825,18 +826,6 @@ pub use ingress_egress_tracker::{
 	RpcTransactionRef, RpcVaultDepositWitnessInfo, RpcWitnessedEventsResponse,
 };
 
-use state_chain_runtime::runtime_apis::versioned_product_api::{
-	AtRpcLayer, GetVariant, HasVariant, Test, TestRpc, VersionedProductRuntimeApi,
-};
-
-generate_versioned_product_custom_rpc_trait! {
-	#[rpc(server, client, namespace = "cf")]
-	trait CustomProductApi where {
-		server = trait CustomProductApiServer,
-		server = struct CustomRpc,
-		client = trait CustomProductApiClient,
-	}
-}
 
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.

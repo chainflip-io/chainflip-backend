@@ -14,77 +14,32 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::runtime_apis::transparent_rpc_generator::type_variants::VariantName;
+
 use super::types::*;
 use cf_utilities::define_empty_struct;
 use sp_api::decl_runtime_apis;
 
-// ------------------ versions ---------------------
+pub mod type_variants;
+pub mod runtime_and_rpc_layer;
+pub mod transformations;
 
-pub trait VariantName {}
-pub struct V2_2;
-impl VariantName for V2_2 {}
-pub struct V2_1;
-impl VariantName for V2_1 {}
-pub struct V2_0;
-impl VariantName for V2_0 {}
-pub struct AtRpcLayer;
-impl VariantName for AtRpcLayer {}
-
-pub trait HasVariant<V: VariantName> {
-	type Get;
-	fn to_variant(self) -> Self::Get;
-	fn from_variant(at_version: Self::Get) -> Self;
-}
-pub type GetVariant<V: VariantName, X> = <X as HasVariant<V>>::Get;
 
 // ------------------ migrations --------------------
 
-struct IdentityMigration<X>(sp_std::marker::PhantomData<X>);
 
-impl<X> Migration for IdentityMigration<X> {
-	type From = X;
-	type To = X;
-}
+// trait Migration {
+// 	type From;
+// 	type To;
+// }
 
-trait Migration {
-	type From;
-	type To;
-}
+// trait Versioned {
+// 	type Version_2_0;
+// 	type Version_2_1;
+// }
 
-trait Versioned {
-	type Version_2_0;
-	type Version_2_1;
-}
 
-type Source<M: Migration> = M::From;
-type Target<M: Migration> = M::To;
 
-trait Migrations: Sized {
-	type To_V_2_0: Migration<To = Source<Self::To_V_2_1>> =
-		IdentityMigration<Source<Self::To_V_2_1>>;
-	type To_V_2_1: Migration<To = Source<Self::To_V_2_2>> =
-		IdentityMigration<Source<Self::To_V_2_2>>;
-	type To_V_2_2: Migration<To = Self> = IdentityMigration<Self>;
-}
-
-define_empty_struct! {
-	pub struct Test;
-}
-define_empty_struct! {
-	pub struct TestRpc;
-}
-
-impl HasVariant<AtRpcLayer> for Test {
-	type Get = TestRpc;
-
-	fn from_variant(at_version: Self::Get) -> Self {
-		Test {}
-	}
-
-	fn to_variant(self) -> Self::Get {
-		TestRpc {}
-	}
-}
 
 // impl<X: Migrations> HasVariant<V2_1> for X {
 // 	type Get = <X::To_V_2_2 as Migration>::From;
@@ -94,35 +49,36 @@ impl HasVariant<AtRpcLayer> for Test {
 // 	type Get = X;
 // }
 
-impl<V: VariantName> HasVariant<V> for () {
-	type Get = ();
+// impl<V: VariantName> type_variants::HasVariant<V> for () {
+// 	type Get = ();
 
-	fn to_variant(self) -> Self::Get {
-		()
-	}
+// 	fn to_variant(self) -> Self::Get {
+// 		()
+// 	}
 
-	fn from_variant(at_version: Self::Get) -> Self {
-		()
-	}
-}
+// 	fn from_variant(at_version: Self::Get) -> Self {
+// 		()
+// 	}
+// }
 
-impl<V: VariantName, A: HasVariant<V>> HasVariant<V> for (A,) {
-	type Get = (A::Get,);
+// impl<V: VariantName, A: HasVariant<V>> HasVariant<V> for (A,) {
+// 	type Get = (A::Get,);
 
-	fn to_variant(self) -> Self::Get {
-		(self.0.to_variant(),)
-	}
+// 	fn to_variant(self) -> Self::Get {
+// 		(self.0.to_variant(),)
+// 	}
 
-	fn from_variant(at_version: Self::Get) -> Self {
-		todo!()
-	}
-}
+// 	fn from_variant(at_version: Self::Get) -> Self {
+// 		todo!()
+// 	}
+// }
 
-trait ApiVersion<const N: usize> {
+pub trait ApiVersion<const N: usize> {
 	type AsVersion: VariantName;
 }
 
-macro_rules! decl_versioned_runtime_api_and_rpc {
+#[macro_export]
+macro_rules! decl_runtime_apis_with_transparent_rpc {
     (
         versions {
             $(
@@ -146,6 +102,10 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
             )*
         }
     ) => {
+		use crate::runtime_apis::transparent_rpc_generator::ApiVersion;
+		use crate::runtime_apis::transparent_rpc_generator::type_variants::HasVariant;
+		use crate::decl_versioned_runtime_apis;
+
 		$(
 			impl ApiVersion<$api_version> for () {
 				type AsVersion = $runtime_version_ty;
@@ -201,21 +161,21 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
 				#[async_trait]
 				impl<C, B, BE> $$rpc_server_trait_name for $$rpc_server_struct_name<C, B, BE>
 				where
-					B: BlockT<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
+					B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash, Header = state_chain_runtime::Header>,
 					B::Header: Unpin,
-					BE: Backend<B> + Send + Sync + 'static,
+					BE: sc_client_api::Backend<B> + Send + Sync + 'static,
 					C: sp_api::ProvideRuntimeApi<B>
+						+ sp_api::CallApiAt<B>
+						+ sc_client_api::BlockBackend<B>
+						+ sc_client_api::ExecutorProvider<B>
+						+ sc_client_api::HeaderBackend<B>
+						+ sc_client_api::StorageProvider<B, BE>
+						+ sc_client_api::BlockchainEvents<B>
+						+ sc_client_api::blockchain::HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
 						+ Send
 						+ Sync
-						+ 'static
-						+ BlockBackend<B>
-						+ ExecutorProvider<B>
-						+ HeaderBackend<B>
-						+ HeaderMetadata<B, Error = sc_client_api::blockchain::Error>
-						+ BlockchainEvents<B>
-						+ CallApiAt<B>
-						+ StorageProvider<B, BE>,
-					C::Api: $api_name<B> + ElectoralRuntimeApi<B>,
+						+ 'static,
+					C::Api: $api_name<B>,
 				{
 					$(
 						fn $fn_name(
@@ -263,7 +223,9 @@ macro_rules! decl_versioned_runtime_api_and_rpc {
 		// );
     };
 }
+pub use decl_runtime_apis_with_transparent_rpc;
 
+#[macro_export]
 macro_rules! decl_versioned_runtime_apis {
     (
         #[api_version($current_api_version:literal)]
@@ -276,6 +238,7 @@ macro_rules! decl_versioned_runtime_apis {
             )*
         }
     ) => {
+		use sp_api::decl_runtime_apis;
 		decl_runtime_apis!(
 			#[api_version($current_api_version)]
 			pub trait VersionedProductRuntimeApi {
@@ -291,66 +254,4 @@ macro_rules! decl_versioned_runtime_apis {
     };
 }
 
-// decl_runtime_apis!(
-// 	#[api_version(1)]
-// 	pub trait VersionedProductRuntimeApi {
-// 		fn mytest() -> ();
-// 	}
-// );
-
-decl_versioned_runtime_api_and_rpc! {
-	versions {
-		1 => V2_1,
-		2 => V2_2,
-	}
-
-	trait macro generate_versioned_product_custom_rpc_trait;
-	impl macro generate_versioned_product_custom_rpc_impl;
-
-	#[api_version(2)]
-	trait VersionedProductRuntimeApi {
-		#[method(name = "mytest")]
-		#[changed_in(1,2)]
-		fn mytest(arg:()) -> ();
-
-		#[method(name = "mytest2")]
-		#[changed_in()]
-		fn mytest2(arg: Test) -> Test;
-	}
-}
-
-decl_runtime_apis!(
-	/// Versioning of runtime apis is explained here:
-	/// https://docs.rs/sp-api/latest/sp_api/macro.decl_runtime_apis.html
-	/// Of course it doesn't explain everything, e.g. there's a very useful
-	/// `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
-	/// of apis automatically.
-	#[api_version(2)]
-	pub trait VersionedProductRuntimeApi2 {
-		/// Returns SCALE encoded `Option<ElectoralDataFor<state_chain_runtime::Runtime,
-		/// Instance>>`
-		#[renamed("cf_electoral_data", 2)]
-		fn cf_solana_electoral_data(account_id: AccountId) -> Vec<u8>;
-
-		/// Returns SCALE encoded `BTreeSet<ElectionIdentifierOf<<state_chain_runtime::Runtime as
-		/// pallet_cf_elections::Config<Instance>>::ElectoralSystem>>`
-		#[renamed("cf_filter_votes", 2)]
-		fn cf_solana_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
-
-		fn cf_bitcoin_electoral_data(account_id: AccountId) -> Vec<u8>;
-
-		fn cf_bitcoin_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
-
-		fn cf_generic_electoral_data(account_id: AccountId) -> Vec<u8>;
-
-		fn cf_generic_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
-
-		fn cf_ethereum_electoral_data(account_id: AccountId) -> Vec<u8>;
-
-		fn cf_ethereum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
-
-		fn cf_arbitrum_electoral_data(account_id: AccountId) -> Vec<u8>;
-
-		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8>;
-	}
-);
+pub use decl_versioned_runtime_apis;
