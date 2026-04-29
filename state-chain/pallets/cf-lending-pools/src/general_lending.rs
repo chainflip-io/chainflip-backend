@@ -28,6 +28,9 @@ pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 
 pub use general_lending_pool::{LendingPool, WithdrawnAndRemainingAmounts};
 
+/// Maximum broker fee that a loan request can specify (10%).
+pub const MAX_BROKER_FEE_BPS: cf_primitives::BasisPoints = 1_000;
+
 /// Helps to link swap id in liquidation status to loan id
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct LiquidationSwap {
@@ -1426,6 +1429,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 	) -> Result<LoanId, DispatchError> {
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
 			.map_err(|_| Error::<T>::NoRefundAddressSet)?;
+
+		if let Some(broker) = &broker {
+			ensure!(broker.bps <= MAX_BROKER_FEE_BPS, Error::<T>::BrokerFeeTooHigh);
+		}
 
 		let price_cache = OraclePriceCache::<T>::default();
 

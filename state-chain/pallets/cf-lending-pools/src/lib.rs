@@ -598,6 +598,8 @@ pub mod pallet {
 		/// The new loan would lower the utilisation cap of one of the borrower's
 		/// collateral pools below that pool's current utilisation.
 		CollateralPoolUtilisationCapExceeded,
+		/// The broker fee specified on the loan request exceeds the maximum allowed.
+		BrokerFeeTooHigh,
 	}
 
 	#[pallet::hooks]
