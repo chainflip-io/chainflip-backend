@@ -2098,7 +2098,7 @@ impl_runtime_apis! {
 
 mod witnessed_events {
 	use super::*;
-	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance};
+	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
 
 	pub fn extract_witnessed_events(
@@ -2108,6 +2108,7 @@ mod witnessed_events {
 			ForeignChain::Bitcoin => extract_bitcoin_witnessed_events(),
 			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
+			ForeignChain::Tron => extract_tron_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2192,5 +2193,23 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Arbitrum { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_tron_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, TronInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Tron electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &u64| *h,
+		);
+
+		Ok(RawWitnessedEvents::Tron { deposits, vault_deposits, broadcasts })
 	}
 }
