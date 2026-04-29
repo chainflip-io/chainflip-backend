@@ -26,6 +26,7 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 ethereum-eip712 = { workspace = true }
 bitvec = { workspace = true }
 paste = { workspace = true }
+duplicate = "2.0.0"
 
 # Remove this after 1.9 migration
 sol-prim = { workspace = true }

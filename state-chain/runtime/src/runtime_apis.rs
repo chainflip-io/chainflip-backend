@@ -17,6 +17,7 @@
 pub mod custom_api;
 pub mod elections_api;
 pub mod monitoring_api;
+pub mod versioned_product_api;
 
 pub mod impl_api;
 
