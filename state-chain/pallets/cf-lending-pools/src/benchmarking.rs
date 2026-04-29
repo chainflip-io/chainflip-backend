@@ -98,6 +98,7 @@ mod benchmarks {
 			LOAN_ASSET,
 			amount,
 			Some(COLLATERAL_ASSET),
+			None,
 		));
 		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
 		loan_account.loans.get(&LoanId::from(0)).unwrap().clone()
@@ -141,6 +142,7 @@ mod benchmarks {
 				loan_asset,
 				loan_amount,
 				Some(collateral_asset),
+				None,
 			));
 		}
 	}
@@ -426,7 +428,13 @@ mod benchmarks {
 		let price_cache = OraclePriceCache::<T>::default();
 
 		#[extrinsic_call]
-		request_loan(RawOrigin::Signed(borrower), LOAN_ASSET, LOAN_AMOUNT, Some(COLLATERAL_ASSET));
+		request_loan(
+			RawOrigin::Signed(borrower),
+			LOAN_ASSET,
+			LOAN_AMOUNT,
+			Some(COLLATERAL_ASSET),
+			None,
+		);
 
 		assert!(
 			LoanAccounts::<T>::iter()
@@ -460,6 +468,7 @@ mod benchmarks {
 			LOAN_ASSET,
 			LOAN_AMOUNT,
 			Some(COLLATERAL_ASSET),
+			None,
 		));
 
 		let total_owed = || {
@@ -527,6 +536,7 @@ mod benchmarks {
 			LOAN_ASSET,
 			50_000_000,
 			Some(COLLATERAL_ASSET),
+			None,
 		));
 
 		#[extrinsic_call]
