@@ -56,6 +56,8 @@ impl<AccountId: Clone> From<RpcLoanAccount<AccountId, AssetAmount>>
 					created_at: loan.created_at,
 					loan_type: super::LoanType::User(account.clone()),
 					principal_amount: loan.principal_amount.into(),
+					// Legacy loans don't have brokers:
+					broker: None,
 				})
 				.collect(),
 			liquidation_status: acc.liquidation_status,

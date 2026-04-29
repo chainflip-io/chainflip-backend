@@ -4883,6 +4883,7 @@ mod rpcs {
 							asset: LOAN_ASSET,
 							created_at: INIT_BLOCK as u32,
 							principal_amount: PRINCIPAL + ORIGINATION_FEE,
+							broker: None,
 						}],
 						liquidation_status: None
 					}]
@@ -4973,6 +4974,7 @@ mod rpcs {
 								principal_amount: PRINCIPAL_2 +
 									ORIGINATION_FEE_2 + pool_interest_2 +
 									network_interest_2 - ACCUMULATED_OUTPUT_AMOUNT,
+								broker: None,
 							}],
 							liquidation_status: Some(RpcLiquidationStatus {
 								liquidation_swaps: vec![RpcLiquidationSwap {
@@ -4999,6 +5001,7 @@ mod rpcs {
 								principal_amount: PRINCIPAL +
 									ORIGINATION_FEE + pool_interest_1 +
 									network_interest_1,
+								broker: None,
 							}],
 							liquidation_status: None
 						},

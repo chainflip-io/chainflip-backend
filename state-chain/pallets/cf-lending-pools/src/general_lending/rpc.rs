@@ -1,5 +1,5 @@
 use super::*;
-use cf_primitives::{AssetAmount, AssetAndAmount, SwapRequestId};
+use cf_primitives::{AssetAmount, AssetAndAmount, Beneficiary, SwapRequestId};
 use cf_traits::lending::LoanId;
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
@@ -11,6 +11,7 @@ pub struct RpcLoan<AccountId, Amount> {
 	pub asset: Asset,
 	pub created_at: u32,
 	pub principal_amount: Amount,
+	pub broker: Option<Beneficiary<AccountId>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -81,6 +82,7 @@ impl<AccountId> From<RpcLoan<AccountId, AssetAmount>> for RpcLoan<AccountId, U25
 			asset: loan.asset,
 			created_at: loan.created_at,
 			principal_amount: loan.principal_amount.into(),
+			broker: loan.broker,
 		}
 	}
 }
@@ -140,6 +142,7 @@ fn build_rpc_loan_account<T: Config>(
 				asset: loan.asset,
 				created_at: loan.created_at_block.unique_saturated_into(),
 				principal_amount: loan.owed_principal,
+				broker: loan.broker,
 			})
 			.collect(),
 		liquidation_status: match loan_account.liquidation_status {
@@ -222,6 +225,7 @@ pub fn get_all_loans<T: Config>() -> Vec<RpcLoan<T::AccountId, AssetAmount>> {
 				asset: loan.asset,
 				created_at: loan.created_at_block.unique_saturated_into(),
 				principal_amount: loan.owed_principal,
+				broker: loan.broker,
 			})
 		});
 
@@ -232,6 +236,7 @@ pub fn get_all_loans<T: Config>() -> Vec<RpcLoan<T::AccountId, AssetAmount>> {
 			asset: loan.asset,
 			created_at: loan.created_at_block.unique_saturated_into(),
 			principal_amount: loan.owed_principal,
+			broker: loan.broker,
 		})
 	});
 
