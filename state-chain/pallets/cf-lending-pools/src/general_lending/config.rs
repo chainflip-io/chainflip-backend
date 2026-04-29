@@ -218,7 +218,7 @@ impl LendingConfiguration {
 		}
 	}
 
-	fn interest_per_year_to_per_payment_interval(
+	pub fn interest_per_year_to_per_payment_interval(
 		&self,
 		interest_per_year: Permill,
 		interval_blocks: u32,

@@ -548,6 +548,7 @@ fn basic_boosting() {
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
+				broker: None,
 			})
 		);
 
@@ -682,6 +683,7 @@ fn boosted_deposit_is_lost() {
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
+				broker: None,
 			})
 		);
 
@@ -1671,7 +1673,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 			Asset::Btc,
 			BTC_COLLATERAL,
 		));
-		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None,));
+		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None, None));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =
 		// BOOST_DEPOSIT_AMOUNT.

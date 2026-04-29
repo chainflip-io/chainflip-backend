@@ -314,7 +314,7 @@ impl Get<LendingConfiguration> for LendingConfigDefault {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::SwapRequestId;
+	use cf_primitives::{Beneficiary, SwapRequestId};
 
 	use crate::{
 		boost::{BoostPool, BoostedDeposit, BOOST_FEE},
@@ -915,6 +915,7 @@ pub mod pallet {
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
 			collateral_topup_asset: Option<Asset>,
+			broker: Option<Beneficiary<T::AccountId>>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -923,7 +924,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset)?;
+			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset, broker)?;
 
 			Ok(())
 		}

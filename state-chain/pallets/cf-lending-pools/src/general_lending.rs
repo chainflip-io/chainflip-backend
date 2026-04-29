@@ -1,5 +1,5 @@
 use cf_amm_math::Price;
-use cf_primitives::{DcaParameters, SwapRequestId};
+use cf_primitives::{Beneficiary, DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
@@ -943,6 +943,8 @@ pub struct GeneralLoan<T: Config> {
 	pub owed_principal: AssetAmount,
 	/// Interest owed on the loan but not yet taken (it is below the threshold)
 	pub pending_interest: InterestBreakdown,
+	/// Broker and their fee/interest (if any)
+	pub broker: Option<Beneficiary<T::AccountId>>,
 }
 
 /// A parameter into [collect_pending_interest_if_above_threshold] grouping the threshold
@@ -1028,6 +1030,16 @@ impl<T: Config> GeneralLoan<T> {
 		// depending on whether the amounts exceed some threshold.
 		self.pending_interest.network.saturating_accrue(network_interest_amount);
 		self.pending_interest.pool.saturating_accrue(pool_interest_amount);
+
+		if let Some(broker) = &self.broker {
+			use cf_primitives::BASIS_POINTS_PER_MILLION;
+			let broker_interest_rate = config.interest_per_year_to_per_payment_interval(
+				Permill::from_parts(broker.bps as u32 * BASIS_POINTS_PER_MILLION),
+				payment_interval,
+			);
+			let broker_interest_amount = owed_principal * broker_interest_rate;
+			self.pending_interest.broker.saturating_accrue(broker_interest_amount);
+		}
 	}
 
 	/// Repays the loan after collecting any pending interest and deducting liquidation fee
@@ -1140,25 +1152,55 @@ impl<T: Config> GeneralLoan<T> {
 
 		let pool_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.pool)?;
 
+		let broker_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.broker)?;
+
 		let fees_owed_to_network = network_interest.saturating_add(low_ltv_penalty);
 
 		self.owed_principal.saturating_accrue(pool_interest);
 		self.owed_principal.saturating_accrue(fees_owed_to_network);
 
-		Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
+		let broker_interest_collected = Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
 			pool.record_pool_fee(pool_interest);
 
 			let network_fees_collected = pool.record_and_collect_network_fee(fees_owed_to_network);
 			Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
+
+			pool.collect_fee_from_available(broker_interest)
 		});
 
-		if pool_interest != 0 || network_interest != 0 || low_ltv_penalty != 0 {
+		// Any portion of the broker fee that the pool couldn't cover stays in pending so the
+		// next collection round can retry once the pool has more liquidity.
+		let broker_interest_uncollected = broker_interest.saturating_sub(broker_interest_collected);
+		if broker_interest_uncollected > 0 {
+			self.pending_interest
+				.broker
+				.saturating_accrue(ScaledAmountHP::from_asset_amount(broker_interest_uncollected));
+		}
+
+		self.owed_principal.saturating_accrue(broker_interest_collected);
+
+		if broker_interest_collected > 0 {
+			match &self.broker {
+				Some(broker) => T::Balance::credit_account(
+					&broker.account,
+					loan_asset,
+					broker_interest_collected,
+				),
+				None =>
+					log_or_panic!("Broker interest collected without broker on loan {:?}", self.id),
+			}
+		}
+
+		if pool_interest != 0 ||
+			network_interest != 0 ||
+			low_ltv_penalty != 0 ||
+			broker_interest_collected != 0
+		{
 			Pallet::<T>::deposit_event(Event::InterestTaken {
 				loan_id: self.id,
 				pool_interest,
 				network_interest,
-				// TODO: broker fees
-				broker_interest: Default::default(),
+				broker_interest: broker_interest_collected,
 				low_ltv_penalty,
 			});
 		}
@@ -1380,6 +1422,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
 		collateral_topup_asset: Option<Asset>,
+		broker: Option<Beneficiary<T::AccountId>>,
 	) -> Result<LoanId, DispatchError> {
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
 			.map_err(|_| Error::<T>::NoRefundAddressSet)?;
@@ -1394,7 +1437,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		);
 
 		// Creating a loan with 0 principal first, then using `expand_loan_inner` to update it
-		let loan = create_new_loan::<T>(asset);
+		let loan = create_new_loan::<T>(asset, broker);
 		let loan_id = loan.id;
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
@@ -1746,7 +1789,10 @@ fn check_collateral_pool_caps<T: Config>(
 	Ok(())
 }
 
-pub fn create_new_loan<T: Config>(asset: Asset) -> GeneralLoan<T> {
+pub fn create_new_loan<T: Config>(
+	asset: Asset,
+	broker: Option<Beneficiary<T::AccountId>>,
+) -> GeneralLoan<T> {
 	let loan_id = NextLoanId::<T>::get();
 	NextLoanId::<T>::set(loan_id + 1);
 
@@ -1756,6 +1802,7 @@ pub fn create_new_loan<T: Config>(asset: Asset) -> GeneralLoan<T> {
 		created_at_block: frame_system::Pallet::<T>::current_block_number(),
 		owed_principal: 0,
 		pending_interest: Default::default(),
+		broker,
 	}
 }
 
@@ -1916,18 +1963,21 @@ impl<T: Config> Pallet<T> {
 		Ok(account)
 	}
 
-	/// Mutates for pool for `asset` expecting it to exist.
-	fn mutate_existing_pool<F>(asset: Asset, f: F)
+	/// Mutates the pool for `asset` expecting it to exist. If the pool is missing the
+	/// closure is skipped and the default value is returned.
+	fn mutate_existing_pool<R, F>(asset: Asset, f: F) -> R
 	where
-		F: FnOnce(&mut LendingPool<T::AccountId>),
+		R: Default,
+		F: FnOnce(&mut LendingPool<T::AccountId>) -> R,
 	{
 		GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
 				f(pool)
 			} else {
 				log_or_panic!("Lending Pool must exist for asset {}", asset);
+				R::default()
 			}
-		});
+		})
 	}
 }
 

@@ -219,7 +219,7 @@ fn create_loan_and_supply_collateral(
 			*collateral_amount,
 		)?;
 	}
-	LendingPools::new_loan(borrower, asset, amount, collateral_topup_asset)
+	LendingPools::new_loan(borrower, asset, amount, collateral_topup_asset, None)
 }
 
 #[test]
@@ -452,6 +452,7 @@ fn basic_general_lending() {
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE,
 							pending_interest: InterestBreakdown::default(),
+							broker: None,
 						}
 					)]),
 				})
@@ -805,7 +806,8 @@ fn basic_loan_aggregation() {
 								EXTRA_PRINCIPAL_1 + origination_fee_pool_1 +
 								origination_fee_pool_2 + origination_fee_network_1 +
 								origination_fee_network_2,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
@@ -895,7 +897,8 @@ fn basic_loan_aggregation() {
 								origination_fee_pool_3 + origination_fee_network_1 +
 								origination_fee_network_2 +
 								origination_fee_network_3,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
@@ -1131,7 +1134,8 @@ fn basic_liquidation() {
 							asset: LOAN_ASSET,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE - repaid_amount_1,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)]),
 				})
@@ -2106,7 +2110,7 @@ mod multi_asset_collateral_liquidation {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None,),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None, None),
 					Ok(LOAN_ID_2)
 				);
 			})
@@ -2184,7 +2188,8 @@ mod multi_asset_collateral_liquidation {
 							asset: LOAN_ASSET_2,
 							created_at_block: INIT_BLOCK,
 							owed_principal: PRINCIPAL_2 + ORIGINATION_FEE_2,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)])
 				);
@@ -2245,7 +2250,8 @@ mod multi_asset_collateral_liquidation {
 							owed_principal: PRINCIPAL_2 + ORIGINATION_FEE_2 + liquidation_fee -
 								SWAP_OUTPUT_LOAN_2_SWAP_2 -
 								SWAP_OUTPUT_LOAN_2_SWAP_4,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)])
 				);
@@ -2650,7 +2656,7 @@ fn borrowing_disallowed_during_liquidation() {
 			);
 
 			assert_noop!(
-				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None,),
+				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
 				Error::<Test>::LiquidationInProgress
 			);
 
@@ -3133,7 +3139,8 @@ fn adding_collateral_during_liquidation() {
 								pool: 0.into(),
 								broker: 0.into(),
 								low_ltv_penalty: 0.into()
-							}
+							},
+							broker: None,
 						}
 					)]),
 					liquidation_status: LiquidationStatus::NoLiquidation,
@@ -3575,7 +3582,8 @@ mod voluntary_liquidation {
 								asset: LOAN_ASSET,
 								owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL,
 								created_at_block: INIT_BLOCK,
-								pending_interest: Default::default()
+								pending_interest: Default::default(),
+								broker: None,
 							}
 						)]),
 						liquidation_status: LiquidationStatus::NoLiquidation,
@@ -3668,7 +3676,8 @@ mod voluntary_liquidation {
 							asset: LOAN_ASSET,
 							owed_principal: PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1,
 							created_at_block: INIT_BLOCK,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)])
 				);
@@ -3766,7 +3775,8 @@ mod voluntary_liquidation {
 							asset: LOAN_ASSET,
 							owed_principal: owed_after_liquidation_2,
 							created_at_block: INIT_BLOCK,
-							pending_interest: Default::default()
+							pending_interest: Default::default(),
+							broker: None,
 						}
 					)])
 				);
@@ -4023,7 +4033,7 @@ mod safe_mode {
 	fn safe_mode_for_creating_loan() {
 		const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
 
-		let try_to_borrow = || LendingPools::new_loan(LP, LOAN_ASSET, PRINCIPAL, None);
+		let try_to_borrow = || LendingPools::new_loan(LP, LOAN_ASSET, PRINCIPAL, None, None);
 
 		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -4199,6 +4209,7 @@ mod whitelisting {
 				LOAN_ASSET,
 				PRINCIPAL,
 				None,
+				None,
 			));
 
 			assert_noop!(
@@ -4206,6 +4217,7 @@ mod whitelisting {
 					RuntimeOrigin::signed(NON_WHITELISTED_USER),
 					LOAN_ASSET,
 					PRINCIPAL,
+					None,
 					None,
 				),
 				Error::<Test>::AccountNotWhitelisted
@@ -4242,6 +4254,7 @@ fn init_liquidation_swaps_test() {
 					created_at_block: 0,
 					owed_principal: 20,
 					pending_interest: Default::default(),
+					broker: None,
 				},
 			),
 			(
@@ -4252,6 +4265,7 @@ fn init_liquidation_swaps_test() {
 					created_at_block: 0,
 					owed_principal: 2000,
 					pending_interest: Default::default(),
+					broker: None,
 				},
 			),
 		]),
@@ -4496,7 +4510,7 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 
 		// Or create a new loan
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_1),),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_1), None),
 			Error::<Test>::OraclePriceUnavailable
 		);
 
@@ -4510,7 +4524,7 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 			SupplyAddedActionType::Manual,
 		));
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_2),),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_2), None),
 			Error::<Test>::OraclePriceUnavailable
 		);
 	});
@@ -4803,6 +4817,7 @@ fn loan_minimum_is_enforced() {
 				LOAN_ASSET,
 				MIN_LOAN_AMOUNT_ASSET - 1,
 				Some(COLLATERAL_ASSET),
+				None,
 			),
 			Error::<Test>::AmountBelowMinimum
 		);
@@ -4814,6 +4829,7 @@ fn loan_minimum_is_enforced() {
 				LOAN_ASSET,
 				MIN_LOAN_AMOUNT_ASSET,
 				Some(COLLATERAL_ASSET),
+				None,
 			),
 			Ok(LOAN_ID)
 		);
@@ -5102,14 +5118,14 @@ fn must_have_refund_address_for_loan_asset() {
 
 		// Should not be able to create a loan without a refund address set
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET),),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET), None),
 			Error::<Test>::NoRefundAddressSet
 		);
 
 		// Set refund address and try again
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 		assert_eq!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET),),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET), None),
 			Ok(LOAN_ID)
 		);
 	});
@@ -5133,6 +5149,7 @@ fn can_handle_liquidation_with_zero_collateral() {
 				created_at_block: 0,
 				owed_principal: 20,
 				pending_interest: Default::default(),
+				broker: None,
 			},
 		)]),
 		liquidation_status: LiquidationStatus::NoLiquidation,
@@ -5179,7 +5196,7 @@ fn same_asset_loan() {
 				INIT_COLLATERAL,
 			));
 			assert_eq!(
-				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(LOAN_ASSET),),
+				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(LOAN_ASSET), None),
 				Ok(LOAN_ID)
 			);
 
@@ -5307,7 +5324,7 @@ mod supply_as_collateral {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None,),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
 					Ok(LOAN_ID)
 				);
 
@@ -5463,7 +5480,7 @@ mod supply_as_collateral {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None,),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
 					Ok(LOAN_ID)
 				);
 			})
@@ -5560,7 +5577,8 @@ mod supply_as_collateral {
 								asset: LOAN_ASSET,
 								created_at_block: 1,
 								owed_principal: amount_owed_after_first_liquidation,
-								pending_interest: Default::default()
+								pending_interest: Default::default(),
+								broker: None,
 							}
 						)]),
 						liquidation_status: LiquidationStatus::NoLiquidation,
