@@ -115,7 +115,7 @@ enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
 }
 
 impl<T: Config> LimitOrderUpdate<T> {
-	fn targets_same_order(&self, other: &Self) -> bool {
+	fn can_override_order(&self, other: &Self) -> bool {
 		self.lp == other.lp &&
 			self.base_asset == other.base_asset &&
 			self.quote_asset == other.quote_asset &&
@@ -207,7 +207,7 @@ impl<T: Config> LimitOrderUpdate<T> {
 			let order_id = self.id;
 			ScheduledLimitOrderUpdates::<T>::try_mutate(dispatch_at, |orders| {
 				if let Some(scheduled_order) =
-					orders.iter_mut().find(|order| self.targets_same_order(order))
+					orders.iter_mut().find(|order| self.can_override_order(order))
 				{
 					*scheduled_order = self;
 				} else {

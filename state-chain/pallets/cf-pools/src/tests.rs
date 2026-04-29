@@ -585,6 +585,88 @@ fn scheduled_close_replaces_existing_close_for_same_order() {
 }
 
 #[test]
+fn scheduled_set_does_not_override_different_order() {
+	const DISPATCH_AT: u64 = 2;
+	const FIRST_ORDER_ID: OrderId = 0;
+	const SECOND_ORDER_ID: OrderId = 1;
+	const FIRST_AMOUNT: AssetAmount = 55;
+	const SECOND_AMOUNT: AssetAmount = 77;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				400_000u32,
+				Price::at_tick_zero(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, FIRST_AMOUNT + SECOND_AMOUNT);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				FIRST_ORDER_ID,
+				Some(100),
+				FIRST_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				SECOND_ORDER_ID,
+				Some(101),
+				SECOND_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 2);
+
+			let scheduled_updates = ScheduledLimitOrderUpdates::<Test>::get(DISPATCH_AT);
+			assert_eq!(scheduled_updates.len(), 2);
+			assert_eq!(scheduled_updates[0].id, FIRST_ORDER_ID);
+			assert_eq!(
+				scheduled_updates[0].details,
+				LimitOrderUpdateDetails::Set {
+					option_tick: Some(100),
+					sell_amount: FIRST_AMOUNT,
+					close_order_at: None,
+				}
+			);
+			assert_eq!(scheduled_updates[1].id, SECOND_ORDER_ID);
+			assert_eq!(
+				scheduled_updates[1].details,
+				LimitOrderUpdateDetails::Set {
+					option_tick: Some(101),
+					sell_amount: SECOND_AMOUNT,
+					close_order_at: None,
+				}
+			);
+		})
+		.then_process_blocks_until_block(DISPATCH_AT)
+		.then_execute_with(|_| {
+			let bids =
+				LiquidityPools::pool_orders_for_account(Asset::Flip, STABLE_ASSET, &ALICE, false)
+					.unwrap()
+					.limit_orders
+					.bids;
+
+			assert_eq!(bids.len(), 2);
+			let by_tick: std::collections::BTreeMap<_, _> =
+				bids.into_iter().map(|o| (o.tick, o.sell_amount)).collect();
+			assert_eq!(by_tick.get(&100), Some(&FIRST_AMOUNT.into()));
+			assert_eq!(by_tick.get(&101), Some(&SECOND_AMOUNT.into()));
+		});
+}
+
+#[test]
 fn test_dispatch_at_validation() {
 	const CURRENT_BLOCK: u64 = 10;
 	new_test_ext().then_execute_at_block(10u32, |_| {
