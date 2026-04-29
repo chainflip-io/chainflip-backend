@@ -140,8 +140,10 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 					server = trait $$rpc_server_trait_name:ident,
 					server = struct $$rpc_server_struct_name:ident,
 					client = trait $$rpc_client_trait_name:ident,
+					translation_to_runtime_types = $$migration:ident,
 				}
 			) => {
+
 				$$(
 					#[$$($$Attributes)*]
 				)*
@@ -151,10 +153,10 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 						fn $fn_name(
 							&self,
 							$(
-								$arg_name: GetVariant<AtRpcLayer, $arg_ty>,
+								$arg_name: GetVariant<AtRpc, $arg_ty>,
 							)*
 							at: Option<state_chain_runtime::Hash>
-						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpcLayer, $result_ty>>;
+						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpc, $result_ty>>;
 					)*
 				}
 
@@ -181,17 +183,18 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 						fn $fn_name(
 							&self,
 							$(
-								$arg_name: GetVariant<AtRpcLayer, $arg_ty>,
+								$arg_name: GetVariant<AtRpc, $arg_ty>,
 							)*
 							at: Option<state_chain_runtime::Hash>
-						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpcLayer, $result_ty>> {
+						) -> cf_rpc_apis::RpcResult<GetVariant<AtRpc, $result_ty>> {
 							self.rpc_backend.with_versioned_runtime_api(
 								at,
 								|api, hash, _version| {
 									// convert arguments to runtime layer types
 									let runtime_args = (
 										$(
-											<$arg_ty as HasVariant<AtRpcLayer>>::from_variant($arg_name),
+											<$$migration as TypedMigration< <$arg_ty as HasVariant<AtRpc>>::Get, $arg_ty >>::backwards($arg_name),
+											// <<$arg_ty as HasMigrationFrom<AtRpc>>::GetMigration as Migration>::backwards($arg_name),
 										)*
 									);
 
@@ -199,7 +202,9 @@ macro_rules! decl_runtime_apis_with_transparent_rpc {
 									let runtime_result = api.$fn_name(hash, runtime_args);
 
 									// convert result back to rpc layer variant
-									runtime_result.map(|value| <$result_ty as HasVariant<AtRpcLayer>>::to_variant(value))
+									runtime_result.map(|value| 
+										<$$migration as TypedMigration< <$result_ty as HasVariant<AtRpc>>::Get, $result_ty >>::forwards(value)
+									)
 								}
 							)
 						}
@@ -241,7 +246,7 @@ macro_rules! decl_versioned_runtime_apis {
 		use sp_api::decl_runtime_apis;
 		decl_runtime_apis!(
 			#[api_version($current_api_version)]
-			pub trait VersionedProductRuntimeApi {
+			pub trait $api_name {
 				$(
 					$(
 						#[changed_in($changed_version)]

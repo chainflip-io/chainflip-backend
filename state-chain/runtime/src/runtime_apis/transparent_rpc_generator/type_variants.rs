@@ -56,6 +56,50 @@ pub trait TypedMigration<From,To> {
     fn backwards(x: To) -> From;
 }
 
+impl<A,B, M: TypedMigration<A,B>> TypedMigration<Vec<A>,Vec<B>> for M {
+    fn forwards(x: Vec<A>) -> Vec<B> {
+        x.into_iter().map(M::forwards).collect()
+    }
+
+    fn backwards(x: Vec<B>) -> Vec<A> {
+        x.into_iter().map(M::backwards).collect()
+    }
+}
+
+impl<A,B, M: TypedMigration<A,B>> TypedMigration<Option<A>,Option<B>> for M {
+    fn forwards(x: Option<A>) -> Option<B> {
+        x.map(M::forwards)
+    }
+
+    fn backwards(x: Option<B>) -> Option<A> {
+        x.map(M::backwards)
+    }
+}
+impl<A0,A1,B0,B1, M: TypedMigration<A0,B0> + TypedMigration<A1,B1>> TypedMigration<(A0,A1),(B0,B1)> for M {
+    fn forwards((x,y): (A0,A1)) -> (B0,B1) {
+        (M::forwards(x), M::forwards(y))
+    }
+
+    fn backwards((x,y): (B0,B1)) -> (A0,A1) {
+        (M::backwards(x), M::backwards(y))
+    }
+}
+
+#[duplicate::duplicate_item(T; [()]; [u32]; [u8]; [u16])]
+impl<M> TypedMigration<T,T> for M {
+    fn forwards(x: T) -> T {
+        x
+    }
+    fn backwards(x: T) -> T {
+        x
+    }
+}
+
+
+
+
+// type GetTypedMigration<M, T, V> = <M as TypedMigration <T as HasVariant<V>>::Get
+
 pub struct FromTypedMigration<From, To, M: TypedMigration<From,To>>(From,To,M);
 impl<From, To, M: TypedMigration<From,To>> Migration for FromTypedMigration<From,To,M> {
     type From = From;
@@ -138,8 +182,6 @@ pub struct V2_1;
 impl VariantName for V2_1 {}
 pub struct V2_0;
 impl VariantName for V2_0 {}
-pub struct AtRpc;
-impl VariantName for AtRpc {}
 
 pub struct AtRuntime;
 impl VariantName for AtRuntime {}

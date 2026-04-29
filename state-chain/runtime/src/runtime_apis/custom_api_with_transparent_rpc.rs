@@ -34,7 +34,7 @@ decl_runtime_apis_with_transparent_rpc! {
 	impl macro generate_versioned_product_custom_rpc_impl;
 
 	#[api_version(2)]
-	trait TransparentCustomApi {
+	trait TransparentCustomRuntimeApi {
 		#[method(name = "mytest")]
 		#[changed_in()]
 		fn mytest(arg:()) -> ();
@@ -44,5 +44,7 @@ decl_runtime_apis_with_transparent_rpc! {
 		fn mytest2(arg: BrokerInfo::Struct<AtRuntime>) -> BrokerInfo::Struct<AtRuntime>;
 	}
 }
+
+
 
 

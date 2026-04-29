@@ -1,6 +1,6 @@
 use pallet_cf_elections::generic_tools::CommonTraits;
 
-use crate::{generic_item, runtime_apis::transparent_rpc_generator::type_variants::{AtRpc, AtRuntime, HasVariant, TypedMigration}};
+use crate::{generic_item, runtime_apis::transparent_rpc_generator::type_variants::{AtRuntime, HasVariant, TypedMigration}};
 use crate::runtime_apis::transparent_rpc_generator::VariantName;
 use sp_std::vec::Vec;
 
