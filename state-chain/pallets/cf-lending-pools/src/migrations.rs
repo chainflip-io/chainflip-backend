@@ -42,7 +42,7 @@ pub type PalletMigration<T> = (
 	VersionedMigration<
 		4,
 		5,
-		collateral_to_supply::Migration<T>,
+		loan_account_migration::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
