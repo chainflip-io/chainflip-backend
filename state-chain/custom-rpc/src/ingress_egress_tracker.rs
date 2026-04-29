@@ -362,9 +362,7 @@ pub(crate) fn convert_raw_witnessed_events(
 		} => {
 			let deposits = deposits
 				.into_iter()
-				.map(|(height, witness)| {
-					convert_deposit_witness::<Tron>(&witness, height, network)
-				})
+				.map(|(height, witness)| convert_deposit_witness::<Tron>(&witness, height, network))
 				.collect();
 
 			let converted_vault_deposits = vault_deposits
