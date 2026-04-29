@@ -1,7 +1,8 @@
 use crate::{general_lending::general_lending_pool::LendingPoolError, mocks::*};
 use cf_chains::ForeignChain;
 use cf_test_utilities::{
-	assert_event_sequence, assert_has_event, assert_matching_event_count, assert_no_matching_event,
+	assert_event_sequence, assert_has_event, assert_has_matching_event,
+	assert_matching_event_count, assert_no_matching_event,
 };
 use cf_traits::{
 	lending::LendingSystemApi,
@@ -607,6 +608,254 @@ fn basic_general_lending() {
 
 			// Account is removed once the last loan is repaid:
 			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+		});
+}
+
+/// When a loan is created with a broker attached, the broker's per-year fee accrues alongside
+/// the pool/network interest and, on each interest payment block, is paid out of the pool's
+/// available liquidity directly into the broker's free balance.
+#[test]
+fn broker_interest_credited_to_broker() {
+	use cf_primitives::{Beneficiary, BASIS_POINTS_PER_MILLION};
+
+	// Pick a principal large enough that one interest period charges a non-zero broker fee.
+	const PRINCIPAL: AssetAmount = 2_000_000_000_000;
+	const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+
+	const BROKER: u64 = 999;
+	const BROKER_BPS: u16 = 100; // 1% per year
+
+	// With network fees disabled below, all of the origination fee goes to the pool and the
+	// loan's initial owed principal is `PRINCIPAL + ORIGINATION_FEE`. The pool's utilisation at
+	// the time of interest accrual is therefore:
+	let utilisation =
+		Permill::from_rational(PRINCIPAL + ORIGINATION_FEE, INIT_POOL_AMOUNT + ORIGINATION_FEE);
+
+	// Pool interest charged for one payment interval at this utilisation:
+	let pool_rate_per_interval = CONFIG.derive_base_interest_rate_per_payment_interval(
+		LOAN_ASSET,
+		utilisation,
+		CONFIG.interest_payment_interval_blocks,
+	);
+	let expected_pool_interest = (ScaledAmountHP::from_asset_amount(PRINCIPAL + ORIGINATION_FEE) *
+		pool_rate_per_interval)
+		.take_non_fractional_part();
+
+	// Broker interest computed using the same conversion as the pallet:
+	let broker_rate_per_interval = CONFIG.interest_per_year_to_per_payment_interval(
+		Permill::from_parts(BROKER_BPS as u32 * BASIS_POINTS_PER_MILLION),
+		CONFIG.interest_payment_interval_blocks,
+	);
+	let expected_broker_interest =
+		(ScaledAmountHP::from_asset_amount(PRINCIPAL + ORIGINATION_FEE) * broker_rate_per_interval)
+			.take_non_fractional_part();
+
+	// NOTE: intentional use of a hardcoded value: it was computed by hand to make sure it matches
+	// our expectation.
+	assert_eq!(expected_broker_interest, 38029);
+
+	let first_interest_payment_block = INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.disable_network_fees()
+		.then_execute_with(|_| {
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+
+			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+
+			assert_ok!(supply_funds::<Test>(
+				BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL,
+				SupplyAddedActionType::Manual,
+			));
+
+			assert_ok!(LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				None,
+				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			));
+
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
+		})
+		.then_process_blocks_until_block(first_interest_payment_block)
+		.then_execute_with(|_| {
+			// The broker has been credited their accrued fee in the loan asset.
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_interest);
+			// We didn't credit the wrong asset:
+			assert_eq!(MockBalance::get_balance(&BROKER, COLLATERAL_ASSET), 0);
+
+			// Both the pool interest and the broker fee were rolled into the loan's owed
+			// principal (so the borrower will repay them back to the pool):
+			let loan = LoanAccounts::<Test>::get(BORROWER)
+				.unwrap()
+				.loans
+				.get(&LOAN_ID)
+				.unwrap()
+				.clone();
+			assert_eq!(
+				loan.owed_principal,
+				PRINCIPAL + ORIGINATION_FEE + expected_pool_interest + expected_broker_interest,
+			);
+
+			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+				loan_id: LOAN_ID,
+				pool_interest: expected_pool_interest,
+				network_interest: 0,
+				broker_interest: expected_broker_interest,
+				low_ltv_penalty: 0,
+			}));
+		});
+}
+
+/// If the pool has no available liquidity at the time of interest collection, the broker
+/// fee for that interval is left in `pending_interest.broker` and rolled forward. Once a
+/// lender supplies more funds, the next collection round pays the broker the cumulative
+/// amount in one go.
+#[test]
+fn broker_fee_collected_after_pool_replenished() {
+	use cf_primitives::{Beneficiary, BASIS_POINTS_PER_MILLION};
+
+	const PRINCIPAL: AssetAmount = 2_000_000_000_000;
+	// Pool exactly equals the loan principal so utilisation hits 100% after the loan and the
+	// pool has zero available liquidity to pay broker fees on the first interest payment.
+	const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL;
+	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE;
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+
+	const BROKER: u64 = 999;
+	const BROKER_BPS: u16 = 100; // 1% per year
+
+	// Plenty of additional liquidity so that the deferred broker fee can be paid in full
+	// at the next interest interval.
+	const EXTRA_FUNDS: AssetAmount = PRINCIPAL;
+
+	let broker_rate_per_interval = CONFIG.interest_per_year_to_per_payment_interval(
+		Permill::from_parts(BROKER_BPS as u32 * BASIS_POINTS_PER_MILLION),
+		CONFIG.interest_payment_interval_blocks,
+	);
+
+	// At the start of each interval the loan's `owed_principal` is what gets multiplied by
+	// the broker rate. After the first interest payment, `owed_principal` is bumped by the
+	// pool interest charged at 100% utilisation:
+	let pool_rate_at_full_utilisation = CONFIG.derive_base_interest_rate_per_payment_interval(
+		LOAN_ASSET,
+		Permill::one(),
+		CONFIG.interest_payment_interval_blocks,
+	);
+	let principal_interval_1 = PRINCIPAL + ORIGINATION_FEE;
+	let pool_interest_1 = (ScaledAmountHP::from_asset_amount(principal_interval_1) *
+		pool_rate_at_full_utilisation)
+		.take_non_fractional_part();
+	let principal_interval_2 = principal_interval_1 + pool_interest_1;
+
+	// The broker fee for interval 1 is left in pending after a failed collection; the broker fee
+	// for interval 2 then accumulates on top of it.
+	let broker_fee_1 =
+		ScaledAmountHP::from_asset_amount(principal_interval_1) * broker_rate_per_interval;
+	let mut combined_pending = broker_fee_1 +
+		ScaledAmountHP::from_asset_amount(principal_interval_2) * broker_rate_per_interval;
+	let expected_broker_total = combined_pending.take_non_fractional_part();
+
+	let first_interest_payment_block = INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64;
+	let second_interest_payment_block =
+		INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64;
+
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.disable_network_fees()
+		.then_execute_with(|_| {
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+
+			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+			assert_ok!(supply_funds::<Test>(
+				BORROWER,
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL,
+				SupplyAddedActionType::Manual,
+			));
+
+			assert_ok!(LendingPools::new_loan(
+				BORROWER,
+				LOAN_ASSET,
+				PRINCIPAL,
+				None,
+				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			));
+
+			// Sanity check: the pool is now fully utilised.
+			let pool = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
+			assert_eq!(pool.available_amount, 0);
+		})
+		.then_process_blocks_until_block(first_interest_payment_block)
+		.then_execute_with(|_| {
+			// The broker fee was charged but the pool had nothing to pay it with, so the
+			// broker's free balance is still zero and the InterestTaken event reports a
+			// zero broker_interest for this interval.
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+					loan_id: LOAN_ID,
+					broker_interest: 0,
+					..
+				}),
+			);
+
+			// Broker fee is still pending:
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER)
+					.unwrap()
+					.loans
+					.get(&LOAN_ID)
+					.unwrap()
+					.pending_interest
+					.broker,
+				broker_fee_1
+			);
+		})
+		.then_execute_with(|_| {
+			// A lender adds more liquidity to the pool.
+			MockBalance::credit_account(&LENDER, LOAN_ASSET, EXTRA_FUNDS);
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(LENDER),
+				LOAN_ASSET,
+				EXTRA_FUNDS,
+			));
+		})
+		.then_process_blocks_until_block(second_interest_payment_block)
+		.then_execute_with(|_| {
+			// The broker now receives the deferred fee from interval 1 plus the freshly
+			// accrued fee from interval 2 in a single payout.
+			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), expected_broker_total);
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
+					loan_id: LOAN_ID,
+					broker_interest,
+					..
+				}) if *broker_interest == expected_broker_total,
+			);
+
+			// Broker fees have been collected in full (ignoring fractional part):
+			assert_eq!(
+				LoanAccounts::<Test>::get(BORROWER)
+					.unwrap()
+					.loans
+					.get(&LOAN_ID)
+					.unwrap()
+					.pending_interest
+					.broker
+					.into_asset_amount(),
+				0
+			);
 		});
 }
 
