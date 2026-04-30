@@ -22,9 +22,9 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
@@ -632,6 +632,11 @@ pub enum RawWitnessedEvents {
 		deposits: Vec<(u64, DepositWitness<Arbitrum>)>,
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, ArbitrumInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)>,
+	},
+	Tron {
+		deposits: Vec<(u64, DepositWitness<Tron>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
 }
 
