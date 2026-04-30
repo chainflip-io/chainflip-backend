@@ -68,7 +68,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	// TODO: Add the actual addresses for the TRON contracts once deployed
 	tron_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
 	tron_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	trx_usdt_token_address: hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c"), // TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
+	trx_usdt_token_address: hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c"), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
 	tron_chain_id: cf_chains::tron::CHAIN_ID_MAINNET,
