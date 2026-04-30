@@ -316,7 +316,7 @@ impl_migration_sequence_ending_with_always_run!(A, B, C, D, E, F, G);
 /// ```ignore
 /// #[cfg(test)]
 /// const _: u16 =
-/// 	<PalletMigration<crate::mocks::Test> as cf_runtime_utilities::MigrationSequence>::FROM;
+///     <PalletMigration<crate::mocks::Test> as cf_runtime_utilities::MigrationSequence>::FROM;
 /// ```
 pub trait MigrationSequence {
 	const FROM: u16;
@@ -350,12 +350,12 @@ impl<A: MigrationSequence> MigrationSequence for (A,) {
 }
 
 macro_rules! impl_migration_sequence_for_tuple {
-	($first:ident, $($rest:ident),+) => {
+	($first:ident, $($rest:ident),+ $(,)?) => {
 		impl<$first: MigrationSequence, $($rest: MigrationSequence),+> MigrationSequence
 			for ($first, $($rest),+)
 		{
 			const FROM: u16 = {
-				impl_migration_sequence_for_tuple!(@checks $first, $($rest),+);
+				impl_migration_sequence_for_tuple!(@checks $first, $($rest,)+);
 				$first::FROM
 			};
 			const TO: u16 = impl_migration_sequence_for_tuple!(@last $($rest),+);
@@ -367,7 +367,7 @@ macro_rules! impl_migration_sequence_for_tuple {
 		impl_migration_sequence_for_tuple!(@last $($rest),+)
 	};
 
-	(@checks $prev:ident, $next:ident) => {
+	(@checks $prev:ident, $next:ident, $($rest:ident),* $(,)?) => {
 		if $prev::TO != $next::FROM {
 			panic!(concat!(
 				"Migration sequence not contiguous: ",
@@ -377,19 +377,9 @@ macro_rules! impl_migration_sequence_for_tuple {
 				"::FROM",
 			));
 		}
+		impl_migration_sequence_for_tuple!(@checks $next, $($rest,)*);
 	};
-	(@checks $prev:ident, $next:ident, $($rest:ident),+) => {
-		if $prev::TO != $next::FROM {
-			panic!(concat!(
-				"Migration sequence not contiguous: ",
-				stringify!($prev),
-				"::TO != ",
-				stringify!($next),
-				"::FROM",
-			));
-		}
-		impl_migration_sequence_for_tuple!(@checks $next, $($rest),+);
-	};
+	(@checks $_last:ident $(,)?) => {};
 }
 
 impl_migration_sequence_for_tuple!(A, B);
