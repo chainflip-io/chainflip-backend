@@ -1236,7 +1236,10 @@ fn test_get_scheduled_swap_legs() {
 			]);
 		});
 
-		SwapRate::set(2f64);
+		// Oracle price of 2 USD/Eth is used to estimate the intermediate USDC amount
+		// when the input is Eth (swap 5).
+		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 2);
+		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 		// The amount of USDC in the middle of swap (5):
 		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
 
@@ -1348,25 +1351,32 @@ fn test_get_scheduled_swap_legs_fallback() {
 			]);
 		});
 
-		// Setting the swap rate to something different from the price so that if the fallback is
-		// not used, it will give a different result, avoiding a false positive.
-		SwapRate::set(PRICE.checked_add(1).unwrap() as f64);
-
-		// The swap simulation must fail for it to use the fallback price estimation
-		MockSwappingApi::set_swaps_should_fail(true);
-
-		// Only setting pool price for FLIP to make sure that the test would fail
-		// if the code tried to use the price of some other asset
+		// Only setting the pool price (and no oracle price) for FLIP to make sure that the
+		// pool price is used as the fallback when no oracle is available.
 		MockPoolPriceApi::set_pool_price(
 			Asset::Flip,
 			STABLE_ASSET,
 			Price::from_usd_fine_amount(PRICE),
 		);
 
-		// The order changed due to failed swaps being put after successful ones, but thats fine.
 		assert_eq!(
 			Swapping::get_scheduled_swap_legs(Asset::Eth),
 			vec![
+				(
+					SwapLegInfo {
+						swap_id: SwapId(1),
+						swap_request_id: SwapRequestId(1),
+						base_asset: Asset::Eth,
+						quote_asset: Asset::Usdc,
+						side: Side::Buy,
+						amount: INIT_AMOUNT * PRICE,
+						source_asset: Some(Asset::Flip),
+						source_amount: Some(INIT_AMOUNT),
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
 				(
 					SwapLegInfo {
 						swap_id: SwapId(2),
@@ -1382,21 +1392,6 @@ fn test_get_scheduled_swap_legs_fallback() {
 					},
 					BLOCK
 				),
-				(
-					SwapLegInfo {
-						swap_id: SwapId(1),
-						swap_request_id: SwapRequestId(1),
-						base_asset: Asset::Eth,
-						quote_asset: Asset::Usdc,
-						side: Side::Buy,
-						amount: INIT_AMOUNT * PRICE,
-						source_asset: Some(Asset::Flip),
-						source_amount: Some(INIT_AMOUNT),
-						remaining_chunks: 0,
-						chunk_interval: SWAP_DELAY_BLOCKS,
-					},
-					BLOCK
-				)
 			]
 		);
 	});
@@ -1409,7 +1404,10 @@ fn test_get_scheduled_swap_legs_for_dca() {
 		const NUMBER_OF_CHUNKS: u32 = 3;
 		const CHUNK_INTERVAL: u32 = 10;
 		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		SwapRate::set(1_f64);
+
+		// Oracle price of 1 USD for both assets so the intermediate amount equals input.
+		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1);
+		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 
 		let dca_params =
 			DcaParameters { number_of_chunks: NUMBER_OF_CHUNKS, chunk_interval: CHUNK_INTERVAL };
@@ -1440,6 +1438,38 @@ fn test_get_scheduled_swap_legs_for_dca() {
 				BLOCK
 			)]
 		);
+	});
+}
+
+#[test]
+fn test_get_scheduled_swap_legs_applies_network_fee() {
+	new_test_ext().execute_with(|| {
+		const INIT_AMOUNT: AssetAmount = 1_000_000;
+		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		// 1% network fee.
+		const NETWORK_FEE_RATE: Permill = Permill::from_parts(10_000);
+		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 });
+
+		// Oracle price of 1 USD/Flip and 1 USD/USDC so the intermediate stable amount of
+		// the buy leg equals the input amount before fees.
+		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1);
+		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
+
+		ScheduledSwaps::<Test>::mutate(|swaps| {
+			swaps.extend(vec![
+				// Sell direction with respect to base_asset = Flip.
+				(1.into(), create_test_swap(1, Asset::Flip, Asset::Eth, INIT_AMOUNT, None, BLOCK)),
+				// Buy direction with respect to base_asset = Flip.
+				(2.into(), create_test_swap(2, Asset::Usdc, Asset::Flip, INIT_AMOUNT, None, BLOCK)),
+			]);
+		});
+
+		let legs = Swapping::get_scheduled_swap_legs(Asset::Flip);
+		assert_eq!(legs.len(), 2);
+		assert_eq!(legs[0].0.side, Side::Sell);
+		assert_eq!(legs[0].0.amount, INIT_AMOUNT);
+		assert_eq!(legs[1].0.side, Side::Buy);
+		assert_eq!(legs[1].0.amount, INIT_AMOUNT - (NETWORK_FEE_RATE * INIT_AMOUNT));
 	});
 }
 

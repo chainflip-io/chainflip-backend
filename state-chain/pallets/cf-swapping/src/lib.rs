@@ -1791,27 +1791,27 @@ pub mod pallet {
 				return vec![];
 			}
 
-			let swaps: Vec<_> = ScheduledSwaps::<T>::get()
-				.values()
+			ScheduledSwaps::<T>::get()
+				.into_values()
 				.filter(|swap| swap.from == base_asset || swap.to == base_asset)
-				.cloned()
-				// Remove refund parameters for swap simulation to avoid price violations.
-				.map(|swap| swap.without_refund_params())
-				.collect();
-
-			// Run the full execution logic
-			let BatchExecutionOutcomes { successful_swaps, failed_swaps } =
-				Self::execute_batch(swaps);
-
-			// Map the swaps to SwapLegInfo
-			successful_swaps
-				.into_iter()
-				// Turn the failed swaps into fresh swap states. Pool price fallback will be used
-				// for these swaps.
-				.chain(failed_swaps.into_iter().map(|(swap, _)| SwapState::new(swap)))
-				.filter_map(|state| {
-					let swap_request = SwapRequests::<T>::get(state.swap_request_id())
+				.filter_map(|swap| {
+					let swap_request = SwapRequests::<T>::get(swap.swap_request_id)
 						.expect("Swap request should exist");
+
+					// Find out what the network fee for this swap is
+					let network_fee = match &swap_request.state {
+						SwapRequestState::UserSwap { output_action, .. } => {
+							let is_internal =
+								matches!(output_action, SwapOutputAction::CreditOnChain { .. });
+							Self::get_network_fee_for_swap(swap.from, swap.to, is_internal)
+						},
+						SwapRequestState::IngressEgressFee => FeeRateAndMinimum {
+							rate: Self::get_network_fee_for_swap(swap.from, swap.to, false).rate,
+							minimum: 0,
+						},
+						SwapRequestState::NetworkFee => FeeRateAndMinimum::default(),
+					};
+
 					let dca_state = match swap_request.state {
 						SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
 						_ => None,
@@ -1821,66 +1821,76 @@ pub mod pallet {
 					let chunk_interval =
 						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
 
-					if state.input_asset() == base_asset {
+					// There are 2 cases where the swap leg is relevant for the base asset:
+					// 1. When the swap is selling the base asset (swap.from == base_asset). This
+					//    case is easy because the swap amount is the input amount.
+					// 2. When the swap is buying the base asset (swap.to == base_asset). This is
+					//    more complex because it will require calculating the stable amount after
+					//    the first leg of the swap. We use the oracle price with a pool price
+					//    fallback to estimate the stable amount.
+					if swap.from == base_asset {
 						Some((
 							SwapLegInfo {
-								swap_id: state.swap_id(),
-								swap_request_id: state.swap_request_id(),
+								swap_id: swap.swap_id,
+								swap_request_id: swap.swap_request_id,
 								base_asset,
 								// All swaps from `base_asset` have to go through the stable asset:
 								quote_asset: STABLE_ASSET,
 								side: Side::Sell,
-								amount: state.input_amount(),
+								amount: swap.input_amount,
 								source_asset: None,
 								source_amount: None,
 								remaining_chunks,
 								chunk_interval,
 							},
-							state.swap.execute_at,
+							swap.execute_at,
 						))
-					} else if state.output_asset() == base_asset {
-						// In case the swap is "simulated", the amount is just an estimate,
-						// so we additionally include `source_asset` and `source_amount`:
-						let (source_asset, source_amount) = if state.input_asset() != STABLE_ASSET {
-							(Some(state.input_asset()), Some(state.input_amount()))
+					} else if swap.to == base_asset {
+						// `source_asset`/`source_amount` are included so consumers know the
+						// estimate's origin asset.
+						let (source_asset, source_amount) = if swap.from != STABLE_ASSET {
+							(Some(swap.from), Some(swap.input_amount))
 						} else {
 							(None, None)
 						};
 
-						let amount = state.stable_amount.or_else(|| {
-							// If the swap into stable asset failed, fallback to estimating the
-							// amount via pool price.
-
-							// Should be able to successfully retrieve the price since the pool
-							// should exist as we wouldn't need to estimate if input asset
-							// was already STABLE_ASSET):
+						// Calculate the stable amount using the oracle price with pool price
+						// fallback. If the fallback fails, the swap will be skipped.
+						let stable_amount_pre_fee: AssetAmount = if swap.from == STABLE_ASSET {
+							swap.input_amount
+						} else {
 							let sell_price =
-								T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
-									.ok()
-									.map(|price| price.sell)?;
+								T::PriceFeedApi::get_relative_price(swap.from, STABLE_ASSET)
+									.map(|oracle| oracle.price)
+									.or_else(|| {
+										T::PoolPriceApi::pool_price(swap.from, STABLE_ASSET)
+											.ok()
+											.map(|p| p.sell)
+									})?;
+							sell_price.output_amount_ceil(swap.input_amount).unique_saturated_into()
+						};
 
-							Some(
-								sell_price
-									.output_amount_ceil(state.input_amount())
-									.saturated_into(),
-							)
-						})?;
+						let fee = core::cmp::max(
+							network_fee.rate * stable_amount_pre_fee,
+							network_fee.minimum,
+						);
+						let stable_amount = stable_amount_pre_fee
+							.saturating_sub(core::cmp::min(fee, stable_amount_pre_fee));
 
 						Some((
 							SwapLegInfo {
-								swap_id: state.swap_id(),
-								swap_request_id: state.swap_request_id(),
+								swap_id: swap.swap_id,
+								swap_request_id: swap.swap_request_id,
 								base_asset,
-								// All swaps to `base_asset` have to go through the stable asset:
 								quote_asset: STABLE_ASSET,
 								side: Side::Buy,
-								amount,
+								amount: stable_amount,
 								source_asset,
 								source_amount,
 								remaining_chunks,
 								chunk_interval,
 							},
-							state.swap.execute_at,
+							swap.execute_at,
 						))
 					} else {
 						None

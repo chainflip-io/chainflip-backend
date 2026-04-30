@@ -24,7 +24,7 @@ impl MockPoolPriceApi {
 impl PoolPriceProvider for MockPoolPriceApi {
 	fn pool_price(base_asset: Asset, quote_asset: Asset) -> Result<PoolPrice, DispatchError> {
 		let price = Self::get_storage::<_, Price>(POOL_PRICES, (base_asset, quote_asset))
-			.expect("price should have been set");
+			.ok_or(DispatchError::Other("MockPoolPriceApi: price not set"))?;
 		Ok(PoolPrice { sell: price, buy: price })
 	}
 }
