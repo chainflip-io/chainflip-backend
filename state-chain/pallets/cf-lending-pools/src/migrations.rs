@@ -21,8 +21,8 @@ use crate::Pallet;
 
 mod add_min_lending_pool_share;
 mod boost_refactor_migration;
-mod collateral_to_supply;
 mod lending_config_migration;
+mod loan_account_migration;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<

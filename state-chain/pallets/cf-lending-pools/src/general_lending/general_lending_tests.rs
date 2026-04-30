@@ -871,6 +871,7 @@ fn broker_fee_above_cap_is_rejected() {
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL * 2);
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
 		assert_ok!(supply_funds::<Test>(
 			BORROWER,
 			COLLATERAL_ASSET,
@@ -6150,7 +6151,13 @@ mod utilisation_cap {
 
 				// A large loan should fail due to hitting utilisation cap:
 				assert_noop!(
-					LendingPools::new_loan(BORROWER_2, COLLATERAL_ASSET, EXCESSIVE_BORROW, None),
+					LendingPools::new_loan(
+						BORROWER_2,
+						COLLATERAL_ASSET,
+						EXCESSIVE_BORROW,
+						None,
+						None
+					),
 					Error::<Test>::UtilisationCapExceeded
 				);
 				assert_eq!(eth_pool_utilisation(), utilisation_before);
@@ -6160,6 +6167,7 @@ mod utilisation_cap {
 					BORROWER_2,
 					COLLATERAL_ASSET,
 					MODEST_BORROW,
+					None,
 					None
 				));
 				let utilisation_after = eth_pool_utilisation();
@@ -6331,6 +6339,7 @@ mod utilisation_cap {
 				BORROWER_A,
 				Asset::Usdt,
 				LOAN_A_USDT,
+				None,
 				None
 			));
 			// Loan B:
@@ -6338,6 +6347,7 @@ mod utilisation_cap {
 				BORROWER_B,
 				Asset::Usdc,
 				LOAN_B_USDC,
+				None,
 				None
 			));
 			// Loan C:
@@ -6345,6 +6355,7 @@ mod utilisation_cap {
 				BORROWER_C,
 				Asset::Btc,
 				LOAN_C_BTC,
+				None,
 				None
 			));
 
@@ -6443,7 +6454,7 @@ mod utilisation_cap {
 				Asset::Usdt,
 				SUPPLY,
 			));
-			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None));
+			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None, None));
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(Asset::Usdc).unwrap().get_utilisation(),
@@ -6453,7 +6464,7 @@ mod utilisation_cap {
 			// Step 4: A borrows 40 BTC. The new collateral-pool cap check rejects this because
 			// USDC's cap drops below USDC's existing 80% utilisation.
 			assert_noop!(
-				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None),
+				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None, None),
 				Error::<Test>::CollateralPoolUtilisationCapExceeded,
 			);
 		});
