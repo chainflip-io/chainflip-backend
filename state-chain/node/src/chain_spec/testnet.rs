@@ -66,7 +66,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	tron_key_manager_address: hex_literal::hex!("106b8a5ad54db12e3bdfc2bbae756bd8e7fab7e4"),
 	tron_vault_address: hex_literal::hex!("8c98ed1d78b3feecc406c49aa125ab1a5d69f093"),
 	trx_usdt_token_address: hex_literal::hex!("8b4552006feb994813bc721abb1c5b71b5911f1f"),
-
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
 	tron_chain_id: cf_chains::tron::CHAIN_ID_NILE_TESTNET,
