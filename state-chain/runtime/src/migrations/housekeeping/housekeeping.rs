@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-
 use crate::*;
 use cf_chains::{
 	assets::{arb::Asset as ArbAsset, btc::Asset as BtcAsset, eth::Asset as EthAsset},
