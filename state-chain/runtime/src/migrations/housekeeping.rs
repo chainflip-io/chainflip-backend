@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Runtime;
+use crate::{Runtime, VERSION};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
 #[cfg(feature = "try-runtime")]
@@ -22,10 +22,17 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-pub mod deploy_stuck_eth_channels;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
+pub mod refund_stuck_funds;
 pub mod solana_remove_unused_channels_state;
+
+// One-shot gate for the refund_stuck_funds migration. Must equal the runtime's
+// spec_version at the moment the migration ships. If a future release forgets
+// to remove the migration, the version mismatch prevents a re-run. Update this
+// in lock-step with VERSION.spec_version, and remove both the constant and the
+// refund_stuck_funds module in the release that follows.
+const REFUND_STUCK_FUNDS_SPEC_VERSION: u32 = 2_01_14;
 
 pub type Migration = (
 	NetworkSpecificHousekeeping,
@@ -40,10 +47,19 @@ pub struct NetworkSpecificHousekeeping;
 impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
-			genesis_hashes::BERGHAIN => {
-				deploy_stuck_eth_channels::Migration::on_runtime_upgrade();
-				log::info!("🧹 Berghain: scheduled deployment of 2 stuck ETH deposit channels.");
-			},
+			genesis_hashes::BERGHAIN =>
+				if VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION {
+					refund_stuck_funds::Migration::on_runtime_upgrade();
+					log::info!(
+						"🧹 Berghain: scheduled refunds for stuck BTC, ETH, USDT and USDC deposits."
+					);
+				} else {
+					log::info!(
+						"🧹 Skipping refund_stuck_funds: spec_version is {} (expected {}).",
+						VERSION.spec_version,
+						REFUND_STUCK_FUNDS_SPEC_VERSION,
+					);
+				},
 			genesis_hashes::PERSEVERANCE => {
 				log::info!("🧹 No housekeeping required for Perseverance.");
 			},
@@ -58,22 +74,21 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, DispatchError> {
-		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
-			log::info!("🧹 Pre-migration check for Berghain housekeeping.");
-			deploy_stuck_eth_channels::Migration::pre_upgrade()
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
+			VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION
+		{
+			refund_stuck_funds::Migration::pre_upgrade()
 		} else {
-			log::info!("🧹 No pre-migration checks required for this network.");
 			Ok(Default::default())
 		}
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), DispatchError> {
-		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) {
-			log::info!("🧹 Post-migration check for Berghain housekeeping.");
-			deploy_stuck_eth_channels::Migration::post_upgrade(state)?;
-		} else {
-			log::info!("🧹 No post-migration checks required for this network.");
+		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
+			VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION
+		{
+			refund_stuck_funds::Migration::post_upgrade(state)?;
 		}
 		Ok(())
 	}
