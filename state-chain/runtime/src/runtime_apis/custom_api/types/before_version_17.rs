@@ -1,6 +1,7 @@
 use super::*;
 use cf_traits::lending::LoanId;
 use frame_support::sp_runtime::Percent;
+use pallet_cf_lending_pools::LendingPoolConfiguration;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BoostConfiguration {
@@ -58,6 +59,32 @@ impl<AccountId: Clone> From<RpcLoanAccount<AccountId, AssetAmount>>
 				})
 				.collect(),
 			liquidation_status: acc.liquidation_status,
+		}
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
+pub struct RpcLendingPool<Amount> {
+	pub asset: Asset,
+	pub total_amount: Amount,
+	pub available_amount: Amount,
+	pub owed_to_network: Amount,
+	pub utilisation_rate: Permill,
+	pub current_interest_rate: Permill,
+	pub config: LendingPoolConfiguration,
+}
+
+impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendingPool<Amount> {
+	fn from(value: RpcLendingPool<Amount>) -> Self {
+		Self {
+			asset: value.asset,
+			total_amount: value.total_amount,
+			available_amount: value.available_amount,
+			owed_to_network: value.owed_to_network,
+			utilisation_rate: value.utilisation_rate,
+			utilisation_cap: Permill::one(),
+			current_interest_rate: value.current_interest_rate,
+			config: value.config,
 		}
 	}
 }

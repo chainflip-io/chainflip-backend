@@ -161,6 +161,7 @@ fn can_update_all_config_items() {
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
 		const NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD: AssetAmount = 567;
 		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
+		const NEW_LIQUIDATION_COVERAGE_FACTOR: Percent = Percent::from_percent(75);
 
 		let update_boost_config: PalletConfigUpdate =
 			PalletConfigUpdate::SetBoostConfig { config: new_boost_config.clone() };
@@ -215,6 +216,9 @@ fn can_update_all_config_items() {
 			minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 		};
 
+		const UPDATE_LIQUIDATION_COVERAGE_FACTOR: PalletConfigUpdate =
+			PalletConfigUpdate::SetLiquidationCoverageFactor(NEW_LIQUIDATION_COVERAGE_FACTOR);
+
 		// Check that the default values are different from the new ones
 		assert_ne!(BoostConfig::<Test>::get(), new_boost_config);
 		assert_ne!(
@@ -262,6 +266,10 @@ fn can_update_all_config_items() {
 			LendingConfig::<Test>::get().minimum_update_supply_amount_usd,
 			NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD
 		);
+		assert_ne!(
+			LendingConfig::<Test>::get().liquidation_coverage_factor,
+			NEW_LIQUIDATION_COVERAGE_FACTOR
+		);
 
 		// Update all config items at the same time
 		assert_ok!(LendingPools::update_pallet_config(
@@ -278,6 +286,7 @@ fn can_update_all_config_items() {
 				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD,
 				UPDATE_LOAN_MINIMUMS,
+				UPDATE_LIQUIDATION_COVERAGE_FACTOR,
 			]
 			.try_into()
 			.unwrap()
@@ -306,6 +315,7 @@ fn can_update_all_config_items() {
 				minimum_update_supply_amount_usd: NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD,
 				minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
+				liquidation_coverage_factor: NEW_LIQUIDATION_COVERAGE_FACTOR,
 			}
 		);
 
@@ -338,6 +348,9 @@ fn can_update_all_config_items() {
 				update: UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 			}),
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated { update: UPDATE_LOAN_MINIMUMS }),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_LIQUIDATION_COVERAGE_FACTOR
+			}),
 		);
 
 		// Make sure that only governance can update the config
