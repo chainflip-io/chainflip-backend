@@ -863,44 +863,42 @@ fn broker_fee_collected_after_pool_replenished() {
 /// and including the cap are accepted.
 #[test]
 fn broker_fee_above_cap_is_rejected() {
-	use cf_primitives::Beneficiary;
 	use crate::general_lending::MAX_BROKER_FEE_BPS;
+	use cf_primitives::Beneficiary;
 
 	const BROKER: u64 = 999;
 
-	new_test_ext()
-		.with_funded_pool(INIT_POOL_AMOUNT)
-		.then_execute_with(|_| {
-			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL * 2);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-			assert_ok!(supply_funds::<Test>(
-				BORROWER,
-				COLLATERAL_ASSET,
-				INIT_COLLATERAL * 2,
-				SupplyAddedActionType::Manual,
-			));
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL * 2);
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		assert_ok!(supply_funds::<Test>(
+			BORROWER,
+			COLLATERAL_ASSET,
+			INIT_COLLATERAL * 2,
+			SupplyAddedActionType::Manual,
+		));
 
-			// Anything above the cap is rejected.
-			assert_noop!(
-				LendingPools::new_loan(
-					BORROWER,
-					LOAN_ASSET,
-					PRINCIPAL,
-					None,
-					Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS + 1 }),
-				),
-				Error::<Test>::BrokerFeeTooHigh,
-			);
-
-			// The cap itself is allowed.
-			assert_ok!(LendingPools::new_loan(
+		// Anything above the cap is rejected.
+		assert_noop!(
+			LendingPools::new_loan(
 				BORROWER,
 				LOAN_ASSET,
 				PRINCIPAL,
 				None,
-				Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS }),
-			));
-		});
+				Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS + 1 }),
+			),
+			Error::<Test>::BrokerFeeTooHigh,
+		);
+
+		// The cap itself is allowed.
+		assert_ok!(LendingPools::new_loan(
+			BORROWER,
+			LOAN_ASSET,
+			PRINCIPAL,
+			None,
+			Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS }),
+		));
+	});
 }
 
 #[test]
