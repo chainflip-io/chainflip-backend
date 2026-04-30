@@ -42,8 +42,8 @@ pub use weights::WeightInfo;
 /// Hash over (call, nonce, runtime_version)
 pub type GovCallHash = [u8; 32];
 
-pub const PALLET_VERSION: u16 = 3;
-pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
+pub const STORAGE_VERSION_U16: u16 = 3;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[cfg(test)]
 mod mock;

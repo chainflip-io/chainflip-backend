@@ -42,8 +42,8 @@ pub use weights::WeightInfo;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: u16 = 5;
-pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
+pub const STORAGE_VERSION_U16: u16 = 5;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub type PayloadFor<T, I = ()> =
 	<<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;

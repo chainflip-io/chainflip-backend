@@ -155,8 +155,8 @@ use frame_system::pallet_prelude::*;
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: u16 = 9;
-pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
+pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub use pallet::UniqueMonotonicIdentifier;
 

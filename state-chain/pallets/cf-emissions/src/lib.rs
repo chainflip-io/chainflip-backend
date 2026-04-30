@@ -54,8 +54,8 @@ impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
-	pub const PALLET_VERSION: u16 = 1;
-	pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(PALLET_VERSION);
+	pub const STORAGE_VERSION_U16: u16 = 1;
+	pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 	use super::*;
 	use cf_chains::{eth::api::StateChainGatewayAddressProvider, Chain, Ethereum};

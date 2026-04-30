@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Config, Pallet, PALLET_VERSION};
+use crate::{Config, Pallet, STORAGE_VERSION_U16};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
@@ -50,7 +50,7 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = (PlaceholderMigration<{ PALLET_VERSION }, Pallet<T>>,);
+pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
 
 #[cfg(test)]
 const _: u16 =

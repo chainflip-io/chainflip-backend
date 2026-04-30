@@ -2,9 +2,9 @@
 
 This crate provides a `NoopRuntimeUpgrade` and `PlaceholderMigration` that supplements Substrate's `frame_support::migrations::VersionedMigration` to provide developers with tools to perform runtime storage migrations.
 
-## Versioned migration 
+## Versioned migration
 
-Some migrations are run as part of a "Versioned" upgrade - it should be run exactly once, for a specific version. Such migrations are done with Substrate's `VersionedMigration` tool. 
+Some migrations are run as part of a "Versioned" upgrade - it should be run exactly once, for a specific version. Such migrations are done with Substrate's `VersionedMigration` tool.
 
 ``` rust,ignore
    VersionedMigration<FROM, TO, Inner, Pallet, DbWeight>
@@ -35,8 +35,13 @@ When removing migrations, it can be helpful to leave a placeholder migration to 
 
    ```rust,ignore
    use cf_runtime_utilities::PlaceholderMigration;
+   use crate::STORAGE_VERSION_U16;
 
-   type PalletMigration<T> = PlaceholderMigration<4, crate::Pallet<T>>;
+   type PalletMigration<T> = PlaceholderMigration<STORAGE_VERSION_U16, crate::Pallet<T>>;
+
+   #[cfg(test)]
+   const _: u16 =
+      <PalletMigration<crate::mocks::Test> as cf_runtime_utilities::MigrationSequence>::FROM;
    ```
 
 ## Noop migrations
@@ -44,32 +49,32 @@ When removing migrations, it can be helpful to leave a placeholder migration to 
 For instance pallets (e.g. Pallet::<Runtime, EthereumInstance>), sometimes the runtime migrations are not required for all instances. For example, we may be updating storage for Ethereum chain only and the migration will not affect the same Pallet's other chain's instances. You can use `NoopRuntimeUpgrade` do ensure all other instances of the pallets are migrated to the same version. For example - in the example below we upgrade SolanaInstance of the Broadcaster pallet from version 1 to 3, we also want to use `NoopRuntimeUpgrade` to update all other instances to version 3.
 
 ``` rust,ignore
-	VersionedMigration<1, 2, Migration1,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<2, 3, Migration2,
-		pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
-		DbWeight,
-	>,
+ VersionedMigration<1, 2, Migration1,
+  pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+  DbWeight,
+ >,
+ VersionedMigration<2, 3, Migration2,
+  pallet_cf_broadcast::Pallet<Runtime, SolanaInstance>,
+  DbWeight,
+ >,
 
    // Update other instances to version 3
-	VersionedMigration<1, 3, NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<1, 3, NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<1, 3, NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
-		DbWeight,
-	>,
-	VersionedMigration<1, 3, NoopRuntimeUpgrade,
-		pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
-		DbWeight,
-	>,
+ VersionedMigration<1, 3, NoopRuntimeUpgrade,
+  pallet_cf_broadcast::Pallet<Runtime, EthereumInstance>,
+  DbWeight,
+ >,
+ VersionedMigration<1, 3, NoopRuntimeUpgrade,
+  pallet_cf_broadcast::Pallet<Runtime, PolkadotInstance>,
+  DbWeight,
+ >,
+ VersionedMigration<1, 3, NoopRuntimeUpgrade,
+  pallet_cf_broadcast::Pallet<Runtime, BitcoinInstance>,
+  DbWeight,
+ >,
+ VersionedMigration<1, 3, NoopRuntimeUpgrade,
+  pallet_cf_broadcast::Pallet<Runtime, ArbitrumInstance>,
+  DbWeight,
+ >,
 ```
 
 ## Examples with code
@@ -105,14 +110,15 @@ For instance pallets (e.g. Pallet::<Runtime, EthereumInstance>), sometimes the r
    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
 
    // Bump this if already present.
-   pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+   pub const STORAGE_VERSION_U16: u16 = 1;
+   pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
    #[frame_support::pallet]
    pub mod pallet {
        // [...]
 
        #[pallet::pallet]
-       #[pallet::storage_version(PALLET_VERSION)] // <-- Add this if not already present.
+       #[pallet::storage_version(STORAGE_VERSION)] // <-- Add this if not already present.
        // [...]
        pub struct Pallet<T>(_);
 
