@@ -17,15 +17,6 @@ services:
       - "/tmp/solana:/test-ledger"
     command: /bin/sh -c "cp -R /solana/solana-ledger.tar.gz /test-ledger"
 
-  tron-init:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-test-26-${NODE_COUNT}
-    pull_policy: if_not_present
-    container_name: tron-init
-    entrypoint: /bin/sh
-    volumes:
-      - "/tmp/chainflip/data/tron-data:/tron-initial-state"
-    command: -c "cp -R /tron/output-directory/* /tron-initial-state/"
-
   arb-init:
     image: ghcr.io/chainflip-io/chainflip-eth-contracts/arbitrum-gizmo-shop:v1.4.1-${NODE_COUNT}
     restart: always
@@ -259,13 +250,14 @@ services:
     pull_policy: if_not_present
     container_name: tron
     restart: unless-stopped
+    environment:
+      - JAVA_OPTS=-Xms4g -Xmx6g # Give the VM more heap size to not run into CPU TIMEOUT problems
     ports:
       - "8090:8090" # TRON HTTP API (wallet)
       - "8555:8555" # EVM-compatible JSON-RPC
       - "50051:50051" # gRPC
     volumes:
       - "./init/tron:/tron/config"
-      - "/tmp/chainflip/data/tron-data:/tron/output-directory"
     command: -c /tron/config/config.conf -d /tron/output-directory -w -p ef895dc87b545ba42ece3162b8441f712c892d0681ae34682eeb3e5443afefaa
     healthcheck:
       test:
