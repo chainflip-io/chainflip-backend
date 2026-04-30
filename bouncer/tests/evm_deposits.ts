@@ -23,6 +23,9 @@ import {
   TransactionOriginId,
   Chains,
   Asset,
+  getTronWebClient,
+  getTronWhaleKeyPair,
+  getEncodedTronAddress,
 } from 'shared/utils';
 import { signAndSendTxEvm } from 'shared/send_evm';
 import { getCFTesterAbi, getEvmVaultAbi } from 'shared/contract_interfaces';
@@ -32,7 +35,8 @@ import { observeBadEvent } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { newEvmAddress } from 'shared/new_evm_address';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
-import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
+import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
+import { encodeEvmVaultSwapParams } from 'shared/vault_swap/evm_vault_swap';
 import { SwapContext } from 'shared/utils/swap_context';
 import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
 import assert from 'assert';
@@ -181,6 +185,128 @@ async function testTxMultipleVaultSwaps<A = []>(
     foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
   }
   assert.strictEqual(foundSwapRequestIds.length, numSwaps - 1); // TODO rever back to numSwaps once the deduplication ingress issue is fixed
+  cf.info(`Success found ${foundSwapRequestIds.length} SwapRequested events`);
+}
+
+async function testTronTxMultipleVaultSwaps<A = []>(
+  parentCf: ChainflipIO<A>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+) {
+  const sourceChain = chainFromAsset(sourceAsset);
+  assert.strictEqual(
+    sourceChain,
+    Chains.Tron,
+    `sourceAsset must be on the Tron chain, got ${sourceChain}`,
+  );
+
+  const { destAddress, tag } = await prepareSwap(parentCf.logger, sourceAsset, destAsset);
+  const cf = parentCf
+    .with({ account: fullAccountFromUri('//BROKER_2', 'Broker') })
+    .withChildLogger(`${tag} testTronTxMultipleVaultSwaps`);
+
+  const { vaultSwapDetails, fineAmount } = await encodeEvmVaultSwapParams<{ note: string }>(
+    cf,
+    sourceAsset,
+    destAsset,
+    destAddress,
+  );
+
+  const tronWeb = getTronWebClient();
+  const { privkey, pubkey } = getTronWhaleKeyPair();
+
+  const cfTesterEncodedAddress = getEncodedTronAddress(getContractAddress(sourceChain, 'CFTESTER'));
+  const srcTokenAddress = getEncodedTronAddress(getContractAddress(sourceChain, sourceAsset));
+  const amount = BigInt(fineAmount);
+  const numSwaps = 2;
+  const callValue = sourceAsset === 'Trx' ? Number(amount * BigInt(numSwaps)) : 0;
+  const amountPerSwap = sourceAsset === 'Trx' ? amount * BigInt(numSwaps) : amount;
+
+  if (sourceAsset !== 'Trx') {
+    // TRC20: approve cfTester to spend amount * numSwaps before the call uses safeTransferFrom
+    cf.debug(`Approving cfTester to spend ${amount * BigInt(numSwaps)} of ${sourceAsset}`);
+    const approvalResult = await tronWeb.transactionBuilder.triggerSmartContract(
+      srcTokenAddress,
+      'approve(address,uint256)',
+      { feeLimit: 100_000_000 },
+      [
+        { type: 'address', value: cfTesterEncodedAddress },
+        { type: 'uint256', value: (amount * BigInt(numSwaps)).toString() },
+      ],
+      getEncodedTronAddress(pubkey),
+    );
+    const signedApproval = await tronWeb.trx.sign(approvalResult.transaction, privkey);
+    await tronWeb.trx.sendRawTransaction(signedApproval);
+  }
+
+  // Swap params are carried in the note; passing dummy values for the contract call
+  // parameters that CfTester doesn't use.
+  cf.debug(`Calling multipleContractSwap on cfTester at ${cfTesterEncodedAddress}`);
+  const result = await tronWeb.transactionBuilder.triggerSmartContract(
+    cfTesterEncodedAddress,
+    'multipleContractSwap(uint32,bytes,uint32,address,uint256,bytes,uint8)',
+    { feeLimit: 1_000_000_000, callValue },
+    [
+      { type: 'uint32', value: 0 },
+      { type: 'bytes', value: '0x' },
+      { type: 'uint32', value: 0 },
+      { type: 'address', value: srcTokenAddress },
+      { type: 'uint256', value: amount.toString() },
+      { type: 'bytes', value: '0x' },
+      { type: 'uint8', value: numSwaps },
+    ],
+    getEncodedTronAddress(pubkey),
+  );
+
+  let transaction = result.transaction;
+  transaction = await tronWeb.transactionBuilder.addUpdateData(
+    transaction,
+    vaultSwapDetails.note.substring(2),
+    'hex',
+  );
+
+  const signedTx = await tronWeb.trx.sign(transaction, privkey);
+  const broadcast = await tronWeb.trx.sendRawTransaction(signedTx);
+  const txHash = '0x' + broadcast.txid;
+  cf.debug(`Tron multipleContractSwap tx hash: ${txHash}`);
+
+  const txOrigin: TransactionOriginId = {
+    type: TransactionOrigin.VaultSwapEvm,
+    txHash,
+  };
+
+  // Wait for SwapRequested events. For Trx they should be ingressed as the
+  // same swap, as it is witnessed on a per-transaction basis. For TrxUsdt
+  // they will be ingressed as separate swaps.
+  const foundSwapRequestIds: bigint[] = [];
+
+  for (let i = 1; i <= numSwaps - 1; i++) {
+    const swapRequestedEvent = await cf.stepUntilEvent(
+      'Swapping.SwapRequested',
+      swappingSwapRequested.refine((event) => {
+        const channelMatches = checkTransactionInMatches(event.origin, txOrigin);
+        const sourceAssetMatches = sourceAsset === event.inputAsset;
+        const destAssetMatches = destAsset === event.outputAsset;
+        const amountMatches = event.inputAmount === amountPerSwap;
+        const requestTypeMatches = checkRequestTypeMatches(
+          event.requestType,
+          SwapRequestType.Regular,
+        );
+        const differentSwapReqId = !foundSwapRequestIds.includes(event.swapRequestId);
+        return (
+          channelMatches &&
+          sourceAssetMatches &&
+          destAssetMatches &&
+          amountMatches &&
+          requestTypeMatches &&
+          differentSwapReqId
+        );
+      }),
+    );
+    cf.debug(`Found SwapRequested event ${i} : ${JSON.stringify(swapRequestedEvent)}`);
+    foundSwapRequestIds.push(swapRequestedEvent.swapRequestId);
+  }
+  assert.strictEqual(foundSwapRequestIds.length, 1);
   cf.info(`Success found ${foundSwapRequestIds.length} SwapRequested events`);
 }
 
@@ -404,6 +530,8 @@ export async function dotestEvmDeposits<A = []>(
     parentCf.all([
       (subcf) => testTxMultipleVaultSwaps(subcf, 'Eth', 'Flip'),
       (subcf) => testTxMultipleVaultSwaps(subcf, 'ArbEth', 'Flip'),
+      (subcf) => testTronTxMultipleVaultSwaps(subcf, 'Trx', 'ArbEth'),
+      (subcf) => testTronTxMultipleVaultSwaps(subcf, 'TrxUsdt', 'Usdc'),
     ]);
 
   const doubleDepositTests = (parentCf: ChainflipIO<A>) =>
@@ -419,11 +547,6 @@ export async function dotestEvmDeposits<A = []>(
       (subcf) => testEncodeCfParameters(subcf, 'ArbEth', 'Eth'),
       (subcf) => testEncodeCfParameters(subcf, 'Eth', 'Flip'),
     ]);
-
-  // TODO: Test Tron DEX Aggregation using similar logic to what we do in `testTxMultipleVaultSwaps`
-  // using the CfTester's logic. We can consider doing 1 or 2 swaps in the same transaction. Doing
-  // two with Trx will test both the DEX aggregation and also the same-tx balance logic in the engine,
-  // they should both be credited as the same swap.
 
   await cf.all([
     depositTests,
