@@ -5819,13 +5819,8 @@ mod utilisation_cap {
 					total_collateral_usd,
 				));
 
-				let utilisation_cap = compute_utilisation_cap::<Test>(
-					COLLATERAL_ASSET,
-					Percent::from_percent(100),
-					&price_cache,
-					None,
-				)
-				.unwrap();
+				let utilisation_cap = get_utilisation_cap(COLLATERAL_ASSET);
+
 				assert_eq!(utilisation_cap, expected_cap);
 
 				// Nothing has been borrowed from the ETH pool yet.
