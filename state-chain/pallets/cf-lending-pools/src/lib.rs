@@ -86,7 +86,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
 
 use serde::{Deserialize, Serialize};
 
