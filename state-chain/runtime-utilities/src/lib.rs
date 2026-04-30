@@ -306,17 +306,17 @@ impl_migration_sequence_ending_with_always_run!(A, B, C, D, E);
 impl_migration_sequence_ending_with_always_run!(A, B, C, D, E, F);
 impl_migration_sequence_ending_with_always_run!(A, B, C, D, E, F, G);
 
-/// Verifies that a sequence of migrations forms a contiguous version chain.
+/// Connects the FROM/TO versions of a sequence of VersionedMigrations.
 ///
-/// Implementations for tuples check at compile time that each step's `TO` version equals
-/// the next step's `FROM` version. `check` accesses `FROM`, triggering this evaluation.
+/// There is a compile-time check that the sequence is contiguous, i.e. that the TO version of each
+/// migration matches the FROM version of the next. The main use-case is the following pattern in a
+/// pallet's `migrations.rs`. Accessing the FROM version of the composed migration sequence forces
+/// evaluation of the sequence. If the sequence is not contiguous, it triggers a compile-time error:
 ///
-/// Each pallet's `migrations.rs` should include:
 /// ```ignore
-/// #[test]
-/// fn migration_chain_is_current() {
-///     <PalletMigration<mock::Test> as MigrationSequence>::check(PALLET_VERSION);
-/// }
+/// #[cfg(test)]
+/// const _: u16 =
+/// 	<PalletMigration<crate::mocks::Test> as cf_runtime_utilities::MigrationSequence>::FROM;
 /// ```
 pub trait MigrationSequence {
 	const FROM: u16;
