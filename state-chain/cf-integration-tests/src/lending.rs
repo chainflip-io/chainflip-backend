@@ -111,6 +111,7 @@ fn basic_lending() {
 				LOAN_ASSET,
 				LOAN_AMOUNT,
 				Some(COLLATERAL_ASSET),
+				None
 			));
 
 			// Check that we got the loan amount
