@@ -22,9 +22,9 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod housekeeping;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
-pub mod refund_stuck_funds;
 pub mod solana_remove_unused_channels_state;
 
 // One-shot gate for the refund_stuck_funds migration. Must equal the runtime's
@@ -49,7 +49,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
 				if VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION {
-					refund_stuck_funds::Migration::on_runtime_upgrade();
+					housekeeping::Migration::on_runtime_upgrade();
 					log::info!(
 						"🧹 Berghain: scheduled refunds for stuck BTC, ETH, USDT and USDC deposits."
 					);
@@ -77,7 +77,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
 			VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION
 		{
-			refund_stuck_funds::Migration::pre_upgrade()
+			housekeeping::Migration::pre_upgrade()
 		} else {
 			Ok(Default::default())
 		}
@@ -88,7 +88,7 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 		if matches!(genesis_hashes::genesis_hash::<Runtime>(), genesis_hashes::BERGHAIN) &&
 			VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION
 		{
-			refund_stuck_funds::Migration::post_upgrade(state)?;
+			housekeeping::Migration::post_upgrade(state)?;
 		}
 		Ok(())
 	}

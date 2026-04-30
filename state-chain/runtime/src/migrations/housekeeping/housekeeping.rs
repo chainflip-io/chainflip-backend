@@ -14,9 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Refund stuck deposits that were witnessed but marked Unrefundable due to
-// missing vault metadata. Schedules a separate egress per (asset, deposit) to
-// the recipient address provided by the depositor.
 
 use crate::*;
 use cf_chains::{
@@ -89,14 +86,14 @@ impl OnRuntimeUpgrade for Migration {
 				None,
 			) {
 				Ok(d) => log::info!(
-					"🪙 BTC refund {} sats -> {}: egress_id={:?} after_fees={} fee={}",
+					"BTC refund {} sats -> {}: egress_id={:?} after_fees={} fee={}",
 					amount,
 					address,
 					d.egress_id,
 					d.egress_amount,
 					d.fee_withheld,
 				),
-				Err(e) => log::error!("🪙 Failed to schedule BTC refund to {}: {:?}", address, e),
+				Err(e) => log::error!("Failed to schedule BTC refund to {}: {:?}", address, e),
 			}
 		}
 
@@ -108,7 +105,7 @@ impl OnRuntimeUpgrade for Migration {
 				None,
 			) {
 				Ok(d) => log::info!(
-					"💎 ETH refund {} {:?} -> 0x{}: egress_id={:?} after_fees={} fee={}",
+					"ETH refund {} {:?} -> 0x{}: egress_id={:?} after_fees={} fee={}",
 					amount,
 					asset,
 					hex::encode(address),
@@ -117,7 +114,7 @@ impl OnRuntimeUpgrade for Migration {
 					d.fee_withheld,
 				),
 				Err(e) => log::error!(
-					"💎 Failed to schedule ETH refund {:?} to 0x{}: {:?}",
+					"Failed to schedule ETH refund {:?} to 0x{}: {:?}",
 					asset,
 					hex::encode(address),
 					e,
@@ -133,7 +130,7 @@ impl OnRuntimeUpgrade for Migration {
 				None,
 			) {
 				Ok(d) => log::info!(
-					"🅰️  ARB refund {} {:?} -> 0x{}: egress_id={:?} after_fees={} fee={}",
+					"ARB refund {} {:?} -> 0x{}: egress_id={:?} after_fees={} fee={}",
 					amount,
 					asset,
 					hex::encode(address),
@@ -142,7 +139,7 @@ impl OnRuntimeUpgrade for Migration {
 					d.fee_withheld,
 				),
 				Err(e) => log::error!(
-					"🅰️  Failed to schedule ARB refund {:?} to 0x{}: {:?}",
+					"Failed to schedule ARB refund {:?} to 0x{}: {:?}",
 					asset,
 					hex::encode(address),
 					e,
