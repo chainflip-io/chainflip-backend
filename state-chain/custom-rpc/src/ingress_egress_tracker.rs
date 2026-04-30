@@ -19,7 +19,7 @@ use cf_chains::{
 	address::{AddressString, EncodedAddress},
 	evm::SchnorrVerificationComponents,
 	instances::BitcoinInstance,
-	Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain,
+	Chain, ChainCrypto, ChannelRefundParametersUnchecked, IntoTransactionInIdForAnyChain, Tron,
 };
 use cf_primitives::{BasisPoints, DcaParameters, NetworkEnvironment};
 use cf_traits::ChainflipWithTargetChain;
@@ -334,6 +334,35 @@ pub(crate) fn convert_raw_witnessed_events(
 				.map(|(height, witness)| {
 					convert_deposit_witness::<cf_chains::Arbitrum>(&witness, height, network)
 				})
+				.collect();
+
+			let converted_vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event(&event)
+						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+				})
+				.collect();
+
+			let broadcasts_vec = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
+
+			RpcWitnessedEventsResponse {
+				deposits,
+				broadcasts: broadcasts_vec,
+				vault_deposits: converted_vault_deposits,
+			}
+		},
+		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Tron {
+			deposits,
+			broadcasts,
+			vault_deposits,
+		} => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| convert_deposit_witness::<Tron>(&witness, height, network))
 				.collect();
 
 			let converted_vault_deposits = vault_deposits
