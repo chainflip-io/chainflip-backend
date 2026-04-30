@@ -30,7 +30,9 @@ impl OnRuntimeUpgrade for TronElectionsInit {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), DispatchError> {
-		use crate::chainflip::witnessing::tron_elections::TRON_MAINNET_SAFETY_BUFFER;
+		use crate::chainflip::witnessing::tron_elections::{
+			TRON_MAINNET_SAFETY_BUFFER, TRON_MAINNET_SAFETY_MARGIN,
+		};
 		use pallet_cf_elections::{
 			electoral_systems::{
 				block_height_witnesser::BlockHeightWitnesserSettings,
@@ -48,19 +50,19 @@ impl OnRuntimeUpgrade for TronElectionsInit {
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 1,
+					safety_margin: TRON_MAINNET_SAFETY_MARGIN,
 					safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 1,
+					safety_margin: TRON_MAINNET_SAFETY_MARGIN,
 					safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 				},
 				BlockWitnesserSettings {
 					max_ongoing_elections: 15,
 					max_optimistic_elections: 1,
-					safety_margin: 1,
+					safety_margin: TRON_MAINNET_SAFETY_MARGIN,
 					safety_buffer: TRON_MAINNET_SAFETY_BUFFER,
 				},
 				(),
