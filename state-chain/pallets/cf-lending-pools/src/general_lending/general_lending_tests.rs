@@ -5780,7 +5780,6 @@ mod utilisation_cap {
 			asset,
 			COVERAGE_FACTOR,
 			&OraclePriceCache::<Test>::default(),
-			None,
 		)
 		.unwrap()
 	}
