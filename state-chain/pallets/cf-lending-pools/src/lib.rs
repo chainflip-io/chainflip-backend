@@ -216,7 +216,7 @@ pub enum SupplyAddedActionType {
 	/// than was required.
 	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
 	/// Triggered by the protocol when liquidation did not swap all of input amount.
-	SystemLiquidationUnusedAmount,
+	SystemLiquidationUnusedAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
 }
 
 /// Indicates how the action of supplying funds was triggered.

@@ -475,7 +475,10 @@ impl<T: Config> LoanAccount<T> {
 				self.supply_from_liquidation(
 					from_asset,
 					swap_progress.remaining_input_amount,
-					SupplyAddedActionType::SystemLiquidationUnusedAmount,
+					SupplyAddedActionType::SystemLiquidationUnusedAmount {
+						loan_id,
+						swap_request_id,
+					},
 				);
 			} else {
 				log_or_panic!("Failed to abort swap request: {swap_request_id}");
