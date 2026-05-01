@@ -1750,8 +1750,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeSafeMode> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, _version| api.cf_safe_mode_statuses(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_17(hash)?.into())
+			} else {
+				api.cf_safe_mode_statuses(hash)
+			}
+		})
 	}
 
 	fn cf_free_balances(
