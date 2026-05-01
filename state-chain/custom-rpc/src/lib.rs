@@ -2028,29 +2028,21 @@ where
 
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_16(hash, &account_id).map(Into::into)
+					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
 				} else if api_version < 17 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_17(hash, &account_id)
-						.map(Into::into)
-						.or_else(|_| {
-							api.cf_common_account_info_before_version_16(hash, &account_id)
-								.map(Into::into)
-						})
+					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
 				} else {
-					api.cf_common_account_info(hash, &account_id)
-						.or_else(|_| {
-							api.cf_common_account_info_before_version_17(hash, &account_id)
-								.map(Into::into)
-						})
-						.or_else(|_| {
-							api.cf_common_account_info_before_version_16(hash, &account_id)
-								.map(Into::into)
-						})
+					api.cf_common_account_info(hash, &account_id)?
 				}
-				.unwrap_or_default()
 				.try_map_balances(TryInto::try_into)
-				.unwrap_or_default();
+				.map_err(|_| {
+					CfApiError::ErrorObject(ErrorObject::owned(
+						ErrorCode::InternalError.code(),
+						"Unable to convert balances.",
+						None::<()>,
+					))
+				})?;
 
 				Ok(RpcAccountInfoWrapper {
 					common_items,
@@ -2089,49 +2081,6 @@ where
 						},
 						AccountRole::LiquidityProvider => {
 							#[expect(deprecated)]
-							let lp_info = if api_version < 9 {
-								api.cf_liquidity_provider_info_before_version_9(
-									hash,
-									account_id.clone(),
-								)
-								.map(Into::into)
-							} else if api_version < 16 {
-								api.cf_liquidity_provider_info_before_version_16(
-									hash,
-									account_id.clone(),
-								)
-								.map(Into::into)
-							} else if api_version < 17 {
-								api.cf_liquidity_provider_info_before_version_17(
-									hash,
-									account_id.clone(),
-								)
-								.map(Into::into)
-								.or_else(|_| {
-									api.cf_liquidity_provider_info_before_version_16(
-										hash,
-										account_id.clone(),
-									)
-									.map(Into::into)
-								})
-							} else {
-								api.cf_liquidity_provider_info(hash, account_id.clone())
-									.or_else(|_| {
-										api.cf_liquidity_provider_info_before_version_17(
-											hash,
-											account_id.clone(),
-										)
-										.map(Into::into)
-									})
-									.or_else(|_| {
-										api.cf_liquidity_provider_info_before_version_16(
-											hash,
-											account_id.clone(),
-										)
-										.map(Into::into)
-									})
-							};
-
 							let LiquidityProviderInfo {
 								refund_addresses,
 								earned_fees,
@@ -2139,25 +2088,36 @@ where
 								lending_positions,
 								collateral_balances,
 								..
-							} = lp_info.unwrap_or_default();
+							} = if api_version < 9 {
+								api.cf_liquidity_provider_info_before_version_9(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else if api_version < 16 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_16(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else if api_version < 17 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_17(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else {
+								api.cf_liquidity_provider_info(hash, account_id)?
+							};
 
-							let should_render_refund_addresses = api_version >= 17;
-							let network = api.cf_network_environment(hash).ok();
+							let network = api.cf_network_environment(hash)?;
 							RpcAccountInfo::LiquidityProvider {
 								refund_addresses: refund_addresses
 									.into_iter()
 									.map(|(chain, address)| {
-										if should_render_refund_addresses {
-											(
-												chain,
-												address.and_then(|a| {
-													network
-														.map(|network| a.to_humanreadable(network))
-												}),
-											)
-										} else {
-											(chain, None)
-										}
+										(chain, address.map(|a| a.to_humanreadable(network)))
 									})
 									.collect(),
 								earned_fees: earned_fees
