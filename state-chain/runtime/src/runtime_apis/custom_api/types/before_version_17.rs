@@ -89,6 +89,15 @@ impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendin
 	}
 }
 
+// All AssetMap-derived types reuse before_version_16 equivalents: they decode the same wire
+// format as api_version 16 runtimes (which lack the Tron chain in AssetMap).
+pub type AssetMap<T> = super::before_version_16::AssetMap<T>;
+pub type NetworkFeeDetails = super::before_version_16::NetworkFeeDetails;
+pub type NetworkFees = super::before_version_16::NetworkFees;
+pub type LiquidityProviderInfo = super::before_version_16::LiquidityProviderInfo;
+pub type TradingStrategyLimits = super::before_version_16::TradingStrategyLimits;
+pub type RpcAccountInfoCommonItems<B> = super::before_version_16::RpcAccountInfoCommonItems<B>;
+
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]

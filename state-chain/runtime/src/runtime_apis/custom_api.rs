@@ -197,6 +197,10 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_16::LiquidityProviderInfo;
+		#[changed_in(17)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_17::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
@@ -210,11 +214,17 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		#[changed_in(16)]
 		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		#[changed_in(16)]
 		fn cf_lp_total_balances(
 			account_id: AccountId32,
 		) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -317,9 +327,13 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		#[changed_in(16)]
 		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
+		#[changed_in(17)]
+		fn cf_trading_strategy_limits() -> before_version_17::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		#[changed_in(16)]
 		fn cf_network_fees() -> before_version_16::NetworkFees;
+		#[changed_in(17)]
+		fn cf_network_fees() -> before_version_17::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(17)]
 		fn cf_lending_pools(
@@ -359,6 +373,10 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(17)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+		) -> before_version_17::RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
@@ -388,6 +406,8 @@ decl_runtime_apis!(
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 		#[changed_in(16)]
 		fn cf_default_oracle_price_protection();
+		#[changed_in(17)]
+		fn cf_default_oracle_price_protection() -> before_version_17::AssetMap<Option<BasisPoints>>;
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.
