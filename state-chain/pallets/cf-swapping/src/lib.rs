@@ -1812,14 +1812,11 @@ pub mod pallet {
 						SwapRequestState::NetworkFee => FeeRateAndMinimum::default(),
 					};
 
-					let dca_state = match swap_request.state {
-						SwapRequestState::UserSwap { dca_state, .. } => Some(dca_state),
-						_ => None,
+					let (remaining_chunks, chunk_interval) = match swap_request.state {
+						SwapRequestState::UserSwap { dca_state, .. } =>
+							(dca_state.remaining_chunks, dca_state.chunk_interval),
+						_ => (0, SWAP_DELAY_BLOCKS),
 					};
-					let remaining_chunks =
-						dca_state.as_ref().map(|dca| dca.remaining_chunks).unwrap_or(0);
-					let chunk_interval =
-						dca_state.map(|dca| dca.chunk_interval).unwrap_or(SWAP_DELAY_BLOCKS);
 
 					// There are 2 cases where the swap leg is relevant for the base asset:
 					// 1. When the swap is selling the base asset (swap.from == base_asset). This
@@ -1874,8 +1871,7 @@ pub mod pallet {
 							network_fee.rate * stable_amount_pre_fee,
 							network_fee.minimum,
 						);
-						let stable_amount = stable_amount_pre_fee
-							.saturating_sub(core::cmp::min(fee, stable_amount_pre_fee));
+						let stable_amount = stable_amount_pre_fee.saturating_sub(fee);
 
 						Some((
 							SwapLegInfo {

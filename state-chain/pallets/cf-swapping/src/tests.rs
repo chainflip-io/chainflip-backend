@@ -1241,7 +1241,7 @@ fn test_get_scheduled_swap_legs() {
 		MockPriceFeedApi::set_price_usd_fine(Asset::Eth, 2);
 		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 		// The amount of USDC in the middle of swap (5):
-		const INTERMEDIATE_AMOUNT: AssetAmount = 2000;
+		const INTERMEDIATE_AMOUNT: AssetAmount = INIT_AMOUNT * 2;
 
 		// The test is more useful when these aren't equal:
 		assert_ne!(INIT_AMOUNT, INTERMEDIATE_AMOUNT);
@@ -1404,9 +1404,9 @@ fn test_get_scheduled_swap_legs_for_dca() {
 		const NUMBER_OF_CHUNKS: u32 = 3;
 		const CHUNK_INTERVAL: u32 = 10;
 		const BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const FLIP_PRICE: u128 = 2;
 
-		// Oracle price of 1 USD for both assets so the intermediate amount equals input.
-		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1);
+		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, FLIP_PRICE);
 		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 
 		let dca_params =
@@ -1428,7 +1428,7 @@ fn test_get_scheduled_swap_legs_for_dca() {
 					base_asset: Asset::Eth,
 					quote_asset: Asset::Usdc,
 					side: Side::Buy,
-					amount: INIT_AMOUNT,
+					amount: INIT_AMOUNT * FLIP_PRICE,
 					source_asset: Some(Asset::Flip),
 					source_amount: Some(INIT_AMOUNT),
 					// This is the first chunk, so there are 2 remaining
@@ -1450,9 +1450,8 @@ fn test_get_scheduled_swap_legs_applies_network_fee() {
 		const NETWORK_FEE_RATE: Permill = Permill::from_parts(10_000);
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: NETWORK_FEE_RATE, minimum: 0 });
 
-		// Oracle price of 1 USD/Flip and 1 USD/USDC so the intermediate stable amount of
-		// the buy leg equals the input amount before fees.
-		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 1);
+		// Setting the flip price to something different to make sure it does not affect the test
+		MockPriceFeedApi::set_price_usd_fine(Asset::Flip, 2);
 		MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
 
 		ScheduledSwaps::<Test>::mutate(|swaps| {
