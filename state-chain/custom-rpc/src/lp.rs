@@ -539,16 +539,17 @@ where
 	}
 
 	async fn free_balances(&self) -> RpcResult<AssetMap<NumberOrHex>> {
-		Ok(self
-			.rpc_backend
-			.client
-			.runtime_api()
-			.cf_free_balances(
-				self.rpc_backend.client.info().finalized_hash,
-				self.signed_pool_client.account_id(),
-			)
-			.map_err(CfApiError::from)?
-			.map(Into::into))
+		let account_id = self.signed_pool_client.account_id();
+		let at = Some(self.rpc_backend.client.info().finalized_hash);
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_17(hash, account_id.clone()).map(Into::into)
+			} else {
+				api.cf_free_balances(hash, account_id.clone())
+			}
+			.map(|balances| balances.map(Into::into))
+		})
 	}
 
 	async fn get_open_swap_channels(&self, at: Option<Hash>) -> RpcResult<OpenSwapChannels> {

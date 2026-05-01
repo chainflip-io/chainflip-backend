@@ -1750,8 +1750,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeSafeMode> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, _version| api.cf_safe_mode_statuses(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_17(hash)?.into())
+			} else {
+				api.cf_safe_mode_statuses(hash)
+			}
+		})
 	}
 
 	fn cf_free_balances(
@@ -1763,6 +1769,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}
@@ -1779,6 +1788,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
@@ -1794,6 +1806,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_trading_strategy_limits_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_trading_strategy_limits_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_trading_strategy_limits(hash)
 			}
@@ -2034,6 +2049,9 @@ where
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+				} else if api_version < 17 {
+					#[expect(deprecated)]
+					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
 				} else {
 					api.cf_common_account_info(hash, &account_id)?
 				}
@@ -2099,6 +2117,13 @@ where
 							} else if api_version < 16 {
 								#[expect(deprecated)]
 								api.cf_liquidity_provider_info_before_version_16(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else if api_version < 17 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_17(
 									hash,
 									account_id.clone(),
 								)?
@@ -2329,6 +2354,9 @@ where
 			let mut boost_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
+				if version < 17 && chain == ForeignChain::Tron {
+					continue;
+				}
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
 				// These fields were added in version 8 of the runtime API
@@ -2340,16 +2368,28 @@ where
 
 			Ok::<_, CfApiError>(IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_min_deposit_amount(hash, asset).map(Into::into)
 				})?,
 				ingress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_ingress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				egress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_egress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				witness_safety_margins,
 				egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_egress_dust_limit(hash, asset).map(Into::into)
 				})?,
 				channel_opening_fees,
@@ -2381,11 +2421,17 @@ where
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
 				api.cf_network_fees_before_version_16(hash)?.into()
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_network_fees_before_version_17(hash)?.into()
 			} else {
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
@@ -2397,10 +2443,22 @@ where
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
 				network_fees,
-				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
+				default_oracle_price_protection: if version < 17 {
+					if version < 16 {
+						any::AssetMap::default()
+					} else {
+						#[expect(deprecated)]
+						api.cf_default_oracle_price_protection_before_version_17(hash)?.into()
+					}
+				} else {
+					api.cf_default_oracle_price_protection(hash)?
+				},
 			})
 		})
 	}
@@ -3048,6 +3106,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_vault_addresses(hash)
 			}
