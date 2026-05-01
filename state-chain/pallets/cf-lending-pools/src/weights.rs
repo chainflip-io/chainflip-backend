@@ -60,14 +60,12 @@ pub trait WeightInfo {
 	fn request_loan() -> Weight;
 	fn expand_loan() -> Weight;
 	fn make_repayment() -> Weight;
-	fn update_collateral_topup_asset() -> Weight;
 	fn usd_value_of() -> Weight;
 	fn initiate_network_fee_swap() -> Weight;
 	fn derive_ltv() -> Weight;
 	fn loan_charge_interest() -> Weight;
 	fn loan_charge_low_ltv_penalty() -> Weight;
 	fn collect_pending_interest() -> Weight;
-	fn loan_calculate_top_up_amount() -> Weight;
 	fn start_liquidation_swaps() -> Weight;
 	fn abort_liquidation_swaps() -> Weight;
 	fn change_voluntary_liquidation() -> Weight;
@@ -317,19 +315,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(7_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn update_collateral_topup_asset() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `839`
-		//  Estimated: `4304`
-		// Minimum execution time: 28_046_000 picoseconds.
-		Weight::from_parts(28_448_000, 4304)
-			.saturating_add(T::DbWeight::get().reads(2_u64))
-			.saturating_add(T::DbWeight::get().writes(1_u64))
-	}
 	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
 	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn usd_value_of() -> Weight {
@@ -398,16 +383,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(246_302_000, 43824)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn loan_calculate_top_up_amount() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `278`
-		//  Estimated: `3743`
-		// Minimum execution time: 16_764_000 picoseconds.
-		Weight::from_parts(17_181_000, 3743)
-			.saturating_add(T::DbWeight::get().reads(1_u64))
 	}
 	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
 	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
@@ -711,19 +686,6 @@ impl WeightInfo for () {
 			.saturating_add(ParityDbWeight::get().reads(7_u64))
 			.saturating_add(ParityDbWeight::get().writes(3_u64))
 	}
-	/// Storage: `AccountRoles::AccountRoles` (r:1 w:0)
-	/// Proof: `AccountRoles::AccountRoles` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	/// Storage: `LendingPools::LoanAccounts` (r:1 w:1)
-	/// Proof: `LendingPools::LoanAccounts` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn update_collateral_topup_asset() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `839`
-		//  Estimated: `4304`
-		// Minimum execution time: 28_046_000 picoseconds.
-		Weight::from_parts(28_448_000, 4304)
-			.saturating_add(ParityDbWeight::get().reads(2_u64))
-			.saturating_add(ParityDbWeight::get().writes(1_u64))
-	}
 	/// Storage: `GenericElections::ElectoralUnsynchronisedState` (r:1 w:0)
 	/// Proof: `GenericElections::ElectoralUnsynchronisedState` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
 	fn usd_value_of() -> Weight {
@@ -792,16 +754,6 @@ impl WeightInfo for () {
 		Weight::from_parts(246_302_000, 43824)
 			.saturating_add(ParityDbWeight::get().reads(2_u64))
 			.saturating_add(ParityDbWeight::get().writes(2_u64))
-	}
-	/// Storage: `AssetBalances::FreeBalances` (r:1 w:0)
-	/// Proof: `AssetBalances::FreeBalances` (`max_values`: None, `max_size`: None, mode: `Measured`)
-	fn loan_calculate_top_up_amount() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `278`
-		//  Estimated: `3743`
-		// Minimum execution time: 16_764_000 picoseconds.
-		Weight::from_parts(17_181_000, 3743)
-			.saturating_add(ParityDbWeight::get().reads(1_u64))
 	}
 	/// Storage: `LendingPools::LendingConfig` (r:1 w:0)
 	/// Proof: `LendingPools::LendingConfig` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)

@@ -97,7 +97,6 @@ mod benchmarks {
 			RawOrigin::Signed(borrower.clone()).into(),
 			LOAN_ASSET,
 			amount,
-			Some(COLLATERAL_ASSET),
 			None,
 		));
 		let loan_account = LoanAccounts::<T>::get(borrower).unwrap();
@@ -141,7 +140,6 @@ mod benchmarks {
 				RawOrigin::Signed(borrower.clone()).into(),
 				loan_asset,
 				loan_amount,
-				Some(collateral_asset),
 				None,
 			));
 		}
@@ -428,13 +426,7 @@ mod benchmarks {
 		let price_cache = OraclePriceCache::<T>::default();
 
 		#[extrinsic_call]
-		request_loan(
-			RawOrigin::Signed(borrower),
-			LOAN_ASSET,
-			LOAN_AMOUNT,
-			Some(COLLATERAL_ASSET),
-			None,
-		);
+		request_loan(RawOrigin::Signed(borrower), LOAN_ASSET, LOAN_AMOUNT, None);
 
 		assert!(
 			LoanAccounts::<T>::iter()
@@ -463,13 +455,9 @@ mod benchmarks {
 			COLLATERAL_ASSET,
 			200_000_000,
 		));
-		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone().into(),
-			LOAN_ASSET,
-			LOAN_AMOUNT,
-			Some(COLLATERAL_ASSET),
-			None,
-		));
+		assert_ok!(
+			Pallet::<T>::request_loan(origin.clone().into(), LOAN_ASSET, LOAN_AMOUNT, None,)
+		);
 
 		let total_owed = || {
 			LoanAccounts::<T>::iter()
@@ -516,36 +504,6 @@ mod benchmarks {
 		);
 
 		assert!(total_owed() < owed_before);
-	}
-
-	#[benchmark]
-	fn update_collateral_topup_asset() {
-		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
-		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let origin = RawOrigin::Signed(borrower.clone());
-
-		// Supply collateral and create a loan
-		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), COLLATERAL_ASSET));
-		assert_ok!(Pallet::<T>::add_lender_funds(
-			origin.clone().into(),
-			COLLATERAL_ASSET,
-			200_000_000,
-		));
-		assert_ok!(Pallet::<T>::request_loan(
-			origin.clone().into(),
-			LOAN_ASSET,
-			50_000_000,
-			Some(COLLATERAL_ASSET),
-			None,
-		));
-
-		#[extrinsic_call]
-		update_collateral_topup_asset(origin, Some(LOAN_ASSET));
-
-		assert_eq!(
-			get_loan_accounts::<T>(Some(borrower)).first().unwrap().collateral_topup_asset,
-			Some(LOAN_ASSET)
-		);
 	}
 
 	#[benchmark]
@@ -652,26 +610,6 @@ mod benchmarks {
 		// Make sure that some interest was actually collected
 		let total_amount_after = GeneralLendingPools::<T>::get(LOAN_ASSET).unwrap().total_amount;
 		assert!(total_amount_after > total_amount_before);
-	}
-
-	#[benchmark]
-	fn loan_calculate_top_up_amount() {
-		let borrower = setup_lp_account::<T>(COLLATERAL_ASSET, 0);
-		let lender = setup_lp_account::<T>(LOAN_ASSET, 1);
-
-		create_pools_and_loans_for_some_assets::<T>(&borrower, &lender, 100_000_000);
-
-		let price_cache = get_prefilled_price_cache();
-		let loan_account = LoanAccounts::<T>::get(borrower.clone()).unwrap();
-
-		#[block]
-		{
-			assert_ok!(loan_account.calculate_top_up_amount(
-				&borrower,
-				LENDING_DEFAULT_CONFIG.ltv_thresholds.target,
-				&price_cache
-			));
-		}
 	}
 
 	#[benchmark]

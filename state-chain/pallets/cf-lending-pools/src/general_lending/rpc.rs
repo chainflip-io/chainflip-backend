@@ -67,7 +67,6 @@ pub struct RpcLiquidationStatus {
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcLoanAccount<AccountId, Amount> {
 	pub account: AccountId,
-	pub collateral_topup_asset: Option<Asset>,
 	pub ltv_ratio: Option<FixedU64>,
 	pub collateral: Vec<AssetAndAmount<Amount>>,
 	pub loans: Vec<RpcLoan<AccountId, Amount>>,
@@ -91,7 +90,6 @@ impl<AccountId> From<RpcLoanAccount<AccountId, AssetAmount>> for RpcLoanAccount<
 	fn from(acc: RpcLoanAccount<AccountId, AssetAmount>) -> Self {
 		Self {
 			account: acc.account,
-			collateral_topup_asset: acc.collateral_topup_asset,
 			ltv_ratio: acc.ltv_ratio,
 			collateral: acc.collateral.into_iter().map(Into::into).collect(),
 			loans: acc.loans.into_iter().map(Into::into).collect(),
@@ -127,7 +125,6 @@ fn build_rpc_loan_account<T: Config>(
 
 	RpcLoanAccount {
 		account: borrower_id.clone(),
-		collateral_topup_asset: loan_account.collateral_topup_asset,
 		ltv_ratio: loan_account.derive_ltv(price_cache).ok(),
 		collateral: loan_account
 			.get_total_collateral()

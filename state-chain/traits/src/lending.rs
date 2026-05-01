@@ -105,7 +105,6 @@ pub trait LendingApi {
 		borrower: Self::AccountId,
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
-		collateral_topup_asset: Option<Asset>,
 		broker: Option<Beneficiary<Self::AccountId>>,
 	) -> Result<LoanId, DispatchError>;
 
@@ -113,11 +112,6 @@ pub trait LendingApi {
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
 		amount: RepaymentAmount,
-	) -> DispatchResult;
-
-	fn update_collateral_topup_asset(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
 	) -> DispatchResult;
 
 	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)

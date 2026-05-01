@@ -106,13 +106,7 @@ fn basic_lending() {
 			));
 
 			// open the loan
-			assert_ok!(LendingPools::new_loan(
-				BORROWER.clone(),
-				LOAN_ASSET,
-				LOAN_AMOUNT,
-				Some(COLLATERAL_ASSET),
-				None
-			));
+			assert_ok!(LendingPools::new_loan(BORROWER.clone(), LOAN_ASSET, LOAN_AMOUNT, None));
 
 			// Check that we got the loan amount
 			assert_eq!(AssetBalances::get_balance(&BORROWER, LOAN_ASSET), LOAN_AMOUNT);

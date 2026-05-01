@@ -117,7 +117,6 @@ async function lendingTestForAsset<A = []>(
       api.tx.lendingPools.requestLoan(
         loanAsset,
         amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
-        collateralAsset,
         null,
       ),
     expectedEvent: {

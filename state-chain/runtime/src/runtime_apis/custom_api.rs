@@ -332,6 +332,8 @@ decl_runtime_apis!(
 		fn cf_lending_pool_supply_balances(
 			asset: Option<Asset>,
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_lending_config() -> before_version_17::RpcLendingConfig;
 		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
 			caller: EvmAddress,

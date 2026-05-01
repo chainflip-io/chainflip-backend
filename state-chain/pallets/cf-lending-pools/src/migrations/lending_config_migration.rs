@@ -5,9 +5,19 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 mod old {
 	use super::*;
-	use crate::general_lending::config::{
-		LendingPoolConfiguration, LtvThresholds, NetworkFeeContributions,
-	};
+	use crate::general_lending::config::{LendingPoolConfiguration, NetworkFeeContributions};
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct LtvThresholds {
+		pub target: Permill,
+		// This field is being removed:
+		pub topup: Option<Permill>,
+		pub soft_liquidation: Permill,
+		pub soft_liquidation_abort: Permill,
+		pub hard_liquidation: Permill,
+		pub hard_liquidation_abort: Permill,
+		pub low_ltv: Permill,
+	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct LendingConfiguration {
@@ -33,16 +43,24 @@ mod old {
 
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
-		// Reads the on-chain `LendingConfig` value as the old (pre-`liquidation_coverage_factor`)
-		// layout and rewrites it with the new field defaulted to 100%, matching
-		// `LENDING_DEFAULT_CONFIG`. If decoding the old layout fails (e.g. on a fresh chain
-		// where no value has been written), we leave the storage empty so subsequent reads
-		// fall back to `LendingConfigDefault`, which already includes the new field.
+		// Reads the on-chain `LendingConfig` value as the old (pre-`liquidation_coverage_factor`,
+		// pre-topup-removal) layout and rewrites it with `liquidation_coverage_factor` defaulted
+		// to 100% (matching `LENDING_DEFAULT_CONFIG`) and the now-removed `LtvThresholds.topup`
+		// dropped. If decoding the old layout fails (e.g. on a fresh chain where no value has
+		// been written), we leave the storage empty so subsequent reads fall back to
+		// `LendingConfigDefault`, which already has the new shape.
 		let translate_result = LendingConfig::<T>::translate::<old::LendingConfiguration, _>(
 			|maybe_old: Option<old::LendingConfiguration>| {
 				maybe_old.map(|old| LendingConfiguration {
 					default_pool_config: old.default_pool_config,
-					ltv_thresholds: old.ltv_thresholds,
+					ltv_thresholds: LtvThresholds {
+						target: old.ltv_thresholds.target,
+						soft_liquidation: old.ltv_thresholds.soft_liquidation,
+						soft_liquidation_abort: old.ltv_thresholds.soft_liquidation_abort,
+						hard_liquidation: old.ltv_thresholds.hard_liquidation,
+						hard_liquidation_abort: old.ltv_thresholds.hard_liquidation_abort,
+						low_ltv: old.ltv_thresholds.low_ltv,
+					},
 					network_fee_contributions: old.network_fee_contributions,
 					fee_swap_interval_blocks: old.fee_swap_interval_blocks,
 					interest_payment_interval_blocks: old.interest_payment_interval_blocks,

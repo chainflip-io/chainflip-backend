@@ -96,7 +96,6 @@ impl<Ctx: Clone> LendingTestRunnerExt for cf_test_utilities::TestExternalities<T
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 				),
 				Ok(LOAN_ID)
@@ -213,7 +212,6 @@ fn create_loan_and_supply_collateral(
 	borrower: u64,
 	asset: Asset,
 	amount: AssetAmount,
-	collateral_topup_asset: Option<Asset>,
 	collateral: BTreeMap<Asset, AssetAmount>,
 ) -> Result<LoanId, DispatchError> {
 	for (collateral_asset, collateral_amount) in &collateral {
@@ -226,7 +224,7 @@ fn create_loan_and_supply_collateral(
 			*collateral_amount,
 		)?;
 	}
-	LendingPools::new_loan(borrower, asset, amount, collateral_topup_asset, None)
+	LendingPools::new_loan(borrower, asset, amount, None)
 }
 
 #[test]
@@ -380,7 +378,6 @@ fn basic_general_lending() {
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 				),
 				Ok(LOAN_ID)
@@ -410,14 +407,6 @@ fn basic_general_lending() {
 					..
 				})
 			);
-			assert_no_matching_event!(
-				Test,
-				RuntimeEvent::LendingPools(Event::<Test>::CollateralTopupAssetUpdated {
-					borrower_id: BORROWER,
-					collateral_topup_asset: Some(COLLATERAL_ASSET),
-				}),
-			);
-
 			assert_has_event::<Test>(RuntimeEvent::LendingPools(
 				Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -448,7 +437,6 @@ fn basic_general_lending() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: None,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
 					loans: BTreeMap::from([(
@@ -685,7 +673,6 @@ fn broker_interest_credited_to_broker() {
 				BORROWER,
 				LOAN_ASSET,
 				PRINCIPAL,
-				None,
 				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			));
 
@@ -794,7 +781,6 @@ fn broker_fee_collected_after_pool_replenished() {
 				BORROWER,
 				LOAN_ASSET,
 				PRINCIPAL,
-				None,
 				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			));
 
@@ -888,7 +874,7 @@ mod broker_fees {
 			SupplyAddedActionType::Manual,
 		));
 
-		LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, Some(broker))
+		LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(broker))
 	}
 
 	/// `new_loan` rejects broker fees above [`MAX_BROKER_FEE_BPS`].
@@ -932,101 +918,6 @@ mod broker_fees {
 }
 
 #[test]
-fn collateral_auto_topup() {
-	const COLLATERAL_TOPUP: AssetAmount = INIT_COLLATERAL / 100;
-
-	// The user deposits this much of collateral asset into their balance at a later point
-	const EXTRA_FUNDS: AssetAmount = INIT_COLLATERAL;
-
-	fn get_ltv() -> FixedU64 {
-		let price_cache = OraclePriceCache::<Test>::default();
-		LoanAccounts::<Test>::get(BORROWER).unwrap().derive_ltv(&price_cache).unwrap()
-	}
-
-	new_test_ext()
-		.execute_with(|| {
-			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE * 1_000_000);
-			MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 1_000_000);
-			setup_pool_with_funds(LOAN_ASSET, INIT_POOL_AMOUNT);
-
-			// Enable auto top-up for this test.
-			assert_ok!(Pallet::<Test>::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![PalletConfigUpdate::SetLtvThresholds {
-					ltv_thresholds: LtvThresholds {
-						topup: Some(Permill::from_percent(85)),
-						..CONFIG.ltv_thresholds
-					}
-				}],
-			));
-
-			MockBalance::credit_account(
-				&BORROWER,
-				COLLATERAL_ASSET,
-				INIT_COLLATERAL + COLLATERAL_TOPUP,
-			);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-
-			assert_eq!(
-				create_loan_and_supply_collateral(
-					BORROWER,
-					LOAN_ASSET,
-					PRINCIPAL,
-					Some(COLLATERAL_ASSET),
-					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
-				),
-				Ok(LOAN_ID)
-			);
-
-			assert_eq!(get_ltv(), FixedU64::from_rational(750_075, 1_000_000)); // ~75%
-
-			// The price drops 1%, but that shouldn't trigger a top-up
-			// at the next block
-			MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 990_000);
-
-			assert_eq!(get_ltv(), FixedU64::from_rational(757_651_515, 1_000_000_000)); // ~76%
-		})
-		.then_execute_at_next_block(|_| {
-			// No change in collateral (no auto top up):
-			assert_eq!(get_collateral(), INIT_COLLATERAL);
-
-			// Drop the price further, this time auto-top up should be triggered
-			MockPriceFeedApi::set_price_usd_fine(COLLATERAL_ASSET, 870_000);
-
-			assert_eq!(get_ltv(), FixedU64::from_rational(862_155_173, 1_000_000_000)); // ~86%
-		})
-		.then_execute_at_next_block(|_| {
-			// The user only had a small amount in their balance, all of it gets used:
-			assert_eq!(get_collateral(), INIT_COLLATERAL + COLLATERAL_TOPUP);
-			assert_eq!(get_ltv(), FixedU64::from_rational(853_618_983, 1_000_000_000)); // ~85%
-			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
-
-			// After we give the user more funds, auto-top up should bring CR back to target
-			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, EXTRA_FUNDS);
-
-			assert_has_event::<Test>(RuntimeEvent::LendingPools(
-				Event::<Test>::LendingFundsAdded {
-					lender_id: BORROWER,
-					asset: COLLATERAL_ASSET,
-					amount: COLLATERAL_TOPUP,
-					action_type: SupplyAddedActionType::SystemTopup,
-				},
-			));
-		})
-		.then_execute_at_next_block(|_| {
-			let collateral_topup_2 =
-				get_collateral().saturating_sub(INIT_COLLATERAL + COLLATERAL_TOPUP);
-
-			assert_ne!(collateral_topup_2, 0);
-			assert_eq!(get_ltv(), FixedU64::from_rational(80, 100)); // 80%
-			assert_eq!(
-				MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET),
-				EXTRA_FUNDS - collateral_topup_2
-			);
-		});
-}
-
-#[test]
 fn basic_loan_aggregation() {
 	// Should be able to borrow this amount without providing any extra collateral:
 	const EXTRA_PRINCIPAL_1: AssetAmount = PRINCIPAL / 100;
@@ -1061,7 +952,6 @@ fn basic_loan_aggregation() {
 				BORROWER,
 				LOAN_ASSET,
 				PRINCIPAL,
-				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 			),
 			Ok(LOAN_ID)
@@ -1116,7 +1006,6 @@ fn basic_loan_aggregation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: Some(COLLATERAL_ASSET),
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
@@ -1204,7 +1093,6 @@ fn basic_loan_aggregation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: Some(COLLATERAL_ASSET),
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
@@ -1445,7 +1333,6 @@ fn basic_liquidation() {
 				LoanAccounts::<Test>::get(BORROWER),
 				Some(LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: None,
 					liquidation_status: LiquidationStatus::NoLiquidation,
 					voluntary_liquidation_requested: false,
 					loans: BTreeMap::from([(
@@ -2035,7 +1922,6 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 				),
 				Ok(LOAN_ID)
@@ -2421,7 +2307,6 @@ mod multi_asset_collateral_liquidation {
 						BORROWER,
 						LOAN_ASSET,
 						PRINCIPAL,
-						None,
 						BTreeMap::from([
 							(COLLATERAL_ASSET, INIT_COLLATERAL),
 							(COLLATERAL_ASSET_2, INIT_COLLATERAL_2),
@@ -2431,7 +2316,7 @@ mod multi_asset_collateral_liquidation {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None, None),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET_2, PRINCIPAL_2, None),
 					Ok(LOAN_ID_2)
 				);
 			})
@@ -2658,7 +2543,6 @@ fn small_interest_amounts_accumulate() {
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 				),
 				Ok(LOAN_ID)
@@ -2977,7 +2861,7 @@ fn borrowing_disallowed_during_liquidation() {
 			);
 
 			assert_noop!(
-				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
+				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 				Error::<Test>::LiquidationInProgress
 			);
 
@@ -2986,60 +2870,6 @@ fn borrowing_disallowed_during_liquidation() {
 				Error::<Test>::LiquidationInProgress
 			);
 		});
-}
-
-#[test]
-fn updating_collateral_topup_asset() {
-	const COLLATERAL_TOPUP_ASSET: Asset = Asset::Btc;
-
-	assert_ne!(COLLATERAL_ASSET, COLLATERAL_TOPUP_ASSET);
-
-	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		// Must have LP role:
-		assert_noop!(
-			LendingPools::update_collateral_topup_asset(
-				RuntimeOrigin::signed(NON_LP),
-				Some(COLLATERAL_TOPUP_ASSET)
-			),
-			DispatchError::BadOrigin
-		);
-
-		// Must already have a loan account:
-		assert_noop!(
-			LendingPools::update_collateral_topup_asset(
-				RuntimeOrigin::signed(BORROWER),
-				Some(COLLATERAL_TOPUP_ASSET)
-			),
-			Error::<Test>::LoanAccountNotFound
-		);
-
-		// Should succeed after creating a loan (which creates an account):
-		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-
-		assert_eq!(
-			create_loan_and_supply_collateral(
-				BORROWER,
-				LOAN_ASSET,
-				PRINCIPAL,
-				None,
-				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
-			),
-			Ok(LOAN_ID)
-		);
-
-		assert_ok!(LendingPools::update_collateral_topup_asset(
-			RuntimeOrigin::signed(BORROWER),
-			Some(COLLATERAL_TOPUP_ASSET)
-		));
-
-		assert_has_event::<Test>(RuntimeEvent::LendingPools(
-			Event::<Test>::CollateralTopupAssetUpdated {
-				borrower_id: BORROWER,
-				collateral_topup_asset: Some(COLLATERAL_TOPUP_ASSET),
-			},
-		));
-	});
 }
 
 #[test]
@@ -3111,7 +2941,6 @@ fn network_fees_under_full_utilisation() {
 					BORROWER,
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 				),
 				Ok(LOAN_ID)
@@ -3449,7 +3278,6 @@ fn adding_collateral_during_liquidation() {
 				get_account(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: None,
 					loans: BTreeMap::from([(
 						LOAN_ID,
 						GeneralLoan {
@@ -3536,7 +3364,6 @@ fn full_loan_repayment_followed_by_full_liquidation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: None,
 					loans: Default::default(),
 					liquidation_status: LiquidationStatus::Liquidating {
 						liquidation_swaps: BTreeMap::from([(
@@ -3686,7 +3513,6 @@ fn full_loan_repayment_during_partial_liquidation() {
 				LoanAccounts::<Test>::get(BORROWER).unwrap(),
 				LoanAccount {
 					borrower_id: BORROWER,
-					collateral_topup_asset: None,
 					loans: Default::default(),
 					liquidation_status: LiquidationStatus::Liquidating {
 						liquidation_swaps: BTreeMap::from([(
@@ -3900,7 +3726,6 @@ mod voluntary_liquidation {
 					LoanAccounts::<Test>::get(BORROWER).unwrap(),
 					LoanAccount {
 						borrower_id: BORROWER,
-						collateral_topup_asset: None,
 						// The loan is partially repaid:
 						loans: BTreeMap::from([(
 							LOAN_ID,
@@ -4366,7 +4191,7 @@ mod safe_mode {
 	fn safe_mode_for_creating_loan() {
 		const INIT_COLLATERAL: AssetAmount = 2 * PRINCIPAL * SWAP_RATE;
 
-		let try_to_borrow = || LendingPools::new_loan(LP, LOAN_ASSET, PRINCIPAL, None, None);
+		let try_to_borrow = || LendingPools::new_loan(LP, LOAN_ASSET, PRINCIPAL, None);
 
 		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
@@ -4542,7 +4367,6 @@ mod whitelisting {
 				LOAN_ASSET,
 				PRINCIPAL,
 				None,
-				None,
 			));
 
 			assert_noop!(
@@ -4550,7 +4374,6 @@ mod whitelisting {
 					RuntimeOrigin::signed(NON_WHITELISTED_USER),
 					LOAN_ASSET,
 					PRINCIPAL,
-					None,
 					None,
 				),
 				Error::<Test>::AccountNotWhitelisted
@@ -4577,7 +4400,6 @@ fn init_liquidation_swaps_test() {
 
 	let mut loan_account = LoanAccount::<Test> {
 		borrower_id: BORROWER,
-		collateral_topup_asset: Some(Asset::Eth),
 		loans: BTreeMap::from([
 			(
 				LOAN_1,
@@ -4821,7 +4643,6 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 			BORROWER,
 			LOAN_ASSET,
 			PRINCIPAL,
-			Some(COLLATERAL_ASSET_1),
 			BTreeMap::from([(COLLATERAL_ASSET_1, INIT_COLLATERAL)])
 		));
 
@@ -4843,7 +4664,7 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 
 		// Or create a new loan
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_1), None),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 			Error::<Test>::OraclePriceUnavailable
 		);
 
@@ -4857,7 +4678,7 @@ fn can_repay_but_not_expand_or_create_a_loan_with_stale_price() {
 			SupplyAddedActionType::Manual,
 		));
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET_2), None),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 			Error::<Test>::OraclePriceUnavailable
 		);
 	});
@@ -4933,7 +4754,6 @@ mod rpcs {
 						BORROWER,
 						LOAN_ASSET,
 						PRINCIPAL,
-						Some(COLLATERAL_ASSET),
 						BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 					),
 					Ok(LOAN_ID)
@@ -4944,7 +4764,6 @@ mod rpcs {
 						BORROWER_2,
 						LOAN_ASSET_2,
 						PRINCIPAL_2,
-						Some(COLLATERAL_ASSET_2),
 						BTreeMap::from([(COLLATERAL_ASSET_2, INIT_COLLATERAL_2)])
 					),
 					Ok(LOAN_ID_2)
@@ -4955,7 +4774,6 @@ mod rpcs {
 					super::rpc::get_loan_accounts::<Test>(Some(BORROWER)),
 					vec![RpcLoanAccount {
 						account: BORROWER,
-						collateral_topup_asset: Some(COLLATERAL_ASSET),
 						ltv_ratio: Some(FixedU64::from_rational(750_075, 1_000_000)),
 						collateral: vec![AssetAndAmount {
 							asset: COLLATERAL_ASSET,
@@ -5040,7 +4858,6 @@ mod rpcs {
 					vec![
 						RpcLoanAccount {
 							account: BORROWER_2,
-							collateral_topup_asset: Some(COLLATERAL_ASSET_2),
 							ltv_ratio: Some(FixedU64::from_rational(1_173_483_514, 1_000_000_000)),
 							// NOTE: all of collateral is in liquidation swaps, but we include
 							// any amount that has not been swapped yet:
@@ -5070,7 +4887,6 @@ mod rpcs {
 						},
 						RpcLoanAccount {
 							account: BORROWER,
-							collateral_topup_asset: Some(COLLATERAL_ASSET),
 							// LTV slightly increased due to interest payment:
 							ltv_ratio: Some(FixedU64::from_rational(750_075_090, 1_000_000_000)),
 							collateral: vec![AssetAndAmount {
@@ -5148,25 +4964,13 @@ fn loan_minimum_is_enforced() {
 
 		// Should not be able to create a loan below the minimum amount
 		assert_noop!(
-			LendingPools::new_loan(
-				BORROWER,
-				LOAN_ASSET,
-				MIN_LOAN_AMOUNT_ASSET - 1,
-				Some(COLLATERAL_ASSET),
-				None,
-			),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, MIN_LOAN_AMOUNT_ASSET - 1, None,),
 			Error::<Test>::AmountBelowMinimum
 		);
 
 		// A loan equal to or above the minimum amount should be fine
 		assert_eq!(
-			LendingPools::new_loan(
-				BORROWER,
-				LOAN_ASSET,
-				MIN_LOAN_AMOUNT_ASSET,
-				Some(COLLATERAL_ASSET),
-				None,
-			),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, MIN_LOAN_AMOUNT_ASSET, None,),
 			Ok(LOAN_ID)
 		);
 
@@ -5374,7 +5178,6 @@ fn expand_or_repay_loan_minimum_is_enforced() {
 				BORROWER,
 				LOAN_ASSET,
 				MIN_LOAN_AMOUNT_ASSET,
-				Some(COLLATERAL_ASSET),
 				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)])
 			),
 			Ok(LOAN_ID)
@@ -5454,16 +5257,13 @@ fn must_have_refund_address_for_loan_asset() {
 
 		// Should not be able to create a loan without a refund address set
 		assert_noop!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET), None),
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 			Error::<Test>::NoRefundAddressSet
 		);
 
 		// Set refund address and try again
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-		assert_eq!(
-			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(COLLATERAL_ASSET), None),
-			Ok(LOAN_ID)
-		);
+		assert_eq!(LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None), Ok(LOAN_ID));
 	});
 }
 
@@ -5476,7 +5276,6 @@ fn can_handle_liquidation_with_zero_collateral() {
 	// want to make sure that it is handled gracefully.
 	let loan_account = LoanAccount::<Test> {
 		borrower_id: BORROWER,
-		collateral_topup_asset: None,
 		loans: BTreeMap::from([(
 			LOAN_ID,
 			GeneralLoan {
@@ -5531,10 +5330,7 @@ fn same_asset_loan() {
 				LOAN_ASSET,
 				INIT_COLLATERAL,
 			));
-			assert_eq!(
-				LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, Some(LOAN_ASSET), None),
-				Ok(LOAN_ID)
-			);
+			assert_eq!(LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None), Ok(LOAN_ID));
 
 			// Supply additional collateral and expand
 			assert_ok!(LendingPools::add_lender_funds(
@@ -5660,7 +5456,7 @@ mod supply_as_collateral {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 					Ok(LOAN_ID)
 				);
 
@@ -5816,7 +5612,7 @@ mod supply_as_collateral {
 				);
 
 				assert_eq!(
-					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, None),
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None),
 					Ok(LOAN_ID)
 				);
 			})
@@ -5832,7 +5628,6 @@ mod supply_as_collateral {
 						BORROWER_2,
 						COLLATERAL_ASSET,
 						PRINCIPAL_2,
-						None,
 						BTreeMap::from([(COLLATERAL_ASSET_2, INIT_COLLATERAL)])
 					),
 					Ok(LOAN_2_ID)
@@ -5905,7 +5700,6 @@ mod supply_as_collateral {
 					get_account(),
 					LoanAccount {
 						borrower_id: BORROWER,
-						collateral_topup_asset: None,
 						loans: BTreeMap::from([(
 							LOAN_ID,
 							GeneralLoan {
@@ -6001,7 +5795,6 @@ mod supply_as_collateral {
 						BORROWER,
 						LOAN_ASSET,
 						PRINCIPAL,
-						None,
 						BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 					),
 					Ok(LOAN_ID)
@@ -6064,7 +5857,6 @@ mod supply_as_collateral {
 						BORROWER,
 						LOAN_ASSET,
 						PRINCIPAL,
-						None,
 						BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 					),
 					Ok(LOAN_ID)
@@ -6192,13 +5984,7 @@ mod utilisation_cap {
 
 				// A large loan should fail due to hitting utilisation cap:
 				assert_noop!(
-					LendingPools::new_loan(
-						BORROWER_2,
-						COLLATERAL_ASSET,
-						EXCESSIVE_BORROW,
-						None,
-						None
-					),
+					LendingPools::new_loan(BORROWER_2, COLLATERAL_ASSET, EXCESSIVE_BORROW, None),
 					Error::<Test>::UtilisationCapExceeded
 				);
 				assert_eq!(eth_pool_utilisation(), utilisation_before);
@@ -6208,7 +5994,6 @@ mod utilisation_cap {
 					BORROWER_2,
 					COLLATERAL_ASSET,
 					MODEST_BORROW,
-					None,
 					None
 				));
 				let utilisation_after = eth_pool_utilisation();
@@ -6380,7 +6165,6 @@ mod utilisation_cap {
 				BORROWER_A,
 				Asset::Usdt,
 				LOAN_A_USDT,
-				None,
 				None
 			));
 			// Loan B:
@@ -6388,7 +6172,6 @@ mod utilisation_cap {
 				BORROWER_B,
 				Asset::Usdc,
 				LOAN_B_USDC,
-				None,
 				None
 			));
 			// Loan C:
@@ -6396,7 +6179,6 @@ mod utilisation_cap {
 				BORROWER_C,
 				Asset::Btc,
 				LOAN_C_BTC,
-				None,
 				None
 			));
 
@@ -6495,7 +6277,7 @@ mod utilisation_cap {
 				Asset::Usdt,
 				SUPPLY,
 			));
-			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None, None));
+			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None));
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(Asset::Usdc).unwrap().get_utilisation(),
@@ -6505,7 +6287,7 @@ mod utilisation_cap {
 			// Step 4: A borrows 40 BTC. The new collateral-pool cap check rejects this because
 			// USDC's cap drops below USDC's existing 80% utilisation.
 			assert_noop!(
-				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None, None),
+				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None),
 				Error::<Test>::CollateralPoolUtilisationCapExceeded,
 			);
 		});
