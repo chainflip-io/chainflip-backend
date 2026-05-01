@@ -88,3 +88,46 @@ impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendin
 		}
 	}
 }
+
+// VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
+// but lacks the tron field added in v17.
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+pub struct VaultAddresses {
+	pub ethereum: EncodedAddress,
+	pub arbitrum: EncodedAddress,
+	pub bitcoin: Vec<(AccountId32, EncodedAddress)>,
+	pub sol_vault_program: EncodedAddress,
+	pub sol_swap_endpoint_program_data_account: EncodedAddress,
+	pub usdc_token_mint_pubkey: EncodedAddress,
+	pub usdt_token_mint_pubkey: EncodedAddress,
+
+	pub bitcoin_vault: Option<EncodedAddress>,
+	pub solana_sol_vault: Option<EncodedAddress>,
+	pub solana_usdc_token_vault_ata: EncodedAddress,
+	pub solana_usdt_token_vault_ata: EncodedAddress,
+	pub solana_vault_swap_account: Option<EncodedAddress>,
+
+	pub predicted_seconds_until_next_vault_rotation: u64,
+}
+
+impl From<VaultAddresses> for super::VaultAddresses {
+	fn from(old: VaultAddresses) -> Self {
+		Self {
+			ethereum: old.ethereum,
+			arbitrum: old.arbitrum,
+			bitcoin: old.bitcoin,
+			sol_vault_program: old.sol_vault_program,
+			sol_swap_endpoint_program_data_account: old.sol_swap_endpoint_program_data_account,
+			usdc_token_mint_pubkey: old.usdc_token_mint_pubkey,
+			usdt_token_mint_pubkey: old.usdt_token_mint_pubkey,
+			bitcoin_vault: old.bitcoin_vault,
+			solana_sol_vault: old.solana_sol_vault,
+			solana_usdc_token_vault_ata: old.solana_usdc_token_vault_ata,
+			solana_usdt_token_vault_ata: old.solana_usdt_token_vault_ata,
+			solana_vault_swap_account: old.solana_vault_swap_account,
+			tron: EncodedAddress::Tron([0u8; 20]),
+			predicted_seconds_until_next_vault_rotation: old
+				.predicted_seconds_until_next_vault_rotation,
+		}
+	}
+}

@@ -3034,6 +3034,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_vault_addresses(hash)
 			}
