@@ -76,7 +76,9 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0098: rustl-webpki issue, transitive and unrelated to us. Requires issuance of invalid certificates.
 # - RUSTSEC-2026-0099: rustl-webpki issue, transitive and unrelated to us. Requires issuance of invalid certificates.
 # - RUSTSEC-2026-0104: rustl-webpki issue, transitive and unrelated to us. Requires issuance of invalid certificates.
-# - RUSTSEC-2026-0105: core2 unmaintained: transitive dependency of substrate via multihash
+# - RUSTSEC-2026-0114: wasmtime panic during memory allocation. Dependency of substrate.
+# - RUSTSEC-2026-0118: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
+# - RUSTSEC-2026-0119: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 #
 cf-audit = '''
 audit -D unmaintained -D unsound
@@ -121,6 +123,9 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0099
 	--ignore RUSTSEC-2026-0104
 	--ignore RUSTSEC-2026-0105
+	--ignore RUSTSEC-2026-0114
+	--ignore RUSTSEC-2026-0118
+	--ignore RUSTSEC-2026-0119
 '''
 
 [build]
