@@ -1,4 +1,4 @@
-use crate::{decl_runtime_apis_with_transparent_rpc, runtime_apis::transparent_rpc_generator::{runtime_and_rpc_layer::BrokerInfo, type_variants::{AtRuntime, V2_1, V2_2}}};
+use crate::{decl_runtime_apis_with_transparent_rpc, runtime_apis::transparent_rpc_generator::{type_variants::{AtRuntime, V2_1, V2_2}}};
 
 
 
@@ -39,9 +39,9 @@ decl_runtime_apis_with_transparent_rpc! {
 		#[changed_in()]
 		fn mytest(arg:u8) -> u8;
 
-		#[method(name = "mytest2")]
-		#[changed_in()]
-		fn mytest2(arg: BrokerInfo::Struct<AtRuntime>) -> BrokerInfo::Struct<AtRuntime>;
+		// #[method(name = "mytest2")]
+		// #[changed_in()]
+		// fn mytest2(arg: BrokerInfo::Struct<AtRuntime>) -> BrokerInfo::Struct<AtRuntime>;
 	}
 }
 

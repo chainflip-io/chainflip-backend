@@ -2,12 +2,19 @@
 #[macro_export]
 macro_rules! generic_item {
     (
-        mod $mod:ident {
+        struct $struct:ident$(<$T:ident: $TBound:path>)? {
             $(
-                $field:ident,
+                $field:ident: $field_ty:ty,
             )*
         }
+        mod $mod:ident;
     ) => {
+        pub struct $struct$(<$T: $TBound>)? {
+            $(
+                $field: $field_ty,
+            )*
+        }
+
         pub mod $mod {
             #![allow(nonstandard_style)]
             #![allow(unused)]
@@ -15,12 +22,41 @@ macro_rules! generic_item {
             use crate::runtime_apis::transparent_rpc_generator::transformations::*;
             use crate::runtime_apis::transparent_rpc_generator::type_variants::*;
             use pallet_cf_elections::generic_tools::CommonTraits;
+            use super::*;
 
 
             pub trait Types: 'static {
                 $(
                     type $field: CommonTraits;
                 )*
+            }
+
+            pub struct DefaultTypes$(<$T: $TBound>)?(T);
+
+            impl$(<$T: $TBound>)? Types for DefaultTypes$(<$T>)? {
+                $(
+                    type $field = $field_ty;
+                )*
+            }
+
+            impl$(<$T: $TBound>)? From<Struct<DefaultTypes $(<$T>)? >> for $struct $(<$T>)? {
+                fn from(x: Struct<DefaultTypes $(<$T>)? >) -> $struct $(<$T>)? {
+                    $struct {
+                        $(
+                            $field: x.$field,
+                        )*
+                    }
+                }
+            }
+
+            impl$(<$T: $TBound>)? Into<Struct<DefaultTypes $(<$T>)? >> for $struct $(<$T>)? {
+                fn into(self) -> Struct<DefaultTypes $(<$T>)? > {
+                    Struct {
+                        $(
+                            $field: self.$field,
+                        )*
+                    }
+                }
             }
 
             // impl Types for () {

@@ -8,7 +8,7 @@ use jsonrpsee::{
 use state_chain_runtime::generate_transparent_custom_rpc;
 
 use state_chain_runtime::runtime_apis::transparent_rpc_generator::type_variants::{AtRuntime, FromTypedMigration, HasMigrationFrom, HasVariant, VariantName};
-use state_chain_runtime::runtime_apis::transparent_rpc_generator::runtime_and_rpc_layer::{PrimitiveTypes, BrokerInfo};
+use state_chain_runtime::runtime_apis::transparent_rpc_generator::runtime_and_rpc_layer::PrimitiveTypes;
 use state_chain_runtime::runtime_apis::transparent_rpc_generator::type_variants::TypedMigration;
 
 use crate::CustomRpc;
@@ -38,7 +38,6 @@ impl VariantName for AtRpc {}
 
 impl PrimitiveTypes for AtRpc {
 	type AssetAmount = u64;
-	type BtcAddress = u16;
 	type AccountId = u16;
 }
 

@@ -1,3 +1,4 @@
+use cf_primitives::Asset;
 use pallet_cf_elections::generic_tools::CommonTraits;
 
 use crate::{generic_item, runtime_apis::transparent_rpc_generator::type_variants::{AtRuntime, HasVariant, TypedMigration}};
@@ -6,13 +7,11 @@ use sp_std::vec::Vec;
 
 pub trait PrimitiveTypes: 'static {
     type AssetAmount: CommonTraits;
-    type BtcAddress: CommonTraits;
     type AccountId: CommonTraits;
 }
 
 impl PrimitiveTypes for AtRuntime {
 	type AssetAmount = cf_primitives::AssetAmount;
-	type BtcAddress = u8;
 	type AccountId = u32;
 }
 
@@ -21,7 +20,7 @@ impl PrimitiveTypes for AtRuntime {
 
 macro_rules! define_rpc_runtime_type {
     (
-        struct $name:ident<$T:ident: PrimitiveTypes> {
+        struct $name:ident<$T:ident: $TBound:path> {
             $(
                 $field:ident: $field_ty:ty,
             )*
@@ -35,13 +34,13 @@ macro_rules! define_rpc_runtime_type {
             }
         }
 
-        impl<$T: PrimitiveTypes> $name::Types for $T {
+        impl<$T: $TBound> $name::Types for $T {
             $(
                 type $field = $field_ty;
             )*
         }
 
-        impl<T: PrimitiveTypes + VariantName> HasVariant<T> for $name::Struct<AtRuntime> {
+        impl<T: $TBound + VariantName> HasVariant<T> for $name::Struct<AtRuntime> {
             type Get = $name::Struct<T>;
         }
     };
@@ -49,15 +48,38 @@ macro_rules! define_rpc_runtime_type {
 
 // --------- the actual types ---------
 
-define_rpc_runtime_type! {
-    struct BrokerInfo<T: PrimitiveTypes> {
-	    earned_fees: Vec<(cf_primitives::Asset, T::AssetAmount)>,
-	    btc_vault_deposit_address: Option<T::BtcAddress>,
-	    affiliates: Vec<(sp_runtime::AccountId32, T::AccountId)>,
-	    bond: (u8, u8),
-	    bound_fee_withdrawal_address: Option<u16>,
+generic_item! {
+    struct LendingPoolAndSupplyPositions<T: PrimitiveTypes> {
+        asset: Asset,
+        amount: T::AssetAmount,
+        // positions: Vec<LendingSupplyPosition<AccountId, Amount>>,
     }
+    mod Generic_LendingPoolAndSupplyPositions;
 }
+
+
+
+
+
+
+
+// mod MyTest {
+
+// }
+
+// struct MyTest {
+//     asdf: u8
+// }
+
+// define_rpc_runtime_type! {
+//     struct BrokerInfo<T: PrimitiveTypes> {
+// 	    earned_fees: Vec<(cf_primitives::Asset, T::AssetAmount)>,
+// 	    btc_vault_deposit_address: Option<T::BtcAddress>,
+// 	    affiliates: Vec<(sp_runtime::AccountId32, T::AccountId)>,
+// 	    bond: (u8, u8),
+// 	    bound_fee_withdrawal_address: Option<u16>,
+//     }
+// }
 
 // generic_item! {
 // 	mod BrokerInfo {
