@@ -19,7 +19,7 @@ export const solanaIngressEgressDepositBoosted = z.object({
   blockHeight: numberOrHex,
   ingressFee: numberOrHex,
   maxBoostFeeBps: z.number(),
-  boostFee: numberOrHex,
+  boostFee: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   action: palletCfSolanaIngressEgressDepositAction,
   originType: cfChainsDepositOriginType,
 });

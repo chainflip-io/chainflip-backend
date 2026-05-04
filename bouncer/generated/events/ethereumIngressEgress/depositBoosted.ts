@@ -19,7 +19,7 @@ export const ethereumIngressEgressDepositBoosted = z.object({
   blockHeight: numberOrHex,
   ingressFee: numberOrHex,
   maxBoostFeeBps: z.number(),
-  boostFee: numberOrHex,
+  boostFee: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   action: palletCfEthereumIngressEgressDepositAction,
   originType: cfChainsDepositOriginType,
 });

@@ -156,7 +156,7 @@ fn basic_passive_boosting() {
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
 				max_boost_fee_bps: BOOST_FEE_BPS,
-				boost_fee: BOOST_FEE,
+				boost_fee: [(BoostSource::LendingPool, BOOST_FEE)].into(),
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				origin_type: DepositOriginType::DepositChannel,
 			}));

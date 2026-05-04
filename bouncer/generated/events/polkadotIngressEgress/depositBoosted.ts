@@ -18,7 +18,7 @@ export const polkadotIngressEgressDepositBoosted = z.object({
   blockHeight: z.number(),
   ingressFee: numberOrHex,
   maxBoostFeeBps: z.number(),
-  boostFee: numberOrHex,
+  boostFee: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   action: palletCfPolkadotIngressEgressDepositAction,
   originType: cfChainsDepositOriginType,
 });

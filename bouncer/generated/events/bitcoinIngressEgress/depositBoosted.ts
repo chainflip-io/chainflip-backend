@@ -19,7 +19,7 @@ export const bitcoinIngressEgressDepositBoosted = z.object({
   blockHeight: numberOrHex,
   ingressFee: numberOrHex,
   maxBoostFeeBps: z.number(),
-  boostFee: numberOrHex,
+  boostFee: z.array(z.tuple([cfTraitsLendingBoostSource, numberOrHex])),
   action: palletCfBitcoinIngressEgressDepositAction,
   originType: cfChainsDepositOriginType,
 });
