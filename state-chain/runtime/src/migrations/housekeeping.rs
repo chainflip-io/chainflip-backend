@@ -15,8 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Runtime, VERSION};
+use cf_chains::{
+	btc::{BitcoinNetwork, ScriptPubkey},
+	instances::BitcoinInstance,
+};
 use cf_runtime_utilities::genesis_hashes;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
+use pallet_cf_ingress_egress::FetchOrTransfer;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
@@ -48,7 +53,12 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 	fn on_runtime_upgrade() -> Weight {
 		match genesis_hashes::genesis_hash::<Runtime>() {
 			genesis_hashes::BERGHAIN =>
-				if VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION {
+				if VERSION.spec_version == REFUND_STUCK_FUNDS_SPEC_VERSION && pallet_cf_ingress_egress::ScheduledEgressFetchOrTransfer::<Runtime, BitcoinInstance>::get().into_iter().find(|item|
+					matches!(
+						item,
+						FetchOrTransfer::Transfer { destination_address, .. }
+							if (destination_address == &ScriptPubkey::try_from_address("bc1qgqez4lvdm8xcgj3yyqjlygqu26ggdxqcc69p0e", &BitcoinNetwork::Mainnet).expect("address is valid")))
+				).is_none() {
 					egresses::Migration::on_runtime_upgrade();
 					log::info!(
 						"🧹 Berghain: scheduled refunds for stuck BTC, ETH, USDT and USDC deposits."
