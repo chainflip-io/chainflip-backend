@@ -3073,7 +3073,10 @@ fn adding_collateral_during_liquidation() {
 					lender_id: BORROWER,
 					asset: COLLATERAL_ASSET,
 					amount,
-					action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+					action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount {
+						loan_id: LOAN_ID,
+						swap_request_id: LIQUIDATION_SWAP_1,
+					},
 				}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
 				RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 					lender_id: BORROWER,
@@ -3516,7 +3519,10 @@ mod voluntary_liquidation {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						amount,
-						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount {
+							loan_id: LOAN_ID,
+							swap_request_id: LIQUIDATION_SWAP,
+						},
 					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL,
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
@@ -3720,7 +3726,10 @@ mod voluntary_liquidation {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						amount,
-						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount {
+							loan_id: LOAN_ID,
+							swap_request_id: LIQUIDATION_SWAP_1,
+						},
 					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
 					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 						lender_id: BORROWER,
@@ -3822,7 +3831,10 @@ mod voluntary_liquidation {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						amount,
-						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount,
+						action_type: SupplyAddedActionType::SystemLiquidationUnusedAmount {
+							loan_id: LOAN_ID,
+							swap_request_id: LIQUIDATION_SWAP_2,
+						},
 					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
 					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 						lender_id: BORROWER,

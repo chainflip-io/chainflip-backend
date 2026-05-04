@@ -1897,7 +1897,11 @@ export const palletCfLendingPoolsSupplyAddedActionType = z.discriminatedUnion('_
     loanId: numberOrHex,
     swapRequestId: numberOrHex,
   }),
-  z.object({ __kind: z.literal('SystemLiquidationUnusedAmount') }),
+  z.object({
+    __kind: z.literal('SystemLiquidationUnusedAmount'),
+    loanId: numberOrHex,
+    swapRequestId: numberOrHex,
+  }),
 ]);
 
 export const palletCfLendingPoolsSupplyRemovedActionType = simpleEnum([
