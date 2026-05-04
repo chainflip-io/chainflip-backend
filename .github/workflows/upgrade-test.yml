@@ -227,7 +227,6 @@ jobs:
         if: inputs.run-job
         run: |
           git checkout ${{ github.sha }}
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron-init --quiet-pull
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron tron-peer --quiet-pull -d
           source localnet/helper.sh
           echo "🌞 Waiting for TRON node to start"
