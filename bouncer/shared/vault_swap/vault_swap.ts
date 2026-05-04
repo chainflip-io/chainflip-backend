@@ -115,13 +115,9 @@ export async function requestSwapParameterEncoding<T>(
       stateChainAssetFromAsset(destAsset),
       'destination_asset mismatch',
     );
-    const normalizedDestAddress =
-      chainFromAsset(destAsset) === Chains.Tron
-        ? getEncodedTronAddress(encodedDestAddress)
-        : encodedDestAddress;
     assert.strictEqual(
       decoded.destination_address.toLowerCase(),
-      normalizedDestAddress.toLowerCase(),
+      encodedDestAddress.toLowerCase(),
       'destination_address mismatch',
     );
     assert.strictEqual(
