@@ -89,11 +89,11 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				assert!(TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt).is_some());
 				assert_eq!(
 					TronKeyManagerAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("9df3e70fc7ea8128d6d0634664118d16bc856e1c"))
+					EvmAddress::from(hex_literal::hex!("3dc86c42d46ba03ab9563726fa63c22226e1ae11"))
 				);
 				assert_eq!(
 					TronVaultAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("a0e915df8a24a4718061461a41f303c6d3353e51"))
+					EvmAddress::from(hex_literal::hex!("6f07c012183ecf09c449d769a5a05427a6385503"))
 				);
 			},
 		};
