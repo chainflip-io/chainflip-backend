@@ -169,8 +169,8 @@ async fn can_connect_after_pubkey_change() {
 
 	// TODO: automatically select ports to avoid any potential conflicts
 	// with other tests
-	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8089);
-	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8090);
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8091);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8092);
 
 	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
 	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
@@ -189,7 +189,7 @@ async fn can_connect_after_pubkey_change() {
 
 	// Node 2 connects with a different key:
 	let node_key2b = create_keypair();
-	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2b, 8091);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2b, 8093);
 	let mut node2b = spawn_node(&node_key2b, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
 
 	// Node 1 learn about Node 2's new key:
