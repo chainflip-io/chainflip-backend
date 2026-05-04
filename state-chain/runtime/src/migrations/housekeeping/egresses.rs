@@ -71,7 +71,7 @@ const ETH_REFUNDS: &[(EthAsset, u128, [u8; 20])] = &[
 const ARB_REFUNDS: &[(ArbAsset, u128, [u8; 20])] = &[
 	// tx: 0x622b7f62cc072569eabac69d5d87f057a3c31479bf19a45cdf8bd65bdfdcc39a  (19.82018 USDC)
 	(ArbAsset::ArbUsdc, 19_820_180, hex!("846aaa63b06e302f86f81d3313cd13df624655f0")),
-	// tx: 0x622b7f62cc072569eabac69d5d87f057a3c31479bf19a45cdf8bd65bdfdcc39a (556.181886 USDT)
+	// tx: 0x90d834fe146a0faf029d6c95471b8d8b82ffe1eab1a25860a18324858dc86660 (556.181886 USDT)
 	(ArbAsset::ArbUsdt, 556_181_886, hex!("7765a4f732204d0837f2ee4dB75C2b3e4c69d5cC")),
 ];
 
