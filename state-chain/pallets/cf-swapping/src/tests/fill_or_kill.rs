@@ -1097,6 +1097,26 @@ mod oracle_swaps {
 				);
 			});
 		}
+
+		#[test]
+		fn stale_oracle_price_only_fails_when_refund_params_set() {
+			new_test_ext().execute_with(|| {
+				set_prices();
+				MockPriceFeedApi::set_stale(Asset::Btc, true);
+
+				// Actual swap (refund params set): a stale oracle price aborts the swap.
+				assert_err!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(100))),
+					SwapFailureReason::OraclePriceStale
+				);
+
+				// Simulation (no refund params): a stale oracle price is ignored, so the swap
+				// can still be quoted.
+				let mut simulated = test_swap_state(None);
+				simulated.swap = simulated.swap.without_refund_params();
+				assert_eq!(Pallet::<Test>::check_swap_price_violation(&simulated), Ok(None));
+			});
+		}
 	}
 
 	#[test]

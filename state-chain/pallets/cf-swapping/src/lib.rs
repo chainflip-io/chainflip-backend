@@ -2084,40 +2084,45 @@ pub mod pallet {
 			if let Some(stable_amount_after_fees) = swap.stable_amount {
 				// Calculate the slippage from oracle prices for both legs of the swap.
 				let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
-					Some(SignedHundredthBasisPoints(0))
+					Ok(Some(SignedHundredthBasisPoints(0)))
 				} else {
 					Self::get_delta_from_oracle_price(
 						swap.swap.input_amount,
 						stable_amount_after_fees + swap.fees_amount(),
 						swap.input_asset(),
 						STABLE_ASSET,
-					)?
+					)
 				};
 				let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
-					Some(SignedHundredthBasisPoints(0))
+					Ok(Some(SignedHundredthBasisPoints(0)))
 				} else {
 					Self::get_delta_from_oracle_price(
 						stable_amount_after_fees,
 						final_output,
 						STABLE_ASSET,
 						swap.output_asset(),
-					)?
+					)
 				};
 
 				// Sum the deltas or just use a single leg delta if the other leg doesn't have
 				// an oracle price.
 				let total_delta = match (to_stable_delta, from_stable_delta) {
-					(Some(to_stable), Some(from_stable)) =>
-						Some(to_stable.saturating_add(&from_stable)),
+					(Ok(Some(to_stable)), Ok(Some(from_stable))) =>
+						Ok(Some(to_stable.saturating_add(&from_stable))),
 					// Use the one sided slippage as long as that side is not USDC.
-					(Some(delta), None) if swap.input_asset() != STABLE_ASSET => Some(delta),
-					(None, Some(delta)) if swap.output_asset() != STABLE_ASSET => Some(delta),
-					_ => None,
+					(Ok(Some(delta)), Ok(None)) if swap.input_asset() != STABLE_ASSET =>
+						Ok(Some(delta)),
+					(Ok(None), Ok(Some(delta))) if swap.output_asset() != STABLE_ASSET =>
+						Ok(Some(delta)),
+					// In the case of a stale price on either leg, we pass through the error and
+					// only fail later if there is refund params.
+					(Err(e), _) | (_, Err(e)) => Err(e),
+					_ => Ok(None),
 				};
 
-				if let Some(total_delta) = total_delta {
-					// Oracle price protection, aka Live price protection (LPP)
-					if let Some(params) = swap.refund_params() {
+				if let Some(params) = swap.refund_params() {
+					if let Some(total_delta) = total_delta? {
+						// Oracle price protection, aka Live price protection (LPP)
 						if let Some(max_slippage) = params.price_limits.max_oracle_price_slippage {
 							// The swapper expresses the limit as a worst acceptable *sell*
 							// price, so slippage needs to be measured in the negative
@@ -2128,10 +2133,10 @@ pub mod pallet {
 								return Err(SwapFailureReason::OraclePriceSlippageExceeded);
 							}
 						}
+						return Ok(Some(total_delta.pessimistic_rounded_into()));
 					}
-
-					return Ok(Some(total_delta.pessimistic_rounded_into()));
 				}
+				return Ok(None)
 			}
 
 			Ok(None)
