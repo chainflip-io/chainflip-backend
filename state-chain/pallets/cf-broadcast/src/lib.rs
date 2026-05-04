@@ -88,7 +88,8 @@ pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
+pub const STORAGE_VERSION_U16: u16 = 14;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -290,7 +291,7 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

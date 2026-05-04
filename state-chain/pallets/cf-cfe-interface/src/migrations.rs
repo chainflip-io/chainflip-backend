@@ -16,14 +16,14 @@
 
 use cf_runtime_utilities::PlaceholderMigration;
 
-use crate::{Config, Pallet};
+use crate::{Config, Pallet, STORAGE_VERSION_U16};
 use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use frame_support::{pallet_prelude::DispatchError, sp_runtime};
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-pub type PalletMigration<T> = PlaceholderMigration<0, Pallet<T>>;
+pub type PalletMigration<T> = PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>;
 
 // This migration should only be run at the start of all migrations, in case another migration
 // needs to trigger an event like a Broadcast for example

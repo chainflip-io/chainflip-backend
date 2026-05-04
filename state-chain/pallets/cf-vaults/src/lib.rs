@@ -42,7 +42,8 @@ pub use weights::WeightInfo;
 mod mock;
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(5);
+pub const STORAGE_VERSION_U16: u16 = 5;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub type PayloadFor<T, I = ()> =
 	<<T as ChainflipWithTargetChain<I>>::TargetChain as ChainCrypto>::Payload;
@@ -90,7 +91,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

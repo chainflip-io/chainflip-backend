@@ -134,7 +134,7 @@ Individual migrations live in `migrations/my_migration.rs` and implement `Unchec
 
 When writing a migration:
 
-1. **Bump `PALLET_VERSION`** in the pallet's `lib.rs` (the `StorageVersion::new(N)` constant).
+1. **Bump `STORAGE_VERSION_U16`** in the pallet's `lib.rs` (the `StorageVersion::new(N)` constant).
 2. **Add the migration module** under `migrations/` implementing `UncheckedOnRuntimeUpgrade`.
 3. **Update `PalletMigration`** in `migrations.rs`: add a new `VersionedMigration` entry and update the `PlaceholderMigration` version.
 4. **Define old storage types** using `#[frame_support::storage_alias]` in an `old` module within the migration file. This avoids depending on types that may change.
