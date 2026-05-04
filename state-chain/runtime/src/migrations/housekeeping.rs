@@ -22,9 +22,9 @@ use sp_runtime::DispatchError;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+pub mod egresses;
 pub mod liveness_election_state;
 pub mod reap_old_accounts;
-pub mod egresses;
 pub mod solana_remove_unused_channels_state;
 
 // One-shot gate for the refund_stuck_funds migration. Must equal the runtime's
