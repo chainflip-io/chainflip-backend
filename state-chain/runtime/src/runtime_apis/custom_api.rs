@@ -314,8 +314,10 @@ decl_runtime_apis!(
 		#[changed_in(16)]
 		fn cf_network_fees() -> before_version_16::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
-		#[changed_in(12)]
-		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_lending_pools(
+			asset: Option<Asset>,
+		) -> Vec<before_version_17::RpcLendingPool<AssetAmount>>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		#[changed_in(17)]
 		fn cf_loan_accounts(
