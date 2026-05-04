@@ -35,9 +35,9 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				_ => (
 					4271970548u64, // localnet Tron Chain ID
 					// TODO: Set actual addresses once we have a final localnet image
-					EvmAddress::from(hex_literal::hex!("8b4552006feb994813bc721abb1c5b71b5911f1f")),
-					EvmAddress::from(hex_literal::hex!("106b8a5ad54db12e3bdfc2bbae756bd8e7fab7e4")),
-					EvmAddress::from(hex_literal::hex!("8c98ed1d78b3feecc406c49aa125ab1a5d69f093")),
+					EvmAddress::from(hex_literal::hex!("847d36e5bcaefa7fbf6723b2eaee1ae6ff8a9570")),
+					EvmAddress::from(hex_literal::hex!("3dc86c42d46ba03ab9563726fa63c22226e1ae11")),
+					EvmAddress::from(hex_literal::hex!("6f07c012183ecf09c449d769a5a05427a6385503")),
 				),
 			};
 

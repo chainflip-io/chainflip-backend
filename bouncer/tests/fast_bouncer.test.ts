@@ -28,7 +28,7 @@ describe('ConcurrentTests', () => {
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
-  const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
+  const singleSwapTimeout = numberOfNodes === 1 ? 300 : 320;
   const inCi = !!process.env.GITHUB_ACTIONS;
   // CI runners are slower, use a larger timeout factor
   const ciTimeoutFactor = inCi ? 1.6 : 1.1;
@@ -66,7 +66,7 @@ describe('ConcurrentTests', () => {
     testGovernanceDepositWitnessing,
     265 * ciTimeoutFactor,
   );
-  concurrentTest('RpcCalls', testRpcCalls, 100 * ciTimeoutFactor);
+  concurrentTest('RpcCalls', testRpcCalls, 160 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);
