@@ -58,11 +58,21 @@ const ETH_REFUNDS: &[(EthAsset, u128, [u8; 20])] = &[
 	(EthAsset::Usdt, 17_602_230_865, hex!("6fcafd9630f35cb0452d9dc5a18a98065e558b1b")),
 	// tx: 0xcb5536a5e659a22de0aa915ba1ae3ef70cc2a521049a8f13be4886c5f8f5d4a3  (4,646.379279 USDC)
 	(EthAsset::Usdc, 4_646_379_279, hex!("c3a490b6c91a2464eb30f19db4289ac81be1f863")),
+	// tx: 0x27cec0e5683791c433b4cf04dc11ab3b8593d823288e0fd7129cb755e66e7265 (0.2188 ETH)
+	(EthAsset::Eth, 218_800_000_000_000_000, hex!("FE3De096B85E67c34F75BCE7d1B8958383DfF871")),
+	// tx: 0x8dc69379b9a2fa41bf823e14d94f2b6d50797522baf37127d9119c7cad64e234 (1,545 USDT)
+	(EthAsset::Usdt, 1_545_000_000, hex!("F7F44a263CcE00d250c0AA6336f6bb400ed850Fa")),
+	// tx: 0xa2d2bf65c5c64bc5892149390ea5f8e4917143f85e8445cfe84b0b30fac30cd4 (4,000 USDT)
+	(EthAsset::Usdt, 4_000_000_000, hex!("47c4A175d3873f8DB0285D49cA812441b24e9420")),
+	// tx: 0xf7f4b1d1973e717faa7e7e9c32bebbaeb80646ac7ee1a092cd207f789c1d0820 (800 USDT)
+	(EthAsset::Usdt, 800_000_000, hex!("d52ce7E0dF3AD342E3BC9006E64689DC0B523C41")),
 ];
 
 const ARB_REFUNDS: &[(ArbAsset, u128, [u8; 20])] = &[
 	// tx: 0x622b7f62cc072569eabac69d5d87f057a3c31479bf19a45cdf8bd65bdfdcc39a  (19.82018 USDC)
 	(ArbAsset::ArbUsdc, 19_820_180, hex!("846aaa63b06e302f86f81d3313cd13df624655f0")),
+	// tx: 0x622b7f62cc072569eabac69d5d87f057a3c31479bf19a45cdf8bd65bdfdcc39a (556.181886 USDT)
+	(ArbAsset::ArbUsdt, 556_181_886, hex!("7765a4f732204d0837f2ee4dB75C2b3e4c69d5cC")),
 ];
 
 pub struct Migration;
