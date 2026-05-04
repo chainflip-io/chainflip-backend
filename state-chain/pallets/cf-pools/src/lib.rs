@@ -115,6 +115,19 @@ enum LimitOrderUpdateDetails<BlockNumber: sp_std::fmt::Debug> {
 }
 
 impl<T: Config> LimitOrderUpdate<T> {
+	fn can_override_order(&self, other: &Self) -> bool {
+		self.lp == other.lp &&
+			self.base_asset == other.base_asset &&
+			self.quote_asset == other.quote_asset &&
+			self.side == other.side &&
+			self.id == other.id &&
+			matches!(
+				(&self.details, &other.details),
+				(LimitOrderUpdateDetails::Set { .. }, LimitOrderUpdateDetails::Set { .. }) |
+					(LimitOrderUpdateDetails::Close, LimitOrderUpdateDetails::Close)
+			)
+	}
+
 	pub fn dispatch(self) -> (Weight, DispatchResult) {
 		let (weight, result) = match self.details {
 			LimitOrderUpdateDetails::Set { option_tick, sell_amount, close_order_at } => {
@@ -190,18 +203,29 @@ impl<T: Config> LimitOrderUpdate<T> {
 		/// The maximum number of scheduled updates per (lp, block number).
 		const MAX_SCHEDULED_UPDATES: u32 = 12;
 		ScheduledLimitOrderUpdateCount::<T>::try_mutate((self.lp.clone(), dispatch_at), |count| {
-			if *count >= MAX_SCHEDULED_UPDATES {
-				Err(Error::<T>::SheduledUpdateLimitReached)
-			} else {
-				*count += 1;
+			let lp = self.lp.clone();
+			let order_id = self.id;
+			ScheduledLimitOrderUpdates::<T>::try_mutate(dispatch_at, |orders| {
+				if let Some(scheduled_order) =
+					orders.iter_mut().find(|order| self.can_override_order(order))
+				{
+					*scheduled_order = self;
+				} else {
+					ensure!(*count < MAX_SCHEDULED_UPDATES, Error::<T>::SheduledUpdateLimitReached);
+					*count += 1;
+					orders.push(self);
+				}
+
 				Pallet::<T>::deposit_event(Event::<T>::LimitOrderSetOrUpdateScheduled {
-					lp: self.lp.clone(),
-					order_id: self.id,
+					lp,
+					order_id,
 					dispatch_at,
 				});
-				ScheduledLimitOrderUpdates::<T>::append(dispatch_at, self);
+
 				Ok(())
-			}
+			})?;
+
+			Ok(())
 		})?;
 		Ok(())
 	}

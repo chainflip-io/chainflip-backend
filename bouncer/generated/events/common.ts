@@ -1881,6 +1881,7 @@ export const palletCfLendingPoolsPalletConfigUpdate = z.discriminatedUnion('__ki
     minimumUpdateSupplyAmountUsd: numberOrHex,
     minimumSupplyAmountUsd: numberOrHex,
   }),
+  z.object({ __kind: z.literal('SetLiquidationCoverageFactor'), value: z.number() }),
 ]);
 
 export const palletCfLendingPoolsBoostBoostPoolId = z.object({

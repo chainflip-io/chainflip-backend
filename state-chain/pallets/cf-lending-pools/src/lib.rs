@@ -26,9 +26,9 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{
-		before_v12, get_all_loans, get_lending_pools, get_loan_accounts,
-		LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus,
-		RpcLiquidationSwap, RpcLoan, RpcLoanAccount,
+		get_all_loans, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
+		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
+		RpcLoanAccount,
 	},
 	LendingPool, LiquidationCompletionReason, LiquidationType, LoanType, OraclePriceCache,
 	WhitelistStatus, WhitelistUpdate, WithdrawnAndRemainingAmounts,
@@ -86,7 +86,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const STORAGE_VERSION_U16: u16 = 5;
+pub const STORAGE_VERSION_U16: u16 = 6;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 use serde::{Deserialize, Serialize};
@@ -190,6 +190,7 @@ pub enum PalletConfigUpdate {
 		minimum_update_supply_amount_usd: AssetAmount,
 		minimum_supply_amount_usd: AssetAmount,
 	},
+	SetLiquidationCoverageFactor(Percent),
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -302,6 +303,7 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	minimum_update_loan_amount_usd: 10_000_000,   // 10 USD
 	minimum_supply_amount_usd: 100_000_000,       // 100 USD
 	minimum_update_supply_amount_usd: 10_000_000, // 10 USD
+	liquidation_coverage_factor: Percent::from_percent(100),
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -592,6 +594,11 @@ pub mod pallet {
 		BoostedFundsRemaining,
 		/// Can't removed funds due to LTV check
 		InsufficientLtvHeadroom,
+		/// The new loan would push pool utilisation above the utilisation cap.
+		UtilisationCapExceeded,
+		/// The new loan would lower the utilisation cap of one of the borrower's
+		/// collateral pools below that pool's current utilisation.
+		CollateralPoolUtilisationCapExceeded,
 	}
 
 	#[pallet::hooks]
@@ -711,6 +718,9 @@ pub mod pallet {
 							config.minimum_update_supply_amount_usd =
 								*minimum_update_supply_amount_usd;
 							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
+						},
+						PalletConfigUpdate::SetLiquidationCoverageFactor(coverage_factor) => {
+							config.liquidation_coverage_factor = *coverage_factor;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
