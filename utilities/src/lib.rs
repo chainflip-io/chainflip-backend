@@ -20,6 +20,7 @@
 #![feature(async_fn_track_caller)]
 #![feature(iterator_try_collect)]
 #![feature(decl_macro)]
+#![feature(never_type)]
 
 #[cfg(feature = "std")]
 mod with_std;

@@ -96,9 +96,10 @@ use state_chain_runtime::{
 			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
 			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
 			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
-			SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
-			TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
+			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
+			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
+			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
+			VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -895,6 +896,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
+	#[method(name = "accounts_info")]
+	fn cf_all_accounts_info(
+		&self,
+		roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>>;
 	#[method(name = "free_balances", aliases = ["cf_asset_balances"])]
 	fn cf_free_balances(
 		&self,
@@ -1932,6 +1939,157 @@ where
 		})
 	}
 
+	fn cf_all_accounts_info(
+		&self,
+		roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>> {
+		let maybe_accounts_info: Option<_> =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version >= 17 {
+					let network: cf_chains::btc::BitcoinNetwork =
+						api.cf_network_environment(hash)?.into();
+					let network_env = api.cf_network_environment(hash)?;
+
+					api.cf_multiple_accounts_info(hash, roles)?
+						.into_iter()
+						.map(|info| {
+							let common_items = info
+								.common_items
+								.try_map_balances(TryInto::try_into)
+								.map_err(|_| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										"Unable to convert balances.",
+										None::<()>,
+									))
+								})?;
+
+							let role_specific = match info.role {
+								RuntimeApiAccountInfo::Unregistered =>
+									RpcAccountInfo::Unregistered {},
+								RuntimeApiAccountInfo::Broker(broker_info) => {
+									let broker_info =
+										broker_info.map(|pubkey| pubkey.to_address(&network));
+									RpcAccountInfo::Broker {
+										earned_fees: AssetMap::from_iter_or_default(
+											broker_info
+												.earned_fees
+												.into_iter()
+												.map(|(k, v)| (k, v.into())),
+										),
+										affiliates: broker_info
+											.affiliates
+											.into_iter()
+											.map(Into::into)
+											.collect(),
+										btc_vault_deposit_address: broker_info
+											.btc_vault_deposit_address,
+										bound_fee_withdrawal_address: broker_info
+											.bound_fee_withdrawal_address,
+									}
+								},
+								RuntimeApiAccountInfo::LiquidityProvider(lp_info) =>
+									RpcAccountInfo::LiquidityProvider {
+										refund_addresses: lp_info
+											.refund_addresses
+											.into_iter()
+											.map(|(chain, address)| {
+												(
+													chain,
+													address
+														.map(|a| a.to_humanreadable(network_env)),
+												)
+											})
+											.collect(),
+										earned_fees: lp_info
+											.earned_fees
+											.iter()
+											.map(|(asset, balance)| (asset, (*balance).into()))
+											.collect(),
+										boost_balances: lp_info
+											.boost_balances
+											.iter()
+											.map(|(asset, infos)| {
+												(
+													asset,
+													infos.iter().map(|info| info.into()).collect(),
+												)
+											})
+											.collect(),
+										lending_positions: lp_info
+											.lending_positions
+											.into_iter()
+											.map(|pos| LendingPosition {
+												asset: pos.asset,
+												total_amount: pos.total_amount.into(),
+												available_amount: pos.available_amount.into(),
+											})
+											.collect(),
+										collateral_balances: lp_info
+											.collateral_balances
+											.into_iter()
+											.map(|(asset, amount)| AssetAndAmount {
+												asset,
+												amount: amount.into(),
+											})
+											.collect(),
+									},
+								RuntimeApiAccountInfo::Validator(validator_info) => {
+									let ValidatorInfo {
+										last_heartbeat,
+										reputation_points,
+										keyholder_epochs,
+										is_current_authority,
+										#[expect(deprecated)]
+										is_current_backup,
+										is_qualified,
+										is_online,
+										is_bidding,
+										apy_bp,
+										operator,
+										..
+									} = *validator_info;
+									RpcAccountInfo::Validator {
+										last_heartbeat,
+										reputation_points,
+										keyholder_epochs,
+										is_current_authority,
+										is_current_backup,
+										is_qualified,
+										is_online,
+										is_bidding,
+										apy_bp,
+										operator,
+									}
+								},
+								RuntimeApiAccountInfo::Operator(operator_info) =>
+									RpcAccountInfo::Operator {
+										info: operator_info.map_amounts(NumberOrHex::from),
+									},
+							};
+
+							Ok(RpcAccountInfoWrapper { common_items, role_specific })
+						})
+						.collect::<Result<Vec<_>, CfApiError>>()
+						.map(Some)
+				} else {
+					Ok(None)
+				}
+			})?;
+
+		maybe_accounts_info.map(Ok).unwrap_or_else(|| {
+			// fallback to calling old account info in a loop if above code returned None (runtime
+			// version < 17)
+			let accounts = self.cf_accounts(at)?;
+			let info = accounts
+				.into_iter()
+				.map(|(account_id, _)| self.cf_account_info(account_id, at))
+				.collect::<Result<Vec<_>, _>>()?;
+			Ok(info)
+		})
+	}
+
 	fn cf_account_info(
 		&self,
 		account_id: state_chain_runtime::AccountId,
@@ -1998,7 +2156,7 @@ where
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
 				} else {
-					api.cf_common_account_info(hash, &account_id)?
+					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
 				.try_map_balances(TryInto::try_into)
 				.map_err(|_| {
@@ -2066,8 +2224,10 @@ where
 									account_id.clone(),
 								)?
 								.into()
+							} else if api_version < 17 {
+								api.cf_liquidity_provider_info_before_version_17(hash, account_id)?
 							} else {
-								api.cf_liquidity_provider_info(hash, account_id)?
+								api.cf_liquidity_provider_info(hash, account_id, ShouldSweep::Yes)?
 							};
 
 							let network = api.cf_network_environment(hash)?;

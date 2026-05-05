@@ -99,6 +99,10 @@ where
 		Ok(())
 	}
 
+	fn sweep_all() -> Result<(), DispatchError> {
+		Ok(())
+	}
+
 	fn open_order_count(
 		who: &Self::AccountId,
 		asset_pair: &PoolPairsMap<Asset>,
