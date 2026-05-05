@@ -14,6 +14,8 @@ import { rangeOrder } from 'shared/range_order';
 import { initializeTronChain, initializeTronContracts } from 'shared/initialize_new_chains';
 import { tronVaultAwaitingGovernanceActivation } from 'generated/events/tronVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
+import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
+import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
 
 async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up vaults for Tron');
@@ -26,15 +28,32 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Forcing rotation');
   await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
 
+  const rotationEvent = await cf.stepUntilOneEventOf({
+    rotationPhaseUpdated: {
+      name: 'Validator.RotationPhaseUpdated',
+      schema: validatorRotationPhaseUpdated.refine(
+        (event) => event.newPhase.__kind === 'KeygensInProgress',
+      ),
+    },
+    rotationAborted: {
+      name: 'Validator.RotationAborted',
+      schema: validatorRotationAborted,
+    },
+  });
+  if (rotationEvent.key === 'rotationAborted') {
+    throw new Error(
+      `Initial setup_vaults forced rotation was ABORTED. Cannot continue with the test, please check the node logs for possible reasons.`,
+    );
+  }
+
+  // Step 3
+  cf.info('Waiting for new keys');
   const keyEvents = await cf.stepUntilAllEventsOf({
     tron: {
       name: 'TronVault.AwaitingGovernanceActivation',
       schema: tronVaultAwaitingGovernanceActivation,
     },
   });
-
-  // Step 3
-  cf.info('Waiting for new keys');
   const tronKey = keyEvents.tron.data.newPublicKey;
 
   // Step 4
