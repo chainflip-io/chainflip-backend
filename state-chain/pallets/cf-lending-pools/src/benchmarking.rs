@@ -623,7 +623,9 @@ mod benchmarks {
 
 		#[block]
 		{
-			let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
+			let collateral = loan_account
+				.prepare_collateral_for_liquidation(&price_cache, LiquidationType::Hard)
+				.unwrap();
 			assert_ok!(loan_account.init_liquidation_swaps(
 				&borrower,
 				collateral,
@@ -645,7 +647,9 @@ mod benchmarks {
 		let price_cache = get_prefilled_price_cache();
 
 		// Start the liquidation swaps
-		let collateral = loan_account.prepare_collateral_for_liquidation(&price_cache).unwrap();
+		let collateral = loan_account
+			.prepare_collateral_for_liquidation(&price_cache, LiquidationType::Hard)
+			.unwrap();
 		assert_ok!(loan_account.init_liquidation_swaps(
 			&borrower,
 			collateral,

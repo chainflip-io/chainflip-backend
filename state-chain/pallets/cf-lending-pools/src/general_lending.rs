@@ -1,5 +1,5 @@
 use cf_amm_math::Price;
-use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId};
+use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
@@ -380,7 +380,8 @@ impl<T: Config> LoanAccount<T> {
 		match new_status {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
 				ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
-				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				let collateral =
+					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
@@ -396,7 +397,8 @@ impl<T: Config> LoanAccount<T> {
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
 				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
-				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				let collateral =
+					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
@@ -609,34 +611,62 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Split collateral proportionally to the usd value of each loan (to give each loan a fair
-	/// chance of being liquidated without a loss) as a preparation step for liquidation. Returns
-	/// error if oracle prices aren't available.
+	/// Collect just enough collateral from supply pools to cover the outstanding loan
+	/// principal plus a buffer for the maximum oracle price slippage allowed for the
+	/// upcoming liquidation swaps, then split the collected collateral proportionally to
+	/// the usd value of each loan (to give each loan a fair chance of being liquidated
+	/// without a loss). When multiple collateral assets are involved, each is drawn
+	/// proportionally to its available USD value. Returns error if oracle prices aren't
+	/// available.
 	pub(super) fn prepare_collateral_for_liquidation(
 		&mut self,
 		price_cache: &OraclePriceCache<T>,
+		liquidation_type: LiquidationType,
 	) -> Result<Vec<AssetCollateralForLoan>, Error<T>> {
+		let config = LendingConfig::<T>::get();
+		let max_oracle_price_slippage_bps = match liquidation_type {
+			LiquidationType::Hard => config.hard_liquidation_max_oracle_slippage,
+			LiquidationType::Soft | LiquidationType::SoftVoluntary =>
+				config.soft_liquidation_max_oracle_slippage,
+		};
+
+		// Gather available collateral positions per asset, paired with their USD value.
+		let positions_with_usd: Vec<(Asset, AssetAmount, AssetAmount)> = self
+			.get_collateral_in_supply_pools()
+			.into_iter()
+			.filter(|(_, amount)| *amount > 0)
+			.map(|(asset, amount)| {
+				price_cache.usd_value_of(asset, amount).map(|usd| (asset, amount, usd))
+			})
+			.collect::<Result<Vec<_>, Error<T>>>()?;
+
+		let total_owed_usd = self.total_owed_usd_value(price_cache)?;
+
 		let mut collateral_to_liquidate = BTreeMap::<Asset, AssetAmount>::new();
 
-		// Gather collateral from supply side of liquidity pools if available:
-		for asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>().iter() {
+		for (asset, amount_to_request) in compute_per_asset_collateral_takes(
+			total_owed_usd,
+			max_oracle_price_slippage_bps,
+			&positions_with_usd,
+		) {
 			GeneralLendingPools::<T>::mutate(asset, |pool| {
 				if let Some(pool) = pool.as_mut() {
-					// Remove as much as possible:
 					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
-						pool.remove_funds(&self.borrower_id, None)
+						pool.remove_funds(&self.borrower_id, Some(amount_to_request))
 					{
-						collateral_to_liquidate
-							.entry(*asset)
-							.or_default()
-							.saturating_accrue(withdrawn_amount);
+						if withdrawn_amount > 0 {
+							collateral_to_liquidate
+								.entry(asset)
+								.or_default()
+								.saturating_accrue(withdrawn_amount);
 
-						Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
-							lender_id: self.borrower_id.clone(),
-							asset: *asset,
-							unlocked_amount: withdrawn_amount,
-							action_type: SupplyRemovedActionType::SystemLiquidation,
-						});
+							Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
+								lender_id: self.borrower_id.clone(),
+								asset,
+								unlocked_amount: withdrawn_amount,
+								action_type: SupplyRemovedActionType::SystemLiquidation,
+							});
+						}
 					}
 				}
 			});
@@ -1164,6 +1194,214 @@ pub(super) struct AssetCollateralForLoan {
 	loan_asset: Asset,
 	collateral_asset: Asset,
 	collateral_amount: AssetAmount,
+}
+
+/// Inflate `total_owed_usd` by the maximum oracle slippage allowed for the upcoming
+/// liquidation swaps. In the worst case the swaps return `oracle_value * (1 - slippage)`
+/// of loan asset per unit of oracle USD value of collateral, so to fully cover the debt
+/// we must collect collateral worth `total_owed_usd / (1 - slippage)`. A slippage of 100%
+/// (or more) means the swap could return nothing, so we'd need an unbounded amount —
+/// represented here as `AssetAmount::MAX`.
+fn required_collateral_with_slippage(
+	total_owed_usd: AssetAmount,
+	max_oracle_slippage_bps: BasisPoints,
+) -> AssetAmount {
+	let slippage_denom = ONE_AS_BASIS_POINTS.saturating_sub(max_oracle_slippage_bps) as u128;
+	if slippage_denom == 0 {
+		AssetAmount::MAX
+	} else {
+		multiply_by_rational_with_rounding(
+			total_owed_usd,
+			ONE_AS_BASIS_POINTS as u128,
+			slippage_denom,
+			Rounding::Up,
+		)
+		.unwrap_or(AssetAmount::MAX)
+	}
+}
+
+/// Decide how much of each available collateral asset to pull into liquidation swaps.
+/// `positions` is `(asset, available_amount, available_usd_value)` for each pool the
+/// borrower has a positive supply position in. When the available collateral exceeds the
+/// owed-plus-slippage target, each asset is drawn proportionally to its share of the
+/// total available USD value (rounded up so the collected oracle value never falls short
+/// of the per-asset target). Otherwise the function returns the full available amount of
+/// each position.
+fn compute_per_asset_collateral_takes(
+	total_owed_usd: AssetAmount,
+	max_oracle_slippage_bps: BasisPoints,
+	positions: &[(Asset, AssetAmount, AssetAmount)],
+) -> Vec<(Asset, AssetAmount)> {
+	let total_available_usd =
+		positions.iter().fold(0u128, |acc, (_, _, usd)| acc.saturating_add(*usd));
+
+	if total_available_usd == 0 {
+		return Vec::new();
+	}
+
+	let total_required_with_slippage_usd =
+		required_collateral_with_slippage(total_owed_usd, max_oracle_slippage_bps);
+	let take_all = total_required_with_slippage_usd >= total_available_usd;
+	let target_total_usd = core::cmp::min(total_required_with_slippage_usd, total_available_usd);
+
+	positions
+		.iter()
+		.map(|&(asset, available_amount, _)| {
+			let amount = if take_all {
+				available_amount
+			} else {
+				core::cmp::min(
+					multiply_by_rational_with_rounding(
+						available_amount,
+						target_total_usd,
+						total_available_usd,
+						Rounding::Up,
+					)
+					.unwrap_or(available_amount),
+					available_amount,
+				)
+			};
+			(asset, amount)
+		})
+		.filter(|(_, amount)| *amount > 0)
+		.collect()
+}
+
+#[cfg(test)]
+mod liquidation_math_tests {
+	use super::*;
+
+	const ETH: Asset = Asset::Eth;
+	const BTC: Asset = Asset::Btc;
+	const SOL: Asset = Asset::Sol;
+	const USDC: Asset = Asset::Usdc;
+
+	#[test]
+	fn required_collateral_with_zero_slippage_equals_owed() {
+		assert_eq!(required_collateral_with_slippage(1_000, 0), 1_000);
+	}
+
+	#[test]
+	fn required_collateral_with_slippage_inflates_with_ceil_rounding() {
+		// 1_000 / (1 - 0.005) = 1_005.025... -> 1_006 (ceil).
+		assert_eq!(required_collateral_with_slippage(1_000, 50), 1_006);
+		// 1_000 / (1 - 0.05) = 1_052.63... -> 1_053 (ceil).
+		assert_eq!(required_collateral_with_slippage(1_000, 500), 1_053);
+	}
+
+	#[test]
+	fn required_collateral_saturates_when_slippage_is_total_loss() {
+		// 100% slippage means any swap could return zero, so no finite amount is enough.
+		assert_eq!(required_collateral_with_slippage(1_000, ONE_AS_BASIS_POINTS), AssetAmount::MAX);
+		// Above 100% saturates the same way.
+		assert_eq!(
+			required_collateral_with_slippage(1_000, ONE_AS_BASIS_POINTS + 1_000),
+			AssetAmount::MAX
+		);
+	}
+
+	#[test]
+	fn empty_positions_give_no_takes() {
+		assert!(compute_per_asset_collateral_takes(1_000, 50, &[]).is_empty());
+	}
+
+	#[test]
+	fn single_asset_with_excess_takes_only_required_with_buffer() {
+		// Owed 1_000 USD, slippage 0.5%, available 10_000 USD worth of ETH (10_000 ETH @ $1).
+		// Required = ceil(1_000 / 0.995) = 1_006. ETH price is 1, so amount equals USD.
+		assert_eq!(
+			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 10_000, 10_000)]),
+			vec![(ETH, 1_006)]
+		);
+	}
+
+	#[test]
+	fn single_asset_with_deficit_takes_everything() {
+		// Owed 1_000 USD, slippage 0.5% → required 1_006 USD. Only 800 USD available.
+		assert_eq!(
+			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 800, 800)]),
+			vec![(ETH, 800)]
+		);
+	}
+
+	#[test]
+	fn at_required_threshold_takes_all() {
+		// Exactly enough collateral (in USD) to cover the slippage-buffered owed amount.
+		assert_eq!(
+			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 1_006, 1_006)]),
+			vec![(ETH, 1_006)]
+		);
+	}
+
+	#[test]
+	fn zero_owed_takes_nothing() {
+		assert!(compute_per_asset_collateral_takes(0, 50, &[(ETH, 1_000, 1_000)]).is_empty());
+	}
+
+	#[test]
+	fn two_assets_with_equal_usd_split_evenly() {
+		// Owed 1_000 USD, slippage 0%, available: 100 ETH @ $5 and 50 BTC @ $10 = $500 each.
+		// target = 1_000, total_avail = 1_000 → take everything.
+		assert_eq!(
+			compute_per_asset_collateral_takes(1_000, 0, &[(ETH, 100, 500), (BTC, 50, 500)]),
+			vec![(ETH, 100), (BTC, 50)]
+		);
+	}
+
+	#[test]
+	fn two_assets_drawn_proportionally_to_usd_share() {
+		// ETH: 100 units @ $1 = $100 USD. SOL: 200 units @ $5 = $1000 USD. Total = $1100.
+		// Owed 550 USD, slippage 0% → target = 550. ETH share = 100/1100 ≈ 9.09%, SOL = 90.91%.
+		// ETH take = ceil(100 * 550 / 1100) = 50. SOL take = ceil(200 * 550 / 1100) = 100.
+		assert_eq!(
+			compute_per_asset_collateral_takes(550, 0, &[(ETH, 100, 100), (SOL, 200, 1_000)]),
+			vec![(ETH, 50), (SOL, 100)]
+		);
+	}
+
+	#[test]
+	fn three_assets_proportional_split_with_slippage_buffer() {
+		// Total available: 1_000 ETH ($2_000) + 500 SOL ($500) + 1_000_000 USDC ($1_000_000) =
+		// $1_002_500. Owed 500_000 USD, slippage 0.5% → required = ceil(500_000 / 0.995) =
+		// 502_513. Per-asset: ETH = ceil(1_000 * 502_513 / 1_002_500) ≈ 502, SOL = ceil(500 *
+		// 502_513 / 1_002_500) ≈ 251, USDC = ceil(1_000_000 * 502_513 / 1_002_500) ≈ 501_260.
+		assert_eq!(
+			compute_per_asset_collateral_takes(
+				500_000,
+				50,
+				&[(ETH, 1_000, 2_000), (SOL, 500, 500), (USDC, 1_000_000, 1_000_000)],
+			),
+			vec![(ETH, 502), (SOL, 251), (USDC, 501_260)]
+		);
+	}
+
+	#[test]
+	fn rounds_up_so_collected_usd_meets_target() {
+		// ETH and SOL each contribute $50 USD with awkward unit counts that force rounding.
+		// Owed 33 USD, slippage 0% → target 33 USD, total avail 100 USD. Each share = 33/2 USD
+		// rounded up. ETH: ceil(7 * 33 / 100) = ceil(2.31) = 3. SOL: ceil(13 * 33 / 100) =
+		// ceil(4.29) = 5. The sum (8 + leftover from rounding) covers the target.
+		let takes = compute_per_asset_collateral_takes(33, 0, &[(ETH, 7, 50), (SOL, 13, 50)]);
+		assert_eq!(takes, vec![(ETH, 3), (SOL, 5)]);
+	}
+
+	#[test]
+	fn deficit_in_some_assets_still_takes_all_when_total_required_exceeds_available() {
+		// Required 100_000 USD with 0% slippage but only $300 + $200 = $500 available → take all.
+		assert_eq!(
+			compute_per_asset_collateral_takes(100_000, 0, &[(ETH, 30, 300), (SOL, 100, 200)],),
+			vec![(ETH, 30), (SOL, 100)]
+		);
+	}
+
+	#[test]
+	fn extreme_slippage_forces_take_all() {
+		// 99.5% slippage means required ≈ 200x owed → almost certainly exceeds available.
+		assert_eq!(
+			compute_per_asset_collateral_takes(100, 9_950, &[(ETH, 50, 50)]),
+			vec![(ETH, 50)]
+		);
+	}
 }
 
 /// Check collateralisation ratio (triggering/aborting liquidations if necessary) and
@@ -1728,7 +1966,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 					let liquidation_swap = match &mut loan_account.liquidation_status {
 						LiquidationStatus::NoLiquidation => {
-							log_or_panic!("Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})");
+							log_or_panic!(
+								"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
+							);
 							return;
 						},
 						LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
@@ -1753,7 +1993,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 								swap
 							} else {
-								log_or_panic!("Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})");
+								log_or_panic!(
+									"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
+								);
 								return;
 							}
 						},

@@ -1223,6 +1223,14 @@ fn basic_liquidation() {
 	// This should trigger second (hard) liquidation
 	const SWAP_RATE_2: u128 = 29;
 
+	// The soft liquidation swap pulls just enough collateral to cover the owed principal
+	// (in USD) plus the soft-slippage buffer; the rest stays in the supply pool.
+	let liquidation_input = required_collateral_with_slippage(
+		(PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE,
+		CONFIG.soft_liquidation_max_oracle_slippage,
+	);
+	let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
+
 	// How much collateral will be swapped during liquidation:
 	const EXECUTED_COLLATERAL: AssetAmount = 3 * INIT_COLLATERAL / 5;
 	// How much of principal asset is bought during first liquidation:
@@ -1236,6 +1244,8 @@ fn basic_liquidation() {
 
 	// How much of principal asset is bought during second liquidation:
 	const SWAPPED_PRINCIPAL_2: AssetAmount = (INIT_COLLATERAL - EXECUTED_COLLATERAL) / SWAP_RATE_2;
+
+	assert!(liquidation_input >= EXECUTED_COLLATERAL);
 
 	// This much will be repaid via second liquidation (full principal after first repayment)
 	let repaid_amount_2 = PRINCIPAL + ORIGINATION_FEE - repaid_amount_1;
@@ -1265,8 +1275,8 @@ fn basic_liquidation() {
 				MockSwapRequest {
 					input_asset: COLLATERAL_ASSET,
 					output_asset: LOAN_ASSET,
-					input_amount: INIT_COLLATERAL,
-					remaining_input_amount: INIT_COLLATERAL,
+					input_amount: liquidation_input,
+					remaining_input_amount: liquidation_input,
 					accumulated_output_amount: 0,
 					swap_type: SwapRequestType::Regular {
 						output_action: SwapOutputAction::CreditLendingPool {
@@ -1300,8 +1310,12 @@ fn basic_liquidation() {
 				}
 			);
 
-			// All collateral should now be in liquidation swaps (removed from supply pool)
-			assert_eq!(loan_account.get_collateral_in_supply_pools(), Default::default());
+			// Only the collateral required to repay the loan (plus the slippage buffer) is
+			// removed from the supply pool — the rest stays available to other lenders.
+			assert_eq!(
+				loan_account.get_collateral_in_supply_pools(),
+				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
+			);
 
 			// Despite collateral having been moved to the swapping pallet, we
 			// can still calculate its value:
@@ -1322,7 +1336,7 @@ fn basic_liquidation() {
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
 				LIQUIDATION_SWAP_1,
 				SwapExecutionProgress {
-					remaining_input_amount: INIT_COLLATERAL - EXECUTED_COLLATERAL,
+					remaining_input_amount: liquidation_input - EXECUTED_COLLATERAL,
 					accumulated_output_amount: SWAPPED_PRINCIPAL,
 				},
 			);
@@ -1553,10 +1567,12 @@ fn soft_liquidation_escalates_to_hard() {
 	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
 	const LIQUIDATION_SWAP_2: SwapRequestId = SwapRequestId(1);
 
-	// The user get unfavorable swap rate here, which should trigger
-	// escalation to hard liquidation:
+	// The user gets an unfavourable swap rate here: only 45% of PRINCIPAL of loan asset is
+	// produced by the time most of the swap input has been consumed, leaving us with too
+	// little remaining collateral to cover the still-outstanding principal at the new
+	// oracle price — this triggers escalation to hard liquidation.
 	const SWAP_1_OUTPUT_AMOUNT: AssetAmount = 45 * PRINCIPAL / 100;
-	const SWAP_1_REMAINING_INPUT_AMOUNT: AssetAmount = INIT_COLLATERAL / 2;
+	const SWAP_1_REMAINING_INPUT_AMOUNT: AssetAmount = 2 * INIT_COLLATERAL / 5;
 
 	new_test_ext()
 		.with_funded_pool(INIT_POOL_AMOUNT)
@@ -2042,8 +2058,12 @@ mod multi_asset_collateral_liquidation {
 	/// funds to fully repay the loan.
 	#[test]
 	fn one_liquidation_swap_completes_the_other_aborted_due_to_low_ltv() {
-		// Swap 1 will be a partial swap
-		const SWAP_1_REMAINING_INPUT: AssetAmount = INIT_COLLATERAL / 10;
+		// Swap 1 will be a partial swap. With the "collect just enough" liquidation flow, a
+		// portion of the original collateral stays in the supply pool, which lowers the LTV
+		// computed during the post-partial-swap upkeep. We pick this remaining-input amount
+		// so the LTV stays inside the soft-liquidation band (between soft_abort=88% and
+		// hard_liquidation=95%) rather than dropping below 88% and aborting prematurely.
+		const SWAP_1_REMAINING_INPUT: AssetAmount = 700_000_000;
 		const SWAP_1_OUTPUT_AMOUNT: AssetAmount = 82 * PRINCIPAL / 100;
 
 		const TOTAL_OWED: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
@@ -2067,6 +2087,27 @@ mod multi_asset_collateral_liquidation {
 		// The intention is to have some amount left after liquidation fees to be added to
 		// collateral:
 		assert!(EXCESS_AMOUNT > total_liquidation_fee);
+
+		// Soft liquidation only collects the owed principal (in USD) plus the slippage
+		// buffer, drawn proportionally from each available collateral asset; the rest
+		// stays in the supply pools throughout liquidation.
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+			TOTAL_OWED * NEW_SWAP_RATE,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+			&[
+				(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
+				(
+					OTHER_COLLATERAL_ASSET,
+					OTHER_COLLATERAL_ASSET_AMOUNT,
+					OTHER_COLLATERAL_ASSET_AMOUNT,
+				),
+			],
+		)
+		.into_iter()
+		.collect();
+		let collateral_leftover_at_init = INIT_COLLATERAL - liquidation_takes[&COLLATERAL_ASSET];
+		let other_collateral_leftover_at_init =
+			OTHER_COLLATERAL_ASSET_AMOUNT - liquidation_takes[&OTHER_COLLATERAL_ASSET];
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
@@ -2146,7 +2187,8 @@ mod multi_asset_collateral_liquidation {
 				// settled, and the account has been removed:
 				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
-				// Collateral from both swaps should be returned to supply pools:
+				// Collateral from both swaps should be returned to supply pools alongside
+				// the leftovers that were never pulled into the swaps at init.
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(LOAN_ASSET)
 						.unwrap()
@@ -2159,7 +2201,14 @@ mod multi_asset_collateral_liquidation {
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER)
 						.unwrap(),
-					SWAP_1_REMAINING_INPUT
+					SWAP_1_REMAINING_INPUT + collateral_leftover_at_init
+				);
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(OTHER_COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					other_collateral_leftover_at_init
 				);
 			});
 	}
@@ -2185,6 +2234,27 @@ mod multi_asset_collateral_liquidation {
 		// Swap 2 will only be executed half way through
 		const SWAP_2_REMAINING_INPUT_AMOUNT: AssetAmount = OTHER_COLLATERAL_ASSET_AMOUNT / 2;
 		const SWAP_2_OUTPUT_AMOUNT: AssetAmount = (OTHER_COLLATERAL_ASSET_AMOUNT / 2) / SWAP_RATE;
+
+		// Soft liquidation only collects the owed principal (in USD) plus the slippage
+		// buffer, drawn proportionally from each available collateral asset; the rest
+		// stays in the supply pools throughout liquidation.
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+			TOTAL_OWED * NEW_SWAP_RATE,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+			&[
+				(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
+				(
+					OTHER_COLLATERAL_ASSET,
+					OTHER_COLLATERAL_ASSET_AMOUNT,
+					OTHER_COLLATERAL_ASSET_AMOUNT,
+				),
+			],
+		)
+		.into_iter()
+		.collect();
+		let collateral_leftover_at_init = INIT_COLLATERAL - liquidation_takes[&COLLATERAL_ASSET];
+		let other_collateral_leftover_at_init =
+			OTHER_COLLATERAL_ASSET_AMOUNT - liquidation_takes[&OTHER_COLLATERAL_ASSET];
 
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
@@ -2239,7 +2309,8 @@ mod multi_asset_collateral_liquidation {
 				// settled, and the account has been removed:
 				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 
-				// Collateral from both swaps should be returned to supply pools:
+				// Collateral from both swaps should be returned to supply pools alongside
+				// the leftovers that were never pulled into the swaps at init.
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(LOAN_ASSET)
 						.unwrap()
@@ -2248,11 +2319,18 @@ mod multi_asset_collateral_liquidation {
 					EXCESS_AMOUNT + SWAP_2_OUTPUT_AMOUNT
 				);
 				assert_eq!(
+					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					collateral_leftover_at_init
+				);
+				assert_eq!(
 					GeneralLendingPools::<Test>::get(OTHER_COLLATERAL_ASSET)
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER)
 						.unwrap(),
-					SWAP_2_REMAINING_INPUT_AMOUNT
+					SWAP_2_REMAINING_INPUT_AMOUNT + other_collateral_leftover_at_init
 				);
 			});
 	}
@@ -2281,6 +2359,25 @@ mod multi_asset_collateral_liquidation {
 		const REMAINING_INPUT_SWAP_4: AssetAmount = INIT_COLLATERAL_2 / 4;
 		const SWAP_OUTPUT_LOAN_2_SWAP_2: AssetAmount = PRINCIPAL_2 / 5;
 		const SWAP_OUTPUT_LOAN_2_SWAP_4: AssetAmount = PRINCIPAL_2 / 2;
+
+		// Soft liquidation only collects the owed principal (in USD) plus the slippage
+		// buffer, drawn proportionally from each available collateral asset; the rest
+		// stays in the supply pools throughout liquidation.
+		let total_owed_usd = (PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE +
+			(PRINCIPAL_2 + ORIGINATION_FEE_2) * SWAP_RATE;
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+			total_owed_usd,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+			&[
+				(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
+				(COLLATERAL_ASSET_2, INIT_COLLATERAL_2, INIT_COLLATERAL_2),
+			],
+		)
+		.into_iter()
+		.collect();
+		let collateral_leftover_at_init = INIT_COLLATERAL - liquidation_takes[&COLLATERAL_ASSET];
+		let collateral_2_leftover_at_init =
+			INIT_COLLATERAL_2 - liquidation_takes[&COLLATERAL_ASSET_2];
 
 		new_test_ext()
 			.execute_with(|| {
@@ -2367,9 +2464,16 @@ mod multi_asset_collateral_liquidation {
 					}
 				);
 
-				assert!(super::is_zero_collateral(
-					&get_loan_account().get_collateral_in_supply_pools()
-				));
+				// Soft liquidation collects only the principal (in USD) plus a 0.5% slippage
+				// buffer, drawn from each collateral asset proportionally to its share of the
+				// available USD value. The remainder stays in the supply pools.
+				assert_eq!(
+					get_loan_account().get_collateral_in_supply_pools(),
+					BTreeMap::from([
+						(COLLATERAL_ASSET, collateral_leftover_at_init),
+						(COLLATERAL_ASSET_2, collateral_2_leftover_at_init),
+					])
+				);
 			})
 			.then_execute_with(|_| {
 				// Swaps for loan 1 are executed all the way through and fully repay the loan:
@@ -2414,7 +2518,11 @@ mod multi_asset_collateral_liquidation {
 
 				assert_eq!(
 					get_loan_account().get_collateral_in_supply_pools(),
-					BTreeMap::from([(LOAN_ASSET, excess_loan_asset_amount)])
+					BTreeMap::from([
+						(LOAN_ASSET, excess_loan_asset_amount),
+						(COLLATERAL_ASSET, collateral_leftover_at_init),
+						(COLLATERAL_ASSET_2, collateral_2_leftover_at_init),
+					])
 				);
 
 				excess_loan_asset_amount
@@ -2466,8 +2574,11 @@ mod multi_asset_collateral_liquidation {
 					get_loan_account().get_collateral_in_supply_pools(),
 					BTreeMap::from([
 						(LOAN_ASSET, excess_loan_asset_amount),
-						(COLLATERAL_ASSET, REMAINING_INPUT_SWAP_2),
-						(COLLATERAL_ASSET_2, REMAINING_INPUT_SWAP_4)
+						(COLLATERAL_ASSET, REMAINING_INPUT_SWAP_2 + collateral_leftover_at_init),
+						(
+							COLLATERAL_ASSET_2,
+							REMAINING_INPUT_SWAP_4 + collateral_2_leftover_at_init
+						),
 					])
 				);
 			});
@@ -3422,9 +3533,20 @@ fn adding_collateral_during_liquidation() {
 				LiquidationStatus::Liquidating { liquidation_type: LiquidationType::Soft, .. }
 			);
 
-			// All added collateral less what has been swapped in the first swap
-			const INPUT_AMOUNT: AssetAmount =
+			// At soft liquidation init, only enough collateral is collected to cover the
+			// outstanding principal at the new oracle rate plus the soft-slippage buffer.
+			let owed_after_swap_1 = PRINCIPAL + ORIGINATION_FEE - RECOVERED_PRINCIPAL_1;
+			let liquidation_input = required_collateral_with_slippage(
+				owed_after_swap_1 * NEW_SWAP_RATE,
+				CONFIG.soft_liquidation_max_oracle_slippage,
+			);
+
+			// What's left in the pool after the soft liquidation swap is initiated: the
+			// total available collateral (everything we've supplied minus what was already
+			// swapped in the aborted hard liquidation) less the new swap input.
+			let total_available_at_soft_init =
 				INIT_COLLATERAL + EXTRA_COLLATERAL + EXTRA_COLLATERAL_2 - SWAPPED_COLLATERAL_1;
+			let pool_remainder_after_init = total_available_at_soft_init - liquidation_input;
 
 			assert_event_sequence!(
 				Test,
@@ -3449,9 +3571,9 @@ fn adding_collateral_during_liquidation() {
 				RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 					lender_id: BORROWER,
 					asset: COLLATERAL_ASSET,
-					unlocked_amount: INPUT_AMOUNT,
+					unlocked_amount,
 					action_type: SupplyRemovedActionType::SystemLiquidation
-				}),
+				}) if unlocked_amount == liquidation_input,
 				RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 					borrower_id: BORROWER,
 					ref swaps,
@@ -3459,13 +3581,18 @@ fn adding_collateral_during_liquidation() {
 				}) if swaps == &BTreeMap::from([(LOAN_ID, vec![LIQUIDATION_SWAP_2])])
 			);
 
-			// This time the extra collateral does get included in the swap:
+			// The newly-initiated swap pulls just the required amount, not all available
+			// collateral:
 			assert_eq!(
 				MockSwapRequestHandler::<Test>::get_swap_requests(),
-				BTreeMap::from([(LIQUIDATION_SWAP_2, swap_request(INPUT_AMOUNT, 5, false))])
+				BTreeMap::from([(LIQUIDATION_SWAP_2, swap_request(liquidation_input, 5, false))])
 			);
 
-			assert!(is_zero_collateral(&get_account().get_collateral_in_supply_pools()));
+			// The unused remainder stays in the supply pool:
+			assert_eq!(
+				get_account().get_collateral_in_supply_pools(),
+				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
+			);
 
 			// Adding collateral once more should result in a transition from
 			// soft liquidation to a healthy loan:
@@ -3480,7 +3607,7 @@ fn adding_collateral_during_liquidation() {
 			MockSwapRequestHandler::<Test>::set_swap_request_progress(
 				LIQUIDATION_SWAP_2,
 				SwapExecutionProgress {
-					remaining_input_amount: INPUT_AMOUNT - SWAPPED_COLLATERAL_2,
+					remaining_input_amount: liquidation_input - SWAPPED_COLLATERAL_2,
 					accumulated_output_amount: RECOVERED_PRINCIPAL_2,
 				},
 			);
@@ -3823,8 +3950,16 @@ mod voluntary_liquidation {
 	fn voluntary_liquidation_happy_path() {
 		const LIQUIDATION_SWAP: SwapRequestId = SwapRequestId(0);
 
-		const SWAPPED_COLLATERAL: AssetAmount = 4 * INIT_COLLATERAL / 5;
-		const SWAPPED_PRINCIPAL: AssetAmount = SWAPPED_COLLATERAL / SWAP_RATE;
+		// Voluntary liquidation only collects the owed principal (in USD) plus the
+		// soft-slippage buffer; the rest stays in the supply pool.
+		let liquidation_input = required_collateral_with_slippage(
+			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+		);
+		// Pick a SWAPPED_COLLATERAL that fits within the liquidation input and still
+		// produces enough principal to fully repay the loan with some excess.
+		let swapped_collateral = liquidation_input - 100_000_000;
+		let swapped_principal = swapped_collateral / SWAP_RATE;
 
 		const TOTAL_TO_REPAY: AssetAmount = PRINCIPAL + ORIGINATION_FEE;
 
@@ -3838,29 +3973,32 @@ mod voluntary_liquidation {
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP,
 					SwapExecutionProgress {
-						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL,
-						accumulated_output_amount: SWAPPED_PRINCIPAL,
+						remaining_input_amount: liquidation_input - swapped_collateral,
+						accumulated_output_amount: swapped_principal,
 					},
 				);
 			})
 			.then_execute_at_next_block(|_| {
-				const EXCESS_PRINCIPAL: AssetAmount = SWAPPED_PRINCIPAL - TOTAL_TO_REPAY;
+				let excess_principal = swapped_principal - TOTAL_TO_REPAY;
+				let remaining_input = liquidation_input - swapped_collateral;
 
-				// The account is removed once the loan is settled and voluntary liquidation ends:
+				// The account is removed once the loan is settled and voluntary liquidation ends.
+				// Borrower's collateral pool position = (remainder left in the pool at init) +
+				// (remaining-input returned by the aborted swap) = INIT_COLLATERAL - SWAPPED.
 				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER)
 						.unwrap(),
-					INIT_COLLATERAL - SWAPPED_COLLATERAL
+					INIT_COLLATERAL - swapped_collateral
 				);
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(LOAN_ASSET)
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER)
 						.unwrap(),
-					EXCESS_PRINCIPAL
+					excess_principal
 				);
 
 				assert_event_sequence!(
@@ -3889,7 +4027,7 @@ mod voluntary_liquidation {
 							loan_id: LOAN_ID,
 							swap_request_id: LIQUIDATION_SWAP,
 						},
-					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL,
+					}) if amount == remaining_input,
 					RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
 						loan_id: LOAN_ID,
 						outstanding_principal: 0,
@@ -3912,6 +4050,13 @@ mod voluntary_liquidation {
 		const SWAPPED_COLLATERAL: AssetAmount = INIT_COLLATERAL / 5;
 		const SWAPPED_PRINCIPAL: AssetAmount = SWAPPED_COLLATERAL / SWAP_RATE;
 
+		// Voluntary liquidation only collects the owed principal plus the soft-slippage
+		// buffer, so the swap input is much smaller than INIT_COLLATERAL.
+		let liquidation_input = required_collateral_with_slippage(
+			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+		);
+
 		new_test_ext()
 			.with_funded_pool(INIT_POOL_AMOUNT)
 			.with_default_loan()
@@ -3923,7 +4068,7 @@ mod voluntary_liquidation {
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP,
 					SwapExecutionProgress {
-						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL,
+						remaining_input_amount: liquidation_input - SWAPPED_COLLATERAL,
 						accumulated_output_amount: SWAPPED_PRINCIPAL,
 					},
 				);
@@ -4004,6 +4149,25 @@ mod voluntary_liquidation {
 			PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1 - SWAPPED_PRINCIPAL_2 +
 				liquidation_fee;
 
+		// Each liquidation only collects the owed principal (in USD) plus the soft/voluntary
+		// slippage buffer, capped at the available collateral. With ETH at $1, the
+		// required-with-slippage value (in fine USD) equals the ETH amount we'd pull in.
+		let slippage_bps = CONFIG.soft_liquidation_max_oracle_slippage;
+		// Swap 1: voluntary, owed = (PRINCIPAL + ORIGINATION_FEE) BTC at SWAP_RATE.
+		let liquidation_input_1 = required_collateral_with_slippage(
+			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
+			slippage_bps,
+		);
+		// Swap 2: forced soft after the price spike to NEW_SWAP_RATE, owed has dropped by
+		// SWAPPED_PRINCIPAL_1 from the partial swap 1.
+		let liquidation_input_2 = required_collateral_with_slippage(
+			(PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1) * NEW_SWAP_RATE,
+			slippage_bps,
+		);
+		// Swap 3: back to voluntary at SWAP_RATE, owed = owed_after_liquidation_2.
+		let liquidation_input_3 =
+			required_collateral_with_slippage(owed_after_liquidation_2 * SWAP_RATE, slippage_bps);
+
 		// Third liquidation will result in this much extra principal (after repaying
 		// the loan in full).
 		const SWAPPED_PRINCIPAL_EXTRA: AssetAmount = PRINCIPAL / 50;
@@ -4020,7 +4184,7 @@ mod voluntary_liquidation {
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP_1,
 					SwapExecutionProgress {
-						remaining_input_amount: INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+						remaining_input_amount: liquidation_input_1 - SWAPPED_COLLATERAL_1,
 						accumulated_output_amount: SWAPPED_PRINCIPAL_1,
 					},
 				);
@@ -4065,17 +4229,24 @@ mod voluntary_liquidation {
 				// The flag is still set:
 				assert!(get_account().voluntary_liquidation_requested);
 
-				// All of collateral is still in liquidation:
-				assert!(is_zero_collateral(&get_account().get_collateral_in_supply_pools()));
+				// The new soft swap pulls only the required-with-slippage amount; the rest
+				// of the recovered collateral stays in the supply pool.
+				let pool_leftover_after_soft_init =
+					INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - liquidation_input_2;
+				assert_eq!(
+					get_account().get_collateral_in_supply_pools(),
+					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_soft_init)])
+				);
 
 				assert_eq!(
 					MockSwapRequestHandler::<Test>::get_swap_requests(),
 					BTreeMap::from([(
 						LIQUIDATION_SWAP_2,
-						mock_liquidation_swap(INIT_COLLATERAL - SWAPPED_COLLATERAL_1, 3)
+						mock_liquidation_swap(liquidation_input_2, 3)
 					)])
 				);
 
+				let swap_1_remaining = liquidation_input_1 - SWAPPED_COLLATERAL_1;
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
@@ -4097,13 +4268,13 @@ mod voluntary_liquidation {
 							loan_id: LOAN_ID,
 							swap_request_id: LIQUIDATION_SWAP_1,
 						},
-					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+					}) if amount == swap_1_remaining,
 					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						unlocked_amount,
 						action_type: SupplyRemovedActionType::SystemLiquidation
-					}) if unlocked_amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1,
+					}) if unlocked_amount == liquidation_input_2,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
 						liquidation_type: LiquidationType::Soft,
@@ -4122,8 +4293,7 @@ mod voluntary_liquidation {
 				MockSwapRequestHandler::<Test>::set_swap_request_progress(
 					LIQUIDATION_SWAP_2,
 					SwapExecutionProgress {
-						remaining_input_amount: INIT_COLLATERAL -
-							SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+						remaining_input_amount: liquidation_input_2 - SWAPPED_COLLATERAL_2,
 						accumulated_output_amount: SWAPPED_PRINCIPAL_2,
 					},
 				);
@@ -4151,8 +4321,16 @@ mod voluntary_liquidation {
 				// The flag is still set:
 				assert!(get_account().voluntary_liquidation_requested);
 
-				// All of collateral is still in liquidation:
-				assert!(is_zero_collateral(&get_account().get_collateral_in_supply_pools()));
+				// The new voluntary swap pulls only the required-with-slippage amount; the
+				// rest of the recovered collateral stays in the supply pool.
+				let pool_leftover_after_voluntary_reinit = INIT_COLLATERAL -
+					SWAPPED_COLLATERAL_1 -
+					SWAPPED_COLLATERAL_2 -
+					liquidation_input_3;
+				assert_eq!(
+					get_account().get_collateral_in_supply_pools(),
+					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_voluntary_reinit)])
+				);
 
 				// Transitioned back to voluntary liquidation via a new swap:
 				assert_eq!(
@@ -4174,13 +4352,11 @@ mod voluntary_liquidation {
 					MockSwapRequestHandler::<Test>::get_swap_requests(),
 					BTreeMap::from([(
 						LIQUIDATION_SWAP_3,
-						mock_liquidation_swap(
-							INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
-							3
-						)
+						mock_liquidation_swap(liquidation_input_3, 2)
 					)])
 				);
 
+				let swap_2_remaining = liquidation_input_2 - SWAPPED_COLLATERAL_2;
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
@@ -4203,13 +4379,13 @@ mod voluntary_liquidation {
 							loan_id: LOAN_ID,
 							swap_request_id: LIQUIDATION_SWAP_2,
 						},
-					}) if amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+					}) if amount == swap_2_remaining,
 					RuntimeEvent::LendingPools(Event::<Test>::LendingFundsRemoved {
 						lender_id: BORROWER,
 						asset: COLLATERAL_ASSET,
 						unlocked_amount,
 						action_type: SupplyRemovedActionType::SystemLiquidation
-					}) if unlocked_amount == INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - SWAPPED_COLLATERAL_2,
+					}) if unlocked_amount == liquidation_input_3,
 					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated {
 						borrower_id: BORROWER,
 						liquidation_type: LiquidationType::SoftVoluntary,
@@ -4597,8 +4773,17 @@ mod whitelisting {
 #[test]
 fn init_liquidation_swaps_test() {
 	// Test that we handle multi-asset collateral + multi-asset loans correctly in case of
-	// liquidation: each collateral asset should be split proportionally to the value of every
-	// loan (the expected ratio is 1:5 in this case)
+	// liquidation. We collect just enough collateral to cover the outstanding principal plus
+	// the (soft) max liquidation slippage, taking from each collateral asset proportionally to
+	// its share of available USD value, then split the collected collateral across the loans
+	// proportionally to the USD value of each loan (the expected loan ratio is 1:5 in this case).
+	//
+	// Loan principal: 20 BTC @ 100k = $2,000,000 + 2000 SOL @ 200 = $400,000 → $2,400,000.
+	// Soft slippage: 50 bps → required = ceil(2_400_000 * 10_000 / 9_950) = $2_412_061.
+	// Collateral: 500 ETH @ 4k = $2_000_000 + 1_000_000 USDC @ 1 = $1_000_000 → $3_000_000.
+	// Per-asset (rounded up): ETH = ceil(500 * 2_412_061 / 3_000_000) = 403,
+	// USDC = ceil(1_000_000 * 2_412_061 / 3_000_000) = 804_021.
+	// Then split per loan in 5:1 (BTC:SOL), distributing rounding remainders deterministically.
 
 	const LOAN_1: LoanId = LoanId(0);
 	const LOAN_2: LoanId = LoanId(1);
@@ -4658,7 +4843,7 @@ fn init_liquidation_swaps_test() {
 		));
 
 		let collateral = loan_account
-			.prepare_collateral_for_liquidation(&OraclePriceCache::default())
+			.prepare_collateral_for_liquidation(&OraclePriceCache::default(), LiquidationType::Soft)
 			.unwrap();
 		assert_ok!(loan_account.init_liquidation_swaps(
 			&BORROWER,
@@ -4668,10 +4853,10 @@ fn init_liquidation_swaps_test() {
 		));
 
 		let expected_swaps = [
-			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 417),
-			(SWAP_2, LOAN_2, Asset::Eth, Asset::Sol, 83),
-			(SWAP_3, LOAN_1, Asset::Usdc, Asset::Btc, 833334),
-			(SWAP_4, LOAN_2, Asset::Usdc, Asset::Sol, 166666),
+			(SWAP_1, LOAN_1, Asset::Eth, Asset::Btc, 335),
+			(SWAP_2, LOAN_2, Asset::Eth, Asset::Sol, 68),
+			(SWAP_3, LOAN_1, Asset::Usdc, Asset::Btc, 670_018),
+			(SWAP_4, LOAN_2, Asset::Usdc, Asset::Sol, 134_003),
 		]
 		.into_iter()
 		.map(|(swap_req_id, loan_id, input_asset, output_asset, input_amount)| {
@@ -5526,7 +5711,16 @@ fn can_handle_liquidation_with_zero_collateral() {
 fn same_asset_loan() {
 	const EXPANDED_PRINCIPAL: AssetAmount = PRINCIPAL / 2;
 	const SWAP_DEFICIT: AssetAmount = 1_000;
-	const SWAP_OUTPUT_AMOUNT: AssetAmount = INIT_COLLATERAL + PRINCIPAL - SWAP_DEFICIT;
+
+	// Voluntary (soft) liquidation only collects what's needed to cover the outstanding
+	// principal (PRINCIPAL + EXPANDED_PRINCIPAL + origination fees on each) plus the
+	// soft-slippage buffer. LOAN_ASSET price is 1 fine USD, so owed_usd == owed.
+	let total_origination_fee = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL) +
+		portion_of_amount(DEFAULT_ORIGINATION_FEE, EXPANDED_PRINCIPAL);
+	let liquidation_input = required_collateral_with_slippage(
+		PRINCIPAL + EXPANDED_PRINCIPAL + total_origination_fee,
+		CONFIG.soft_liquidation_max_oracle_slippage,
+	);
 
 	new_test_ext()
 		.with_funded_pool(INIT_POOL_AMOUNT)
@@ -5563,23 +5757,20 @@ fn same_asset_loan() {
 		})
 		.then_process_next_block()
 		.then_execute_with(|_| {
-			// The borrower's supply position is slightly larger than INIT_COLLATERAL + PRINCIPAL
-			// because they earn a share of the origination fees credited to the pool.
 			let swap_requests = MockSwapRequestHandler::<Test>::get_swap_requests();
 			let swap = swap_requests.get(&SwapRequestId(0)).expect("swap request not found");
 
-			// The supply/collateral position has accrued some fees. We are not particularly
-			// interested in the exact fee math, only the fact that it slightly increased:
-			assert!(swap.input_amount > INIT_COLLATERAL + PRINCIPAL);
-			assert!(swap.input_amount < INIT_COLLATERAL + PRINCIPAL + INIT_COLLATERAL / 100_000);
-			let actual_collateral = swap.input_amount;
+			// The borrower's supply position is more than enough to cover the loan, so the
+			// liquidation only requests the required-with-slippage amount. With a USD value
+			// of ~1.5B fine USD and a soft chunk size of 10B fine USD, this fits in one DCA
+			// chunk.
 			assert_eq!(
 				*swap,
 				MockSwapRequest {
 					input_asset: LOAN_ASSET,
 					output_asset: LOAN_ASSET,
-					input_amount: actual_collateral,
-					remaining_input_amount: actual_collateral,
+					input_amount: liquidation_input,
+					remaining_input_amount: liquidation_input,
 					accumulated_output_amount: 0,
 					swap_type: SwapRequestType::Regular {
 						output_action: SwapOutputAction::CreditLendingPool {
@@ -5592,15 +5783,17 @@ fn same_asset_loan() {
 					broker_fees: Default::default(),
 					origin: SwapOrigin::Internal,
 					price_limits_and_expiry: Some(SOFT_SWAP_PRICE_LIMIT),
-					dca_params: Some(DcaParameters { number_of_chunks: 3, chunk_interval: 1 }),
+					dca_params: Some(DcaParameters { number_of_chunks: 1, chunk_interval: 1 }),
 				}
 			);
+
+			let swap_output_amount = liquidation_input - SWAP_DEFICIT;
 
 			// Finish the swap
 			LendingPools::process_loan_swap_outcome(
 				SwapRequestId(0),
 				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
-				SWAP_OUTPUT_AMOUNT,
+				swap_output_amount,
 			);
 
 			// Check that the loan has been repaid and account has the correct amount left
@@ -5613,15 +5806,22 @@ fn same_asset_loan() {
 			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
 			let origination_fee =
 				portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL + EXPANDED_PRINCIPAL);
-			let expected_collateral_left =
-				SWAP_OUTPUT_AMOUNT - (PRINCIPAL + EXPANDED_PRINCIPAL + origination_fee);
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET)
-					.unwrap()
-					.get_supply_position_for_account(&BORROWER)
-					.unwrap(),
-				expected_collateral_left
-			);
+			// Borrower's final supply position = (the leftover that was never pulled into
+			// the swap) + (the swap excess after repaying loan and origination fee). The
+			// leftover equals (initial position) - (input pulled), and the excess equals
+			// (swap output) - (loan + origination_fee). This simplifies to:
+			//   initial_supply - SWAP_DEFICIT - (loan + origination_fee)
+			// plus a small share of the pool's origination-fee credits accrued while the
+			// borrower was holding most of the pool's supply.
+			let expected_collateral_left_minimum =
+				INIT_COLLATERAL + PRINCIPAL -
+					SWAP_DEFICIT - (PRINCIPAL + EXPANDED_PRINCIPAL + origination_fee);
+			let actual_supply = GeneralLendingPools::<Test>::get(LOAN_ASSET)
+				.unwrap()
+				.get_supply_position_for_account(&BORROWER)
+				.unwrap();
+			assert!(actual_supply >= expected_collateral_left_minimum);
+			assert!(actual_supply < expected_collateral_left_minimum + INIT_COLLATERAL / 100_000);
 		});
 }
 
@@ -5640,6 +5840,17 @@ mod supply_as_collateral {
 		const EXCESS_AMOUNT: AssetAmount = PRINCIPAL / 10;
 
 		const SWAPPED_PRINCIPAL: AssetAmount = PRINCIPAL + ORIGINATION_FEE + EXCESS_AMOUNT;
+
+		// This will trigger soft liquidation (LTV jumps from 75% to 93.75%).
+		const NEW_SWAP_RATE: u128 = 25;
+
+		// Soft liquidation only collects the owed principal (in USD) plus the slippage
+		// buffer; the rest stays in the supply pool.
+		let liquidation_input = required_collateral_with_slippage(
+			(PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE,
+			CONFIG.soft_liquidation_max_oracle_slippage,
+		);
+		let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
 
 		let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL + ORIGINATION_FEE);
 
@@ -5674,9 +5885,6 @@ mod supply_as_collateral {
 
 				assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
-				// This should trigger soft liquidation
-				const NEW_SWAP_RATE: u128 = 25;
-
 				// Change oracle price to trigger liquidation
 				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
 			})
@@ -5697,8 +5905,8 @@ mod supply_as_collateral {
 					MockSwapRequest {
 						input_asset: COLLATERAL_ASSET,
 						output_asset: LOAN_ASSET,
-						input_amount: INIT_COLLATERAL,
-						remaining_input_amount: INIT_COLLATERAL,
+						input_amount: liquidation_input,
+						remaining_input_amount: liquidation_input,
 						accumulated_output_amount: 0,
 						swap_type: SwapRequestType::Regular {
 							output_action: SwapOutputAction::CreditLendingPool {
@@ -5715,12 +5923,12 @@ mod supply_as_collateral {
 					}
 				);
 
-				// Check that the user no longer has funds on the supply side:
+				// The user keeps the remainder of their supply not pulled into the swap:
 				assert_eq!(
 					GeneralLendingPools::<Test>::get(COLLATERAL_ASSET)
 						.unwrap()
 						.get_supply_position_for_account(&BORROWER),
-					Err(LendingPoolError::LenderNotFoundInPool)
+					Ok(pool_remainder_after_init)
 				);
 			})
 			.then_execute_at_next_block(|_| {
