@@ -178,7 +178,7 @@ export async function doTestLpDeposits<A = []>(parentCf: ChainflipIO<A>) {
 }
 
 export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
-  await cf.all([
+  await cf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') }).all([
     // --- vault swaps ---
     (subcf) => testBitcoinVaultSwap(subcf, async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testEvmVaultSwap(subcf, 'Eth', async (txId) => setTxRiskScore(txId, 9.0)),

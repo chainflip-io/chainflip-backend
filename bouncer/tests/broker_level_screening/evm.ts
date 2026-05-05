@@ -21,7 +21,7 @@ import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
-import { ChainflipIO, fullAccountFromUri, WithLpAccount } from 'shared/utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount, WithLpAccount } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
 import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
@@ -198,14 +198,12 @@ export async function testEvm<A = []>(
   cf.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
-export async function testEvmVaultSwap<A = []>(
+export async function testEvmVaultSwap<A extends WithBrokerAccount>(
   parentCf: ChainflipIO<A>,
   sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
-  const cf = parentCf
-    .with({ account: fullAccountFromUri('//BROKER_1', 'Broker') })
-    .withChildLogger(`${sourceAsset}_BrokerLevelScreening_testEvmVaultSwap`);
+  const cf = parentCf.withChildLogger(`${sourceAsset}_BrokerLevelScreening_testEvmVaultSwap`);
 
   const chain = chainFromAsset(sourceAsset);
 
