@@ -15,10 +15,12 @@ allow_local_ip = true
 #private_key_file = "./keys/eth_private_key_file"
 
 [eth.rpc]
+ws_endpoint = "ws://localhost:8546"
 http_endpoint = "http://localhost:8545"
 
 # optional
 #[eth.backup_rpc]
+#ws_endpoint = "ws://localhost:8555"
 #http_endpoint = "http://localhost:8555"
 
 [hub.rpc]
@@ -42,10 +44,12 @@ basic_auth_password = "flip"
 # basic_auth_password = "flip"
 
 [arb.rpc]
+ws_endpoint = "ws://localhost:8548"
 http_endpoint = "http://localhost:8547"
 
 # optional
 #[arb.backup_rpc]
+#ws_endpoint = "ws://localhost:8548"
 #http_endpoint = "http://localhost:8547"
 
 [sol.rpc]
