@@ -892,8 +892,7 @@ impl_runtime_apis! {
 
 		fn cf_multiple_accounts_info(requested_roles: Option<Vec<AccountRole>>) -> Vec<RuntimeApiAccountInfoWrapper> {
 
-			// TODO: implement sweep_all functionality in pools pallet
-			// <pallet_cf_pools::Pallet<Runtime> as PoolApi>::sweep_all();
+			let _ = <pallet_cf_pools::Pallet<Runtime> as PoolApi>::sweep_all();
 
 			Self::cf_accounts().into_iter().filter_map(|(account_id, _)| {
 				let role = Self::cf_account_role(account_id.clone()).unwrap_or(AccountRole::Unregistered);

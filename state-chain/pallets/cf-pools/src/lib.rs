@@ -1141,6 +1141,10 @@ impl<T: Config> PoolApi for Pallet<T> {
 		Self::inner_sweep(Select::Single(who))
 	}
 
+	fn sweep_all() -> DispatchResult {
+		Self::inner_sweep(Select::All())
+	}
+
 	fn open_order_count(
 		who: &Self::AccountId,
 		asset_pair: &PoolPairsMap<Asset>,
