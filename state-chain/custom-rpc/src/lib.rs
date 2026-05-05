@@ -96,7 +96,7 @@ use state_chain_runtime::{
 			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
 			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
 			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RuntimeApiPenalty, SimulateSwapAdditionalOrder,
+			RpcLendingPool, RuntimeApiPenalty, ShouldSweep, SimulateSwapAdditionalOrder,
 			SimulatedSwapInformation, TradingStrategyInfo, TradingStrategyLimits,
 			TransactionScreeningEvents, ValidatorInfo, VaultAddresses, VaultSwapDetails,
 		},
@@ -896,6 +896,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
+	#[method(name = "accounts_info")]
+	fn cf_all_accounts_info(
+		&self,
+		roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>>;
 	#[method(name = "free_balances", aliases = ["cf_asset_balances"])]
 	fn cf_free_balances(
 		&self,
@@ -1984,6 +1990,14 @@ where
 		})
 	}
 
+	fn cf_all_accounts_info(
+		&self,
+		_roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>> {
+		todo!()
+	}
+
 	fn cf_account_info(
 		&self,
 		account_id: state_chain_runtime::AccountId,
@@ -2053,7 +2067,7 @@ where
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
 				} else {
-					api.cf_common_account_info(hash, &account_id)?
+					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
 				.try_map_balances(TryInto::try_into)
 				.map_err(|_| {
@@ -2129,7 +2143,7 @@ where
 								)?
 								.into()
 							} else {
-								api.cf_liquidity_provider_info(hash, account_id)?
+								api.cf_liquidity_provider_info(hash, account_id, ShouldSweep::Yes)?
 							};
 
 							let network = api.cf_network_environment(hash)?;

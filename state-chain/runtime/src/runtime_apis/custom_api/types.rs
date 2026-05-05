@@ -27,7 +27,7 @@ use cf_chains::{
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
+use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -726,4 +726,25 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.transpose()?,
 		})
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct RuntimeApiAccountInfoWrapper {
+	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
+	pub role: RuntimeApiAccountInfo,
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub enum RuntimeApiAccountInfo {
+	Unregistered,
+	Broker(Box<BrokerInfo<<Bitcoin as Chain>::ChainAccount>>),
+	LiquidityProvider(Box<LiquidityProviderInfo>),
+	Validator(Box<ValidatorInfo>),
+	Operator(Box<OperatorInfo<FlipBalance>>),
+}
+
+#[derive(Encode, Decode, TypeInfo, PartialEq)]
+pub enum ShouldSweep {
+	Yes,
+	No,
 }

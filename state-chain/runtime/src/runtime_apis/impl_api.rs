@@ -796,6 +796,7 @@ impl_runtime_apis! {
 		}
 		fn cf_common_account_info(
 			account_id: &AccountId,
+			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
@@ -805,13 +806,19 @@ impl_runtime_apis! {
 					DelegationInfo { operator, bid }
 				));
 
+			// Call optimized version if we know that we don't have to sweep
+			let asset_balances = match should_sweep {
+				ShouldSweep::Yes => AssetBalances::free_balances(account_id),
+				ShouldSweep::No => AssetBalances::free_balances_dont_sweep(account_id),
+			};
+
 			RpcAccountInfoCommonItems {
 				vanity_name: pallet_cf_account_roles::VanityNames::<Runtime>::get().get(account_id)
 					.cloned()
 					.unwrap_or_default()
 					.into(),
 				flip_balance: flip_account.total(),
-				asset_balances: AssetBalances::free_balances(account_id),
+				asset_balances,
 				bond: flip_account.bond(),
 				estimated_redeemable_balance: pallet_cf_funding::Redemption::<Runtime>::for_rpc(
 					account_id,
@@ -881,6 +888,32 @@ impl_runtime_apis! {
 					account_id,
 				),
 			}
+		}
+
+		fn cf_multiple_accounts_info(requested_roles: Option<Vec<AccountRole>>) -> Vec<RuntimeApiAccountInfoWrapper> {
+
+			// TODO: implement sweep_all functionality in pools pallet
+			// <pallet_cf_pools::Pallet<Runtime> as PoolApi>::sweep_all();
+
+			Self::cf_accounts().into_iter().filter_map(|(account_id, _)| {
+				let role = Self::cf_account_role(account_id.clone()).unwrap_or(AccountRole::Unregistered);
+
+				// only compute account info if this role was requested
+				if requested_roles.as_ref().is_none_or(|roles| roles.contains(&role)) {
+					let common_items = Self::cf_common_account_info(&account_id, ShouldSweep::No);
+					let role_specific =
+						match role {
+							AccountRole::Unregistered => RuntimeApiAccountInfo::Unregistered,
+							AccountRole::Broker => RuntimeApiAccountInfo::Broker(Box::new(Self::cf_broker_info(account_id))),
+							AccountRole::LiquidityProvider => RuntimeApiAccountInfo::LiquidityProvider(Box::new(Self::cf_liquidity_provider_info(account_id, ShouldSweep::No))),
+							AccountRole::Validator => RuntimeApiAccountInfo::Validator(Box::new(Self::cf_validator_info(&account_id))),
+							AccountRole::Operator => RuntimeApiAccountInfo::Operator(Box::new(Self::cf_operator_info(&account_id))),
+						};
+					Some(RuntimeApiAccountInfoWrapper { common_items, role: role_specific })
+				} else {
+					None
+				}
+			}).collect()
 		}
 
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
@@ -1139,12 +1172,15 @@ impl_runtime_apis! {
 
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
+			should_sweep: ShouldSweep,
 		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
-			LiquidityPools::sweep(&account_id).unwrap();
+			if should_sweep == ShouldSweep::Yes {
+				LiquidityPools::sweep(&account_id).unwrap();
+			}
 
 			LiquidityProviderInfo {
 				refund_addresses,

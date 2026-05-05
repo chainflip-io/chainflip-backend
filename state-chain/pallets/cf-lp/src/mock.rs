@@ -99,6 +99,10 @@ impl BalanceApi for MockBalanceApi {
 		})
 	}
 
+	fn free_balances_dont_sweep(who: &Self::AccountId) -> assets::any::AssetMap<AssetAmount> {
+		Self::free_balances(who)
+	}
+
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		BALANCE_MAP
 			.with(|balance_map| balance_map.borrow().get(&(who.to_owned(), asset)).cloned())
