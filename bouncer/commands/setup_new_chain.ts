@@ -119,4 +119,4 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Swaps Setup completed');
 }
 const cf = await newChainflipIO(globalLogger, []);
-await runWithTimeoutAndExit(Promise.all([setupNewChain(cf)]), 360);
+await runWithTimeoutAndExit(Promise.all([setupNewChain(cf)]), 500);
