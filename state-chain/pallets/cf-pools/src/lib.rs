@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![cfg_attr(not(feature = "std"), no_std)]
+
 use cf_amm::{
 	common::{AskBidMap, AssetPair, LimitOrder, PoolPairsMap, Side},
 	limit_orders::{self, Collected, PositionInfo},
@@ -29,6 +30,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	LpOrdersWeightsProvider, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
+use cf_utilities::selector::Select;
 use sp_runtime::Saturating;
 
 pub use cf_traits::IncreaseOrDecrease;
@@ -1136,7 +1138,7 @@ impl<T: Config> PoolApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	fn sweep(who: &T::AccountId) -> DispatchResult {
-		Self::inner_sweep(who)
+		Self::inner_sweep(Select::Single(who))
 	}
 
 	fn open_order_count(
@@ -1549,14 +1551,22 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn inner_sweep(lp: &T::AccountId) -> DispatchResult {
+	fn inner_sweep(lp_accounts: Select<T::AccountId>) -> DispatchResult {
 		// Collect to avoid undefined behaviour (See StorageMap::iter_keys documentation).
 		// Note that we read one pool at a time to optimise memory usage.
 		for asset_pair in Pools::<T>::iter_keys().collect::<Vec<_>>() {
 			let mut pool = Pools::<T>::get(asset_pair).unwrap();
 
-			if let Some(range_orders_cache) = pool.range_orders_cache.get(lp).cloned() {
+			// we keep track of whether this pool was referenced by the orders - if it wasn't,
+			// there's no point in writing the full pool structure back to memory, which is a costly
+			// operation.
+			let mut pool_possibly_mutated = false;
+
+			for (lp, range_orders_cache) in
+				lp_accounts.with_values_from_btree_map(&pool.range_orders_cache.clone())
+			{
 				for (id, range) in range_orders_cache.iter() {
+					pool_possibly_mutated = true;
 					Self::inner_update_range_order(
 						&mut pool,
 						lp,
@@ -1571,31 +1581,35 @@ impl<T: Config> Pallet<T> {
 				}
 			}
 
-			for (assets, limit_orders_cache) in pool
+			for (lp, assets, limit_orders_cache) in pool
 				.limit_orders_cache
+				.clone()
 				.as_ref()
 				.into_iter()
-				.filter_map(|(assets, limit_orders_cache)| {
-					limit_orders_cache
-						.get(lp)
-						.cloned()
-						.map(|limit_orders_cache| (assets, limit_orders_cache))
+				.flat_map(|(assets, limit_orders_cache)| {
+					lp_accounts
+						.with_values_from_btree_map(limit_orders_cache)
+						.map(move |(lp, limit_orders_cache)| (lp, assets, limit_orders_cache))
 				})
 				.collect::<Vec<_>>()
 			{
 				for (id, tick) in limit_orders_cache {
+					pool_possibly_mutated = true;
 					Self::sweep_limit_order(
 						&mut pool,
 						lp,
 						&asset_pair,
 						assets.sell_order(),
-						id,
-						tick,
+						*id,
+						*tick,
 					)?;
 				}
 			}
 
-			Pools::<T>::insert(asset_pair, pool);
+			// Only write back if the pool was indeed referenced by at least one order.
+			if pool_possibly_mutated {
+				Pools::<T>::insert(asset_pair, pool);
+			}
 		}
 
 		Ok(())
@@ -1700,7 +1714,7 @@ impl<T: Config> Pallet<T> {
 		amount_change: IncreaseOrDecrease<AssetAmount>,
 	) -> DispatchResult {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
-		Self::inner_sweep(lp)?;
+		Self::inner_sweep(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
 			let tick = match (
 				pool.limit_orders_cache[side.to_sold_pair()]
@@ -2080,7 +2094,7 @@ impl<T: Config> Pallet<T> {
 		f: F,
 	) -> Result<R, DispatchError> {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
-		Self::inner_sweep(lp)?;
+		Self::inner_sweep(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, f)
 	}
 
