@@ -26,8 +26,8 @@ import { TestContext } from 'shared/utils/test_context';
 import { getIsoTime, globalLogger } from 'shared/utils/logger';
 import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
-import { buildAndSendBtcVaultSwap } from 'shared/btc_vault_swap';
-import { executeEvmVaultSwap } from 'shared/evm_vault_swap';
+import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
+import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 import {
   ChainflipIO,

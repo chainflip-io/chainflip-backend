@@ -13,16 +13,12 @@ import {
   getContractAddress,
   amountToFineAmount,
   defaultAssetAmounts,
-  chainFromAsset,
   assetDecimals,
   getSolWhaleKeyPair,
   getSolConnection,
   sleep,
-  stateChainAssetFromAsset,
   decodeSolAddress,
-  decodeDotAddressForContract,
   observeFetch,
-  Chains,
   Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
@@ -33,7 +29,8 @@ import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import { throwError } from 'shared/utils/logger';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { SwapEndpoint } from '../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
+import { SwapEndpoint } from '../../../contract-interfaces/sol-program-idls/v1.3.0/swap_endpoint';
+import { requestSwapParameterEncoding } from './vault_swap';
 
 const createdEventAccounts: [PublicKey, boolean][] = [];
 
@@ -133,28 +130,19 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
   };
 
   cf.trace('Requesting vault swap parameter encoding');
-  const vaultSwapDetails = (await chainflip.rpc(
-    `cf_request_swap_parameter_encoding`,
+  const vaultSwapDetails = await requestSwapParameterEncoding<SolVaultSwapDetails>(
+    chainflip,
     cf.requirements.account.keypair.address,
-    stateChainAssetFromAsset(srcAsset),
-    stateChainAssetFromAsset(destAsset),
-    chainFromAsset(destAsset) === Chains.Assethub
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress,
+    srcAsset,
+    destAsset,
+    destAddress,
     brokerCommissionBps,
     extraParameters,
-    messageMetadata && {
-      message: messageMetadata.message,
-      gas_budget: messageMetadata.gasBudget,
-      ccm_additional_data: messageMetadata.ccmAdditionalData,
-    },
+    messageMetadata,
     boostFeeBps ?? 0,
     affiliateFees,
-    dcaParams && {
-      number_of_chunks: dcaParams.numberOfChunks,
-      chunk_interval: dcaParams.chunkIntervalBlocks,
-    },
-  )) as unknown as SolVaultSwapDetails;
+    dcaParams,
+  );
 
   assert.strictEqual(vaultSwapDetails.chain, 'Solana');
   assert.strictEqual(

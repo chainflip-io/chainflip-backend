@@ -1006,6 +1006,8 @@ pub enum ExecutexSwapAndCallError {
 	NoVault,
 	/// Auxiliary data required to build the transaction is not ready.
 	AuxDataNotReady,
+	/// There is no deposit channel available.
+	NoChannelAvailable,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {

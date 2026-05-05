@@ -45,7 +45,8 @@ impl Get<FixedU128> for GetOne {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const STORAGE_VERSION_U16: u16 = 4;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -62,7 +63,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// The tracked state of the external chain.

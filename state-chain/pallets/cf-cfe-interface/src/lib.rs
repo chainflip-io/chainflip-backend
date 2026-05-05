@@ -38,7 +38,8 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(0);
+pub const STORAGE_VERSION_U16: u16 = 0;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub type EventId = u64;
 
@@ -59,7 +60,7 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]

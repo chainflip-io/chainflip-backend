@@ -69,7 +69,8 @@ use sp_std::{
 pub enum Pending {
 	Pending,
 }
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const STORAGE_VERSION_U16: u16 = 4;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct PendingRedemptionInfo<FlipBalance> {
@@ -320,7 +321,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::RedemptionCheck;
+	use cf_traits::{Issuance, RedemptionCheck};
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -386,7 +387,8 @@ pub mod pallet {
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
 			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
-			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
+			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>
+			+ Issuance<Balance = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -416,7 +418,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -912,11 +914,25 @@ pub mod pallet {
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
-					caller_account_id.clone(),
-					amount.into(),
-					FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
-				),
+				EthereumDeposit::FlipToSCGateway { amount } =>
+					if !frame_system::Pallet::<T>::account_exists(&caller_account_id) &&
+						amount < MinimumFunding::<T>::get().into()
+					{
+						// Insufficient funds to create an account.
+						T::Flip::burn_offchain(amount.into());
+						Self::deposit_event(Event::FailedFundingAttempt {
+							account_id: caller_account_id,
+							withdrawal_address: caller,
+							amount: amount.into(),
+						});
+						return Ok(())
+					} else {
+						Self::fund_account(
+							caller_account_id.clone(),
+							amount.into(),
+							FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
+						)
+					},
 
 				// nothing to do
 				EthereumDeposit::NoDeposit => {},

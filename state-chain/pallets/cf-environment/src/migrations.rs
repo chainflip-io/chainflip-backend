@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Config, Pallet};
+use crate::{Config, Pallet, STORAGE_VERSION_U16};
 #[cfg(feature = "try-runtime")]
 use crate::{CurrentReleaseVersion, Get};
 use cf_runtime_utilities::PlaceholderMigration;
@@ -50,14 +50,20 @@ impl<T: Config> OnRuntimeUpgrade for VersionUpdate<T> {
 	}
 }
 
-pub type PalletMigration<T> = (PlaceholderMigration<22, Pallet<T>>,);
+pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
+
+#[cfg(test)]
+const _: u16 =
+	<PalletMigration<crate::mock::Test> as cf_runtime_utilities::MigrationSequence>::FROM;
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::{CurrentReleaseVersion, SemVer};
-
-	use crate::mock::{new_test_ext, Test};
+	use super::{Config, VersionUpdate};
+	use crate::{
+		mock::{new_test_ext, Test},
+		CurrentReleaseVersion, SemVer,
+	};
+	use frame_support::traits::OnRuntimeUpgrade;
 
 	#[test]
 	fn version_updates() {

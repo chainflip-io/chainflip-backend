@@ -1318,6 +1318,7 @@ fn lending_pools_serialization() {
 		available_amount: 1_500u128.into(),
 		owed_to_network: 155u128.into(),
 		utilisation_rate: Permill::from_percent(90),
+		utilisation_cap: Permill::from_percent(95),
 		current_interest_rate: Permill::from_percent(8),
 		config: LendingPoolConfiguration {
 			origination_fee: Permill::from_parts(100),
@@ -1414,7 +1415,7 @@ fn lending_config_serialization() {
 		minimum_loan_amount_usd: U256::from(100_000),
 		minimum_supply_amount_usd: U256::from(100_000),
 		minimum_update_loan_amount_usd: U256::from(50_000),
-		minimum_update_collateral_amount_usd: U256::from(25_000),
+		minimum_update_supply_amount_usd: U256::from(25_000),
 	};
 
 	insta::assert_json_snapshot!(config);

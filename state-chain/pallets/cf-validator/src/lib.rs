@@ -115,7 +115,8 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const STORAGE_VERSION_U16: u16 = 9;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(
@@ -189,7 +190,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -1013,6 +1014,10 @@ pub mod pallet {
 			ensure!(
 				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
+			);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
 			);
 
 			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {

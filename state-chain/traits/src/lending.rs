@@ -98,7 +98,6 @@ pub trait LendingApi {
 		borrower: Self::AccountId,
 		loan_id: LoanId,
 		extra_amount_to_borrow: AssetAmount,
-		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult;
 
 	fn new_loan(
@@ -106,24 +105,12 @@ pub trait LendingApi {
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
 		collateral_topup_asset: Option<Asset>,
-		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> Result<LoanId, DispatchError>;
 
 	fn try_making_repayment(
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
 		amount: RepaymentAmount,
-	) -> DispatchResult;
-
-	fn add_collateral(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> DispatchResult;
-
-	fn remove_collateral(
-		borrower_id: &Self::AccountId,
-		collateral: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult;
 
 	fn update_collateral_topup_asset(

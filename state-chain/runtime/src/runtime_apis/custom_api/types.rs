@@ -39,8 +39,8 @@ use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
-	before_v12, BoostConfiguration, BoostPoolDetails, LendingPoolAndSupplyPositions,
-	LendingSupplyPosition, LoanType, RpcLendingPool, RpcLiquidationStatus, RpcLoan, RpcLoanAccount,
+	BoostConfiguration, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+	LoanType, RpcLendingPool, RpcLiquidationStatus, RpcLoan, RpcLoanAccount,
 };
 pub use pallet_cf_pools::{
 	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
@@ -657,8 +657,8 @@ pub struct RpcLendingConfig {
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: U256,
-	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
-	pub minimum_update_collateral_amount_usd: U256,
+	/// Minimum equivalent amount that can be added to or removed from a lending pool supply.
+	pub minimum_update_supply_amount_usd: U256,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]

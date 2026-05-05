@@ -48,7 +48,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::address::EncodedAddress;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
+pub const STORAGE_VERSION_U16: u16 = 3;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled, internal_swaps_enabled);
 
@@ -325,7 +326,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 

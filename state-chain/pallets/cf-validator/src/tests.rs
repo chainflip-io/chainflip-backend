@@ -1943,6 +1943,49 @@ mod operator {
 			));
 		});
 	}
+
+	#[test]
+	fn max_validators_per_operator_cannot_be_bypassed_via_accept() {
+		const OP: u64 = 1001;
+		// One more than the cap, to prove the bound holds.
+		let validators: Vec<u64> =
+			(0..(MAX_VALIDATORS_PER_OPERATOR as u64 + 1)).map(|i| 2000 + i).collect();
+
+		new_test_ext().execute_with(|| {
+			assert_ok!(ValidatorPallet::register_as_operator(
+				OriginTrait::signed(OP),
+				OPERATOR_SETTINGS,
+				vanity()
+			));
+			for v in &validators {
+				assert_ok!(ValidatorPallet::register_as_validator(RuntimeOrigin::signed(*v)));
+			}
+
+			// Operator claims all validators before any of them accepts. The claim-time check
+			// reads ManagedValidators, which is still empty, so every claim passes. This is the
+			// pre-condition the bypass relies on.
+			for v in &validators {
+				assert_ok!(ValidatorPallet::claim_validator(OriginTrait::signed(OP), *v));
+			}
+
+			// The first MAX_VALIDATORS_PER_OPERATOR accepts must succeed.
+			for v in &validators[..MAX_VALIDATORS_PER_OPERATOR] {
+				assert_ok!(ValidatorPallet::accept_operator(OriginTrait::signed(*v), OP));
+			}
+			assert_eq!(ManagedValidators::<Test>::get(OP).len(), MAX_VALIDATORS_PER_OPERATOR);
+
+			// The one past the cap must be rejected at accept time.
+			assert_noop!(
+				ValidatorPallet::accept_operator(
+					OriginTrait::signed(*validators.last().unwrap()),
+					OP
+				),
+				Error::<Test>::TooManyValidators
+			);
+			assert_eq!(ManagedValidators::<Test>::get(OP).len(), MAX_VALIDATORS_PER_OPERATOR);
+		});
+	}
+
 	#[test]
 	fn validator_and_operator_can_remove_validator() {
 		new_test_ext().execute_with(|| {

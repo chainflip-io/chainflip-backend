@@ -234,7 +234,8 @@ pub enum KeyRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(7);
+pub const STORAGE_VERSION_U16: u16 = 7;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
@@ -486,7 +487,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 

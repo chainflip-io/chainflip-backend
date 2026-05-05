@@ -19,13 +19,12 @@ use crate::{
 		PolkadotAccountId, PolkadotAccountIdLookup, PolkadotProxyType, PolkadotReplayProtection,
 	},
 	hub::{
-		Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall, BalancesCall,
-		ProxyCall, UtilityCall,
+		as_derivative_u64, Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall,
+		BalancesCall, ProxyCall, UtilityCall,
 	},
 	FetchAssetParams, TransferAssetParams,
 };
 use cf_primitives::{ASSETHUB_USDC_ASSET_ID, ASSETHUB_USDT_ASSET_ID};
-use cf_utilities::SliceToArray;
 use sp_std::{boxed::Box, vec::Vec};
 
 pub fn extrinsic_builder(
@@ -78,15 +77,8 @@ fn utility_fetch(
 	fetch_param: FetchAssetParams<Assethub>,
 	vault_account: PolkadotAccountId,
 ) -> AssethubRuntimeCall {
-	let layers = fetch_param
-		.deposit_fetch_id
-		.to_be_bytes()
-		.chunks(2)
-		.map(|chunk| u16::from_be_bytes(chunk.copy_to_array::<2>()))
-		.skip_while(|layer| *layer == 0u16)
-		.collect::<Vec<u16>>();
-
-	layers.into_iter().fold(
+	as_derivative_u64(
+		fetch_param.deposit_fetch_id,
 		match fetch_param.asset {
 			cf_primitives::chains::assets::hub::Asset::HubDot =>
 				AssethubRuntimeCall::Balances(BalancesCall::transfer_all {
@@ -106,9 +98,6 @@ fn utility_fetch(
 					keep_alive: false,
 				}),
 		},
-		|call, index| {
-			AssethubRuntimeCall::Utility(UtilityCall::as_derivative { index, call: Box::new(call) })
-		},
 	)
 }
 
@@ -118,7 +107,7 @@ mod test_batch_fetch {
 	use super::*;
 	use crate::{
 		dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2},
-		hub::TEST_RUNTIME_VERSION,
+		hub::test::TEST_RUNTIME_VERSION,
 	};
 	use cf_primitives::chains::assets;
 
@@ -216,7 +205,10 @@ mod test_batch_fetch {
 				})),
 			})
 		);
+	}
 
+	#[test]
+	fn asset_is_passed_through() {
 		let fetch_param = FetchAssetParams::<Assethub> {
 			deposit_fetch_id: 1,
 			asset: assets::hub::Asset::HubUsdc,

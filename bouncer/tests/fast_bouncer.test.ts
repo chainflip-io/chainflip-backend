@@ -1,7 +1,7 @@
 import { describe } from 'vitest';
 import { testBoostingSwap } from 'tests/boost';
 import { testVaultSwap } from 'tests/vault_swap_tests';
-import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
+import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { testAllSwaps } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';

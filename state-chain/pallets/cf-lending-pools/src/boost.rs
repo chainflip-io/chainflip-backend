@@ -2,7 +2,7 @@ use cf_traits::lending::BoostFinalisationOutcome;
 
 use crate::{
 	core_lending_pool::{CoreLendingPool, CoreLoanId},
-	general_lending::{create_new_loan, fund_loan},
+	general_lending::{create_new_loan, fund_loan, OraclePriceCache},
 };
 
 use super::*;
@@ -204,7 +204,14 @@ impl<T: Config> BoostApi for Pallet<T> {
 				principal_amount: lending_pool_principal,
 			});
 
-			fund_loan::<T>(&mut loan, lending_pool_principal, pool_fee, network_fee)?;
+			fund_loan::<T>(
+				&mut loan,
+				lending_pool_principal,
+				pool_fee,
+				network_fee,
+				&OraclePriceCache::<T>::default(),
+			)?;
+
 			BoostLoans::<T>::insert(loan_id, loan);
 			Some(loan_id)
 		} else {

@@ -365,7 +365,8 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(30);
+pub const STORAGE_VERSION_U16: u16 = 30;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -747,7 +748,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -3461,7 +3462,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
+	pub fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
 		ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
 			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 			Ok(*id)

@@ -159,8 +159,9 @@ fn can_update_all_config_items() {
 		const NEW_HARD_LIQUIDATION_SWAP_CHUNK_SIZE_USD: AssetAmount = 45_000_000_000;
 		const NEW_MINIMUM_LOAN_AMOUNT_USD: AssetAmount = 12345;
 		const NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD: AssetAmount = 1234;
-		const NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD: AssetAmount = 567;
+		const NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD: AssetAmount = 567;
 		const NEW_MINIMUM_SUPPLY_AMOUNT_USD: AssetAmount = 7783;
+		const NEW_LIQUIDATION_COVERAGE_FACTOR: Percent = Percent::from_percent(75);
 
 		let update_boost_config: PalletConfigUpdate =
 			PalletConfigUpdate::SetBoostConfig { config: new_boost_config.clone() };
@@ -211,9 +212,12 @@ fn can_update_all_config_items() {
 		const UPDATE_LOAN_MINIMUMS: PalletConfigUpdate = PalletConfigUpdate::SetMinimumAmounts {
 			minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 			minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
-			minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+			minimum_update_supply_amount_usd: NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD,
 			minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 		};
+
+		const UPDATE_LIQUIDATION_COVERAGE_FACTOR: PalletConfigUpdate =
+			PalletConfigUpdate::SetLiquidationCoverageFactor(NEW_LIQUIDATION_COVERAGE_FACTOR);
 
 		// Check that the default values are different from the new ones
 		assert_ne!(BoostConfig::<Test>::get(), new_boost_config);
@@ -259,8 +263,12 @@ fn can_update_all_config_items() {
 			NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD
 		);
 		assert_ne!(
-			LendingConfig::<Test>::get().minimum_update_collateral_amount_usd,
-			NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD
+			LendingConfig::<Test>::get().minimum_update_supply_amount_usd,
+			NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD
+		);
+		assert_ne!(
+			LendingConfig::<Test>::get().liquidation_coverage_factor,
+			NEW_LIQUIDATION_COVERAGE_FACTOR
 		);
 
 		// Update all config items at the same time
@@ -278,6 +286,7 @@ fn can_update_all_config_items() {
 				UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD,
 				UPDATE_INTEREST_COLLECTION_THRESHOLD_USD,
 				UPDATE_LOAN_MINIMUMS,
+				UPDATE_LIQUIDATION_COVERAGE_FACTOR,
 			]
 			.try_into()
 			.unwrap()
@@ -303,9 +312,10 @@ fn can_update_all_config_items() {
 				fee_swap_max_oracle_slippage: NEW_ORACLE_SLIPPAGE_FEE_SWAP,
 				minimum_loan_amount_usd: NEW_MINIMUM_LOAN_AMOUNT_USD,
 				minimum_update_loan_amount_usd: NEW_MINIMUM_UPDATE_LOAN_AMOUNT_USD,
-				minimum_update_collateral_amount_usd: NEW_MINIMUM_UPDATE_COLLATERAL_AMOUNT_USD,
+				minimum_update_supply_amount_usd: NEW_MINIMUM_UPDATE_SUPPLY_AMOUNT_USD,
 				minimum_supply_amount_usd: NEW_MINIMUM_SUPPLY_AMOUNT_USD,
 				pool_config_overrides: BTreeMap::default(),
+				liquidation_coverage_factor: NEW_LIQUIDATION_COVERAGE_FACTOR,
 			}
 		);
 
@@ -338,6 +348,9 @@ fn can_update_all_config_items() {
 				update: UPDATE_LIQUIDATION_SWAP_CHUNK_SIZE_USD
 			}),
 			RuntimeEvent::LendingPools(Event::PalletConfigUpdated { update: UPDATE_LOAN_MINIMUMS }),
+			RuntimeEvent::LendingPools(Event::PalletConfigUpdated {
+				update: UPDATE_LIQUIDATION_COVERAGE_FACTOR
+			}),
 		);
 
 		// Make sure that only governance can update the config
@@ -1653,13 +1666,12 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		const USER_LOAN_ID: LoanId = LoanId(1);
 		MockBalance::credit_account(&LP, Asset::Btc, BTC_COLLATERAL);
 		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
-		assert_ok!(LendingPools::new_loan(
-			LP,
-			BOOST_ASSET,
-			PRINCIPAL,
-			None,
-			BTreeMap::from([(Asset::Btc, BTC_COLLATERAL)]),
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(LP),
+			Asset::Btc,
+			BTC_COLLATERAL,
 		));
+		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None,));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =
 		// BOOST_DEPOSIT_AMOUNT.
