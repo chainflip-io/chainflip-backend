@@ -49,7 +49,6 @@ impl AssetConverter for MockAssetConverter {
 			C::GAS_ASSET.into(),
 			required_gas.into(),
 			true,
-			false,
 		))
 		.unwrap()
 	}
@@ -59,7 +58,6 @@ impl AssetConverter for MockAssetConverter {
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,
 		_with_network_fee: bool,
-		_is_internal: bool,
 	) -> AssetAmount {
 		// The following check is copied from the implementation in the swapping pallet
 		if desired_output_amount.is_zero() {

@@ -28,7 +28,7 @@ use crate::{
 	*,
 };
 use cf_amm::{
-	common::{AskBidMap, PoolPairsMap},
+	common::{AskBidMap, AssetPair, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -46,7 +46,7 @@ use cf_chains::{
 use cf_primitives::{
 	chains::*, AccountRole, Affiliates, Asset, AssetAmount, BasisPoints, BlockNumber, BroadcastId,
 	ChannelId, DcaParameters, EpochIndex, FlipBalance, ForeignChain, IngressOrEgress,
-	NetworkEnvironment, SemVer, STABLE_ASSET,
+	NetworkEnvironment, SemVer,
 };
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, ChainflipWithTargetChain, EpochKey,
@@ -1224,8 +1224,8 @@ impl_runtime_apis! {
 		}
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
-			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
-			Swapping::get_scheduled_swap_legs(base_asset)
+			assert!(AssetPair::new(base_asset, quote_asset).is_some(), "Invalid asset pair: Pool does not exist.");
+			Swapping::get_scheduled_swap_legs(base_asset, quote_asset)
 		}
 
 		fn cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as cf_chains::Chain>::Transaction> {
@@ -2027,7 +2027,8 @@ impl_runtime_apis! {
 
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>{
 			AssetMap::from_fn(|asset| {
-				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(asset)
+				// TODO JAMIE: This currently only supports USDC pools
+				pallet_cf_swapping::Pallet::<Runtime>::default_oracle_lpp_for_asset(pallet_cf_swapping::SwapLeg{ from: asset, to: Asset::Usdc})
 			})
 		}
 

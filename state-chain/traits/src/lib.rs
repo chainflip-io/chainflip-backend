@@ -1093,7 +1093,6 @@ pub trait AssetConverter {
 			C::GAS_ASSET.into(),
 			required_gas.into(),
 			true,
-			false,
 		))
 		.unwrap_or_default()
 	}
@@ -1107,7 +1106,6 @@ pub trait AssetConverter {
 		output_asset: Asset,
 		desired_output_amount: AssetAmount,
 		with_network_fee: bool,
-		is_internal_swap: bool,
 	) -> AssetAmount;
 }
 

@@ -571,7 +571,6 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				Asset::Usdc,
 				1000,
 				false,
-				false
 			),
 			500 // 1 leg swap, so 1/2 of input
 		);
@@ -582,7 +581,6 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				Asset::Usdc,
 				1000,
 				true,
-				false
 			),
 			505 // 1 leg swap + 1% network fee
 		);
@@ -593,7 +591,6 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				Asset::Dot,
 				1000,
 				false,
-				false
 			),
 			250 // 2 leg swap, so 1/4th of input
 		);
@@ -606,7 +603,6 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 				Asset::Eth,
 				10_u128.pow(18),
 				false,
-				false
 			),
 			// So the result is half the Eth price, plus a small rounding error
 			1400 * 10_u128.pow(18) + 1
@@ -629,7 +625,6 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Eth,
 				2 * 10u128.pow(18),
 				false,
-				false
 			),
 			14_000 * 10u128.pow(18) + 1 // 2 ETH ~= 14000 FLIP plus small rounding error
 		);
@@ -642,7 +637,6 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Eth,
 				2 * 10u128.pow(18),
 				false,
-				false
 			),
 			6473989 // 2 ETH ~=  0.06473988439 BTC
 		);
@@ -654,7 +648,6 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				Asset::Eth,
 				2 * 10u128.pow(18),
 				true, // With network fee
-				false
 			),
 			6539382 // Same as above + 1% network fee
 		);
@@ -679,7 +672,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Eth,
 				2 * 10u128.pow(18),
 				false,
-				false
 			),
 			4_000 * 10u128.pow(6) + 16_000_000 // $4k + 40bps
 		);
@@ -690,7 +682,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Usdt,
 				1_000_000_000,
 				false,
-				false
 			),
 			1_000_000_000 + 600_181 // $1k + 6bps
 		);
@@ -701,7 +692,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				10u128.pow(8),
 				false,
-				false
 			),
 			15 * 10u128.pow(18) + 120481927710843374 // 15 ETH + 80bps
 		);
@@ -712,7 +702,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				10u128.pow(8),
 				true, // With network fee
-				false
 			),
 			// $30k + 40bps + 1% network fee - precision error
 			30_000_000_000 + 120_000_000 + 304242424 - 3
@@ -725,7 +714,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				10u128.pow(8),
 				false,
-				false
 			),
 			236220472441 + 944_881_890 // ~236 SOL + 40bps
 		);
@@ -738,7 +726,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				10u128.pow(8),
 				false,
-				false
 			),
 			// ~=15k + 40bps + rounding error
 			(15_000 + 60) * 10u128.pow(Asset::Flip.decimals()) + 1
@@ -752,7 +739,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Btc,
 				10u128.pow(8),
 				true, // With network fee
-				false
 			),
 			10u128.pow(8) + 1010101 // output + 1% network fee
 		);
@@ -764,7 +750,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 				Asset::Eth,
 				0,
 				true,
-				false
 			),
 			0
 		);
@@ -774,7 +759,6 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 			Asset::Eth,
 			u128::MAX,
 			true,
-			false,
 		);
 	});
 }
@@ -1157,7 +1141,7 @@ fn test_get_network_fee() {
 			let fee = Pallet::<Test>::get_network_fee_for_swap(
 				input_asset_fee.0,
 				output_asset_fee.0,
-				is_internal,
+				if is_internal { NetworkFeeType::Internal } else { NetworkFeeType::Standard },
 			);
 
 			// Check that the fee rate and minimum are as expected

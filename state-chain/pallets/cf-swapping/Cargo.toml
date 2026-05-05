@@ -38,6 +38,8 @@ sp-arithmetic = { workspace = true }
 sp-std = { workspace = true }
 sp-runtime = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
@@ -48,6 +50,7 @@ sp-core = { workspace = true, default-features = true }
 itertools = { workspace = true }
 cf-traits = { workspace = true, features = ["mocks"] }
 cf-amm-math = { workspace = true, features = ["test"] }
+proptest = { workspace = true }
 
 [features]
 default = ["std"]
@@ -69,6 +72,7 @@ std = [
 	"cf-runtime-utilities/std",
 	"itertools/use_std",
 	"pallet-cf-environment/std",
+	"strum/std",
 ]
 runtime-benchmarks = [
 	"cf-chains/runtime-benchmarks",
