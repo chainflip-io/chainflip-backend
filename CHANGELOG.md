@@ -2,11 +2,15 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
-## [2.1.14] - 2026-04-30
+## [2.1.15] - 2026-05-05
 
 ### Fixes
 
+- Prevent Bitcoin signature verification spoof.
 
+## [2.1.14] - 2026-04-30
+
+### Fixes
 
 ## [2.1.13] - 2026-04-23
 
