@@ -122,6 +122,10 @@ pub trait PoolApi {
 	/// debited from their free balance)
 	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
 
+	/// Sweeps all LP accounts. Since sweeping is expensive, it is more performant to do it once for
+	/// all accounts instead of iterating over all accounts and sweeping each on individually.
+	fn sweep_all() -> Result<(), DispatchError>;
+
 	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,

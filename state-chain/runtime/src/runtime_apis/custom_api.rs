@@ -197,7 +197,12 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_16::LiquidityProviderInfo;
-		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		// #[changed_in(16)]
+		// fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+			should_sweep: ShouldSweep,
+		) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
 		#[changed_in(10)]
@@ -345,9 +350,19 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
+		// #[changed_in(17)]
+		// fn cf_common_account_info(
+		// 	account_id: &AccountId32,
+		// ) -> RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
+			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
+		// #[changed_in(17)]
+		// fn cf_multiple_accounts_info();
+		fn cf_multiple_accounts_info(
+			roles: Option<Vec<AccountRole>>,
+		) -> Vec<RuntimeApiAccountInfoWrapper>;
 		#[changed_in(7)]
 		fn cf_active_delegations();
 		fn cf_active_delegations(
