@@ -34,7 +34,8 @@ regex = { workspace = true, optional = true }
 scale-info = { workspace = true, optional = true }
 scopeguard = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
-sp-core = { workspace = true, optional = false }
+sp-core = { workspace = true }
+sp-std = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
