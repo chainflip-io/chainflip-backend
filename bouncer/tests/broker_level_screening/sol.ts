@@ -15,7 +15,7 @@ import { getBalance } from 'shared/get_balance';
 import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
-import { ChainflipIO, fullAccountFromUri } from 'shared/utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { solanaIngressEgressTransactionRejectedByBroker } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
 import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngressEgress/depositFinalised';
 
@@ -118,13 +118,11 @@ export async function testSol<A = []>(
   cf.info(`Marked ${sourceAsset} transaction was rejected and refunded 👍.`);
 }
 
-export async function testSolVaultSwap<A = []>(
-  parentCf: ChainflipIO<A>,
+export async function testSolVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   sourceAsset: Asset,
   reportFunction: (txId: string) => Promise<void>,
 ) {
-  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
-
   const chain = chainFromAsset(sourceAsset);
   if (chain !== Chains.Solana) {
     // This should always be Sol

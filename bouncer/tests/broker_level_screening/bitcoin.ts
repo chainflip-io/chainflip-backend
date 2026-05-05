@@ -6,7 +6,7 @@ import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBtcBalance } from 'shared/get_btc_balance';
 import { getIsoTime } from 'shared/utils/logger';
 import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
-import { ChainflipIO, fullAccountFromUri, WithBrokerAccount } from 'shared/utils/chainflip_io';
+import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 
 /**
  * Observes the balance of a BTC address and returns true if the balance changes. Times out after 100 seconds and returns false if the balance does not change.
@@ -123,6 +123,7 @@ export async function testBitcoin<A = []>(
   // the deposit monitor will possibly reject transactions created by other tests, due
   // to ancestor screening. This has been a source of bouncer flakiness in the past.
   const taintedClient = await btcClientMutex.runExclusive(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reply: any = await btcClient.createWallet(`tainted-${getIsoTime()}`, false, false, '');
     if (!reply.name) {
       throw new Error(`Could not create tainted wallet, with error ${reply.warning}`);
@@ -189,12 +190,10 @@ export async function testBitcoin<A = []>(
   return [simple, sameBlockParentMarked, oldParentMarked];
 }
 
-export async function testBitcoinVaultSwap<A = []>(
-  parentCf: ChainflipIO<A>,
+export async function testBitcoinVaultSwap<A extends WithBrokerAccount>(
+  cf: ChainflipIO<A>,
   reportFunction: (txId: string) => Promise<void>,
 ) {
-  const cf = parentCf.with({ account: fullAccountFromUri('//BROKER_1', 'Broker') });
-
   // -- Test vault swap rejection --
   cf.info('Testing broker level screening for Bitcoin vault swap...');
   const btcRefundAddress = await newAssetAddress('Btc');
