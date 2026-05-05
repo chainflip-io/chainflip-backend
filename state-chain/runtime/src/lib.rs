@@ -490,7 +490,15 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = ();
+type MigrationsForV2_2 = (
+	frame_support::migrations::VersionedMigration<
+		5,
+		6,
+		NoopMigration,
+		pallet_grandpa::Pallet<Runtime>,
+		DbWeight,
+	>,
+);
 
 #[cfg(test)]
 mod test {
