@@ -22,6 +22,7 @@ pub use cf_chains::address::AddressString;
 use cf_chains::{evm::to_evm_address, CcmChannelMetadataUnchecked};
 pub use cf_primitives::{AccountRole, Affiliates, Asset, BasisPoints, ChannelId, SemVer};
 use cf_primitives::{DcaParameters, ForeignChain};
+use cf_rpc_apis::grandpa::GrandpaExtApiClient;
 use cf_rpc_types::{RebalanceOutcome, RedemptionAmount, RedemptionOutcome, RefundParametersRpc};
 use futures::{future::BoxFuture, FutureExt, TryFutureExt};
 use pallet_cf_account_roles::MAX_LENGTH_FOR_VANITY_NAME;
@@ -213,7 +214,11 @@ impl BrokerApi for StateChainClient {
 	}
 }
 #[async_trait]
-impl OperatorApi for StateChainClient {}
+impl OperatorApi for StateChainClient {
+	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient {
+		&self.base_rpc_client.raw_rpc_client
+	}
+}
 #[async_trait]
 impl ValidatorApi for StateChainClient {}
 #[async_trait]
@@ -261,7 +266,11 @@ pub trait ValidatorApi: SimpleSubmissionApi {
 }
 
 #[async_trait]
-pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi {
+pub trait OperatorApi:
+	SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseApi + StorageApi + ChainApi
+{
+	fn raw_rpc_client(&self) -> &jsonrpsee::ws_client::WsClient;
+
 	async fn request_redemption(
 		&self,
 		amount: RedemptionAmount,
@@ -345,6 +354,82 @@ pub trait OperatorApi: SignedExtrinsicApi + RotateSessionKeysApi + AuctionPhaseA
 					grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
 				},
 				proof: [0; 1].to_vec(),
+			})
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn delegate_grandpa_vote(&self) -> Result<H256> {
+		use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
+
+		let block_hash = self.latest_finalized_block().hash;
+		let account_id = self.account_id();
+
+		// Look up this validator's GRANDPA key from their registered session keys.
+		let caller_grandpa_key = self
+			.storage_map_entry::<pallet_session::pallet::NextKeys<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?
+			.map(|keys: SessionKeys| GrandpaAuthorityId::from(keys.grandpa))
+			.ok_or_else(|| anyhow!("No session keys registered. Run 'rotate' first."))?;
+
+		// Query current session index.
+		let session_index: u32 = self
+			.storage_value::<pallet_session::pallet::CurrentIndex<state_chain_runtime::Runtime>>(
+				block_hash,
+			)
+			.await?;
+
+		// Have the node's keystore sign the proof: (account_id, session_index). The node creates
+		// a GRND delegate key on demand if one doesn't already exist.
+		let signed_proof = self
+			.raw_rpc_client()
+			.sign_delegation_proof(cf_rpc_apis::grandpa::DelegationPayload {
+				account_id,
+				session_index,
+			})
+			.await
+			.map_err(|e| anyhow!("Failed to sign GRND delegation proof: {e}"))?;
+
+		let delegate_key = GrandpaAuthorityId::from(signed_proof.delegate_key);
+		let proof = sp_consensus_grandpa::AuthoritySignature::from(signed_proof.signature);
+
+		println!("Using GRND delegate key: 0x{}", hex::encode(signed_proof.delegate_key.0));
+
+		Ok(self
+			.submit_signed_extrinsic(pallet_cf_validator::Call::delegate_grandpa_vote {
+				caller_grandpa_key,
+				delegate_key,
+				proof,
+			})
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn revoke_grandpa_delegation(&self) -> Result<H256> {
+		use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
+
+		let block_hash = self.latest_finalized_block().hash;
+		let account_id = self.account_id();
+
+		let caller_grandpa_key = self
+			.storage_map_entry::<pallet_session::pallet::NextKeys<state_chain_runtime::Runtime>>(
+				block_hash,
+				&account_id,
+			)
+			.await?
+			.map(|keys: SessionKeys| GrandpaAuthorityId::from(keys.grandpa))
+			.ok_or_else(|| anyhow!("No session keys registered."))?;
+
+		Ok(self
+			.submit_signed_extrinsic(pallet_cf_validator::Call::revoke_grandpa_delegation {
+				caller_grandpa_key,
 			})
 			.await
 			.until_in_block()

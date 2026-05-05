@@ -213,6 +213,12 @@ pub enum CliCommand {
 	#[clap(about = "Rotate your session keys")]
 	Rotate,
 	#[clap(
+		about = "Delegate your GRANDPA vote - generates a delegate key on the node if no key exists and delegates the vote to it"
+	)]
+	DelegateGrandpaVote,
+	#[clap(about = "Revoke your GRANDPA vote delegation")]
+	RevokeGrandpaDelegation,
+	#[clap(
 		about = "Stop bidding, thereby stop participating in auctions. [DEPRECATED - use 'validator stop-bidding' instead]"
 	)]
 	StopBidding,

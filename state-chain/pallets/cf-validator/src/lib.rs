@@ -68,6 +68,9 @@ use sp_std::{
 
 use crate::rotation_state::RotationState;
 
+pub use pallet_grandpa::GrandpaVoteDelegation;
+use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
+
 type SessionIndex = u32;
 
 type Version = SemVer;
@@ -232,6 +235,9 @@ pub mod pallet {
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
+
+		/// GRANDPA vote delegation manager.
+		type GrandpaDelegation: GrandpaVoteDelegation;
 	}
 
 	/// Percentage of epoch we allow redemptions.
@@ -548,6 +554,12 @@ pub mod pallet {
 		TooManyValidators,
 		/// Delegation amount must be at least as large as minimum funding amount.
 		DelegationAmountBelowMinimum,
+		/// The caller's GRANDPA key does not match their session key registration.
+		GrandpaKeyOwnershipMismatch,
+		/// The delegate key proof signature is invalid.
+		InvalidDelegateProof,
+		/// Cannot rotate session keys while a GRANDPA delegation is active. Revoke first.
+		GrandpaDelegationActive,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -779,7 +791,19 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
-			T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			// Block key rotation while a GRANDPA delegation is active.
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				ensure!(
+					T::GrandpaDelegation::get_delegate(&grandpa_key).is_none(),
+					Error::<T>::GrandpaDelegationActive
+				);
+			}
+
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
 			Ok(())
 		}
@@ -897,6 +921,11 @@ pub mod pallet {
 			let validator_id = <ValidatorIdOf<T> as IsType<
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
+
+			// Revoke any active GRANDPA delegation before purging keys.
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
+			}
 
 			// This can only error if the validator didn't register any keys, in which case we want
 			// to continue with the deregistration anyway.
@@ -1383,6 +1412,75 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::WitnessingTaskRestarted { task, reporter: who.into() });
 			Ok(())
 		}
+
+		/// Delegate this validator's GRANDPA vote to a delegate key.
+		#[pallet::call_index(21)]
+		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		pub fn delegate_grandpa_vote(
+			origin: OriginFor<T>,
+			caller_grandpa_key: GrandpaAuthorityId,
+			delegate_key: GrandpaAuthorityId,
+			proof: sp_consensus_grandpa::AuthoritySignature,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
+				Error::<T>::RotationInProgress
+			);
+
+			let key_owner = pallet_session::Pallet::<T>::key_owner(
+				sp_consensus_grandpa::KEY_TYPE,
+				caller_grandpa_key.as_ref(),
+			);
+			ensure!(
+				key_owner.as_ref() == Some(validator_id),
+				Error::<T>::GrandpaKeyOwnershipMismatch
+			);
+
+			let session_index = pallet_session::Pallet::<T>::current_index();
+			let payload = (account_id, session_index).encode();
+			let delegate_pub = sp_core::ed25519::Public::from(delegate_key.clone());
+			let delegate_sig = sp_core::ed25519::Signature::from(proof);
+			ensure!(
+				RuntimePublic::verify(&delegate_pub, &payload, &delegate_sig),
+				Error::<T>::InvalidDelegateProof
+			);
+
+			T::GrandpaDelegation::add_vote_delegation(caller_grandpa_key, delegate_key)
+		}
+
+		/// Revoke this validator's GRANDPA vote delegation.
+		#[pallet::call_index(22)]
+		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		pub fn revoke_grandpa_delegation(
+			origin: OriginFor<T>,
+			caller_grandpa_key: GrandpaAuthorityId,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
+				Error::<T>::RotationInProgress
+			);
+
+			let key_owner = pallet_session::Pallet::<T>::key_owner(
+				sp_consensus_grandpa::KEY_TYPE,
+				caller_grandpa_key.as_ref(),
+			);
+			ensure!(
+				key_owner.as_ref() == Some(validator_id),
+				Error::<T>::GrandpaKeyOwnershipMismatch
+			);
+
+			T::GrandpaDelegation::remove_vote_delegation(caller_grandpa_key)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -1521,6 +1619,31 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 }
 
 impl<T: Config> Pallet<T> {
+	/// Look up a validator's GRANDPA key from their registered session keys.
+	///
+	/// Returns `None` if the validator has no session keys registered.
+	/// Panics in tests (logs in production) if session keys are registered but
+	/// the GRANDPA key cannot be decoded.
+	fn grandpa_key_for(validator_id: &ValidatorIdOf<T>) -> Option<GrandpaAuthorityId> {
+		use frame_support::sp_runtime::traits::OpaqueKeys;
+		let keys = pallet_session::Pallet::<T>::load_keys(validator_id)?;
+		let raw = keys.get_raw(sp_consensus_grandpa::KEY_TYPE);
+		if raw.is_empty() {
+			return None;
+		}
+		match GrandpaAuthorityId::decode(&mut &raw[..]) {
+			Ok(key) => Some(key),
+			Err(e) => {
+				cf_runtime_utilities::log_or_panic!(
+					"Failed to decode GRANDPA key for {:?}: {:?}",
+					validator_id,
+					e
+				);
+				None
+			},
+		}
+	}
+
 	/// Removes a validator from an operator's managed pool, cleaning up both storage items and
 	/// emitting the `ValidatorRemovedFromOperator` event. This is the single source of truth for
 	/// this operation, called from both `remove_validator` and `deregister_as_validator`.
