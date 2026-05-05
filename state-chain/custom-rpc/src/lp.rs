@@ -542,11 +542,14 @@ where
 		let account_id = self.signed_pool_client.account_id();
 		let at = Some(self.rpc_backend.client.info().finalized_hash);
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			if version < 17 {
+			if version < 16 {
 				#[expect(deprecated)]
-				api.cf_free_balances_before_version_17(hash, account_id.clone()).map(Into::into)
+				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
-				api.cf_free_balances(hash, account_id.clone())
+				api.cf_free_balances(hash, account_id)
 			}
 			.map(|balances| balances.map(Into::into))
 		})
