@@ -407,11 +407,11 @@ fn can_only_redeem_if_redemption_check_passes() {
 
 		MockRedemptionChecker::set_can_redeem(ALICE, false);
 
-		// Redeem fails of RedemptionCheck fails.
+		// Redeem fails if RedemptionCheck fails.
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
-				RedemptionAmount::Max,
+				(AMOUNT / 2).into(),
 				ETH_DUMMY_ADDR,
 				Default::default()
 			),

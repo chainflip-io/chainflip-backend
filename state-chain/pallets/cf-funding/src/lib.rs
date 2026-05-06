@@ -402,7 +402,10 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 
 		/// Provide information on current bidders
-		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+		type RedemptionChecker: RedemptionCheck<
+			ValidatorId = Self::AccountId,
+			Amount = Self::Amount,
+		>;
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
@@ -657,9 +660,6 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
-			// Not allowed to redeem if we are an active bidder in the auction phase
-			T::RedemptionChecker::ensure_can_redeem(&account_id)?;
-
 			// The redemption must be executed before a new one can be requested.
 			ensure!(
 				!PendingRedemptions::<T>::contains_key(&account_id),
@@ -686,6 +686,15 @@ pub mod pallet {
 
 			let redemption @ Redemption { redeem_amount, restricted_redeem_amount, .. } =
 				Redemption::<T>::for_redeem(&account_id, amount, &address)?;
+
+			// Block the redemption if it would push the account's balance below
+			// the amount reserved by an active delegation, or if the account is
+			// an active bidder during the auction phase.
+			T::RedemptionChecker::ensure_can_redeem_amount(
+				&account_id,
+				redemption.total_debit_amount(),
+			)?;
+
 			redemption.burn_fee()?;
 			redemption.update_restricted_balances(None)?;
 

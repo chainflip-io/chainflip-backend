@@ -147,10 +147,18 @@ pub struct MockRedemptionChecker;
 
 impl RedemptionCheck for MockRedemptionChecker {
 	type ValidatorId = AccountId;
+	type Amount = u128;
 
 	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
 		frame_support::ensure!(CanRedeem::get().get(validator_id).unwrap_or(&true), BIDDING_ERR);
 		Ok(())
+	}
+
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		_amount: Self::Amount,
+	) -> DispatchResult {
+		Self::ensure_can_redeem(validator_id)
 	}
 }
 

@@ -2436,9 +2436,10 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumS
 	}
 }
 
-impl<T: Config> RedemptionCheck for Pallet<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+impl<T: Config> Pallet<T> {
+	fn ensure_not_active_bidder_during_auction(
+		validator_id: &ValidatorIdOf<T>,
+	) -> DispatchResult {
 		if Self::is_auction_phase() {
 			ensure!(
 				!ActiveBidder::<T>::get()
@@ -2446,11 +2447,44 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 				Error::<T>::StillBidding
 			);
 		}
+		Ok(())
+	}
+}
+
+impl<T: Config> RedemptionCheck for Pallet<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	type Amount = T::Amount;
+
+	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+		Self::ensure_not_active_bidder_during_auction(validator_id)?;
 		ensure!(
 			!DelegationChoice::<T>::contains_key(validator_id.into_ref()),
 			Error::<T>::StillBidding
 		);
+		Ok(())
+	}
 
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		amount: Self::Amount,
+	) -> DispatchResult {
+		Self::ensure_not_active_bidder_during_auction(validator_id)?;
+		// A delegator may redeem from the portion of their balance that is not
+		// reserved by their stored max_bid — the amount visible to the auction
+		// (capped at max_bid) cannot drop, but funds the user never pledged
+		// remain freely redeemable.
+		if let Some((_, max_bid)) =
+			DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(
+				validator_id,
+			)) {
+			let balance = T::FundingInfo::balance(
+				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
+			);
+			ensure!(
+				balance.saturating_sub(amount) >= max_bid,
+				Error::<T>::StillBidding
+			);
+		}
 		Ok(())
 	}
 }
