@@ -113,6 +113,7 @@ pub fn simulate_swap(
 				input_asset,
 				output_asset,
 				is_internal,
+				true, // With minimum
 			);
 		max(rate * amount_to_swap, minimum)
 	} else {
@@ -150,7 +151,7 @@ pub fn simulate_swap(
 		.intermediate
 		.as_ref()
 		.map(|AssetAndAmount { asset: _, amount }| amount * number_of_chunks);
-	let output = swap.output_amount_after_fees() * number_of_chunks;
+	let output = swap.output_amount_after_fees * number_of_chunks;
 	let broker_fee = swap.broker_fee_taken * number_of_chunks;
 
 	let AmountAndFeesWithheld { amount_after_fees: output, fees_withheld: egress_fee } =

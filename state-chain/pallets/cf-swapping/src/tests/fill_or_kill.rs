@@ -376,7 +376,7 @@ fn storage_state_rolls_back_on_fok_violation(is_ccm: bool) {
 
 			// This ensures that storage from the initial failure was reverted (otherwise
 			// we would see the network fee charged more than once)
-			assert_eq!(CollectedNetworkFee::<Test>::get(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
+			assert_eq!(get_collected_network_fee(INPUT_ASSET), EXPECTED_NETWORK_FEE_AMOUNT);
 
 			assert_eq!(
 				MockSwappingApi::get_liquidity(&INPUT_ASSET),
@@ -969,6 +969,8 @@ mod oracle_swaps {
 	mod oracle_swap_calculations_with_real_world_values {
 		use cf_primitives::basis_points::SignedHundredthBasisPoints;
 
+		use crate::swap_state::{AfterBrokerFee4, SwapState};
+
 		use super::*;
 
 		// Values from an actual swap
@@ -991,9 +993,11 @@ mod oracle_swaps {
 			MockPriceFeedApi::set_price(Asset::Usdc, Some(usdc_price));
 		}
 
-		fn test_swap_state(max_oracle_price_slippage: Option<BasisPoints>) -> SwapState<Test> {
-			SwapState {
-				swap: Swap::new(
+		fn test_swap_state(
+			max_oracle_price_slippage: Option<BasisPoints>,
+		) -> SwapState<Test, AfterBrokerFee4> {
+			SwapState::new_test_state(
+				Swap::new(
 					0.into(),
 					0.into(),
 					Asset::Btc,
@@ -1008,16 +1012,15 @@ mod oracle_swaps {
 					}),
 					Default::default(),
 				),
-
-				network_fee_taken: NETWORK_FEE,
-				broker_fee_taken: BROKER_FEE,
-				intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
-				output_amount_before_fees: Some(OUTPUT_AMOUNT + BROKER_FEE),
-				output_amount_after_fees: Some(OUTPUT_AMOUNT),
-				input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
-			}
+				AfterBrokerFee4 {
+					network_fee_taken: NETWORK_FEE,
+					broker_fee_taken: BROKER_FEE,
+					intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
+					output_amount_before_fees: OUTPUT_AMOUNT + BROKER_FEE,
+					output_amount_after_fees: OUTPUT_AMOUNT,
+					input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,
+				},
+			)
 		}
 
 		#[test]
@@ -1032,10 +1035,8 @@ mod oracle_swaps {
 			new_test_ext().execute_with(|| {
 				set_prices();
 				let oracle_delta = Pallet::<Test>::get_delta_from_oracle_price(
-					INPUT_AMOUNT,
-					OUTPUT_AMOUNT,
-					Asset::Btc,
-					Asset::Eth,
+					AssetAndAmount::new(Asset::Btc, INPUT_AMOUNT),
+					AssetAndAmount::new(Asset::Eth, OUTPUT_AMOUNT),
 				)
 				.unwrap()
 				.unwrap();

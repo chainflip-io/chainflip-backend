@@ -24,6 +24,7 @@ use std::sync::LazyLock;
 
 use super::*;
 use crate::{
+	impls::BrokerDeregistrationCheck,
 	mock::{RuntimeEvent, *},
 	CollectedRejectedFunds, Error, Event, MaximumSwapAmount, Pallet, Swap, SwapOrigin, SwapType,
 };
@@ -33,11 +34,12 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	dot::PolkadotAccountId,
 	evm::Hash as H256,
-	AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked, CcmDepositMetadata,
-	CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
+	AccountOrAddress, AnyChain, CcmChannelMetadata, CcmChannelMetadataUnchecked,
+	CcmDepositMetadata, CcmDepositMetadataUnchecked, Ethereum, TransactionInIdForAnyChain,
 };
 use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber, DcaParameters, ForeignChain,
+	BASIS_POINTS_PER_MILLION, STABLE_ASSET,
 };
 use cf_test_utilities::{assert_event_sequence, assert_has_matching_event};
 use cf_traits::{
@@ -50,8 +52,8 @@ use cf_traits::{
 		pool_price_api::MockPoolPriceApi,
 		price_feed_api::MockPriceFeedApi,
 	},
-	AccountRoleRegistry, AssetConverter, Chainflip, SetSafeMode, SwapExecutionProgress,
-	INITIAL_FLIP_FUNDING,
+	AccountRoleRegistry, AssetConverter, Chainflip, ExpiryBehaviour, SetSafeMode,
+	SwapExecutionProgress, SwapRequestType, INITIAL_FLIP_FUNDING,
 };
 use frame_support::{
 	assert_noop, assert_ok,
@@ -84,6 +86,10 @@ fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 			.try_into()
 			.unwrap()
 	));
+}
+
+fn get_collected_network_fee(asset: Asset) -> AssetAmount {
+	CollectedNetworkFee::<Test>::get().get(&asset).copied().unwrap_or(0)
 }
 
 struct TestSwapParams {
@@ -651,40 +657,41 @@ fn process_all_into_stable_swaps_first() {
 			]
 		);
 
-		assert_event_sequence!(
+		assert_has_matching_event!(
 			Test,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: SwapRequestId(1),
-				egress_id: (ForeignChain::Ethereum, 1),
+				egress_id: (ForeignChain::Ethereum, _),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
+			}) if *amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+		);
+		assert_has_matching_event!(
+			Test,
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: SwapRequestId(2),
-				egress_id: (ForeignChain::Ethereum, 2),
+				egress_id: (ForeignChain::Ethereum, _),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(3), .. }),
+			}) if *amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+		);
+		assert_has_matching_event!(
+			Test,
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: SwapRequestId(3),
-				egress_id: (ForeignChain::Ethereum, 3),
+				egress_id: (ForeignChain::Ethereum, _),
 				amount,
 				..
-			}) if amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
+			}) if *amount == usdc_amount_swapped_after_fee * DEFAULT_SWAP_RATE,
+		);
+		assert_has_matching_event!(
+			Test,
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_request_id: SwapRequestId(4),
-				egress_id: (ForeignChain::Ethereum, 4),
+				egress_id: (ForeignChain::Ethereum, _),
 				amount,
 				..
-			}) if amount == usdc_amount_deposited_after_fee * DEFAULT_SWAP_RATE,
-			RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
+			}) if *amount == usdc_amount_deposited_after_fee * DEFAULT_SWAP_RATE,
 		);
 	});
 }
@@ -729,21 +736,14 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 		.then_process_blocks_until_block(PRINCIPAL_SWAP_BLOCK)
 		.then_execute_with(|_| {
 			// Swap outputs are zero
-			assert_event_sequence!(
+			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_request_id: SwapRequestId(1),
 					swap_id: SwapId(1),
-					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: 0 },
-					broker_fee: AssetAndAmount { asset: OUTPUT_ASSET, amount: 0 },
 					input: AssetAndAmount { asset: INPUT_ASSET, amount: PRINCIPAL_AMOUNT },
 					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: ZERO_AMOUNT },
-					intermediate: Some(AssetAndAmount {
-						asset: STABLE_ASSET,
-						amount: PRINCIPAL_AMOUNT
-					}),
-					oracle_delta: None,
-					oracle_delta_ex_fees: None,
+					..
 				}),
 			);
 		})
@@ -759,44 +759,43 @@ fn can_handle_swaps_with_zero_outputs() {
 	new_test_ext()
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 100, bounded_vec![]);
-			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 1, bounded_vec![]);
+			swap_with_custom_broker_fee(Asset::Usdc, Asset::Eth, 10, bounded_vec![]);
 
 			// Change the swap rate so swap output will be 0
-			SwapRate::set(0.01f64);
+			SwapRate::set(0.001f64);
 		})
 		.then_process_blocks_until_block(INIT_BLOCK + SWAP_DELAY_BLOCKS as u64)
 		.then_execute_with(|_| {
 			// Swap outputs are zero
-			assert_event_sequence!(
+			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(1),
 					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
-				}),
+				})
+			);
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
 					swap_request_id: SwapRequestId(1),
 					..
-				}),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed,
-					..
-				}),
+				})
+			);
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(2),
 					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
-				}),
+				})
+			);
+			assert_has_matching_event!(
+				Test,
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
 					swap_request_id: SwapRequestId(2),
 					..
-				}),
-				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
-					swap_request_id: SwapRequestId(2),
-					reason: SwapRequestCompletionReason::Executed,
-					..
-				}),
+				})
 			);
 
 			// Swaps are not egressed when output is 0.
@@ -1267,21 +1266,8 @@ fn test_get_scheduled_swap_legs() {
 					},
 					BLOCK
 				),
-				(
-					SwapLegInfo {
-						swap_id: SwapId(4),
-						swap_request_id: SwapRequestId(4),
-						base_asset: Asset::Flip,
-						quote_asset: Asset::Usdc,
-						side: Side::Sell,
-						amount: INIT_AMOUNT,
-						source_asset: None,
-						source_amount: None,
-						remaining_chunks: 0,
-						chunk_interval: SWAP_DELAY_BLOCKS,
-					},
-					BLOCK
-				),
+				// The order of swap 5 and 4 changed due to the swap grouping. But that doesn't
+				// matter.
 				(
 					SwapLegInfo {
 						swap_id: SwapId(5),
@@ -1292,6 +1278,21 @@ fn test_get_scheduled_swap_legs() {
 						amount: INTERMEDIATE_AMOUNT,
 						source_asset: Some(Asset::Eth),
 						source_amount: Some(INIT_AMOUNT),
+						remaining_chunks: 0,
+						chunk_interval: SWAP_DELAY_BLOCKS,
+					},
+					BLOCK
+				),
+				(
+					SwapLegInfo {
+						swap_id: SwapId(4),
+						swap_request_id: SwapRequestId(4),
+						base_asset: Asset::Flip,
+						quote_asset: Asset::Usdc,
+						side: Side::Sell,
+						amount: INIT_AMOUNT,
+						source_asset: None,
+						source_amount: None,
 						remaining_chunks: 0,
 						chunk_interval: SWAP_DELAY_BLOCKS,
 					},
@@ -1347,14 +1348,14 @@ fn test_get_scheduled_swap_legs_fallback() {
 		MockSwappingApi::set_swaps_should_fail(true);
 
 		// Only setting pool price for FLIP to make sure that the test would fail
-		// if the code tried to use the price of some other asset
+		// if the code tried to use the price of some other asset.
 		MockPoolPriceApi::set_pool_price(
 			Asset::Flip,
 			STABLE_ASSET,
 			Price::from_usd_fine_amount(PRICE),
 		);
 
-		// The order changed due to failed swaps being put after successful ones, but thats fine.
+		// The ordering changed due to swap grouping, but that doesn't matter.
 		assert_eq!(
 			Swapping::get_scheduled_swap_legs(Asset::Eth),
 			vec![
@@ -1387,7 +1388,7 @@ fn test_get_scheduled_swap_legs_fallback() {
 						chunk_interval: SWAP_DELAY_BLOCKS,
 					},
 					BLOCK
-				)
+				),
 			]
 		);
 	});
@@ -1600,41 +1601,31 @@ fn can_handle_input_and_output_being_the_stable_asset() {
 #[cfg(test)]
 mod swap_batching {
 
+	use crate::swap_state::{StageFailed, SwapState};
+
 	use super::*;
 
 	impl<T: Config> Swap<T> {
-		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T> {
-			SwapState {
-				swap: self.clone(),
-				network_fee_taken: 0,
-				broker_fee_taken: 0,
-				intermediate: stable_amount
-					.map(|amount| AssetAndAmount { asset: self.from, amount }),
-				output_amount_before_fees: None,
-				oracle_delta: None,
-				oracle_delta_ex_fees: None,
-				output_amount_after_fees: None,
-				input_amount_after_fees: self.input_amount,
-			}
+		fn to_state(&self, stable_amount: Option<AssetAmount>) -> FailedSwapState<T> {
+			SwapState::new_test_state(
+				self.clone(),
+				StageFailed { swap_amount: stable_amount.unwrap_or(self.input_amount) },
+			)
 		}
 	}
 
 	#[test]
 	fn single_swap() {
 		let swap1 = Swap::new(0.into(), 0.into(), Asset::Btc, Asset::Usdc, 1000, None, 1);
-		let mut swaps = vec![swap1.clone()];
+		let mut swaps = BTreeMap::from([(swap1.swap_id, swap1.clone())]);
 
 		let swap_states = vec![swap1.to_state(None)];
 
 		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(
-				&mut swaps,
-				&swap_states,
-				SwapLeg::ToStable
-			),
+			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_states,),
 			Some(swap1)
 		);
-		assert_eq!(swaps, vec![]);
+		assert_eq!(swaps, BTreeMap::new());
 	}
 
 	#[test]
@@ -1643,20 +1634,20 @@ mod swap_batching {
 		let swap2 = Swap::new(1.into(), 1.into(), Asset::Btc, Asset::Eth, 1000, None, 1);
 		let swap3 = Swap::new(2.into(), 2.into(), Asset::Eth, Asset::Usdc, 1000, None, 1);
 
-		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = BTreeMap::from([
+			(swap1.swap_id, swap1.clone()),
+			(swap2.swap_id, swap2.clone()),
+			(swap3.swap_id, swap3.clone()),
+		]);
 
 		// The test assumes the BTC->USDC leg failed (so swap3 is excluded from `swap_states`)
 		let swap_states = vec![swap1.to_state(None), swap2.to_state(None)];
 
 		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(
-				&mut swaps,
-				&swap_states,
-				SwapLeg::ToStable
-			),
+			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_states,),
 			Some(swap2)
 		);
-		assert_eq!(swaps, vec![swap1, swap3]);
+		assert_eq!(swaps, BTreeMap::from([(swap1.swap_id, swap1), (swap3.swap_id, swap3)]));
 	}
 
 	#[test]
@@ -1667,20 +1658,20 @@ mod swap_batching {
 		let swap2 = Swap::new(2.into(), 2.into(), Asset::Usdc, Asset::Eth, 1000, None, 1);
 		let swap3 = Swap::new(3.into(), 3.into(), Asset::Eth, Asset::Usdc, 100, None, 1);
 
-		let mut swaps = vec![swap1.clone(), swap2.clone(), swap3.clone()];
+		let mut swaps = BTreeMap::from([
+			(swap1.swap_id, swap1.clone()),
+			(swap2.swap_id, swap2.clone()),
+			(swap3.swap_id, swap3.clone()),
+		]);
 
 		// The test assumes the USDC->ETH leg failed (so swap3 is excluded from `swap_states`)
 		let swap_state = vec![swap1.to_state(Some(60000)), swap2.to_state(Some(3000))];
 
 		assert_eq!(
-			utilities::split_off_highest_impact_swap::<mock::Test>(
-				&mut swaps,
-				&swap_state,
-				SwapLeg::FromStable
-			),
+			utilities::split_off_highest_impact_swap::<mock::Test>(&mut swaps, swap_state,),
 			Some(swap1)
 		);
-		assert_eq!(swaps, vec![swap2, swap3]);
+		assert_eq!(swaps, BTreeMap::from([(swap2.swap_id, swap2), (swap3.swap_id, swap3)]));
 	}
 
 	#[test]
@@ -1740,10 +1731,7 @@ mod swap_batching {
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
 				// from swap 2):
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Usdc),
-					network_fee_rate * USDC_AMOUNT
-				);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), network_fee_rate * USDC_AMOUNT);
 
 				// Adding some more liquidity to make the other swap succeed:
 				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
@@ -1755,14 +1743,8 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Usdc),
-					network_fee_rate * USDC_AMOUNT
-				);
-				assert_eq!(
-					CollectedNetworkFee::<Test>::get(Asset::Btc),
-					network_fee_rate * BTC_AMOUNT
-				);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), network_fee_rate * USDC_AMOUNT);
+				assert_eq!(get_collected_network_fee(Asset::Btc), network_fee_rate * BTC_AMOUNT);
 			});
 	}
 
@@ -1811,7 +1793,7 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 0);
+				assert_eq!(get_collected_network_fee(Asset::Usdc), 0);
 			});
 	}
 }

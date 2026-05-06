@@ -597,6 +597,7 @@ impl<T> ApiWaitForResult<T> {
 }
 
 #[derive(
+	Copy,
 	Clone,
 	Debug,
 	PartialEq,

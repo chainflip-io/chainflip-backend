@@ -46,7 +46,9 @@ impl<T: crate::Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		let old_value = old::CollectedNetworkFee::<T>::take();
 
 		if old_value > 0 {
-			crate::CollectedNetworkFee::<T>::insert(STABLE_ASSET, old_value);
+			crate::CollectedNetworkFee::<T>::mutate(|fees| {
+				fees.insert(STABLE_ASSET, old_value);
+			});
 			log::info!(
 				"✅ Migrated CollectedNetworkFee: {} USDC inserted into per-asset map.",
 				old_value
@@ -73,7 +75,8 @@ impl<T: crate::Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		let old_value = AssetAmount::decode(&mut &state[..])
 			.map_err(|_| DispatchError::Other("Failed to decode pre-upgrade state"))?;
 
-		let migrated = crate::CollectedNetworkFee::<T>::get(Asset::Usdc);
+		let fees = crate::CollectedNetworkFee::<T>::get();
+		let migrated = fees.get(&Asset::Usdc).copied().unwrap_or(0);
 
 		ensure!(
 			migrated == old_value,
@@ -85,10 +88,7 @@ impl<T: crate::Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			"Post-upgrade: old CollectedNetworkFee StorageValue was not removed"
 		);
 
-		ensure!(
-			crate::CollectedNetworkFee::<T>::iter().count() == 1,
-			"Post-upgrade: CollectedNetworkFee contains more than just USDC"
-		);
+		ensure!(fees.len() == 1, "Post-upgrade: CollectedNetworkFee contains more than just USDC");
 
 		log::info!("✅ Post-upgrade: CollectedNetworkFee migration verified. Usdc = {}.", migrated);
 
