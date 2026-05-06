@@ -66,11 +66,15 @@ fn main() -> anyhow::Result<()> {
 
 	match exit_status_new_first.status_code {
 		engine_upgrade_utils::NO_LONGER_COMPATIBLE => {
-			bail!("You need to update your CFE. The current version of the CFE you are running is not compatible with the latest runtime update.");
+			bail!(
+				"You need to update your CFE. The current version of the CFE you are running is not compatible with the latest runtime update."
+			);
 		},
 		engine_upgrade_utils::NOT_YET_COMPATIBLE => {
 			// The new version is not compatible yet, so run the old version
-			println!("The latest version {NEW_VERSION} is not yet compatible. Running the old version {OLD_VERSION}...");
+			println!(
+				"The latest version {NEW_VERSION} is not yet compatible. Running the old version {OLD_VERSION}..."
+			);
 
 			let exit_status_old = filter_args_and_run_old(env_args)?;
 
@@ -78,7 +82,9 @@ fn main() -> anyhow::Result<()> {
 
 			// Check if we need to switch back to the new version
 			if exit_status_old.status_code == engine_upgrade_utils::NO_LONGER_COMPATIBLE {
-				println!("Switching to the new version {NEW_VERSION} after the old version {OLD_VERSION} is no longer compatible.");
+				println!(
+					"Switching to the new version {NEW_VERSION} after the old version {OLD_VERSION} is no longer compatible."
+				);
 				// Attempt to run the new version again
 				let exit_status_new = new::cfe_entrypoint(c_str_array, exit_status_old.at_block);
 				bail!("New version has exited with exit status: {:?}", exit_status_new);
@@ -140,19 +146,10 @@ mod tests {
 			format!("--eth.private_key_file={some_file}"),
 			"--eth.rpc.http_endpoint=http://localhost:8545".to_string(),
 			"--eth.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
-			"--eth.rpc.ws_endpoint=ws://localhost:8545".to_string(),
-			"--eth.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
 			// Arb
 			format!("--arb.private_key_file={some_file}"),
 			"--arb.rpc.http_endpoint=http://localhost:8545".to_string(),
 			"--arb.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
-			"--arb.rpc.ws_endpoint=ws://localhost:8545".to_string(),
-			"--arb.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
-			// Dot
-			"--dot.rpc.ws_endpoint=ws://localhost:8545".to_string(),
-			"--dot.backup_rpc.ws_endpoint=ws://localhost:8546".to_string(),
-			"--dot.rpc.http_endpoint=http://localhost:8545".to_string(),
-			"--dot.backup_rpc.http_endpoint=http://localhost:8546".to_string(),
 			// Btc
 			"--btc.rpc.http_endpoint=http://localhost:8545".to_string(),
 			"--btc.rpc.basic_auth_user=user".to_string(),

@@ -30,19 +30,13 @@ use crate::{
 		cached_rpc::EvmRetryRpcApiWithResult,
 		rpc::{EvmRpcApi, EvmSigningRpcApi},
 	},
-	retrier::{
-		Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY, MAX_SUBSCRIPTION_RETRY_DELAY,
-	},
-	settings::{NodeContainer, WsHttpEndpoints},
+	retrier::{Attempt, RequestLog, RetrierClient, MAX_RPC_RETRY_DELAY},
+	settings::{HttpEndpoint, NodeContainer},
 	witness::common::chain_source::{ChainClient, Header},
 };
 use std::{path::PathBuf, time::Duration};
 
-use super::{
-	rpc::{EvmRpcClient, EvmRpcSigningClient, ReconnectSubscriptionClient},
-	ConscientiousEvmWebsocketBlockHeaderStream,
-};
-use crate::evm::rpc::ReconnectSubscribeApi;
+use super::rpc::{EvmRpcClient, EvmRpcSigningClient};
 use cf_chains::Ethereum;
 
 use anyhow::{Context, Result};
@@ -50,7 +44,6 @@ use anyhow::{Context, Result};
 #[derive(Clone)]
 pub struct EvmRetryRpcClient<Rpc: EvmRpcApi> {
 	rpc_retry_client: RetrierClient<Rpc>,
-	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 	chain_name: &'static str,
 	witness_period: u64,
 }
@@ -64,25 +57,12 @@ pub const MAX_RETRY_FOR_WITH_RESULT: Attempt = 2;
 impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 	fn from_inner_clients<ClientFut: Future<Output = Rpc> + Send + 'static>(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<WsHttpEndpoints>,
-		expected_chain_id: U256,
 		rpc_client: ClientFut,
 		backup_rpc_client: Option<ClientFut>,
 		evm_rpc_client_name: &'static str,
-		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
 		witness_period: u64,
 	) -> Self {
-		let sub_client = ReconnectSubscriptionClient::new(
-			nodes.primary.ws_endpoint,
-			expected_chain_id,
-			chain_name,
-		);
-
-		let backup_sub_client = nodes.backup.as_ref().map(|ep| {
-			ReconnectSubscriptionClient::new(ep.ws_endpoint.clone(), expected_chain_id, chain_name)
-		});
-
 		Self {
 			rpc_retry_client: RetrierClient::new(
 				scope,
@@ -91,15 +71,6 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 				backup_rpc_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_RPC_RETRY_DELAY,
-				MAX_CONCURRENT_SUBMISSIONS,
-			),
-			sub_retry_client: RetrierClient::new(
-				scope,
-				evm_subscription_client_name,
-				futures::future::ready(sub_client),
-				backup_sub_client.map(futures::future::ready),
-				ETHERS_RPC_TIMEOUT,
-				MAX_SUBSCRIPTION_RETRY_DELAY,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
 			chain_name,
@@ -111,10 +82,9 @@ impl<Rpc: EvmRpcApi> EvmRetryRpcClient<Rpc> {
 impl EvmRetryRpcClient<EvmRpcClient> {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		nodes: NodeContainer<WsHttpEndpoints>,
+		nodes: NodeContainer<HttpEndpoint>,
 		expected_chain_id: U256,
 		evm_rpc_client_name: &'static str,
-		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
 		witness_period: u64,
 	) -> Result<Self> {
@@ -134,12 +104,9 @@ impl EvmRetryRpcClient<EvmRpcClient> {
 
 		Ok(Self::from_inner_clients(
 			scope,
-			nodes,
-			expected_chain_id,
 			rpc_client,
 			backup_rpc_client,
 			evm_rpc_client_name,
-			evm_subscription_client_name,
 			chain_name,
 			witness_period,
 		))
@@ -150,10 +117,9 @@ impl EvmRetryRpcClient<EvmRpcSigningClient> {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		private_key_file: PathBuf,
-		nodes: NodeContainer<WsHttpEndpoints>,
+		nodes: NodeContainer<HttpEndpoint>,
 		expected_chain_id: U256,
 		evm_rpc_client_name: &'static str,
-		evm_subscription_client_name: &'static str,
 		chain_name: &'static str,
 		witness_period: u64,
 	) -> Result<Self> {
@@ -179,12 +145,9 @@ impl EvmRetryRpcClient<EvmRpcSigningClient> {
 
 		Ok(Self::from_inner_clients(
 			scope,
-			nodes,
-			expected_chain_id,
 			rpc_client,
 			backup_rpc_client,
 			evm_rpc_client_name,
-			evm_subscription_client_name,
 			chain_name,
 			witness_period,
 		))
@@ -593,23 +556,6 @@ impl<Rpc: EvmSigningRpcApi> EvmRetrySigningRpcApi for EvmRetryRpcClient<Rpc> {
 }
 
 #[async_trait::async_trait]
-pub trait EvmRetrySubscribeApi {
-	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream;
-}
-
-#[async_trait::async_trait]
-impl<Rpc: EvmRpcApi> EvmRetrySubscribeApi for EvmRetryRpcClient<Rpc> {
-	async fn subscribe_blocks(&self) -> ConscientiousEvmWebsocketBlockHeaderStream {
-		self.sub_retry_client
-			.request(
-				RequestLog::new("subscribe_blocks".to_string(), None),
-				Box::pin(move |client| Box::pin(async move { client.subscribe_blocks().await })),
-			)
-			.await
-	}
-}
-
-#[async_trait::async_trait]
 impl<Rpc: EvmRpcApi> ChainClient for EvmRetryRpcClient<Rpc> {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
@@ -753,7 +699,6 @@ mod tests {
 					settings.eth.nodes,
 					U256::from(1337u64),
 					"eth_rpc",
-					"eth_subscribe_client",
 					"Ethereum",
 					Ethereum::WITNESS_PERIOD,
 				)

@@ -323,13 +323,12 @@ mod tests {
 
 	use super::*;
 
-	use chainflip_engine::constants::{ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT};
+	use chainflip_engine::constants::ETH_HTTP_ENDPOINT;
 
 	pub fn set_test_env() {
 		use std::env;
 
 		env::set_var(ETH_HTTP_ENDPOINT, "http://localhost:8545");
-		env::set_var(ETH_WS_ENDPOINT, "ws://localhost:8545");
 	}
 
 	#[test]
