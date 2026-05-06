@@ -1122,7 +1122,8 @@ pub mod pallet {
 		DepositBoosted {
 			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
-			/// Per-source amounts funded (entries present only if that source contributed).
+			/// Per-source amounts funded, including the boost fee charged by that source
+			/// (entries present only if that source contributed).
 			amounts: BTreeMap<BoostSource, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			prewitnessed_deposit_id: PrewitnessedDepositId,
@@ -1132,8 +1133,9 @@ pub mod pallet {
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
 			max_boost_fee_bps: BasisPoints,
-			// Total fee the user paid for their deposit to be boosted.
-			boost_fee: TargetChainAmount<T, I>,
+			/// Per-source boost fees the user paid for their deposit to be boosted
+			/// (entries present only if that source contributed).
+			boost_fee: BTreeMap<BoostSource, TargetChainAmount<T, I>>,
 			action: DepositAction<T, I>,
 			origin_type: DepositOriginType,
 		},
@@ -2667,9 +2669,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount.into(),
 				boost_fee,
 			) {
-				Ok(BoostOutcome { total_fee, amounts }) => {
-					let boost_fee_amount = total_fee.unique_saturated_into();
-					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
+				Ok(BoostOutcome { amounts, fees }) => {
+					let total_boost_fee: AssetAmount = fees.values().copied().sum();
+					let amount_after_boost_fee =
+						amount.saturating_sub(total_boost_fee.unique_saturated_into());
 
 					// Note that ingress fee is deducted at the time of boosting rather than the
 					// time the deposit is finalised (which allows us to perform the channel
@@ -2701,7 +2704,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						deposit_details,
 						ingress_fee,
 						max_boost_fee_bps: boost_fee,
-						boost_fee: boost_fee_amount,
+						boost_fee: fees
+							.into_iter()
+							.map(|(source, fee)| (source, fee.unique_saturated_into()))
+							.collect(),
 						action,
 						origin_type: origin.into(),
 					});

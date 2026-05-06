@@ -49,9 +49,11 @@ pub enum BoostSource {
 
 #[derive(Debug, PartialEq)]
 pub struct BoostOutcome {
-	pub total_fee: AssetAmount,
-	/// Per-source principal amounts funded (entries present only if that source contributed).
+	/// Per-source amounts funded, including the boost fee charged by that source
+	/// (entries present only if that source contributed).
 	pub amounts: BTreeMap<BoostSource, AssetAmount>,
+	/// Per-source boost fees charged (entries present only if that source contributed).
+	pub fees: BTreeMap<BoostSource, AssetAmount>,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]

@@ -124,8 +124,8 @@ impl BoostApi for MockBoostApi {
 		Self::set_available_amount(available_amount - required_amount);
 
 		Ok(BoostOutcome {
-			total_fee,
 			amounts: [(BoostSource::LendingPool, deposit_amount)].into_iter().collect(),
+			fees: [(BoostSource::LendingPool, total_fee)].into_iter().collect(),
 		})
 	}
 
