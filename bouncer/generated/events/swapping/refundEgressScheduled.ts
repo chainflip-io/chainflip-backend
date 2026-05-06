@@ -11,5 +11,4 @@ export const swappingRefundEgressScheduled = z.object({
   asset: cfPrimitivesChainsAssetsAnyAsset,
   amount: numberOrHex,
   egressFee: z.tuple([numberOrHex, cfPrimitivesChainsAssetsAnyAsset]),
-  refundFee: numberOrHex,
 });

@@ -29,8 +29,7 @@ use cf_chains::{
 	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, Polkadot, Solana,
 };
 pub use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
-	SemVer, SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId, SemVer,
 };
 pub use cf_traits::{
 	AccountInfo, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,

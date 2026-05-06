@@ -45,6 +45,7 @@ pub enum SwapType {
 	Swap,
 	NetworkFee,
 	IngressEgressFee,
+	BrokerFee,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -77,6 +78,8 @@ impl<AccountId> SwapRequestType<AccountId> {
 	pub fn into_encoded<Converter: AddressConverter>(self) -> SwapRequestTypeEncoded<AccountId> {
 		match self {
 			SwapRequestType::NetworkFee => SwapRequestTypeEncoded::NetworkFee,
+			SwapRequestType::BrokerFee { account_id } =>
+				SwapRequestTypeEncoded::BrokerFee { account_id },
 			SwapRequestType::IngressEgressFee => SwapRequestTypeEncoded::IngressEgressFee,
 			SwapRequestType::Regular { output_action } => SwapRequestTypeEncoded::Regular {
 				output_action: match output_action {
@@ -129,6 +132,7 @@ impl<AccountId> SwapRequestType<AccountId> {
 pub enum SwapRequestTypeGeneric<Address, AccountId> {
 	NetworkFee,
 	IngressEgressFee,
+	BrokerFee { account_id: AccountId },
 	Regular { output_action: SwapOutputActionGeneric<Address, AccountId> },
 	RegularNoNetworkFee { output_action: SwapOutputActionGeneric<Address, AccountId> },
 }
@@ -201,6 +205,23 @@ pub trait SwapRequestHandler {
 			input_amount,
 			Asset::Flip,
 			SwapRequestType::NetworkFee,
+			Default::default(), /* broker fees */
+			None,               /* refund params */
+			None,               /* dca params */
+			SwapOrigin::Internal,
+		)
+	}
+
+	fn init_broker_fee_swap_request(
+		input_asset: Asset,
+		input_amount: AssetAmount,
+		account_id: Self::AccountId,
+	) -> SwapRequestId {
+		Self::init_swap_request(
+			input_asset,
+			input_amount,
+			Asset::Usdc,
+			SwapRequestType::BrokerFee { account_id },
 			Default::default(), /* broker fees */
 			None,               /* refund params */
 			None,               /* dca params */

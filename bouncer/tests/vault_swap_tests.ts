@@ -19,6 +19,7 @@ import {
   WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 
 // Fee to use for the broker and affiliates
 const commissionBps = 100;
@@ -138,13 +139,13 @@ async function testFeeCollection<A = []>(
   cf.debug(`Short ID: ${shortId}`);
 
   // Setup
-  const feeAsset = Assets.Usdc;
-  const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
+  // Using an asset that is not USDC as the output asset so that the broker fees are swapped after the swap completes
+  const destAsset = inputAsset === Assets.Eth ? Assets.Flip : Assets.Eth;
   const depositAmount = defaultAssetAmounts(inputAsset);
   const { destAddress, tag } = await prepareSwap(
     parentCf.logger,
     inputAsset,
-    feeAsset,
+    destAsset,
     undefined, // addressType
     undefined, // messageMetadata
     'VaultSwapFeeTest',
@@ -158,7 +159,7 @@ async function testFeeCollection<A = []>(
   cf.debug(`Earned affiliate fees before: ${earnedAffiliateFeesBefore}`);
 
   // Do the vault swap
-  await performVaultSwap(
+  const vaultSwapParams = await performVaultSwap(
     cf.withChildLogger(tag),
     inputAsset,
     destAsset,
@@ -173,6 +174,30 @@ async function testFeeCollection<A = []>(
     [{ accountAddress: affiliateId, commissionBps }],
   );
 
+  // Wait for the broker fee swap to complete before we see the increase in earned broker fees.
+  assert.strictEqual(
+    vaultSwapParams.brokerFeeSwaps?.length,
+    2,
+    `Expected 2 broker fee swaps for vault swap, but got ${vaultSwapParams.brokerFeeSwaps?.length}`,
+  );
+  cf.debug(
+    `Waiting for both broker fee swaps to complete: ${vaultSwapParams.brokerFeeSwaps[0][1]} & ${vaultSwapParams.brokerFeeSwaps[1][1]}`,
+  );
+  await cf.stepUntilAllEventsOf({
+    mainBroker: {
+      name: 'Swapping.SwapRequestCompleted',
+      schema: swappingSwapRequestCompleted.refine(
+        (event) => event.swapRequestId === vaultSwapParams.brokerFeeSwaps?.[0][1],
+      ),
+    },
+    affiliate: {
+      name: 'Swapping.SwapRequestCompleted',
+      schema: swappingSwapRequestCompleted.refine(
+        (event) => event.swapRequestId === vaultSwapParams.brokerFeeSwaps?.[1][1],
+      ),
+    },
+  });
+
   // Check that both the broker and affiliate earned fees
   const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
   const earnedAffiliateFeesAfter = await getEarnedBrokerFees(cf.logger, affiliateId);
@@ -180,11 +205,11 @@ async function testFeeCollection<A = []>(
   cf.debug(`Earned affiliate fees after: ${earnedAffiliateFeesAfter}`);
   assert(
     earnedBrokerFeesAfter > earnedBrokerFeesBefore,
-    `No increase in earned broker fees after ${tag}(${inputAsset} -> ${destAsset}) vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
+    `No increase in earned broker fees after ${tag} vault swap: ${{ account: broker.address, commissionBps }}, ${earnedBrokerFeesBefore} -> ${earnedBrokerFeesAfter}`,
   );
   assert(
     earnedAffiliateFeesAfter > earnedAffiliateFeesBefore,
-    `No increase in earned affiliate fees after ${inputAsset} swap`,
+    `No increase in earned affiliate fees after ${tag} vault swap ${{ account: affiliateId, commissionBps }}, ${earnedAffiliateFeesBefore} -> ${earnedAffiliateFeesAfter}`,
   );
 
   return Promise.resolve([brokerAccount, affiliateId, refundAddress]);

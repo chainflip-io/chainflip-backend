@@ -80,13 +80,14 @@ pub mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub const STORAGE_VERSION_U16: u16 = 16;
+type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
+
+pub const STORAGE_VERSION_U16: u16 = 18;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
 const DEFAULT_MAX_SWAP_REQUEST_DURATION_BLOCKS: u32 = 86_400 / SECONDS_PER_BLOCK as u32; // 24 hours
-
 /// Default oracle price slippage protection when no specific value is configured.
 ///
 /// Note this only applies to assets where we have oracle prices. If we don't have an oracle
@@ -111,7 +112,7 @@ pub struct FeeTaken {
 
 enum EgressType {
 	Regular,
-	Refund { refund_fee: AssetAmount },
+	Refund,
 }
 
 #[derive(
@@ -133,11 +134,19 @@ pub struct SwapRefundParameters {
 
 #[derive(CloneNoBound, DebugNoBound)]
 pub struct SwapState<T: Config> {
-	pub swap: Swap<T>,
-	pub network_fee_taken: Option<AssetAmount>,
-	pub broker_fee_taken: Option<AssetAmount>,
-	pub stable_amount: Option<AssetAmount>,
-	pub final_output: Option<AssetAmount>,
+	swap: Swap<T>,
+	/// Always in terms of input asset
+	pub network_fee_taken: AssetAmount,
+	/// Always in terms of output asset
+	pub broker_fee_taken: AssetAmount,
+	/// Always in terms of USDC
+	pub intermediate: Option<AssetAndAmount>,
+	/// Always in terms of output asset. This is the amount before broker fees have been taken.
+	pub output_amount_before_fees: Option<AssetAmount>,
+	/// Always in terms of output asset. This is the amount after broker fees have been taken.
+	pub output_amount_after_fees: Option<AssetAmount>,
+	/// Always in terms of input asset. This is the amount after network fees have been taken.
+	pub input_amount_after_fees: AssetAmount,
 	pub oracle_delta: Option<SignedBasisPoints>,
 	pub oracle_delta_ex_fees: Option<SignedBasisPoints>,
 }
@@ -145,13 +154,19 @@ pub struct SwapState<T: Config> {
 impl<T: Config> SwapState<T> {
 	fn new(swap: Swap<T>) -> Self {
 		Self {
-			stable_amount: if swap.from == STABLE_ASSET { Some(swap.input_amount) } else { None },
-			final_output: if swap.from == swap.to { Some(swap.input_amount) } else { None },
-			network_fee_taken: None,
-			broker_fee_taken: None,
+			intermediate: if swap.from == STABLE_ASSET {
+				Some(AssetAndAmount::new(swap.from, swap.input_amount))
+			} else {
+				None
+			},
+			input_amount_after_fees: swap.input_amount,
+			output_amount_before_fees: None,
+			network_fee_taken: 0,
+			broker_fee_taken: 0,
 			swap,
 			oracle_delta: None,
 			oracle_delta_ex_fees: None,
+			output_amount_after_fees: None,
 		}
 	}
 
@@ -171,12 +186,12 @@ impl<T: Config> SwapState<T> {
 		self.swap.to
 	}
 
-	fn input_amount(&self) -> AssetAmount {
+	fn input_amount_before_fees(&self) -> AssetAmount {
 		self.swap.input_amount
 	}
 
-	fn fees_amount(&self) -> AssetAmount {
-		self.network_fee_taken.unwrap_or_default() + self.broker_fee_taken.unwrap_or_default()
+	pub fn output_amount_after_fees(&self) -> AssetAmount {
+		self.output_amount_after_fees.unwrap_or_default()
 	}
 
 	fn refund_params(&self) -> &Option<SwapRefundParameters> {
@@ -186,19 +201,23 @@ impl<T: Config> SwapState<T> {
 	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
 		match direction {
 			SwapLeg::ToStable => {
-				self.stable_amount = Some(output);
+				self.intermediate = Some(AssetAndAmount::new(STABLE_ASSET, output));
 				if self.output_asset() == STABLE_ASSET {
-					self.final_output = Some(output);
+					self.output_amount_before_fees = Some(output);
+					self.output_amount_after_fees = Some(output);
 				}
 			},
-			SwapLeg::FromStable => self.final_output = Some(output),
+			SwapLeg::FromStable => {
+				self.output_amount_before_fees = Some(output);
+				self.output_amount_after_fees = Some(output);
+			},
 		}
 	}
 
 	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
 		match direction {
-			SwapLeg::ToStable => Some(self.input_amount()),
-			SwapLeg::FromStable => self.stable_amount,
+			SwapLeg::ToStable => Some(self.input_amount_after_fees),
+			SwapLeg::FromStable => self.intermediate.as_ref().map(|a| a.amount),
 		}
 	}
 
@@ -211,20 +230,26 @@ impl<T: Config> SwapState<T> {
 		}
 	}
 
-	pub fn intermediate_amount(&self) -> Option<AssetAmount> {
-		if self.input_asset() == STABLE_ASSET || self.output_asset() == STABLE_ASSET {
-			None
+	pub fn take_network_fee(&mut self, fee_tracker: &mut NetworkFeeTracker) -> AssetAmount {
+		let FeeTaken { fee, .. } = fee_tracker.take_fee(self.input_amount_after_fees);
+		self.input_amount_after_fees.saturating_reduce(fee);
+		self.network_fee_taken.saturating_accrue(fee);
+		fee
+	}
+
+	pub fn take_broker_fees(
+		&mut self,
+		fee_tracker: &mut BrokerFeesTracker<T::AccountId>,
+	) -> AssetAmount {
+		if let Some(output) = self.output_amount_after_fees {
+			let FeeTaken { fee, remaining_amount } = fee_tracker.take_all_fees(output);
+			self.output_amount_after_fees = Some(remaining_amount);
+			self.broker_fee_taken.saturating_accrue(fee);
+			fee
 		} else {
-			self.stable_amount
+			0
 		}
 	}
-}
-
-#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-#[scale_info(skip_type_params(T))]
-pub enum FeeType<T: Config> {
-	NetworkFee(NetworkFeeTracker),
-	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
 #[derive(
@@ -241,46 +266,97 @@ pub enum FeeType<T: Config> {
 	Deserialize,
 )]
 pub struct FeeRateAndMinimum {
-	pub rate: sp_runtime::Permill,
+	pub rate: Permill,
 	pub minimum: AssetAmount,
 }
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct NetworkFeeTracker {
+	/// Fee rate and minimum in input asset terms.
 	network_fee: FeeRateAndMinimum,
-	// Total amount of stable asset that has been processed so far (before fees)
-	accumulated_stable_amount: AssetAmount,
+	/// Total amount of the input asset that has had fees taken already
+	processed_asset_amount: AssetAmount,
+	/// Total amount of fees that has been taken already in input asset terms
 	accumulated_fee: AssetAmount,
 }
 
 impl NetworkFeeTracker {
 	pub const fn new(network_fee: FeeRateAndMinimum) -> Self {
-		Self { network_fee, accumulated_stable_amount: 0, accumulated_fee: 0 }
+		Self { network_fee, processed_asset_amount: 0, accumulated_fee: 0 }
 	}
 
-	pub fn new_without_minimum(network_fee: FeeRateAndMinimum) -> Self {
+	pub fn new_without_minimum(network_fee_rate: Permill) -> Self {
 		Self {
-			network_fee: FeeRateAndMinimum { rate: network_fee.rate, minimum: 0 },
-			accumulated_stable_amount: 0,
+			network_fee: FeeRateAndMinimum { rate: network_fee_rate, minimum: 0 },
+			processed_asset_amount: 0,
 			accumulated_fee: 0,
 		}
 	}
 
-	pub fn take_fee(&mut self, stable_amount: AssetAmount) -> FeeTaken {
-		if stable_amount.is_zero() {
+	#[cfg(feature = "try-runtime")]
+	pub(crate) fn network_fee(&self) -> &FeeRateAndMinimum {
+		&self.network_fee
+	}
+
+	pub fn take_fee(&mut self, input_amount: AssetAmount) -> FeeTaken {
+		if input_amount.is_zero() {
 			return FeeTaken { remaining_amount: 0, fee: 0 };
 		}
+		self.processed_asset_amount.saturating_accrue(input_amount);
 		let calculated_fee = core::cmp::max(
-			self.network_fee.rate * (self.accumulated_stable_amount.saturating_add(stable_amount)),
+			self.network_fee.rate * self.processed_asset_amount,
 			self.network_fee.minimum,
 		);
 		let fee_taken =
-			core::cmp::min(calculated_fee.saturating_sub(self.accumulated_fee), stable_amount);
+			core::cmp::min(calculated_fee.saturating_sub(self.accumulated_fee), input_amount);
 
 		self.accumulated_fee.saturating_accrue(fee_taken);
-		self.accumulated_stable_amount.saturating_accrue(stable_amount);
 
-		FeeTaken { remaining_amount: stable_amount.saturating_sub(fee_taken), fee: fee_taken }
+		FeeTaken { remaining_amount: input_amount.saturating_sub(fee_taken), fee: fee_taken }
+	}
+}
+
+#[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub struct BrokerFeesTracker<AccountId: core::fmt::Debug + Ord> {
+	pub fee_and_accumulated: BTreeMap<Beneficiary<AccountId>, AssetAmount>,
+}
+
+impl<AccountId: core::fmt::Debug + Ord> BrokerFeesTracker<AccountId> {
+	pub fn new(beneficiaries: Beneficiaries<AccountId>) -> Self {
+		Self { fee_and_accumulated: beneficiaries.into_iter().map(|b| (b, 0)).collect() }
+	}
+
+	pub fn take_all_fees(&mut self, input_amount: AssetAmount) -> FeeTaken {
+		if input_amount.is_zero() {
+			return FeeTaken { remaining_amount: 0, fee: 0 };
+		}
+		if self.fee_and_accumulated.is_empty() {
+			return FeeTaken { remaining_amount: input_amount, fee: 0 };
+		}
+		// Sanity check: it should already not be possible to open a channel with broker fees
+		// this high, but if the total broker fee would exceed 100% we charge no broker fee
+		// instead (for simplicity):
+		let total_fee_bps = self
+			.fee_and_accumulated
+			.keys()
+			.fold(0u16, |total_bps, Beneficiary { bps, .. }| total_bps.saturating_add(*bps));
+
+		let mut total_fee = 0;
+		if total_fee_bps > ONE_AS_BASIS_POINTS {
+			return FeeTaken { remaining_amount: input_amount, fee: 0 }
+		} else {
+			self.fee_and_accumulated.iter_mut().for_each(
+				|(Beneficiary { bps, .. }, accumulated_fee)| {
+					let fee =
+						Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) * input_amount;
+					accumulated_fee.saturating_accrue(fee);
+					total_fee.saturating_accrue(fee)
+				},
+			);
+		}
+
+		assert!(total_fee <= input_amount, "Broker fee cannot be more than the amount");
+		FeeTaken { remaining_amount: input_amount.saturating_sub(total_fee), fee: total_fee }
 	}
 }
 
@@ -478,10 +554,14 @@ enum SwapRequestState<T: Config> {
 		price_limits_and_expiry: Option<PriceLimitsAndExpiry<T::AccountId>>,
 		output_action: SwapOutputAction<T::AccountId>,
 		dca_state: DcaState,
-		fees: Vec<FeeType<T>>,
+		network_fee_tracker: NetworkFeeTracker,
+		broker_fees_tracker: BrokerFeesTracker<T::AccountId>,
 	},
 	NetworkFee,
 	IngressEgressFee,
+	BrokerFee {
+		account_id: T::AccountId,
+	},
 }
 
 #[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -688,9 +768,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FlipBuyInterval<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
-	/// Network fees, in USDC terms, that have been collected and are ready to be converted to FLIP.
+	/// Network fees collected from the input asset of swaps.
 	#[pallet::storage]
-	pub type CollectedNetworkFee<T: Config> = StorageValue<_, AssetAmount, ValueQuery>;
+	pub type CollectedNetworkFee<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// The delay in blocks before retrying a previously failed swap.
 	#[pallet::storage]
@@ -807,7 +888,7 @@ pub mod pallet {
 		SwapRequested {
 			swap_request_id: SwapRequestId,
 			input_asset: Asset,
-			input_amount: AssetAmount, // includes broker fee
+			input_amount: AssetAmount, // Before network fee
 			output_asset: Asset,
 			origin: SwapOrigin<T::AccountId>,
 			request_type: SwapRequestTypeEncoded<T::AccountId>,
@@ -818,6 +899,7 @@ pub mod pallet {
 		SwapRequestCompleted {
 			swap_request_id: SwapRequestId,
 			reason: SwapRequestCompletionReason,
+			broker_fee_swaps: BTreeMap<T::AccountId, SwapRequestId>,
 		},
 		/// An new swap deposit channel has been opened.
 		SwapDepositAddressReady {
@@ -854,14 +936,13 @@ pub mod pallet {
 		SwapExecuted {
 			swap_request_id: SwapRequestId,
 			swap_id: SwapId,
-			input_asset: Asset,
-			output_asset: Asset,
-			// this amount excludes all fees (e.g. network fee, broker fee, etc.)
-			input_amount: AssetAmount,
-			network_fee: AssetAmount,
-			broker_fee: AssetAmount,
-			intermediate_amount: Option<AssetAmount>,
-			output_amount: AssetAmount,
+			// Input amount after deducting network fee
+			input: AssetAndAmount,
+			// Output amount after deducting broker fee
+			output: AssetAndAmount,
+			network_fee: AssetAndAmount,
+			broker_fee: AssetAndAmount,
+			intermediate: Option<AssetAndAmount>,
 			// Total difference between final swap output price and oracle price (including fees).
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
@@ -885,7 +966,6 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 			egress_fee: (AssetAmount, Asset),
-			refund_fee: AssetAmount,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -948,7 +1028,6 @@ pub mod pallet {
 			account_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
-			refund_fee: AssetAmount,
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate<T>,
@@ -983,6 +1062,10 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			short_id: AffiliateShortId,
 			affiliate_account_id: T::AccountId,
+		},
+		/// List of network fee swaps that were started by the periodic task.
+		NetworkFeeSwapsInitiated {
+			swap_request_ids: Vec<SwapRequestId>,
 		},
 	}
 	#[pallet::error]
@@ -1104,16 +1187,23 @@ pub mod pallet {
 			if interval.is_zero() {
 				log::debug!("Flip buy interval is zero, skipping.")
 			} else {
-				weight_used.saturating_accrue(T::DbWeight::get().reads(1));
-				if (current_block % interval).is_zero() &&
-					!CollectedNetworkFee::<T>::get().is_zero()
-				{
+				if (current_block % interval).is_zero() {
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-					CollectedNetworkFee::<T>::mutate(|collected_fee| {
-						Self::init_network_fee_swap_request(Asset::Usdc, *collected_fee);
-
-						collected_fee.set_zero();
-					});
+					let swap_request_ids: Vec<_> = CollectedNetworkFee::<T>::drain()
+						.filter_map(|(asset, amount)| {
+							if amount > 0 {
+								weight_used.saturating_accrue(
+									T::WeightInfo::init_network_fee_swap_request(),
+								);
+								Some(Self::init_network_fee_swap_request(asset, amount))
+							} else {
+								None
+							}
+						})
+						.collect();
+					if !swap_request_ids.is_empty() {
+						Self::deposit_event(Event::NetworkFeeSwapsInitiated { swap_request_ids });
+					}
 				}
 			}
 			weight_used
@@ -1831,7 +1921,7 @@ pub mod pallet {
 								// All swaps from `base_asset` have to go through the stable asset:
 								quote_asset: STABLE_ASSET,
 								side: Side::Sell,
-								amount: state.input_amount(),
+								amount: state.input_amount_after_fees,
 								source_asset: None,
 								source_amount: None,
 								remaining_chunks,
@@ -1843,29 +1933,33 @@ pub mod pallet {
 						// In case the swap is "simulated", the amount is just an estimate,
 						// so we additionally include `source_asset` and `source_amount`:
 						let (source_asset, source_amount) = if state.input_asset() != STABLE_ASSET {
-							(Some(state.input_asset()), Some(state.input_amount()))
+							(Some(state.input_asset()), Some(state.input_amount_after_fees))
 						} else {
 							(None, None)
 						};
 
-						let amount = state.stable_amount.or_else(|| {
-							// If the swap into stable asset failed, fallback to estimating the
-							// amount via pool price.
+						let amount = state
+							.intermediate
+							.as_ref()
+							.map(|intermediate| intermediate.amount)
+							.or_else(|| {
+								// If the swap into intermediate failed, fallback to estimating the
+								// amount via pool price.
 
-							// Should be able to successfully retrieve the price since the pool
-							// should exist as we wouldn't need to estimate if input asset
-							// was already STABLE_ASSET):
-							let sell_price =
-								T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
-									.ok()
-									.map(|price| price.sell)?;
+								// Should be able to successfully retrieve the price since the pool
+								// should exist as we wouldn't need to estimate if input asset
+								// was already the intermediate asset):
+								let sell_price =
+									T::PoolPriceApi::pool_price(state.input_asset(), STABLE_ASSET)
+										.ok()
+										.map(|price| price.sell)?;
 
-							Some(
-								sell_price
-									.output_amount_ceil(state.input_amount())
-									.saturated_into(),
-							)
-						})?;
+								Some(
+									sell_price
+										.output_amount_ceil(state.input_amount_after_fees)
+										.saturated_into(),
+								)
+							})?;
 
 						Some((
 							SwapLegInfo {
@@ -1920,111 +2014,121 @@ pub mod pallet {
 			Ok(())
 		}
 
-		fn take_broker_fees(
-			stable_amount: AssetAmount,
-			broker_fees: &Beneficiaries<T::AccountId>,
-		) -> FeeTaken {
-			// Sanity check: it should already not be possible to open a channel with broker fees
-			// this high, but if the total broker fee would exceed 100% we charge no broker fee
-			// instead (for simplicity):
-			let total_fee_bps =
-				broker_fees.iter().fold(0u16, |fee_accumulator, Beneficiary { bps, .. }| {
-					fee_accumulator.saturating_add(*bps)
-				});
-
-			if total_fee_bps > ONE_AS_BASIS_POINTS {
-				FeeTaken { remaining_amount: stable_amount, fee: 0 }
-			} else {
-				let total_fee = broker_fees
-					.iter()
-					.filter(|Beneficiary { account: _, bps }| *bps > 0)
-					.fold(0u128, |fee_accumulator, Beneficiary { account, bps }| {
-						let fee = Permill::from_parts(*bps as u32 * BASIS_POINTS_PER_MILLION) *
-							stable_amount;
-
-						T::BalanceApi::credit_account(account, STABLE_ASSET, fee);
-
-						fee_accumulator.saturating_add(fee)
-					});
-
-				assert!(total_fee <= stable_amount, "Broker fee cannot be more than the amount");
-
-				FeeTaken {
-					remaining_amount: stable_amount.saturating_sub(total_fee),
-					fee: total_fee,
-				}
-			}
-		}
-
-		fn swap_into_stable_taking_fees(
+		fn swap_into_stable_taking_network_fees(
 			swaps: &mut [SwapState<T>],
 		) -> Result<(), BatchExecutionError<T>> {
-			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
-
-			// Take fees as required:
-			let mut total_network_fee_taken = 0_u128;
+			let mut total_network_fee_taken = BTreeMap::<Asset, AssetAmount>::new();
 			for swap in swaps.iter_mut() {
-				debug_assert!(
-					swap.stable_amount.is_some(),
-					"All swaps should have Stable amount set here"
-				);
-
 				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
-					let fees = if let Some(swap_request) = swap_request {
+					// Get the network fee tracker from the swap request
+					let fee_tracker = if let Some(swap_request) = swap_request {
 						match &mut swap_request.state {
-							SwapRequestState::UserSwap { fees, .. } => fees,
-							SwapRequestState::IngressEgressFee =>
-							// Disposable fee tracker with no minimum
-								&mut vec![FeeType::NetworkFee(
-									NetworkFeeTracker::new_without_minimum(
-										Pallet::<T>::get_network_fee_for_swap(
-											swap.input_asset(),
-											swap.output_asset(),
-											false,
-										),
+							SwapRequestState::UserSwap { network_fee_tracker, .. } =>
+								Some(network_fee_tracker),
+							SwapRequestState::IngressEgressFee |
+							SwapRequestState::BrokerFee { .. } =>
+							// Disposable network fee tracker with no minimum
+								Some(&mut NetworkFeeTracker::new_without_minimum(
+									Pallet::<T>::get_network_fee_rate_for_swap(
+										swap.input_asset(),
+										swap.output_asset(),
+										false, // is_internal_swap
 									),
-								)],
-							SwapRequestState::NetworkFee => &mut vec![],
+								)),
+							SwapRequestState::NetworkFee => None,
 						}
 					} else {
 						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
-						&mut vec![]
+						None
 					};
 
-					for fee_type in fees.iter_mut() {
-						let remaining_amount = match fee_type {
-							FeeType::NetworkFee(fee_tracker) => {
-								let FeeTaken { remaining_amount, fee } =
-									fee_tracker.take_fee(swap.stable_amount.unwrap_or_default());
-								swap.network_fee_taken = Some(fee);
-								total_network_fee_taken.saturating_accrue(fee);
-								remaining_amount
-							},
-							FeeType::BrokerFee(beneficiaries) => {
-								let FeeTaken { remaining_amount, fee } = Self::take_broker_fees(
-									swap.stable_amount.unwrap_or_default(),
-									beneficiaries,
-								);
-								swap.broker_fee_taken = Some(fee);
-								remaining_amount
-							},
-						};
-						swap.stable_amount = Some(remaining_amount);
-					}
-
-					if swap.output_asset() == STABLE_ASSET {
-						swap.final_output = swap.stable_amount;
+					// Take the network fee from the input asset
+					if let Some(tracker) = fee_tracker {
+						let fee = swap.take_network_fee(tracker);
+						total_network_fee_taken
+							.entry(swap.input_asset())
+							.or_default()
+							.saturating_accrue(fee);
 					}
 				});
+
+				// Now that the fee is taken, we can update the swap result for a special case where
+				// the input asset is the stable asset because it will be skipped later when doing
+				// the group swap.
+				if swap.input_asset() == STABLE_ASSET {
+					swap.update_swap_result(SwapLeg::ToStable, swap.input_amount_after_fees);
+				}
 			}
 
-			if !total_network_fee_taken.is_zero() {
-				CollectedNetworkFee::<T>::mutate(|total| {
-					total.saturating_accrue(total_network_fee_taken);
+			// Accrue the total network fees taken in storage
+			for (asset, total) in total_network_fee_taken {
+				CollectedNetworkFee::<T>::mutate(asset, |collected_fee| {
+					collected_fee.saturating_accrue(total)
+				})
+			}
+
+			// Run the first leg of the swaps
+			Self::do_group_and_swap(swaps, SwapLeg::ToStable)?;
+
+			Ok(())
+		}
+
+		fn swap_from_stable_taking_broker_fees(
+			swaps: &mut [SwapState<T>],
+		) -> Result<(), BatchExecutionError<T>> {
+			// Run the second leg of the swaps
+			Self::do_group_and_swap(swaps, SwapLeg::FromStable)?;
+
+			// Take the broker fee from the output amount
+			for swap in swaps.iter_mut() {
+				if swap.output_amount_after_fees.is_none() {
+					log_or_panic!("Final output should be set after the second leg");
+				}
+
+				// Get the broker fee tracker from the swap request
+				SwapRequests::<T>::mutate(swap.swap_request_id(), |swap_request| {
+					if let Some(swap_request) = swap_request {
+						// Only user swaps have broker fees
+						if let SwapRequestState::UserSwap { broker_fees_tracker, .. } =
+							&mut swap_request.state
+						{
+							swap.take_broker_fees(broker_fees_tracker);
+						}
+					} else {
+						log_or_panic!("Swap request {} should exist", swap.swap_request_id());
+					};
 				});
 			}
 
 			Ok(())
+		}
+
+		fn start_broker_fee_swaps_or_credit(
+			fee_tracker: &BrokerFeesTracker<T::AccountId>,
+			fee_asset: Asset,
+		) -> BTreeMap<T::AccountId, SwapRequestId> {
+			if fee_asset == Asset::Usdc {
+				// No need to swap if the fee asset is already in usdc, just credit directly.
+				for (Beneficiary { account, .. }, amount) in &fee_tracker.fee_and_accumulated {
+					T::BalanceApi::credit_account(account, fee_asset, *amount)
+				}
+				return BTreeMap::new();
+			}
+
+			// For each beneficiary start a swap to convert the fee into usdc.
+			fee_tracker
+				.fee_and_accumulated
+				.iter()
+				.filter_map(|(Beneficiary { account, .. }, amount)| {
+					if *amount > 0 {
+						let fee_swap_request_id =
+							Self::init_broker_fee_swap_request(fee_asset, *amount, account.clone());
+						Some((account.clone(), fee_swap_request_id))
+					} else {
+						None
+					}
+				})
+				.collect()
 		}
 
 		/// Calculate executed price delta from the oracle price.
@@ -2064,7 +2168,7 @@ pub mod pallet {
 		pub(super) fn check_swap_price_violation(
 			swap: &SwapState<T>,
 		) -> Result<Option<SignedBasisPoints>, SwapFailureReason> {
-			let Some(final_output) = swap.final_output else {
+			let Some(output_before_fees) = swap.output_amount_before_fees else {
 				log_or_panic!("Final output should be set");
 				return Err(SwapFailureReason::LogicError);
 			};
@@ -2074,45 +2178,46 @@ pub mod pallet {
 				let min_price_output = params
 					.price_limits
 					.min_price
-					.output_amount_floor(swap.swap.input_amount)
+					.output_amount_floor(swap.input_amount_before_fees())
 					.unique_saturated_into();
-				if final_output < min_price_output {
+				if output_before_fees < min_price_output {
 					return Err(SwapFailureReason::MinPriceViolation);
 				}
 			}
 
 			// Calculate oracle delta without fees
-			if let Some(stable_amount_after_fees) = swap.stable_amount {
+			if let Some(intermediate) = &swap.intermediate {
 				// Calculate the slippage from oracle prices for both legs of the swap.
-				let to_stable_delta = if swap.input_asset() == STABLE_ASSET {
+				let to_intermediate_delta = if swap.input_asset() == intermediate.asset {
 					Some(SignedHundredthBasisPoints(0))
 				} else {
 					Self::get_delta_from_oracle_price(
-						swap.swap.input_amount,
-						stable_amount_after_fees + swap.fees_amount(),
+						swap.input_amount_after_fees,
+						intermediate.amount,
 						swap.input_asset(),
-						STABLE_ASSET,
+						intermediate.asset,
 					)?
 				};
-				let from_stable_delta = if swap.output_asset() == STABLE_ASSET {
+				let from_intermediate_delta = if swap.output_asset() == intermediate.asset {
 					Some(SignedHundredthBasisPoints(0))
 				} else {
 					Self::get_delta_from_oracle_price(
-						stable_amount_after_fees,
-						final_output,
-						STABLE_ASSET,
+						intermediate.amount,
+						output_before_fees,
+						intermediate.asset,
 						swap.output_asset(),
 					)?
 				};
 
 				// Sum the deltas or just use a single leg delta if the other leg doesn't have
 				// an oracle price.
-				let total_delta = match (to_stable_delta, from_stable_delta) {
-					(Some(to_stable), Some(from_stable)) =>
-						Some(to_stable.saturating_add(&from_stable)),
-					// Use the one sided slippage as long as that side is not USDC.
-					(Some(delta), None) if swap.input_asset() != STABLE_ASSET => Some(delta),
-					(None, Some(delta)) if swap.output_asset() != STABLE_ASSET => Some(delta),
+				let total_delta = match (to_intermediate_delta, from_intermediate_delta) {
+					(Some(to_intermediate), Some(from_intermediate)) =>
+						Some(to_intermediate.saturating_add(&from_intermediate)),
+					// Use the one sided slippage as long as that side is not the intermediate
+					// asset.
+					(Some(delta), None) if swap.input_asset() != intermediate.asset => Some(delta),
+					(None, Some(delta)) if swap.output_asset() != intermediate.asset => Some(delta),
 					_ => None,
 				};
 
@@ -2143,10 +2248,8 @@ pub mod pallet {
 			swaps: Vec<Swap<T>>,
 		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
 			let mut swaps: Vec<_> = swaps.into_iter().map(SwapState::new).collect();
-			Self::swap_into_stable_taking_fees(&mut swaps)?;
-
-			// Swap from Stable asset, and complete the swap logic.
-			Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
+			Self::swap_into_stable_taking_network_fees(&mut swaps)?;
+			Self::swap_from_stable_taking_broker_fees(&mut swaps)?;
 
 			// Successfully executed without hitting price impact limit.
 			// Now checking for FoK violations:
@@ -2158,8 +2261,8 @@ pub mod pallet {
 					Ok(oracle_delta_ex_fees) => {
 						swap.oracle_delta_ex_fees = oracle_delta_ex_fees;
 						swap.oracle_delta = Self::get_delta_from_oracle_price(
-							swap.input_amount(),
-							swap.final_output.unwrap_or(0),
+							swap.input_amount_before_fees(),
+							swap.output_amount_after_fees(),
 							swap.input_asset(),
 							swap.output_asset(),
 						)
@@ -2191,8 +2294,9 @@ pub mod pallet {
 			input_asset: Asset,
 			output_asset: Asset,
 			amount: AssetAmount,
-			fees: Vec<FeeType<T>>,
-		) -> Result<Vec<SwapState<T>>, BatchExecutionError<T>> {
+			network_fee: FeeRateAndMinimum,
+			broker_fees: Beneficiaries<T::AccountId>,
+		) -> Result<SwapState<T>, BatchExecutionError<T>> {
 			with_transaction_unchecked(|| {
 				TransactionOutcome::Rollback({
 					const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(0);
@@ -2216,7 +2320,8 @@ pub mod pallet {
 								chunk_interval: SWAP_DELAY_BLOCKS,
 								accumulated_output_amount: 0,
 							},
-							fees,
+							network_fee_tracker: NetworkFeeTracker::new(network_fee),
+							broker_fees_tracker: BrokerFeesTracker::new(broker_fees),
 						},
 					};
 					SwapRequests::<T>::insert(SWAP_REQUEST_ID, swap_request);
@@ -2231,7 +2336,14 @@ pub mod pallet {
 						None,               // Refund params
 						Default::default(), // Execution block
 					);
-					Self::try_execute_without_violations(vec![swap])
+
+					// We expect to get exactly one swap back if the execution is successful.
+					Self::try_execute_without_violations(vec![swap]).and_then(|swaps| {
+						swaps
+							.into_iter()
+							.next()
+							.ok_or(DispatchError::Other("Unexpected empty swap result").into())
+					})
 				})
 			})
 		}
@@ -2310,11 +2422,12 @@ pub mod pallet {
 				return;
 			};
 
-			match &mut request.state {
+			let broker_fee_swaps = match &mut request.state {
 				SwapRequestState::UserSwap {
 					output_action,
 					price_limits_and_expiry,
 					dca_state,
+					broker_fees_tracker,
 					..
 				} => {
 					let Some(ExpiryBehaviour::RefundIfExpires {
@@ -2343,31 +2456,17 @@ pub mod pallet {
 					let total_input_remaining = swap.input_amount +
 						dca_state.remaining_input_amount +
 						canceled_swaps_amount;
-					let FeeTaken { remaining_amount: amount_to_refund, fee: refund_fee } =
-						match Self::take_refund_fee(
-							total_input_remaining,
-							request.input_asset,
-							matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-						) {
-							Ok(fee_taken) => fee_taken,
-							Err(e) => {
-								log_or_panic!(
-								"Failed to calculate refund fee for swap request {swap_request_id}: {e:?}"
-							);
-								FeeTaken { remaining_amount: total_input_remaining, fee: 0 }
-							},
-						};
 
-					if amount_to_refund > 0 {
+					if total_input_remaining > 0 {
 						match refund_address {
 							AccountOrAddress::ExternalAddress(address) => {
 								Self::egress_for_swap(
 									request.id,
-									amount_to_refund,
+									total_input_remaining,
 									request.input_asset,
 									address.clone(),
 									refund_ccm_metadata.clone(),
-									EgressType::Refund { refund_fee },
+									EgressType::Refund,
 								);
 							},
 							AccountOrAddress::InternalAccount(account_id) => {
@@ -2375,14 +2474,13 @@ pub mod pallet {
 									swap_request_id,
 									account_id: account_id.clone(),
 									asset: request.input_asset,
-									amount: amount_to_refund,
-									refund_fee,
+									amount: total_input_remaining,
 								});
 
 								T::BalanceApi::credit_account(
 									account_id,
 									request.input_asset,
-									amount_to_refund,
+									total_input_remaining,
 								);
 							},
 						}
@@ -2390,7 +2488,7 @@ pub mod pallet {
 						Self::deposit_event(Event::<T>::RefundEgressIgnored {
 							swap_request_id,
 							asset: request.input_asset,
-							amount: amount_to_refund,
+							amount: total_input_remaining,
 							reason: DispatchError::from(Error::<T>::NoRefundAmountRemaining),
 						});
 					}
@@ -2431,16 +2529,24 @@ pub mod pallet {
 							},
 						}
 					}
+
+					// Start swaps for any accumulated broker fees
+					Self::start_broker_fee_swaps_or_credit(
+						broker_fees_tracker,
+						request.output_asset,
+					)
 				},
 				non_refundable_request => {
 					log_or_panic!(
 						"Refund for swap request is not supported: {non_refundable_request:?}"
 					);
+					Default::default()
 				},
 			};
 			Self::deposit_event(Event::<T>::SwapRequestCompleted {
 				swap_request_id: request.id,
 				reason: SwapRequestCompletionReason::Expired,
+				broker_fee_swaps,
 			});
 		}
 
@@ -2467,7 +2573,7 @@ pub mod pallet {
 				return;
 			};
 
-			let Some(output_amount) = swap.final_output else {
+			let Some(output_amount) = swap.output_amount_after_fees else {
 				log_or_panic!("Swap {} is not completed yet!", swap.swap_id());
 				return;
 			};
@@ -2475,32 +2581,21 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::SwapExecuted {
 				swap_request_id,
 				swap_id: swap.swap_id(),
-				// To be consistent with `swap_output` and `intermediate_amount` (which do
-				// not include the network fee), we report input amount without the network fee
-				// for swaps from STABLE_ASSET:
-				input_amount: if swap.input_asset() == STABLE_ASSET {
-					swap.stable_amount.unwrap_or_else(|| {
-						log_or_panic!("stable amount must be set for swaps from STABLE_ASSET");
-						swap.input_amount()
-					})
-				} else {
-					swap.input_amount()
-				},
-				input_asset: swap.input_asset(),
-				network_fee: swap.network_fee_taken.unwrap_or_default(),
-				broker_fee: swap.broker_fee_taken.unwrap_or_default(),
-				output_asset: swap.output_asset(),
-				output_amount,
-				intermediate_amount: swap.intermediate_amount(),
+				input: AssetAndAmount::new(swap.input_asset(), swap.input_amount_after_fees),
+				network_fee: AssetAndAmount::new(swap.input_asset(), swap.network_fee_taken),
+				broker_fee: AssetAndAmount::new(swap.output_asset(), swap.broker_fee_taken),
+				output: AssetAndAmount::new(swap.output_asset(), output_amount),
+				intermediate: swap.intermediate.clone(),
 				oracle_delta: swap.oracle_delta,
 				oracle_delta_ex_fees: swap.oracle_delta_ex_fees,
 			});
 
-			let request_completed = match &mut request.state {
+			let (request_completed, broker_fee_swaps) = match &mut request.state {
 				SwapRequestState::UserSwap {
 					output_action,
 					dca_state,
 					price_limits_and_expiry,
+					broker_fees_tracker,
 					..
 				} =>
 					if let Some(chunk_input_amount) = dca_state.calculate_next_chunk() {
@@ -2520,7 +2615,7 @@ pub mod pallet {
 						dca_state.record_scheduled_chunk(swap_id, chunk_input_amount);
 						dca_state.record_chunk_completion(swap.swap_id(), output_amount);
 
-						false
+						(false, Default::default())
 					} else {
 						debug_assert!(dca_state.remaining_input_amount == 0);
 
@@ -2602,9 +2697,16 @@ pub mod pallet {
 										log_or_panic!("Encountered transfer to gateway swap for asset that isn't Flip: {swap_request_id:?}");
 									},
 							}
-							true
+
+							// Start swaps for any accumulated broker fees
+							let broker_fee_swaps = Self::start_broker_fee_swaps_or_credit(
+								broker_fees_tracker,
+								request.output_asset,
+							);
+
+							(true, broker_fee_swaps)
 						} else {
-							false
+							(false, Default::default())
 						}
 					},
 				SwapRequestState::NetworkFee => {
@@ -2618,7 +2720,7 @@ pub mod pallet {
 							swap.output_asset()
 						);
 					}
-					true
+					(true, Default::default())
 				},
 				SwapRequestState::IngressEgressFee => {
 					if swap.output_asset() == ForeignChain::from(swap.output_asset()).gas_asset() {
@@ -2633,7 +2735,12 @@ pub mod pallet {
 						);
 					}
 
-					true
+					(true, Default::default())
+				},
+				SwapRequestState::BrokerFee { account_id } => {
+					T::BalanceApi::credit_account(account_id, swap.output_asset(), output_amount);
+
+					(true, Default::default())
 				},
 			};
 
@@ -2641,6 +2748,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapRequestCompleted {
 					swap_request_id,
 					reason: SwapRequestCompletionReason::Executed,
+					broker_fee_swaps,
 				});
 			} else {
 				SwapRequests::<T>::insert(swap_request_id, request);
@@ -2692,7 +2800,7 @@ pub mod pallet {
 			let bundle_input: AssetAmount =
 				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
 
-			// Process the swap leg as a bundle. No network fee is taken here.
+			// Process the swap leg as a bundle
 			let bundle_output = T::SwappingApi::swap_single_leg(
 				match direction {
 					SwapLeg::FromStable => STABLE_ASSET,
@@ -2919,14 +3027,13 @@ pub mod pallet {
 								amount: egress_amount,
 								egress_fee: (fee_withheld, asset),
 							}),
-						EgressType::Refund { refund_fee } =>
+						EgressType::Refund =>
 							Self::deposit_event(Event::<T>::RefundEgressScheduled {
 								swap_request_id,
 								egress_id,
 								asset,
 								amount: egress_amount,
 								egress_fee: (fee_withheld, asset),
-								refund_fee,
 							}),
 					},
 				Err(err) => match egress_type {
@@ -2938,50 +3045,14 @@ pub mod pallet {
 							reason: err.into(),
 						});
 					},
-					EgressType::Refund { .. } =>
-						Self::deposit_event(Event::<T>::RefundEgressIgnored {
-							swap_request_id,
-							asset,
-							amount,
-							reason: err.into(),
-						}),
+					EgressType::Refund => Self::deposit_event(Event::<T>::RefundEgressIgnored {
+						swap_request_id,
+						asset,
+						amount,
+						reason: err.into(),
+					}),
 				},
 			}
-		}
-
-		pub(super) fn take_refund_fee(
-			total_input_amount: AssetAmount,
-			input_asset: Asset,
-			is_internal_swap: bool,
-		) -> Result<FeeTaken, DispatchError> {
-			// We use the network fee minimum as the refund fee
-			let refund_fee_usdc = if is_internal_swap {
-				InternalSwapNetworkFee::<T>::get().minimum
-			} else {
-				NetworkFee::<T>::get().minimum
-			};
-			if refund_fee_usdc.is_zero() || total_input_amount.is_zero() {
-				return Ok(FeeTaken { remaining_amount: total_input_amount, fee: 0 });
-			}
-
-			let required_refund_fee_as_input_asset =
-				Self::calculate_input_for_desired_output_or_default_to_zero(
-					input_asset,
-					STABLE_ASSET,
-					refund_fee_usdc,
-					false, // Without network fee
-					false, // Not internal
-				);
-
-			let refund_fee =
-				sp_std::cmp::min(required_refund_fee_as_input_asset, total_input_amount);
-			let remaining_amount = total_input_amount.saturating_sub(refund_fee);
-
-			if !refund_fee.is_zero() {
-				Self::init_network_fee_swap_request(input_asset, refund_fee);
-			}
-
-			Ok(FeeTaken { remaining_amount, fee: refund_fee })
 		}
 
 		pub fn assemble_and_validate_broker_fees(
@@ -3001,12 +3072,14 @@ pub mod pallet {
 			Ok(beneficiaries)
 		}
 
-		pub fn get_network_fee_for_swap(
+		/// Gets the network fee rate and minimum in usdc terms for a swap between the given input
+		/// and output assets, taking into account whether it's an internal swap or not.
+		fn get_network_fee(
 			input_asset: Asset,
 			output_asset: Asset,
 			is_internal_swap: bool,
 		) -> FeeRateAndMinimum {
-			let (input_asset_fee, output_asset_fee, minimum) = if is_internal_swap {
+			let (input_asset_fee, output_asset_fee, usdc_minimum) = if is_internal_swap {
 				let default_fee = InternalSwapNetworkFee::<T>::get();
 				(
 					InternalSwapNetworkFeeForAsset::<T>::get(input_asset)
@@ -3023,7 +3096,38 @@ pub mod pallet {
 					default_fee.minimum,
 				)
 			};
-			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum }
+
+			FeeRateAndMinimum { rate: input_asset_fee.max(output_asset_fee), minimum: usdc_minimum }
+		}
+
+		pub fn get_network_fee_rate_for_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			is_internal_swap: bool,
+		) -> Permill {
+			Self::get_network_fee(input_asset, output_asset, is_internal_swap).rate
+		}
+
+		/// Gets the network fee rate and minimum in the input asset terms.
+		pub fn get_network_fee_for_swap(
+			input_asset: Asset,
+			output_asset: Asset,
+			is_internal_swap: bool,
+		) -> FeeRateAndMinimum {
+			// Find the correct fee values in USDC
+			let FeeRateAndMinimum { rate, minimum: usdc_minimum } =
+				Self::get_network_fee(input_asset, output_asset, is_internal_swap);
+
+			// Convert the minimum amount to the input asset
+			let minimum = Pallet::<T>::calculate_input_for_desired_output_or_default_to_zero(
+				input_asset,
+				Asset::Usdc,
+				usdc_minimum,
+				false, // no network fee
+				false, // not internal
+			);
+
+			FeeRateAndMinimum { rate, minimum }
 		}
 
 		/// Returns the configured default oracle price slippage protection for a single pool leg.
@@ -3140,7 +3244,9 @@ pub mod pallet {
 						..limits
 					})
 				},
-				SwapRequestType::NetworkFee | SwapRequestType::IngressEgressFee => None,
+				SwapRequestType::NetworkFee |
+				SwapRequestType::IngressEgressFee |
+				SwapRequestType::BrokerFee { .. } => None,
 			};
 
 			Self::deposit_event(Event::<T>::SwapRequested {
@@ -3200,31 +3306,47 @@ pub mod pallet {
 						},
 					);
 				},
+				SwapRequestType::BrokerFee { account_id } => {
+					Self::schedule_swap(
+						input_asset,
+						output_asset,
+						net_amount,
+						// No refund parameters for broker fee swaps
+						None,
+						SwapType::BrokerFee,
+						request_id,
+						SWAP_DELAY_BLOCKS.into(),
+					);
+
+					SwapRequests::<T>::insert(
+						request_id,
+						SwapRequest {
+							id: request_id,
+							input_asset,
+							output_asset,
+							state: SwapRequestState::BrokerFee { account_id },
+						},
+					);
+				},
 				SwapRequestType::Regular { ref output_action } |
 				SwapRequestType::RegularNoNetworkFee { ref output_action } => {
 					let mut dca_state = DcaState::new(net_amount, dca_params.clone());
 					let chunk_input_amount = dca_state.calculate_next_chunk().unwrap_or_default();
 
 					// Choose correct network fee for the swap
-					let mut fees =
+					let network_fee_rate_and_minimum =
 						if matches!(request_type, SwapRequestType::Regular { output_action: _ }) {
-							vec![FeeType::NetworkFee(NetworkFeeTracker::new(
-								Pallet::<T>::get_network_fee_for_swap(
-									input_asset,
-									output_asset,
-									// TODO: see if we want to treat lending swaps as internal for
-									// the purposes of determining network fee?
-									matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
-								),
-							))]
+							Pallet::<T>::get_network_fee_for_swap(
+								input_asset,
+								output_asset,
+								// TODO: see if we want to treat lending swaps as internal for
+								// the purposes of determining network fee?
+								matches!(output_action, SwapOutputAction::CreditOnChain { .. }),
+							)
 						} else {
-							Default::default()
+							// No network fee for RegularNoNetworkFee
+							FeeRateAndMinimum { rate: Permill::zero(), minimum: 0 }
 						};
-
-					// Add broker fees if any
-					if !broker_fees.is_empty() {
-						fees.push(FeeType::BrokerFee(broker_fees));
-					}
 
 					let swap_id = Self::schedule_swap(
 						input_asset,
@@ -3271,7 +3393,10 @@ pub mod pallet {
 								output_action: output_action.clone(),
 								price_limits_and_expiry: processed_price_limits_and_expiry,
 								dca_state,
-								fees,
+								network_fee_tracker: NetworkFeeTracker::new(
+									network_fee_rate_and_minimum,
+								),
+								broker_fees_tracker: BrokerFeesTracker::new(broker_fees),
 							},
 						},
 					);
@@ -3307,17 +3432,29 @@ pub mod pallet {
 			let swap_progress = Self::inspect_swap_request(swap_request_id)?;
 
 			// Cancel any scheduled swaps:
-			let swap_request = SwapRequests::<T>::take(swap_request_id)?;
+			let request = SwapRequests::<T>::take(swap_request_id)?;
 
-			if let SwapRequestState::UserSwap { dca_state, .. } = swap_request.state {
-				for swap_id in dca_state.scheduled_chunks {
-					Self::cancel_swap(swap_id, SwapFailureReason::AbortedFromOrigin);
-				}
-			}
+			let broker_fee_swaps =
+				if let SwapRequestState::UserSwap { dca_state, broker_fees_tracker, .. } =
+					request.state
+				{
+					for swap_id in dca_state.scheduled_chunks {
+						Self::cancel_swap(swap_id, SwapFailureReason::AbortedFromOrigin);
+					}
+
+					// Start swaps for any accumulated broker fees
+					Self::start_broker_fee_swaps_or_credit(
+						&broker_fees_tracker,
+						request.output_asset,
+					)
+				} else {
+					BTreeMap::new()
+				};
 
 			Self::deposit_event(Event::<T>::SwapRequestCompleted {
 				swap_request_id,
 				reason: SwapRequestCompletionReason::Aborted,
+				broker_fee_swaps,
 			});
 
 			Some(swap_progress)
@@ -3341,14 +3478,13 @@ pub mod pallet {
 			}
 
 			let network_fee = if with_network_fee {
-				let fee_rate_and_minimum = Pallet::<T>::get_network_fee_for_swap(
+				// Ignoring the minimum network fee because this function is only used for fees and
+				// gas (no minimum).
+				Pallet::<T>::get_network_fee_rate_for_swap(
 					input_asset,
 					output_asset,
 					is_internal_swap,
-				);
-				// Ignoring the minimum network fee because this function is only used for fees and
-				// gas (no minimum).
-				fee_rate_and_minimum.rate
+				)
 			} else {
 				Permill::zero()
 			};
@@ -3429,7 +3565,9 @@ impl<T: Config> DeregistrationCheck for BrokerDeregistrationCheck<T> {
 		);
 		ensure!(
 			AffiliateAccountDetails::<T>::iter_key_prefix(account_id).all(|affiliate_account_id| {
-				T::BalanceApi::get_balance(&affiliate_account_id, Asset::Usdc).is_zero()
+				T::BalanceApi::free_balances(&affiliate_account_id)
+					.iter()
+					.all(|(_, amount)| *amount == 0)
 			}),
 			Error::<T>::AffiliateEarnedFeesNotWithdrawn
 		);

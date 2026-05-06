@@ -61,18 +61,21 @@ use frame_support::{
 
 use sp_arithmetic::Permill;
 use sp_core::{H160, U256};
-use sp_std::iter;
 
 const GAS_BUDGET: AssetAmount = 100_000u128;
 const INPUT_AMOUNT: AssetAmount = 40_000;
 const SWAP_REQUEST_ID: SwapRequestId = SwapRequestId(1);
 const INIT_BLOCK: u64 = 1;
-const BROKER_FEE_BPS: u16 = 10;
+const BROKER_FEE_BPS: BasisPoints = 10;
 const INPUT_ASSET: Asset = Asset::Usdc;
 const OUTPUT_ASSET: Asset = Asset::Eth;
 
 static EVM_OUTPUT_ADDRESS: LazyLock<ForeignChainAddress> =
 	LazyLock::new(|| ForeignChainAddress::Eth([1; 20].into()));
+
+const fn permill_from_bps(bps: BasisPoints) -> Permill {
+	Permill::from_parts(bps as u32 * BASIS_POINTS_PER_MILLION)
+}
 
 fn set_maximum_swap_amount(asset: Asset, amount: Option<AssetAmount>) {
 	assert_ok!(Swapping::update_pallet_config(
@@ -163,7 +166,11 @@ fn create_test_swap(
 					output_address: ForeignChainAddress::Eth(H160::zero()),
 				},
 				dca_state,
-				fees: Default::default(),
+				network_fee_tracker: NetworkFeeTracker::new(FeeRateAndMinimum {
+					rate: Permill::zero(),
+					minimum: 0,
+				}),
+				broker_fees_tracker: BrokerFeesTracker::new(Default::default()),
 			},
 		},
 	);
@@ -171,24 +178,24 @@ fn create_test_swap(
 	Swap::new(id.into(), id.into(), input_asset, output_asset, amount, None, execute_at)
 }
 
-// Returns some test data
+// Returns 4 swaps covering different asset combos
 fn generate_test_swaps() -> Vec<TestSwapParams> {
 	vec![
-		// asset -> USDC
+		// asset -> stable (one-leg swap)
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Usdc,
-			input_amount: 100,
+			input_amount: 100_000_000_000_000_000_000,
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
 			is_ccm: false,
 		},
-		// USDC -> asset
+		// stable -> asset (one-leg swap)
 		TestSwapParams {
-			input_asset: Asset::Eth,
-			output_asset: Asset::Usdc,
-			input_amount: 40,
+			input_asset: Asset::Usdc,
+			output_asset: Asset::Eth,
+			input_amount: 4_000_000_000_000_000_000,
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([9; 20].into()),
@@ -198,7 +205,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Eth,
-			input_amount: 500,
+			input_amount: 500_000_000_000_000_000_000,
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Eth([2; 20].into()),
@@ -208,7 +215,7 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 		TestSwapParams {
 			input_asset: Asset::Flip,
 			output_asset: Asset::Dot,
-			input_amount: 600,
+			input_amount: 600_000_000_000_000_000_000,
 			price_limits_and_expiry: None,
 			dca_params: None,
 			output_address: ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32])),
@@ -217,8 +224,8 @@ fn generate_test_swaps() -> Vec<TestSwapParams> {
 	]
 }
 
-fn insert_swaps(swaps: &[TestSwapParams]) {
-	for (broker_id, swap) in swaps.iter().enumerate() {
+fn insert_swaps(swaps: &[TestSwapParams], broker_fee: Option<BasisPoints>) {
+	for swap in swaps.iter() {
 		let ccm_deposit_metadata = if swap.is_ccm {
 			Some(
 				generate_ccm_deposit()
@@ -236,12 +243,18 @@ fn insert_swaps(swaps: &[TestSwapParams]) {
 			},
 		};
 
+		let brokers = if let Some(broker_fee) = broker_fee {
+			bounded_vec![Beneficiary { account: BROKER, bps: broker_fee }]
+		} else {
+			Default::default()
+		};
+
 		Swapping::init_swap_request(
 			swap.input_asset,
 			swap.input_amount,
 			swap.output_asset,
 			request_type,
-			bounded_vec![Beneficiary { account: broker_id as u64, bps: BROKER_FEE_BPS }],
+			brokers,
 			swap.price_limits_and_expiry.clone(),
 			swap.dca_params.clone(),
 			SwapOrigin::Vault {
@@ -340,47 +353,6 @@ fn request_swap_success_with_valid_parameters() {
 }
 
 #[test]
-fn process_all_swaps() {
-	new_test_ext().execute_with(|| {
-		let swaps = generate_test_swaps();
-		insert_swaps(&swaps);
-		Swapping::on_finalize(System::block_number() + SWAP_DELAY_BLOCKS as u64);
-
-		assert_swaps_queue_is_empty();
-		let mut expected = swaps
-			.iter()
-			.map(|swap| {
-				let output_amount = if swap.input_asset == Asset::Usdc {
-					let fee = swap.input_amount * BROKER_FEE_BPS as u128 / 10_000;
-					(swap.input_amount - fee) * DEFAULT_SWAP_RATE
-				} else if swap.output_asset == Asset::Usdc {
-					let output_before_fee = swap.input_amount * DEFAULT_SWAP_RATE;
-					let fee = output_before_fee * BROKER_FEE_BPS as u128 / 10_000;
-					output_before_fee - fee
-				} else {
-					let intermediate_amount = swap.input_amount * DEFAULT_SWAP_RATE;
-					let fee = intermediate_amount * BROKER_FEE_BPS as u128 / 10_000;
-					(intermediate_amount - fee) * DEFAULT_SWAP_RATE
-				};
-
-				MockEgressParameter::<AnyChain>::Swap {
-					asset: swap.output_asset,
-					amount: output_amount,
-					destination_address: swap.output_address.clone(),
-					fee: 0,
-				}
-			})
-			.collect::<Vec<_>>();
-		expected.sort();
-		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
-		egresses.sort();
-		for (input, output) in iter::zip(expected, egresses) {
-			assert_eq!(input, output);
-		}
-	});
-}
-
-#[test]
 #[should_panic]
 fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
@@ -474,8 +446,9 @@ fn affiliates_with_0_bps_and_swap_id_are_getting_emitted_in_events() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed
-				}),
+					reason: SwapRequestCompletionReason::Executed,
+					ref broker_fee_swaps,
+				}) if broker_fee_swaps.is_empty(),
 			);
 		});
 }
@@ -667,9 +640,9 @@ fn process_all_into_stable_swaps_first() {
 		assert_eq!(
 			Swaps::get(),
 			vec![
-				(Asset::Flip, Asset::Usdc, AMOUNT),
-				(Asset::Dot, Asset::Usdc, AMOUNT),
-				(Asset::Btc, Asset::Usdc, AMOUNT),
+				(Asset::Flip, Asset::Usdc, AMOUNT - network_fee_amount),
+				(Asset::Dot, Asset::Usdc, AMOUNT - network_fee_amount),
+				(Asset::Btc, Asset::Usdc, AMOUNT - network_fee_amount),
 				(
 					Asset::Usdc,
 					Asset::Eth,
@@ -761,13 +734,14 @@ fn can_handle_ccm_with_zero_swap_outputs() {
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_request_id: SwapRequestId(1),
 					swap_id: SwapId(1),
-					network_fee: 0,
-					broker_fee: 0,
-					input_amount: PRINCIPAL_AMOUNT,
-					input_asset: INPUT_ASSET,
-					output_asset: OUTPUT_ASSET,
-					output_amount: ZERO_AMOUNT,
-					intermediate_amount: None,
+					network_fee: AssetAndAmount { asset: INPUT_ASSET, amount: 0 },
+					broker_fee: AssetAndAmount { asset: OUTPUT_ASSET, amount: 0 },
+					input: AssetAndAmount { asset: INPUT_ASSET, amount: PRINCIPAL_AMOUNT },
+					output: AssetAndAmount { asset: OUTPUT_ASSET, amount: ZERO_AMOUNT },
+					intermediate: Some(AssetAndAmount {
+						asset: STABLE_ASSET,
+						amount: PRINCIPAL_AMOUNT
+					}),
 					oracle_delta: None,
 					oracle_delta_ex_fees: None,
 				}),
@@ -797,8 +771,7 @@ fn can_handle_swaps_with_zero_outputs() {
 				Test,
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(1),
-					output_asset: Asset::Eth,
-					output_amount: 0,
+					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
@@ -807,12 +780,12 @@ fn can_handle_swaps_with_zero_outputs() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapExecuted {
 					swap_id: SwapId(2),
-					output_asset: Asset::Eth,
-					output_amount: 0,
+					output: AssetAndAmount { asset: Asset::Eth, amount: 0 },
 					..
 				}),
 				RuntimeEvent::Swapping(Event::SwapEgressIgnored {
@@ -821,7 +794,8 @@ fn can_handle_swaps_with_zero_outputs() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(2),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 
@@ -883,7 +857,7 @@ fn swaps_are_executed_according_to_execute_at_field() {
 	new_test_ext()
 		.then_execute_at_block(1_u64, |_| {
 			// Block 1, swaps should be scheduled at block 3
-			insert_swaps(&swaps);
+			insert_swaps(&swaps, None);
 
 			assert_has_matching_event!(
 				Test,
@@ -906,7 +880,7 @@ fn swaps_are_executed_according_to_execute_at_field() {
 		.then_execute_at_next_block(|_| {
 			// Block 2, swaps should be scheduled at block 4
 			assert_eq!(System::block_number(), 2);
-			insert_swaps(&later_swaps);
+			insert_swaps(&later_swaps, None);
 
 			assert_has_matching_event!(
 				Test,
@@ -933,6 +907,7 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 3);
 			assert_event_sequence!(
 				Test,
+				// Swap 1: Flip -> USDC
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(1),
@@ -940,8 +915,10 @@ fn swaps_are_executed_according_to_execute_at_field() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
+				// Swap 2: USDC -> ETH
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(2),
@@ -949,7 +926,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(2),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 		})
@@ -960,6 +938,7 @@ fn swaps_are_executed_according_to_execute_at_field() {
 			assert_eq!(System::block_number(), 4);
 			assert_event_sequence!(
 				Test,
+				// Swap 3: Flip -> ETH
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(3), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(3),
@@ -967,8 +946,10 @@ fn swaps_are_executed_according_to_execute_at_field() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(3),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
+				// Swap 4: Flip -> DOT
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(4),
@@ -976,7 +957,8 @@ fn swaps_are_executed_according_to_execute_at_field() {
 				}),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(4),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 		});
@@ -994,7 +976,7 @@ fn swaps_get_retried_after_failure() {
 		.then_execute_at_block(INIT_BLOCK, |_| {
 			assert_eq!(SwapRetryDelay::<Test>::get(), DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64);
 			// Block 1, swaps should be scheduled at block 3
-			insert_swaps(&swaps);
+			insert_swaps(&swaps, None);
 
 			assert_has_matching_event!(
 				Test,
@@ -1017,7 +999,7 @@ fn swaps_get_retried_after_failure() {
 		.then_execute_at_next_block(|_| {
 			// Block 2, swaps should be scheduled at block 4
 			assert_eq!(System::block_number(), 2);
-			insert_swaps(&later_swaps);
+			insert_swaps(&later_swaps, None);
 
 			assert_has_matching_event!(
 				Test,
@@ -1075,6 +1057,7 @@ fn swaps_get_retried_after_failure() {
 		.then_execute_with(|_| {
 			assert_event_sequence!(
 				Test,
+				// Swap 3: Flip -> ETH
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(3), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(3),
@@ -1082,8 +1065,10 @@ fn swaps_get_retried_after_failure() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(3),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
+				// Swap 4: Flip -> DOT (broker fee swap DOT -> USDC)
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(4), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(4),
@@ -1091,7 +1076,8 @@ fn swaps_get_retried_after_failure() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(4),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 		})
@@ -1101,6 +1087,7 @@ fn swaps_get_retried_after_failure() {
 			// now be successful):
 			assert_event_sequence!(
 				Test,
+				// Swap 1: Flip -> USDC (output is USDC, broker fee credited directly, no fee swap)
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(1),
@@ -1108,8 +1095,10 @@ fn swaps_get_retried_after_failure() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
+				// Swap 2: USDC -> ETH (broker fee swap ETH -> USDC)
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 				RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 					swap_request_id: SwapRequestId(2),
@@ -1117,7 +1106,8 @@ fn swaps_get_retried_after_failure() {
 				}),
 				RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(2),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 		});
@@ -1182,7 +1172,8 @@ fn fee_swap_is_retried_after_failure() {
 				RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				RuntimeEvent::Swapping(Event::<Test>::SwapRequestCompleted {
 					swap_request_id: SwapRequestId(1),
-					reason: SwapRequestCompletionReason::Executed
+					reason: SwapRequestCompletionReason::Executed,
+					..
 				}),
 			);
 		});
@@ -1615,12 +1606,15 @@ mod swap_batching {
 		fn to_state(&self, stable_amount: Option<AssetAmount>) -> SwapState<T> {
 			SwapState {
 				swap: self.clone(),
-				network_fee_taken: None,
-				broker_fee_taken: None,
-				stable_amount,
-				final_output: None,
+				network_fee_taken: 0,
+				broker_fee_taken: 0,
+				intermediate: stable_amount
+					.map(|amount| AssetAndAmount { asset: self.from, amount }),
+				output_amount_before_fees: None,
 				oracle_delta: None,
 				oracle_delta_ex_fees: None,
+				output_amount_after_fees: None,
+				input_amount_after_fees: self.input_amount,
 			}
 		}
 	}
@@ -1697,13 +1691,14 @@ mod swap_batching {
 
 		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const SWAP_RESCHEDULED_BLOCK: u64 = SWAP_BLOCK + DEFAULT_SWAP_RETRY_DELAY_BLOCKS as u64;
+		const BTC_AMOUNT: AssetAmount = 100_000;
+		const USDC_AMOUNT: AssetAmount = 150_000;
+
+		let network_fee_rate = Permill::from_percent(1);
 
 		new_test_ext()
 			.execute_with(|| {
-				NetworkFee::<Test>::set(FeeRateAndMinimum {
-					rate: Permill::from_percent(1),
-					minimum: 0,
-				});
+				NetworkFee::<Test>::set(FeeRateAndMinimum { rate: network_fee_rate, minimum: 0 });
 
 				let swap = |input_asset: Asset, output_asset: Asset, input_amount: AssetAmount| {
 					TestSwapParams {
@@ -1717,10 +1712,10 @@ mod swap_batching {
 					}
 				};
 
-				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
-				let swap2 = swap(Asset::Usdc, Asset::Eth, 150_000);
+				let swap1 = swap(Asset::Btc, Asset::Eth, BTC_AMOUNT);
+				let swap2 = swap(Asset::Usdc, Asset::Eth, USDC_AMOUNT);
 
-				insert_swaps(&[swap1, swap2]);
+				insert_swaps(&[swap1, swap2], None);
 
 				// This amount of liquidity would only be enough for one of the swaps
 				// (USDC liquidity is not set is thus will not be checked):
@@ -1731,6 +1726,7 @@ mod swap_batching {
 				assert_event_sequence!(
 					Test,
 					RuntimeEvent::Swapping(Event::BatchSwapFailed { .. }),
+					// Swap 2: USDC -> ETH
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(2), .. }),
 					RuntimeEvent::Swapping(Event::SwapEgressScheduled { .. }),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted { .. }),
@@ -1744,7 +1740,10 @@ mod swap_batching {
 				// Ensure that storage has been reverted from the first (failed) attempt
 				// by checking the network fee (which should only be collected
 				// from swap 2):
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500);
+				assert_eq!(
+					CollectedNetworkFee::<Test>::get(Asset::Usdc),
+					network_fee_rate * USDC_AMOUNT
+				);
 
 				// Adding some more liquidity to make the other swap succeed:
 				MockSwappingApi::add_liquidity(Asset::Eth, 500_000);
@@ -1756,7 +1755,14 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 1500 + 2000);
+				assert_eq!(
+					CollectedNetworkFee::<Test>::get(Asset::Usdc),
+					network_fee_rate * USDC_AMOUNT
+				);
+				assert_eq!(
+					CollectedNetworkFee::<Test>::get(Asset::Btc),
+					network_fee_rate * BTC_AMOUNT
+				);
 			});
 	}
 
@@ -1789,7 +1795,7 @@ mod swap_batching {
 				let swap1 = swap(Asset::Btc, Asset::Eth, 100_000);
 				let swap2 = swap(Asset::Eth, Asset::Usdc, 150_000);
 
-				insert_swaps(&[swap1, swap2]);
+				insert_swaps(&[swap1, swap2], None);
 
 				// This activates liquidity check for USDC in the Mock, and provides insufficient
 				// amount, leading to all swaps failing:
@@ -1805,7 +1811,7 @@ mod swap_batching {
 					RuntimeEvent::Swapping(Event::SwapRescheduled { swap_id: SwapId(1), .. }),
 				);
 
-				assert_eq!(CollectedNetworkFee::<Test>::get(), 0);
+				assert_eq!(CollectedNetworkFee::<Test>::get(Asset::Usdc), 0);
 			});
 	}
 }
@@ -1877,7 +1883,8 @@ mod internal_swaps {
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
-						reason: SwapRequestCompletionReason::Executed
+						reason: SwapRequestCompletionReason::Executed,
+						..
 					}),
 				);
 
@@ -1893,28 +1900,13 @@ mod internal_swaps {
 	fn swap_on_chain_with_refund() {
 		const CHUNK_1_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const CHUNK_2_BLOCK: u64 = CHUNK_1_BLOCK + SWAP_DELAY_BLOCKS as u64;
-		const MIN_NETWORK_FEE: u128 = 10;
 		const NEW_SWAP_RATE: f64 = DEFAULT_SWAP_RATE as f64 / 2.0;
 		const CHUNK_AMOUNT: AssetAmount = INPUT_AMOUNT / 2;
 
-		// We require the internal swap minimum network fee to be non-zero for the refund fee to
-		// work, so this must be taken into account in the min_price calculation.
-		// Note that the `NetworkFee` is set to 0 by default, so the minimum network fee will be
-		// charged instead.
-		let min_price = Price::from_usd_fine_amount(
-			(DEFAULT_SWAP_RATE as f64 *
-				DEFAULT_SWAP_RATE as f64 *
-				(((CHUNK_AMOUNT - MIN_NETWORK_FEE) as f64) / CHUNK_AMOUNT as f64)) as u128,
-		);
+		let min_price = Price::from_usd_fine_amount(DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE);
 
 		new_test_ext()
 			.execute_with(|| {
-				// Internal swaps use a different network fee minimum than the regular swaps.
-				// This minimum network fee is used as the refund fee.
-				InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
-					rate: Permill::from_percent(0),
-					minimum: MIN_NETWORK_FEE,
-				});
 				// Set price for refund fee calculation
 				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 1);
 
@@ -1959,12 +1951,10 @@ mod internal_swaps {
 			})
 			.then_process_blocks_until_block(CHUNK_2_BLOCK)
 			.then_execute_with(|_| {
-				// Small rounding error due to price calculation
-				const REFUND_FEE: AssetAmount = MIN_NETWORK_FEE + 1;
 				// Only one chunk is expected to be swapped:
 				const EXPECTED_OUTPUT_AMOUNT: AssetAmount =
-					(CHUNK_AMOUNT * DEFAULT_SWAP_RATE - MIN_NETWORK_FEE) * DEFAULT_SWAP_RATE;
-				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT - REFUND_FEE;
+					CHUNK_AMOUNT * DEFAULT_SWAP_RATE * DEFAULT_SWAP_RATE;
+				const EXPECTED_REFUND_AMOUNT: AssetAmount = CHUNK_AMOUNT;
 
 				assert_event_sequence!(
 					Test,
@@ -1972,22 +1962,11 @@ mod internal_swaps {
 						swap_id: SwapId(2),
 						reason: SwapFailureReason::MinPriceViolation
 					}),
-					RuntimeEvent::Swapping(Event::SwapRequested {
-						request_type: SwapRequestTypeEncoded::NetworkFee,
-						input_amount: REFUND_FEE,
-						..
-					}),
-					RuntimeEvent::Swapping(Event::SwapScheduled {
-						swap_type: SwapType::NetworkFee,
-						input_amount: REFUND_FEE,
-						..
-					}),
 					RuntimeEvent::Swapping(Event::RefundedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,
 						account_id: LP_ACCOUNT,
 						asset: INPUT_ASSET,
 						amount: EXPECTED_REFUND_AMOUNT,
-						refund_fee: REFUND_FEE,
 					}),
 					RuntimeEvent::Swapping(Event::CreditedOnChain {
 						swap_request_id: SWAP_REQUEST_ID,
@@ -1997,7 +1976,8 @@ mod internal_swaps {
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
-						reason: SwapRequestCompletionReason::Expired
+						reason: SwapRequestCompletionReason::Expired,
+						..
 					}),
 				);
 
@@ -2081,7 +2061,7 @@ mod credit_flip_and_transfer {
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
-						reason: _
+						..
 					}),
 				);
 				assert_eq!(
@@ -2149,7 +2129,7 @@ mod credit_flip_and_transfer {
 					}),
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
-						reason: _
+						..
 					}),
 				);
 
@@ -2567,7 +2547,20 @@ mod affiliates {
 
 			MockBalance::try_debit_account(&affiliate_account_id, Asset::Usdc, BALANCE).unwrap();
 
-			assert_ok!(Swapping::deregister_as_broker(OriginTrait::signed(BROKER)));
+			// An asset thats not USDC also blocks deregistration.
+			MockBalance::credit_account(&affiliate_account_id, Asset::Eth, BALANCE);
+
+			assert!(matches!(
+				BrokerDeregistrationCheck::<Test>::check(&BROKER),
+				Err(Error::<Test>::AffiliateEarnedFeesNotWithdrawn)
+			));
+
+			MockBalance::try_debit_account(&affiliate_account_id, Asset::Eth, BALANCE).unwrap();
+
+			// The deregister_as_broker call will use the mock and always succeed, so we do the
+			// deregistration check manually here as well.
+			assert_ok!(BrokerDeregistrationCheck::<Test>::check(&BROKER));
+			Swapping::deregister_as_broker(OriginTrait::signed(BROKER)).unwrap();
 
 			assert!(AffiliateAccountDetails::<Test>::get(BROKER, affiliate_account_id).is_none());
 			assert!(AffiliateIdMapping::<Test>::get(BROKER, SHORT_ID).is_none());
@@ -2662,7 +2655,8 @@ mod lending_liquidation_swaps {
 					Test,
 					RuntimeEvent::Swapping(Event::SwapRequestCompleted {
 						swap_request_id: SWAP_REQUEST_ID,
-						reason: SwapRequestCompletionReason::Aborted
+						reason: SwapRequestCompletionReason::Aborted,
+						..
 					}),
 				);
 

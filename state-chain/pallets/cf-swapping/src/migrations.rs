@@ -14,11 +14,30 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Pallet, STORAGE_VERSION_U16};
+pub mod collected_network_fee_per_asset;
+pub mod fee_fields_in_swap_requests;
 
+use crate::Pallet;
 use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
 
-pub type PalletMigration<T> = (PlaceholderMigration<{ STORAGE_VERSION_U16 }, Pallet<T>>,);
+pub type PalletMigration<T> = (
+	VersionedMigration<
+		16,
+		17,
+		collected_network_fee_per_asset::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		17,
+		18,
+		fee_fields_in_swap_requests::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	PlaceholderMigration<18, Pallet<T>>,
+);
 
 #[cfg(test)]
 const _: u16 =

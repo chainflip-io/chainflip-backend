@@ -29,12 +29,14 @@ import {
   newChainflipIO,
   WithBrokerAccount,
 } from 'shared/utils/chainflip_io';
-import { swappingSwapExecuted } from 'generated/events/swapping/swapExecuted';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { swappingWithdrawalRequested } from 'generated/events/swapping/withdrawalRequested';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
+import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 
 const commissionBps = 1000; // 10%
+// All broker fees are swapped to USDC
+const feeAsset = Assets.Usdc;
 
 export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
@@ -60,19 +62,18 @@ export async function submitBrokerWithdrawal<A extends WithBrokerAccount>(
   );
 }
 
-const feeAsset = Assets.Usdc;
-
+/// Gets the USDC free balance for the broker.
+/// The broker fee is taken from the output asset and swap to USDC,
+/// so you will have to wait for the fee swap to complete before it will show up in this free balance.
 export async function getEarnedBrokerFees(logger: Logger, address: string): Promise<bigint> {
   logger.debug(`Getting earned broker fees for address: ${address}`);
-  // NOTE: All broker fees are collected in USDC
-  return getFreeBalance(address, Assets.Usdc);
+  return getFreeBalance(address, feeAsset);
 }
 
 /// Runs a swap, checks that the broker fees are collected,
 /// then withdraws the broker fees, making sure the balance is correct after the withdrawal.
 async function testBrokerFees<A extends WithBrokerAccount>(
   cf: ChainflipIO<A>,
-  inputAsset: Asset,
   seed?: string,
 ): Promise<void> {
   const broker = cf.requirements.account.keypair;
@@ -80,10 +81,12 @@ async function testBrokerFees<A extends WithBrokerAccount>(
 
   // Check the broker fees before the swap
   const earnedBrokerFeesBefore = await getEarnedBrokerFees(cf.logger, broker.address);
-  cf.debug(`${inputAsset} earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
+  cf.debug(`earnedBrokerFeesBefore:`, earnedBrokerFeesBefore);
 
   // Run a swap
-  const destAsset = inputAsset === feeAsset ? Assets.Flip : feeAsset;
+  const inputAsset = Assets.Flip;
+  // Using an asset that is not USDC as the output asset so that the broker fees are swapped after the swap completes.
+  const destAsset = Assets.Eth;
   const destinationAddress = await newAssetAddress(
     destAsset,
     seed ?? randomBytes(32).toString('hex'),
@@ -92,7 +95,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     chainFromAsset(inputAsset) === Chains.Assethub
       ? decodeDotAddressForContract(destinationAddress)
       : destinationAddress;
-  cf.debug(`${inputAsset} destinationAddress:`, destinationAddress);
+  cf.debug(`destinationAddress:`, destinationAddress);
 
   cf.debug(`Running swap ${inputAsset} -> ${destAsset}`);
 
@@ -150,13 +153,6 @@ async function testBrokerFees<A extends WithBrokerAccount>(
   // Get values from the swap event
   const requestId = swapRequestedEvent.swapRequestId;
 
-  const swapExecutedEvent = await cf.stepUntilEvent(
-    'Swapping.SwapExecuted',
-    swappingSwapExecuted.refine((event) => event.swapRequestId === requestId),
-  );
-
-  cf.debug('brokerFee:', swapExecutedEvent.brokerFee);
-
   // Check that the deposit amount is correct after deducting the deposit fee
   const depositAmountAfterIngressFee = swapRequestedEvent.inputAmount;
   const rawDepositForSwapAmountBigInt = amountToFineAmountBigInt(
@@ -171,9 +167,30 @@ async function testBrokerFees<A extends WithBrokerAccount>(
     }`,
   );
 
-  // Check that the detected increase in earned broker fees matches the swap event values and it is equal to the expected amount (after the deposit fee is accounted for)
+  // Wait for the swap request to complete
+  const swapRequestCompletedEvent = await cf.stepUntilEvent(
+    'Swapping.SwapRequestCompleted',
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === requestId),
+  );
+
+  // Check that the broker fees where swapped to USDC
+  const [feeSwapBroker, feeSwapRequestId] = swapRequestCompletedEvent.brokerFeeSwaps[0];
+  if (!feeSwapRequestId) {
+    throw new Error(
+      `No broker fee swap found in swap request completed event ${JSON.stringify(swapRequestCompletedEvent)}`,
+    );
+  }
+  assert.strictEqual(feeSwapBroker, broker.address, `Unexpected broker fee swap account`);
+
+  // Wait for the broker fee swap to complete
+  await cf.stepUntilEvent(
+    'Swapping.SwapRequestCompleted',
+    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === feeSwapRequestId),
+  );
+
+  // Check that the earned broker fees increased
   const earnedBrokerFeesAfter = await getEarnedBrokerFees(cf.logger, broker.address);
-  cf.debug(`${inputAsset} earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
+  cf.debug(`earnedBrokerFeesAfter:`, earnedBrokerFeesAfter);
 
   assert(earnedBrokerFeesAfter > earnedBrokerFeesBefore, 'No increase in earned broker fees');
 
@@ -197,7 +214,7 @@ async function testBrokerFees<A extends WithBrokerAccount>(
 
   // Check that the balance after withdrawal is correct after deducting withdrawal fee
   const balanceAfterWithdrawal = await getBalance(feeAsset, withdrawalAddress);
-  cf.debug(`${inputAsset} Balance after withdrawal:`, balanceAfterWithdrawal);
+  cf.debug(`${feeAsset} Balance after withdrawal:`, balanceAfterWithdrawal);
   const balanceAfterWithdrawalBigInt = amountToFineAmountBigInt(balanceAfterWithdrawal, feeAsset);
   const balanceBeforeWithdrawalBigInt = amountToFineAmountBigInt(balanceBeforeWithdrawal, feeAsset);
   assert(
@@ -214,5 +231,5 @@ export async function testBrokerFeeCollection(testContext: TestContext): Promise
   await setupAccount(parentCf, brokerUri, AccountRole.Broker);
 
   const cf = parentCf.with({ account: fullAccountFromUri(brokerUri, 'Broker') });
-  await testBrokerFees(cf, Assets.Flip, randomBytes(32).toString('hex'));
+  await testBrokerFees(cf, randomBytes(32).toString('hex'));
 }
