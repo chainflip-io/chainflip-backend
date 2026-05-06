@@ -76,3 +76,62 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mock::*;
+	use cf_traits::mocks::funding_info::MockFundingInfo;
+
+	#[test]
+	fn removes_only_dust_delegations() {
+		const MIN_FUNDING: u128 = 100; // matches MockMinimumFundingProvider
+
+		const LOW_MAX_BID: u64 = 200;
+		const LOW_BALANCE: u64 = 201;
+		const STALE_BUT_FUNDED: u64 = 202;
+		const HEALTHY: u64 = 203;
+		const EXACTLY_AT_MIN: u64 = 204;
+
+		new_test_ext().execute_with(|| {
+			// Pre-existing on-chain state may violate today's invariants (e.g.
+			// max_bid < MinimumFunding, or max_bid > balance). Seed those
+			// scenarios directly via storage writes — the regular `delegate`
+			// path enforces MinimumFunding and clamps to balance.
+			let stale_max_bid = MIN_FUNDING * 10;
+			let scenarios = [
+				(LOW_MAX_BID, MIN_FUNDING * 5, MIN_FUNDING - 1),
+				(LOW_BALANCE, MIN_FUNDING - 1, MIN_FUNDING * 5),
+				(STALE_BUT_FUNDED, MIN_FUNDING * 2, stale_max_bid),
+				(HEALTHY, MIN_FUNDING * 5, MIN_FUNDING * 3),
+				(EXACTLY_AT_MIN, MIN_FUNDING * 5, MIN_FUNDING),
+			];
+			MockFundingInfo::<Test>::set_balances(
+				scenarios.iter().map(|(account, balance, _)| (*account, *balance)),
+			);
+			for (account, _, max_bid) in scenarios {
+				DelegationChoice::<Test>::insert(account, (ALICE, max_bid));
+			}
+
+			Migration::<Test>::on_runtime_upgrade();
+
+			// Dust entries are removed: effective_bid = min(max_bid, balance)
+			// is below MinimumFunding for both LOW_MAX_BID (low max_bid) and
+			// LOW_BALANCE (low balance behind a high stored max_bid).
+			assert!(DelegationChoice::<Test>::get(LOW_MAX_BID).is_none());
+			assert!(DelegationChoice::<Test>::get(LOW_BALANCE).is_none());
+
+			// Non-dust entries are kept.
+			assert!(DelegationChoice::<Test>::get(HEALTHY).is_some());
+			assert!(DelegationChoice::<Test>::get(EXACTLY_AT_MIN).is_some());
+
+			// Stale max_bid (max_bid > balance, but effective_bid still ≥ min)
+			// is kept *and not rewritten* — the migration must not mutate
+			// user-set max_bid values.
+			assert_eq!(
+				DelegationChoice::<Test>::get(STALE_BUT_FUNDED).map(|(_, max_bid)| max_bid),
+				Some(stale_max_bid)
+			);
+		});
+	}
+}
