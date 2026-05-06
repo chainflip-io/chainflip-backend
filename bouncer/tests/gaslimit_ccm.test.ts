@@ -429,7 +429,9 @@ async function testTronInsufficientGas<A = []>(
   });
   await cf.stepUntilEvent(
     'TronBroadcaster.BroadcastAborted',
-    tronBroadcasterBroadcastAborted.refine((data) => data.broadcastId === broadcastId),
+    tronBroadcasterBroadcastAborted.refine(
+      (data) => Number(data.broadcastId) === Number(broadcastId),
+    ),
   );
   stopObservingCcmReceived = true;
   cf.debug(`Broadcast Aborted found! broadcastId: ${broadcastId}`);
