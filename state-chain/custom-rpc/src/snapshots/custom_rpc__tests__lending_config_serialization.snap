@@ -5,7 +5,6 @@ expression: config
 {
   "ltv_thresholds": {
     "target": 750000,
-    "topup": 800000,
     "soft_liquidation": 900000,
     "soft_liquidation_abort": 880000,
     "hard_liquidation": 950000,

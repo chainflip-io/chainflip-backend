@@ -95,7 +95,6 @@ pub enum LiquidationCompletionReason {
 #[scale_info(skip_type_params(T))]
 pub struct LoanAccount<T: Config> {
 	pub(super) borrower_id: T::AccountId,
-	pub(super) collateral_topup_asset: Option<Asset>,
 	pub(super) loans: BTreeMap<LoanId, GeneralLoan<T>>,
 	pub(super) liquidation_status: LiquidationStatus,
 	pub(super) voluntary_liquidation_requested: bool,
@@ -104,7 +103,7 @@ pub struct LoanAccount<T: Config> {
 #[derive(Clone, Debug)]
 enum SurplusOrDeficit {
 	Surplus(AssetAmount),
-	Deficit(AssetAmount),
+	Deficit,
 }
 
 #[derive(
@@ -152,7 +151,6 @@ impl<T: Config> LoanAccount<T> {
 	pub fn new(borrower_id: T::AccountId) -> Self {
 		Self {
 			borrower_id,
-			collateral_topup_asset: None,
 			loans: BTreeMap::new(),
 			liquidation_status: LiquidationStatus::NoLiquidation,
 			voluntary_liquidation_requested: false,
@@ -589,52 +587,6 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Checks if a top up is required and if so, performs it. Returns
-	/// boolean indicating whether a topup has been performed.
-	#[transactional]
-	pub fn check_and_process_auto_top_up(
-		&mut self,
-		borrower_id: &T::AccountId,
-		ltv: FixedU64,
-		price_cache: &OraclePriceCache<T>,
-		weight_used: &mut Weight,
-	) -> Result<bool, DispatchError> {
-		let config = LendingConfig::<T>::get();
-
-		if config.ltv_thresholds.topup.is_none_or(|threshold| ltv <= threshold.into()) {
-			return Ok(false)
-		}
-
-		// No topup if topup asset is not specified:
-		let Some(collateral_topup_asset) = self.collateral_topup_asset else { return Ok(false) };
-
-		// Ignoring weight of sweep as we expect most borrowers to not have open orders
-		try_sweep::<T>(borrower_id);
-
-		weight_used.saturating_accrue(T::WeightInfo::loan_calculate_top_up_amount());
-		let top_up_amount =
-			self.calculate_top_up_amount(borrower_id, config.ltv_thresholds.target, price_cache)?;
-
-		if top_up_amount > 0 {
-			weight_used.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
-			T::Balance::try_debit_account(borrower_id, collateral_topup_asset, top_up_amount)
-				.inspect_err(|_| {
-					log_or_panic!("Unable to debit after checking balance");
-				})?;
-
-			supply_funds::<T>(
-				borrower_id.clone(),
-				collateral_topup_asset,
-				top_up_amount,
-				SupplyAddedActionType::SystemTopup,
-			)?;
-
-			Ok(true)
-		} else {
-			Ok(false)
-		}
-	}
-
 	fn calculate_collateral_surplus_or_deficit(
 		&self,
 		ltv_threshold_target: Permill,
@@ -650,38 +602,10 @@ impl<T: Config> LoanAccount<T> {
 			.ok_or(Error::<T>::InvalidConfigurationParameters)?;
 
 		if collateral_required_in_usd >= collateral_value_in_usd {
-			Ok(SurplusOrDeficit::Deficit(collateral_required_in_usd - collateral_value_in_usd))
+			Ok(SurplusOrDeficit::Deficit)
 		} else {
 			Ok(SurplusOrDeficit::Surplus(collateral_value_in_usd - collateral_required_in_usd))
 		}
-	}
-
-	pub(super) fn calculate_top_up_amount(
-		&self,
-		borrower_id: &T::AccountId,
-		ltv_threshold_target: Permill,
-		price_cache: &OraclePriceCache<T>,
-	) -> Result<AssetAmount, Error<T>> {
-		let Some(topup_asset) = self.collateral_topup_asset else {
-			return Ok(0);
-		};
-
-		let top_up_required_in_usd = match self
-			.calculate_collateral_surplus_or_deficit(ltv_threshold_target, price_cache)?
-		{
-			SurplusOrDeficit::Surplus(_) => 0,
-			SurplusOrDeficit::Deficit(amount) => amount,
-		};
-
-		// Auto top up is currently only possible from the primary collateral asset
-		let top_up_required_in_collateral_asset =
-			price_cache.amount_from_usd_value(topup_asset, top_up_required_in_usd)?;
-
-		// Don't attempt to charge more than what's available:
-		Ok(core::cmp::min(
-			T::Balance::get_balance(borrower_id, topup_asset),
-			top_up_required_in_collateral_asset,
-		))
 	}
 
 	/// Split collateral proportionally to the usd value of each loan (to give each loan a fair
@@ -1232,19 +1156,6 @@ impl<T: Config> GeneralLoan<T> {
 	}
 }
 
-/// Sweeping but it is a no-op if it fails for whatever reason
-fn try_sweep<T: Config>(account_id: &T::AccountId) {
-	use frame_support::sp_runtime::TransactionOutcome;
-
-	storage::with_transaction_unchecked(|| {
-		if T::PoolApi::sweep(account_id).is_ok() {
-			TransactionOutcome::Commit(())
-		} else {
-			TransactionOutcome::Rollback(())
-		}
-	})
-}
-
 /// Collateral amount linked to a specific loan
 #[derive(Debug)]
 pub(super) struct AssetCollateralForLoan {
@@ -1287,29 +1198,12 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 					&mut weight_used,
 				);
 
-				let new_ltv = if let Ok(true) = loan_account.check_and_process_auto_top_up(
+				loan_account.update_liquidation_status(
 					borrower_id,
 					ltv,
 					&price_cache,
 					&mut weight_used,
-				) {
-					// A successful topup means we have to re-derive LTV
-					weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-					loan_account.derive_ltv(&price_cache)
-				} else {
-					Ok(ltv)
-				};
-
-				// `new_ltv` should always be Ok (otherwise we wouldn't be able to derive LTV the
-				// first time), but let's avoid unwrapping as a defensive measure:
-				new_ltv.and_then(|new_ltv| {
-					loan_account.update_liquidation_status(
-						borrower_id,
-						new_ltv,
-						&price_cache,
-						&mut weight_used,
-					)
-				})
+				)
 			});
 
 			// If all loans are repaid manually while in liquidation, liquidation swaps will be
@@ -1422,14 +1316,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 	type AccountId = T::AccountId;
 
 	/// Create a new loan (assigning a new loan id) provided that the account's existing collateral
-	/// plus any `extra_collateral` is sufficient. Will update the primary collateral asset if
-	/// provided.
+	/// is sufficient.
 	#[transactional]
 	fn new_loan(
 		borrower_id: T::AccountId,
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
-		collateral_topup_asset: Option<Asset>,
 		broker: Option<Beneficiary<T::AccountId>>,
 	) -> Result<LoanId, DispatchError> {
 		T::LpRegistrationApi::ensure_has_refund_address_for_asset(&borrower_id, asset)
@@ -1458,11 +1350,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let loan_id = loan.id;
 
 		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
-			let account = Self::create_or_update_loan_account(
-				borrower_id.clone(),
-				maybe_account,
-				collateral_topup_asset,
-			)?;
+			let account = maybe_account.get_or_insert(LoanAccount::new(borrower_id.clone()));
 
 			// NOTE: it is important that this event is emitted before `OriginationFeeTaken` event
 			Self::deposit_event(Event::LoanCreated {
@@ -1596,26 +1484,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 		})
 	}
 
-	fn update_collateral_topup_asset(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
-	) -> Result<(), DispatchError> {
-		LoanAccounts::<T>::try_mutate(borrower_id, |maybe_account| {
-			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
-
-			if loan_account.collateral_topup_asset != collateral_topup_asset {
-				loan_account.collateral_topup_asset = collateral_topup_asset;
-
-				Self::deposit_event(Event::CollateralTopupAssetUpdated {
-					borrower_id: borrower_id.clone(),
-					collateral_topup_asset,
-				});
-			}
-
-			Ok(())
-		})
-	}
-
 	fn set_voluntary_liquidation_flag(borrower_id: Self::AccountId, value: bool) -> DispatchResult {
 		LoanAccounts::<T>::try_mutate(&borrower_id, |maybe_account| {
 			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanAccountNotFound)?;
@@ -1658,7 +1526,7 @@ pub fn remove_lender_funds<T: Config>(
 			.calculate_collateral_surplus_or_deficit(config.ltv_thresholds.target, &price_cache)?
 		{
 			SurplusOrDeficit::Surplus(amount) => amount,
-			SurplusOrDeficit::Deficit(_) => 0,
+			SurplusOrDeficit::Deficit => 0,
 		};
 
 		Some(price_cache.amount_from_usd_value(asset, surplus_usd)?)
@@ -1960,24 +1828,6 @@ impl<T: Config> Pallet<T> {
 		PendingNetworkFees::<T>::mutate(fee_asset, |pending_amount| {
 			pending_amount.saturating_accrue(fee_amount);
 		});
-	}
-
-	fn create_or_update_loan_account(
-		borrower_id: T::AccountId,
-		maybe_account: &mut Option<LoanAccount<T>>,
-		collateral_topup_asset: Option<Asset>,
-	) -> Result<&mut LoanAccount<T>, Error<T>> {
-		let account = maybe_account.get_or_insert(LoanAccount::new(borrower_id.clone()));
-
-		if account.collateral_topup_asset != collateral_topup_asset {
-			account.collateral_topup_asset = collateral_topup_asset;
-			Self::deposit_event(Event::CollateralTopupAssetUpdated {
-				borrower_id,
-				collateral_topup_asset: account.collateral_topup_asset,
-			});
-		}
-
-		Ok(account)
 	}
 
 	/// Mutates the pool for `asset` expecting it to exist. If the pool is missing the

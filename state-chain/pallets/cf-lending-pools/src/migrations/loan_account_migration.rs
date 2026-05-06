@@ -48,7 +48,7 @@ fn migrate_loan<T: Config>(old_loan: old::GeneralLoan<T>) -> general_lending::Ge
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		// Migrate user loan accounts: move collateral to supply pools, drop the `collateral`
-		// field, and add `broker: None` to every nested loan.
+		// and `collateral_topup_asset` fields, and add `broker: None` to every nested loan.
 		let old_accounts: Vec<_> = old::LoanAccounts::<T>::drain().collect();
 
 		for (account_id, old_account) in &old_accounts {
@@ -86,8 +86,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				}
 			}
 
-			// Write the new LoanAccount without the collateral field, with `broker: None`
-			// added to each loan.
+			// Write the new LoanAccount: drop the `collateral` and `collateral_topup_asset`
+			// fields, and add `broker: None` to each nested loan.
 			let migrated_loans = old_account
 				.loans
 				.iter()
@@ -98,7 +98,6 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				account_id,
 				LoanAccount {
 					borrower_id: old_account.borrower_id.clone(),
-					collateral_topup_asset: old_account.collateral_topup_asset,
 					loans: migrated_loans,
 					liquidation_status: old_account.liquidation_status.clone(),
 					voluntary_liquidation_requested: old_account.voluntary_liquidation_requested,
@@ -107,7 +106,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		}
 
 		log::info!(
-			"Migrated {} loan accounts (collateral moved to supply pools, broker field added)",
+			"Migrated {} loan accounts (collateral moved to supply pools, collateral_topup_asset \
+			 dropped, broker field added)",
 			old_accounts.len(),
 		);
 

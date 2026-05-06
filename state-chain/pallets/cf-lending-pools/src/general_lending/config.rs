@@ -75,8 +75,6 @@ pub struct LtvThresholds {
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
 	/// ratio (principal/collateral) would exceed this threshold.
 	pub target: Permill,
-	/// Reaching this threshold will trigger a top-up of the collateral
-	pub topup: Option<Permill>,
 	/// Reaching this threshold will trigger soft liquidation account's loans
 	pub soft_liquidation: Permill,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
@@ -97,11 +95,6 @@ pub struct LtvThresholds {
 impl LtvThresholds {
 	pub fn validate(&self) -> DispatchResult {
 		ensure!(self.soft_liquidation <= self.hard_liquidation, "Invalid LTV thresholds");
-		ensure!(
-			self.topup
-				.is_none_or(|topup| self.target <= topup && topup <= self.soft_liquidation),
-			"Invalid LTV thresholds"
-		);
 
 		ensure!(
 			self.hard_liquidation_abort < self.hard_liquidation &&

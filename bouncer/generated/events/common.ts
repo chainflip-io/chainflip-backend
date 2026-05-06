@@ -1829,7 +1829,6 @@ export const palletCfLendingPoolsGeneralLendingConfigLendingPoolConfiguration = 
 
 export const palletCfLendingPoolsGeneralLendingConfigLtvThresholds = z.object({
   target: z.number(),
-  topup: z.number().nullish(),
   softLiquidation: z.number(),
   softLiquidationAbort: z.number(),
   hardLiquidation: z.number(),
@@ -1891,7 +1890,6 @@ export const palletCfLendingPoolsBoostBoostPoolId = z.object({
 
 export const palletCfLendingPoolsSupplyAddedActionType = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('Manual') }),
-  z.object({ __kind: z.literal('SystemTopup') }),
   z.object({
     __kind: z.literal('SystemLiquidationExcessAmount'),
     loanId: numberOrHex,

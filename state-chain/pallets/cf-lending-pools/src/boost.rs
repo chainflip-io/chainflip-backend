@@ -250,14 +250,17 @@ impl<T: Config> BoostApi for Pallet<T> {
 		);
 
 		let mut amounts = BTreeMap::new();
+		let mut fees = BTreeMap::new();
 		if lending_pool_principal > 0 {
 			amounts.insert(BoostSource::LendingPool, lending_pool_principal + lending_pool_fee);
+			fees.insert(BoostSource::LendingPool, lending_pool_fee);
 		}
 		if boost_pool_principal > 0 {
 			amounts.insert(BoostSource::BoostPool, boost_pool_principal + boost_pool_fee);
+			fees.insert(BoostSource::BoostPool, boost_pool_fee);
 		}
 
-		Ok(BoostOutcome { total_fee, amounts })
+		Ok(BoostOutcome { amounts, fees })
 	}
 
 	fn finalise_boost(deposit_id: PrewitnessedDepositId, asset: Asset) -> BoostFinalisationOutcome {

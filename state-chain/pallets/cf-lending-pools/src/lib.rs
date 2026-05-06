@@ -210,9 +210,6 @@ pub enum LoanUsage {
 pub enum SupplyAddedActionType {
 	/// Triggered manually by the user. Funds are taken from the user's free balance.
 	Manual,
-	/// Triggered by the protocol due to high LTV. Funds are taken from the user's free
-	/// balance.
-	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
 	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
@@ -271,7 +268,6 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	ltv_thresholds: LtvThresholds {
 		target: Permill::from_percent(80),
-		topup: None,
 		soft_liquidation: Permill::from_percent(90),
 		soft_liquidation_abort: Permill::from_percent(88),
 		hard_liquidation: Permill::from_percent(95),
@@ -473,10 +469,6 @@ pub mod pallet {
 		LoanUpdated {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
-		},
-		CollateralTopupAssetUpdated {
-			borrower_id: T::AccountId,
-			collateral_topup_asset: Option<Asset>,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
@@ -921,7 +913,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
-			collateral_topup_asset: Option<Asset>,
 			broker: Option<Beneficiary<T::AccountId>>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
@@ -931,23 +922,9 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset, broker)?;
+			Self::new_loan(borrower_id, loan_asset, loan_amount, broker)?;
 
 			Ok(())
-		}
-
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_collateral_topup_asset())]
-		pub fn update_collateral_topup_asset(
-			origin: OriginFor<T>,
-			collateral_topup_asset: Option<Asset>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			<Self as LendingApi>::update_collateral_topup_asset(
-				&borrower_id,
-				collateral_topup_asset,
-			)
 		}
 
 		#[pallet::call_index(11)]

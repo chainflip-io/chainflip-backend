@@ -132,7 +132,6 @@ fn can_update_all_config_items() {
 
 		const NEW_LTV_THRESHOLDS: LtvThresholds = LtvThresholds {
 			target: Permill::from_percent(61),
-			topup: Some(Permill::from_percent(71)),
 			soft_liquidation: Permill::from_percent(81),
 			soft_liquidation_abort: Permill::from_percent(80),
 			hard_liquidation: Permill::from_percent(91),
@@ -1149,7 +1148,7 @@ fn boost_pool_details() {
 /// Boosting with both lending and legacy boost pools
 mod hybrid_boosting {
 
-	use cf_traits::lending::BoostFinalisationOutcome;
+	use cf_traits::lending::{BoostFinalisationOutcome, BoostOutcome, BoostSource};
 
 	use super::*;
 
@@ -1224,12 +1223,21 @@ mod hybrid_boosting {
 			frame_system::Pallet::<Test>::reset_events();
 
 			// 3. Boost deposit.
-			assert_ok!(LendingPools::try_boosting(
-				DEPOSIT_ID,
-				BOOST_ASSET,
-				DEPOSIT_AMOUNT,
-				BOOST_FEE_BPS,
-			));
+			assert_eq!(
+				LendingPools::try_boosting(DEPOSIT_ID, BOOST_ASSET, DEPOSIT_AMOUNT, BOOST_FEE_BPS,),
+				Ok(BoostOutcome {
+					amounts: [
+						(BoostSource::LendingPool, LENDING_FUNDS + LENDING_FEE_TOTAL),
+						(BoostSource::BoostPool, LEGACY_POOL_FUNDS + LEGACY_FEE_TOTAL),
+					]
+					.into(),
+					fees: [
+						(BoostSource::LendingPool, LENDING_FEE_TOTAL),
+						(BoostSource::BoostPool, LEGACY_FEE_TOTAL),
+					]
+					.into(),
+				})
+			);
 
 			assert_event_sequence!(
 				Test,
@@ -1685,7 +1693,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 			Asset::Btc,
 			BTC_COLLATERAL,
 		));
-		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None, Some(BROKER)));
+		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, Some(BROKER)));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =
 		// BOOST_DEPOSIT_AMOUNT.

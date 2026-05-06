@@ -49,9 +49,11 @@ pub enum BoostSource {
 
 #[derive(Debug, PartialEq)]
 pub struct BoostOutcome {
-	pub total_fee: AssetAmount,
-	/// Per-source principal amounts funded (entries present only if that source contributed).
+	/// Per-source amounts funded, including the boost fee charged by that source
+	/// (entries present only if that source contributed).
 	pub amounts: BTreeMap<BoostSource, AssetAmount>,
+	/// Per-source boost fees charged (entries present only if that source contributed).
+	pub fees: BTreeMap<BoostSource, AssetAmount>,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -105,7 +107,6 @@ pub trait LendingApi {
 		borrower: Self::AccountId,
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
-		collateral_topup_asset: Option<Asset>,
 		broker: Option<Beneficiary<Self::AccountId>>,
 	) -> Result<LoanId, DispatchError>;
 
@@ -113,11 +114,6 @@ pub trait LendingApi {
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
 		amount: RepaymentAmount,
-	) -> DispatchResult;
-
-	fn update_collateral_topup_asset(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
 	) -> DispatchResult;
 
 	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)

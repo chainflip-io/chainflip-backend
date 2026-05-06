@@ -1700,7 +1700,6 @@ where
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
-		cf_lending_config() -> RpcLendingConfig,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
@@ -1838,6 +1837,20 @@ where
 			} else {
 				api.cf_loan_accounts(hash, borrower_id.clone())
 					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			}
+		})
+	}
+
+	fn cf_lending_config(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLendingConfig> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lending_config_before_version_17(hash).map(Into::into)
+			} else {
+				api.cf_lending_config(hash)
 			}
 		})
 	}
