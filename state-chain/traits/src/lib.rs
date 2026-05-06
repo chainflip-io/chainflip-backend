@@ -300,15 +300,6 @@ pub trait RedemptionCheck {
 	type ValidatorId;
 	type Amount;
 
-	/// Whole-account redemption gate, used by callers (rebalance, sub-account
-	/// spawn) that don't have a specific amount to validate. Currently treats
-	/// validators and delegators inconsistently: a validator is locked only
-	/// during the auction phase, but a delegator is locked unconditionally
-	/// whenever they have a `DelegationChoice` entry. The delegator half is
-	/// stricter than necessary; long-term the two should be unified, but the
-	/// existing call sites depend on this behaviour for now.
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
-
 	/// Amount-aware redemption gate, used by `redeem`. Enforces auction-phase /
 	/// active-bidder restrictions, and (for delegators) ensures the requested
 	/// amount does not eat into the balance reserved by their stored max_bid.
@@ -317,8 +308,17 @@ pub trait RedemptionCheck {
 		amount: Self::Amount,
 	) -> DispatchResult;
 
-	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
-		Self::ensure_can_redeem(validator_id).is_ok()
+	/// Transfer gate, used by `rebalance` and sub-account spawning. Allows the
+	/// transfer if the source has no redemption restrictions, or if the
+	/// recipient is subject to the same restrictions (so funds cannot escape a
+	/// lock by hopping to an unrestricted account).
+	fn ensure_can_transfer(
+		source: &Self::ValidatorId,
+		dest: &Self::ValidatorId,
+	) -> DispatchResult;
+
+	fn can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> bool {
+		Self::ensure_can_transfer(source, dest).is_ok()
 	}
 }
 

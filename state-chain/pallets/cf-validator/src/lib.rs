@@ -2449,20 +2449,20 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
+
+	/// True if the account has no redemption restriction at all — neither an
+	/// active-bidder lock during auction phase, nor a delegation reservation.
+	fn is_redemption_unrestricted(validator_id: &ValidatorIdOf<T>) -> bool {
+		Self::ensure_not_active_bidder_during_auction(validator_id).is_ok() &&
+			!DelegationChoice::<T>::contains_key(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(
+				validator_id,
+			))
+	}
 }
 
 impl<T: Config> RedemptionCheck for Pallet<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
-
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
-		Self::ensure_not_active_bidder_during_auction(validator_id)?;
-		ensure!(
-			!DelegationChoice::<T>::contains_key(validator_id.into_ref()),
-			Error::<T>::StillBidding
-		);
-		Ok(())
-	}
 
 	fn ensure_can_redeem_amount(
 		validator_id: &Self::ValidatorId,
@@ -2486,6 +2486,22 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 			);
 		}
 		Ok(())
+	}
+
+	fn ensure_can_transfer(
+		source: &Self::ValidatorId,
+		dest: &Self::ValidatorId,
+	) -> DispatchResult {
+		// If the source can move funds out freely, the transfer is fine.
+		// Otherwise the recipient must share the same restriction so funds
+		// can't escape it by hopping to an unrestricted account.
+		if Self::is_redemption_unrestricted(source) ||
+			!Self::is_redemption_unrestricted(dest)
+		{
+			Ok(())
+		} else {
+			Err(Error::<T>::StillBidding.into())
+		}
 	}
 }
 

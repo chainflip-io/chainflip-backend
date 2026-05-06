@@ -863,12 +863,10 @@ pub mod pallet {
 				ensure!(amount >= MinimumFunding::<T>::get(), Error::<T>::MinimumRebalanceAmount);
 			}
 
-			if !T::RedemptionChecker::can_redeem(&source_account_id) {
-				ensure!(
-					!T::RedemptionChecker::can_redeem(&recipient_account_id),
-					Error::<T>::CanNotRebalanceToNotBiddingValidator
-				);
-			}
+			ensure!(
+				T::RedemptionChecker::can_transfer(&source_account_id, &recipient_account_id),
+				Error::<T>::CanNotRebalanceToNotBiddingValidator
+			);
 
 			ensure!(
 				BoundExecutorAddress::<T>::get(&source_account_id) ==
@@ -1136,16 +1134,16 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 			!ParentAccount::<T>::contains_key(parent_account_id),
 			Error::<T>::CannotSpawnFromSubAccount
 		);
-		ensure!(
-			T::RedemptionChecker::can_redeem(parent_account_id),
-			Error::<T>::CannotSpawnDuringAuctionPhase
-		);
 
 		let sub_account_id = Self::derive_sub_account_id(parent_account_id, index)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
 			Error::<T>::AccountAlreadyExists
+		);
+		ensure!(
+			T::RedemptionChecker::can_transfer(parent_account_id, &sub_account_id),
+			Error::<T>::CannotSpawnDuringAuctionPhase
 		);
 
 		// FRAME reference counting:

@@ -1552,27 +1552,34 @@ fn can_determine_is_auction_phase() {
 }
 
 #[test]
-fn redemption_check_works() {
+fn transfer_check_works() {
 	new_test_ext().execute_with(|| {
-		let validator = WINNING_BIDS[0].bidder_id;
+		let source = WINNING_BIDS[0].bidder_id;
+		let dest = WINNING_BIDS[1].bidder_id;
 
-		// Not in auction + not bidding = Can redeem
+		// Both unrestricted: transfer allowed.
 		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
 		ActiveBidder::<Test>::set(Default::default());
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 
-		// In Auction + not bidding = Can redeem
+		// Source restricted (active bidder during auction), dest unrestricted:
+		// blocked, since the funds would escape the lock.
 		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(source));
+		assert_noop!(
+			ValidatorPallet::ensure_can_transfer(&source, &dest),
+			Error::<Test>::StillBidding
+		);
 
-		// Not in Auction + bidding = Can redeem
-		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
-		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(validator));
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		// Source and dest both restricted in the same way: allowed (lock is
+		// preserved across the hop).
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(dest));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 
-		// Auction Phase + bidding = Cannot redeem
-		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
+		// Source unrestricted, dest restricted: allowed (we don't gate based
+		// on the recipient's state when the source is free to move funds).
+		ActiveBidder::<Test>::mutate(|bidders| bidders.remove(&source));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 	});
 }
 
