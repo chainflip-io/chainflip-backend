@@ -877,9 +877,7 @@ mod broker_fees {
 	/// Set up a borrower with collateral, then call `new_loan` with the given broker
 	/// beneficiary. Broker registration is left to the caller.
 	#[transactional]
-	fn try_loan_with_broker(
-		broker: Beneficiary<AccountId>,
-	) -> Result<LoanId, DispatchError> {
+	fn try_loan_with_broker(broker: Beneficiary<AccountId>) -> Result<LoanId, DispatchError> {
 		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 		assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
@@ -901,10 +899,7 @@ mod broker_fees {
 		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
 			register_as_broker(&BROKER);
 			assert_noop!(
-				try_loan_with_broker(Beneficiary {
-					account: BROKER,
-					bps: MAX_BROKER_FEE_BPS + 1,
-				}),
+				try_loan_with_broker(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS + 1 }),
 				Error::<Test>::BrokerFeeTooHigh,
 			);
 		});
