@@ -600,6 +600,10 @@ pub mod pallet {
 		CollateralPoolUtilisationCapExceeded,
 		/// The broker fee specified on the loan request exceeds the maximum allowed.
 		BrokerFeeTooHigh,
+		/// The broker fee (if specified) can't be zero.
+		InvalidZeroBrokerFee,
+		/// Provided broker does not exist.
+		UnknownBroker,
 	}
 
 	#[pallet::hooks]

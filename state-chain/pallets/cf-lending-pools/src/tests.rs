@@ -1609,7 +1609,13 @@ mod hybrid_boosting {
 #[test]
 fn get_all_loans_returns_boost_and_user_loans() {
 	use cf_chains::ForeignChain;
-	use cf_traits::mocks::balance_api::{MockBalance, MockLpRegistration};
+	use cf_traits::{
+		mocks::{
+			account_role_registry::MockAccountRoleRegistry,
+			balance_api::{MockBalance, MockLpRegistration},
+		},
+		AccountRoleRegistry,
+	};
 
 	new_test_ext().execute_with(|| {
 		const ETH_PRICE: u128 = 1;
@@ -1671,6 +1677,9 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		const USER_LOAN_ID: LoanId = LoanId(1);
 		MockBalance::credit_account(&LP, Asset::Btc, BTC_COLLATERAL);
 		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER.account,
+		));
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(LP),
 			Asset::Btc,

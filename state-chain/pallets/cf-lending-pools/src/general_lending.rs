@@ -1,5 +1,5 @@
 use cf_amm_math::Price;
-use cf_primitives::{Beneficiary, DcaParameters, SwapRequestId};
+use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,
@@ -1432,6 +1432,11 @@ impl<T: Config> LendingApi for Pallet<T> {
 
 		if let Some(broker) = &broker {
 			ensure!(broker.bps <= MAX_BROKER_FEE_BPS, Error::<T>::BrokerFeeTooHigh);
+			ensure!(broker.bps > 0, Error::<T>::InvalidZeroBrokerFee);
+			ensure!(
+				T::AccountRoleRegistry::has_account_role(&broker.account, AccountRole::Broker),
+				Error::<T>::UnknownBroker
+			);
 		}
 
 		let price_cache = OraclePriceCache::<T>::default();

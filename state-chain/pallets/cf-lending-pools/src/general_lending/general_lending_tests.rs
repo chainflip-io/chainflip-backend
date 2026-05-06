@@ -7,10 +7,12 @@ use cf_test_utilities::{
 use cf_traits::{
 	lending::LendingSystemApi,
 	mocks::{
+		account_role_registry::MockAccountRoleRegistry,
 		balance_api::{MockBalance, MockLpRegistration},
 		price_feed_api::MockPriceFeedApi,
 		swap_request_api::{MockSwapRequest, MockSwapRequestHandler},
 	},
+	AccountRoleRegistry,
 	ExpiryBehaviour::NoExpiry,
 	SafeMode, SetSafeMode, SwapExecutionProgress,
 };
@@ -152,6 +154,10 @@ const fn portion_of_amount(fee: Permill, principal: AssetAmount) -> AssetAmount 
 
 fn disable_whitelist() {
 	assert_ok!(LendingPools::update_whitelist(RuntimeOrigin::root(), WhitelistUpdate::SetAllowAll));
+}
+
+fn register_as_broker(account: &AccountId) {
+	assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(account));
 }
 
 const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
@@ -664,6 +670,7 @@ fn broker_interest_credited_to_broker() {
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
 
@@ -773,6 +780,7 @@ fn broker_fee_collected_after_pool_replenished() {
 		.then_execute_with(|_| {
 			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+			register_as_broker(&BROKER);
 
 			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
 			assert_ok!(supply_funds::<Test>(
@@ -859,47 +867,73 @@ fn broker_fee_collected_after_pool_replenished() {
 		});
 }
 
-/// `new_loan` rejects requests whose broker fee exceeds [`MAX_BROKER_FEE_BPS`]; values up to
-/// and including the cap are accepted.
-#[test]
-fn broker_fee_above_cap_is_rejected() {
-	use crate::general_lending::MAX_BROKER_FEE_BPS;
+mod broker_fees {
+
+	use super::*;
 	use cf_primitives::Beneficiary;
 
-	const BROKER: u64 = 999;
+	const BROKER: AccountId = 999;
 
-	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
-		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL * 2);
+	/// Set up a borrower with collateral, then call `new_loan` with the given broker
+	/// beneficiary. Broker registration is left to the caller.
+	#[transactional]
+	fn try_loan_with_broker(
+		broker: Beneficiary<AccountId>,
+	) -> Result<LoanId, DispatchError> {
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
 		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
 		assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
 		assert_ok!(supply_funds::<Test>(
 			BORROWER,
 			COLLATERAL_ASSET,
-			INIT_COLLATERAL * 2,
+			INIT_COLLATERAL,
 			SupplyAddedActionType::Manual,
 		));
 
-		// Anything above the cap is rejected.
-		assert_noop!(
-			LendingPools::new_loan(
-				BORROWER,
-				LOAN_ASSET,
-				PRINCIPAL,
-				None,
-				Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS + 1 }),
-			),
-			Error::<Test>::BrokerFeeTooHigh,
-		);
+		LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None, Some(broker))
+	}
 
-		// The cap itself is allowed.
-		assert_ok!(LendingPools::new_loan(
-			BORROWER,
-			LOAN_ASSET,
-			PRINCIPAL,
-			None,
-			Some(Beneficiary { account: BROKER, bps: MAX_BROKER_FEE_BPS }),
-		));
-	});
+	/// `new_loan` rejects broker fees above [`MAX_BROKER_FEE_BPS`].
+	#[test]
+	fn broker_fee_above_cap_is_rejected() {
+		use crate::general_lending::MAX_BROKER_FEE_BPS;
+
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+			register_as_broker(&BROKER);
+			assert_noop!(
+				try_loan_with_broker(Beneficiary {
+					account: BROKER,
+					bps: MAX_BROKER_FEE_BPS + 1,
+				}),
+				Error::<Test>::BrokerFeeTooHigh,
+			);
+		});
+	}
+
+	/// `new_loan` rejects a broker fee of zero (callers should pass `None` instead of a
+	/// zero-fee broker beneficiary).
+	#[test]
+	fn zero_broker_fee_is_rejected() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+			register_as_broker(&BROKER);
+			assert_noop!(
+				try_loan_with_broker(Beneficiary { account: BROKER, bps: 0 }),
+				Error::<Test>::InvalidZeroBrokerFee,
+			);
+		});
+	}
+
+	/// `new_loan` rejects a broker beneficiary whose account is not registered as a Broker.
+	#[test]
+	fn unknown_broker_is_rejected() {
+		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).then_execute_with(|_| {
+			// BROKER is intentionally not registered as a broker account.
+			assert_noop!(
+				try_loan_with_broker(Beneficiary { account: BROKER, bps: 100 }),
+				Error::<Test>::UnknownBroker,
+			);
+		});
+	}
 }
 
 #[test]
