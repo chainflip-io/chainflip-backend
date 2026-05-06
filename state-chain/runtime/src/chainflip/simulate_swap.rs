@@ -33,7 +33,7 @@ use cf_primitives::{
 	IngressOrEgress, OrderId,
 };
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
-use pallet_cf_swapping::{BatchExecutionError, FeeRateAndMinimum};
+use pallet_cf_swapping::{BatchExecutionError, FeeRateAndMinimum, NetworkFeeType};
 use sp_runtime::{
 	traits::{Saturating, UniqueSaturatedInto},
 	DispatchError, Permill,
@@ -112,8 +112,7 @@ pub fn simulate_swap(
 			pallet_cf_swapping::Pallet::<Runtime>::get_network_fee_for_swap(
 				input_asset,
 				output_asset,
-				is_internal,
-				true, // With minimum
+				if is_internal { NetworkFeeType::Internal } else { NetworkFeeType::Standard },
 			);
 		max(rate * amount_to_swap, minimum)
 	} else {
@@ -147,10 +146,14 @@ pub fn simulate_swap(
 	})?;
 
 	// Extrapolate the total by multiplying the chunk by the number of chunks
-	let intermediary = swap
-		.intermediate
-		.as_ref()
-		.map(|AssetAndAmount { asset: _, amount }| amount * number_of_chunks);
+	let intermediates = swap
+		.intermediates
+		.iter()
+		.map(|AssetAndAmount { asset, amount }| AssetAndAmount {
+			asset: *asset,
+			amount: amount * number_of_chunks,
+		})
+		.collect();
 	let output = swap.output_amount_after_fees * number_of_chunks;
 	let broker_fee = swap.broker_fee_taken * number_of_chunks;
 
@@ -169,7 +172,7 @@ pub fn simulate_swap(
 		};
 
 	Ok(SimulatedSwapInformation {
-		intermediary,
+		intermediates,
 		output,
 		network_fee: AssetAndAmount::new(input_asset, network_fee),
 		ingress_fee: AssetAndAmount::new(input_asset, ingress_fee),

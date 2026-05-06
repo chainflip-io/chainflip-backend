@@ -655,7 +655,7 @@ fn failed_swaps_are_rolled_back() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::BatchSwapFailed {
 					asset: Asset::Flip,
-					direction: cf_primitives::SwapLeg::FromStable,
+					direction: cf_primitives::LegacySwapLegDirection::FromStable,
 					..
 				},
 			) => ()
@@ -1135,7 +1135,10 @@ mod swap_simulation {
 			// Small rounding error
 			let expected_intermediate_amount =
 				AMOUNT - expected_network_fee - simulated_swap.ingress_fee.amount - 1;
-			assert_eq!(simulated_swap.intermediary, Some(expected_intermediate_amount));
+			assert_eq!(
+				simulated_swap.intermediates,
+				vec![AssetAndAmount::new(Asset::Usdc, expected_intermediate_amount)]
+			);
 
 			let expected_broker_fee = broker_fee_rate * (expected_intermediate_amount);
 			assert_eq!(simulated_swap.broker_fee.amount, expected_broker_fee);
@@ -1200,11 +1203,20 @@ mod swap_simulation {
 				let epsilon = a / 10_000;
 				a.abs_diff(b) <= epsilon
 			};
-			assert!(match (simulated_non_dca_swap.intermediary, simulated_dca_swap.intermediary) {
-				(Some(a), Some(b)) => check(a, b),
-				_ => false,
-			});
-			assert!(check(simulated_non_dca_swap.output, simulated_dca_swap.output),);
+			assert_eq!(simulated_non_dca_swap.intermediates.len(), 1);
+			assert_eq!(simulated_dca_swap.intermediates.len(), 1);
+			let non_dca_intermediate = simulated_non_dca_swap
+				.intermediates
+				.first()
+				.expect("Should have usdc as the intermediate");
+			let dca_intermediate = simulated_dca_swap
+				.intermediates
+				.first()
+				.expect("Should have usdc as the intermediate");
+			assert_eq!(non_dca_intermediate.asset, Asset::Usdc);
+			assert_eq!(dca_intermediate.asset, Asset::Usdc);
+			assert!(check(non_dca_intermediate.amount, dca_intermediate.amount));
+			assert!(check(simulated_non_dca_swap.output, simulated_dca_swap.output));
 		});
 	}
 
@@ -1264,8 +1276,8 @@ mod swap_simulation {
 				simulated_normal_swap.broker_fee.amount < simulated_internal_swap.broker_fee.amount
 			);
 			assert!(
-				simulated_normal_swap.intermediary.unwrap() <
-					simulated_internal_swap.intermediary.unwrap()
+				simulated_normal_swap.intermediates.first().unwrap().amount <
+					simulated_internal_swap.intermediates.first().unwrap().amount
 			);
 			assert!(simulated_normal_swap.output < simulated_internal_swap.output);
 		});
@@ -1313,7 +1325,8 @@ mod swap_simulation {
 			// swapping pallet applies to the oracle price.
 			assert!(simulated_swap.network_fee.amount >= MINIMUM_NETWORK_FEE_INPUT_ASSET);
 			assert!(
-				simulated_swap.intermediary.unwrap() < AMOUNT - MINIMUM_NETWORK_FEE_INPUT_ASSET
+				simulated_swap.intermediates.first().unwrap().amount <
+					AMOUNT - MINIMUM_NETWORK_FEE_INPUT_ASSET
 			);
 		});
 	}

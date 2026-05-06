@@ -175,8 +175,7 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 								NetworkFeeTracker::new(Pallet::<T>::get_network_fee_for_swap(
 									old.input_asset,
 									old.output_asset,
-									false, // not internal
-									false, // with minimum
+									NetworkFeeType::Standard,
 								))
 							}),
 							// Starting a new tracker for broker fees is safe.

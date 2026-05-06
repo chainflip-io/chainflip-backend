@@ -320,7 +320,7 @@ pub enum AccountRole {
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub enum SwapLeg {
+pub enum LegacySwapLegDirection {
 	FromStable,
 	ToStable,
 }
