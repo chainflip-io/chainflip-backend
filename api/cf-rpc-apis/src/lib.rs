@@ -22,6 +22,7 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 
 pub mod broker;
+pub mod grandpa;
 pub mod lp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

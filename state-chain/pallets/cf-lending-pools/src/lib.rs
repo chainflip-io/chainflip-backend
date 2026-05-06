@@ -86,7 +86,8 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(6);
+pub const STORAGE_VERSION_U16: u16 = 6;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 use serde::{Deserialize, Serialize};
 
@@ -216,7 +217,7 @@ pub enum SupplyAddedActionType {
 	/// than was required.
 	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
 	/// Triggered by the protocol when liquidation did not swap all of input amount.
-	SystemLiquidationUnusedAmount,
+	SystemLiquidationUnusedAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
 }
 
 /// Indicates how the action of supplying funds was triggered.
@@ -345,7 +346,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 

@@ -30,6 +30,7 @@ tracing = { workspace = true }
 cf-chains = { workspace = true, default-features = true }
 cf-primitives = { workspace = true, default-features = true }
 cf-node-client = { workspace = true }
+cf-rpc-apis = { workspace = true }
 custom-rpc = { workspace = true }
 pallet-cf-account-roles = { workspace = true, default-features = true }
 pallet-cf-elections = { workspace = true, default-features = true }

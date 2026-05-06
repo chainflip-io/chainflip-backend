@@ -42,7 +42,8 @@ pub enum Proposal {
 	SetCommunityKey(Address),
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -50,7 +51,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	use frame_system::pallet_prelude::*;

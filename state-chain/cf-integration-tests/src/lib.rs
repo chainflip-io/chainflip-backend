@@ -29,6 +29,7 @@ mod fee_scaling;
 mod funding;
 mod genesis;
 mod governance;
+mod grandpa_delegation;
 mod lending;
 mod new_epoch;
 mod solana;

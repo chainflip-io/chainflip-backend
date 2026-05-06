@@ -190,6 +190,14 @@ async fn run_cli() -> Result<()> {
 					let tx_hash = api.operator_api().rotate_session_keys().await?;
 					println!("Session key rotated at tx {tx_hash:#x}.");
 				},
+				DelegateGrandpaVote => {
+					let tx_hash = api.operator_api().delegate_grandpa_vote().await?;
+					println!("GRANDPA vote delegated at tx {tx_hash:#x}.");
+				},
+				RevokeGrandpaDelegation => {
+					let tx_hash = api.operator_api().revoke_grandpa_delegation().await?;
+					println!("GRANDPA vote delegation revoked at tx {tx_hash:#x}.");
+				},
 				StopBidding => {
 					let tx_hash = api.validator_api().stop_bidding().await?;
 					println!("Account stopped bidding, in tx {tx_hash:#x}.");
