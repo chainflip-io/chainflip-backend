@@ -22,6 +22,7 @@ use crate::{
 	general_lending::{GeneralLoan, LoanType},
 	mocks::*,
 };
+use cf_primitives::Beneficiary;
 use cf_test_utilities::{assert_event_sequence, assert_events_eq};
 use cf_traits::{
 	mocks::{balance_api::MockBalance, price_feed_api::MockPriceFeedApi},
@@ -548,6 +549,7 @@ fn basic_boosting() {
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
+				broker: None,
 			})
 		);
 
@@ -682,6 +684,7 @@ fn boosted_deposit_is_lost() {
 				created_at_block: 1,
 				owed_principal: DEPOSIT_AMOUNT,
 				pending_interest: Default::default(),
+				broker: None,
 			})
 		);
 
@@ -1606,11 +1609,19 @@ mod hybrid_boosting {
 #[test]
 fn get_all_loans_returns_boost_and_user_loans() {
 	use cf_chains::ForeignChain;
-	use cf_traits::mocks::balance_api::{MockBalance, MockLpRegistration};
+	use cf_traits::{
+		mocks::{
+			account_role_registry::MockAccountRoleRegistry,
+			balance_api::{MockBalance, MockLpRegistration},
+		},
+		AccountRoleRegistry,
+	};
 
 	new_test_ext().execute_with(|| {
 		const ETH_PRICE: u128 = 1;
 		const BTC_PRICE: u128 = 20;
+
+		const BROKER: Beneficiary<AccountId> = Beneficiary { account: 987, bps: 100 };
 
 		assert_ok!(LendingPools::update_whitelist(
 			RuntimeOrigin::root(),
@@ -1666,12 +1677,15 @@ fn get_all_loans_returns_boost_and_user_loans() {
 		const USER_LOAN_ID: LoanId = LoanId(1);
 		MockBalance::credit_account(&LP, Asset::Btc, BTC_COLLATERAL);
 		MockLpRegistration::register_refund_address(LP, ForeignChain::Ethereum);
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(
+			&BROKER.account,
+		));
 		assert_ok!(LendingPools::add_lender_funds(
 			RuntimeOrigin::signed(LP),
 			Asset::Btc,
 			BTC_COLLATERAL,
 		));
-		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None,));
+		assert_ok!(LendingPools::new_loan(LP, BOOST_ASSET, PRINCIPAL, None, Some(BROKER)));
 
 		// Boost: owed_principal = required_amount + pool_fee + 0 network_fee =
 		// BOOST_DEPOSIT_AMOUNT.
@@ -1693,6 +1707,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 					asset: Asset::Btc,
 					created_at: 1,
 					principal_amount: BOOST_PRINCIPAL,
+					broker: None,
 				},
 				RpcLoan {
 					loan_id: USER_LOAN_ID,
@@ -1700,6 +1715,7 @@ fn get_all_loans_returns_boost_and_user_loans() {
 					asset: BOOST_ASSET,
 					created_at: 1,
 					principal_amount: USER_PRINCIPAL,
+					broker: Some(BROKER),
 				},
 			]
 		);

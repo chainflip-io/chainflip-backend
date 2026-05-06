@@ -27,7 +27,11 @@ expression: loan_account
         "asset": "USDC"
       },
       "created_at": 400,
-      "principal_amount": "0x3e8"
+      "principal_amount": "0x3e8",
+      "broker": {
+        "account": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        "bps": 100
+      }
     }
   ],
   "liquidation_status": {

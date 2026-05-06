@@ -177,6 +177,16 @@ where
 		available_for_collection
 	}
 
+	/// Collects funds from the pool's available liquidity in order to pay fees before the
+	/// principal is repaid. The borrower's principal is responsible for repaying this back to the
+	/// pool, so the pool's `total_amount` is unaffected. Returns the actually-deducted amount,
+	/// which may be less than `amount` if available liquidity is insufficient.
+	pub fn collect_fee_from_available(&mut self, amount: AssetAmount) -> AssetAmount {
+		let collected = core::cmp::min(self.available_amount, amount);
+		self.available_amount.saturating_reduce(collected);
+		collected
+	}
+
 	/// Inform the pool that it won't be receiving `amount` as a result of account liquidation
 	/// not being able to recover the debt in full. This effectively socialises the loss by
 	/// reducing the pool's total amount.

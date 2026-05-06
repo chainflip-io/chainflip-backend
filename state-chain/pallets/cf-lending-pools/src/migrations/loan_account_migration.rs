@@ -5,7 +5,17 @@ pub struct Migration<T: Config>(PhantomData<T>);
 
 mod old {
 	use super::*;
-	use crate::general_lending::{GeneralLoan, LiquidationStatus};
+	use crate::general_lending::{InterestBreakdown, LiquidationStatus};
+	use cf_traits::lending::LoanId;
+
+	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct GeneralLoan<T: Config> {
+		pub id: LoanId,
+		pub asset: Asset,
+		pub created_at_block: BlockNumberFor<T>,
+		pub owed_principal: AssetAmount,
+		pub pending_interest: InterestBreakdown,
+	}
 
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct LoanAccount<T: Config> {
@@ -13,7 +23,8 @@ mod old {
 		pub collateral_topup_asset: Option<Asset>,
 		// This field is being removed:
 		pub collateral: BTreeMap<Asset, AssetAmount>,
-		pub loans: BTreeMap<cf_traits::lending::LoanId, GeneralLoan<T>>,
+		// Loans are modified: broker field is added
+		pub loans: BTreeMap<LoanId, GeneralLoan<T>>,
 		pub liquidation_status: LiquidationStatus,
 		pub voluntary_liquidation_requested: bool,
 	}
@@ -23,8 +34,21 @@ mod old {
 		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, LoanAccount<T>>;
 }
 
+fn migrate_loan<T: Config>(old_loan: old::GeneralLoan<T>) -> general_lending::GeneralLoan<T> {
+	general_lending::GeneralLoan {
+		id: old_loan.id,
+		asset: old_loan.asset,
+		created_at_block: old_loan.created_at_block,
+		owed_principal: old_loan.owed_principal,
+		pending_interest: old_loan.pending_interest,
+		broker: None,
+	}
+}
+
 impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
+		// Migrate user loan accounts: move collateral to supply pools, drop the `collateral`
+		// field, and add `broker: None` to every nested loan.
 		let old_accounts: Vec<_> = old::LoanAccounts::<T>::drain().collect();
 
 		for (account_id, old_account) in &old_accounts {
@@ -62,13 +86,20 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 				}
 			}
 
-			// Write the new LoanAccount without the collateral field.
+			// Write the new LoanAccount without the collateral field, with `broker: None`
+			// added to each loan.
+			let migrated_loans = old_account
+				.loans
+				.iter()
+				.map(|(id, loan)| (*id, migrate_loan::<T>(loan.clone())))
+				.collect();
+
 			LoanAccounts::<T>::insert(
 				account_id,
 				LoanAccount {
 					borrower_id: old_account.borrower_id.clone(),
 					collateral_topup_asset: old_account.collateral_topup_asset,
-					loans: old_account.loans.clone(),
+					loans: migrated_loans,
 					liquidation_status: old_account.liquidation_status.clone(),
 					voluntary_liquidation_requested: old_account.voluntary_liquidation_requested,
 				},
@@ -76,8 +107,8 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		}
 
 		log::info!(
-			"Migrated {} loan accounts: collateral moved to supply pools",
-			old_accounts.len()
+			"Migrated {} loan accounts (collateral moved to supply pools, broker field added)",
+			old_accounts.len(),
 		);
 
 		Weight::zero()
@@ -135,6 +166,13 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		ensure!(
 			old_total_borrowed == new_total_borrowed,
 			"Total borrowed amounts changed during migration"
+		);
+
+		// Every loan should have `broker: None` after the migration.
+		ensure!(
+			LoanAccounts::<T>::iter()
+				.all(|(_, account)| account.loans.values().all(|loan| loan.broker.is_none())),
+			"User loans should have broker = None after migration",
 		);
 
 		// Verify that total supplied increased by exactly the old collateral amounts.

@@ -15,7 +15,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, PrewitnessedDepositId, SwapRequestId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, Beneficiary, PrewitnessedDepositId,
+	SwapRequestId,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
@@ -105,6 +106,7 @@ pub trait LendingApi {
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
 		collateral_topup_asset: Option<Asset>,
+		broker: Option<Beneficiary<Self::AccountId>>,
 	) -> Result<LoanId, DispatchError>;
 
 	fn try_making_repayment(

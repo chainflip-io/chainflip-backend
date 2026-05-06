@@ -1353,6 +1353,7 @@ fn loan_account_serialization() {
 			created_at: 400,
 			loan_type: LoanType::User(ID_1),
 			principal_amount: 1000u128.into(),
+			broker: Some(Beneficiary { account: ID_2, bps: 100 }),
 		}],
 		liquidation_status: Some(RpcLiquidationStatus {
 			liquidation_swaps: vec![RpcLiquidationSwap {

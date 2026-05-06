@@ -194,7 +194,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 		let lending_loan_id = if lending_pool_principal > 0 {
 			let (network_fee, pool_fee) = split_between_network_and_pool::<T>(lending_pool_fee);
 
-			let mut loan = create_new_loan::<T>(asset);
+			let mut loan = create_new_loan::<T>(asset, None);
 			let loan_id = loan.id;
 
 			Self::deposit_event(Event::LoanCreated {

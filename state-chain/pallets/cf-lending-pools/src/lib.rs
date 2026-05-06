@@ -315,7 +315,7 @@ impl Get<LendingConfiguration> for LendingConfigDefault {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::SwapRequestId;
+	use cf_primitives::{Beneficiary, SwapRequestId};
 
 	use crate::{
 		boost::{BoostPool, BoostedDeposit, BOOST_FEE},
@@ -599,6 +599,12 @@ pub mod pallet {
 		/// The new loan would lower the utilisation cap of one of the borrower's
 		/// collateral pools below that pool's current utilisation.
 		CollateralPoolUtilisationCapExceeded,
+		/// The broker fee specified on the loan request exceeds the maximum allowed.
+		BrokerFeeTooHigh,
+		/// The broker fee (if specified) can't be zero.
+		InvalidZeroBrokerFee,
+		/// Provided broker does not exist.
+		UnknownBroker,
 	}
 
 	#[pallet::hooks]
@@ -916,6 +922,7 @@ pub mod pallet {
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
 			collateral_topup_asset: Option<Asset>,
+			broker: Option<Beneficiary<T::AccountId>>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -924,7 +931,7 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset)?;
+			Self::new_loan(borrower_id, loan_asset, loan_amount, collateral_topup_asset, broker)?;
 
 			Ok(())
 		}

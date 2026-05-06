@@ -118,6 +118,7 @@ async function lendingTestForAsset<A = []>(
         loanAsset,
         amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
         collateralAsset,
+        null,
       ),
     expectedEvent: {
       name: 'LendingPools.LoanCreated',
