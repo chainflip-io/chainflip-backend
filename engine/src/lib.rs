@@ -139,7 +139,7 @@ async fn run_main(
 		async move {
 			let has_completed_initialising = Arc::new(AtomicBool::new(false));
 
-			let (state_chain_stream, unfinalised_state_chain_stream, state_chain_client) =
+			let (state_chain_stream, _unfinalised_state_chain_stream, state_chain_client) =
 				engine_sc_client::StateChainClient::connect_with_account(
 					scope,
 					&settings.state_chain.ws_endpoint,
@@ -351,8 +351,6 @@ async fn run_main(
 				sol_client.clone(),
 				hub_client.clone(),
 				state_chain_client.clone(),
-				state_chain_stream.clone(),
-				unfinalised_state_chain_stream.clone(),
 				db.clone(),
 			)
 			.await?;
