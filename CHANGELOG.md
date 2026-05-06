@@ -6,6 +6,9 @@ All notable changes included in each Chainflip release will be documented in thi
 
 ### Features
 
+- Drop vote tasks for closed elections ([#6525](https://github.com/chainflip-io/chainflip-backend/issues/6525))
+- Restart hub voter process
+- Deduplicate scheduled set/close orders for the same order ([#6548](https://github.com/chainflip-io/chainflip-backend/issues/6548))
 - Impl is_vote_needed for state machine ES ([#6511](https://github.com/chainflip-io/chainflip-backend/issues/6511))
 - Simplify nonce tracking & timeout after ImmediatelyDropped ([#6500](https://github.com/chainflip-io/chainflip-backend/issues/6500))
 - Follow up on transaction submission ([#6474](https://github.com/chainflip-io/chainflip-backend/issues/6474))
