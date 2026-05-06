@@ -687,9 +687,6 @@ pub mod pallet {
 			let redemption @ Redemption { redeem_amount, restricted_redeem_amount, .. } =
 				Redemption::<T>::for_redeem(&account_id, amount, &address)?;
 
-			// Block the redemption if it would push the account's balance below
-			// the amount reserved by an active delegation, or if the account is
-			// an active bidder during the auction phase.
 			T::RedemptionChecker::ensure_can_redeem_amount(
 				&account_id,
 				redemption.total_debit_amount(),
