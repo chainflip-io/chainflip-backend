@@ -1169,7 +1169,8 @@ impl<T: Config> GeneralLoan<T> {
 			Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
 
 			pool.collect_fee_from_available(broker_interest)
-		});
+		})
+		.unwrap_or_default();
 
 		// Any portion of the broker fee that the pool couldn't cover stays in pending so the
 		// next collection round can retry once the pool has more liquidity.
@@ -1976,18 +1977,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Mutates the pool for `asset` expecting it to exist. If the pool is missing the
-	/// closure is skipped and the default value is returned.
-	fn mutate_existing_pool<R, F>(asset: Asset, f: F) -> R
+	/// closure is skipped and `None` is returned.
+	fn mutate_existing_pool<R, F>(asset: Asset, f: F) -> Option<R>
 	where
-		R: Default,
 		F: FnOnce(&mut LendingPool<T::AccountId>) -> R,
 	{
 		GeneralLendingPools::<T>::mutate(asset, |maybe_pool| {
 			if let Some(pool) = maybe_pool.as_mut() {
-				f(pool)
+				Some(f(pool))
 			} else {
 				log_or_panic!("Lending Pool must exist for asset {}", asset);
-				R::default()
+				None
 			}
 		})
 	}
