@@ -18,6 +18,7 @@ use crate::genesis::GENESIS_BALANCE;
 
 use super::{genesis, network, *};
 use cf_primitives::{FLIPPERINOS_PER_FLIP, GENESIS_EPOCH};
+use cf_test_utilities::TestExternalities;
 use cf_traits::{offence_reporting::OffenceReporter, AccountInfo, EpochInfo};
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
@@ -32,7 +33,7 @@ use state_chain_runtime::chainflip::{calculate_account_apy, Offence};
 fn cannot_redeem_funds_out_of_redemption_period() {
 	const EPOCH_DURATION_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
-	super::genesis::with_test_defaults()
+	let snapshot = super::genesis::with_test_defaults()
 		.epoch_duration(EPOCH_DURATION_BLOCKS)
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
@@ -47,9 +48,10 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			nodes.append(&mut extra_nodes);
 
 			// Fund these nodes so that they are included in the next epoch
-			let funding_amount = genesis::GENESIS_BALANCE;
 			for node in &nodes {
-				testnet.state_chain_gateway_contract.fund_account(node.clone(), funding_amount);
+				testnet
+					.state_chain_gateway_contract
+					.fund_account(node.clone(), genesis::GENESIS_BALANCE);
 			}
 
 			// Move forward one block to process events
@@ -61,6 +63,12 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 				"We should be in the genesis epoch"
 			);
 
+			(testnet, nodes)
+		})
+		.snapshot();
+
+	TestExternalities::<Runtime, _>::from_snapshot(snapshot.clone()).then_execute_with(
+		|(_testnet, nodes)| {
 			// We should be able to redeem outside of an auction
 			for node in &nodes {
 				assert_ok!(Funding::redeem(
@@ -70,17 +78,22 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 					Default::default()
 				));
 			}
+		},
+	);
 
+	// If instead we advance to the auction period we should not be able to redeem
+	TestExternalities::<Runtime, _>::from_snapshot(snapshot.clone()).then_execute_with(
+		|(mut testnet, nodes)| {
 			let end_of_redemption_period =
 				EPOCH_DURATION_BLOCKS * REDEMPTION_PERIOD_AS_PERCENTAGE as u32 / 100;
-			// Move to end of the redemption period
+
 			System::set_block_number(end_of_redemption_period + 1);
 			// We will try to redeem
 			for node in &nodes {
 				assert_noop!(
 					Funding::redeem(
 						RuntimeOrigin::signed(node.clone()),
-						funding_amount.into(),
+						(MIN_FUNDING + 1).into(),
 						ETH_DUMMY_ADDR,
 						Default::default()
 					),
@@ -107,10 +120,8 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 				CurrentRotationPhase::<Runtime>::get(),
 			);
 
-			// We should be able to redeem again outside of the auction
-			// At the moment we have a pending redemption so we would expect an error here for
-			// this.
-			// TODO implement Redemptions in Contract/Network
+			// Redemption is still blocked but now due to bond violation (ie. the auction phase
+			// check didn't trigger)
 			for node in &nodes {
 				assert_noop!(
 					Funding::redeem(
@@ -119,10 +130,11 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 						ETH_DUMMY_ADDR,
 						Default::default()
 					),
-					Error::<Runtime>::PendingRedemption
+					Error::<Runtime>::BondViolation
 				);
 			}
-		});
+		},
+	);
 }
 
 #[test]

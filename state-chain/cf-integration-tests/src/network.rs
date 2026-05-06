@@ -116,7 +116,7 @@ macro_rules! witness_broadcast {
 }
 
 // An SC Gateway contract
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ScGatewayContract {
 	// List of balances
 	pub balances: HashMap<NodeId, FlipBalance>,
@@ -206,6 +206,7 @@ impl Cli {
 }
 
 // Engine monitoring contract
+#[derive(Clone)]
 pub struct Engine {
 	pub node_id: NodeId,
 	// Automatically responds to events and responds with "OK".
@@ -220,6 +221,18 @@ pub struct Engine {
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 	pub sol_threshold_signer: Rc<RefCell<SolThresholdSigner>>,
+}
+
+impl core::fmt::Debug for Engine {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Don't print signing keys
+		f.debug_struct("Engine")
+			.field("node_id", &self.node_id)
+			.field("live", &self.live)
+			.field("auto_submit_heartbeat", &self.auto_submit_heartbeat)
+			.field("last_heartbeat", &self.last_heartbeat)
+			.finish()
+	}
 }
 
 impl Engine {
@@ -563,7 +576,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 	));
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
 	pub auto_witness_broadcasts: bool,
