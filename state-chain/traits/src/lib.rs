@@ -312,10 +312,7 @@ pub trait RedemptionCheck {
 	/// transfer if the source has no redemption restrictions, or if the
 	/// recipient is subject to the same restrictions (so funds cannot escape a
 	/// lock by hopping to an unrestricted account).
-	fn ensure_can_transfer(
-		source: &Self::ValidatorId,
-		dest: &Self::ValidatorId,
-	) -> DispatchResult;
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult;
 
 	fn can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> bool {
 		Self::ensure_can_transfer(source, dest).is_ok()

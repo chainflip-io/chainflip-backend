@@ -157,10 +157,7 @@ impl RedemptionCheck for MockRedemptionChecker {
 		Ok(())
 	}
 
-	fn ensure_can_transfer(
-		source: &Self::ValidatorId,
-		dest: &Self::ValidatorId,
-	) -> DispatchResult {
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
 		// Mirrors the validator-pallet impl: source's lock applies unless the
 		// recipient shares it (so funds can't escape the lock by hopping).
 		if MockRedemptionChecker::is_unrestricted(source) ||

@@ -2437,9 +2437,7 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumS
 }
 
 impl<T: Config> Pallet<T> {
-	fn ensure_not_active_bidder_during_auction(
-		validator_id: &ValidatorIdOf<T>,
-	) -> DispatchResult {
+	fn ensure_not_active_bidder_during_auction(validator_id: &ValidatorIdOf<T>) -> DispatchResult {
 		if Self::is_auction_phase() {
 			ensure!(
 				!ActiveBidder::<T>::get()
@@ -2454,9 +2452,9 @@ impl<T: Config> Pallet<T> {
 	/// active-bidder lock during auction phase, nor a delegation reservation.
 	fn is_redemption_unrestricted(validator_id: &ValidatorIdOf<T>) -> bool {
 		Self::ensure_not_active_bidder_during_auction(validator_id).is_ok() &&
-			!DelegationChoice::<T>::contains_key(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(
-				validator_id,
-			))
+			!DelegationChoice::<T>::contains_key(
+				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
+			)
 	}
 }
 
@@ -2473,31 +2471,23 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		// reserved by their stored max_bid — the amount visible to the auction
 		// (capped at max_bid) cannot drop, but funds the user never pledged
 		// remain freely redeemable.
-		if let Some((_, max_bid)) =
-			DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(
-				validator_id,
-			)) {
+		if let Some((_, max_bid)) = DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<
+			T::AccountId,
+		>>::into_ref(validator_id))
+		{
 			let balance = T::FundingInfo::balance(
 				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
 			);
-			ensure!(
-				balance.saturating_sub(amount) >= max_bid,
-				Error::<T>::StillBidding
-			);
+			ensure!(balance.saturating_sub(amount) >= max_bid, Error::<T>::StillBidding);
 		}
 		Ok(())
 	}
 
-	fn ensure_can_transfer(
-		source: &Self::ValidatorId,
-		dest: &Self::ValidatorId,
-	) -> DispatchResult {
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
 		// If the source can move funds out freely, the transfer is fine.
 		// Otherwise the recipient must share the same restriction so funds
 		// can't escape it by hopping to an unrestricted account.
-		if Self::is_redemption_unrestricted(source) ||
-			!Self::is_redemption_unrestricted(dest)
-		{
+		if Self::is_redemption_unrestricted(source) || !Self::is_redemption_unrestricted(dest) {
 			Ok(())
 		} else {
 			Err(Error::<T>::StillBidding.into())
