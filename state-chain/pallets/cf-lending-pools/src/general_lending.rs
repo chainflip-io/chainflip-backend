@@ -644,29 +644,27 @@ impl<T: Config> LoanAccount<T> {
 
 		let mut collateral_to_liquidate = BTreeMap::<Asset, AssetAmount>::new();
 
-		for (asset, amount_to_request) in compute_per_asset_collateral_takes(
+		for (asset, amount_to_request) in compute_per_asset_liquidation_estimates(
 			total_owed_usd,
 			max_oracle_price_slippage_bps,
 			&positions_with_usd,
 		) {
-			GeneralLendingPools::<T>::mutate(asset, |pool| {
-				if let Some(pool) = pool.as_mut() {
-					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
-						pool.remove_funds(&self.borrower_id, Some(amount_to_request))
-					{
-						if withdrawn_amount > 0 {
-							collateral_to_liquidate
-								.entry(asset)
-								.or_default()
-								.saturating_accrue(withdrawn_amount);
+			Pallet::<T>::mutate_existing_pool(asset, |pool| {
+				if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
+					pool.remove_funds(&self.borrower_id, Some(amount_to_request))
+				{
+					if withdrawn_amount > 0 {
+						collateral_to_liquidate
+							.entry(asset)
+							.or_default()
+							.saturating_accrue(withdrawn_amount);
 
-							Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
-								lender_id: self.borrower_id.clone(),
-								asset,
-								unlocked_amount: withdrawn_amount,
-								action_type: SupplyRemovedActionType::SystemLiquidation,
-							});
-						}
+						Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
+							lender_id: self.borrower_id.clone(),
+							asset,
+							unlocked_amount: withdrawn_amount,
+							action_type: SupplyRemovedActionType::SystemLiquidation,
+						});
 					}
 				}
 			});
@@ -1227,7 +1225,7 @@ fn required_collateral_with_slippage(
 /// total available USD value (rounded up so the collected oracle value never falls short
 /// of the per-asset target). Otherwise the function returns the full available amount of
 /// each position.
-fn compute_per_asset_collateral_takes(
+fn compute_per_asset_liquidation_estimates(
 	total_owed_usd: AssetAmount,
 	max_oracle_slippage_bps: BasisPoints,
 	positions: &[(Asset, AssetAmount, AssetAmount)],
@@ -1242,18 +1240,21 @@ fn compute_per_asset_collateral_takes(
 	let total_required_with_slippage_usd =
 		required_collateral_with_slippage(total_owed_usd, max_oracle_slippage_bps);
 	let take_all = total_required_with_slippage_usd >= total_available_usd;
-	let target_total_usd = core::cmp::min(total_required_with_slippage_usd, total_available_usd);
 
 	positions
 		.iter()
 		.map(|&(asset, available_amount, _)| {
+			// In the proportional branch we know `total_required_with_slippage_usd <
+			// total_available_usd` (otherwise `take_all` would be true), so the rounded-up
+			// per-asset share never exceeds `available_amount` mathematically — but we
+			// still cap with `min` to be safe against rounding overflow.
 			let amount = if take_all {
 				available_amount
 			} else {
 				core::cmp::min(
 					multiply_by_rational_with_rounding(
 						available_amount,
-						target_total_usd,
+						total_required_with_slippage_usd,
 						total_available_usd,
 						Rounding::Up,
 					)
@@ -1302,7 +1303,7 @@ mod liquidation_math_tests {
 
 	#[test]
 	fn empty_positions_give_no_takes() {
-		assert!(compute_per_asset_collateral_takes(1_000, 50, &[]).is_empty());
+		assert!(compute_per_asset_liquidation_estimates(1_000, 50, &[]).is_empty());
 	}
 
 	#[test]
@@ -1310,7 +1311,7 @@ mod liquidation_math_tests {
 		// Owed 1_000 USD, slippage 0.5%, available 10_000 USD worth of ETH (10_000 ETH @ $1).
 		// Required = ceil(1_000 / 0.995) = 1_006. ETH price is 1, so amount equals USD.
 		assert_eq!(
-			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 10_000, 10_000)]),
+			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 10_000, 10_000)]),
 			vec![(ETH, 1_006)]
 		);
 	}
@@ -1319,7 +1320,7 @@ mod liquidation_math_tests {
 	fn single_asset_with_deficit_takes_everything() {
 		// Owed 1_000 USD, slippage 0.5% → required 1_006 USD. Only 800 USD available.
 		assert_eq!(
-			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 800, 800)]),
+			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 800, 800)]),
 			vec![(ETH, 800)]
 		);
 	}
@@ -1328,14 +1329,14 @@ mod liquidation_math_tests {
 	fn at_required_threshold_takes_all() {
 		// Exactly enough collateral (in USD) to cover the slippage-buffered owed amount.
 		assert_eq!(
-			compute_per_asset_collateral_takes(1_000, 50, &[(ETH, 1_006, 1_006)]),
+			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 1_006, 1_006)]),
 			vec![(ETH, 1_006)]
 		);
 	}
 
 	#[test]
 	fn zero_owed_takes_nothing() {
-		assert!(compute_per_asset_collateral_takes(0, 50, &[(ETH, 1_000, 1_000)]).is_empty());
+		assert!(compute_per_asset_liquidation_estimates(0, 50, &[(ETH, 1_000, 1_000)]).is_empty());
 	}
 
 	#[test]
@@ -1343,7 +1344,7 @@ mod liquidation_math_tests {
 		// Owed 1_000 USD, slippage 0%, available: 100 ETH @ $5 and 50 BTC @ $10 = $500 each.
 		// target = 1_000, total_avail = 1_000 → take everything.
 		assert_eq!(
-			compute_per_asset_collateral_takes(1_000, 0, &[(ETH, 100, 500), (BTC, 50, 500)]),
+			compute_per_asset_liquidation_estimates(1_000, 0, &[(ETH, 100, 500), (BTC, 50, 500)]),
 			vec![(ETH, 100), (BTC, 50)]
 		);
 	}
@@ -1354,7 +1355,7 @@ mod liquidation_math_tests {
 		// Owed 550 USD, slippage 0% → target = 550. ETH share = 100/1100 ≈ 9.09%, SOL = 90.91%.
 		// ETH take = ceil(100 * 550 / 1100) = 50. SOL take = ceil(200 * 550 / 1100) = 100.
 		assert_eq!(
-			compute_per_asset_collateral_takes(550, 0, &[(ETH, 100, 100), (SOL, 200, 1_000)]),
+			compute_per_asset_liquidation_estimates(550, 0, &[(ETH, 100, 100), (SOL, 200, 1_000)]),
 			vec![(ETH, 50), (SOL, 100)]
 		);
 	}
@@ -1366,7 +1367,7 @@ mod liquidation_math_tests {
 		// 502_513. Per-asset: ETH = ceil(1_000 * 502_513 / 1_002_500) ≈ 502, SOL = ceil(500 *
 		// 502_513 / 1_002_500) ≈ 251, USDC = ceil(1_000_000 * 502_513 / 1_002_500) ≈ 501_260.
 		assert_eq!(
-			compute_per_asset_collateral_takes(
+			compute_per_asset_liquidation_estimates(
 				500_000,
 				50,
 				&[(ETH, 1_000, 2_000), (SOL, 500, 500), (USDC, 1_000_000, 1_000_000)],
@@ -1381,7 +1382,7 @@ mod liquidation_math_tests {
 		// Owed 33 USD, slippage 0% → target 33 USD, total avail 100 USD. Each share = 33/2 USD
 		// rounded up. ETH: ceil(7 * 33 / 100) = ceil(2.31) = 3. SOL: ceil(13 * 33 / 100) =
 		// ceil(4.29) = 5. The sum (8 + leftover from rounding) covers the target.
-		let takes = compute_per_asset_collateral_takes(33, 0, &[(ETH, 7, 50), (SOL, 13, 50)]);
+		let takes = compute_per_asset_liquidation_estimates(33, 0, &[(ETH, 7, 50), (SOL, 13, 50)]);
 		assert_eq!(takes, vec![(ETH, 3), (SOL, 5)]);
 	}
 
@@ -1389,7 +1390,7 @@ mod liquidation_math_tests {
 	fn deficit_in_some_assets_still_takes_all_when_total_required_exceeds_available() {
 		// Required 100_000 USD with 0% slippage but only $300 + $200 = $500 available → take all.
 		assert_eq!(
-			compute_per_asset_collateral_takes(100_000, 0, &[(ETH, 30, 300), (SOL, 100, 200)],),
+			compute_per_asset_liquidation_estimates(100_000, 0, &[(ETH, 30, 300), (SOL, 100, 200)],),
 			vec![(ETH, 30), (SOL, 100)]
 		);
 	}
@@ -1398,7 +1399,7 @@ mod liquidation_math_tests {
 	fn extreme_slippage_forces_take_all() {
 		// 99.5% slippage means required ≈ 200x owed → almost certainly exceeds available.
 		assert_eq!(
-			compute_per_asset_collateral_takes(100, 9_950, &[(ETH, 50, 50)]),
+			compute_per_asset_liquidation_estimates(100, 9_950, &[(ETH, 50, 50)]),
 			vec![(ETH, 50)]
 		);
 	}

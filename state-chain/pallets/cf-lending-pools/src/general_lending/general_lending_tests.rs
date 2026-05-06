@@ -2091,7 +2091,7 @@ mod multi_asset_collateral_liquidation {
 		// Soft liquidation only collects the owed principal (in USD) plus the slippage
 		// buffer, drawn proportionally from each available collateral asset; the rest
 		// stays in the supply pools throughout liquidation.
-		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_liquidation_estimates(
 			TOTAL_OWED * NEW_SWAP_RATE,
 			CONFIG.soft_liquidation_max_oracle_slippage,
 			&[
@@ -2238,7 +2238,7 @@ mod multi_asset_collateral_liquidation {
 		// Soft liquidation only collects the owed principal (in USD) plus the slippage
 		// buffer, drawn proportionally from each available collateral asset; the rest
 		// stays in the supply pools throughout liquidation.
-		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_liquidation_estimates(
 			TOTAL_OWED * NEW_SWAP_RATE,
 			CONFIG.soft_liquidation_max_oracle_slippage,
 			&[
@@ -2365,7 +2365,7 @@ mod multi_asset_collateral_liquidation {
 		// stays in the supply pools throughout liquidation.
 		let total_owed_usd = (PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE +
 			(PRINCIPAL_2 + ORIGINATION_FEE_2) * SWAP_RATE;
-		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_collateral_takes(
+		let liquidation_takes: BTreeMap<Asset, AssetAmount> = compute_per_asset_liquidation_estimates(
 			total_owed_usd,
 			CONFIG.soft_liquidation_max_oracle_slippage,
 			&[
