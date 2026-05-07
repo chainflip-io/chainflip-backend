@@ -2472,6 +2472,218 @@ mod multi_asset_collateral_liquidation {
 				);
 			});
 	}
+
+	/// When one loan's only liquidation swap completes with a shortfall while a sibling
+	/// loan's swap is still in flight, the shortfall loan must NOT be written off as bad
+	/// debt: the sibling swap may finish with excess that becomes available collateral
+	/// (via `supply_from_liquidation`) and the next upkeep round can liquidate against
+	/// it. Settlement is therefore deferred until no liquidation swaps remain in flight
+	/// for the borrower.
+	#[test]
+	fn loan_not_written_off_while_sibling_liquidation_swap_in_flight() {
+		const LOAN_ID_2: LoanId = LoanId(1);
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL;
+
+		// Total collateral covers both loans together at the same ~75% LTV the single-loan
+		// tests start at.
+		const TOTAL_COLLATERAL: AssetAmount = INIT_COLLATERAL * 2;
+
+		// Doubling the loan-asset price pushes total LTV to ~150%, forcing the take-all
+		// branch in `compute_per_asset_liquidation_estimates` so all collateral is drained
+		// from supply and split between the two loans' liquidation swaps.
+		const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+		// Loan 1's swap returns less than its share of principal (severe slippage).
+		const LOAN_1_SWAP_OUTPUT: AssetAmount = PRINCIPAL / 2;
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT * 4)
+			.then_execute_with(|_| {
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, TOTAL_COLLATERAL);
+				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+
+				assert_eq!(
+					create_loan_and_supply_collateral(
+						BORROWER,
+						LOAN_ASSET,
+						PRINCIPAL,
+						BTreeMap::from([(COLLATERAL_ASSET, TOTAL_COLLATERAL)]),
+					),
+					Ok(LOAN_ID),
+				);
+				assert_eq!(
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL_2, None),
+					Ok(LOAN_ID_2),
+				);
+			})
+			.then_execute_with(|_| {
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				// All collateral has been pulled into liquidation swaps (take_all path):
+				let acc = get_loan_account();
+				assert!(general_lending::is_zero_collateral(&acc.get_collateral_in_supply_pools()));
+				match &acc.liquidation_status {
+					LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
+						assert_eq!(liquidation_swaps.len(), 2);
+						assert!(liquidation_swaps.values().any(|s| s.loan_id == LOAN_ID));
+						assert!(liquidation_swaps.values().any(|s| s.loan_id == LOAN_ID_2));
+					},
+					_ => panic!("expected Liquidating status"),
+				}
+
+				// Loan 1's swap completes first, with a shortfall. Loan 2's swap is still
+				// in flight at this point — supply pools are empty.
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_1,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					LOAN_1_SWAP_OUTPUT,
+				);
+
+				let acc = get_loan_account();
+
+				// Loan 1 must NOT be written off while loan 2's swap is still in flight,
+				// even though no collateral remains in supply pools.
+				assert!(acc.loans.contains_key(&LOAN_ID));
+
+				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
+				assert_eq!(
+					acc.loans[&LOAN_ID].owed_principal,
+					PRINCIPAL + ORIGINATION_FEE - l1_repaid,
+				);
+
+				// Liquidation status is still `Liquidating`, with only loan 2's swap left.
+				match &acc.liquidation_status {
+					LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
+						assert_eq!(liquidation_swaps.len(), 1);
+						assert!(liquidation_swaps.values().all(|s| s.loan_id == LOAN_ID_2));
+					},
+					_ => panic!(
+						"expected Liquidating status to persist while sibling swap in flight"
+					),
+				}
+
+				// Loan 2's swap also completes with a shortfall, leaving the borrower with
+				// no collateral and no swaps in flight. At this point both loans are
+				// unrecoverable and must be written off — otherwise loan 1 would be stuck
+				// forever (no collateral means the next upkeep can't initiate new swaps).
+				const LOAN_2_SWAP_OUTPUT: AssetAmount = PRINCIPAL_2 / 2;
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_2,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID_2 },
+					LOAN_2_SWAP_OUTPUT,
+				);
+
+				// Both loans written off as bad debt; account removed.
+				assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
+			});
+	}
+
+	/// Companion to [loan_not_written_off_while_sibling_liquidation_swap_in_flight] where
+	/// loan 2's swap completes with *excess* (positive slippage). The deferred loan 1 must
+	/// not be written off; loan 2 settles cleanly, the excess lands in the loan-asset
+	/// supply pool, and the next upkeep round can attempt to re-liquidate loan 1 against
+	/// the freshly available collateral.
+	#[test]
+	fn deferred_loan_recovers_when_sibling_swap_returns_excess() {
+		const LOAN_ID_2: LoanId = LoanId(1);
+		const PRINCIPAL_2: AssetAmount = PRINCIPAL;
+
+		const TOTAL_COLLATERAL: AssetAmount = INIT_COLLATERAL * 2;
+		const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
+
+		// Loan 1's swap returns less than its share of principal (severe slippage).
+		const LOAN_1_SWAP_OUTPUT: AssetAmount = PRINCIPAL / 2;
+		// Loan 2's swap returns enough to fully repay loan 2 and leave a small excess in
+		// the loan-asset supply pool — but not enough collateral to bring loan 1's LTV
+		// back below the soft-liquidation threshold, so the next upkeep round must
+		// re-enter liquidation for loan 1.
+		const LOAN_2_SWAP_OUTPUT: AssetAmount = 11 * PRINCIPAL_2 / 10;
+
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT * 4)
+			.then_execute_with(|_| {
+				MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, TOTAL_COLLATERAL);
+				MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+
+				assert_eq!(
+					create_loan_and_supply_collateral(
+						BORROWER,
+						LOAN_ASSET,
+						PRINCIPAL,
+						BTreeMap::from([(COLLATERAL_ASSET, TOTAL_COLLATERAL)]),
+					),
+					Ok(LOAN_ID),
+				);
+				assert_eq!(
+					LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL_2, None),
+					Ok(LOAN_ID_2),
+				);
+			})
+			.then_execute_with(|_| {
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
+			})
+			.then_execute_at_next_block(|_| {
+				// Loan 1's swap completes first with a shortfall: deferred (sibling in flight).
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_1,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
+					LOAN_1_SWAP_OUTPUT,
+				);
+				assert!(get_loan_account().loans.contains_key(&LOAN_ID));
+
+				// Loan 2's swap completes with excess.
+				LendingPools::process_loan_swap_outcome(
+					LIQUIDATION_SWAP_2,
+					LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID_2 },
+					LOAN_2_SWAP_OUTPUT,
+				);
+
+				let acc = get_loan_account();
+
+				// Loan 2 fully repaid + settled. Loan 1 still outstanding (no premature
+				// write-off because the loan-asset supply pool now holds the excess from
+				// loan 2's swap, so `no_collateral_left` was false at the sweep check).
+				assert!(!acc.loans.contains_key(&LOAN_ID_2));
+				assert!(acc.loans.contains_key(&LOAN_ID));
+
+				let liquidation_fee_1 = CONFIG.liquidation_fee(LOAN_ASSET) * LOAN_1_SWAP_OUTPUT;
+				let l1_repaid = LOAN_1_SWAP_OUTPUT - liquidation_fee_1;
+				assert_eq!(
+					acc.loans[&LOAN_ID].owed_principal,
+					PRINCIPAL + ORIGINATION_FEE - l1_repaid,
+				);
+
+				// Liquidation finished from the perspective of the swap engine.
+				assert_eq!(acc.liquidation_status, LiquidationStatus::NoLiquidation);
+
+				// Loan 2's excess (after the loan-2 liquidation fee) sits in the loan-asset
+				// supply pool, available as collateral for the next upkeep round.
+				let liquidation_fee_2 =
+					CONFIG.liquidation_fee(LOAN_ASSET) * (PRINCIPAL_2 + ORIGINATION_FEE);
+				let expected_excess =
+					LOAN_2_SWAP_OUTPUT - (PRINCIPAL_2 + ORIGINATION_FEE) - liquidation_fee_2;
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(LOAN_ASSET)
+						.unwrap()
+						.get_supply_position_for_account(&BORROWER)
+						.unwrap(),
+					expected_excess,
+				);
+			})
+			.then_execute_at_next_block(|_| {
+				// Next upkeep observes loan 1's outstanding principal against the freshly
+				// supplied loan-asset collateral (from loan 2's excess), finds LTV still
+				// above the soft-liquidation threshold, and re-enters liquidation for
+				// loan 1 — proving the deferred loan really does keep making progress
+				// rather than sitting unrepayable.
+				let acc = get_loan_account();
+				assert!(acc.loans.contains_key(&LOAN_ID));
+				assert!(!acc.loans.contains_key(&LOAN_ID_2));
+				assert_matches!(acc.liquidation_status, LiquidationStatus::Liquidating { .. });
+			});
+	}
 }
 
 #[test]

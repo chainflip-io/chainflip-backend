@@ -1788,19 +1788,23 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						is_zero_collateral(&loan_account.get_collateral_in_supply_pools());
 
 					// If this swap is the last liquidation swap for the loan, we should
-					// "settle" it (even if it hasn't been repaid in full):
+					// "settle" it if it has been fully repaid:
 					if is_last_liquidation_swap_for_loan {
 						if let Some(loan) = loan_account.loans.get(&loan_id) {
 							if loan.owed_principal == 0 {
-								// If the loan is fully repaid, we "settle" it:
 								loan_account.settle_loan(loan_id, true /* via liquidation */);
-							} else {
-								// Otherwise, only settle (write-off) the loan if the user has
-								// no other funds that may become available for liquidation later:
-								if no_collateral_left {
-									loan_account
-										.settle_loan(loan_id, true /* via liquidation */);
-								}
+							}
+						}
+
+						// If all liquidation swaps have finished and we have no collateral left,
+						// write off any remaining loans:
+						if loan_account.liquidation_status == LiquidationStatus::NoLiquidation &&
+							no_collateral_left
+						{
+							let unrecoverable: Vec<LoanId> =
+								loan_account.loans.iter().map(|(id, _)| *id).collect();
+							for loan_id in unrecoverable {
+								loan_account.settle_loan(loan_id, true /* via liquidation */);
 							}
 						}
 
