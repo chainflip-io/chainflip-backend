@@ -813,6 +813,7 @@ impl_runtime_apis! {
 			};
 
 			RpcAccountInfoCommonItems {
+				account_id: Some(account_id.clone()),
 				vanity_name: pallet_cf_account_roles::VanityNames::<Runtime>::get().get(account_id)
 					.cloned()
 					.unwrap_or_default()

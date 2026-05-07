@@ -221,6 +221,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
 	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
 		Self {
+			account_id: None,
 			vanity_name: value.vanity_name,
 			flip_balance: value.flip_balance,
 			asset_balances: value.asset_balances.into(),

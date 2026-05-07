@@ -6,6 +6,7 @@ use super::*;
 fn test_no_account_serialization() {
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"NO_ACCOUNT".to_vec(),
 			flip_balance: 1500000000000000000u128.into(), // 1.5 FLIP
 			asset_balances: any::AssetMap {
@@ -78,6 +79,7 @@ fn test_broker_serialization() {
 
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: 5000000000000000000u128.into(), // 5 FLIP
 			asset_balances: Default::default(),
@@ -215,6 +217,7 @@ fn test_lp_serialization() {
 
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: 25000000000000000000u128.into(), // 25 FLIP
 			asset_balances,
@@ -241,6 +244,7 @@ fn test_lp_serialization() {
 fn test_validator_serialization() {
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: (FLIPPERINOS_PER_FLIP * 50).into(), // 50 FLIP
 			asset_balances: any::AssetMap {
