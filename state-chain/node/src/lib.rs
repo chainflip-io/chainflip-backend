@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod chain_spec;
+mod runtime_warmer;
 pub mod service;
 
 pub use chain_spec::test_account_from_seed;

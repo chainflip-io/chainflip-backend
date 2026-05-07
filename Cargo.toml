@@ -249,6 +249,7 @@ sc-consensus-aura = { git = "https://github.com/chainflip-io/polkadot-sdk.git", 
 sc-consensus-grandpa = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 sc-consensus-grandpa-rpc = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
+sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 sc-keystore = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 sc-network = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
 sc-offchain = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-2.2.0", default-features = false }
