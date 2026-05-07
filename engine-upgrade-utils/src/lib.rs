@@ -67,6 +67,8 @@ pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
 	copy_arg(&mut compatible_args, "hub.backup_rpc.ws_endpoint", "dot.backup_rpc.ws_endpoint");
 	copy_arg(&mut compatible_args, "hub.backup_rpc.http_endpoint", "dot.backup_rpc.http_endpoint");
 
+	compatible_args.retain(|arg| !arg.starts_with("--tron."));
+
 	compatible_args
 }
 

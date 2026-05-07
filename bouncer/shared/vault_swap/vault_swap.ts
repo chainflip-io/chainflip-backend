@@ -4,11 +4,26 @@ import {
   stateChainAssetFromAsset,
   chainFromAsset,
   decodeDotAddressForContract,
+  getEncodedTronAddress,
   Chains,
   Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams } from 'shared/new_swap';
 import { AssetAndChain } from '@chainflip/utils/chainflip';
+
+export type ChannelRefundParameters = {
+  retry_duration: number;
+  refund_address: string;
+  min_price: string;
+  refund_ccm_metadata:
+    | {
+        message: string;
+        gas_budget: string;
+        ccm_additional_data: string | undefined;
+      }
+    | undefined;
+  max_oracle_price_slippage: number | undefined;
+};
 
 function toCcmRpcParams(metadata: CcmDepositMetadata) {
   return {
@@ -40,7 +55,7 @@ type VaultSwapInputRpc = {
   dca_parameters: { number_of_chunks: number; chunk_interval: number } | null;
 };
 
-const evmChains: ReadonlySet<string> = new Set([Chains.Ethereum, Chains.Arbitrum]);
+const evmChains: ReadonlySet<string> = new Set([Chains.Ethereum, Chains.Arbitrum, Chains.Tron]);
 
 /**
  * Requests the encoded vault swap parameters using the `cf_request_swap_parameter_encoding` RPC.
@@ -59,10 +74,12 @@ export async function requestSwapParameterEncoding<T>(
   affiliateFees: { account: string; bps: number }[],
   dcaParams: DcaParams | undefined,
 ): Promise<T> {
-  const encodedDestAddress =
-    chainFromAsset(destAsset) === Chains.Assethub
-      ? decodeDotAddressForContract(destAddress)
-      : destAddress;
+  let encodedDestAddress = destAddress;
+  if (chainFromAsset(destAsset) === Chains.Assethub) {
+    encodedDestAddress = decodeDotAddressForContract(destAddress);
+  } else if (chainFromAsset(destAsset) === Chains.Tron) {
+    encodedDestAddress = getEncodedTronAddress(destAddress);
+  }
 
   // Encode the payload
   const encoded = (await chainflip.rpc(

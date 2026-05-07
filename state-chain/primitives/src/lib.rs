@@ -622,6 +622,7 @@ impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
 	}
 }
 /// Used in cf_ingress_egress and in cf_chains.
+#[derive(Clone)]
 pub enum IngressOrEgress {
 	IngressDepositChannel,
 	IngressVaultSwap,
@@ -669,4 +670,5 @@ pub enum WitnessingTaskName {
 	Solana,
 	Assethub,
 	Oracle,
+	Tron,
 }

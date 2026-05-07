@@ -197,6 +197,10 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_16::LiquidityProviderInfo;
+		#[changed_in(17)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_17::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
@@ -210,11 +214,17 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		#[changed_in(16)]
 		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		#[changed_in(16)]
 		fn cf_lp_total_balances(
 			account_id: AccountId32,
 		) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -224,6 +234,11 @@ decl_runtime_apis!(
 		fn cf_failed_call_arbitrum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
+		#[changed_in(17)]
+		fn cf_failed_call_tron();
+		fn cf_failed_call_tron(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Tron as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(
@@ -234,6 +249,8 @@ decl_runtime_apis!(
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails<AccountId32>>;
+		#[changed_in(17)]
+		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -303,6 +320,8 @@ decl_runtime_apis!(
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		#[changed_in(16)]
 		fn cf_vault_addresses() -> before_version_16::VaultAddresses;
+		#[changed_in(17)]
+		fn cf_vault_addresses() -> before_version_17::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
@@ -310,9 +329,13 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		#[changed_in(16)]
 		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
+		#[changed_in(17)]
+		fn cf_trading_strategy_limits() -> before_version_17::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		#[changed_in(16)]
 		fn cf_network_fees() -> before_version_16::NetworkFees;
+		#[changed_in(17)]
+		fn cf_network_fees() -> before_version_17::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(17)]
 		fn cf_lending_pools(
@@ -354,6 +377,10 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(17)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+		) -> before_version_17::RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
@@ -383,6 +410,8 @@ decl_runtime_apis!(
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 		#[changed_in(16)]
 		fn cf_default_oracle_price_protection();
+		#[changed_in(17)]
+		fn cf_default_oracle_price_protection() -> before_version_17::AssetMap<Option<BasisPoints>>;
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.

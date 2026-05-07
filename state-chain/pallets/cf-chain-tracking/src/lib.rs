@@ -28,11 +28,11 @@ pub use weights::WeightInfo;
 
 use cf_chains::{Chain, ChainState, FeeEstimationApi};
 use cf_primitives::IngressOrEgress;
-use cf_traits::{AdjustedFeeEstimationApi, Chainflip, GetBlockHeight};
+use cf_traits::{AdjustedFeeEstimationApi, Chainflip, FeeMultiplierProvider, GetBlockHeight};
 use frame_support::{dispatch::DispatchResult, pallet_prelude::*};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::{FixedPointNumber, FixedU128};
+use sp_runtime::FixedU128;
 use sp_std::marker::PhantomData;
 
 const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
@@ -57,6 +57,9 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: Chainflip {
 		/// A marker trait identifying the chain whose state we are tracking.
 		type TargetChain: Chain;
+
+		/// Controls how the fee multiplier is applied to fee estimates.
+		type FeeMultiplierProvider: FeeMultiplierProvider<Self::TargetChain>;
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
@@ -228,11 +231,15 @@ impl<T: Config<I>, I: 'static> AdjustedFeeEstimationApi<T::TargetChain> for Pall
 		asset: <T::TargetChain as Chain>::ChainAsset,
 		ingress_or_egress: IngressOrEgress,
 	) -> <T::TargetChain as Chain>::ChainAmount {
-		FeeMultiplier::<T, I>::get().saturating_mul_int(
-			CurrentChainState::<T, I>::get()
-				.expect(NO_CHAIN_STATE)
-				.tracked_data
-				.estimate_fee(asset, ingress_or_egress),
+		let estimated_fee = CurrentChainState::<T, I>::get()
+			.expect(NO_CHAIN_STATE)
+			.tracked_data
+			.estimate_fee(asset, ingress_or_egress.clone());
+
+		T::FeeMultiplierProvider::adjust_fee(
+			estimated_fee,
+			FeeMultiplier::<T, I>::get(),
+			&ingress_or_egress,
 		)
 	}
 }

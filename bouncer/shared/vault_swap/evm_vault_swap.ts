@@ -16,8 +16,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { signAndSendTxEvm } from 'shared/send_evm';
-import { ChannelRefundParameters } from './sol_vault_swap';
-import { requestSwapParameterEncoding } from './vault_swap';
+import { ChannelRefundParameters, requestSwapParameterEncoding } from './vault_swap';
 
 const erc20Assets: Asset[] = ['Flip', 'Usdc', 'Usdt', 'Wbtc', 'ArbUsdc', 'ArbUsdt'];
 
@@ -28,10 +27,80 @@ interface EvmVaultSwapDetails {
   to: string;
 }
 
-interface EvmVaultSwapExtraParameters {
-  chain: 'Ethereum' | 'Arbitrum';
+export interface EvmVaultSwapExtraParameters {
+  chain: 'Ethereum' | 'Arbitrum' | 'Tron';
   input_amount: string;
   refund_parameters: ChannelRefundParameters;
+}
+
+/**
+ * Shared prep + `cf_request_swap_parameter_encoding` call for EVM-encoded vault swaps
+ * (Ethereum, Arbitrum, Tron). Returns the encoded details alongside the amounts used
+ * so callers can perform chain-specific signing/broadcasting.
+ */
+export async function encodeEvmVaultSwapParams<T>(
+  cf: ChainflipIO<WithBrokerAccount>,
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  brokerCommissionBps: number = 0,
+  messageMetadata?: CcmDepositMetadata,
+  amount?: string,
+  boostFeeBps?: number,
+  fillOrKillParams?: FillOrKillParamsX128,
+  dcaParams?: DcaParams,
+  affiliateFees: { accountAddress: string; commissionBps: number }[] = [],
+  optionalRefundAddress?: string,
+): Promise<{ vaultSwapDetails: T; amountToSwap: string; fineAmount: string }> {
+  const srcChain = chainFromAsset(sourceAsset);
+  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
+  const refundAddress =
+    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
+  const fokParams = fillOrKillParams ?? {
+    retryDurationBlocks: 0,
+    refundAddress,
+    minPriceX128: '0',
+  };
+  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
+
+  await using chainflip = await getChainflipApi();
+
+  const refundParams: ChannelRefundParameters = {
+    retry_duration: fokParams.retryDurationBlocks,
+    refund_address: fokParams.refundAddress,
+    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
+    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
+      ? {
+          message: fillOrKillParams.refundCcmMetadata.message,
+          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
+          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
+        }
+      : undefined,
+    max_oracle_price_slippage: undefined,
+  };
+
+  const extraParameters: EvmVaultSwapExtraParameters = {
+    chain: srcChain as EvmVaultSwapExtraParameters['chain'],
+    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
+    refund_parameters: refundParams,
+  };
+
+  cf.debug('Requesting vault swap parameter encoding');
+  const vaultSwapDetails = await requestSwapParameterEncoding<T>(
+    chainflip,
+    cf.requirements.account.keypair.address,
+    sourceAsset,
+    destAsset,
+    destAddress,
+    brokerCommissionBps,
+    extraParameters,
+    messageMetadata,
+    boostFeeBps ?? 0,
+    affiliateFees.map((fee) => ({ account: fee.accountAddress, bps: fee.commissionBps })),
+    dcaParams,
+  );
+
+  return { vaultSwapDetails, amountToSwap, fineAmount };
 }
 
 export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
@@ -53,19 +122,11 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
   optionalRefundAddress?: string,
 ) {
   const srcChain = chainFromAsset(sourceAsset);
-  const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
-  const refundAddress =
-    optionalRefundAddress ?? (await newAssetAddress(sourceAsset, randomBytes(32).toString('hex')));
-  const fokParams = fillOrKillParams ?? {
-    retryDurationBlocks: 0,
-    refundAddress,
-    minPriceX128: '0',
-  };
-  const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
   cf.debug('Creating evm wallet ...');
   const evmWallet = wallet ?? (await createEvmWalletAndFund(cf.logger, sourceAsset, amount));
 
   if (erc20Assets.includes(sourceAsset)) {
+    const amountToSwap = amount ?? defaultAssetAmounts(sourceAsset);
     cf.debug(`Approving EvmTokenVault ${sourceAsset} for evm wallet ${evmWallet.address}`);
     // Doing effectively infinite approvals to make sure it doesn't fail.
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
@@ -76,41 +137,19 @@ export async function executeEvmVaultSwap<A extends WithBrokerAccount>(
     );
   }
 
-  await using chainflip = await getChainflipApi();
-
-  const refundParams: ChannelRefundParameters = {
-    retry_duration: fokParams.retryDurationBlocks,
-    refund_address: fokParams.refundAddress,
-    min_price: '0x' + new BigNumber(fokParams.minPriceX128).toString(16),
-    refund_ccm_metadata: fillOrKillParams?.refundCcmMetadata
-      ? {
-          message: fillOrKillParams.refundCcmMetadata.message,
-          gas_budget: fillOrKillParams.refundCcmMetadata.gasBudget,
-          ccm_additional_data: fillOrKillParams.refundCcmMetadata.ccmAdditionalData,
-        }
-      : undefined,
-    max_oracle_price_slippage: undefined,
-  };
-
-  const extraParameters: EvmVaultSwapExtraParameters = {
-    chain: srcChain as 'Ethereum' | 'Arbitrum',
-    input_amount: '0x' + new BigNumber(fineAmount).toString(16),
-    refund_parameters: refundParams,
-  };
-
-  cf.debug('Requesting vault swap parameter encoding');
-  const vaultSwapDetails = await requestSwapParameterEncoding<EvmVaultSwapDetails>(
-    chainflip,
-    cf.requirements.account.keypair.address,
+  const { vaultSwapDetails } = await encodeEvmVaultSwapParams<EvmVaultSwapDetails>(
+    cf,
     sourceAsset,
     destAsset,
     destAddress,
     brokerCommissionBps,
-    extraParameters,
     messageMetadata,
-    boostFeeBps ?? 0,
-    affiliateFees.map((fee) => ({ account: fee.accountAddress, bps: fee.commissionBps })),
+    amount,
+    boostFeeBps,
+    fillOrKillParams,
     dcaParams,
+    affiliateFees,
+    optionalRefundAddress,
   );
 
   const tx = {

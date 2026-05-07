@@ -77,6 +77,8 @@ macro_rules! vault_deposit_witness {
 	}
 }
 
+pub(crate) use vault_deposit_witness;
+
 fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 	from: Primitive,
 ) -> Result<CfType>

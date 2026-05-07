@@ -1106,6 +1106,13 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
 
+	#[method(name = "failed_call_tron")]
+	fn cf_failed_call_tron(
+		&self,
+		broadcast_id: BroadcastId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<<cf_chains::Tron as Chain>::Transaction>>;
+
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
 		&self,
@@ -1194,6 +1201,21 @@ pub trait CustomApi {
 
 	#[method(name = "arbitrum_filter_votes")]
 	fn cf_arbitrum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "tron_electoral_data")]
+	fn cf_tron_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "tron_filter_votes")]
+	fn cf_tron_filter_votes(
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
@@ -1695,6 +1717,7 @@ where
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
+		cf_failed_call_tron(broadcast_id: BroadcastId) -> Option<<cf_chains::Tron as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
@@ -1727,8 +1750,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeSafeMode> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, _version| api.cf_safe_mode_statuses(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_17(hash)?.into())
+			} else {
+				api.cf_safe_mode_statuses(hash)
+			}
+		})
 	}
 
 	fn cf_free_balances(
@@ -1740,6 +1769,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}
@@ -1756,6 +1788,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
@@ -1771,6 +1806,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_trading_strategy_limits_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_trading_strategy_limits_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_trading_strategy_limits(hash)
 			}
@@ -2011,6 +2049,9 @@ where
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+				} else if api_version < 17 {
+					#[expect(deprecated)]
+					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
 				} else {
 					api.cf_common_account_info(hash, &account_id)?
 				}
@@ -2076,6 +2117,13 @@ where
 							} else if api_version < 16 {
 								#[expect(deprecated)]
 								api.cf_liquidity_provider_info_before_version_16(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
+							} else if api_version < 17 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_17(
 									hash,
 									account_id.clone(),
 								)?
@@ -2306,6 +2354,9 @@ where
 			let mut boost_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
+				if version < 17 && chain == ForeignChain::Tron {
+					continue;
+				}
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
 				// These fields were added in version 8 of the runtime API
@@ -2317,16 +2368,28 @@ where
 
 			Ok::<_, CfApiError>(IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_min_deposit_amount(hash, asset).map(Into::into)
 				})?,
 				ingress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_ingress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				egress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_egress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				witness_safety_margins,
 				egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_egress_dust_limit(hash, asset).map(Into::into)
 				})?,
 				channel_opening_fees,
@@ -2358,11 +2421,17 @@ where
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
 				api.cf_network_fees_before_version_16(hash)?.into()
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_network_fees_before_version_17(hash)?.into()
 			} else {
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
@@ -2374,10 +2443,22 @@ where
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
 				network_fees,
-				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
+				default_oracle_price_protection: if version < 17 {
+					if version < 16 {
+						any::AssetMap::default()
+					} else {
+						#[expect(deprecated)]
+						api.cf_default_oracle_price_protection_before_version_17(hash)?.into()
+					}
+				} else {
+					api.cf_default_oracle_price_protection(hash)?
+				},
 			})
 		})
 	}
@@ -2716,6 +2797,26 @@ where
 		})
 	}
 
+	fn cf_tron_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_tron_electoral_data(hash, validator))
+	}
+
+	fn cf_tron_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_tron_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
 	fn cf_request_swap_parameter_encoding(
 		&self,
 		broker: state_chain_runtime::AccountId,
@@ -3005,6 +3106,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_vault_addresses(hash)
 			}
@@ -3032,6 +3136,7 @@ where
 			solana_usdc_token_vault_ata,
 			solana_usdt_token_vault_ata,
 			solana_vault_swap_account,
+			tron,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
@@ -3101,7 +3206,7 @@ where
 					name: "solana_sol_vault_swap_account".into(),
 					address: AddressString::from_encoded_address(solana_vault_swap_account),
 					explanation: none_if_compact("Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into()),
-					rotation_policy: rotates_never,
+					rotation_policy: rotates_never.clone(),
 					next_predicted_rotation: None,
 				})
 			}
@@ -3131,6 +3236,16 @@ where
 				}
 			}));
 			result.insert(ForeignChain::Bitcoin, bitcoin_addresses);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Tron) {
+			result.insert(ForeignChain::Tron, vec![AddressAndExplanation {
+				name: "tron_vault_contract".into(),
+				address: AddressString::from_encoded_address(tron),
+				explanation: none_if_compact("Holds TRX and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
 		}
 
 		Ok(result)

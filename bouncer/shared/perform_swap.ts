@@ -23,6 +23,7 @@ import {
   getContractAddress,
   decodeDispatchError,
   Asset,
+  getTronWhaleKeyPair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -48,6 +49,11 @@ import { solanaIngressEgressCcmBroadcastRequested } from 'generated/events/solan
 import { solanaIngressEgressCcmEgressInvalid } from 'generated/events/solanaIngressEgress/ccmEgressInvalid';
 import { solanaIngressEgressCcmBroadcastFailed } from 'generated/events/solanaIngressEgress/ccmBroadcastFailed';
 import { solanaBroadcasterBroadcastSuccess } from 'generated/events/solanaBroadcaster/broadcastSuccess';
+import { tronIngressEgressCcmBroadcastRequested } from 'generated/events/tronIngressEgress/ccmBroadcastRequested';
+import { tronIngressEgressCcmEgressInvalid } from 'generated/events/tronIngressEgress/ccmEgressInvalid';
+import { tronIngressEgressCcmBroadcastFailed } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
+import { tronBroadcasterBroadcastSuccess } from 'generated/events/tronBroadcaster/broadcastSuccess';
+import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -303,6 +309,52 @@ async function waitForCcmExecution<A = []>(
       }
       break;
     }
+    case 'Tron': {
+      const ccmEgressResult = await cf.stepUntilOneEventOf({
+        ccmBroadcastRequested: {
+          name: 'TronIngressEgress.CcmBroadcastRequested',
+          schema: tronIngressEgressCcmBroadcastRequested.refine(
+            (event) =>
+              event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
+          ),
+        },
+        ccmEgressInvalid: {
+          name: 'TronIngressEgress.CcmEgressInvalid',
+          schema: tronIngressEgressCcmEgressInvalid.refine(
+            (event) =>
+              event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
+          ),
+        },
+      });
+
+      if (ccmEgressResult.key === 'ccmEgressInvalid') {
+        throw new Error(
+          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
+        );
+      }
+
+      broadcastId = ccmEgressResult.data.broadcastId;
+
+      const broadcastResult = await cf.stepUntilOneEventOf({
+        broadcastSuccess: {
+          name: 'TronBroadcaster.BroadcastSuccess',
+          schema: tronBroadcasterBroadcastSuccess.refine(
+            (event) => event.broadcastId === broadcastId,
+          ),
+        },
+        ccmBroadcastFailed: {
+          name: 'TronIngressEgress.CcmBroadcastFailed',
+          schema: tronIngressEgressCcmBroadcastFailed.refine(
+            (event) => event.broadcastId === broadcastId,
+          ),
+        },
+      });
+
+      if (broadcastResult.key === 'ccmBroadcastFailed') {
+        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
+      }
+      break;
+    }
     default:
       throw new Error(`Unsupported CCM destination chain: ${destChain}`);
   }
@@ -410,7 +462,6 @@ export async function performSwap<A = []>(
     messageMetadata,
     brokerCommissionBps,
   );
-
   await doPerformSwap(cf, swapParams, messageMetadata, senderType, amount, swapContext);
 
   return swapParams;
@@ -445,7 +496,8 @@ export async function performAndTrackSwap<A = []>(
 export type VaultSwapSource =
   | { chain: 'Evm'; wallet: HDNodeWallet; sourceAddress: string }
   | { chain: 'Bitcoin'; sourceAddress: string }
-  | { chain: 'Solana'; sourceAddress: string };
+  | { chain: 'Solana'; sourceAddress: string }
+  | { chain: 'Tron'; sourceAddress: string };
 
 export async function prepareVaultSwapSource<A = []>(
   cf: ChainflipIO<A>,
@@ -467,6 +519,11 @@ export async function prepareVaultSwapSource<A = []>(
     vaultSwapSource = {
       chain: 'Solana',
       sourceAddress: decodeSolAddress(getSolWhaleKeyPair().publicKey.toBase58()),
+    };
+  } else if (srcChain === 'Tron') {
+    vaultSwapSource = {
+      chain: 'Tron',
+      sourceAddress: getTronWhaleKeyPair().pubkey,
     };
   } else {
     throwError(cf.logger, new Error('Unsupported vault swap source chain'));
@@ -550,6 +607,22 @@ export async function executeVaultSwap<A extends WithBrokerAccount>(
       type: TransactionOrigin.VaultSwapSolana,
       addressAndSlot: [decodeSolAddress(accountAddress.toBase58()), slot],
     };
+  } else if (vaultSwapSource.chain === 'Tron') {
+    cf.trace('Executing Tron vault swap');
+    const txHash = await executeTronVaultSwap(
+      cf,
+      sourceAsset,
+      destAsset,
+      destAddress,
+      brokerFee,
+      messageMetadata,
+      amount,
+      boostFeeBps,
+      fillOrKillParams,
+      dcaParams,
+      affiliateFees,
+    );
+    transactionId = { type: TransactionOrigin.VaultSwapEvm, txHash };
   } else {
     throwError(cf.logger, new Error('Unsupported vault swap source chain'));
   }
