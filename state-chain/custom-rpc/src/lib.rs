@@ -897,7 +897,7 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
-	#[method(name = "accounts_info")]
+	#[method(name = "all_accounts_info")]
 	fn cf_all_accounts_info(
 		&self,
 		roles: Option<Vec<AccountRole>>,
