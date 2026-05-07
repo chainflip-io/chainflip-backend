@@ -251,13 +251,14 @@ impl<T: Config> LoanAccount<T> {
 			.try_fold(0u128, |acc, x| Ok(acc.saturating_add(x?)))
 	}
 
+	#[transactional]
 	pub fn update_liquidation_status(
 		&mut self,
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
 		price_cache: &OraclePriceCache<T>,
 		weight_used: &mut Weight,
-	) -> Result<(), Error<T>> {
+	) -> DispatchResult {
 		let config = LendingConfig::<T>::get();
 
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
@@ -1190,21 +1191,22 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 			// OK and doesn't need any specific error handling (they will simply be re-tried
 			// at a later point).
 			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-			let result = loan_account.derive_ltv(&price_cache).and_then(|ltv| {
-				loan_account.check_low_ltv_penalty_and_collect_interest(
-					ltv,
-					&price_cache,
-					&config,
-					&mut weight_used,
-				);
+			let result: DispatchResult =
+				loan_account.derive_ltv(&price_cache).map_err(Into::into).and_then(|ltv| {
+					loan_account.check_low_ltv_penalty_and_collect_interest(
+						ltv,
+						&price_cache,
+						&config,
+						&mut weight_used,
+					);
 
-				loan_account.update_liquidation_status(
-					borrower_id,
-					ltv,
-					&price_cache,
-					&mut weight_used,
-				)
-			});
+					loan_account.update_liquidation_status(
+						borrower_id,
+						ltv,
+						&price_cache,
+						&mut weight_used,
+					)
+				});
 
 			// If all loans are repaid manually while in liquidation, liquidation swaps will be
 			// aborted above and we need to delete the account:
@@ -1802,7 +1804,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							no_collateral_left
 						{
 							let unrecoverable: Vec<LoanId> =
-								loan_account.loans.iter().map(|(id, _)| *id).collect();
+								loan_account.loans.keys().copied().collect();
 							for loan_id in unrecoverable {
 								loan_account.settle_loan(loan_id, true /* via liquidation */);
 							}
