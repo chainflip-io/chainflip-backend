@@ -2485,8 +2485,9 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 
 	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
 		// If the source can move funds out freely, the transfer is fine.
-		// Otherwise the recipient must share the same restriction so funds
-		// can't escape it by hopping to an unrestricted account.
+		// Otherwise the destination account must also be restricted according to this trait's 
+		// definition of "restricted". Additional checks (like balance checks) are
+		// outside the scope of this implementation.
 		if Self::is_redemption_unrestricted(source) || !Self::is_redemption_unrestricted(dest) {
 			Ok(())
 		} else {
