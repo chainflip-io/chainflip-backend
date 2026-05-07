@@ -9,6 +9,7 @@ import {
   testEvmLiquidityDeposit,
 } from 'tests/broker_level_screening/evm';
 import { testBitcoin, testBitcoinVaultSwap } from 'tests/broker_level_screening/bitcoin';
+import { testTron, testTronVaultSwap } from 'tests/broker_level_screening/tron';
 
 /**
  * Submit a post request to the deposit-monitor, with error handling.
@@ -100,25 +101,23 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
     return result;
   };
 
-  for (const prefix of [
-    BTC_WHITELIST_PREFIX,
-    ETH_WHITELIST_PREFIX,
-    ARB_WHITELIST_PREFIX,
-    SOL_WHITELIST_PREFIX,
-  ]) {
-    await cf.submitGovernance({
-      extrinsic: (api) =>
-        api.tx.governance.callAsSudo(
-          api.tx.system.setStorage([
-            [
-              decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
-              // Empty, we just need to insert the key.
-              '',
-            ],
-          ]),
-        ),
-    });
-  }
+  await cf.all(
+    [BTC_WHITELIST_PREFIX, ETH_WHITELIST_PREFIX, ARB_WHITELIST_PREFIX, SOL_WHITELIST_PREFIX].map(
+      (prefix) => (subcf: ChainflipIO<A>) =>
+        subcf.submitGovernance({
+          extrinsic: (api) =>
+            api.tx.governance.callAsSudo(
+              api.tx.system.setStorage([
+                [
+                  decodeHexStringToByteArray(prefix).concat(Array.from(brokerAddress)),
+                  // Empty, we just need to insert the key.
+                  '',
+                ],
+              ]),
+            ),
+        }),
+    ),
+  );
 }
 
 export async function doTestSwapDeposits<A = []>(
@@ -141,6 +140,8 @@ export async function doTestSwapDeposits<A = []>(
 
   // test rejection of swaps by the responsible broker
   await cf.all([
+    (subcf) => testTron(subcf, 'Trx', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testTron(subcf, 'TrxUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSol(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSol(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSol(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
@@ -188,6 +189,8 @@ export async function doTestVaultSwaps<A = []>(cf: ChainflipIO<A>) {
     (subcf) => testSolVaultSwap(subcf, 'Sol', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSolVaultSwap(subcf, 'SolUsdc', async (txId) => setTxRiskScore(txId, 9.0)),
     (subcf) => testSolVaultSwap(subcf, 'SolUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testTronVaultSwap(subcf, 'Trx', async (txId) => setTxRiskScore(txId, 9.0)),
+    (subcf) => testTronVaultSwap(subcf, 'TrxUsdt', async (txId) => setTxRiskScore(txId, 9.0)),
   ]);
 }
 

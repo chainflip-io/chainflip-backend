@@ -6,6 +6,7 @@ import {
 } from 'shared/utils';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { Logger } from 'shared/utils/logger';
+import { HexString } from '@polkadot/util/types';
 
 const trc20abi = await getErc20abi();
 
@@ -14,7 +15,7 @@ export async function sendTrc20(
   destinationAddress: string,
   contractAddress: string,
   amount: string,
-) {
+): Promise<HexString> {
   const tronWeb = getTronWebClient();
   const privateKey = getTronWhaleKeyPair().privkey;
   tronWeb.setPrivateKey(privateKey);
@@ -35,8 +36,10 @@ export async function sendTrc20(
     const result = await contract
       .transfer(encodedAddress, fineAmount)
       .send({ feeLimit: 100_000_000 }, privateKey);
+    const txHash: HexString = `0x${result as string}`;
 
-    logger.info(`Transaction complete, tx_hash: ${result}`);
+    logger.info(`Transaction complete, tx_hash: ${txHash}`);
+    return txHash;
   } catch (error) {
     logger.error(`sendTrc20 failed: ${error instanceof Error ? error.message : String(error)}`, {
       error,
