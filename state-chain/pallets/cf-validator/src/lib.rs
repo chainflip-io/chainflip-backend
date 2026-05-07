@@ -2489,7 +2489,7 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 		);
 
 		if Self::ensure_not_active_bidder_during_auction(source).is_ok() ||
-			!Self::ensure_not_active_bidder_during_auction(dest).is_ok()
+			Self::ensure_not_active_bidder_during_auction(dest).is_err()
 		{
 			Ok(())
 		} else {
