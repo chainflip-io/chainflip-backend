@@ -560,6 +560,8 @@ pub mod pallet {
 		InvalidDelegateProof,
 		/// Cannot rotate session keys while a GRANDPA delegation is active. Revoke first.
 		GrandpaDelegationActive,
+		/// Delegator funds cannot be transferred between accounts.
+		DelegatorTransferRestricted,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -2447,15 +2449,6 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
-
-	/// True if the account has no redemption restriction at all — neither an
-	/// active-bidder lock during auction phase, nor a delegation reservation.
-	fn is_redemption_unrestricted(validator_id: &ValidatorIdOf<T>) -> bool {
-		Self::ensure_not_active_bidder_during_auction(validator_id).is_ok() &&
-			!DelegationChoice::<T>::contains_key(
-				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
-			)
-	}
 }
 
 impl<T: Config> RedemptionCheck for Pallet<T> {
@@ -2485,10 +2478,19 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 
 	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
 		// If the source can move funds out freely, the transfer is fine.
-		// Otherwise the destination account must also be restricted according to this trait's 
+		// Otherwise the destination account must also be restricted according to this trait's
 		// definition of "restricted". Additional checks (like balance checks) are
 		// outside the scope of this implementation.
-		if Self::is_redemption_unrestricted(source) || !Self::is_redemption_unrestricted(dest) {
+		ensure!(
+			!DelegationChoice::<T>::contains_key(
+				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(source),
+			),
+			Error::<T>::DelegatorTransferRestricted
+		);
+
+		if Self::ensure_not_active_bidder_during_auction(source).is_ok() ||
+			!Self::ensure_not_active_bidder_during_auction(dest).is_ok()
+		{
 			Ok(())
 		} else {
 			Err(Error::<T>::StillBidding.into())
