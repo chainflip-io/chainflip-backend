@@ -27,14 +27,16 @@ pub use cf_amm::{
 use cf_chains::{address::AddressString, ForeignChain};
 use cf_node_client::WaitForResult;
 use cf_primitives::{
-	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, BlockNumber, DcaParameters,
-	EgressId, OrderId, SwapRequestId, WaitFor,
+	AccountId, ApiWaitForResult, Asset, AssetAmount, BasisPoints, Beneficiary, BlockNumber,
+	DcaParameters, EgressId, OrderId, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
-	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
+	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails, LoanId,
 	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
+	RepaymentResponse,
 };
 use cf_rpc_types::ExtrinsicResponse;
+use cf_traits::lending::RepaymentAmount;
 use engine_sc_client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	DefaultRpcClient, StateChainClient,
@@ -504,5 +506,176 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 				}
 			},
 		})
+	}
+
+	async fn add_lender_funds(
+		&self,
+		asset: Asset,
+		amount: AssetAmount,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<()>> {
+		if amount == 0 {
+			bail!("Amount must be greater than 0");
+		}
+		Ok(into_api_wait_for_result(
+			self.submit_signed_extrinsic_wait_for(
+				pallet_cf_lending_pools::Call::add_lender_funds { asset, amount },
+				wait_for,
+			)
+			.await?,
+			|_events| (),
+		))
+	}
+
+	async fn remove_lender_funds(
+		&self,
+		asset: Asset,
+		amount: Option<AssetAmount>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<AssetAmount>> {
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lending_pools::Call::remove_lender_funds { asset, amount },
+				wait_for,
+			)
+			.await?;
+
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(extrinsic_data) => {
+				let unlocked_amount = extrinsic_data
+					.events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LendingPools(
+							pallet_cf_lending_pools::Event::LendingFundsRemoved {
+								unlocked_amount,
+								..
+							},
+						) => Some(unlocked_amount),
+						_ => None,
+					})
+					.ok_or_else(|| anyhow!("No LendingFundsRemoved event was found"))?;
+
+				ApiWaitForResult::TxDetails {
+					tx_hash: extrinsic_data.tx_hash,
+					response: unlocked_amount,
+				}
+			},
+		})
+	}
+
+	async fn request_loan(
+		&self,
+		loan_asset: Asset,
+		loan_amount: AssetAmount,
+		broker: Option<Beneficiary<AccountId>>,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<LoanId>> {
+		if loan_amount == 0 {
+			bail!("Loan amount must be greater than 0");
+		}
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lending_pools::Call::request_loan { loan_asset, loan_amount, broker },
+				wait_for,
+			)
+			.await?;
+
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(extrinsic_data) => {
+				let loan_id = extrinsic_data
+					.events
+					.into_iter()
+					.find_map(|event| match event {
+						state_chain_runtime::RuntimeEvent::LendingPools(
+							pallet_cf_lending_pools::Event::LoanCreated { loan_id, .. },
+						) => Some(loan_id),
+						_ => None,
+					})
+					.ok_or_else(|| anyhow!("No LoanCreated event was found"))?;
+
+				ApiWaitForResult::TxDetails { tx_hash: extrinsic_data.tx_hash, response: loan_id }
+			},
+		})
+	}
+
+	async fn expand_loan(
+		&self,
+		loan_id: LoanId,
+		extra_amount_to_borrow: AssetAmount,
+	) -> Result<H256> {
+		if extra_amount_to_borrow == 0 {
+			bail!("Extra amount must be greater than 0");
+		}
+		Ok(self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_lending_pools::Call::expand_loan { loan_id, extra_amount_to_borrow },
+			))
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn make_repayment(
+		&self,
+		loan_id: LoanId,
+		amount: RepaymentAmount,
+		wait_for: WaitFor,
+	) -> Result<ApiWaitForResult<RepaymentResponse>> {
+		let wait_for_result = self
+			.submit_signed_extrinsic_wait_for(
+				pallet_cf_lending_pools::Call::make_repayment { loan_id, amount },
+				wait_for,
+			)
+			.await?;
+
+		Ok(match wait_for_result {
+			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
+			WaitForResult::Details(extrinsic_data) => {
+				let mut repaid_amount: AssetAmount = 0;
+				let mut is_settled = false;
+				for event in &extrinsic_data.events {
+					match event {
+						state_chain_runtime::RuntimeEvent::LendingPools(
+							pallet_cf_lending_pools::Event::LoanRepaid { amount, .. },
+						) => repaid_amount = *amount,
+						state_chain_runtime::RuntimeEvent::LendingPools(
+							pallet_cf_lending_pools::Event::LoanSettled { .. },
+						) => is_settled = true,
+						_ => (),
+					}
+				}
+
+				ApiWaitForResult::TxDetails {
+					tx_hash: extrinsic_data.tx_hash,
+					response: RepaymentResponse { amount: repaid_amount.into(), is_settled },
+				}
+			},
+		})
+	}
+
+	async fn initiate_voluntary_liquidation(&self) -> Result<H256> {
+		Ok(self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_lending_pools::Call::initiate_voluntary_liquidation {},
+			))
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
+	}
+
+	async fn stop_voluntary_liquidation(&self) -> Result<H256> {
+		Ok(self
+			.submit_signed_extrinsic(RuntimeCall::from(
+				pallet_cf_lending_pools::Call::stop_voluntary_liquidation {},
+			))
+			.await
+			.until_in_block()
+			.await?
+			.tx_hash)
 	}
 }

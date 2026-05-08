@@ -14,6 +14,7 @@ import {
   createStateChainKeypair,
   getFreeBalance,
   Assets,
+  Asset,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -33,19 +34,20 @@ const testAmount = 0.1;
 const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
-const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
-async function provideLiquidityAndTestAssetBalances<A = []>(parentcf: ChainflipIO<A>) {
+export async function provideLiquidityAndTestAssetBalances<A = []>(
+  parentcf: ChainflipIO<A>,
+  asset: Asset,
+  amount: number,
+) {
   const cf = parentcf.with({
     account: fullAccountFromUri('//LP_API', 'LP'),
   });
 
-  const fineAmountToProvide = parseInt(
-    amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
-  );
+  const fineAmountToProvide = parseInt(amountToFineAmount(amount.toString(), assetDecimals(asset)));
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(cf, testAsset, amountToProvide);
+  await depositLiquidity(cf, asset, amount);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
@@ -495,8 +497,8 @@ async function testInternalSwap<A = []>(cf: ChainflipIO<A>) {
 export async function testLpApi(testContext: TestContext) {
   const parentcf = await newChainflipIO(testContext.logger, []);
 
-  // Provide the amount of liquidity needed for the tests
-  await provideLiquidityAndTestAssetBalances(parentcf);
+  // Provide the amount of liquidity needed for the rest of the tests
+  await provideLiquidityAndTestAssetBalances(parentcf, testAsset, testAmount * 50);
 
   await parentcf.all([
     (cf) =>

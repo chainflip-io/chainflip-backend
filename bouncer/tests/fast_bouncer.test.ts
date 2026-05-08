@@ -21,6 +21,7 @@ import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
 import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
 import { testRpcCalls } from 'tests/rpc_tests';
+import { testLpApiLending } from './lp_api_lending_test';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -41,6 +42,7 @@ describe('ConcurrentTests', () => {
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
+  concurrentTest('LpApiLending', testLpApiLending, 360 * ciTimeoutFactor);
   concurrentTest('BrokerFeeCollection', testBrokerFeeCollection, 240 * ciTimeoutFactor);
   concurrentTest('BoostingForAsset', testBoostingSwap, 310 * ciTimeoutFactor);
   concurrentTest('FillOrKill', testFillOrKill, 300 * ciTimeoutFactor);
