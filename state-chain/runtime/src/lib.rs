@@ -99,7 +99,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
 	#[expect(clippy::mistyped_literal_suffixes)]
-	spec_version: 2_01_16,
+	spec_version: 2_01_17,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,

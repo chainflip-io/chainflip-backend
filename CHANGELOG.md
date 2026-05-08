@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.17] - 2026-05-08
+
+### Fixes
+
+- Ignore address mismatch during Solana fetches.
+- Clamp range order prices at boundaries.
+
 ## [2.1.16] - 2026-05-06
 
 ### Features
