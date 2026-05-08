@@ -650,27 +650,32 @@ pub enum DepositDetails {
 	Tron(<Tron as Chain>::DepositDetails),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct DepositWitnessInfo {
 	pub deposit_chain_block_height: u64,
 	pub deposit_address: EncodedAddress,
-	pub amount: U256,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
 	pub asset: Asset,
 	pub deposit_details: DepositDetails,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct VaultDepositWitnessInfo {
 	pub tx_id: TransactionInIdForAnyChain,
 	pub deposit_chain_block_height: u64,
 	pub input_asset: Asset,
 	pub output_asset: Asset,
-	pub amount: U256,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
 	pub destination_address: EncodedAddress,
 	pub deposit_details: DepositDetails,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct IngressEvents {
 	pub deposits: Vec<DepositWitnessInfo>,
 	pub vault_deposits: Vec<VaultDepositWitnessInfo>,
