@@ -90,6 +90,8 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
   const ETH_WHITELIST_PREFIX = '4fc967eb3d0785df0389312c2ebd853e6b8fb02fc586c9dab2385ea1690a7db6';
   const ARB_WHITELIST_PREFIX = '3d3491b8c14ff78a5176bc3b6ebe516f6b8fb02fc586c9dab2385ea1690a7db6';
   const SOL_WHITELIST_PREFIX = '8595efe3a571f61007e89f4416b858b16b8fb02fc586c9dab2385ea1690a7db6';
+  const TRON_WHITELIST_PREFIX = '65fbb72d24f6d3ade3baaf42fd5075756b8fb02fc586c9dab2385ea1690a7db6';
+
 
   const decodeHexStringToByteArray = (hex: string) => {
     let hexString = hex;
@@ -102,7 +104,13 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
   };
 
   await cf.all(
-    [BTC_WHITELIST_PREFIX, ETH_WHITELIST_PREFIX, ARB_WHITELIST_PREFIX, SOL_WHITELIST_PREFIX].map(
+    [
+      BTC_WHITELIST_PREFIX,
+      ETH_WHITELIST_PREFIX,
+      ARB_WHITELIST_PREFIX,
+      SOL_WHITELIST_PREFIX,
+      TRON_WHITELIST_PREFIX,
+    ].map(
       (prefix) => (subcf: ChainflipIO<A>) =>
         subcf.submitGovernance({
           extrinsic: (api) =>
