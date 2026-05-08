@@ -4,7 +4,7 @@
 
 # Wait for node to start
 echo -e "🚀 Starting chainflip-node..."
-sleep 10
+sleep 20
 
 # call rpc to get blocktime
 # SLOT_DURATION="$(curl --silent -H "Content-Type: application/json" -d '{ "jsonrpc":"2.0", "id":"1", "method":"cf_slot_duration", "params":{} }' http://localhost:9944 | jq '.result')"
