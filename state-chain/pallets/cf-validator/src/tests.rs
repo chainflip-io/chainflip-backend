@@ -1552,27 +1552,82 @@ fn can_determine_is_auction_phase() {
 }
 
 #[test]
-fn redemption_check_works() {
+fn transfer_check_works() {
 	new_test_ext().execute_with(|| {
-		let validator = WINNING_BIDS[0].bidder_id;
+		let source = WINNING_BIDS[0].bidder_id;
+		let dest = WINNING_BIDS[1].bidder_id;
 
-		// Not in auction + not bidding = Can redeem
+		// Both unrestricted: transfer allowed.
 		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
 		ActiveBidder::<Test>::set(Default::default());
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
 
-		// In Auction + not bidding = Can redeem
+		// Source restricted (active bidder during auction), dest unrestricted:
+		// blocked, since the funds would escape the lock.
 		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(source));
+		assert_noop!(
+			ValidatorPallet::ensure_can_transfer(&source, &dest),
+			Error::<Test>::StillBidding
+		);
 
-		// Not in Auction + bidding = Can redeem
+		// Source and dest both restricted in the same way: allowed (lock is
+		// preserved across the hop).
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(dest));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+
+		// Source unrestricted, dest restricted: allowed (we don't gate based
+		// on the recipient's state when the source is free to move funds).
+		ActiveBidder::<Test>::mutate(|bidders| bidders.remove(&source));
+		assert_ok!(ValidatorPallet::ensure_can_transfer(&source, &dest));
+	});
+}
+
+#[test]
+fn redemption_amount_check_respects_delegation_reservation() {
+	const BALANCE: u128 = 1_000;
+	const MAX_BID: u128 = 100;
+	new_test_ext().execute_with(|| {
+		// Idle phase so the auction-phase guard doesn't kick in.
 		CurrentRotationPhase::<Test>::set(RotationPhase::Idle);
-		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(validator));
-		assert_ok!(ValidatorPallet::ensure_can_redeem(&validator));
+		ActiveBidder::<Test>::set(Default::default());
 
-		// Auction Phase + bidding = Cannot redeem
+		assert_ok!(ValidatorPallet::register_as_operator(
+			OriginTrait::signed(ALICE),
+			OperatorSettings {
+				fee_bps: DEFAULT_MIN_OPERATOR_FEE,
+				delegation_acceptance: DelegationAcceptance::Allow,
+			},
+			vanity()
+		));
+		MockFlip::credit_funds(&BOB, BALANCE);
+		assert_ok!(ValidatorPallet::delegate(
+			OriginTrait::signed(BOB),
+			ALICE,
+			DelegationAmount::Some(MAX_BID)
+		));
+		assert_eq!(DelegationChoice::<Test>::get(BOB), Some((ALICE, MAX_BID)));
+
+		// Redeeming exactly the un-pledged portion is allowed.
+		assert_ok!(ValidatorPallet::ensure_can_redeem_amount(&BOB, BALANCE - MAX_BID));
+
+		// Redeeming one more than the un-pledged portion would dip into max_bid.
+		assert_noop!(
+			ValidatorPallet::ensure_can_redeem_amount(&BOB, BALANCE - MAX_BID + 1),
+			Error::<Test>::StillBidding
+		);
+
+		// A non-delegator with the same balance is unrestricted (only auction-phase
+		// rules apply, and we're idle).
+		assert_ok!(ValidatorPallet::ensure_can_redeem_amount(&NOBODY, BALANCE));
+
+		// Auction-phase + active-bidder still blocks regardless of amount.
 		CurrentRotationPhase::<Test>::set(RotationPhase::KeygensInProgress(Default::default()));
-		assert_noop!(ValidatorPallet::ensure_can_redeem(&validator), Error::<Test>::StillBidding);
+		ActiveBidder::<Test>::mutate(|bidders| bidders.insert(BOB));
+		assert_noop!(
+			ValidatorPallet::ensure_can_redeem_amount(&BOB, 0),
+			Error::<Test>::StillBidding
+		);
 	});
 }
 

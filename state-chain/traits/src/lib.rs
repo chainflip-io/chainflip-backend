@@ -298,9 +298,24 @@ pub trait ReputationResetter {
 
 pub trait RedemptionCheck {
 	type ValidatorId;
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
-	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
-		Self::ensure_can_redeem(validator_id).is_ok()
+	type Amount;
+
+	/// Amount-aware redemption gate, used by `redeem`. Enforces auction-phase /
+	/// active-bidder restrictions, and (for delegators) ensures the requested
+	/// amount does not eat into the balance reserved by their stored max_bid.
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		amount: Self::Amount,
+	) -> DispatchResult;
+
+	/// Transfer gate, used by `rebalance` and sub-account spawning. Allows the
+	/// transfer if the source has no redemption restrictions, or if the
+	/// recipient is subject to the same restrictions (so funds cannot escape a
+	/// lock by hopping to an unrestricted account).
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult;
+
+	fn can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> bool {
+		Self::ensure_can_transfer(source, dest).is_ok()
 	}
 }
 

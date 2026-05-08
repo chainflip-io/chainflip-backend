@@ -402,7 +402,10 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 
 		/// Provide information on current bidders
-		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+		type RedemptionChecker: RedemptionCheck<
+			ValidatorId = Self::AccountId,
+			Amount = Self::Amount,
+		>;
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
@@ -657,9 +660,6 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
-			// Not allowed to redeem if we are an active bidder in the auction phase
-			T::RedemptionChecker::ensure_can_redeem(&account_id)?;
-
 			// The redemption must be executed before a new one can be requested.
 			ensure!(
 				!PendingRedemptions::<T>::contains_key(&account_id),
@@ -686,6 +686,12 @@ pub mod pallet {
 
 			let redemption @ Redemption { redeem_amount, restricted_redeem_amount, .. } =
 				Redemption::<T>::for_redeem(&account_id, amount, &address)?;
+
+			T::RedemptionChecker::ensure_can_redeem_amount(
+				&account_id,
+				redemption.total_debit_amount(),
+			)?;
+
 			redemption.burn_fee()?;
 			redemption.update_restricted_balances(None)?;
 
@@ -854,12 +860,10 @@ pub mod pallet {
 				ensure!(amount >= MinimumFunding::<T>::get(), Error::<T>::MinimumRebalanceAmount);
 			}
 
-			if !T::RedemptionChecker::can_redeem(&source_account_id) {
-				ensure!(
-					!T::RedemptionChecker::can_redeem(&recipient_account_id),
-					Error::<T>::CanNotRebalanceToNotBiddingValidator
-				);
-			}
+			ensure!(
+				T::RedemptionChecker::can_transfer(&source_account_id, &recipient_account_id),
+				Error::<T>::CanNotRebalanceToNotBiddingValidator
+			);
 
 			ensure!(
 				BoundExecutorAddress::<T>::get(&source_account_id) ==
@@ -1127,16 +1131,16 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 			!ParentAccount::<T>::contains_key(parent_account_id),
 			Error::<T>::CannotSpawnFromSubAccount
 		);
-		ensure!(
-			T::RedemptionChecker::can_redeem(parent_account_id),
-			Error::<T>::CannotSpawnDuringAuctionPhase
-		);
 
 		let sub_account_id = Self::derive_sub_account_id(parent_account_id, index)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
 			Error::<T>::AccountAlreadyExists
+		);
+		ensure!(
+			T::RedemptionChecker::can_transfer(parent_account_id, &sub_account_id),
+			Error::<T>::CannotSpawnDuringAuctionPhase
 		);
 
 		// FRAME reference counting:

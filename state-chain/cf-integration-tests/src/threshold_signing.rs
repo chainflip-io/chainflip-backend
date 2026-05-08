@@ -31,7 +31,7 @@ use std::marker::PhantomData;
 
 use crate::GENESIS_KEY_SEED;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct KeyComponents<SecretKey, AggKey> {
 	seed: u64,
 	secret: SecretKey,
@@ -95,6 +95,7 @@ impl KeyUtils for EthKeyComponents {
 	}
 }
 
+#[derive(Clone)]
 pub struct ThresholdSigner<KeyComponents, SigVerification> {
 	previous_key_components: Option<KeyComponents>,
 	key_components: KeyComponents,
