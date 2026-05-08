@@ -42,11 +42,9 @@ pub type Amount = U256;
 	Debug,
 	TypeInfo,
 	Encode,
-	Decode,
 	DecodeWithMemTracking,
 	MaxEncodedLen,
 	Serialize,
-	Deserialize,
 	PartialEq,
 	Eq,
 	PartialOrd,
@@ -55,6 +53,20 @@ pub type Amount = U256;
 	Default,
 )]
 pub struct SqrtPrice(U256);
+
+impl Decode for SqrtPrice {
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let raw = U256::decode(input)?;
+		Self::try_from_raw(raw).map_err(|_| codec::Error::from("SqrtPrice out of bounds"))
+	}
+}
+
+impl<'de> serde::de::Deserialize<'de> for SqrtPrice {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let raw = U256::deserialize(deserializer)?;
+		Self::try_from_raw(raw).map_err(|_| serde::de::Error::custom("SqrtPrice out of bounds"))
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConversionError {
