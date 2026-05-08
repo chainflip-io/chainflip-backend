@@ -131,11 +131,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(mul_div_floor_checked(
+							*sqrt_price = SqrtPrice::try_from_raw(mul_div_floor_checked(
 								sqrt_price.as_raw(),
 								U256::one() << 128,
 								root,
-							).expect("root !=0 because current_sqrt_price & worst_sqrt_price are always > 0"));
+							).expect("root !=0 because current_sqrt_price & worst_sqrt_price are always > 0"))
+							.expect(
+								"interpolated sqrt prices stay within the existing valid range",
+							);
 							Some(*sqrt_price)
 						})
 					})
@@ -152,13 +155,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(
+							*sqrt_price = SqrtPrice::try_from_raw(
 								mul_div_floor_checked(
 									sqrt_price.as_raw(),
 									root,
 									U256::one() << 128,
 								)
 								.unwrap(),
+							)
+							.expect(
+								"interpolated sqrt prices stay within the existing valid range",
 							);
 							Some(*sqrt_price)
 						})
@@ -177,14 +183,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		sqrt_price: SqrtPrice,
 		delta: Tick,
 	) -> Option<SqrtPrice> {
-		if sqrt_price.is_valid() {
-			Some(match order {
-				Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
-				Side::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
-			})
-		} else {
-			None
-		}
+		let sqrt_price = SqrtPrice::try_from_raw(sqrt_price.as_raw()).ok()?;
+
+		Some(match order {
+			Side::Buy => QuoteToBase::increase_sqrt_price(sqrt_price, delta),
+			Side::Sell => BaseToQuote::increase_sqrt_price(sqrt_price, delta),
+		})
 	}
 
 	fn inner_current_sqrt_price<
