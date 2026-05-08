@@ -8,7 +8,7 @@ USE_DEFAULTS=false
 while getopts "dh" opt; do
   case $opt in
     d) USE_DEFAULTS=true;;
-    h) echo "Use -d to create with deafult values if no settings file is found"; exit 0;;
+    h) echo "Use -d to create with default values if no settings file is found"; exit 0;;
     \?) echo "Invalid option -$OPTARG" >&2 ; exit 0 ;;
   esac
 done
