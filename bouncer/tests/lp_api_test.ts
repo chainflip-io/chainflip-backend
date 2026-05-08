@@ -2,6 +2,7 @@ import assert from 'assert';
 import {
   isValidEthAddress,
   amountToFineAmount,
+  amountToFineAmountBigInt,
   sleep,
   observeBalanceIncrease,
   chainFromAsset,
@@ -45,26 +46,34 @@ export async function provideLiquidityAndTestAssetBalances<A = []>(
     account: fullAccountFromUri('//LP_API', 'LP'),
   });
 
-  const fineAmountToProvide = parseInt(amountToFineAmount(amount.toString(), assetDecimals(asset)));
+  const chain = chainFromAsset(asset);
+  const balanceKey = asset.toUpperCase();
+  const fineAmountToProvide = amountToFineAmountBigInt(amount, asset);
+
+  const balancesBefore = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
+  const balanceBefore = BigInt(balancesBefore[chain]?.[balanceKey] ?? '0');
+  // Allow for ingress fees by accepting up to 1% short of the deposited amount.
+  const targetBalance = balanceBefore + (fineAmountToProvide * 99n) / 100n;
+
   // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
   await depositLiquidity(cf, asset, amount);
 
   // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
   let retryCount = 0;
-  let ethBalance = 0;
+  let balance = balanceBefore;
   do {
     const balances = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
-    ethBalance = parseInt(balances.Ethereum.Eth);
+    balance = BigInt(balances[chain]?.[balanceKey] ?? '0');
     retryCount++;
     if (retryCount > 14) {
       throw new Error(
-        `Failed to provide ${testAsset} for tests (${fineAmountToProvide}). balances: ${JSON.stringify(
+        `Failed to provide ${asset} for tests (${fineAmountToProvide}). balances: ${JSON.stringify(
           balances,
         )}`,
       );
     }
     await sleep(1000);
-  } while (ethBalance < fineAmountToProvide);
+  } while (balance < targetBalance);
 }
 
 async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {

@@ -906,16 +906,14 @@ where
 				let repaid = events
 					.find_static_event::<cf_static_runtime::lending_pools::events::LoanRepaid>(
 						false,
-					)?;
+					)?
+					.ok_or(DynamicEventError::StaticEventNotFound("LoanRepaid"))?;
 				let settled = events
 					.find_static_event::<cf_static_runtime::lending_pools::events::LoanSettled>(
 						false,
 					)?;
 				Ok(RepaymentResponse {
-					amount: repaid
-						.ok_or_else(|| return Err(anyhow!("Did not find LoanRepaid event")))
-						.amount
-						.into(),
+					amount: repaid.amount.into(),
 					is_settled: settled.is_some(),
 				})
 			},

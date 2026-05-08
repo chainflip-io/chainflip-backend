@@ -22,9 +22,11 @@ import { lendingPoolsLendingFundsRemoved } from 'generated/events/lendingPools/l
 import { provideLiquidityAndTestAssetBalances } from './lp_api_test';
 
 // Note: use a different asset to the other LP_API test to avoid conflicts when depositing the liquidity.
+// Localnet oracle prices: SOL ~ $100, BTC ~ $10,000. Target LTV cap is 80%.
+// 550 SOL ≈ $55k collateral; 1.5 BTC peak loan ≈ $15k → ~27% LTV.
 const COLLATERAL_ASSET = Assets.Sol;
-const COLLATERAL_AMOUNT = 100;
-const COLLATERAL_FUNDS_ADDED = COLLATERAL_AMOUNT * 1.1;
+const COLLATERAL_AMOUNT = 500;
+const COLLATERAL_FUNDS_ADDED = 550;
 const LOAN_ASSET = Assets.Btc;
 const LOAN_AMOUNT = 1;
 const EXPAND_AMOUNT = 0.5;
