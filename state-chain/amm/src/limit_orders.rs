@@ -543,13 +543,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))
 			.filter(|(sqrt_price, _)| {
-				let sqrt_price_adjusted = super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
+				super::sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
 					*sqrt_price,
 					range_orders_pool_fee_hundredth_pips,
-				);
-
-				sqrt_price_limit.is_none_or(|sqrt_price_limit| {
-					!SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
+				)
+				.is_some_and(|sqrt_price_adjusted| {
+					sqrt_price_limit.is_none_or(|sqrt_price_limit| {
+						!SD::sqrt_price_op_more_than(sqrt_price_adjusted, sqrt_price_limit)
+					})
 				})
 			}) {
 			let fixed_pool = fixed_pool_entry.get_mut();

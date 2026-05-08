@@ -20,9 +20,7 @@ mod tests;
 
 use core::convert::Infallible;
 
-use cf_amm_math::{
-	mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-};
+use cf_amm_math::{mul_div_floor_checked, Amount, Price, SqrtPrice, Tick};
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
 	nth_root_of_integer_as_fixed_point, BaseToQuote, Pairs, PoolPairsMap, QuoteToBase,
@@ -64,11 +62,15 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		fee_hundredth_pips: u32,
 		initial_range_order_price: Price,
 	) -> Result<Self, NewError> {
+		let initial_range_order_sqrt_price = initial_range_order_price
+			.try_into_sqrt_price()
+			.ok_or(NewError::RangeOrders(range_orders::NewError::InvalidInitialPrice))?;
+
 		Ok(Self {
 			limit_orders: limit_orders::PoolState::new(),
 			range_orders: range_orders::PoolState::new(
 				fee_hundredth_pips,
-				initial_range_order_price.into(),
+				initial_range_order_sqrt_price,
 			)
 			.map_err(NewError::RangeOrders)?,
 		})
@@ -192,7 +194,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> Option<SqrtPrice> {
 		let limit_orders_sqrt_price = self.limit_orders.current_sqrt_price::<SD>();
 		let range_orders_sqrt_price =
-			self.range_orders.current_sqrt_price::<SD>().map(|sqrt_price| {
+			self.range_orders.current_sqrt_price::<SD>().and_then(|sqrt_price| {
 				sqrt_price_adjusted_by_pool_fee::<SD>(
 					sqrt_price,
 					self.range_orders.fee_hundredth_pips,
@@ -257,7 +259,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			// (We do this instead of adjusting the range order's price to avoid
 			// having to both adjust and "inverse adjust" the price, which due to
 			// rounding errors could lead to an infinite loop):
-			let limit_orders_sqrt_price = limit_orders_sqrt_price.map(|price| {
+			let limit_orders_sqrt_price = limit_orders_sqrt_price.and_then(|price| {
 				sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
 					price,
 					self.range_orders.fee_hundredth_pips,
@@ -562,7 +564,7 @@ fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 	sqrt_price: SqrtPrice,
 	fee_hundredth_pips: u32,
-) -> SqrtPrice {
+) -> Option<SqrtPrice> {
 	let price = Price::from(sqrt_price);
 
 	let adjusted_price = Price::from_raw(match SD::INPUT_SIDE.sell_order() {
@@ -570,8 +572,7 @@ fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 		Side::Sell => reduce_by_pool_fee(price.as_raw(), fee_hundredth_pips),
 	});
 
-	let adjusted_sqrt_price: SqrtPrice = adjusted_price.into();
-	adjusted_sqrt_price.clamp(MIN_SQRT_PRICE, MAX_SQRT_PRICE)
+	adjusted_price.try_into_sqrt_price()
 }
 
 pub fn input_amount_from_fee(fee: U256, fee_hundredth_pips: u32) -> Option<U256> {
