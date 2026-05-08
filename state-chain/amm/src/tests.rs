@@ -21,7 +21,7 @@ use core::convert::Infallible;
 use sp_core::crypto::AccountId32;
 
 use crate::range_orders::Liquidity;
-use cf_amm_math::{Price, MAX_SQRT_PRICE, MIN_SQRT_PRICE};
+use cf_amm_math::{Price, MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE};
 
 use super::*;
 
@@ -291,5 +291,32 @@ fn check_price_adjustment_by_pool_fee() {
 	for (tick, fee) in [(100, 500), (20_000, 500), (-20_000, 50_000), (-100, 0), (0, 0)] {
 		test_case::<BaseToQuote>(tick, fee);
 		test_case::<QuoteToBase>(tick, fee);
+	}
+}
+
+// Boundary check: `sqrt_price_adjusted_by_pool_fee` must never produce an invalid
+// SqrtPrice across the full range of allowed pool fees, for both swap directions
+// at every valid tick — including the edges of [MIN_TICK, MAX_TICK] where the
+// raw fee adjustment would overflow into an invalid SqrtPrice.
+#[test]
+fn sqrt_price_adjusted_by_pool_fee_never_returns_invalid_sqrt_price() {
+	use cf_amm_math::MIN_TICK;
+
+	for &fee in &[0u32, 1, 100, 500, 50_000, 500_000] {
+		for &tick in &[MIN_TICK, MIN_TICK + 1, -1, 0, 1, MAX_TICK - 1, MAX_TICK] {
+			let sqrt_price = SqrtPrice::from_tick(tick);
+			for adjusted in [
+				sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee),
+				sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee),
+			] {
+				assert!(
+					adjusted.is_valid(),
+					"fee {} tick {}: adjusted SqrtPrice {:?} is invalid",
+					fee,
+					tick,
+					adjusted
+				);
+			}
+		}
 	}
 }
