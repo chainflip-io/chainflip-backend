@@ -295,6 +295,18 @@ impl
 	) -> Result<(), CorruptStorageError> {
 		let current_sc_block_number = crate::System::block_number();
 
+		if let Some(ingress_safety_margin) =
+			pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, TronInstance>::get()
+		{
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, TronInstance>::mutate_extant(|settings|  {
+				// We apply the safety margin to *all* BlockWitnessers. On EVM chains we have the same safety margin for
+				// ingresses and egresses since egresses are entangled with other other stuff in the KeyManager BW.
+				settings.1.safety_margin = ingress_safety_margin as u32;
+				settings.2.safety_margin = ingress_safety_margin as u32;
+				settings.3.safety_margin = ingress_safety_margin as u32;
+			});
+		}
+
 		let chain_progress = TronBlockHeightWitnesserES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
