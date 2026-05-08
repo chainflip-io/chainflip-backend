@@ -75,6 +75,7 @@ impl ChainTypes for ArbitrumChain {
 }
 
 pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
+pub const ARBITRUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum ArbitrumElectoralEvents {

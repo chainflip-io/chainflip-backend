@@ -78,6 +78,7 @@ use state_chain_runtime::{
 		EthereumBlockHeightWitnesserES, EthereumChain, EthereumElectoralSystemRunner,
 		EthereumFeeTracking, EthereumLiveness, ScUtilsCall,
 		StateChainGatewayEvent as ScGatewayEvent, ETHEREUM_MAINNET_SAFETY_BUFFER,
+		ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 	},
 	EthereumInstance,
 };
@@ -235,6 +236,7 @@ impl VoterApi<EthereumBlockHeightWitnesserES> for EvmVoter<EthereumChain, EvmSin
 			self,
 			properties,
 			ETHEREUM_MAINNET_SAFETY_BUFFER,
+			ETHEREUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 			"ETH BHW",
 		)
 		.await

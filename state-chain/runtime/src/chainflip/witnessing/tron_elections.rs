@@ -86,6 +86,7 @@ impl ChainTypes for TronChain {
 
 pub const TRON_MAINNET_SAFETY_MARGIN: u32 = 19;
 pub const TRON_MAINNET_SAFETY_BUFFER: u32 = 25;
+pub const TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 16;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum TronElectoralEvents {
