@@ -20,9 +20,25 @@ use super::{super::ECPoint, Scalar};
 
 type PK = curve25519_dalek::edwards::EdwardsPoint;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Point(PK);
 
+// Manual `Deserialize` (PRO-2856): `curve25519-dalek`'s default impl for
+// `EdwardsPoint` only validates that the encoded point lies on the curve;
+// it does NOT enforce prime-order subgroup membership. FROST and Pedersen
+// DKG security proofs assume a prime-order group, so we reject points that
+// contain a torsion component before they enter the protocol.
+impl<'de> Deserialize<'de> for Point {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let inner = PK::deserialize(deserializer)?;
+		if !inner.is_torsion_free() {
+			return Err(serde::de::Error::custom(
+				"ed25519 point is not in the prime-order subgroup",
+			));
+		}
+		Ok(Point(inner))
+	}
+}
 mod point_impls {
 
 	use super::*;
@@ -91,4 +107,36 @@ fn sanity_check_point_at_infinity() {
 	// Sanity check: point at infinity should correspond
 	// to "zero" on the elliptic curve
 	assert_eq!(Point::point_at_infinity(), Point::from_scalar(&Scalar::zero()));
+}
+
+/// This test asserts that deserialising a torsion-shifted point must error.
+#[test]
+fn deserialization_rejects_torsion_shifted_point() {
+	use curve25519_dalek::{constants, edwards::EdwardsPoint, traits::Identity};
+
+	// `EIGHT_TORSION[0]` is the identity; the others are non-trivial
+	// small-order elements (orders 2, 4, or 8).
+	let torsion: EdwardsPoint = constants::EIGHT_TORSION[1];
+	assert_ne!(torsion, EdwardsPoint::identity());
+	assert!(!torsion.is_torsion_free());
+
+	// A valid prime-order point shifted by a torsion element. This is what a
+	// malicious DKG / FROST participant could submit as a coefficient commitment.
+	let shifted = constants::ED25519_BASEPOINT_POINT + torsion;
+	assert!(!shifted.is_torsion_free());
+
+	let bad_point = Point(shifted);
+	let encoded = bincode::serialize(&bad_point).expect("serialize");
+
+	// bincode is the wire format used by the multisig P2P layer
+	// (see `ceremony_manager.rs` / `common/broadcast.rs`).
+	let result: Result<Point, _> = bincode::deserialize(&encoded);
+
+	assert!(
+		result.is_err(),
+		"BUG: deserialize accepted a torsion-shifted point. \
+		 FROST requires the underlying group to be prime-order; \
+		 a non-prime-order commitment shifts the aggregate pubkey \
+		 into a non-prime-order coset and breaks the security proof.",
+	);
 }
