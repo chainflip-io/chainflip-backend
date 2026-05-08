@@ -276,9 +276,9 @@ fn check_price_adjustment_by_pool_fee() {
 
 		// Output is computed by adjusting the price instead:
 		let output = {
-			let sqrt_price = SqrtPrice::from(price);
+			let sqrt_price = price.try_into_sqrt_price().unwrap();
 			let adjusted_sqrt_price =
-				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips);
+				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips).unwrap();
 			let adjusted_price = Price::from(adjusted_sqrt_price);
 
 			SD::output_amount_floor(input, adjusted_price)
@@ -294,29 +294,11 @@ fn check_price_adjustment_by_pool_fee() {
 	}
 }
 
-// Boundary check: `sqrt_price_adjusted_by_pool_fee` must never produce an invalid
-// SqrtPrice across the full range of allowed pool fees, for both swap directions
-// at every valid tick — including the edges of [MIN_TICK, MAX_TICK] where the
-// raw fee adjustment would overflow into an invalid SqrtPrice.
 #[test]
-fn sqrt_price_adjusted_by_pool_fee_never_returns_invalid_sqrt_price() {
-	use cf_amm_math::MIN_TICK;
-
-	for &fee in &[0u32, 1, 100, 500, 50_000, 500_000] {
-		for &tick in &[MIN_TICK, MIN_TICK + 1, -1, 0, 1, MAX_TICK - 1, MAX_TICK] {
-			let sqrt_price = SqrtPrice::from_tick(tick);
-			for adjusted in [
-				sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee),
-				sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee),
-			] {
-				assert!(
-					adjusted.is_valid(),
-					"fee {} tick {}: adjusted SqrtPrice {:?} is invalid",
-					fee,
-					tick,
-					adjusted
-				);
-			}
-		}
+fn fee_adjustment_rejects_out_of_range_buy_prices() {
+	for (tick, fee) in [(887271, 100), (887267, 500), (MAX_TICK, 1), (MAX_TICK, 500_000)] {
+		let sqrt_price = Price::from_tick(tick).unwrap().try_into_sqrt_price().unwrap();
+		assert_eq!(sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee), None);
+		assert!(sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee).is_some());
 	}
 }

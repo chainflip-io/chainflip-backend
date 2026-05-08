@@ -56,12 +56,26 @@ pub type Amount = U256;
 )]
 pub struct SqrtPrice(U256);
 
-impl From<Price> for SqrtPrice {
-	fn from(price: Price) -> Self {
-		((U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
-			(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS))
-			.try_into()
-			.unwrap_or(SqrtPrice::from_raw(U256::MAX))
+pub enum ConversionError {
+	Overflow,
+	OutsideValidRange,
+}
+
+impl TryFrom<Price> for SqrtPrice {
+	type Error = ConversionError;
+
+	fn try_from(price: Price) -> Result<Self, Self::Error> {
+		let sqrt_price = U256::try_from(
+			(U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
+				(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS),
+		)
+		.map(SqrtPrice)
+		.map_err(|_| ConversionError::Overflow)?;
+
+		sqrt_price
+			.is_valid()
+			.then_some(sqrt_price)
+			.ok_or(ConversionError::OutsideValidRange)
 	}
 }
 
@@ -82,19 +96,29 @@ impl SqrtPrice {
 		if base.is_zero() {
 			MAX_SQRT_PRICE
 		} else {
-			let unbounded_sqrt_price = SqrtPrice::try_from(
+			let unbounded_sqrt_price = U256::try_from(
 				((U512::from(quote) << 256) / U512::from(base)).integer_sqrt() >>
 					(128 - Self::FRACTIONAL_BITS),
 			)
-			.unwrap();
+			.expect(
+				"
+				base is nonzero in this branch, so ((quote << 256) / base) <= (U256::MAX << 256) < 2^512;
+				therefore its integer square root is < 2^256, and after shifting down by
+				(128 - Self::FRACTIONAL_BITS) the result is still < 2^256, so this conversion cannot fail
+				",
+			);
 
-			if unbounded_sqrt_price < MIN_SQRT_PRICE {
-				MIN_SQRT_PRICE
-			} else if unbounded_sqrt_price > MAX_SQRT_PRICE {
-				MAX_SQRT_PRICE
-			} else {
-				unbounded_sqrt_price
-			}
+			SqrtPrice::clamp_from_raw(unbounded_sqrt_price)
+		}
+	}
+
+	pub fn clamp_from_raw(value: U256) -> Self {
+		if value < MIN_SQRT_PRICE.0 {
+			MIN_SQRT_PRICE
+		} else if value > MAX_SQRT_PRICE.0 {
+			MAX_SQRT_PRICE
+		} else {
+			SqrtPrice(value)
 		}
 	}
 
@@ -308,14 +332,6 @@ impl SqrtPrice {
 	}
 }
 
-impl TryFrom<U512> for SqrtPrice {
-	type Error = ();
-
-	fn try_from(value: U512) -> Result<Self, Self::Error> {
-		U256::try_from(value).map(SqrtPrice).map_err(|_| ())
-	}
-}
-
 pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	mul_div_floor_checked(a, b, c).unwrap()
 }
@@ -488,12 +504,11 @@ impl Price {
 	///
 	/// This function never panics.
 	pub fn into_tick(self) -> Option<Tick> {
-		let sqrt_price = SqrtPrice::from(self);
-		if sqrt_price.is_valid() {
-			Some(sqrt_price.to_tick())
-		} else {
-			None
-		}
+		self.try_into_sqrt_price().map(SqrtPrice::to_tick)
+	}
+
+	pub fn try_into_sqrt_price(self) -> Option<SqrtPrice> {
+		SqrtPrice::try_from(self).ok()
 	}
 
 	pub fn at_tick_zero() -> Self {
@@ -764,11 +779,16 @@ mod test {
 
 	#[test]
 	fn test_price_from_sqrt_price() {
+		let max_price = Price::from(MAX_SQRT_PRICE);
+		let clearly_out_of_range_price = Price::from_raw(U256::MAX);
+
 		assert_eq!(
 			Price::from(SqrtPrice::from_raw(U256::from(1) << 96)),
 			Price::from_raw(U256::from(1) << Price::FRACTIONAL_BITS)
 		);
-		assert!(Price::from(MIN_SQRT_PRICE) < Price::from(MAX_SQRT_PRICE));
+		assert!(Price::from(MIN_SQRT_PRICE) < max_price);
+		assert!(max_price.try_into_sqrt_price().is_some_and(|sqrt_price| sqrt_price.is_valid()));
+		assert!(clearly_out_of_range_price.try_into_sqrt_price().is_none());
 	}
 
 	#[test]
