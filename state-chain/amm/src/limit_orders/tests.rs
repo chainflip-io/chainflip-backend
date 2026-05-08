@@ -548,9 +548,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					SqrtPrice::from_raw(
+					SqrtPrice::try_from_raw(
 						SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 					)
+					.unwrap()
 					.to_tick(),
 				100000000.into()
 			));
@@ -574,9 +575,10 @@ fn swap() {
 			assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 				&LiquidityProvider::from([0; 32]),
 				offset +
-					SqrtPrice::from_raw(
+					SqrtPrice::try_from_raw(
 						SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 					)
+					.unwrap()
 					.to_tick(),
 				100000000.into()
 			));
@@ -597,7 +599,10 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
 			&LiquidityProvider::from([0; 32]),
-			SqrtPrice::from_raw(SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt())
+			SqrtPrice::try_from_raw(
+				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.unwrap()
 				.to_tick(),
 			100.into()
 		));
@@ -613,7 +618,10 @@ fn swap() {
 		));
 		assert_ok!(pool_state.collect_and_mint::<QuoteToBase>(
 			&LiquidityProvider::from([0; 32]),
-			SqrtPrice::from_raw(SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt())
+			SqrtPrice::try_from_raw(
+				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
+			)
+			.unwrap()
 				.to_tick(),
 			100.into()
 		));

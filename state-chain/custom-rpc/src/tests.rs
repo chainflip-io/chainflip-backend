@@ -135,7 +135,7 @@ pub fn price_from_u128(value: u128) -> Price {
 }
 
 pub fn sqrt_price_from_u128(value: u128) -> SqrtPrice {
-	SqrtPrice::from_raw(value.into())
+	SqrtPrice::try_from_raw(value.into()).unwrap()
 }
 
 #[test]

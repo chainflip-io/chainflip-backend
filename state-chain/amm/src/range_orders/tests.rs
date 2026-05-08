@@ -148,7 +148,7 @@ fn test_amounts_to_liquidity() {
 
 					let pool_state = PoolState::new(
 						0,
-						SqrtPrice::from_raw(rng_u256_inclusive_bound(
+						SqrtPrice::try_from_raw(rng_u256_inclusive_bound(
 							&mut rng,
 							if tick > MIN_TICK {
 								SqrtPrice::from_tick(tick - 1).as_raw()..=
@@ -157,7 +157,8 @@ fn test_amounts_to_liquidity() {
 								SqrtPrice::from_tick(tick).as_raw()..=
 									SqrtPrice::from_tick(tick + 1).as_raw()
 							},
-						)),
+						))
+						.unwrap(),
 					)
 					.unwrap();
 

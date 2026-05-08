@@ -56,6 +56,7 @@ pub type Amount = U256;
 )]
 pub struct SqrtPrice(U256);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConversionError {
 	Overflow,
 	OutsideValidRange,
@@ -69,20 +70,16 @@ impl TryFrom<Price> for SqrtPrice {
 			(U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
 				(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS),
 		)
-		.map(SqrtPrice)
 		.map_err(|_| ConversionError::Overflow)?;
 
-		sqrt_price
-			.is_valid()
-			.then_some(sqrt_price)
-			.ok_or(ConversionError::OutsideValidRange)
+		SqrtPrice::try_from_raw(sqrt_price)
 	}
 }
 
 impl SqrtPrice {
 	pub const FRACTIONAL_BITS: u32 = 96;
 
-	pub fn is_valid(&self) -> bool {
+	fn is_valid(&self) -> bool {
 		(MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(self)
 	}
 
@@ -112,6 +109,15 @@ impl SqrtPrice {
 		}
 	}
 
+	pub fn try_from_raw(value: U256) -> Result<Self, ConversionError> {
+		let sqrt_price = SqrtPrice(value);
+
+		sqrt_price
+			.is_valid()
+			.then_some(sqrt_price)
+			.ok_or(ConversionError::OutsideValidRange)
+	}
+
 	pub fn clamp_from_raw(value: U256) -> Self {
 		if value < MIN_SQRT_PRICE.0 {
 			MIN_SQRT_PRICE
@@ -120,10 +126,6 @@ impl SqrtPrice {
 		} else {
 			SqrtPrice(value)
 		}
-	}
-
-	pub fn from_raw(value: U256) -> Self {
-		SqrtPrice(value)
 	}
 
 	pub fn as_raw(&self) -> U256 {
@@ -783,7 +785,7 @@ mod test {
 		let clearly_out_of_range_price = Price::from_raw(U256::MAX);
 
 		assert_eq!(
-			Price::from(SqrtPrice::from_raw(U256::from(1) << 96)),
+			Price::from(SqrtPrice::try_from_raw(U256::from(1) << 96).unwrap()),
 			Price::from_raw(U256::from(1) << Price::FRACTIONAL_BITS)
 		);
 		assert!(Price::from(MIN_SQRT_PRICE) < max_price);
