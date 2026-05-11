@@ -30,7 +30,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
 	LpOrdersWeightsProvider, LpStatsApi, PoolApi, SwapRequestHandler, SwappingApi,
 };
-use cf_utilities::selector::Select;
+use cf_utilities::select::Select;
 use sp_runtime::Saturating;
 
 pub use cf_traits::IncreaseOrDecrease;
