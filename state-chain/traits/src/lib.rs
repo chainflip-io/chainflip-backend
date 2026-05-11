@@ -35,7 +35,7 @@ mod validate;
 pub use validate::*;
 
 pub use swapping::{
-	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
+	ExpiryBehaviour, LendingSwapType, NetworkFeeApi, PriceLimitsAndExpiry, SwapExecutionProgress,
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
 };

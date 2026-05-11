@@ -26,8 +26,20 @@ use cf_primitives::{
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_runtime::Permill;
 
 use crate::lending::LoanId;
+
+/// Exposes the network fee rate charged on swaps between a pair of assets.
+pub trait NetworkFeeApi {
+	/// Returns the network fee rate applied to a swap from `input_asset` to `output_asset`.
+	/// `is_internal_swap` selects between the regular and internal-swap fee schedules.
+	fn get_network_fee_rate(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> Permill;
+}
 
 #[derive(
 	Clone,

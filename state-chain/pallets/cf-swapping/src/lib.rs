@@ -3453,6 +3453,16 @@ impl<T: Config> cf_traits::FlipBurnOrMoveInfo for Pallet<T> {
 	}
 }
 
+impl<T: Config> cf_traits::NetworkFeeApi for Pallet<T> {
+	fn get_network_fee_rate(
+		input_asset: Asset,
+		output_asset: Asset,
+		is_internal_swap: bool,
+	) -> sp_runtime::Permill {
+		Pallet::<T>::get_network_fee_for_swap(input_asset, output_asset, is_internal_swap).rate
+	}
+}
+
 impl<T: Config> SwapParameterValidation for Pallet<T> {
 	type AccountId = T::AccountId;
 
