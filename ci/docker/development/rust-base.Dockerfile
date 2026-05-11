@@ -46,8 +46,8 @@ RUN set -eux; \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
     curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
     DEBIAN_CODENAME="$(lsb_release -sc)"; \
-    echo "deb http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" > /etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list; \
-    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list; \
+    echo "deb http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" > "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
+    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
     apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends clang-14 lldb-14 lld-14 libclang-14-dev; \
     apt-get autoremove -y; \
