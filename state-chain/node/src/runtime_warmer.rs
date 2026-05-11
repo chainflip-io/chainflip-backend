@@ -278,6 +278,28 @@ fn warm(
 /// at all — that almost certainly means the runtime's storage layout has
 /// changed and this function needs revisiting.
 fn extract_runtime_upgrade_code(opaque: &[u8]) -> Option<Vec<u8>> {
+	const GOVERNANCE_PALLET_INDEX: u8 = 15;
+	const CHAINFLIP_RUNTIME_UPGRADE_CALL_INDEX: u8 = 2;
+
+	let [pallet_index, call_index, ..] = opaque else {
+		log::error!(
+			target: LOG_TARGET,
+			"Pending governance call is too short to decode as `RuntimeCall`."
+		);
+		return None;
+	};
+	if *pallet_index != GOVERNANCE_PALLET_INDEX ||
+		*call_index != CHAINFLIP_RUNTIME_UPGRADE_CALL_INDEX
+	{
+		// Not `pallet_cf_governance::Call::chainflip_runtime_upgrade` — ignore.
+		log::debug!(
+			target: LOG_TARGET,
+			"Pending governance call is not a runtime upgrade (pallet_index={}, call_index={}). Ignoring.",
+			*pallet_index, *call_index,
+		);
+		return None;
+	}
+
 	let call = match RuntimeCall::decode(&mut &opaque[..]) {
 		Ok(call) => call,
 		Err(e) => {
