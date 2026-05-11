@@ -107,6 +107,10 @@ where
 		}))
 	}
 
+	fn free_balances_dont_sweep(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		Self::free_balances(who)
+	}
+
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		Self::get_storage(FREE_BALANCES, (who, asset)).unwrap_or_default()
 	}

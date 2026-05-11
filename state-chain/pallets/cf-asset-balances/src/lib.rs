@@ -484,6 +484,10 @@ where
 		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 
+	fn free_balances_dont_sweep(who: &Self::AccountId) -> AssetMap<AssetAmount> {
+		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
+	}
+
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount {
 		FreeBalances::<T>::get(who, asset)
 	}

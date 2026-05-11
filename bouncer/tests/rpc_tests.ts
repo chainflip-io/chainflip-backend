@@ -176,6 +176,7 @@ export async function testRpcCalls(testContext: TestContext): Promise<void> {
     (subcf) => testParameterlessRpcCall(subcf, 'cf_auction_parameters'),
 
     // read only rpc calls, mostly stable
+    (subcf) => testParameterlessRpcCall(subcf, 'cf_all_account_infos'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_accounts'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_current_compatibility_version'),
     (subcf) => testParameterlessRpcCall(subcf, 'cf_lp_get_order_fills'),

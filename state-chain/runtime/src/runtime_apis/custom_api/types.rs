@@ -27,7 +27,7 @@ use cf_chains::{
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
+use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -682,6 +682,8 @@ pub struct RpcLendingConfig {
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub account_id: Option<AccountId32>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
 	pub vanity_name: VanityName,
@@ -705,6 +707,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RpcAccountInfoCommonItems<B>, E> {
 		Ok(RpcAccountInfoCommonItems {
+			account_id: self.account_id,
 			vanity_name: self.vanity_name,
 			flip_balance: f(self.flip_balance)?,
 			asset_balances: self.asset_balances.try_map(&f)?,
@@ -726,4 +729,25 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.transpose()?,
 		})
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct RuntimeApiAccountInfoWrapper {
+	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
+	pub role: RuntimeApiAccountInfo,
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub enum RuntimeApiAccountInfo {
+	Unregistered,
+	Broker(Box<BrokerInfo<<Bitcoin as Chain>::ChainAccount>>),
+	LiquidityProvider(Box<LiquidityProviderInfo>),
+	Validator(Box<ValidatorInfo>),
+	Operator(Box<OperatorInfo<FlipBalance>>),
+}
+
+#[derive(Encode, Decode, TypeInfo, PartialEq)]
+pub enum ShouldSweep {
+	Yes,
+	No,
 }
