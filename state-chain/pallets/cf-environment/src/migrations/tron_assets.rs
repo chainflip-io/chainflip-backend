@@ -13,21 +13,21 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 			match cf_runtime_utilities::genesis_hashes::genesis_hash::<T>() {
 				cf_runtime_utilities::genesis_hashes::BERGHAIN => (
 					cf_chains::tron::CHAIN_ID_MAINNET,
-					EvmAddress::from(hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c")), // TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t
-					EvmAddress::from(hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039")), // TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB
-					EvmAddress::from(hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e")), // TDKihjArLMEfF8ebeEWdfiuoqHC8nmydBy
+					EvmAddress::from(hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c")), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
+					EvmAddress::from(hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039")), /* TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB */
+					EvmAddress::from(hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e")), /* TDKihjArLMEfF8ebeEWdfiuoqHC8nmydBy */
 				),
 				cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 					cf_chains::tron::CHAIN_ID_NILE_TESTNET,
-					EvmAddress::from(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f")), // TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf
-					EvmAddress::from(hex_literal::hex!("391362ed6f5f649868eede354d3e833d6165dd9a")), // TFAzjzAnaFWRmXNvpNngTbBBDuo4WjRQyy
-					EvmAddress::from(hex_literal::hex!("2523ae929fecd9d665f472f59b99a8ce6b179510")), // TDMakP1fbWc7XXoSWZpujpjRAuePPEn4oi
+					EvmAddress::from(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f")), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
+					EvmAddress::from(hex_literal::hex!("391362ed6f5f649868eede354d3e833d6165dd9a")), /* TFAzjzAnaFWRmXNvpNngTbBBDuo4WjRQyy */
+					EvmAddress::from(hex_literal::hex!("2523ae929fecd9d665f472f59b99a8ce6b179510")), /* TDMakP1fbWc7XXoSWZpujpjRAuePPEn4oi */
 				),
 				cf_runtime_utilities::genesis_hashes::SISYPHOS => (
 					cf_chains::tron::CHAIN_ID_NILE_TESTNET,
-					EvmAddress::from(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f")), // TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf
-					EvmAddress::from(hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0")), // TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT
-					EvmAddress::from(hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5")), // TPcqDKqWiDyQh4vGbFiJaxpPXtKfk8RZML
+					EvmAddress::from(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f")), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
+					EvmAddress::from(hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0")), /* TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT */
+					EvmAddress::from(hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5")), /* TPcqDKqWiDyQh4vGbFiJaxpPXtKfk8RZML */
 				),
 				_ => (
 					4271970548u64, // localnet Tron Chain ID
