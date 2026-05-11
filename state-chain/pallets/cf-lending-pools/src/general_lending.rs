@@ -1594,6 +1594,12 @@ pub fn remove_lender_funds<T: Config>(
 /// Returns `Permill::one()` if the pool does not exist or is empty. Allows stale oracle
 /// prices (since we still want the cap to hold during price outages), and propagates
 /// an error only when a price is completely unavailable.
+///
+/// Boost loans (in `BoostLoans`) are deliberately excluded from this sum: they are not
+/// secured by collateral and therefore reserve no liquidation capacity. We assume boost
+/// principal will always be repaid because boost loans are funded against prewitnessed
+/// deposits. They still consume `available_amount` via `fund_loan` and so push real pool
+/// utilisation up against this cap, but they do not lower the cap themselves.
 pub fn compute_utilisation_cap<T: Config>(
 	asset: Asset,
 	coverage_factor: Percent,
