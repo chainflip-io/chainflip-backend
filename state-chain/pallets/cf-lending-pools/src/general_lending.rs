@@ -1412,7 +1412,7 @@ pub fn fund_loan<T: Config>(
 	origination_fee_network: AssetAmount,
 	price_cache: &OraclePriceCache<T>,
 ) -> Result<(), DispatchError> {
-	let utilisation_cap = compute_utilisation_cap::<T>(
+	let required_liquidation = required_liquidation_amount::<T>(
 		loan.asset,
 		LendingConfig::<T>::get().liquidation_coverage_factor,
 		price_cache,
@@ -1423,7 +1423,10 @@ pub fn fund_loan<T: Config>(
 
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
 
-		ensure!(pool.get_utilisation() <= utilisation_cap, Error::<T>::UtilisationCapExceeded);
+		ensure!(
+			required_liquidation <= pool.available_for_borrowing(),
+			Error::<T>::UtilisationCapExceeded
+		);
 
 		pool.record_pool_fee(origination_fee_pool);
 
@@ -1785,10 +1788,10 @@ pub fn compute_utilisation_cap<T: Config>(
 	Ok(Permill::one().saturating_sub(Permill::from_rational(required, pool.total_amount)))
 }
 
-/// Checks that, for every pool in which `borrower_id` holds collateral, the pool's current
-/// utilisation does not exceed the (post-borrow) liquidation-coverage cap. Intended to be
-/// called after the loan account has been committed to storage so that
-/// [`compute_utilisation_cap`] sees the new principal directly.
+/// Checks that, for every pool in which `borrower_id` holds collateral, the pool can still
+/// cover the configured liquidation fraction of outstanding loans. Must be called after the
+/// loan account is written to storage so that [`required_liquidation_amount`] sees the new
+/// principal directly.
 fn check_collateral_pool_caps<T: Config>(
 	borrower_id: &T::AccountId,
 	price_cache: &OraclePriceCache<T>,
@@ -1800,13 +1803,15 @@ fn check_collateral_pool_caps<T: Config>(
 	let coverage_factor = LendingConfig::<T>::get().liquidation_coverage_factor;
 
 	for collateral_asset in loan_account.get_total_collateral().into_keys() {
-		let cap = compute_utilisation_cap::<T>(collateral_asset, coverage_factor, price_cache)?;
+		let required =
+			required_liquidation_amount::<T>(collateral_asset, coverage_factor, price_cache)?;
+		let pool = GeneralLendingPools::<T>::get(collateral_asset)
+			.ok_or(Error::<T>::PoolDoesNotExist)?;
 
-		let pool_utilisation = GeneralLendingPools::<T>::get(collateral_asset)
-			.ok_or(Error::<T>::PoolDoesNotExist)?
-			.get_utilisation();
-
-		ensure!(pool_utilisation <= cap, Error::<T>::CollateralPoolUtilisationCapExceeded);
+		ensure!(
+			required <= pool.available_for_borrowing(),
+			Error::<T>::CollateralPoolUtilisationCapExceeded
+		);
 	}
 
 	Ok(())
