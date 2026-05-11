@@ -47,7 +47,10 @@ use cf_rpc_apis::{
 	call_error, internal_error, CfErrorCode, NotificationBehaviour, OrderFills,
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
-use cf_utilities::rpc::NumberOrHex;
+use cf_utilities::{
+	migrations::{basics::migrate_from_historical_type, v0201},
+	rpc::NumberOrHex,
+};
 use core::ops::Range;
 use ethereum_eip712::build_eip712_data::to_ethers_typed_data;
 use itertools::Itertools;
@@ -2592,7 +2595,7 @@ where
 				api.cf_network_fees_before_version_16(hash)?.into()
 			} else if version < 17 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_17(hash)?.into()
+				migrate_from_historical_type(v0201, api.cf_network_fees_before_version_17(hash)?)
 			} else {
 				api.cf_network_fees(hash)?
 			};

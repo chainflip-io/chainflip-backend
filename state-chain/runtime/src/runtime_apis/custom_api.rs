@@ -16,6 +16,7 @@
 
 pub mod types;
 
+use cf_utilities::migrations::v0201;
 pub use types::RawWitnessedEvents;
 
 use crate::runtime_apis::types::*;
@@ -447,3 +448,14 @@ decl_runtime_apis!(
 		fn cf_supported_assets() -> Vec<Asset>;
 	}
 );
+
+#[test]
+pub fn test_historical_conversions() {
+	use crate::runtime_apis::historical_compatibility::test_runtime_call;
+	test_runtime_call::<v0201, (), NetworkFees>(
+		v0201,
+		"CustomRuntimeApi",
+		"cf_network_fees",
+		20117,
+	);
+}

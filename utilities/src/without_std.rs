@@ -16,6 +16,8 @@
 
 pub mod bounded_vec;
 pub mod conditional;
+pub mod generate_module;
+pub mod migrations;
 pub mod select;
 
 pub const fn bs58_array<const S: usize>(s: &'static str) -> [u8; S] {

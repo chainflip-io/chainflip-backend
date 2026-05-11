@@ -30,6 +30,13 @@ use cf_chains::{
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
+use cf_utilities::{
+	generate_module,
+	migrations::{
+		basics::{vCurrent, GlobalMigrationFromGeneric, HasVersion, Migration},
+		v0201, v0202, Migrations,
+	},
+};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
 pub use frame_support::BoundedVec;
@@ -604,16 +611,28 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
-pub struct NetworkFeeDetails {
-	pub standard_rate_and_minimum: FeeRateAndMinimum,
-	pub rates: AssetMap<Permill>,
+generate_module! {
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+	pub struct NetworkFeeDetails {
+		pub standard_rate_and_minimum: FeeRateAndMinimum,
+		pub rates: AssetMap<Permill>,
+	}
+	mod _NetworkFeeDetails { #![migrations] }
+}
+impl Migrations for NetworkFeeDetails {
+	type DefaultMigration = _NetworkFeeDetails::MigrateFields;
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
-pub struct NetworkFees {
-	pub regular_network_fee: NetworkFeeDetails,
-	pub internal_swap_network_fee: NetworkFeeDetails,
+generate_module! {
+	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+	pub struct NetworkFees {
+		pub regular_network_fee: NetworkFeeDetails,
+		pub internal_swap_network_fee: NetworkFeeDetails,
+	}
+	mod _NetworkFees { #![ migrations ] }
+}
+impl Migrations for NetworkFees {
+	type DefaultMigration = _NetworkFees::MigrateFields;
 }
 
 mod serialize_vanity_name {
