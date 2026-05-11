@@ -11,7 +11,6 @@ import {
   stateChainAssetFromAsset,
 } from 'shared/utils';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { setupLendingPools } from 'shared/lending';
 
 import { lendingPoolsLendingFundsAdded } from 'generated/events/lendingPools/lendingFundsAdded';
 import { lendingPoolsLoanCreated } from 'generated/events/lendingPools/loanCreated';
@@ -21,28 +20,15 @@ import { lendingPoolsLoanSettled } from 'generated/events/lendingPools/loanSettl
 import { lendingPoolsLendingFundsRemoved } from 'generated/events/lendingPools/lendingFundsRemoved';
 import { provideLiquidityAndTestAssetBalances } from './lp_api_test';
 
-// Note: use a different asset to the other LP_API test to avoid conflicts when depositing the liquidity.
-// Localnet oracle prices: SOL ~ $100, BTC ~ $10,000. Target LTV cap is 80%.
-// 550 SOL ≈ $55k collateral; 1.5 BTC peak loan ≈ $15k → ~27% LTV.
-const COLLATERAL_ASSET = Assets.Sol;
-const COLLATERAL_AMOUNT = 500;
-const COLLATERAL_FUNDS_ADDED = 550;
+const COLLATERAL_ASSET = Assets.Eth;
+const COLLATERAL_AMOUNT = 35;
+const COLLATERAL_FUNDS_ADDED = 40;
 const LOAN_ASSET = Assets.Btc;
 const LOAN_AMOUNT = 1;
 const EXPAND_AMOUNT = 0.5;
 
 const collateralRpcAsset = stateChainAssetFromAsset(COLLATERAL_ASSET);
 const loanRpcAsset = stateChainAssetFromAsset(LOAN_ASSET);
-
-async function ensureLendingPoolsReady<A>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pool: any = (await chainflip.query.lendingPools.generalLendingPools(LOAN_ASSET)).toJSON();
-  if (!pool) {
-    cf.info(`${LOAN_ASSET} lending pool not found, running setupLendingPools`);
-    await setupLendingPools(cf);
-  }
-}
 
 async function getLoanAccount(lpAddress: string) {
   await using chainflip = await getChainflipApi();
@@ -282,8 +268,6 @@ export async function testLpApiLending(testContext: TestContext) {
   const lpAddress = createStateChainKeypair('//LP_API').address; // cFJt3kyUdXvaoarfxJDLrFmHFqkXUgnVZ4zqqDLLTRjbJosmK
 
   await provideLiquidityAndTestAssetBalances(cf, COLLATERAL_ASSET, COLLATERAL_AMOUNT * 2);
-
-  await ensureLendingPoolsReady(cf);
 
   await testAddLenderFunds(cf.withChildLogger('testAddLenderFunds'), lpAddress);
   const loanId = await testRequestLoan(cf.withChildLogger('testRequestLoan'), lpAddress);

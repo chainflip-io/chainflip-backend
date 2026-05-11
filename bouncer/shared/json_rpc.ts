@@ -1,4 +1,5 @@
 import { Logger, throwError } from 'shared/utils/logger';
+import { cfMutex } from 'shared/utils';
 
 // export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:10997';
 export const brokerApiEndpoint = process.env.BROKER_ENDPOINT || 'http://127.0.0.1:9944';
@@ -43,7 +44,7 @@ export async function jsonRpc(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function lpApiRpc(logger: Logger, method: string, params: any[]): Promise<any> {
-  return jsonRpc(logger, method, params, lpApiEndpoint);
+  return cfMutex.runExclusive('//LP_API', () => jsonRpc(logger, method, params, lpApiEndpoint));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
