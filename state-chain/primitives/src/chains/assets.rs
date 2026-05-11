@@ -359,14 +359,21 @@ macro_rules! assets {
 				type Asset;
 				fn from_fn<F: FnMut(Self::Asset) -> T>(f: F) -> Self;
 			}
-			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
-			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
-			pub struct AssetMap<T> {
-				$(
-					#[serde(rename = $chain_json)]
-					#[serde(default)]
-					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
-				)*
+			$(
+				use super::$chain_member_and_module as $chain_member_and_module;
+			)*
+
+			cf_utilities::generate_module! {
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+				pub struct AssetMap<T> {
+					$(
+						#[serde(rename = $chain_json)]
+						#[serde(default)]
+						pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
+					)*
+				}
+				mod _AssetMap { #![migrations] }
 			}
 			impl<T> AssetMap<T> {
 				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
@@ -571,14 +578,18 @@ macro_rules! assets {
 					Unsupported,
 				}
 
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
-				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
-				pub struct AssetMap<T> {
-					$(
-						#[serde(rename = $asset_json)]
-						#[serde(default)]
-						pub $asset_member: T,
-					)+
+
+				cf_utilities::generate_module! {
+					#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+					#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+					pub struct AssetMap<T> {
+						$(
+							#[serde(rename = $asset_json)]
+							#[serde(default)]
+							pub $asset_member: T,
+						)+
+					}
+					mod _AssetMap { #![migrations] }
 				}
 				impl<T> AssetMap<T> {
 					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
@@ -592,6 +603,7 @@ macro_rules! assets {
 							$($asset_member: f(Asset::$asset_variant)?,)+
 						})
 					}
+
 
 					pub fn map<R, F: FnMut(T) -> R>(self, mut f: F) -> AssetMap<R> {
 						AssetMap {

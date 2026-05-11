@@ -17,6 +17,7 @@
 #![feature(trait_alias)]
 #![feature(step_trait)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 

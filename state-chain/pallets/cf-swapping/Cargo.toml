@@ -22,6 +22,7 @@ cf-primitives = { workspace = true }
 cf-amm = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-traits = { workspace = true }
+cf-utilities = { workspace = true }
 pallet-cf-environment = { workspace = true }
 
 log = { workspace = true }
@@ -38,6 +39,9 @@ sp-arithmetic = { workspace = true }
 sp-std = { workspace = true }
 sp-runtime = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
+
+proptest = { version = "1.6", optional = true }
+proptest-derive = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
@@ -86,3 +90,4 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 ]
+test = ["dep:proptest", "dep:proptest-derive", "sp-arithmetic/proptest"]

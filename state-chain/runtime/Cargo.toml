@@ -114,8 +114,22 @@ n-functor = { workspace = true }
 sp-io = { workspace = true, default-features = true }
 proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }
-cf-chains = { workspace = true, features = ["mocks", "runtime-integration-tests"] }
+cf-chains = { workspace = true, features = [
+	"mocks",
+	"runtime-integration-tests",
+] }
 cf-traits = { workspace = true, features = ["mocks"] }
+frame-metadata = { workspace = true, default-features = true, features = [
+	"current",
+	"decode",
+] }
+scale-decode = { workspace = true }
+scale-json = { workspace = true }
+
+# enable the `test` feature for all (required) dependency crates if we are buiding for a test
+pallet-cf-swapping = { workspace = true, features = ["test"] }
+cf-primitives = { workspace = true, features = ["test"] }
+
 
 [features]
 default = ["std"]
