@@ -755,9 +755,6 @@ where
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<()>> {
 		let amount = try_parse_number_or_hex(amount)?;
-		if amount == 0 {
-			Err(anyhow!("Amount must be greater than 0"))?;
-		}
 		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
 				.submit_wait_for_result_dynamic(
@@ -819,9 +816,6 @@ where
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<LoanId>> {
 		let loan_amount = try_parse_number_or_hex(loan_amount)?;
-		if loan_amount == 0 {
-			Err(anyhow!("Loan amount must be greater than 0"))?;
-		}
 		Ok(
 			match self
 				.signed_pool_client
@@ -858,9 +852,6 @@ where
 		extra_amount_to_borrow: NumberOrHex,
 	) -> RpcResult<Hash> {
 		let extra_amount_to_borrow = try_parse_number_or_hex(extra_amount_to_borrow)?;
-		if extra_amount_to_borrow == 0 {
-			Err(anyhow!("Extra amount must be greater than 0"))?;
-		}
 
 		let ExtrinsicData { tx_hash, .. } = self
 			.signed_pool_client
@@ -885,11 +876,6 @@ where
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<RepaymentResponse>> {
 		let amount: RepaymentAmount = amount.try_into()?;
-		if let RepaymentAmount::Exact(amount) = amount {
-			if amount == 0 {
-				Err(anyhow!("Repayment amount must be greater than 0"))?;
-			}
-		}
 		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
 				.submit_wait_for_result_dynamic(

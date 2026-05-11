@@ -514,9 +514,6 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		amount: AssetAmount,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<()>> {
-		if amount == 0 {
-			bail!("Amount must be greater than 0");
-		}
 		Ok(into_api_wait_for_result(
 			self.submit_signed_extrinsic_wait_for(
 				pallet_cf_lending_pools::Call::add_lender_funds { asset, amount },
@@ -572,9 +569,6 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		broker: Option<Beneficiary<AccountId>>,
 		wait_for: WaitFor,
 	) -> Result<ApiWaitForResult<LoanId>> {
-		if loan_amount == 0 {
-			bail!("Loan amount must be greater than 0");
-		}
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
 				pallet_cf_lending_pools::Call::request_loan { loan_asset, loan_amount, broker },
@@ -606,9 +600,6 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		loan_id: LoanId,
 		extra_amount_to_borrow: AssetAmount,
 	) -> Result<H256> {
-		if extra_amount_to_borrow == 0 {
-			bail!("Extra amount must be greater than 0");
-		}
 		Ok(self
 			.submit_signed_extrinsic(RuntimeCall::from(
 				pallet_cf_lending_pools::Call::expand_loan { loan_id, extra_amount_to_borrow },
