@@ -1567,7 +1567,7 @@ impl<T: Config> Pallet<T> {
 			let mut pool_possibly_mutated = false;
 
 			for (lp, range_orders_cache) in
-				lp_accounts.with_values_from_btree_map(&pool.range_orders_cache.clone())
+				lp_accounts.select_values_from_btree_map(&pool.range_orders_cache.clone())
 			{
 				for (id, range) in range_orders_cache.iter() {
 					pool_possibly_mutated = true;
@@ -1592,7 +1592,7 @@ impl<T: Config> Pallet<T> {
 				.into_iter()
 				.flat_map(|(assets, limit_orders_cache)| {
 					lp_accounts
-						.with_values_from_btree_map(limit_orders_cache)
+						.select_values_from_btree_map(limit_orders_cache)
 						.map(move |(lp, limit_orders_cache)| (lp, assets, limit_orders_cache))
 				})
 				.collect::<Vec<_>>()

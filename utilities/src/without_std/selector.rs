@@ -11,7 +11,7 @@ pub enum Select<'k, Key: 'k> {
 }
 
 impl<'k, Key: Ord + 'k> Select<'k, Key> {
-	pub fn with_values_from_btree_map<'a: 'k, A: 'a>(
+	pub fn select_values_from_btree_map<'a: 'k, A: 'a>(
 		&self,
 		container: &'a BTreeMap<Key, A>,
 	) -> Box<dyn Iterator<Item = (&'a Key, &'a A)> + 'a> {
