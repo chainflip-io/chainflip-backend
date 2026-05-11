@@ -1717,25 +1717,57 @@ pub fn remove_lender_funds<T: Config>(
 	Ok(())
 }
 
-/// Computes the maximum utilisation ratio allowed for `asset`'s lending pool such that
-/// enough of the pool's asset is still available to fully liquidate `coverage_factor`
-/// of all outstanding loans at current oracle prices.
+/// Across all loan accounts, sums the amount of `asset` that the pool would need to
+/// release to liquidate `coverage_factor * total_loans_usd` of each account's debt at
+/// current oracle prices. Each account contributes in proportion to its share of
+/// `asset` in its collateral, capped by the account's total collateral USD value
+/// (we can never extract more than is held).
 ///
-/// For each loan account, the share of its collateral (by USD value) held in `asset` is
-/// multiplied by `coverage_factor * total_loans_usd` (capped by total collateral USD
-/// value for undercollateralised accounts). The sum across accounts is the amount of
-/// `asset` that may need to be released from the pool during liquidation; the cap is
-/// `1 - required / pool.total_amount`, saturating at zero.
+/// Allows stale oracle prices; errors only when a price is completely unavailable.
+fn required_liquidation_amount<T: Config>(
+	asset: Asset,
+	coverage_factor: Percent,
+	price_cache: &OraclePriceCache<T>,
+) -> Result<AssetAmount, DispatchError> {
+	LoanAccounts::<T>::iter().try_fold(0 as AssetAmount, |acc, (_borrower_id, loan_account)| {
+		let collateral = loan_account.get_total_collateral();
+		let collateral_in_asset = collateral.get(&asset).copied().unwrap_or_default();
+
+		let total_collateral_usd = price_cache.total_usd_value_of_allow_stale(&collateral)?;
+		if total_collateral_usd == 0 {
+			return Ok(acc);
+		}
+
+		let total_loans_usd =
+			loan_account.loans.values().try_fold(0 as AssetAmount, |sum, loan| {
+				price_cache
+					.usd_value_of_allow_stale(loan.asset, loan.owed_principal)
+					.map(|usd| sum.saturating_add(usd))
+			})?;
+
+		// Undercollateralised accounts can be liquidated for at most their collateral value.
+		let target_liquidation_usd =
+			core::cmp::min(coverage_factor * total_loans_usd, total_collateral_usd);
+
+		let required_in_asset = multiply_by_rational_with_rounding(
+			collateral_in_asset,
+			target_liquidation_usd,
+			total_collateral_usd,
+			Rounding::Up,
+		)
+		.unwrap_or(u128::MAX);
+
+		Ok::<_, DispatchError>(acc.saturating_add(required_in_asset))
+	})
+}
+
+/// Maximum utilisation ratio allowed for `asset`'s lending pool while still leaving
+/// enough liquidity to liquidate `coverage_factor` of all outstanding loans at current
+/// oracle prices. The cap is `1 - required_liquidation_amount / pool.total_amount`,
+/// saturating at zero. Returns `Permill::one()` if the pool does not exist or is empty.
 ///
-/// Returns `Permill::one()` if the pool does not exist or is empty. Allows stale oracle
-/// prices (since we still want the cap to hold during price outages), and propagates
-/// an error only when a price is completely unavailable.
-///
-/// Boost loans (in `BoostLoans`) are deliberately excluded from this sum: they are not
-/// secured by collateral and therefore reserve no liquidation capacity. We assume boost
-/// principal will always be repaid because boost loans are funded against prewitnessed
-/// deposits. They still consume `available_amount` via `fund_loan` and so push real pool
-/// utilisation up against this cap, but they do not lower the cap themselves.
+/// Used by the RPC for the human-readable view of the cap. Enforcement compares the
+/// underlying amount directly — see [`required_liquidation_amount`].
 pub fn compute_utilisation_cap<T: Config>(
 	asset: Asset,
 	coverage_factor: Percent,
@@ -1749,47 +1781,8 @@ pub fn compute_utilisation_cap<T: Config>(
 		return Ok(Permill::one());
 	}
 
-	// For each loan account, compute the amount of `asset` needed to cover `coverage_factor`
-	// of its loans. When the account holds multiple collateral assets, we attribute the
-	// required amount in proportion to each asset's USD share of the collateral.
-	let total_required_amount_across_accounts = LoanAccounts::<T>::iter().try_fold(
-		0 as AssetAmount,
-		|acc, (_borrower_id, loan_account)| {
-			let collateral = loan_account.get_total_collateral();
-			let collateral_in_asset = collateral.get(&asset).copied().unwrap_or_default();
-
-			let total_collateral_usd = price_cache.total_usd_value_of_allow_stale(&collateral)?;
-			if total_collateral_usd == 0 {
-				return Ok(acc);
-			}
-
-			let total_loans_usd =
-				loan_account.loans.values().try_fold(0 as AssetAmount, |sum, loan| {
-					price_cache
-						.usd_value_of_allow_stale(loan.asset, loan.owed_principal)
-						.map(|usd| sum.saturating_add(usd))
-				})?;
-
-			// For undercollateralised accounts we can extract at most the full collateral value.
-			let target_liquidation_usd =
-				core::cmp::min(coverage_factor * total_loans_usd, total_collateral_usd);
-
-			let required_in_asset = multiply_by_rational_with_rounding(
-				collateral_in_asset,
-				target_liquidation_usd,
-				total_collateral_usd,
-				Rounding::Up,
-			)
-			.unwrap_or(u128::MAX);
-
-			Ok::<_, DispatchError>(acc.saturating_add(required_in_asset))
-		},
-	)?;
-
-	let required_fraction =
-		Permill::from_rational(total_required_amount_across_accounts, pool.total_amount);
-
-	Ok(Permill::one().saturating_sub(required_fraction))
+	let required = required_liquidation_amount::<T>(asset, coverage_factor, price_cache)?;
+	Ok(Permill::one().saturating_sub(Permill::from_rational(required, pool.total_amount)))
 }
 
 /// Checks that, for every pool in which `borrower_id` holds collateral, the pool's current
