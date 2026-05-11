@@ -90,9 +90,8 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 		.with_cache_path(config.data_path.join("wasmtime"))
 		.build();
 
-	// The executor is moved into `new_full_parts` for block production. Cloning shares the
-	// underlying caches (Arc-wrapped internally) so the runtime warmer can populate the same
-	// in-memory and on-disk caches that block production consults during `set_code`.
+	// Cloned executors share the underlying Arc-wrapped caches, so the warmer
+	// populates the same caches block production uses.
 	let warmer_executor = executor.clone();
 
 	let (client, backend, keystore_container, task_manager) =
