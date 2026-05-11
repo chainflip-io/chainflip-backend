@@ -18,8 +18,15 @@
 //! approval window so the actual `set_code` doesn't stall block production
 //! while wasmtime compiles the new ~5 MB compressed (~30 MB uncompressed) blob.
 //!
-//! Watches `Governance::Proposals` on every imported best block, decodes any
-//! `governance.chainflip_runtime_upgrade { code, .. }` calls it finds, and
+//! Watches two governance storage locations on every imported best block:
+//!
+//! - `Governance::Proposals`
+//! - `Governance::ExecutionPipeline`
+//!
+//! The latter is required for single-member councils where approval happens in the same block as
+//! the proposal.
+//!
+//! For each `chainflip_runtime_upgrade { code, .. }` call found, the warmer
 //! drives the executor to compile the WASM via `with_instance`. That populates
 //! both the executor's in-memory `RuntimeCache` and the on-disk wasmtime
 //! artifact cache under the same `(code_hash, heap_alloc_strategy, wasm_method)`
@@ -81,7 +88,8 @@ where
 		+ 'static,
 	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
 {
-	let prefix = governance_proposals_prefix();
+	let proposals_prefix = governance_proposals_prefix();
+	let execution_pipeline_key = governance_execution_pipeline_key();
 	let mut warmed: HashSet<[u8; 32]> = HashSet::new();
 	// Serialise wasmtime compiles to one at a time. A burst of proposals would
 	// otherwise spawn parallel cranelift jobs and starve block production.
@@ -96,36 +104,9 @@ where
 			continue;
 		}
 
-		let pairs = match client.storage_pairs(notification.hash, Some(&prefix), None) {
-			Ok(it) => it,
-			Err(e) => {
-				log::debug!(
-					target: LOG_TARGET,
-					"storage_pairs failed at {:?}: {:?}",
-					notification.hash, e,
-				);
-				continue;
-			},
-		};
-
-		for (_storage_key, value) in pairs {
-			// `Proposal { call: Vec<u8>, .. }` — we only need the first field, so decoding a
-			// `Vec<u8>` from the leading bytes is sufficient and avoids a dependency on
-			// `pallet_cf_governance::Proposal`'s exact layout.
-			let mut bytes = value.0.as_slice();
-			let opaque_call = match Vec::<u8>::decode(&mut bytes) {
-				Ok(c) => c,
-				Err(_) => {
-					log::warn!(
-						target: LOG_TARGET,
-						"Failed to decode `Governance::Proposals` entry as opaque call bytes. \
-						 The storage layout has likely changed — the runtime warmer needs updating. \
-						 Pending runtime upgrades will not be pre-compiled until this is fixed.",
-					);
-					break;
-				},
-			};
-
+		for opaque_call in
+			pending_calls(&*client, notification.hash, &proposals_prefix, &execution_pipeline_key)
+		{
 			let Some(code) = extract_runtime_upgrade_code(&opaque_call) else { continue };
 
 			// `BackendRuntimeCode` keys the runtime cache by `storage_hash(:code:)`,
@@ -155,6 +136,75 @@ where
 	}
 
 	log::debug!(target: LOG_TARGET, "Runtime warmer stopped.");
+}
+
+/// Read every pending governance call at `block` from both `Governance::Proposals`
+/// (proposals still collecting approvals) and `Governance::ExecutionPipeline`
+/// (proposals approved and awaiting execution in the next `on_initialize`).
+///
+/// Returns the inner opaque call bytes from each entry.
+fn pending_calls<C, B>(
+	client: &C,
+	block: <Block as sp_runtime::traits::Block>::Hash,
+	proposals_prefix: &StorageKey,
+	execution_pipeline_key: &StorageKey,
+) -> Vec<Vec<u8>>
+where
+	C: StorageProvider<Block, B> + ?Sized,
+	B: sc_client_api::Backend<Block>,
+{
+	let mut calls = Vec::new();
+
+	match client.storage_pairs(block, Some(proposals_prefix), None) {
+		Ok(pairs) =>
+			for (_storage_key, value) in pairs {
+				// `Proposal { call: Vec<u8>, .. }` — the first field is the opaque call.
+				// Decoding a `Vec<u8>` from the leading bytes is enough and avoids
+				// depending on `pallet_cf_governance::Proposal`'s exact layout.
+				let mut bytes = value.0.as_slice();
+				match Vec::<u8>::decode(&mut bytes) {
+					Ok(call) => calls.push(call),
+					Err(_) => {
+						log::warn!(
+							target: LOG_TARGET,
+							"Failed to decode `Governance::Proposals` entry as opaque call bytes. \
+							 The storage layout has likely changed — the runtime warmer needs updating. \
+							 Pending runtime upgrades will not be pre-compiled until this is fixed.",
+						);
+						break;
+					},
+				}
+			},
+		Err(e) => log::debug!(
+			target: LOG_TARGET,
+			"reading Governance::Proposals at {:?} failed: {:?}",
+			block, e,
+		),
+	}
+
+	// Single-member case: propose + auto-approve in the same block puts the call
+	// straight into ExecutionPipeline, skipping the Proposals storage entirely.
+	match client.storage(block, execution_pipeline_key) {
+		Ok(Some(data)) => {
+			let mut bytes = data.0.as_slice();
+			match Vec::<(Vec<u8>, u32)>::decode(&mut bytes) {
+				Ok(entries) => calls.extend(entries.into_iter().map(|(call, _id)| call)),
+				Err(_) => log::warn!(
+					target: LOG_TARGET,
+					"Failed to decode `Governance::ExecutionPipeline` as `Vec<(OpaqueCall, ProposalId)>`. \
+					 The storage layout has likely changed — the runtime warmer needs updating.",
+				),
+			}
+		},
+		Ok(None) => {},
+		Err(e) => log::debug!(
+			target: LOG_TARGET,
+			"reading Governance::ExecutionPipeline at {:?} failed: {:?}",
+			block, e,
+		),
+	}
+
+	calls
 }
 
 /// Compile `code` via `WasmExecutor::with_instance`, populating both the
@@ -225,15 +275,15 @@ fn warm(
 ///
 /// Returns `None` for any other governance call or for an unrecognised pallet.
 /// Returns a warning-logging `None` if the bytes don't decode as a `RuntimeCall`
-/// at all — that almost certainly means the runtime's storage layout for
-/// `Governance::Proposals` has changed and this function needs revisiting.
+/// at all — that almost certainly means the runtime's storage layout has
+/// changed and this function needs revisiting.
 fn extract_runtime_upgrade_code(opaque: &[u8]) -> Option<Vec<u8>> {
 	let call = match RuntimeCall::decode(&mut &opaque[..]) {
 		Ok(call) => call,
 		Err(e) => {
 			log::warn!(
 				target: LOG_TARGET,
-				"Failed to decode `Governance::Proposals` entry as `RuntimeCall` ({:?}). \
+				"Failed to decode pending governance call as `RuntimeCall` ({:?}). \
 				 The storage layout has likely changed — the runtime warmer needs updating. \
 				 Pending runtime upgrades will not be pre-compiled until this is fixed.",
 				e,
@@ -256,6 +306,15 @@ fn governance_proposals_prefix() -> StorageKey {
 	prefix[..16].copy_from_slice(&twox_128(b"Governance"));
 	prefix[16..].copy_from_slice(&twox_128(b"Proposals"));
 	StorageKey(prefix.to_vec())
+}
+
+/// Storage key for the `ExecutionPipeline` value in the `Governance` pallet:
+/// `Twox128("Governance") || Twox128("ExecutionPipeline")`.
+fn governance_execution_pipeline_key() -> StorageKey {
+	let mut key = [0u8; 32];
+	key[..16].copy_from_slice(&twox_128(b"Governance"));
+	key[16..].copy_from_slice(&twox_128(b"ExecutionPipeline"));
+	StorageKey(key.to_vec())
 }
 
 #[cfg(test)]
@@ -300,5 +359,13 @@ mod tests {
 		assert_eq!(prefix.0.len(), 32);
 		assert_eq!(&prefix.0[..16], &twox_128(b"Governance"));
 		assert_eq!(&prefix.0[16..], &twox_128(b"Proposals"));
+	}
+
+	#[test]
+	fn execution_pipeline_key_matches_known_format() {
+		let key = governance_execution_pipeline_key();
+		assert_eq!(key.0.len(), 32);
+		assert_eq!(&key.0[..16], &twox_128(b"Governance"));
+		assert_eq!(&key.0[16..], &twox_128(b"ExecutionPipeline"));
 	}
 }
