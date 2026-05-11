@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.18] - 2026-05-11
+
+### Fixes
+
+- Bump Polkadot dependency to latest tag.
+
 ## [2.1.17] - 2026-05-08
 
 ### Fixes
