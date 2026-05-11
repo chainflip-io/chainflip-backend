@@ -912,11 +912,16 @@ pub mod pallet {
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
-	// Determines the number of block confirmations is required for a block on
-	// an external chain before CFE can submit any witness extrinsics for it.
+	// Election based witnessing: Determines the number of block confirmations required for a block
+	// to be considered safe and all contained transactions to be forwarded to the ingress egress
+	// pallet.
 	//
-	// This storage item won't be used for any chains using the elections witnessing and
-	// will be removed once all chains are migrated
+	// This value is mirrored to the `safety_margin` setting of all ingress related BlockWitnesser
+	// instances in the respective elections pallet.
+	//
+	// Legacy witnessing (only used for Assethub): Determines the number of block confirmations
+	// required for a block on an external chain before CFE can submit any witness extrinsics for
+	// it.
 	#[pallet::storage]
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =

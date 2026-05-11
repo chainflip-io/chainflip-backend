@@ -1,4 +1,4 @@
-use crate::Runtime;
+use crate::{chainflip::witnessing::tron_elections::TRON_MAINNET_SAFETY_MARGIN, Runtime};
 use cf_chains::instances::TronInstance;
 #[cfg(feature = "try-runtime")]
 use codec::Encode;
@@ -78,8 +78,7 @@ impl OnRuntimeUpgrade for TronElectionsInit {
 
 /// Initialize Tron ingress-egress pallet values (deposit channel lifetime).
 /// These are normally set via GenesisConfig but must be set via migration when adding a new chain.
-/// Note: WitnessSafetyMargin is deprecated for chains using elections-based witnessing (see
-/// comment on WitnessSafetyMargin storage item), so we only set the channel lifetime here.
+/// This sets both the channel lifetime and the witness safety margin.
 pub struct TronIngressEgressInit;
 
 impl OnRuntimeUpgrade for TronIngressEgressInit {
@@ -94,12 +93,17 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 		};
 
 		log::info!(
-			"🔧 Initializing Tron ingress-egress: deposit_channel_lifetime={}",
+			"🔧 Initializing Tron ingress-egress: deposit_channel_lifetime={}, ingress_safety_margin={}",
 			deposit_channel_lifetime,
+			TRON_MAINNET_SAFETY_MARGIN,
 		);
 
 		pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, TronInstance>::put(
 			deposit_channel_lifetime,
+		);
+
+		pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, TronInstance>::put(
+			TRON_MAINNET_SAFETY_MARGIN as u64,
 		);
 
 		Weight::zero()
@@ -110,6 +114,13 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 		let lifetime =
 			pallet_cf_ingress_egress::DepositChannelLifetime::<Runtime, TronInstance>::get();
 		frame_support::ensure!(lifetime > 0, "Tron deposit channel lifetime must be non-zero");
+
+		let safety_margin =
+			pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, TronInstance>::get();
+		frame_support::ensure!(
+			safety_margin == Some(TRON_MAINNET_SAFETY_MARGIN as u64),
+			"Tron safety margin not set correctly during migration"
+		);
 
 		Ok(())
 	}
