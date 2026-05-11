@@ -1,6 +1,8 @@
+// eslint-disable-next-line no-restricted-imports -- type-only import; runtime init is handled elsewhere via `polkadot/keyring`.
+import type { KeyringPair } from '@polkadot/keyring/types';
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { submitGovernanceApproval, submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -8,6 +10,13 @@ import { throwError } from 'shared/utils/logger';
 import { systemCodeUpdated } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecution } from 'generated/events/governance/failedExecution';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
+
+// Multi-member council flow: submit, wait `leadTimeMs`, then `account` signs
+// the second approval. Caller must have already arranged for threshold ≥ 2.
+export type SecondApprover = {
+  account: KeyringPair;
+  leadTimeMs: number;
+};
 
 async function readRuntimeWasmFromFile(filePath: string): Promise<Uint8Array> {
   return compactAddLength(new Uint8Array(await fs.readFile(filePath)));
@@ -21,6 +30,7 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   percentNodesUpgraded = 0,
   // default to false, because try-runtime feature is not always available.
   tryRuntime = false,
+  secondApprover?: SecondApprover,
 ) {
   const wasmStats = await fs.stat(wasmPath);
   const runtimeWasm = await readRuntimeWasmFromFile(wasmPath);
@@ -50,9 +60,17 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   });
 
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
-  await submitGovernanceExtrinsic((api) =>
+  const proposalId = await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
   );
+
+  if (secondApprover) {
+    cf.info(
+      `Proposal ${proposalId}: waiting ${secondApprover.leadTimeMs}ms before second approval.`,
+    );
+    await sleep(secondApprover.leadTimeMs);
+    await submitGovernanceApproval(proposalId, secondApprover.account, cf.logger);
+  }
 
   cf.info('Submitted runtime upgrade. Waiting for the runtime upgrade to complete.');
   const resultEvent = await cf.stepUntilOneEventOf({
