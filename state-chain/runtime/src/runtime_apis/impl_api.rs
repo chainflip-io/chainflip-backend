@@ -891,7 +891,7 @@ impl_runtime_apis! {
 			}
 		}
 
-		fn cf_multiple_accounts_info(requested_roles: Option<Vec<AccountRole>>) -> Vec<RuntimeApiAccountInfoWrapper> {
+		fn cf_all_account_infos(requested_roles: Option<Vec<AccountRole>>) -> Vec<RuntimeApiAccountInfoWrapper> {
 
 			let _ = <pallet_cf_pools::Pallet<Runtime> as PoolApi>::sweep_all();
 

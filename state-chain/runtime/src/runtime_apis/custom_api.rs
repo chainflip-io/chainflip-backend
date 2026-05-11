@@ -389,8 +389,8 @@ decl_runtime_apis!(
 			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
 		#[changed_in(17)]
-		fn cf_multiple_accounts_info();
-		fn cf_multiple_accounts_info(
+		fn cf_all_account_infos();
+		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<RuntimeApiAccountInfoWrapper>;
 		#[changed_in(7)]

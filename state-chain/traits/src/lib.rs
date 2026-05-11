@@ -1210,7 +1210,7 @@ pub trait BalanceApi {
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 
 	/// Returns the asset free balances of the given account, but **without sweeping**.
-	/// This function exists for performance reasons (for the cf_all_accounts_info rpc call),
+	/// This function exists for performance reasons (for the cf_all_account_infos rpc call),
 	/// because sweeping is an expensive operation.
 	///
 	/// Only use this if you can guarantee that the `who` account has been swept already.

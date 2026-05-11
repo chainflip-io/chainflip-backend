@@ -897,8 +897,8 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
-	#[method(name = "all_accounts_info")]
-	fn cf_all_accounts_info(
+	#[method(name = "all_account_infos")]
+	fn cf_all_account_infos(
 		&self,
 		roles: Option<Vec<AccountRole>>,
 		at: Option<state_chain_runtime::Hash>,
@@ -1991,7 +1991,7 @@ where
 		})
 	}
 
-	fn cf_all_accounts_info(
+	fn cf_all_account_infos(
 		&self,
 		roles: Option<Vec<AccountRole>>,
 		at: Option<state_chain_runtime::Hash>,
@@ -2003,7 +2003,7 @@ where
 						api.cf_network_environment(hash)?.into();
 					let network_env = api.cf_network_environment(hash)?;
 
-					api.cf_multiple_accounts_info(hash, roles)?
+					api.cf_all_account_infos(hash, roles)?
 						.into_iter()
 						.map(|info| {
 							let common_items = info
