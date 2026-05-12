@@ -72,7 +72,7 @@ use state_chain_runtime::{
 		pallet_hooks::{EvmKeyManagerEvent, EvmVaultContractEvent},
 		tron_elections::{
 			TronBlockHeightWitnesserES, TronChain, TronElectoralSystemRunner, TronLiveness,
-			TRON_MAINNET_SAFETY_BUFFER,
+			TRON_MAINNET_SAFETY_BUFFER, TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 		},
 	},
 	Runtime, TronInstance,
@@ -182,6 +182,7 @@ impl VoterApi<TronBlockHeightWitnesserES> for TronVoter {
 			self,
 			properties,
 			TRON_MAINNET_SAFETY_BUFFER,
+			TRON_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 			"TRON BHW",
 		)
 		.await

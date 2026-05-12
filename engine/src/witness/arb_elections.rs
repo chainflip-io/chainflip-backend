@@ -54,6 +54,7 @@ use state_chain_runtime::{
 	chainflip::witnessing::arbitrum_elections::{
 		ArbitrumBlockHeightWitnesserES, ArbitrumChain, ArbitrumElectoralSystemRunner,
 		ArbitrumFeeTracking, ArbitrumLiveness, ARBITRUM_MAINNET_SAFETY_BUFFER,
+		ARBITRUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 	},
 	ArbitrumInstance,
 };
@@ -242,6 +243,7 @@ impl VoterApi<ArbitrumBlockHeightWitnesserES>
 			self,
 			properties,
 			ARBITRUM_MAINNET_SAFETY_BUFFER,
+			ARBITRUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 			"ARB BHW",
 		)
 		.await

@@ -48,7 +48,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::witnessing::bitcoin_elections::{
 		BitcoinBlockHeightWitnesserES, BitcoinChain, BitcoinElectoralSystemRunner, BitcoinLiveness,
-		BITCOIN_MAINNET_SAFETY_BUFFER,
+		BITCOIN_MAINNET_SAFETY_BUFFER, BITCOIN_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 	},
 	BitcoinInstance, Runtime,
 };
@@ -155,6 +155,7 @@ impl VoterApi<BitcoinBlockHeightWitnesserES> for BitcoinBlockHeightWitnesserVote
 			&self.client,
 			properties,
 			BITCOIN_MAINNET_SAFETY_BUFFER,
+			BITCOIN_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 			"BTC BHW",
 		)
 		.await

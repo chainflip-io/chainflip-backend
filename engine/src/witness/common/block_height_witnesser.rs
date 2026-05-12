@@ -13,6 +13,7 @@ pub async fn witness_headers<ES, Client, Chain>(
 	client: &Client,
 	properties: <ES as ElectoralSystemTypes>::ElectionProperties,
 	safety_buffer: u32,
+	max_submit_headers: u32,
 	tag: &'static str,
 ) -> anyhow::Result<Option<NonemptyContinuousHeaders<Chain>>>
 where
@@ -44,13 +45,13 @@ where
 
 	// Compute the highest block height we want to fetch a header for,
 	// since for performance reasons we're bounding the number of headers
-	// submitted in one vote. We're submitting at most SAFETY_BUFFER headers.
+	// submitted in one vote. We're submitting at most `max_submit_headers` headers.
 	let highest_submitted_height = std::cmp::min(
 		best_block_header.block_height,
-		witness_from_index.saturating_forward(safety_buffer as usize + 1),
+		witness_from_index.saturating_forward(max_submit_headers as usize + 1),
 	);
 
-	// request headers for at most SAFETY_BUFFER heights, in parallel
+	// request headers for at most `max_submit_headers` heights, in parallel
 	let requests = (witness_from_index..highest_submitted_height)
 		.map(|index| async move { client.block_header_by_height(index).await })
 		.collect::<Vec<_>>();

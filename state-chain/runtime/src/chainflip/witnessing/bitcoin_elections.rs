@@ -467,6 +467,7 @@ impl
 }
 
 pub const BITCOIN_MAINNET_SAFETY_BUFFER: u32 = 8;
+pub const BITCOIN_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {
