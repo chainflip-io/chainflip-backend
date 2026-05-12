@@ -49,16 +49,6 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
     versionPercentRestriction = undefined;
   }
 
-  cf.info('Temporarily disabling MissedAuthorshipSlot punishment during runtime upgrade.');
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 0,
-        suspension: 0,
-      }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
-  });
-
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   const proposalId = await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
@@ -93,16 +83,6 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   await sleep(20000);
 
   cf.info('Runtime upgrade completed.');
-
-  cf.info('Restoring MissedAuthorshipSlot penalty defaults after runtime upgrade.');
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 120,
-        suspension: 150,
-      }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
-  });
 }
 
 export async function submitRuntimeUpgradeWasmPath<A = []>(cf: ChainflipIO<A>, wasmPath: string) {
