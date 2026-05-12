@@ -17,10 +17,9 @@
 use cf_chains::{CcmChannelMetadataUnchecked, ForeignChain};
 use cf_rpc_apis::{
 	broker::{
-		AccountCreationDepositAddress, BrokerRpcApiClient, BrokerRpcApiServer, DcaParameters,
-		DeregisteredAffiliate, GetOpenDepositChannelsQuery, RpcBytes, SignatureData,
-		SwapDepositAddress, TransactionInId, TransactionMetadata, VaultSwapExtraParametersRpc,
-		VaultSwapInputRpc, WithdrawFeesDetail,
+		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
+		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
+		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
