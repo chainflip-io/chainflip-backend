@@ -904,12 +904,7 @@ impl<T: Config> LoanAccount<T> {
 
 		let origination_fee_pool = origination_fee_total.saturating_sub(origination_fee_network);
 
-		fund_loan::<T>(
-			&mut loan,
-			extra_principal,
-			origination_fee_pool,
-			origination_fee_network,
-		)?;
+		fund_loan::<T>(&mut loan, extra_principal, origination_fee_pool, origination_fee_network)?;
 
 		self.loans.insert(loan.id, loan);
 
@@ -1714,25 +1709,29 @@ pub fn remove_lender_funds<T: Config>(
 	Ok(())
 }
 
-/// Across all loan accounts, sums the amount of `asset` that the pool would need to
-/// release to liquidate `coverage_factor * total_loans_usd` of each account's debt at
-/// current oracle prices. Each account contributes in proportion to its share of
-/// `asset` in its collateral, capped by the account's total collateral USD value
-/// (we can never extract more than is held).
+/// For each `(asset, coverage_factor)` pair, sums across all loan accounts the amount of
+/// `asset` the pool would need to release to liquidate `coverage_factor * total_loans_usd`
+/// of each account's debt at current oracle prices. Each account contributes in proportion
+/// to its share of `asset` in its collateral, capped by the account's total collateral USD
+/// value (we can never extract more than is held).
+///
+/// Iterates `LoanAccounts` exactly once regardless of `asset_coverage.len()`, so callers
+/// that need to evaluate several pools in the same context should batch their queries.
 ///
 /// Allows stale oracle prices; errors only when a price is completely unavailable.
-fn required_liquidation_amount<T: Config>(
-	asset: Asset,
-	coverage_factor: Percent,
+fn required_liquidation_amounts<T: Config>(
+	asset_coverage: &[(Asset, Percent)],
 	price_cache: &OraclePriceCache<T>,
-) -> Result<AssetAmount, DispatchError> {
-	LoanAccounts::<T>::iter().try_fold(0 as AssetAmount, |acc, (_borrower_id, loan_account)| {
+) -> Result<BTreeMap<Asset, AssetAmount>, DispatchError> {
+	let mut totals: BTreeMap<Asset, AssetAmount> =
+		asset_coverage.iter().map(|(asset, _)| (*asset, 0)).collect();
+
+	LoanAccounts::<T>::iter().try_for_each(|(_borrower_id, loan_account)| -> DispatchResult {
 		let collateral = loan_account.get_total_collateral();
-		let collateral_in_asset = collateral.get(&asset).copied().unwrap_or_default();
 
 		let total_collateral_usd = price_cache.total_usd_value_of_allow_stale(&collateral)?;
 		if total_collateral_usd == 0 {
-			return Ok(acc);
+			return Ok(());
 		}
 
 		let total_loans_usd =
@@ -1742,29 +1741,37 @@ fn required_liquidation_amount<T: Config>(
 					.map(|usd| sum.saturating_add(usd))
 			})?;
 
-		// Undercollateralised accounts can be liquidated for at most their collateral value.
-		let target_liquidation_usd =
-			core::cmp::min(coverage_factor * total_loans_usd, total_collateral_usd);
+		for (asset, coverage_factor) in asset_coverage {
+			let collateral_in_asset = collateral.get(asset).copied().unwrap_or_default();
 
-		let required_in_asset = multiply_by_rational_with_rounding(
-			collateral_in_asset,
-			target_liquidation_usd,
-			total_collateral_usd,
-			Rounding::Up,
-		)
-		.unwrap_or(u128::MAX);
+			// Undercollateralised accounts can be liquidated for at most their collateral value.
+			let target_liquidation_usd =
+				core::cmp::min(*coverage_factor * total_loans_usd, total_collateral_usd);
 
-		Ok::<_, DispatchError>(acc.saturating_add(required_in_asset))
-	})
+			let required_in_asset = multiply_by_rational_with_rounding(
+				collateral_in_asset,
+				target_liquidation_usd,
+				total_collateral_usd,
+				Rounding::Up,
+			)
+			.unwrap_or(u128::MAX);
+
+			let entry = totals.entry(*asset).or_default();
+			*entry = entry.saturating_add(required_in_asset);
+		}
+
+		Ok(())
+	})?;
+
+	Ok(totals)
 }
 
 /// Maximum utilisation ratio allowed for `asset`'s lending pool while still leaving
 /// enough liquidity to liquidate `coverage_factor` of all outstanding loans at current
-/// oracle prices. The cap is `1 - required_liquidation_amount / pool.total_amount`,
-/// saturating at zero. Returns `Permill::one()` if the pool does not exist or is empty.
+/// oracle prices. Returns `Permill::one()` if the pool does not exist or is empty.
 ///
 /// Used by the RPC for the human-readable view of the cap. Enforcement compares the
-/// underlying amount directly — see [`required_liquidation_amount`].
+/// underlying amount directly — see [`required_liquidation_amounts`].
 pub fn compute_utilisation_cap<T: Config>(
 	asset: Asset,
 	coverage_factor: Percent,
@@ -1778,28 +1785,19 @@ pub fn compute_utilisation_cap<T: Config>(
 		return Ok(Permill::one());
 	}
 
-	let required = required_liquidation_amount::<T>(asset, coverage_factor, price_cache)?;
+	let required = required_liquidation_amounts::<T>(&[(asset, coverage_factor)], price_cache)?
+		.get(&asset)
+		.copied()
+		.unwrap_or_default();
 	Ok(Permill::one().saturating_sub(Permill::from_rational(required, pool.total_amount)))
-}
-
-/// True iff `asset`'s pool can still liquidate `coverage_factor` of outstanding loans at
-/// current oracle prices.
-fn pool_can_cover_required_liquidation<T: Config>(
-	asset: Asset,
-	coverage_factor: Percent,
-	price_cache: &OraclePriceCache<T>,
-) -> Result<bool, DispatchError> {
-	let required = required_liquidation_amount::<T>(asset, coverage_factor, price_cache)?;
-	let pool = GeneralLendingPools::<T>::get(asset).ok_or(Error::<T>::PoolDoesNotExist)?;
-	Ok(required <= pool.available_for_borrowing())
 }
 
 /// Checks the utilisation cap on every pool affected by a just-committed borrow:
 ///
-/// - `loan_asset`: the pool that funded the borrow (its `available_for_borrowing` just
-///   dropped). Always present.
-/// - `collateral_assets`: pools where the borrower's α-weight moved. Empty for boost
-///   loans (not collateralised).
+/// - `loan_asset`: the pool that funded the borrow (its `available_for_borrowing` just dropped).
+///   Always present.
+/// - `collateral_assets`: pools where the borrower's α-weight moved. Empty for boost loans (not
+///   collateralised).
 ///
 /// Must be called *after* the loan account has been written to storage; the surrounding
 /// `#[transactional]` rolls back on failure.
@@ -1810,20 +1808,29 @@ pub fn check_pool_caps_after_borrow<T: Config>(
 ) -> DispatchResult {
 	let coverage_factor = LendingConfig::<T>::get().liquidation_coverage_factor;
 
-	ensure!(
-		pool_can_cover_required_liquidation::<T>(loan_asset, coverage_factor, price_cache)?,
-		Error::<T>::UtilisationCapExceeded
-	);
+	// Build the asset slice, deduplicating loan_asset if also a collateral asset.
+	let mut asset_coverage: Vec<(Asset, Percent)> = Vec::with_capacity(collateral_assets.len() + 1);
+	asset_coverage.push((loan_asset, coverage_factor));
+	for asset in &collateral_assets {
+		if *asset != loan_asset {
+			asset_coverage.push((*asset, coverage_factor));
+		}
+	}
+
+	let required = required_liquidation_amounts::<T>(&asset_coverage, price_cache)?;
+
+	let pool_can_cover = |asset: Asset| -> Result<bool, DispatchError> {
+		let pool = GeneralLendingPools::<T>::get(asset).ok_or(Error::<T>::PoolDoesNotExist)?;
+		Ok(required.get(&asset).copied().unwrap_or_default() <= pool.available_for_borrowing())
+	};
+
+	ensure!(pool_can_cover(loan_asset)?, Error::<T>::UtilisationCapExceeded);
 
 	for asset in collateral_assets {
-		// Skip if it's also the loan asset — already checked above.
 		if asset == loan_asset {
 			continue;
 		}
-		ensure!(
-			pool_can_cover_required_liquidation::<T>(asset, coverage_factor, price_cache)?,
-			Error::<T>::CollateralPoolUtilisationCapExceeded
-		);
+		ensure!(pool_can_cover(asset)?, Error::<T>::CollateralPoolUtilisationCapExceeded);
 	}
 
 	Ok(())
