@@ -1913,9 +1913,10 @@ fn liquidation_with_outstanding_principal() {
 #[test]
 fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 	// Same as in `liquidation_with_outstanding_principal`, we test a scenario where a loan is
-	// liquidated and the recovered principal isn't enough to cover the total loan amount. However,
-	// in this test utilisation is 100% and we want to check that the pool owing some fees to the
-	// network does not break anything when writing off debt.
+	// liquidated and the recovered principal isn't enough to cover the total loan amount. Here
+	// utilisation is 100% so the pool has an outstanding network IOU at the time of write-off;
+	// the IOU should be forgiven up to the written-off amount rather than left for future
+	// lender liquidity to cover.
 
 	const PRINCIPAL: AssetAmount = INIT_POOL_AMOUNT;
 	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
@@ -2004,18 +2005,20 @@ fn liquidation_with_outstanding_principal_and_owed_network_fees() {
 			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
 			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
 
-			// The pool has lost outstanding principal (but has accrued origination and liquidation fees):
+			// The pool has lost outstanding principal (but has accrued origination and liquidation fees).
+			// The defaulted loan's outstanding network fees are forgiven against the network's IOU
+			// rather than charged to lenders, so `total_amount` only absorbs the portion of the
+			// write-off that exceeds the network IOU.
 			let new_total_amount = INIT_POOL_AMOUNT + origination_fee_pool + liquidation_fee_pool -
-expected_outstanding_principal;
+				(expected_outstanding_principal - origination_fee_network);
 
 			assert_eq!(
 				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
 				LendingPool {
 					total_amount: new_total_amount,
-					// Network hasn't collected the fees, but the funds for that are available:
-					available_amount: new_total_amount + origination_fee_network,
+					available_amount: new_total_amount,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: origination_fee_network,
+					owed_to_network: 0,
 				}
 			);
 
