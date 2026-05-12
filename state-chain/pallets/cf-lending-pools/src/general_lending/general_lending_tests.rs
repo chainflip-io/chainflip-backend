@@ -51,22 +51,6 @@ const INIT_POOL_AMOUNT: AssetAmount = PRINCIPAL * 2;
 
 use crate::LENDING_DEFAULT_CONFIG as CONFIG;
 
-/// Test shim matching the production buffer applied at liquidation init. The swap
-/// network fee defaults to zero in these tests, so the buffer is just the oracle
-/// slippage plus the supplied liquidation fee. Pass `Permill::zero()` for voluntary
-/// liquidations (which don't charge the liquidation fee).
-fn required_collateral_with_slippage_and_fee(
-	owed_usd: AssetAmount,
-	slippage_bps: BasisPoints,
-	liquidation_fee: Permill,
-) -> AssetAmount {
-	let slippage = Permill::from_rational(
-		slippage_bps.min(ONE_AS_BASIS_POINTS) as u32,
-		ONE_AS_BASIS_POINTS as u32,
-	);
-	required_collateral_with_buffer(owed_usd, slippage.saturating_add(liquidation_fee))
-}
-
 trait LendingTestRunnerExt {
 	fn with_funded_pool(self, init_pool_amount: AssetAmount) -> Self;
 	fn with_default_loan(self) -> Self;
@@ -1242,10 +1226,10 @@ fn basic_liquidation() {
 
 	// The soft liquidation swap pulls just enough collateral to cover the owed principal
 	// (in USD) plus the soft-slippage buffer; the rest stays in the supply pool.
-	let liquidation_input = required_collateral_with_slippage_and_fee(
+	let liquidation_input = required_collateral_with_buffer(
 		(PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE,
-		CONFIG.soft_liquidation_max_oracle_slippage,
-		CONFIG.liquidation_fee(LOAN_ASSET),
+		bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage)
+			.saturating_add(CONFIG.liquidation_fee(LOAN_ASSET)),
 	);
 	let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
 
@@ -2111,10 +2095,10 @@ mod multi_asset_collateral_liquidation {
 		// stays in the supply pools throughout liquidation.
 		let liquidation_estimates: BTreeMap<Asset, AssetAmount> =
 			compute_per_asset_liquidation_estimates(
-				required_collateral_with_slippage_and_fee(
+				required_collateral_with_buffer(
 					TOTAL_OWED * NEW_SWAP_RATE,
-					CONFIG.soft_liquidation_max_oracle_slippage,
-					CONFIG.liquidation_fee(LOAN_ASSET),
+					bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage)
+						.saturating_add(CONFIG.liquidation_fee(LOAN_ASSET)),
 				),
 				&[
 					(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
@@ -2263,10 +2247,10 @@ mod multi_asset_collateral_liquidation {
 		// stays in the supply pools throughout liquidation.
 		let liquidation_estimates: BTreeMap<Asset, AssetAmount> =
 			compute_per_asset_liquidation_estimates(
-				required_collateral_with_slippage_and_fee(
+				required_collateral_with_buffer(
 					TOTAL_OWED * NEW_SWAP_RATE,
-					CONFIG.soft_liquidation_max_oracle_slippage,
-					CONFIG.liquidation_fee(LOAN_ASSET),
+					bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage)
+						.saturating_add(CONFIG.liquidation_fee(LOAN_ASSET)),
 				),
 				&[
 					(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
@@ -2395,10 +2379,13 @@ mod multi_asset_collateral_liquidation {
 			(PRINCIPAL_2 + ORIGINATION_FEE_2) * SWAP_RATE;
 		let liquidation_estimates: BTreeMap<Asset, AssetAmount> =
 			compute_per_asset_liquidation_estimates(
-				required_collateral_with_slippage_and_fee(
+				required_collateral_with_buffer(
 					total_owed_usd,
-					CONFIG.soft_liquidation_max_oracle_slippage,
-					CONFIG.liquidation_fee(LOAN_ASSET).max(CONFIG.liquidation_fee(LOAN_ASSET_2)),
+					bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage).saturating_add(
+						CONFIG
+							.liquidation_fee(LOAN_ASSET)
+							.max(CONFIG.liquidation_fee(LOAN_ASSET_2)),
+					),
 				),
 				&[
 					(COLLATERAL_ASSET, INIT_COLLATERAL, INIT_COLLATERAL),
@@ -3570,10 +3557,9 @@ fn adding_collateral_during_liquidation() {
 			// outstanding principal at the new oracle rate plus the soft-slippage buffer.
 			// This test disables the liquidation fee, so it doesn't contribute to the buffer.
 			let owed_after_swap_1 = PRINCIPAL + ORIGINATION_FEE - RECOVERED_PRINCIPAL_1;
-			let liquidation_input = required_collateral_with_slippage_and_fee(
+			let liquidation_input = required_collateral_with_buffer(
 				owed_after_swap_1 * NEW_SWAP_RATE,
-				CONFIG.soft_liquidation_max_oracle_slippage,
-				Permill::zero(),
+				bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage),
 			);
 
 			// What's left in the pool after the soft liquidation swap is initiated: the
@@ -3988,10 +3974,9 @@ mod voluntary_liquidation {
 		// Voluntary liquidation only collects the owed principal (in USD) plus the
 		// soft-slippage buffer; the rest stays in the supply pool. Voluntary liquidations
 		// don't charge the liquidation fee, so it doesn't contribute to the buffer.
-		let liquidation_input = required_collateral_with_slippage_and_fee(
+		let liquidation_input = required_collateral_with_buffer(
 			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
-			CONFIG.soft_liquidation_max_oracle_slippage,
-			Permill::zero(),
+			bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage),
 		);
 		// Pick a SWAPPED_COLLATERAL that fits within the liquidation input and still
 		// produces enough principal to fully repay the loan with some excess.
@@ -4090,10 +4075,9 @@ mod voluntary_liquidation {
 		// Voluntary liquidation only collects the owed principal plus the soft-slippage
 		// buffer (no liquidation fee on voluntary liquidations), so the swap input is much
 		// smaller than INIT_COLLATERAL.
-		let liquidation_input = required_collateral_with_slippage_and_fee(
+		let liquidation_input = required_collateral_with_buffer(
 			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
-			CONFIG.soft_liquidation_max_oracle_slippage,
-			Permill::zero(),
+			bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage),
 		);
 
 		new_test_ext()
@@ -4194,23 +4178,20 @@ mod voluntary_liquidation {
 		let slippage_bps = CONFIG.soft_liquidation_max_oracle_slippage;
 		// Swap 1: voluntary, owed = (PRINCIPAL + ORIGINATION_FEE) BTC at SWAP_RATE.
 		// Voluntary liquidations don't charge the liquidation fee.
-		let liquidation_input_1 = required_collateral_with_slippage_and_fee(
+		let liquidation_input_1 = required_collateral_with_buffer(
 			(PRINCIPAL + ORIGINATION_FEE) * SWAP_RATE,
-			slippage_bps,
-			Permill::zero(),
+			bps_to_permill(slippage_bps),
 		);
 		// Swap 2: forced soft after the price spike to NEW_SWAP_RATE, owed has dropped by
 		// SWAPPED_PRINCIPAL_1 from the partial swap 1.
-		let liquidation_input_2 = required_collateral_with_slippage_and_fee(
+		let liquidation_input_2 = required_collateral_with_buffer(
 			(PRINCIPAL + ORIGINATION_FEE - SWAPPED_PRINCIPAL_1) * NEW_SWAP_RATE,
-			slippage_bps,
-			CONFIG.liquidation_fee(LOAN_ASSET),
+			bps_to_permill(slippage_bps).saturating_add(CONFIG.liquidation_fee(LOAN_ASSET)),
 		);
 		// Swap 3: back to voluntary at SWAP_RATE, owed = owed_after_liquidation_2.
-		let liquidation_input_3 = required_collateral_with_slippage_and_fee(
+		let liquidation_input_3 = required_collateral_with_buffer(
 			owed_after_liquidation_2 * SWAP_RATE,
-			slippage_bps,
-			Permill::zero(),
+			bps_to_permill(slippage_bps),
 		);
 
 		// Third liquidation will result in this much extra principal (after repaying
@@ -4745,10 +4726,6 @@ mod liquidation_math_tests {
 	const BTC: Asset = Asset::Btc;
 	const SOL: Asset = Asset::Sol;
 	const USDC: Asset = Asset::Usdc;
-
-	fn bps_to_permill(bps: BasisPoints) -> Permill {
-		Permill::from_rational(bps.min(ONE_AS_BASIS_POINTS) as u32, ONE_AS_BASIS_POINTS as u32)
-	}
 
 	fn estimates(
 		total_owed_usd: AssetAmount,
@@ -5956,10 +5933,9 @@ fn same_asset_loan() {
 		portion_of_amount(DEFAULT_ORIGINATION_FEE, EXPANDED_PRINCIPAL);
 	// Voluntary liquidation doesn't charge the liquidation fee, so only the slippage
 	// buffer applies.
-	let liquidation_input = required_collateral_with_slippage_and_fee(
+	let liquidation_input = required_collateral_with_buffer(
 		PRINCIPAL + EXPANDED_PRINCIPAL + total_origination_fee,
-		CONFIG.soft_liquidation_max_oracle_slippage,
-		Permill::zero(),
+		bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage),
 	);
 
 	new_test_ext()
@@ -6086,10 +6062,10 @@ mod supply_as_collateral {
 
 		// Soft liquidation only collects the owed principal (in USD) plus the slippage
 		// buffer; the rest stays in the supply pool.
-		let liquidation_input = required_collateral_with_slippage_and_fee(
+		let liquidation_input = required_collateral_with_buffer(
 			(PRINCIPAL + ORIGINATION_FEE) * NEW_SWAP_RATE,
-			CONFIG.soft_liquidation_max_oracle_slippage,
-			CONFIG.liquidation_fee(LOAN_ASSET),
+			bps_to_permill(CONFIG.soft_liquidation_max_oracle_slippage)
+				.saturating_add(CONFIG.liquidation_fee(LOAN_ASSET)),
 		);
 		let pool_remainder_after_init = INIT_COLLATERAL - liquidation_input;
 

@@ -672,11 +672,7 @@ impl<T: Config> LoanAccount<T> {
 						.max()
 						.unwrap_or_default()
 				};
-			let slippage_permill = Permill::from_rational(
-				max_oracle_price_slippage_bps.min(ONE_AS_BASIS_POINTS) as u32,
-				ONE_AS_BASIS_POINTS as u32,
-			);
-			let buffer = slippage_permill
+			let buffer = bps_to_permill(max_oracle_price_slippage_bps)
 				.saturating_add(worst_case_network_fee_rate)
 				.saturating_add(worst_case_liquidation_fee_rate);
 
@@ -1232,6 +1228,11 @@ pub(super) struct AssetCollateralForLoan {
 	loan_asset: Asset,
 	collateral_asset: Asset,
 	collateral_amount: AssetAmount,
+}
+
+/// Convert a basis-points value (1/10_000) into a `Permill` (1/1_000_000), clamped to 100%.
+fn bps_to_permill(bps: BasisPoints) -> Permill {
+	Permill::from_rational(bps.min(ONE_AS_BASIS_POINTS) as u32, ONE_AS_BASIS_POINTS as u32)
 }
 
 /// Inflate `total_owed_usd` by `buffer` (the combined fractional loss expected along
