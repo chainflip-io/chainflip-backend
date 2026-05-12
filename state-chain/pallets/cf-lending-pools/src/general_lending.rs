@@ -1,6 +1,8 @@
 use cf_amm_math::Price;
 use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
-use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
+use cf_traits::{
+	ExpiryBehaviour, LendingSwapType, LpRegistration, NetworkFeeApi, PriceLimitsAndExpiry,
+};
 use frame_support::{
 	fail,
 	sp_runtime::{
@@ -642,11 +644,49 @@ impl<T: Config> LoanAccount<T> {
 
 		let total_owed_usd = self.total_owed_usd_value(price_cache)?;
 
+		let total_required_with_buffer_usd = {
+			// Approximate the worst-case fractional loss along the liquidation path as the sum
+			// of the individual loss rates: oracle slippage + swap network fee + lending pool
+			// liquidation fee. This slightly overestimates the true compounded loss
+			// `1 - (1-a)(1-b)(1-c)` (the cross terms are positive), which is acceptable
+			// because the buffer is meant to be conservative. The swap's network fee is the
+			// max of input/output asset fees, so taking the max over every (collateral, loan)
+			// pair upper-bounds it; the liquidation fee depends on the loan asset and is
+			// waived for voluntary liquidations.
+			let worst_case_network_fee_rate = positions_with_usd
+				.iter()
+				.flat_map(|(collateral_asset, _, _)| {
+					self.loans.values().map(move |loan| {
+						T::NetworkFeeApi::get_network_fee_rate(*collateral_asset, loan.asset, false)
+					})
+				})
+				.max()
+				.unwrap_or_default();
+			let worst_case_liquidation_fee_rate =
+				if liquidation_type == LiquidationType::SoftVoluntary {
+					Permill::zero()
+				} else {
+					self.loans
+						.values()
+						.map(|loan| config.liquidation_fee(loan.asset))
+						.max()
+						.unwrap_or_default()
+				};
+			let slippage_permill = Permill::from_rational(
+				max_oracle_price_slippage_bps.min(ONE_AS_BASIS_POINTS) as u32,
+				ONE_AS_BASIS_POINTS as u32,
+			);
+			let buffer = slippage_permill
+				.saturating_add(worst_case_network_fee_rate)
+				.saturating_add(worst_case_liquidation_fee_rate);
+
+			required_collateral_with_buffer(total_owed_usd, buffer)
+		};
+
 		let mut collateral_to_liquidate = BTreeMap::<Asset, AssetAmount>::new();
 
 		for (asset, amount_to_request) in compute_per_asset_liquidation_estimates(
-			total_owed_usd,
-			max_oracle_price_slippage_bps,
+			total_required_with_buffer_usd,
 			&positions_with_usd,
 		) {
 			Pallet::<T>::mutate_existing_pool(asset, |pool| {
@@ -1194,40 +1234,35 @@ pub(super) struct AssetCollateralForLoan {
 	collateral_amount: AssetAmount,
 }
 
-/// Inflate `total_owed_usd` by the maximum oracle slippage allowed for the upcoming
-/// liquidation swaps. In the worst case the swaps return `oracle_value * (1 - slippage)`
-/// of loan asset per unit of oracle USD value of collateral, so to fully cover the debt
-/// we must collect collateral worth `total_owed_usd / (1 - slippage)`. A slippage of 100%
-/// (or more) means the swap could return nothing, so we'd need an unbounded amount —
-/// represented here as `AssetAmount::MAX`.
-fn required_collateral_with_slippage(
-	total_owed_usd: AssetAmount,
-	max_oracle_slippage_bps: BasisPoints,
-) -> AssetAmount {
-	let slippage_denom = ONE_AS_BASIS_POINTS.saturating_sub(max_oracle_slippage_bps) as u128;
-	if slippage_denom == 0 {
-		AssetAmount::MAX
-	} else {
-		multiply_by_rational_with_rounding(
-			total_owed_usd,
-			ONE_AS_BASIS_POINTS as u128,
-			slippage_denom,
-			Rounding::Up,
-		)
-		.unwrap_or(AssetAmount::MAX)
+/// Inflate `total_owed_usd` by `buffer` (the combined fractional loss expected along
+/// the liquidation path — oracle slippage + network fee + liquidation fee + ...) to the
+/// collateral USD needed to cover the debt: `required = total_owed_usd / (1 - buffer)`.
+/// A buffer at or above 100% means total loss is possible, so we'd need an unbounded
+/// amount — represented here as `AssetAmount::MAX`.
+fn required_collateral_with_buffer(total_owed_usd: AssetAmount, buffer: Permill) -> AssetAmount {
+	let recovery_ppm = Permill::one().saturating_sub(buffer).deconstruct() as u128;
+	if recovery_ppm == 0 {
+		return AssetAmount::MAX;
 	}
+	multiply_by_rational_with_rounding(
+		total_owed_usd,
+		Permill::one().deconstruct() as u128,
+		recovery_ppm,
+		Rounding::Up,
+	)
+	.unwrap_or(AssetAmount::MAX)
 }
 
 /// Decide how much of each available collateral asset to pull into liquidation swaps.
 /// `positions` is `(asset, available_amount, available_usd_value)` for each pool the
-/// borrower has a positive supply position in. When the available collateral exceeds the
-/// owed-plus-slippage target, each asset is drawn proportionally to its share of the
-/// total available USD value (rounded up so the collected oracle value never falls short
-/// of the per-asset target). Otherwise the function returns the full available amount of
-/// each position.
+/// borrower has a positive supply position in. `total_required_with_buffer_usd` is the
+/// buffer-inflated debt the swaps need to cover (see [`required_collateral_with_buffer`]).
+/// When the available collateral exceeds the target, each asset is drawn proportionally
+/// to its share of the total available USD value (rounded up so the collected oracle
+/// value never falls short of the per-asset target). Otherwise the function returns the
+/// full available amount of each position.
 fn compute_per_asset_liquidation_estimates(
-	total_owed_usd: AssetAmount,
-	max_oracle_slippage_bps: BasisPoints,
+	total_required_with_buffer_usd: AssetAmount,
 	positions: &[(Asset, AssetAmount, AssetAmount)],
 ) -> Vec<(Asset, AssetAmount)> {
 	let total_available_usd =
@@ -1237,14 +1272,12 @@ fn compute_per_asset_liquidation_estimates(
 		return Vec::new();
 	}
 
-	let total_required_with_slippage_usd =
-		required_collateral_with_slippage(total_owed_usd, max_oracle_slippage_bps);
-	let take_all = total_required_with_slippage_usd >= total_available_usd;
+	let take_all = total_required_with_buffer_usd >= total_available_usd;
 
 	positions
 		.iter()
 		.map(|&(asset, available_amount, _)| {
-			// In the proportional branch we know `total_required_with_slippage_usd <
+			// In the proportional branch we know `total_required_with_buffer_usd <
 			// total_available_usd` (otherwise `take_all` would be true), so the rounded-up
 			// per-asset share never exceeds `available_amount` mathematically — but we
 			// still cap with `min` to be safe against rounding overflow.
@@ -1254,7 +1287,7 @@ fn compute_per_asset_liquidation_estimates(
 				core::cmp::min(
 					multiply_by_rational_with_rounding(
 						available_amount,
-						total_required_with_slippage_usd,
+						total_required_with_buffer_usd,
 						total_available_usd,
 						Rounding::Up,
 					)
@@ -1277,66 +1310,69 @@ mod liquidation_math_tests {
 	const SOL: Asset = Asset::Sol;
 	const USDC: Asset = Asset::Usdc;
 
-	#[test]
-	fn required_collateral_with_zero_slippage_equals_owed() {
-		assert_eq!(required_collateral_with_slippage(1_000, 0), 1_000);
+	fn bps_to_permill(bps: BasisPoints) -> Permill {
+		Permill::from_rational(bps.min(ONE_AS_BASIS_POINTS) as u32, ONE_AS_BASIS_POINTS as u32)
+	}
+
+	fn estimates(
+		total_owed_usd: AssetAmount,
+		slippage_bps: BasisPoints,
+		positions: &[(Asset, AssetAmount, AssetAmount)],
+	) -> Vec<(Asset, AssetAmount)> {
+		compute_per_asset_liquidation_estimates(
+			required_collateral_with_buffer(total_owed_usd, bps_to_permill(slippage_bps)),
+			positions,
+		)
 	}
 
 	#[test]
-	fn required_collateral_with_slippage_inflates_with_ceil_rounding() {
+	fn required_collateral_with_no_buffer_equals_owed() {
+		assert_eq!(required_collateral_with_buffer(1_000, Permill::zero()), 1_000);
+	}
+
+	#[test]
+	fn required_collateral_with_buffer_inflates_with_ceil_rounding() {
 		// 1_000 / (1 - 0.005) = 1_005.025... -> 1_006 (ceil).
-		assert_eq!(required_collateral_with_slippage(1_000, 50), 1_006);
+		assert_eq!(required_collateral_with_buffer(1_000, bps_to_permill(50)), 1_006);
 		// 1_000 / (1 - 0.05) = 1_052.63... -> 1_053 (ceil).
-		assert_eq!(required_collateral_with_slippage(1_000, 500), 1_053);
+		assert_eq!(required_collateral_with_buffer(1_000, bps_to_permill(500)), 1_053);
+		// 65 bps combined buffer: 1_000 / (1 - 0.0065) = 1_006.54... -> 1_007 (ceil).
+		assert_eq!(required_collateral_with_buffer(1_000, bps_to_permill(65)), 1_007);
 	}
 
 	#[test]
-	fn required_collateral_saturates_when_slippage_is_total_loss() {
-		// 100% slippage means any swap could return zero, so no finite amount is enough.
-		assert_eq!(required_collateral_with_slippage(1_000, ONE_AS_BASIS_POINTS), AssetAmount::MAX);
-		// Above 100% saturates the same way.
-		assert_eq!(
-			required_collateral_with_slippage(1_000, ONE_AS_BASIS_POINTS + 1_000),
-			AssetAmount::MAX
-		);
+	fn required_collateral_saturates_when_buffer_is_total_loss() {
+		// A 100% buffer means any swap could return zero, so no finite amount is enough.
+		assert_eq!(required_collateral_with_buffer(1_000, Permill::one()), AssetAmount::MAX);
 	}
 
 	#[test]
-	fn empty_positions_give_no_takes() {
-		assert!(compute_per_asset_liquidation_estimates(1_000, 50, &[]).is_empty());
+	fn empty_positions_give_no_estimates() {
+		assert!(estimates(1_000, 50, &[]).is_empty());
 	}
 
 	#[test]
 	fn single_asset_with_excess_takes_only_required_with_buffer() {
 		// Owed 1_000 USD, slippage 0.5%, available 10_000 USD worth of ETH (10_000 ETH @ $1).
 		// Required = ceil(1_000 / 0.995) = 1_006. ETH price is 1, so amount equals USD.
-		assert_eq!(
-			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 10_000, 10_000)]),
-			vec![(ETH, 1_006)]
-		);
+		assert_eq!(estimates(1_000, 50, &[(ETH, 10_000, 10_000)]), vec![(ETH, 1_006)]);
 	}
 
 	#[test]
 	fn single_asset_with_deficit_takes_everything() {
 		// Owed 1_000 USD, slippage 0.5% → required 1_006 USD. Only 800 USD available.
-		assert_eq!(
-			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 800, 800)]),
-			vec![(ETH, 800)]
-		);
+		assert_eq!(estimates(1_000, 50, &[(ETH, 800, 800)]), vec![(ETH, 800)]);
 	}
 
 	#[test]
 	fn at_required_threshold_takes_all() {
 		// Exactly enough collateral (in USD) to cover the slippage-buffered owed amount.
-		assert_eq!(
-			compute_per_asset_liquidation_estimates(1_000, 50, &[(ETH, 1_006, 1_006)]),
-			vec![(ETH, 1_006)]
-		);
+		assert_eq!(estimates(1_000, 50, &[(ETH, 1_006, 1_006)]), vec![(ETH, 1_006)]);
 	}
 
 	#[test]
 	fn zero_owed_takes_nothing() {
-		assert!(compute_per_asset_liquidation_estimates(0, 50, &[(ETH, 1_000, 1_000)]).is_empty());
+		assert!(estimates(0, 50, &[(ETH, 1_000, 1_000)]).is_empty());
 	}
 
 	#[test]
@@ -1344,7 +1380,7 @@ mod liquidation_math_tests {
 		// Owed 1_000 USD, slippage 0%, available: 100 ETH @ $5 and 50 BTC @ $10 = $500 each.
 		// target = 1_000, total_avail = 1_000 → take everything.
 		assert_eq!(
-			compute_per_asset_liquidation_estimates(1_000, 0, &[(ETH, 100, 500), (BTC, 50, 500)]),
+			estimates(1_000, 0, &[(ETH, 100, 500), (BTC, 50, 500)]),
 			vec![(ETH, 100), (BTC, 50)]
 		);
 	}
@@ -1355,7 +1391,7 @@ mod liquidation_math_tests {
 		// Owed 550 USD, slippage 0% → target = 550. ETH share = 100/1100 ≈ 9.09%, SOL = 90.91%.
 		// ETH take = ceil(100 * 550 / 1100) = 50. SOL take = ceil(200 * 550 / 1100) = 100.
 		assert_eq!(
-			compute_per_asset_liquidation_estimates(550, 0, &[(ETH, 100, 100), (SOL, 200, 1_000)]),
+			estimates(550, 0, &[(ETH, 100, 100), (SOL, 200, 1_000)]),
 			vec![(ETH, 50), (SOL, 100)]
 		);
 	}
@@ -1367,7 +1403,7 @@ mod liquidation_math_tests {
 		// 502_513. Per-asset: ETH = ceil(1_000 * 502_513 / 1_002_500) ≈ 502, SOL = ceil(500 *
 		// 502_513 / 1_002_500) ≈ 251, USDC = ceil(1_000_000 * 502_513 / 1_002_500) ≈ 501_260.
 		assert_eq!(
-			compute_per_asset_liquidation_estimates(
+			estimates(
 				500_000,
 				50,
 				&[(ETH, 1_000, 2_000), (SOL, 500, 500), (USDC, 1_000_000, 1_000_000)],
@@ -1382,15 +1418,14 @@ mod liquidation_math_tests {
 		// Owed 33 USD, slippage 0% → target 33 USD, total avail 100 USD. Each share = 33/2 USD
 		// rounded up. ETH: ceil(7 * 33 / 100) = ceil(2.31) = 3. SOL: ceil(13 * 33 / 100) =
 		// ceil(4.29) = 5. The sum (8 + leftover from rounding) covers the target.
-		let takes = compute_per_asset_liquidation_estimates(33, 0, &[(ETH, 7, 50), (SOL, 13, 50)]);
-		assert_eq!(takes, vec![(ETH, 3), (SOL, 5)]);
+		assert_eq!(estimates(33, 0, &[(ETH, 7, 50), (SOL, 13, 50)]), vec![(ETH, 3), (SOL, 5)]);
 	}
 
 	#[test]
 	fn deficit_in_some_assets_still_takes_all_when_total_required_exceeds_available() {
 		// Required 100_000 USD with 0% slippage but only $300 + $200 = $500 available → take all.
 		assert_eq!(
-			compute_per_asset_liquidation_estimates(100_000, 0, &[(ETH, 30, 300), (SOL, 100, 200)],),
+			estimates(100_000, 0, &[(ETH, 30, 300), (SOL, 100, 200)],),
 			vec![(ETH, 30), (SOL, 100)]
 		);
 	}
@@ -1398,10 +1433,7 @@ mod liquidation_math_tests {
 	#[test]
 	fn extreme_slippage_forces_take_all() {
 		// 99.5% slippage means required ≈ 200x owed → almost certainly exceeds available.
-		assert_eq!(
-			compute_per_asset_liquidation_estimates(100, 9_950, &[(ETH, 50, 50)]),
-			vec![(ETH, 50)]
-		);
+		assert_eq!(estimates(100, 9_950, &[(ETH, 50, 50)]), vec![(ETH, 50)]);
 	}
 }
 
