@@ -92,7 +92,6 @@ async function setWhitelistedBroker<A = []>(cf: ChainflipIO<A>, brokerAddress: U
   const SOL_WHITELIST_PREFIX = '8595efe3a571f61007e89f4416b858b16b8fb02fc586c9dab2385ea1690a7db6';
   const TRON_WHITELIST_PREFIX = '65fbb72d24f6d3ade3baaf42fd5075756b8fb02fc586c9dab2385ea1690a7db6';
 
-
   const decodeHexStringToByteArray = (hex: string) => {
     let hexString = hex;
     const result = [];
