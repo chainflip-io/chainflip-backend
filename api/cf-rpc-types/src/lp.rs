@@ -158,3 +158,11 @@ pub struct RepaymentResponse {
 	pub amount: U256,
 	pub is_settled: bool,
 }
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct LoanCreationResponse {
+	pub loan_id: LoanId,
+	pub pool_fee: U256,
+	pub network_fee: U256,
+	pub broker_fee: U256,
+}

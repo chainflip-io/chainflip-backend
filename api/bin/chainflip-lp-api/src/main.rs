@@ -22,7 +22,7 @@ use cf_primitives::{
 	RepaymentAmount, WaitFor,
 };
 use cf_rpc_apis::{
-	lp::{LoanId, LpRpcApiServer, RepaymentResponse},
+	lp::{LoanCreationResponse, LoanId, LpRpcApiServer, RepaymentResponse},
 	ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,
 };
 use cf_utilities::{
@@ -502,7 +502,7 @@ impl LpRpcApiServer for RpcServerImpl {
 		loan_amount: NumberOrHex,
 		broker: Option<Beneficiary<AccountId32>>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<LoanId>> {
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>> {
 		Ok(self
 			.api
 			.lp_api()

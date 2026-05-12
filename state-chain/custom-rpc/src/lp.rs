@@ -45,9 +45,9 @@ use cf_primitives::{
 };
 use cf_rpc_apis::{
 	lp::{
-		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails, LoanId,
-		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
-		RangeOrderSizeJson, RepaymentResponse, SwapRequestResponse,
+		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
+		LoanCreationResponse, LoanId, LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder,
+		RangeOrderChange, RangeOrderSizeJson, RepaymentResponse, SwapRequestResponse,
 	},
 	ExtrinsicResponse, NotificationBehaviour, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
@@ -813,11 +813,10 @@ where
 		loan_amount: NumberOrHex,
 		broker: Option<Beneficiary<AccountId32>>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<LoanId>> {
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>> {
 		let loan_amount = try_parse_number_or_hex(loan_amount)?;
-		Ok(
-			match self
-				.signed_pool_client
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
 				.submit_wait_for_result_dynamic(
 					RuntimeCall::from(pallet_cf_lending_pools::Call::request_loan {
 						loan_asset,
@@ -828,21 +827,26 @@ where
 					false,
 				)
 				.await
-				.map_err(CfApiError::from)?
-			{
-				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
-				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
-					extrinsic_data.events,
-					cf_static_runtime::lending_pools::events::LoanCreated,
-					{ loan_id },
-					ApiWaitForResult::TxDetails {
-						tx_hash: extrinsic_data.tx_hash,
-						response: LoanId(loan_id.0),
-					}
-				)
-				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
+				.map_err(CfApiError::from)?,
+			|events| {
+				let created = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::LoanCreated>(
+						false,
+					)?
+					.ok_or(DynamicEventError::StaticEventNotFound("LoanCreated"))?;
+				let fees = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::OriginationFeeTaken>(
+						false,
+					)?;
+				Ok(LoanCreationResponse {
+					loan_id: LoanId(created.loan_id.0),
+					pool_fee: fees.as_ref().map(|f| f.pool_fee).unwrap_or_default().into(),
+					network_fee: fees.as_ref().map(|f| f.network_fee).unwrap_or_default().into(),
+					broker_fee: fees.as_ref().map(|f| f.broker_fee).unwrap_or_default().into(),
+				})
 			},
 		)
+		.map_err(CfApiError::from)?)
 	}
 
 	async fn expand_loan(

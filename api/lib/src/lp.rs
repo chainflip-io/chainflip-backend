@@ -31,12 +31,11 @@ use cf_primitives::{
 	DcaParameters, EgressId, OrderId, RepaymentAmount, SwapRequestId, WaitFor,
 };
 pub use cf_rpc_types::lp::{
-	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails, LoanId,
-	OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange, RangeOrderSizeJson,
-	RepaymentResponse,
+	CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
+	LoanCreationResponse, LoanId, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
+	RangeOrderSizeJson, RepaymentResponse,
 };
 use cf_rpc_types::ExtrinsicResponse;
-use cf_traits::lending::RepaymentAmount;
 use engine_sc_client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized, UntilInBlock},
 	DefaultRpcClient, StateChainClient,
@@ -568,7 +567,7 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		loan_amount: AssetAmount,
 		broker: Option<Beneficiary<AccountId>>,
 		wait_for: WaitFor,
-	) -> Result<ApiWaitForResult<LoanId>> {
+	) -> Result<ApiWaitForResult<LoanCreationResponse>> {
 		let wait_for_result = self
 			.submit_signed_extrinsic_wait_for(
 				pallet_cf_lending_pools::Call::request_loan { loan_asset, loan_amount, broker },
@@ -579,18 +578,41 @@ pub trait LpApi: SignedExtrinsicApi + Sized + Send + Sync + 'static {
 		Ok(match wait_for_result {
 			WaitForResult::TransactionHash(tx_hash) => return Ok(ApiWaitForResult::TxHash(tx_hash)),
 			WaitForResult::Details(extrinsic_data) => {
-				let loan_id = extrinsic_data
-					.events
-					.into_iter()
-					.find_map(|event| match event {
+				let mut loan_id: Option<LoanId> = None;
+				let mut pool_fee: AssetAmount = 0;
+				let mut network_fee: AssetAmount = 0;
+				let mut broker_fee: AssetAmount = 0;
+				for event in &extrinsic_data.events {
+					match event {
 						state_chain_runtime::RuntimeEvent::LendingPools(
-							pallet_cf_lending_pools::Event::LoanCreated { loan_id, .. },
-						) => Some(loan_id),
-						_ => None,
-					})
-					.ok_or_else(|| anyhow!("No LoanCreated event was found"))?;
+							pallet_cf_lending_pools::Event::LoanCreated { loan_id: id, .. },
+						) => loan_id = Some(*id),
+						state_chain_runtime::RuntimeEvent::LendingPools(
+							pallet_cf_lending_pools::Event::OriginationFeeTaken {
+								pool_fee: pool,
+								network_fee: network,
+								broker_fee: broker,
+								..
+							},
+						) => {
+							pool_fee = *pool;
+							network_fee = *network;
+							broker_fee = *broker;
+						},
+						_ => (),
+					}
+				}
+				let loan_id = loan_id.ok_or_else(|| anyhow!("No LoanCreated event was found"))?;
 
-				ApiWaitForResult::TxDetails { tx_hash: extrinsic_data.tx_hash, response: loan_id }
+				ApiWaitForResult::TxDetails {
+					tx_hash: extrinsic_data.tx_hash,
+					response: LoanCreationResponse {
+						loan_id,
+						pool_fee: pool_fee.into(),
+						network_fee: network_fee.into(),
+						broker_fee: broker_fee.into(),
+					},
+				}
 			},
 		})
 	}

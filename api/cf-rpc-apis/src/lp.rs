@@ -192,7 +192,7 @@ pub trait LpRpcApi {
 		loan_amount: NumberOrHex,
 		broker: Option<Beneficiary<AccountId32>>,
 		wait_for: Option<WaitFor>,
-	) -> RpcResult<ApiWaitForResult<LoanId>>;
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>>;
 
 	#[method(name = "expand_loan")]
 	async fn expand_loan(

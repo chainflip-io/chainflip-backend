@@ -86,7 +86,7 @@ async function testRequestLoan<A>(cf: ChainflipIO<A>, lpAddress: string): Promis
     null,
     'InBlock',
   ]);
-  const loanId = Number(result.tx_details.response);
+  const loanId = Number(result.tx_details.response.loan_id);
   cf.debug(`Loan ID: ${loanId}`);
 
   await cf.stepToTransactionIncluded({
@@ -234,7 +234,7 @@ async function testVoluntaryLiquidation<A>(cf: ChainflipIO<A>, lpAddress: string
     null,
     'InBlock',
   ]);
-  const loanId = Number(loanResult.tx_details.response);
+  const loanId = Number(loanResult.tx_details.response.loan_id);
 
   // Initiate voluntary liquidation
   const initHash = await lpApiRpc(cf.logger, 'lp_initiate_voluntary_liquidation', []);
