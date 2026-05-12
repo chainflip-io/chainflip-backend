@@ -387,6 +387,11 @@ export function amountToFineAmountBigInt(amount: number | string, asset: Asset):
   return BigInt(amountToFineAmount(stringAmount, assetDecimals(asset)));
 }
 
+export function amountToFineHex(amount: number, asset: Asset): string {
+  const fineAmount = amountToFineAmountBigInt(amount, asset);
+  return `0x${fineAmount.toString(16)}`;
+}
+
 export async function runWithTimeout<T>(
   promise: Promise<T>,
   seconds: number,

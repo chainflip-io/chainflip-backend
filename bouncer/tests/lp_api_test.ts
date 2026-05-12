@@ -2,6 +2,7 @@ import assert from 'assert';
 import {
   isValidEthAddress,
   amountToFineAmount,
+  amountToFineAmountBigInt,
   sleep,
   observeBalanceIncrease,
   chainFromAsset,
@@ -14,6 +15,8 @@ import {
   createStateChainKeypair,
   getFreeBalance,
   Assets,
+  Asset,
+  cfMutex,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -33,36 +36,48 @@ const testAmount = 0.1;
 const testAssetAmount = parseInt(
   amountToFineAmount(testAmount.toString(), assetDecimals(testAsset)),
 );
-const amountToProvide = testAmount * 50; // Provide plenty of the asset for the tests
 const testAddress = '0x1594300cbd587694affd70c933b9ee9155b186d9';
 
-async function provideLiquidityAndTestAssetBalances<A = []>(parentcf: ChainflipIO<A>) {
-  const cf = parentcf.with({
-    account: fullAccountFromUri('//LP_API', 'LP'),
+export async function provideLiquidityAndTestAssetBalances<A = []>(
+  parentcf: ChainflipIO<A>,
+  asset: Asset,
+  amount: number,
+) {
+  // Using a mutex to avoid parallel deposits/tests creating race conditions when waiting for balance to increase.
+  await cfMutex.runExclusive('//LP_API', async () => {
+    const cf = parentcf.with({
+      account: fullAccountFromUri('//LP_API', 'LP'),
+    });
+
+    const chain = chainFromAsset(asset);
+    const balanceKey = asset.toUpperCase();
+    const fineAmountToProvide = amountToFineAmountBigInt(amount, asset);
+
+    const balancesBefore = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
+    const balanceBefore = BigInt(balancesBefore[chain]?.[balanceKey] ?? '0');
+    // Allow for ingress fees by accepting up to 1% short of the deposited amount.
+    const targetBalance = balanceBefore + (fineAmountToProvide * 99n) / 100n;
+
+    // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
+    await depositLiquidity(cf, asset, amount);
+
+    // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
+    let retryCount = 0;
+    let balance = balanceBefore;
+    do {
+      const balances = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
+      balance = BigInt(balances[chain]?.[balanceKey] ?? '0');
+      retryCount++;
+      if (retryCount > 14) {
+        throw new Error(
+          `Failed to provide ${asset} for tests (${fineAmountToProvide}). balances: ${JSON.stringify(
+            balances,
+          )}`,
+        );
+      }
+      await sleep(1000);
+    } while (balance < targetBalance);
   });
-
-  const fineAmountToProvide = parseInt(
-    amountToFineAmount(amountToProvide.toString(), assetDecimals('Eth')),
-  );
-  // We have to wait finalization here because the LP API server is using a finalized block stream (This may change in PRO-777 PR#3986)
-  await depositLiquidity(cf, testAsset, amountToProvide);
-
-  // Wait for the LP API to get the balance update, just incase it was slower than us to see the event.
-  let retryCount = 0;
-  let ethBalance = 0;
-  do {
-    const balances = await lpApiRpc(cf.logger, `lp_asset_balances`, []);
-    ethBalance = parseInt(balances.Ethereum.Eth);
-    retryCount++;
-    if (retryCount > 14) {
-      throw new Error(
-        `Failed to provide ${testAsset} for tests (${fineAmountToProvide}). balances: ${JSON.stringify(
-          balances,
-        )}`,
-      );
-    }
-    await sleep(1000);
-  } while (ethBalance < fineAmountToProvide);
 }
 
 async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
@@ -495,8 +510,8 @@ async function testInternalSwap<A = []>(cf: ChainflipIO<A>) {
 export async function testLpApi(testContext: TestContext) {
   const parentcf = await newChainflipIO(testContext.logger, []);
 
-  // Provide the amount of liquidity needed for the tests
-  await provideLiquidityAndTestAssetBalances(parentcf);
+  // Provide the amount of liquidity needed for the rest of the tests
+  await provideLiquidityAndTestAssetBalances(parentcf, testAsset, testAmount * 50);
 
   await parentcf.all([
     (cf) =>

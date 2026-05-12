@@ -31,6 +31,7 @@ pub use cf_amm::{
 	common::{PoolPairsMap, Side},
 	math::Tick,
 };
+pub use cf_traits::lending::LoanId;
 pub use pallet_cf_pools::{CloseOrder, IncreaseOrDecrease, MAX_ORDERS_DELETE};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -150,4 +151,18 @@ impl From<SwapRequestId> for SwapRequestResponse {
 pub struct LiquidityDepositChannelDetails {
 	pub deposit_address: AddressString,
 	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct RepaymentResponse {
+	pub amount: U256,
+	pub is_settled: bool,
+}
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+pub struct LoanCreationResponse {
+	pub loan_id: LoanId,
+	pub pool_fee: U256,
+	pub network_fee: U256,
+	pub broker_fee: U256,
 }

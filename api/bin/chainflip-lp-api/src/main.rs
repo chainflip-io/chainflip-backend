@@ -18,10 +18,12 @@ use anyhow::anyhow;
 use cf_amm_math::PriceLimits;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	ApiWaitForResult, BasisPoints, BlockNumber, DcaParameters, EgressId, WaitFor,
+	ApiWaitForResult, BasisPoints, Beneficiary, BlockNumber, DcaParameters, EgressId,
+	RepaymentAmount, WaitFor,
 };
 use cf_rpc_apis::{
-	lp::LpRpcApiServer, ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,
+	lp::{LoanCreationResponse, LoanId, LpRpcApiServer, RepaymentResponse},
+	ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,
 };
 use cf_utilities::{
 	health::{self, HealthCheckOptions},
@@ -461,6 +463,89 @@ impl LpRpcApiServer for RpcServerImpl {
 			)
 			.await?
 			.map_details(Into::into))
+	}
+
+	async fn add_lender_funds(
+		&self,
+		asset: Asset,
+		amount: NumberOrHex,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<()>> {
+		Ok(self
+			.api
+			.lp_api()
+			.add_lender_funds(asset, try_parse_number_or_hex(amount)?, wait_for.unwrap_or_default())
+			.await?)
+	}
+
+	async fn remove_lender_funds(
+		&self,
+		asset: Asset,
+		amount: Option<NumberOrHex>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<NumberOrHex>> {
+		Ok(self
+			.api
+			.lp_api()
+			.remove_lender_funds(
+				asset,
+				amount.map(try_parse_number_or_hex).transpose()?,
+				wait_for.unwrap_or_default(),
+			)
+			.await?
+			.map_details(Into::into))
+	}
+
+	async fn request_loan(
+		&self,
+		loan_asset: Asset,
+		loan_amount: NumberOrHex,
+		broker: Option<Beneficiary<AccountId32>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>> {
+		Ok(self
+			.api
+			.lp_api()
+			.request_loan(
+				loan_asset,
+				try_parse_number_or_hex(loan_amount)?,
+				broker,
+				wait_for.unwrap_or_default(),
+			)
+			.await?)
+	}
+
+	async fn expand_loan(
+		&self,
+		loan_id: LoanId,
+		extra_amount_to_borrow: NumberOrHex,
+	) -> RpcResult<Hash> {
+		Ok(self
+			.api
+			.lp_api()
+			.expand_loan(loan_id, try_parse_number_or_hex(extra_amount_to_borrow)?)
+			.await?)
+	}
+
+	async fn make_repayment(
+		&self,
+		loan_id: LoanId,
+		amount: RepaymentAmount,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<RepaymentResponse>> {
+		Ok(self
+			.api
+			.lp_api()
+			.make_repayment(loan_id, amount, wait_for.unwrap_or_default())
+			.await?)
+	}
+
+	async fn initiate_voluntary_liquidation(&self) -> RpcResult<Hash> {
+		Ok(self.api.lp_api().initiate_voluntary_liquidation().await?)
+	}
+
+	async fn stop_voluntary_liquidation(&self) -> RpcResult<Hash> {
+		Ok(self.api.lp_api().stop_voluntary_liquidation().await?)
 	}
 }
 

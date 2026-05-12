@@ -24,7 +24,7 @@
 //!
 //! #[derive(Debug, Clone, Serialize, Deserialize)]
 //! struct Foo {
-//!     #[serde(with = "cf_utilities::number_or_hex")]
+//!     #[serde(with = "cf_utilities::serde_helpers::number_or_hex")]
 //!     bar: u128,
 //! }
 /// ```

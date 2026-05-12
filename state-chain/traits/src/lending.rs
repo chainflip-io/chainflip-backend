@@ -16,7 +16,7 @@
 
 use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, Beneficiary, PrewitnessedDepositId,
-	SwapRequestId,
+	RepaymentAmount, SwapRequestId,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
@@ -59,16 +59,6 @@ pub struct BoostOutcome {
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct BoostFinalisationOutcome {
 	pub network_fee: AssetAmount,
-}
-
-/// Allows to specify whether a loan should be repaid in full
-/// or only with a specified amount.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, TypeInfo, Encode, Decode, DecodeWithMemTracking)]
-pub enum RepaymentAmount {
-	/// Full repayment
-	Full,
-	/// Only repay with the specified amount
-	Exact(AssetAmount),
 }
 
 pub trait BoostApi {

@@ -40,14 +40,14 @@ use cf_node_client::{
 };
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
-	ApiWaitForResult, Asset, BasisPoints, BlockNumber, ChannelId, DcaParameters, EgressId,
-	ForeignChain, WaitFor,
+	ApiWaitForResult, Asset, BasisPoints, Beneficiary, BlockNumber, ChannelId, DcaParameters,
+	EgressId, ForeignChain, RepaymentAmount, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{
 		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails,
-		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
-		RangeOrderSizeJson, SwapRequestResponse,
+		LoanCreationResponse, LoanId, LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder,
+		RangeOrderChange, RangeOrderSizeJson, RepaymentResponse, SwapRequestResponse,
 	},
 	ExtrinsicResponse, NotificationBehaviour, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
@@ -745,6 +745,194 @@ where
 				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
 			},
 		)
+	}
+
+	async fn add_lender_funds(
+		&self,
+		asset: Asset,
+		amount: NumberOrHex,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<()>> {
+		let amount = try_parse_number_or_hex(amount)?;
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lending_pools::Call::add_lender_funds {
+						asset,
+						amount,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?,
+			|_events| Ok(()),
+		)
+		.map_err(CfApiError::from)?)
+	}
+
+	async fn remove_lender_funds(
+		&self,
+		asset: Asset,
+		amount: Option<NumberOrHex>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<NumberOrHex>> {
+		let amount = amount.map(try_parse_number_or_hex).transpose()?;
+		Ok(
+			match self
+				.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lending_pools::Call::remove_lender_funds {
+						asset,
+						amount,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?
+			{
+				WaitForDynamicResult::TransactionHash(tx_hash) => ApiWaitForResult::TxHash(tx_hash),
+				WaitForDynamicResult::Data(extrinsic_data) => extract_from_first_matching_event!(
+					extrinsic_data.events,
+					cf_static_runtime::lending_pools::events::LendingFundsRemoved,
+					{ unlocked_amount },
+					ApiWaitForResult::TxDetails {
+						tx_hash: extrinsic_data.tx_hash,
+						response: unlocked_amount.into(),
+					}
+				)
+				.map_err(|err| handle_dynamic_event_error(err, &extrinsic_data))?,
+			},
+		)
+	}
+
+	async fn request_loan(
+		&self,
+		loan_asset: Asset,
+		loan_amount: NumberOrHex,
+		broker: Option<Beneficiary<AccountId32>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>> {
+		let loan_amount = try_parse_number_or_hex(loan_amount)?;
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lending_pools::Call::request_loan {
+						loan_asset,
+						loan_amount,
+						broker,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?,
+			|events| {
+				let created = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::LoanCreated>(
+						false,
+					)?
+					.ok_or(DynamicEventError::StaticEventNotFound("LoanCreated"))?;
+				let fees = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::OriginationFeeTaken>(
+						false,
+					)?;
+				Ok(LoanCreationResponse {
+					loan_id: LoanId(created.loan_id.0),
+					pool_fee: fees.as_ref().map(|f| f.pool_fee).unwrap_or_default().into(),
+					network_fee: fees.as_ref().map(|f| f.network_fee).unwrap_or_default().into(),
+					broker_fee: fees.as_ref().map(|f| f.broker_fee).unwrap_or_default().into(),
+				})
+			},
+		)
+		.map_err(CfApiError::from)?)
+	}
+
+	async fn expand_loan(
+		&self,
+		loan_id: LoanId,
+		extra_amount_to_borrow: NumberOrHex,
+	) -> RpcResult<Hash> {
+		let extra_amount_to_borrow = try_parse_number_or_hex(extra_amount_to_borrow)?;
+
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lending_pools::Call::expand_loan {
+					loan_id,
+					extra_amount_to_borrow,
+				}),
+				false,
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+
+		Ok(tx_hash)
+	}
+
+	async fn make_repayment(
+		&self,
+		loan_id: LoanId,
+		amount: RepaymentAmount,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<RepaymentResponse>> {
+		Ok(into_api_wait_for_dynamic_result(
+			self.signed_pool_client
+				.submit_wait_for_result_dynamic(
+					RuntimeCall::from(pallet_cf_lending_pools::Call::make_repayment {
+						loan_id,
+						amount,
+					}),
+					wait_for.unwrap_or_default(),
+					false,
+				)
+				.await
+				.map_err(CfApiError::from)?,
+			|events| {
+				let repaid = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::LoanRepaid>(
+						false,
+					)?
+					.ok_or(DynamicEventError::StaticEventNotFound("LoanRepaid"))?;
+				let settled = events
+					.find_static_event::<cf_static_runtime::lending_pools::events::LoanSettled>(
+						false,
+					)?;
+				Ok(RepaymentResponse {
+					amount: repaid.amount.into(),
+					is_settled: settled.is_some(),
+				})
+			},
+		)
+		.map_err(CfApiError::from)?)
+	}
+
+	async fn initiate_voluntary_liquidation(&self) -> RpcResult<Hash> {
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lending_pools::Call::initiate_voluntary_liquidation {}),
+				false,
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+		Ok(tx_hash)
+	}
+
+	async fn stop_voluntary_liquidation(&self) -> RpcResult<Hash> {
+		let ExtrinsicData { tx_hash, .. } = self
+			.signed_pool_client
+			.submit_watch_dynamic(
+				RuntimeCall::from(pallet_cf_lending_pools::Call::stop_voluntary_liquidation {}),
+				false,
+				false,
+			)
+			.await
+			.map_err(CfApiError::from)?;
+		Ok(tx_hash)
 	}
 }
 

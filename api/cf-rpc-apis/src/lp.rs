@@ -19,8 +19,8 @@ use crate::{NotificationBehaviour, RpcResult};
 use cf_amm_math::PriceLimits;
 use cf_chains::address::AddressString;
 use cf_primitives::{
-	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, BlockNumber,
-	DcaParameters, EgressId, ForeignChain, WaitFor,
+	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, Beneficiary, BlockNumber,
+	DcaParameters, EgressId, ForeignChain, RepaymentAmount, WaitFor,
 };
 pub use cf_rpc_types::lp::*;
 use cf_rpc_types::{
@@ -168,4 +168,50 @@ pub trait LpRpcApi {
 		dca_params: Option<DcaParameters>,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<SwapRequestResponse>>;
+
+	#[method(name = "add_lender_funds")]
+	async fn add_lender_funds(
+		&self,
+		asset: Asset,
+		amount: NumberOrHex,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<()>>;
+
+	#[method(name = "remove_lender_funds")]
+	async fn remove_lender_funds(
+		&self,
+		asset: Asset,
+		amount: Option<NumberOrHex>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<NumberOrHex>>;
+
+	#[method(name = "request_loan")]
+	async fn request_loan(
+		&self,
+		loan_asset: Asset,
+		loan_amount: NumberOrHex,
+		broker: Option<Beneficiary<AccountId32>>,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<LoanCreationResponse>>;
+
+	#[method(name = "expand_loan")]
+	async fn expand_loan(
+		&self,
+		loan_id: LoanId,
+		extra_amount_to_borrow: NumberOrHex,
+	) -> RpcResult<Hash>;
+
+	#[method(name = "make_repayment")]
+	async fn make_repayment(
+		&self,
+		loan_id: LoanId,
+		amount: RepaymentAmount,
+		wait_for: Option<WaitFor>,
+	) -> RpcResult<ApiWaitForResult<RepaymentResponse>>;
+
+	#[method(name = "initiate_voluntary_liquidation")]
+	async fn initiate_voluntary_liquidation(&self) -> RpcResult<Hash>;
+
+	#[method(name = "stop_voluntary_liquidation")]
+	async fn stop_voluntary_liquidation(&self) -> RpcResult<Hash>;
 }

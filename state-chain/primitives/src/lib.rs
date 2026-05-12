@@ -672,3 +672,28 @@ pub enum WitnessingTaskName {
 	Oracle,
 	Tron,
 }
+
+/// Allows to specify whether a loan should be repaid in full
+/// or only with a specified amount.
+#[derive(
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Debug,
+	TypeInfo,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	Serialize,
+	Deserialize,
+)]
+pub enum RepaymentAmount {
+	/// Full repayment
+	Full,
+	/// Only repay with the specified amount
+	Exact(
+		#[cfg_attr(feature = "std", serde(with = "cf_utilities::serde_helpers::number_or_hex"))]
+		AssetAmount,
+	),
+}

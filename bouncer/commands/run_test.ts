@@ -85,7 +85,7 @@ let matchingTestName;
 try {
   const data = readFileSync(testFile, 'utf8');
   for (const { testName, functionName } of testNamesAndFunctions) {
-    if (functionName !== '' && data.includes(`function ${functionName}`)) {
+    if (functionName !== '' && new RegExp(`function ${functionName}\\b`).test(data)) {
       // We found a match, this must be the test we want to run
       matchingTestName = testName;
       break;
