@@ -6945,8 +6945,8 @@ mod utilisation_cap {
 				Permill::from_percent(80),
 			);
 
-			// Step 4: A borrows 40 BTC. The new collateral-pool cap check rejects this because
-			// USDC's cap drops below USDC's existing 80% utilisation.
+			// Step 4: A borrows 40 BTC. USDC (one of A's collateral pools) cannot cover the
+			// configured liquidation fraction once A's $40 of new debt is included.
 			assert_noop!(
 				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None),
 				Error::<Test>::CollateralPoolUtilisationCapExceeded,

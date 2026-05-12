@@ -12,6 +12,8 @@ use frame_support::{
 	DefaultNoBound,
 };
 
+use sp_std::collections::btree_set::BTreeSet;
+
 use crate::core_lending_pool::ScaledAmountHP;
 
 use super::*;
@@ -907,7 +909,6 @@ impl<T: Config> LoanAccount<T> {
 			extra_principal,
 			origination_fee_pool,
 			origination_fee_network,
-			price_cache,
 		)?;
 
 		self.loans.insert(loan.id, loan);
@@ -1402,6 +1403,9 @@ pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: Ass
 /// origination_fee_pool + origination_fee_network`. The pool fee stays in the pool (increasing
 /// lenders' share), while the network fee is immediately credited to the network.
 ///
+/// Does *not* enforce the utilisation cap — callers must check it once the loan account
+/// has been committed to storage (see [`check_pool_caps_after_borrow`]).
+///
 /// Emits [`Event::OriginationFeeTaken`].
 ///
 /// Fails if the pool for `loan.asset` does not exist or has insufficient available funds.
@@ -1410,23 +1414,11 @@ pub fn fund_loan<T: Config>(
 	principal: AssetAmount,
 	origination_fee_pool: AssetAmount,
 	origination_fee_network: AssetAmount,
-	price_cache: &OraclePriceCache<T>,
 ) -> Result<(), DispatchError> {
-	let required_liquidation = required_liquidation_amount::<T>(
-		loan.asset,
-		LendingConfig::<T>::get().liquidation_coverage_factor,
-		price_cache,
-	)?;
-
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
-
-		ensure!(
-			required_liquidation <= pool.available_for_borrowing(),
-			Error::<T>::UtilisationCapExceeded
-		);
 
 		pool.record_pool_fee(origination_fee_pool);
 
@@ -1489,28 +1481,26 @@ impl<T: Config> LendingApi for Pallet<T> {
 		let loan = create_new_loan::<T>(asset, broker);
 		let loan_id = loan.id;
 
-		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
-			let account = maybe_account.get_or_insert(LoanAccount::new(borrower_id.clone()));
+		let collateral_assets = LoanAccounts::<T>::mutate(
+			&borrower_id,
+			|maybe_account| -> Result<BTreeSet<Asset>, DispatchError> {
+				let account = maybe_account.get_or_insert(LoanAccount::new(borrower_id.clone()));
 
-			// NOTE: it is important that this event is emitted before `OriginationFeeTaken` event
-			Self::deposit_event(Event::LoanCreated {
-				loan_id,
-				loan_type: LoanType::User(borrower_id.clone()),
-				asset,
-				principal_amount: amount_to_borrow,
-			});
+				// NOTE: this event must be emitted before `OriginationFeeTaken`.
+				Self::deposit_event(Event::LoanCreated {
+					loan_id,
+					loan_type: LoanType::User(borrower_id.clone()),
+					asset,
+					principal_amount: amount_to_borrow,
+				});
 
-			account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
+				account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
 
-			Ok::<_, DispatchError>(())
-		})?;
+				Ok(account.get_total_collateral().into_keys().collect())
+			},
+		)?;
 
-		// Borrowing more raises this account's total_loans_usd, which lowers the utilisation
-		// cap of every pool whose asset the account holds as collateral. Reject the loan if
-		// any of those caps would drop below the pool's current utilisation. We check this
-		// after the loan account is committed so `compute_utilisation_cap` sees the new
-		// principal directly; the surrounding `#[transactional]` rolls back on failure.
-		check_collateral_pool_caps::<T>(&borrower_id, &price_cache)?;
+		check_pool_caps_after_borrow::<T>(asset, collateral_assets, &price_cache)?;
 
 		Ok(loan_id)
 	}
@@ -1526,32 +1516,36 @@ impl<T: Config> LendingApi for Pallet<T> {
 	) -> Result<(), DispatchError> {
 		let price_cache = OraclePriceCache::<T>::default();
 
-		LoanAccounts::<T>::mutate(&borrower_id, |maybe_account| {
-			let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
+		let (loan_asset, collateral_assets) = LoanAccounts::<T>::mutate(
+			&borrower_id,
+			|maybe_account| -> Result<(Asset, BTreeSet<Asset>), DispatchError> {
+				let loan_account = maybe_account.as_mut().ok_or(Error::<T>::LoanNotFound)?;
 
-			let loan = loan_account.loans.remove(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
+				let loan = loan_account.loans.remove(&loan_id).ok_or(Error::<T>::LoanNotFound)?;
+				let loan_asset = loan.asset;
 
-			Self::deposit_event(Event::LoanUpdated {
-				loan_id,
-				extra_principal_amount: extra_amount_to_borrow,
-			});
+				Self::deposit_event(Event::LoanUpdated {
+					loan_id,
+					extra_principal_amount: extra_amount_to_borrow,
+				});
 
-			let config = LendingConfig::<T>::get();
-			ensure!(
-				extra_amount_to_borrow >=
-					price_cache.amount_from_usd_value(
-						loan.asset,
-						config.minimum_update_loan_amount_usd
-					)?,
-				Error::<T>::AmountBelowMinimum
-			);
+				let config = LendingConfig::<T>::get();
+				ensure!(
+					extra_amount_to_borrow >=
+						price_cache.amount_from_usd_value(
+							loan_asset,
+							config.minimum_update_loan_amount_usd
+						)?,
+					Error::<T>::AmountBelowMinimum
+				);
 
-			loan_account.expand_loan_inner(loan, extra_amount_to_borrow, &price_cache)?;
+				loan_account.expand_loan_inner(loan, extra_amount_to_borrow, &price_cache)?;
 
-			Ok::<_, DispatchError>(())
-		})?;
+				Ok((loan_asset, loan_account.get_total_collateral().into_keys().collect()))
+			},
+		)?;
 
-		check_collateral_pool_caps::<T>(&borrower_id, &price_cache)?;
+		check_pool_caps_after_borrow::<T>(loan_asset, collateral_assets, &price_cache)?;
 
 		Ok(())
 	}
@@ -1788,28 +1782,46 @@ pub fn compute_utilisation_cap<T: Config>(
 	Ok(Permill::one().saturating_sub(Permill::from_rational(required, pool.total_amount)))
 }
 
-/// Checks that, for every pool in which `borrower_id` holds collateral, the pool can still
-/// cover the configured liquidation fraction of outstanding loans. Must be called after the
-/// loan account is written to storage so that [`required_liquidation_amount`] sees the new
-/// principal directly.
-fn check_collateral_pool_caps<T: Config>(
-	borrower_id: &T::AccountId,
+/// True iff `asset`'s pool can still liquidate `coverage_factor` of outstanding loans at
+/// current oracle prices.
+fn pool_can_cover_required_liquidation<T: Config>(
+	asset: Asset,
+	coverage_factor: Percent,
+	price_cache: &OraclePriceCache<T>,
+) -> Result<bool, DispatchError> {
+	let required = required_liquidation_amount::<T>(asset, coverage_factor, price_cache)?;
+	let pool = GeneralLendingPools::<T>::get(asset).ok_or(Error::<T>::PoolDoesNotExist)?;
+	Ok(required <= pool.available_for_borrowing())
+}
+
+/// Checks the utilisation cap on every pool affected by a just-committed borrow:
+///
+/// - `loan_asset`: the pool that funded the borrow (its `available_for_borrowing` just
+///   dropped). Always present.
+/// - `collateral_assets`: pools where the borrower's α-weight moved. Empty for boost
+///   loans (not collateralised).
+///
+/// Must be called *after* the loan account has been written to storage; the surrounding
+/// `#[transactional]` rolls back on failure.
+pub fn check_pool_caps_after_borrow<T: Config>(
+	loan_asset: Asset,
+	collateral_assets: BTreeSet<Asset>,
 	price_cache: &OraclePriceCache<T>,
 ) -> DispatchResult {
-	let Some(loan_account) = LoanAccounts::<T>::get(borrower_id) else {
-		return Ok(());
-	};
-
 	let coverage_factor = LendingConfig::<T>::get().liquidation_coverage_factor;
 
-	for collateral_asset in loan_account.get_total_collateral().into_keys() {
-		let required =
-			required_liquidation_amount::<T>(collateral_asset, coverage_factor, price_cache)?;
-		let pool = GeneralLendingPools::<T>::get(collateral_asset)
-			.ok_or(Error::<T>::PoolDoesNotExist)?;
+	ensure!(
+		pool_can_cover_required_liquidation::<T>(loan_asset, coverage_factor, price_cache)?,
+		Error::<T>::UtilisationCapExceeded
+	);
 
+	for asset in collateral_assets {
+		// Skip if it's also the loan asset — already checked above.
+		if asset == loan_asset {
+			continue;
+		}
 		ensure!(
-			required <= pool.available_for_borrowing(),
+			pool_can_cover_required_liquidation::<T>(asset, coverage_factor, price_cache)?,
 			Error::<T>::CollateralPoolUtilisationCapExceeded
 		);
 	}
