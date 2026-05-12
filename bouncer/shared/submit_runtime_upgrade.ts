@@ -8,7 +8,6 @@ import { getChainflipApi, clearChainflipClientCache } from 'shared/utils/substra
 import { throwError } from 'shared/utils/logger';
 import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
-import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penaltyUpdated';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 // Multi-member council flow: submit, wait `leadTimeMs`, then `account` signs
@@ -51,19 +50,6 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
     versionPercentRestriction = undefined;
   }
 
-  cf.info('Temporarily disabling MissedAuthorshipSlot punishment during runtime upgrade.');
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.reputation.setPenalty(
-        { type: 'MissedAuthorshipSlot' },
-        {
-          reputation: 0,
-          suspension: 0,
-        },
-      ),
-    expectedEvent: reputationPenaltyUpdatedEvent,
-  });
-
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   const proposalId = await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(
@@ -100,19 +86,6 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   // dedot client so the next extrinsic is built and submitted against a fresh client that loads the
   // new runtime's metadata from scratch.
   await clearChainflipClientCache();
-
-  cf.info('Restoring MissedAuthorshipSlot penalty defaults after runtime upgrade.');
-  await cf.submitGovernance({
-    extrinsic: (api) =>
-      api.tx.reputation.setPenalty(
-        { type: 'MissedAuthorshipSlot' },
-        {
-          reputation: 120,
-          suspension: 150,
-        },
-      ),
-    expectedEvent: reputationPenaltyUpdatedEvent,
-  });
 }
 
 export async function submitRuntimeUpgradeWasmPath<A = []>(cf: ChainflipIO<A>, wasmPath: string) {
