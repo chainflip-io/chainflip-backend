@@ -49,5 +49,7 @@ export async function lpApiRpc(logger: Logger, method: string, params: any[]): P
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function brokerApiRpc(logger: Logger, method: string, params: any[]): Promise<any> {
-  return jsonRpc(logger, method, params, brokerApiEndpoint);
+  return cfMutex.runExclusive('//BROKER_API', () =>
+    jsonRpc(logger, method, params, brokerApiEndpoint),
+  );
 }

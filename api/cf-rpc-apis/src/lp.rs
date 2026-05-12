@@ -20,7 +20,7 @@ use cf_amm_math::PriceLimits;
 use cf_chains::address::AddressString;
 use cf_primitives::{
 	chains::assets::any::AssetMap, ApiWaitForResult, Asset, BasisPoints, Beneficiary, BlockNumber,
-	DcaParameters, EgressId, ForeignChain, WaitFor,
+	DcaParameters, EgressId, ForeignChain, RepaymentAmount, WaitFor,
 };
 pub use cf_rpc_types::lp::*;
 use cf_rpc_types::{
@@ -205,7 +205,7 @@ pub trait LpRpcApi {
 	async fn make_repayment(
 		&self,
 		loan_id: LoanId,
-		amount: RepaymentAmountJson,
+		amount: RepaymentAmount,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<RepaymentResponse>>;
 

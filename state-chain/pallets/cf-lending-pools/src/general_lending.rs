@@ -1,5 +1,5 @@
 use cf_amm_math::Price;
-use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId};
+use cf_primitives::{AccountRole, Beneficiary, DcaParameters, RepaymentAmount, SwapRequestId};
 use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
 use frame_support::{
 	fail,

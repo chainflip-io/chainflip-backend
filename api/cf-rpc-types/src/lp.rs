@@ -20,7 +20,6 @@ use cf_primitives::{
 	chains::{assets::any, Bitcoin, Ethereum, Polkadot},
 	OrderId, *,
 };
-use cf_traits::lending::RepaymentAmount;
 use cf_utilities::rpc::NumberOrHex;
 use pallet_cf_pools::RangeOrderSize;
 use sp_core::serde::{Deserialize, Serialize};
@@ -152,25 +151,6 @@ impl From<SwapRequestId> for SwapRequestResponse {
 pub struct LiquidityDepositChannelDetails {
 	pub deposit_address: AddressString,
 	pub deposit_chain_expiry_block: <AnyChain as Chain>::ChainBlockNumber,
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum RepaymentAmountJson {
-	Full,
-	Exact(NumberOrHex),
-}
-
-impl TryFrom<RepaymentAmountJson> for RepaymentAmount {
-	type Error = anyhow::Error;
-
-	fn try_from(value: RepaymentAmountJson) -> Result<Self, Self::Error> {
-		Ok(match value {
-			RepaymentAmountJson::Full => RepaymentAmount::Full,
-			RepaymentAmountJson::Exact(amount) => RepaymentAmount::Exact(
-				amount.try_into().map_err(|_| anyhow!("Failed to convert amount to u128"))?,
-			),
-		})
-	}
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]

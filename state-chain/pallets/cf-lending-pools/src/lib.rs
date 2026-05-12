@@ -54,12 +54,12 @@ mod benchmarking;
 
 use cf_primitives::{
 	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
-	SwapRequestId,
+	RepaymentAmount, SwapRequestId,
 };
 use cf_traits::{
-	lending::{LendingApi, RepaymentAmount},
-	AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck, LpRegistration, PoolApi,
-	PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler, SwapRequestType,
+	lending::LendingApi, AccountRoleRegistry, BalanceApi, Chainflip, DeregistrationCheck,
+	LpRegistration, PoolApi, PriceFeedApi, SafeModeSet, SwapOutputAction, SwapRequestHandler,
+	SwapRequestType,
 };
 use frame_support::{
 	fail,

@@ -41,17 +41,16 @@ use cf_node_client::{
 use cf_primitives::{
 	chains::{assets::any::AssetMap, Arbitrum, Bitcoin, Ethereum, Polkadot, Solana},
 	ApiWaitForResult, Asset, BasisPoints, Beneficiary, BlockNumber, ChannelId, DcaParameters,
-	EgressId, ForeignChain, WaitFor,
+	EgressId, ForeignChain, RepaymentAmount, WaitFor,
 };
 use cf_rpc_apis::{
 	lp::{
 		CloseOrderJson, LimitOrRangeOrder, LimitOrder, LiquidityDepositChannelDetails, LoanId,
 		LpRpcApiServer, OpenSwapChannels, OrderIdJson, RangeOrder, RangeOrderChange,
-		RangeOrderSizeJson, RepaymentAmountJson, RepaymentResponse, SwapRequestResponse,
+		RangeOrderSizeJson, RepaymentResponse, SwapRequestResponse,
 	},
 	ExtrinsicResponse, NotificationBehaviour, OrderFills, RedemptionAmount, SwapChannelInfo,
 };
-use cf_traits::lending::RepaymentAmount;
 use cf_utilities::{rpc::NumberOrHex, try_parse_number_or_hex};
 use frame_support::BoundedVec;
 use futures::StreamExt;
@@ -872,10 +871,9 @@ where
 	async fn make_repayment(
 		&self,
 		loan_id: LoanId,
-		amount: RepaymentAmountJson,
+		amount: RepaymentAmount,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<RepaymentResponse>> {
-		let amount: RepaymentAmount = amount.try_into()?;
 		Ok(into_api_wait_for_dynamic_result(
 			self.signed_pool_client
 				.submit_wait_for_result_dynamic(

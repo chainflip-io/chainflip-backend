@@ -18,10 +18,11 @@ use anyhow::anyhow;
 use cf_amm_math::PriceLimits;
 use cf_primitives::{
 	chains::{Arbitrum, Solana},
-	ApiWaitForResult, BasisPoints, Beneficiary, BlockNumber, DcaParameters, EgressId, WaitFor,
+	ApiWaitForResult, BasisPoints, Beneficiary, BlockNumber, DcaParameters, EgressId,
+	RepaymentAmount, WaitFor,
 };
 use cf_rpc_apis::{
-	lp::{LoanId, LpRpcApiServer, RepaymentAmountJson, RepaymentResponse},
+	lp::{LoanId, LpRpcApiServer, RepaymentResponse},
 	ExtrinsicResponse, NotificationBehaviour, RpcApiError, RpcResult,
 };
 use cf_utilities::{
@@ -529,13 +530,13 @@ impl LpRpcApiServer for RpcServerImpl {
 	async fn make_repayment(
 		&self,
 		loan_id: LoanId,
-		amount: RepaymentAmountJson,
+		amount: RepaymentAmount,
 		wait_for: Option<WaitFor>,
 	) -> RpcResult<ApiWaitForResult<RepaymentResponse>> {
 		Ok(self
 			.api
 			.lp_api()
-			.make_repayment(loan_id, amount.try_into()?, wait_for.unwrap_or_default())
+			.make_repayment(loan_id, amount, wait_for.unwrap_or_default())
 			.await?)
 	}
 
