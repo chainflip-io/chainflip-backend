@@ -19,7 +19,6 @@ pub mod api;
 
 pub mod benchmarking;
 
-// TODO: To revisit those numbers, they are rough estimations.
 pub mod fees {
 	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 40_000; // Base energy transaction cost
 	pub const ENERGY_COST_PER_FETCH_NATIVE: u128 = 5_000; // Cost to fetch tokens from deposit channel
