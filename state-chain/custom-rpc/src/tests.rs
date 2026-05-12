@@ -58,9 +58,9 @@ use state_chain_runtime::{
 	Runtime,
 };
 
+use cf_primitives::chains::Tron;
 use sp_core::{H160, H256};
 use sp_runtime::{AccountId32, FixedU64};
-use cf_primitives::chains::Tron;
 /*
 	changing any of these serialization tests signifies a breaking change in the
 	API. please make sure to get approval from the product team before merging

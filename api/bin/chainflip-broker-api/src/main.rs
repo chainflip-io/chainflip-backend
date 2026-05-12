@@ -256,7 +256,7 @@ impl BrokerRpcApiServer for RpcServerImpl {
 		chain: ForeignChain,
 	) {
 		// pipe results through from custom-rpc subscription
-		match self.api.raw_client().subscribe_ingress_events(chain).await {
+		match self.api.raw_client().cf_subscribe_ingress_events(chain).await {
 			Ok(subscription) => {
 				let stream = stream::unfold(subscription, move |mut sub| async move {
 					match sub.next().await {
