@@ -87,7 +87,7 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 		.with_max_runtime_instances(config.executor.max_runtime_instances)
 		.with_runtime_cache_size(config.executor.runtime_cache_size)
 		// Configure a wasmtime cache directory to speed up runtime instantiation.
-		.with_cache_path(config.data_path.join("wasmtime"))
+		.with_cache_path(config.data_path.join("wasm_cache"))
 		.build();
 
 	// Cloned executors share the underlying Arc-wrapped caches, so the warmer

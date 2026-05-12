@@ -41,6 +41,7 @@ use codec::Decode;
 use futures::StreamExt;
 use sc_client_api::{BlockchainEvents, StorageProvider};
 use sc_executor::{WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY};
+use sc_executor_common::runtime_blob::RuntimeBlob;
 use sc_service::SpawnTaskHandle;
 use sp_blockchain::HeaderBackend;
 use sp_core::{
@@ -194,9 +195,13 @@ where
 	calls
 }
 
-/// Compile `code` via `WasmExecutor::with_instance`, populating both the
-/// in-memory `RuntimeCache` and the on-disk wasmtime artifact cache under the
-/// same key block production will look up at `set_code` time.
+/// Compile `code` and populate both the on-disk wasmtime artifact cache and the
+/// executor's in-memory `RuntimeCache`.
+///
+/// Two phases: `uncached_call` does the heavy ~12s compile lock-free (writes the
+/// artifact to disk; block production's executor lookups aren't blocked), then
+/// `with_instance` briefly takes the cache mutex to deserialise from disk and
+/// insert into the LRU. `compile_lock` serialises across proposals.
 fn warm(
 	executor: &WasmExecutor<sp_io::SubstrateHostFunctions>,
 	compile_lock: &Mutex<()>,
@@ -208,6 +213,34 @@ fn warm(
 	let _guard = compile_lock.lock().unwrap_or_else(|poison| poison.into_inner());
 	let started = std::time::Instant::now();
 
+	// Phase 1: lock-free compile to disk cache.
+	let blob = match RuntimeBlob::uncompress_if_needed(&code) {
+		Ok(b) => b,
+		Err(e) => {
+			log::warn!(
+				target: LOG_TARGET,
+				"Runtime warm-up skipped (hash=0x{}): blob decompression failed: {:?}",
+				hash_hex, e,
+			);
+			return;
+		},
+	};
+	// `uncached_call` populates the on-disk cache as a side effect, as long as the cache_path is
+	// set during initialisation of the executor.
+	let mut ext = BasicExternalities::default();
+	if let Err(e) = executor.uncached_call(blob, &mut ext, false, "Core_version", &[]) {
+		log::warn!(
+			target: LOG_TARGET,
+			"Runtime warm-up failed during disk-cache compile (hash=0x{}, took={}ms): {:?}",
+			hash_hex,
+			started.elapsed().as_millis(),
+			e,
+		);
+		return;
+	}
+	let disk_done = started.elapsed();
+
+	// Phase 2: brief mutex hold, deserialises from disk cache and populates LRU.
 	let wrapped = WrappedRuntimeCode(Cow::Borrowed(code.as_slice()));
 	let runtime_code = RuntimeCode {
 		code_fetcher: &wrapped,
@@ -229,15 +262,17 @@ fn warm(
 	match result {
 		Ok(()) => log::info!(
 			target: LOG_TARGET,
-			"Runtime warm-up complete (hash=0x{}, took={}ms).",
+			"Runtime warm-up complete (hash=0x{}, disk_compile={}ms, lru_populate={}ms).",
 			hash_hex,
-			started.elapsed().as_millis(),
+			disk_done.as_millis(),
+			(started.elapsed() - disk_done).as_millis(),
 		),
 		Err(e) => log::warn!(
 			target: LOG_TARGET,
-			"Runtime warm-up failed (hash=0x{}, took={}ms): {:?}",
+			"Runtime warm-up failed during LRU populate (hash=0x{}, disk_compile={}ms, lru_attempt={}ms): {:?}",
 			hash_hex,
-			started.elapsed().as_millis(),
+			disk_done.as_millis(),
+			(started.elapsed() - disk_done).as_millis(),
 			e,
 		),
 	}
