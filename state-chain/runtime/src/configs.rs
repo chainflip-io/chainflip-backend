@@ -1128,6 +1128,7 @@ impl pallet_cf_lending_pools::Config for Runtime {
 	type WeightInfo = pallet_cf_lending_pools::weights::PalletWeight<Runtime>;
 	type Balance = AssetBalances;
 	type SwapRequestHandler = Swapping;
+	type NetworkFeeApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;
