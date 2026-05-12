@@ -4717,6 +4717,88 @@ mod safe_mode {
 				);
 			});
 	}
+
+	// Regression test for PRO-2860.
+	//
+	// When `update_liquidation_status` returns `Err(LiquidationsDisabled)` from inside
+	// `lending_upkeep`'s `try_mutate_exists` closure, the prior
+	// `check_low_ltv_penalty_and_collect_interest` call writes to external storage
+	// (lending pool totals, `PendingNetworkFees`). Those writes must roll back together
+	// with the borrower-side mutations (which `try_mutate_exists` discards on `Err`),
+	// otherwise the pool/network books reflect interest the borrower no longer owes.
+	#[test]
+	fn upkeep_does_not_commit_fees_when_liquidations_are_disabled() {
+		new_test_ext()
+			.with_funded_pool(INIT_POOL_AMOUNT)
+			.with_default_loan()
+			.then_execute_with(|_| {
+				// Snapshot pool / fee / loan state right after loan creation — once the
+				// origination fee has been taken. With the fix, this is exactly what we
+				// expect to see after upkeep runs while liquidations are disabled.
+				let pool_before = GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap();
+				let pending_network_fees_before = PendingNetworkFees::<Test>::get(LOAN_ASSET);
+				let loan_account_before = LoanAccounts::<Test>::get(BORROWER).unwrap();
+
+				// Trigger the bug's preconditions:
+				//  - liquidations disabled via safe mode,
+				//  - collection threshold low enough that any accrued interest gets collected,
+				//  - oracle price moved so that LTV exceeds the hard liquidation threshold (forces
+				//    `update_liquidation_status` down the `LiquidationsDisabled` path).
+				MockRuntimeSafeMode::set_safe_mode(PalletSafeMode {
+					liquidations_enabled: false,
+					..PalletSafeMode::code_green()
+				});
+				assert_ok!(Pallet::<Test>::update_pallet_config(
+					RuntimeOrigin::root(),
+					bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
+				));
+				MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE * 20);
+
+				System::reset_events();
+
+				(pool_before, pending_network_fees_before, loan_account_before)
+			})
+			// Process up to the first interest payment block so that upkeep runs
+			// `derive_and_charge_interest` followed by
+			// `check_low_ltv_penalty_and_collect_interest` followed by
+			// `update_liquidation_status` (which errors).
+			.then_process_blocks_until_block(
+				INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
+			)
+			.then_execute_with(|(pool_before, fees_before, loan_account_before)| {
+				// Sanity: liquidation must not have started.
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap().liquidation_status,
+					LiquidationStatus::NoLiquidation
+				);
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::LiquidationInitiated { .. })
+				);
+
+				// The invariant: because the per-account closure returned `Err`, the
+				// upkeep tick for this borrower must be a no-op across all storage.
+				assert_eq!(
+					GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
+					pool_before,
+					"pool accounting moved despite the loan-account mutations being rolled back",
+				);
+				assert_eq!(
+					PendingNetworkFees::<Test>::get(LOAN_ASSET),
+					fees_before,
+					"network fees were collected without a matching borrower receivable",
+				);
+				assert_eq!(
+					LoanAccounts::<Test>::get(BORROWER).unwrap(),
+					loan_account_before,
+					"loan account changed but upkeep was supposed to be a no-op",
+				);
+				assert_no_matching_event!(
+					Test,
+					RuntimeEvent::LendingPools(Event::<Test>::InterestTaken { .. })
+				);
+			});
+	}
 }
 
 mod liquidation_math_tests {

@@ -1301,6 +1301,50 @@ fn compute_per_asset_liquidation_estimates(
 		.collect()
 }
 
+/// Run a single upkeep tick for one borrower. Wrapped in `#[transactional]` so any
+/// error rolls back the full set of storage writes for this account (interest
+/// collection touches pool and `PendingNetworkFees` storage outside of
+/// `LoanAccounts`, which `try_mutate_exists` does not roll back on its own).
+#[transactional]
+fn upkeep_for_borrower<T: Config>(
+	borrower_id: &T::AccountId,
+	price_cache: &OraclePriceCache<T>,
+	config: &LendingConfiguration,
+	weight_used: &mut Weight,
+) -> DispatchResult {
+	LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
+		let loan_account =
+			maybe_account.as_mut().expect("The caller guarantees that the key exists");
+
+		loan_account.derive_and_charge_interest(weight_used);
+
+		// Some of these may fail due to oracle prices being unavailable, but that's
+		// OK and doesn't need any specific error handling (they will simply be re-tried
+		// at a later point).
+		weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
+		let ltv = loan_account.derive_ltv(price_cache)?;
+
+		loan_account.check_low_ltv_penalty_and_collect_interest(
+			ltv,
+			price_cache,
+			config,
+			weight_used,
+		);
+
+		loan_account.update_liquidation_status(borrower_id, ltv, price_cache, weight_used)?;
+
+		// If all loans are repaid manually while in liquidation, liquidation swaps will be
+		// aborted above and we need to delete the account:
+		if loan_account.loans.is_empty() &&
+			loan_account.liquidation_status == LiquidationStatus::NoLiquidation
+		{
+			*maybe_account = None;
+		}
+
+		Ok::<_, DispatchError>(())
+	})
+}
+
 /// Check collateralisation ratio (triggering/aborting liquidations if necessary) and
 /// periodically swap collected fees into each pool's desired asset.
 pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
@@ -1317,42 +1361,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 	{
 		// Not being able to process a loan account is acceptable (expected when oracle
 		// prices are down).
-		let _ = LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
-			let loan_account = maybe_account.as_mut().expect("Using keys read just above");
-
-			loan_account.derive_and_charge_interest(&mut weight_used);
-
-			// Some of these may fail due to oracle prices being unavailable, but that's
-			// OK and doesn't need any specific error handling (they will simply be re-tried
-			// at a later point).
-			weight_used.saturating_accrue(T::WeightInfo::derive_ltv());
-			let result: DispatchResult =
-				loan_account.derive_ltv(&price_cache).map_err(Into::into).and_then(|ltv| {
-					loan_account.check_low_ltv_penalty_and_collect_interest(
-						ltv,
-						&price_cache,
-						&config,
-						&mut weight_used,
-					);
-
-					loan_account.update_liquidation_status(
-						borrower_id,
-						ltv,
-						&price_cache,
-						&mut weight_used,
-					)
-				});
-
-			// If all loans are repaid manually while in liquidation, liquidation swaps will be
-			// aborted above and we need to delete the account:
-			if loan_account.loans.is_empty() &&
-				loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-			{
-				*maybe_account = None;
-			}
-
-			result
-		});
+		let _ = upkeep_for_borrower::<T>(borrower_id, &price_cache, &config, &mut weight_used);
 	}
 
 	// Swap fees in every asset every fee_swap_interval_blocks, but only if they exceed
