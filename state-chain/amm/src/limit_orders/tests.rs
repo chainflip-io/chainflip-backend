@@ -603,7 +603,7 @@ fn swap() {
 				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 			)
 			.unwrap()
-				.to_tick(),
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<BaseToQuote>(150.into(), None, 0), (200.into(), 24.into()));
@@ -622,7 +622,7 @@ fn swap() {
 				SqrtPrice::from_tick(tick).as_raw() * U256::from(4).integer_sqrt()
 			)
 			.unwrap()
-				.to_tick(),
+			.to_tick(),
 			100.into()
 		));
 		assert_eq!(pool_state.swap::<QuoteToBase>(550.into(), None, 0), (200.into(), 50.into()));
