@@ -853,7 +853,6 @@ impl<T: Config> LoanAccount<T> {
 		}
 
 		if self.voluntary_liquidation_requested {
-			log_or_panic!("Voluntary liquidation flag is set on loan creation");
 			// If the user requests any additional loans, we assume they no longer want to
 			// be in voluntary liquidation mode (if for whatever reason it was active)
 			self.voluntary_liquidation_requested = false;
@@ -1546,8 +1545,10 @@ pub fn remove_lender_funds<T: Config>(
 		};
 
 		if let Some(amount) = amount {
+			// Note that stale prices are acceptable for minimum-amount checks.
 			ensure!(
-				price_cache.usd_value_of(asset, amount)? >= config.minimum_update_supply_amount_usd,
+				price_cache.usd_value_of_allow_stale(asset, amount)? >=
+					config.minimum_update_supply_amount_usd,
 				Error::<T>::InsufficientLtvHeadroom
 			);
 		}
@@ -1593,6 +1594,12 @@ pub fn remove_lender_funds<T: Config>(
 /// Returns `Permill::one()` if the pool does not exist or is empty. Allows stale oracle
 /// prices (since we still want the cap to hold during price outages), and propagates
 /// an error only when a price is completely unavailable.
+///
+/// Boost loans (in `BoostLoans`) are deliberately excluded from this sum: they are not
+/// secured by collateral and therefore reserve no liquidation capacity. We assume boost
+/// principal will always be repaid because boost loans are funded against prewitnessed
+/// deposits. They still consume `available_amount` via `fund_loan` and so push real pool
+/// utilisation up against this cap, but they do not lower the cap themselves.
 pub fn compute_utilisation_cap<T: Config>(
 	asset: Asset,
 	coverage_factor: Percent,

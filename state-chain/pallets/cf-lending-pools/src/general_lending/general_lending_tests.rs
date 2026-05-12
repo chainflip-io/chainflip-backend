@@ -4752,45 +4752,34 @@ fn init_liquidation_swaps_test() {
 }
 
 #[test]
-fn can_add_but_not_remove_supply_with_stale_price() {
-	const SUPPLY_ASSET: Asset = Asset::Eth;
+fn can_add_but_not_remove_supply_with_stale_price_if_has_loans() {
+	new_test_ext()
+		.with_funded_pool(INIT_POOL_AMOUNT)
+		.with_default_loan()
+		.execute_with(|| {
+			// BORROWER now has a loan in LOAN_ASSET with COLLATERAL_ASSET as collateral (the
+			// supply position doubles as collateral in this lending model).
+			MockPriceFeedApi::set_stale(COLLATERAL_ASSET, true);
 
-	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-		MockPriceFeedApi::set_price_usd_fine(SUPPLY_ASSET, 1);
-		MockPriceFeedApi::set_stale(SUPPLY_ASSET, false);
-
-		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-		MockBalance::credit_account(&BORROWER, SUPPLY_ASSET, INIT_COLLATERAL * 2);
-
-		assert_ok!(LendingPools::new_lending_pool(SUPPLY_ASSET));
-
-		// Add supply while price is fresh
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(BORROWER),
-			SUPPLY_ASSET,
-			INIT_COLLATERAL,
-		));
-
-		// Make the price stale
-		MockPriceFeedApi::set_stale(SUPPLY_ASSET, true);
-
-		// Should still be able to add supply with stale price
-		assert_ok!(LendingPools::add_lender_funds(
-			RuntimeOrigin::signed(BORROWER),
-			SUPPLY_ASSET,
-			INIT_COLLATERAL,
-		));
-
-		// But should not be able to remove supply with stale price
-		assert_noop!(
-			LendingPools::remove_lender_funds(
+			// Should still be able to add supply with stale price
+			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+			assert_ok!(LendingPools::add_lender_funds(
 				RuntimeOrigin::signed(BORROWER),
-				SUPPLY_ASSET,
-				Some(INIT_COLLATERAL / 2),
-			),
-			Error::<Test>::OraclePriceUnavailable
-		);
-	});
+				COLLATERAL_ASSET,
+				INIT_COLLATERAL,
+			));
+
+			// But should not be able to remove supply with stale price: computing the LTV
+			// headroom requires fresh oracle prices.
+			assert_noop!(
+				LendingPools::remove_lender_funds(
+					RuntimeOrigin::signed(BORROWER),
+					COLLATERAL_ASSET,
+					Some(INIT_COLLATERAL / 2),
+				),
+				Error::<Test>::OraclePriceUnavailable
+			);
+		});
 }
 
 /// Makes sure that stale oracle prices don't affect lenders' ability
@@ -4824,6 +4813,41 @@ fn can_remove_supply_with_stale_price_if_no_loans() {
 			RuntimeOrigin::signed(BORROWER),
 			SUPPLY_ASSET,
 			None,
+		));
+	});
+}
+
+/// Same as above but with a partial-amount withdrawal: stale prices should
+/// not block a no-loans lender from removing a specific amount either.
+#[test]
+fn can_partially_remove_supply_with_stale_price_if_no_loans() {
+	const SUPPLY_ASSET: Asset = Asset::Eth;
+
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		MockPriceFeedApi::set_price_usd_fine(SUPPLY_ASSET, 1);
+		MockPriceFeedApi::set_stale(SUPPLY_ASSET, false);
+
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		MockBalance::credit_account(&BORROWER, SUPPLY_ASSET, INIT_COLLATERAL * 2);
+
+		assert_ok!(LendingPools::new_lending_pool(SUPPLY_ASSET));
+
+		// Add supply while price is fresh
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(BORROWER),
+			SUPPLY_ASSET,
+			INIT_COLLATERAL,
+		));
+
+		// Make the price stale
+		MockPriceFeedApi::set_stale(SUPPLY_ASSET, true);
+
+		// Should be able to partially remove supply with stale price if the user has
+		// no loans (no LTV check is needed).
+		assert_ok!(LendingPools::remove_lender_funds(
+			RuntimeOrigin::signed(BORROWER),
+			SUPPLY_ASSET,
+			Some(INIT_COLLATERAL / 2),
 		));
 	});
 }
