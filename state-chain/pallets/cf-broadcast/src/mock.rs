@@ -112,7 +112,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeModeChainBlockMargin = ConstU64<SAFEMODE_CHAINBLOCK_MARGIN>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
-	type RetryPolicy = MockRetryPolicy;
+	type DelayRetryPolicy = MockRetryPolicy;
+	type BroadcastFailureRetryPolicy = MockRetryPolicy;
 	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;
 	type BroadcastOutcomeHandler = MockBroadcastOutcomeHandler<MockEthereum>;

@@ -132,7 +132,7 @@ mod benchmarks {
 		insert_transaction_broadcast_attempt::<T, I>(Some(caller.clone().into()), broadcast_id);
 		frame_system::Pallet::<T>::set_block_number(10u32.into());
 		let retry_block = frame_system::Pallet::<T>::block_number().saturating_add(
-			T::RetryPolicy::next_attempt_delay(Pallet::<T, I>::attempt_count(broadcast_id) + 1)
+			T::DelayRetryPolicy::next_attempt_delay(Pallet::<T, I>::attempt_count(broadcast_id) + 1)
 				.unwrap_or(One::one()),
 		);
 
