@@ -172,8 +172,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
-			VaultSwapDetails::Tron { details, note } =>
-				VaultSwapDetails::Tron { details, note },
+			VaultSwapDetails::Tron { details, note } => VaultSwapDetails::Tron { details, note },
 		}
 	}
 }

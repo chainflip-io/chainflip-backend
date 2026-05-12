@@ -70,7 +70,7 @@ export async function executeTronVaultSwap<A extends WithBrokerAccount>(
   } else {
     // TRC20 vault swap: transfer tokens to vaultSwapDetails.to
     const tokenContractAddress = getEncodedTronAddress(
-      getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
+      '0x' + getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
     );
     if (tokenContractAddress !== vaultSwapDetails.source_token_address)
       throw new Error(
