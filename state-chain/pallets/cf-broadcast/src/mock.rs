@@ -74,18 +74,29 @@ impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
 	type ApiCall = MockApiCall<MockEthereumChainCrypto>;
 }
 
-pub struct MockRetryPolicy;
+pub struct MockDelayRetryPolicy;
+pub struct MockBroadcastFailureRetryPolicy;
 
 parameter_types! {
-	pub static BroadcastDelay: Option<BlockNumberFor<Test>> = None;
+	pub static DelayRetryDelay: Option<BlockNumberFor<Test>> = None;
+	pub static BroadcastFailureRetryDelay: Option<BlockNumberFor<Test>> = None;
 }
 
-impl RetryPolicy for MockRetryPolicy {
+impl RetryPolicy for MockDelayRetryPolicy {
 	type BlockNumber = u64;
 	type AttemptCount = u32;
 
 	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
-		BroadcastDelay::get()
+		DelayRetryDelay::get()
+	}
+}
+
+impl RetryPolicy for MockBroadcastFailureRetryPolicy {
+	type BlockNumber = u64;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		BroadcastFailureRetryDelay::get()
 	}
 }
 
@@ -112,8 +123,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type SafeModeChainBlockMargin = ConstU64<SAFEMODE_CHAINBLOCK_MARGIN>;
 	type ChainTracking = BlockHeightProvider<MockEthereum>;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<MockEthereumChainCrypto>;
-	type DelayRetryPolicy = MockRetryPolicy;
-	type BroadcastFailureRetryPolicy = MockRetryPolicy;
+	type DelayRetryPolicy = MockDelayRetryPolicy;
+	type BroadcastFailureRetryPolicy = MockBroadcastFailureRetryPolicy;
 	type LiabilityTracker = MockLiabilityTracker;
 	type CfeBroadcastRequest = MockCfeInterface;
 	type BroadcastOutcomeHandler = MockBroadcastOutcomeHandler<MockEthereum>;
@@ -129,6 +140,8 @@ cf_test_utilities::impl_test_helpers! {
 		..Default::default()
 	},
 	|| {
+		DelayRetryDelay::set(None);
+		BroadcastFailureRetryDelay::set(None);
 		MockEpochInfo::next_epoch((0..151).collect());
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		for id in &MockEpochInfo::current_authorities() {
