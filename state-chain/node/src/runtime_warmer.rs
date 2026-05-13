@@ -26,21 +26,20 @@
 //! The latter is required for single-member councils where approval happens in the same block as
 //! the proposal.
 //!
-//! For each `chainflip_runtime_upgrade { code, .. }` call found, the warmer
-//! drives the executor to compile the WASM via `with_instance`. That populates
-//! both the executor's in-memory `RuntimeCache` and the on-disk wasmtime
-//! artifact cache under the same `(code_hash, heap_alloc_strategy, wasm_method)`
-//! key block production looks up later — so when `set_code` finally runs, the
-//! lookup is a hashmap hit and there is no compilation work to do.
+//! For each `chainflip_runtime_upgrade { code, .. }` call found, the warmer compiles the WASM in
+//! two phases: `uncached_call` runs the heavy compile lock-free (block production's executor
+//! lookups aren't blocked while we work), then `with_instance` populates the in-memory
+//! `RuntimeCache` LRU under the same `(code_hash, heap_alloc_strategy, wasm_method)` key block
+//! production looks up later. When `set_code` finally runs the LRU is hit and there's no
+//! compilation work to do.
 //!
-//! The `code_hash` we set on `RuntimeCode` matches what `BackendRuntimeCode`
-//! produces from `storage_hash(:code:)`: blake2-256 of the compressed bytes
-//! that get stored under the `:code:` key by `set_code`.
+//! The `code_hash` we set on `RuntimeCode` matches what `BackendRuntimeCode` produces from
+//! `storage_hash(:code:)`: blake2-256 of the compressed bytes that get stored under `:code:`.
 
 use codec::Decode;
 use futures::StreamExt;
 use sc_client_api::{BlockchainEvents, StorageProvider};
-use sc_executor::{WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY};
+use sc_executor::{HeapAllocStrategy, WasmExecutor};
 use sc_executor_common::runtime_blob::RuntimeBlob;
 use sc_service::SpawnTaskHandle;
 use sp_blockchain::HeaderBackend;
@@ -61,11 +60,14 @@ const LOG_TARGET: &str = "runtime-warmer";
 const TASK_NAME: &str = "runtime-warmer";
 const TASK_GROUP: Option<&str> = Some("chainflip");
 
-/// Spawn the warmer task. Idempotent when run on multiple imports — already-warmed
-/// code hashes are skipped.
+/// Spawn the warmer task. Already-warmed code hashes are skipped.
+///
+/// `heap_alloc_strategy` must match the executor's — it's baked into the WASM
+/// memory section and hence into the wasmtime cache key.
 pub fn spawn<C, B>(
 	client: Arc<C>,
 	executor: WasmExecutor<sp_io::SubstrateHostFunctions>,
+	heap_alloc_strategy: HeapAllocStrategy,
 	spawn_handle: SpawnTaskHandle,
 ) where
 	C: BlockchainEvents<Block>
@@ -76,11 +78,14 @@ pub fn spawn<C, B>(
 		+ 'static,
 	B: sc_client_api::Backend<Block> + Send + Sync + 'static,
 {
-	spawn_handle.spawn(TASK_NAME, TASK_GROUP, run(client, executor));
+	spawn_handle.spawn(TASK_NAME, TASK_GROUP, run(client, executor, heap_alloc_strategy));
 }
 
-async fn run<C, B>(client: Arc<C>, executor: WasmExecutor<sp_io::SubstrateHostFunctions>)
-where
+async fn run<C, B>(
+	client: Arc<C>,
+	executor: WasmExecutor<sp_io::SubstrateHostFunctions>,
+	heap_alloc_strategy: HeapAllocStrategy,
+) where
 	C: BlockchainEvents<Block>
 		+ StorageProvider<Block, B>
 		+ HeaderBackend<Block>
@@ -109,8 +114,6 @@ where
 		{
 			let Some(code) = extract_runtime_upgrade_code(&opaque_call) else { continue };
 
-			// Hash matches what `BackendRuntimeCode` produces from `storage_hash(:code:)`
-			// after the upgrade lands, so our cache entry is the one block production looks up.
 			let code_hash = Blake2Hasher::hash(&code).0;
 			if !warmed.insert(code_hash) {
 				continue;
@@ -126,7 +129,9 @@ where
 			);
 
 			// CPU-heavy; offload to blocking pool. `compile_lock` in `warm` serialises compiles.
-			tokio::task::spawn_blocking(move || warm(&executor, &lock, code, code_hash, &hash_hex));
+			tokio::task::spawn_blocking(move || {
+				warm(&executor, &lock, code, code_hash, &hash_hex, heap_alloc_strategy)
+			});
 		}
 	}
 
@@ -208,6 +213,7 @@ fn warm(
 	code: Vec<u8>,
 	code_hash: [u8; 32],
 	hash_hex: &str,
+	heap_alloc_strategy: HeapAllocStrategy,
 ) {
 	// Recover from poison: would only happen if a previous compile panicked.
 	let _guard = compile_lock.lock().unwrap_or_else(|poison| poison.into_inner());
@@ -254,8 +260,8 @@ fn warm(
 	let result: sc_executor_common::error::Result<()> = executor.with_instance(
 		&runtime_code,
 		&mut ext,
-		DEFAULT_HEAP_ALLOC_STRATEGY,
-		// Compile + cache insert happens before `f` is called; the closure is a no-op.
+		heap_alloc_strategy,
+		// Compile + cache insert happens before `f` is called; closure is a no-op.
 		|_module, _instance, _version, _ext| Ok(Ok(())),
 	);
 

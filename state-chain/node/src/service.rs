@@ -103,7 +103,12 @@ pub fn new_partial(config: &Configuration) -> Result<Service, ServiceError> {
 	let client = Arc::new(client);
 
 	// Pre-compile pending runtime upgrades during the governance approval window.
-	crate::runtime_warmer::spawn(client.clone(), warmer_executor, task_manager.spawn_handle());
+	crate::runtime_warmer::spawn(
+		client.clone(),
+		warmer_executor,
+		heap_alloc_strategy,
+		task_manager.spawn_handle(),
+	);
 
 	let telemetry = telemetry.map(|(worker, telemetry)| {
 		task_manager.spawn_handle().spawn("telemetry", None, worker.run());
