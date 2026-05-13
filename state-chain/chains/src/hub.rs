@@ -377,7 +377,9 @@ impl FeeRefundCalculator<Assethub> for PolkadotTransactionData {
 	}
 }
 
-// The Assethub Runtime type that is expected by the assethub runtime
+/// The Assethub Runtime type that is expected by the assethub runtime.
+///
+/// NOTE: Never decode this directly from untrusted input, it contains nested calls.
 #[expect(clippy::large_enum_variant)]
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 pub enum AssethubRuntimeCall {
@@ -429,7 +431,7 @@ pub enum XcmCall {
 		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[expect(missing_docs)]
-		fee_asset_itme: u32,
+		fee_asset_item: u32,
 	},
 	#[codec(index = 2u8)]
 	reserve_transfer_assets {
@@ -440,7 +442,7 @@ pub enum XcmCall {
 		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[expect(missing_docs)]
-		fee_asset_itme: u32,
+		fee_asset_item: u32,
 	},
 	#[codec(index = 8u8)]
 	limited_reserve_transfer_assets {
@@ -451,7 +453,7 @@ pub enum XcmCall {
 		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[expect(missing_docs)]
-		fee_asset_itme: u32,
+		fee_asset_item: u32,
 		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
@@ -464,7 +466,7 @@ pub enum XcmCall {
 		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[expect(missing_docs)]
-		fee_asset_itme: u32,
+		fee_asset_item: u32,
 		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
@@ -477,7 +479,7 @@ pub enum XcmCall {
 		#[expect(missing_docs)]
 		assets: xcm_types::hub_runtime_types::xcm::VersionedAssets,
 		#[expect(missing_docs)]
-		fee_asset_itme: u32,
+		fee_asset_item: u32,
 		#[expect(missing_docs)]
 		weight_limit: xcm_types::hub_runtime_types::xcm::v3::WeightLimit,
 	},
