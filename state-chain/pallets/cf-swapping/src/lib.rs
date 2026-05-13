@@ -3365,7 +3365,7 @@ pub mod pallet {
 				// Get the price of both assets using oracles or simulated swap, both with fallback
 				// to hard coded prices
 				let get_usd_price = |asset, side: Side| -> Price {
-					if asset == Asset::Flip || asset == Asset::Dot {
+					if asset == Asset::Flip || asset == Asset::Dot || asset == Asset::Trx {
 						let asset_price =
 							Self::estimate_usdc_price_using_simulated_swap_or_fallback(asset, side); // USDC / Asset
 						let usdc_price = T::PriceFeedApi::get_price(STABLE_ASSET) // USD / USDC
