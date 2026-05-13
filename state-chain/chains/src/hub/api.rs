@@ -20,7 +20,7 @@ pub mod rotate_vault_proxy;
 
 use crate::{
 	dot::{PolkadotAccountId, PolkadotCrypto, PolkadotPublicKey, RuntimeVersion},
-	hub::{Assethub, AssethubRuntimeCall},
+	hub::{Assethub, XcmCall},
 	*,
 };
 use codec::{DecodeLimit, DecodeWithMemTracking};
@@ -168,7 +168,7 @@ where
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
-		match <AssethubRuntimeCall as DecodeLimit>::decode_all_with_depth_limit(
+		match <XcmCall as DecodeLimit>::decode_all_with_depth_limit(
 			MAX_EXTRINSIC_DEPTH,
 			&mut message.as_ref(),
 		) {

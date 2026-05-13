@@ -21,7 +21,7 @@ use crate::{
 	},
 	hub::{
 		as_derivative_u64, Assethub, AssethubExtrinsicBuilder, AssethubRuntimeCall, AssetsCall,
-		BalancesCall, ProxyCall, UtilityCall,
+		BalancesCall, ProxyCall, UtilityCall, XcmCall,
 	},
 	TransferAssetParams,
 };
@@ -33,7 +33,7 @@ pub fn extrinsic_builder(
 	derivative_index: ChannelId,
 	transfer_params: TransferAssetParams<Assethub>,
 	vault_account: PolkadotAccountId,
-	xcm_call: AssethubRuntimeCall,
+	xcm_call: XcmCall,
 ) -> AssethubExtrinsicBuilder {
 	let derived_address = calculate_derived_address(vault_account, derivative_index);
 
@@ -67,7 +67,7 @@ pub fn extrinsic_builder(
 						derivative_index,
 						AssethubRuntimeCall::Utility(UtilityCall::force_batch {
 							calls: vec![
-								xcm_call,
+								AssethubRuntimeCall::PolkadotXcm(xcm_call),
 								match transfer_params.asset {
 									cf_primitives::chains::assets::hub::Asset::HubDot =>
 										AssethubRuntimeCall::Balances(BalancesCall::transfer_all {
@@ -119,8 +119,8 @@ mod test_xcm_call {
 			asset: assets::hub::Asset::HubDot,
 		};
 
-		let mut data: &[u8] = hex_literal::hex!("1f0b03010003000101008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a480304000000000700e87648170000000000").as_ref();
-		let xcm_call = <AssethubRuntimeCall as codec::Decode>::decode(&mut data).unwrap();
+		let mut data: &[u8] = hex_literal::hex!("0b03010003000101008eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a480304000000000700e87648170000000000").as_ref();
+		let xcm_call = <XcmCall as codec::Decode>::decode(&mut data).unwrap();
 
 		let mut builder: AssethubExtrinsicBuilder = super::extrinsic_builder(
 			PolkadotReplayProtection {
@@ -192,15 +192,31 @@ mod test_xcm_call {
 				4 => proptest::prelude::any::<u64>(),
 			],
 		) {
+			use crate::hub::xcm_types::hub_runtime_types::xcm::*;
+			use crate::hub::xcm_types::hub_runtime_types::staging_xcm::v5::location::*;
+			use crate::hub::xcm_types::hub_runtime_types::staging_xcm::v5::junctions::*;
+			use crate::hub::xcm_types::hub_runtime_types::staging_xcm::v5::asset::*;
 			use crate::hub::as_derivative_u64;
 			use proptest::{prop_assert_eq, prop_assert_ne};
 
 			let vault = PolkadotAccountId::from_aliased([1u8; 32]);
 			let recipient = PolkadotAccountId::from_aliased([2u8; 32]);
-			let dummy_user_call = AssethubRuntimeCall::Balances(BalancesCall::transfer_allow_death {
-				dest: PolkadotAccountIdLookup::from(recipient),
-				value: 0,
-			});
+			let dummy_user_call = XcmCall::teleport_assets {
+				dest: VersionedLocation::V5(
+					Location {
+						parents: 0,
+						interior: Junctions::Here,
+					}
+				),
+				beneficiary: VersionedLocation::V5(
+					Location {
+						parents: 0,
+						interior: Junctions::Here,
+					}
+				),
+				assets: VersionedAssets::V5(Assets(Default::default())),
+				fee_asset_item: 0
+			};
 
 			let builder = super::extrinsic_builder(
 				PolkadotReplayProtection {
@@ -250,7 +266,7 @@ mod test_xcm_call {
 				"execution origin should never be the vault, id {:#018x}", id);
 
 			// Sanity: the same id fed through as_derivative_u64 in isolation agrees too.
-			let standalone = as_derivative_u64(id, dummy_user_call.clone());
+			let standalone = as_derivative_u64(id, AssethubRuntimeCall::PolkadotXcm(dummy_user_call.clone()));
 			prop_assert_eq!(simulated_origin(vault, &standalone), execution_origin);
 		}
 	}
