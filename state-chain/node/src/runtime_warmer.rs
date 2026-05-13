@@ -102,20 +102,44 @@ async fn run<C, B>(
 	let compile_lock: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
 	let mut import_stream = client.import_notification_stream();
 
-	log::debug!(target: LOG_TARGET, "Runtime warmer started.");
+	log::info!(target: LOG_TARGET, "Runtime warmer started.");
 
 	while let Some(notification) = import_stream.next().await {
+		log::debug!(
+			target: LOG_TARGET,
+			"import notification: hash={:?} is_new_best={}",
+			notification.hash, notification.is_new_best,
+		);
 		if !notification.is_new_best {
 			continue;
 		}
 
-		for opaque_call in
-			pending_calls(&*client, notification.hash, &proposals_prefix, &execution_pipeline_key)
-		{
-			let Some(code) = extract_runtime_upgrade_code(&opaque_call) else { continue };
+		let calls =
+			pending_calls(&*client, notification.hash, &proposals_prefix, &execution_pipeline_key);
+		if !calls.is_empty() {
+			log::info!(
+				target: LOG_TARGET,
+				"found {} pending governance call(s) at {:?}",
+				calls.len(), notification.hash,
+			);
+		}
+		for opaque_call in calls {
+			let Some(code) = extract_runtime_upgrade_code(&opaque_call) else {
+				log::debug!(
+					target: LOG_TARGET,
+					"skipping non-upgrade governance call (prefix={:02x?})",
+					&opaque_call[..opaque_call.len().min(4)],
+				);
+				continue;
+			};
 
 			let code_hash = Blake2Hasher::hash(&code).0;
 			if !warmed.insert(code_hash) {
+				log::debug!(
+					target: LOG_TARGET,
+					"skipping already-warmed runtime upgrade (hash=0x{})",
+					hex::encode(code_hash),
+				);
 				continue;
 			}
 
@@ -135,7 +159,7 @@ async fn run<C, B>(
 		}
 	}
 
-	log::debug!(target: LOG_TARGET, "Runtime warmer stopped.");
+	log::warn!(target: LOG_TARGET, "Runtime warmer stopped (import stream ended).");
 }
 
 /// Read every pending governance call at `block` from both `Governance::Proposals`
@@ -156,7 +180,8 @@ where
 	let mut calls = Vec::new();
 
 	match client.storage_pairs(block, Some(proposals_prefix), None) {
-		Ok(pairs) =>
+		Ok(pairs) => {
+			let before = calls.len();
 			for (_storage_key, value) in pairs {
 				// `Proposal { call: Vec<u8>, .. }` — decode just the first field.
 				let mut bytes = value.0.as_slice();
@@ -170,8 +195,14 @@ where
 						break;
 					},
 				}
-			},
-		Err(e) => log::debug!(
+			}
+			log::debug!(
+				target: LOG_TARGET,
+				"Governance::Proposals at {:?}: {} entries",
+				block, calls.len() - before,
+			);
+		},
+		Err(e) => log::warn!(
 			target: LOG_TARGET,
 			"reading Governance::Proposals at {:?} failed: {:?}",
 			block, e,
@@ -182,15 +213,26 @@ where
 		Ok(Some(data)) => {
 			let mut bytes = data.0.as_slice();
 			match Vec::<(Vec<u8>, u32)>::decode(&mut bytes) {
-				Ok(entries) => calls.extend(entries.into_iter().map(|(call, _id)| call)),
+				Ok(entries) => {
+					log::debug!(
+						target: LOG_TARGET,
+						"Governance::ExecutionPipeline at {:?}: {} entries",
+						block, entries.len(),
+					);
+					calls.extend(entries.into_iter().map(|(call, _id)| call));
+				},
 				Err(_) => log::warn!(
 					target: LOG_TARGET,
 					"Failed to decode `Governance::ExecutionPipeline`; storage layout has likely changed.",
 				),
 			}
 		},
-		Ok(None) => {},
-		Err(e) => log::debug!(
+		Ok(None) => log::debug!(
+			target: LOG_TARGET,
+			"Governance::ExecutionPipeline at {:?}: empty",
+			block,
+		),
+		Err(e) => log::warn!(
 			target: LOG_TARGET,
 			"reading Governance::ExecutionPipeline at {:?} failed: {:?}",
 			block, e,
