@@ -485,7 +485,7 @@ fn test_network_fee_calculation() {
 }
 
 /// Test Swap simulation,
-/// Flip and Dot don't use the price oracle, so we use swap simulation to estimate prices for
+/// Flip, Dot and Trx don't use the price oracle, so we use swap simulation to estimate prices for
 /// them.
 #[test]
 fn test_calculate_input_for_desired_output_using_swap_simulation() {
@@ -528,6 +528,28 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 			250 // 2 leg swap, so 1/4th of input
 		);
 
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
+				Asset::Trx,
+				Asset::Usdc,
+				1000,
+				false,
+				false
+			),
+			500 // 1 leg swap, so 1/2 of input
+		);
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
+				Asset::Trx,
+				Asset::Usdc,
+				1000,
+				true,
+				false
+			),
+			505 // 1 leg swap + 1% network fee
+		);
+
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
 		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
@@ -562,6 +584,17 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 				false
 			),
 			14_000 * 10u128.pow(18) + 1 // 2 ETH ~= 14000 FLIP plus small rounding error
+		);
+
+		assert_eq!(
+			Swapping::calculate_input_for_desired_output_or_default_to_zero(
+				Asset::Trx,
+				Asset::Usdc,
+				1000,
+				false,
+				false
+			),
+			3334 // 1000 USDC at hard-coded $0.30/TRX = 3333.33... TRX, ceiling to 3334
 		);
 
 		// Also fallback to hard coded prices when oracle is unavailable (This should never
