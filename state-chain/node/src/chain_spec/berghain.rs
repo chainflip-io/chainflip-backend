@@ -65,9 +65,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
 	arb_usdt_token_address: hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 	arb_address_checker_address: hex_literal::hex!("69C700A0DEBAb9e349dd1f52ED62eb253a3c9892"),
-	// TODO: Add the actual addresses for the TRON contracts once deployed
-	tron_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	tron_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_key_manager_address: hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039"), /* TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB */
+	tron_vault_address: hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e"), /* TDKihjArLMEfF8ebeEWdfiuoqHC8nmydBy */
 	trx_usdt_token_address: hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c"), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,

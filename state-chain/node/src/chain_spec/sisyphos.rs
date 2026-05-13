@@ -63,9 +63,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
 	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
-	// TODO: Add the actual addresses for the TRON contracts once deployed
-	tron_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
-	tron_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
+	tron_key_manager_address: hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0"), /* TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT */
+	tron_vault_address: hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5"), /* TPcqDKqWiDyQh4vGbFiJaxpPXtKfk8RZML */
 	trx_usdt_token_address: hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
