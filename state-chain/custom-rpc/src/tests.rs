@@ -21,11 +21,8 @@ pub mod account_info;
 pub mod before_v7;
 pub mod eip712;
 
-use cf_amm::{
-	common::LimitOrder,
-	math::{Price, SqrtPrice},
-};
-use cf_amm_math::{MAX_SQRT_PRICE, MIN_SQRT_PRICE};
+use cf_amm::{common::LimitOrder, math::Price};
+use cf_amm_math::MIN_SQRT_PRICE;
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
