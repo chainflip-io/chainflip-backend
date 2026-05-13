@@ -2,6 +2,13 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.19] - 2026-05-13
+
+### Fixes
+
+- Apply depth limit when decoding untrusted Assethub calls.
+- Assethub CCM restricted to XCM calls only.
+
 ## [2.1.18] - 2026-05-11
 
 ### Fixes
