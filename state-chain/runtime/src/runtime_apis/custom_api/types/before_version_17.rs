@@ -169,8 +169,6 @@ impl From<RpcLendingConfig> for super::RpcLendingConfig {
 	PartialEq,
 	Eq,
 	Hash,
-	Serialize,
-	Deserialize,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -178,25 +176,12 @@ impl From<RpcLendingConfig> for super::RpcLendingConfig {
 	MaxEncodedLen,
 	Default,
 )]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 pub struct AssetMap<T> {
-	#[serde(rename = "Ethereum")]
-	#[serde(default)]
 	pub eth: cf_primitives::chains::assets::eth::AssetMap<T>,
-	#[serde(rename = "Polkadot")]
-	#[serde(default)]
 	pub dot: cf_primitives::chains::assets::dot::AssetMap<T>,
-	#[serde(rename = "Bitcoin")]
-	#[serde(default)]
 	pub btc: cf_primitives::chains::assets::btc::AssetMap<T>,
-	#[serde(rename = "Arbitrum")]
-	#[serde(default)]
 	pub arb: cf_primitives::chains::assets::arb::AssetMap<T>,
-	#[serde(rename = "Solana")]
-	#[serde(default)]
 	pub sol: cf_primitives::chains::assets::sol::AssetMap<T>,
-	#[serde(rename = "Assethub")]
-	#[serde(default)]
 	pub hub: cf_primitives::chains::assets::hub::AssetMap<T>,
 }
 
@@ -214,7 +199,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
@@ -229,7 +214,7 @@ impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,
@@ -244,7 +229,7 @@ impl From<NetworkFees> for super::NetworkFees {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct TradingStrategyLimits {
 	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
@@ -282,23 +267,16 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
-#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
+#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
 pub struct RpcAccountInfoCommonItems<Balance> {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
 	pub vanity_name: VanityName,
 	pub flip_balance: Balance,
 	pub asset_balances: AssetMap<Balance>,
 	pub bond: Balance,
 	pub estimated_redeemable_balance: Balance,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub bound_redeem_address: Option<EvmAddress>,
-	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
 	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
 }
 
@@ -321,7 +299,7 @@ impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCom
 
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
