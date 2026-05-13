@@ -1059,7 +1059,7 @@ fn broadcast_retry_delay_works() {
 		.execute_with(|| {
 			let broadcast_id = start_mock_broadcast(SIG1);
 
-			BroadcastDelay::set(None);
+			BroadcastFailureRetryDelay::set(None);
 			// With no delay, retries are added to the normal queue, and is retried in the next
 			// block.
 			let next_block = System::block_number() + 1;
@@ -1074,7 +1074,7 @@ fn broadcast_retry_delay_works() {
 		})
 		.then_process_next_block()
 		.then_execute_with(|broadcast_id| {
-			BroadcastDelay::set(Some(delay));
+			BroadcastFailureRetryDelay::set(Some(delay));
 			// Set delay - retries will be added to the Delayed queue.
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(1u64), broadcast_id));
 			target = System::block_number() + delay;
@@ -1108,6 +1108,57 @@ fn broadcast_retry_delay_works() {
 }
 
 #[test]
+fn retry_policy_depends_on_retry_reason() {
+	let delay_retry_delay = 10;
+	let failure_retry_delay = 3;
+
+	new_test_ext().execute_with(|| {
+		DelayRetryDelay::set(Some(delay_retry_delay));
+		BroadcastFailureRetryDelay::set(Some(failure_retry_delay));
+
+		let retry_after_delay = System::block_number() + delay_retry_delay;
+		let retry_after_failure = System::block_number() + failure_retry_delay;
+
+		let failed_broadcast_id =
+			initiate_and_sign_broadcast(&mock_api_call(), SIG1, TxType::Normal);
+		let failed_broadcaster = AwaitingBroadcast::<Test, Instance1>::get(failed_broadcast_id)
+			.unwrap()
+			.nominee
+			.unwrap();
+
+		BroadcastBarriers::<Test, Instance1>::put(BTreeSet::from([failed_broadcast_id]));
+		let delayed_broadcast_id =
+			initiate_and_sign_broadcast(&mock_api_call(), SIG2, TxType::Normal);
+
+		assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_delay)
+			.contains(&delayed_broadcast_id));
+		assert!(!DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_failure)
+			.contains(&delayed_broadcast_id));
+
+		BroadcastBarriers::<Test, Instance1>::put(BTreeSet::<BroadcastId>::new());
+		assert!(BroadcastBarriers::<Test, Instance1>::get().is_empty());
+		MockNominator::set_nominees(Some(Default::default()));
+		let no_nominee_broadcast_id =
+			initiate_and_sign_broadcast(&mock_api_call(), SIG3, TxType::Normal);
+		assert!(BroadcastBarriers::<Test, Instance1>::get().is_empty());
+		assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_delay)
+			.contains(&no_nominee_broadcast_id));
+		assert!(!DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_failure)
+			.contains(&no_nominee_broadcast_id));
+
+		assert_ok!(Broadcaster::transaction_failed(
+			RuntimeOrigin::signed(failed_broadcaster),
+			failed_broadcast_id
+		));
+
+		assert!(DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_failure)
+			.contains(&failed_broadcast_id));
+		assert!(!DelayedBroadcastRetryQueue::<Test, Instance1>::get(retry_after_delay)
+			.contains(&failed_broadcast_id));
+	});
+}
+
+#[test]
 fn broadcast_timeout_delay_works() {
 	let mut target = 0;
 	let mut external_target = 0;
@@ -1116,7 +1167,7 @@ fn broadcast_timeout_delay_works() {
 		.execute_with(|| {
 			let broadcast_id = start_mock_broadcast(SIG1);
 
-			BroadcastDelay::set(Some(delay));
+			BroadcastFailureRetryDelay::set(Some(delay));
 			target = System::block_number() + BROADCAST_EXPIRY_BLOCKS;
 			external_target =
 				BlockHeightProvider::<MockEthereum>::get_block_height() + BROADCAST_EXPIRY_BLOCKS;
@@ -1147,7 +1198,7 @@ fn aborted_broadcasts_will_not_retry() {
 	new_test_ext()
 		.execute_with(|| {
 			let broadcast_id = start_mock_broadcast(SIG1);
-			BroadcastDelay::set(Some(delay));
+			BroadcastFailureRetryDelay::set(Some(delay));
 			target = System::block_number() + delay;
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert!(
@@ -1180,7 +1231,7 @@ fn succeeded_broadcasts_will_not_retry() {
 	new_test_ext()
 		.execute_with(|| {
 			let broadcast_id = start_mock_broadcast(SIG1);
-			BroadcastDelay::set(Some(delay));
+			BroadcastFailureRetryDelay::set(Some(delay));
 			target = System::block_number() + delay;
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 			assert!(
@@ -1225,7 +1276,7 @@ fn broadcast_retries_will_not_be_overwritten_during_safe_mode() {
 	new_test_ext()
 		.then_execute_at_block(1_000u64, |_| {
 			let broadcast_id = start_mock_broadcast(SIG1);
-			BroadcastDelay::set(Some(1));
+			BroadcastFailureRetryDelay::set(Some(1));
 			assert_ok!(Broadcaster::transaction_failed(RuntimeOrigin::signed(0u64), broadcast_id));
 
 			// On safe mode next block, storage will be re-added to this target block.

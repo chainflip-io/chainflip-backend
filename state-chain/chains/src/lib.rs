@@ -1441,6 +1441,19 @@ impl RetryPolicy for DefaultRetryPolicy {
 		Some(10u32)
 	}
 }
+pub struct RetryNextBlockPolicy;
+impl RetryPolicy for RetryNextBlockPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		if retry_attempts > 10 {
+			Some(10)
+		} else {
+			Some(1)
+		}
+	}
+}
 
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),

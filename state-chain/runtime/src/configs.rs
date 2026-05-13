@@ -27,7 +27,7 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::SolanaCrypto,
-	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, Polkadot, Solana, Tron,
+	Arbitrum, Assethub, Bitcoin, DefaultRetryPolicy, Polkadot, RetryNextBlockPolicy, Solana, Tron,
 };
 pub use cf_primitives::{
 	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
@@ -856,7 +856,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ETHEREUM>;
 	type ChainTracking = EthereumChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
@@ -880,7 +881,8 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = PolkadotChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
@@ -904,7 +906,8 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<1>; // 10 minutes
 	type ChainTracking = BitcoinChainTracking;
-	type RetryPolicy = BitcoinRetryPolicy;
+	type DelayRetryPolicy = BitcoinRetryPolicy;
+	type BroadcastFailureRetryPolicy = BitcoinRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<BitcoinCrypto>;
@@ -928,7 +931,8 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ARBITRUM>;
 	type ChainTracking = ArbitrumChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
@@ -952,7 +956,8 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_SOLANA>;
 	type ChainTracking = SolanaChainTrackingProvider;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = SolanaEgressWitnessingTrigger;
@@ -976,7 +981,8 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = AssethubChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
@@ -1000,7 +1006,8 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<10>;
 	type ChainTracking = TronChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
