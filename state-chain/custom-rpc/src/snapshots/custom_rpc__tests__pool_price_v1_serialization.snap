@@ -4,6 +4,6 @@ expression: val
 ---
 {
   "price": "0xbc614e",
-  "sqrt_price": "0x5397fb1",
+  "sqrt_price": "0x1000276a3",
   "tick": -100
 }
