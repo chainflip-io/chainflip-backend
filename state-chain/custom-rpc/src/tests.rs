@@ -25,6 +25,7 @@ use cf_amm::{
 	common::LimitOrder,
 	math::{Price, SqrtPrice},
 };
+use cf_amm_math::{MAX_SQRT_PRICE, MIN_SQRT_PRICE};
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -146,12 +147,9 @@ fn ccm_unchecked() -> CcmChannelMetadataUnchecked {
 	}
 }
 
+#[track_caller]
 pub fn price_from_u128(value: u128) -> Price {
 	Price::from_raw(value.into())
-}
-
-pub fn sqrt_price_from_u128(value: u128) -> SqrtPrice {
-	SqrtPrice::try_from_raw(value.into()).unwrap()
 }
 
 #[test]
@@ -600,7 +598,7 @@ fn auction_state_serialization() {
 fn pool_price_v1_serialization() {
 	let val = PoolPriceV1 {
 		price: price_from_u128(12345678u128),
-		sqrt_price: sqrt_price_from_u128(87654321u128),
+		sqrt_price: MIN_SQRT_PRICE,
 		tick: -100i32,
 	};
 
@@ -613,9 +611,9 @@ fn pool_price_v2_serialization() {
 		base_asset: any::Asset::Eth,
 		quote_asset: any::Asset::Usdc,
 		price: pallet_cf_pools::PoolPriceV2 {
-			sell: Some(sqrt_price_from_u128(1234567u128)),
-			buy: Some(sqrt_price_from_u128(1234567u128)),
-			range_order: sqrt_price_from_u128(1234567u128),
+			sell: Some(MIN_SQRT_PRICE),
+			buy: Some(MIN_SQRT_PRICE),
+			range_order: MIN_SQRT_PRICE,
 		},
 	};
 
@@ -642,14 +640,8 @@ fn pool_pairs_map_serialization() {
 #[test]
 fn pool_order_book_serialization() {
 	let val = PoolOrderbook {
-		bids: vec![PoolOrder {
-			amount: 12345678u128.into(),
-			sqrt_price: sqrt_price_from_u128(87654321u128),
-		}],
-		asks: vec![PoolOrder {
-			amount: 23456789u128.into(),
-			sqrt_price: sqrt_price_from_u128(98765432u128),
-		}],
+		bids: vec![PoolOrder { amount: 12345678u128.into(), sqrt_price: MIN_SQRT_PRICE }],
+		asks: vec![PoolOrder { amount: 23456789u128.into(), sqrt_price: MIN_SQRT_PRICE }],
 	};
 
 	insta::assert_json_snapshot!(val);
@@ -677,21 +669,21 @@ fn ask_bid_map_serialization() {
 	let val = AskBidMap::<UnidirectionalPoolDepth> {
 		asks: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(sqrt_price_from_u128(123456)),
+				price: Some(MIN_SQRT_PRICE),
 				depth: 654321.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(sqrt_price_from_u128(234567)),
+				price: Some(MIN_SQRT_PRICE),
 				depth: 765432.into(),
 			},
 		},
 		bids: UnidirectionalPoolDepth {
 			limit_orders: UnidirectionalSubPoolDepth {
-				price: Some(sqrt_price_from_u128(345678)),
+				price: Some(MIN_SQRT_PRICE),
 				depth: 876543.into(),
 			},
 			range_orders: UnidirectionalSubPoolDepth {
-				price: Some(sqrt_price_from_u128(456789)),
+				price: Some(MIN_SQRT_PRICE),
 				depth: 987654.into(),
 			},
 		},
