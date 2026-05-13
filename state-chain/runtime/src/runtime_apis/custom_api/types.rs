@@ -24,6 +24,7 @@ use cf_chains::{
 	evm::Address as EvmAddress,
 	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
+	tron::TronAddress,
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
 	TransactionInIdForAnyChain, Tron,
 };
@@ -116,25 +117,27 @@ pub enum VaultSwapDetails<BtcAddress> {
 	},
 	Tron {
 		#[serde(flatten)]
-		details: EvmCallDetails,
+		details: TronCallDetails,
 		#[serde(with = "sp_core::bytes")]
 		note: Vec<u8>,
 	},
 }
 
+pub type TronCallDetails = EvmCallDetails<String>;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmCallDetails {
+pub struct EvmCallDetails<Address = sp_core::H160> {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
 	/// The ETH/ArbETH amount. Always 0 for ERC-20 tokens.
 	pub value: sp_core::U256,
-	/// The vault address for either Ethereum or Arbitrum.
-	pub to: sp_core::H160,
+	/// The vault address.
+	pub to: Address,
 	/// The address of the source token that requires user approval for the swap to succeed, if
 	/// any.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub source_token_address: Option<sp_core::H160>,
+	pub source_token_address: Option<Address>,
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
@@ -146,8 +149,18 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 		VaultSwapDetails::Arbitrum { details }
 	}
 
-	pub fn tron(details: EvmCallDetails, note: Vec<u8>) -> Self {
-		VaultSwapDetails::Tron { details, note }
+	pub fn tron(evm_details: EvmCallDetails, note: Vec<u8>) -> Self {
+		VaultSwapDetails::Tron {
+			details: TronCallDetails {
+				calldata: evm_details.calldata,
+				value: evm_details.value,
+				to: TronAddress::from_evm_address(evm_details.to).to_base58check(),
+				source_token_address: evm_details
+					.source_token_address
+					.map(|a| TronAddress::from_evm_address(a).to_base58check()),
+			},
+			note,
+		}
 	}
 
 	pub fn map_btc_address<F, T>(self, f: F) -> VaultSwapDetails<T>

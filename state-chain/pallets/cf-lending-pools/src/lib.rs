@@ -331,6 +331,8 @@ pub mod pallet {
 
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
+		type NetworkFeeApi: cf_traits::NetworkFeeApi;
+
 		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PriceApi: PriceFeedApi;

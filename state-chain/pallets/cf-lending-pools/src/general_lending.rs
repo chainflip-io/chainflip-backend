@@ -1,6 +1,8 @@
 use cf_amm_math::Price;
-use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId};
-use cf_traits::{ExpiryBehaviour, LendingSwapType, LpRegistration, PriceLimitsAndExpiry};
+use cf_primitives::{AccountRole, Beneficiary, DcaParameters, SwapRequestId, ONE_AS_BASIS_POINTS};
+use cf_traits::{
+	ExpiryBehaviour, LendingSwapType, LpRegistration, NetworkFeeApi, PriceLimitsAndExpiry,
+};
 use frame_support::{
 	fail,
 	sp_runtime::{
@@ -380,7 +382,8 @@ impl<T: Config> LoanAccount<T> {
 		match new_status {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
 				ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
-				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				let collateral =
+					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
@@ -396,7 +399,8 @@ impl<T: Config> LoanAccount<T> {
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
 				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
-				let collateral = self.prepare_collateral_for_liquidation(price_cache)?;
+				let collateral =
+					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
@@ -609,31 +613,91 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	/// Split collateral proportionally to the usd value of each loan (to give each loan a fair
-	/// chance of being liquidated without a loss) as a preparation step for liquidation. Returns
-	/// error if oracle prices aren't available.
+	/// Collect just enough collateral from supply pools to cover the outstanding loan
+	/// principal plus a buffer for the maximum oracle price slippage allowed for the
+	/// upcoming liquidation swaps, then split the collected collateral proportionally to
+	/// the usd value of each loan (to give each loan a fair chance of being liquidated
+	/// without a loss). When multiple collateral assets are involved, each is drawn
+	/// proportionally to its available USD value. Returns error if oracle prices aren't
+	/// available.
 	pub(super) fn prepare_collateral_for_liquidation(
 		&mut self,
 		price_cache: &OraclePriceCache<T>,
+		liquidation_type: LiquidationType,
 	) -> Result<Vec<AssetCollateralForLoan>, Error<T>> {
+		let config = LendingConfig::<T>::get();
+		let max_oracle_price_slippage_bps = match liquidation_type {
+			LiquidationType::Hard => config.hard_liquidation_max_oracle_slippage,
+			LiquidationType::Soft | LiquidationType::SoftVoluntary =>
+				config.soft_liquidation_max_oracle_slippage,
+		};
+
+		// Gather available collateral positions per asset, paired with their USD value.
+		let positions_with_usd: Vec<(Asset, AssetAmount, AssetAmount)> = self
+			.get_collateral_in_supply_pools()
+			.into_iter()
+			.filter(|(_, amount)| *amount > 0)
+			.map(|(asset, amount)| {
+				price_cache.usd_value_of(asset, amount).map(|usd| (asset, amount, usd))
+			})
+			.collect::<Result<Vec<_>, Error<T>>>()?;
+
+		let total_owed_usd = self.total_owed_usd_value(price_cache)?;
+
+		let total_required_with_buffer_usd = {
+			// Approximate the worst-case fractional loss along the liquidation path as the sum
+			// of the individual loss rates: oracle slippage + swap network fee + lending pool
+			// liquidation fee. This slightly overestimates the true compounded loss
+			// `1 - (1-a)(1-b)(1-c)` (the cross terms are positive), which is acceptable
+			// because the buffer is meant to be conservative. The swap's network fee is the
+			// max of input/output asset fees, so taking the max over every (collateral, loan)
+			// pair upper-bounds it; the liquidation fee depends on the loan asset and is
+			// waived for voluntary liquidations.
+			let worst_case_network_fee_rate = positions_with_usd
+				.iter()
+				.flat_map(|(collateral_asset, _, _)| {
+					self.loans.values().map(move |loan| {
+						T::NetworkFeeApi::get_network_fee_rate(*collateral_asset, loan.asset, false)
+					})
+				})
+				.max()
+				.unwrap_or_default();
+			let worst_case_liquidation_fee_rate =
+				if liquidation_type == LiquidationType::SoftVoluntary {
+					Permill::zero()
+				} else {
+					self.loans
+						.values()
+						.map(|loan| config.liquidation_fee(loan.asset))
+						.max()
+						.unwrap_or_default()
+				};
+			let buffer = bps_to_permill(max_oracle_price_slippage_bps)
+				.saturating_add(worst_case_network_fee_rate)
+				.saturating_add(worst_case_liquidation_fee_rate);
+
+			required_collateral_with_buffer(total_owed_usd, buffer)
+		};
+
 		let mut collateral_to_liquidate = BTreeMap::<Asset, AssetAmount>::new();
 
-		// Gather collateral from supply side of liquidity pools if available:
-		for asset in GeneralLendingPools::<T>::iter_keys().collect::<Vec<_>>().iter() {
-			GeneralLendingPools::<T>::mutate(asset, |pool| {
-				if let Some(pool) = pool.as_mut() {
-					// Remove as much as possible:
-					if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
-						pool.remove_funds(&self.borrower_id, None)
-					{
+		for (asset, amount_to_request) in compute_per_asset_liquidation_estimates(
+			total_required_with_buffer_usd,
+			&positions_with_usd,
+		) {
+			Pallet::<T>::mutate_existing_pool(asset, |pool| {
+				if let Ok(WithdrawnAndRemainingAmounts { withdrawn_amount, .. }) =
+					pool.remove_funds(&self.borrower_id, Some(amount_to_request))
+				{
+					if withdrawn_amount > 0 {
 						collateral_to_liquidate
-							.entry(*asset)
+							.entry(asset)
 							.or_default()
 							.saturating_accrue(withdrawn_amount);
 
 						Pallet::<T>::deposit_event(Event::<T>::LendingFundsRemoved {
 							lender_id: self.borrower_id.clone(),
-							asset: *asset,
+							asset,
 							unlocked_amount: withdrawn_amount,
 							action_type: SupplyRemovedActionType::SystemLiquidation,
 						});
@@ -1163,6 +1227,78 @@ pub(super) struct AssetCollateralForLoan {
 	loan_asset: Asset,
 	collateral_asset: Asset,
 	collateral_amount: AssetAmount,
+}
+
+/// Convert a basis-points value (1/10_000) into a `Permill` (1/1_000_000), clamped to 100%.
+fn bps_to_permill(bps: BasisPoints) -> Permill {
+	Permill::from_rational(bps.min(ONE_AS_BASIS_POINTS) as u32, ONE_AS_BASIS_POINTS as u32)
+}
+
+/// Inflate `total_owed_usd` by `buffer` (the combined fractional loss expected along
+/// the liquidation path — oracle slippage + network fee + liquidation fee + ...) to the
+/// collateral USD needed to cover the debt: `required = total_owed_usd / (1 - buffer)`.
+/// A buffer at or above 100% means total loss is possible, so we'd need an unbounded
+/// amount — represented here as `AssetAmount::MAX`.
+fn required_collateral_with_buffer(total_owed_usd: AssetAmount, buffer: Permill) -> AssetAmount {
+	let recovery_ppm = Permill::one().saturating_sub(buffer).deconstruct() as u128;
+	if recovery_ppm == 0 {
+		return AssetAmount::MAX;
+	}
+	multiply_by_rational_with_rounding(
+		total_owed_usd,
+		Permill::one().deconstruct() as u128,
+		recovery_ppm,
+		Rounding::Up,
+	)
+	.unwrap_or(AssetAmount::MAX)
+}
+
+/// Decide how much of each available collateral asset to pull into liquidation swaps.
+/// `positions` is `(asset, available_amount, available_usd_value)` for each pool the
+/// borrower has a positive supply position in. `total_required_with_buffer_usd` is the
+/// buffer-inflated debt the swaps need to cover (see [`required_collateral_with_buffer`]).
+/// When the available collateral exceeds the target, each asset is drawn proportionally
+/// to its share of the total available USD value (rounded up so the collected oracle
+/// value never falls short of the per-asset target). Otherwise the function returns the
+/// full available amount of each position.
+fn compute_per_asset_liquidation_estimates(
+	total_required_with_buffer_usd: AssetAmount,
+	positions: &[(Asset, AssetAmount, AssetAmount)],
+) -> Vec<(Asset, AssetAmount)> {
+	let total_available_usd =
+		positions.iter().fold(0u128, |acc, (_, _, usd)| acc.saturating_add(*usd));
+
+	if total_available_usd == 0 {
+		return Vec::new();
+	}
+
+	let take_all = total_required_with_buffer_usd >= total_available_usd;
+
+	positions
+		.iter()
+		.map(|&(asset, available_amount, _)| {
+			// In the proportional branch we know `total_required_with_buffer_usd <
+			// total_available_usd` (otherwise `take_all` would be true), so the rounded-up
+			// per-asset share never exceeds `available_amount` mathematically — but we
+			// still cap with `min` to be safe against rounding overflow.
+			let amount = if take_all {
+				available_amount
+			} else {
+				core::cmp::min(
+					multiply_by_rational_with_rounding(
+						available_amount,
+						total_required_with_buffer_usd,
+						total_available_usd,
+						Rounding::Up,
+					)
+					.unwrap_or(available_amount),
+					available_amount,
+				)
+			};
+			(asset, amount)
+		})
+		.filter(|(_, amount)| *amount > 0)
+		.collect()
 }
 
 /// Check collateralisation ratio (triggering/aborting liquidations if necessary) and
@@ -1735,7 +1871,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 					let liquidation_swap = match &mut loan_account.liquidation_status {
 						LiquidationStatus::NoLiquidation => {
-							log_or_panic!("Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})");
+							log_or_panic!(
+								"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
+							);
 							return;
 						},
 						LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
@@ -1760,7 +1898,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 
 								swap
 							} else {
-								log_or_panic!("Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})");
+								log_or_panic!(
+									"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
+								);
 								return;
 							}
 						},

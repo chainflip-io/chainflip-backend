@@ -63,16 +63,16 @@ export async function executeTronVaultSwap<A extends WithBrokerAccount>(
     }
     // Create a native TRX transfer transaction
     transaction = await tronWeb.transactionBuilder.sendTrx(
-      getEncodedTronAddress(vaultSwapDetails.to),
+      vaultSwapDetails.to,
       Number(vaultSwapDetails.value),
       getEncodedTronAddress(pubkey),
     );
   } else {
     // TRC20 vault swap: transfer tokens to vaultSwapDetails.to
     const tokenContractAddress = getEncodedTronAddress(
-      getContractAddress(chainFromAsset(sourceAsset), sourceAsset),
+      '0x' + getContractAddress(chainFromAsset(sourceAsset), sourceAsset).slice(2),
     );
-    if (tokenContractAddress.slice(2) !== vaultSwapDetails.source_token_address?.slice(2))
+    if (tokenContractAddress !== vaultSwapDetails.source_token_address)
       throw new Error(
         `Source token address mismatch. Expected ${tokenContractAddress}, got ${vaultSwapDetails.source_token_address}`,
       );
@@ -82,7 +82,7 @@ export async function executeTronVaultSwap<A extends WithBrokerAccount>(
       'transfer(address,uint256)',
       { feeLimit: 100_000_000 },
       [
-        { type: 'address', value: getEncodedTronAddress(vaultSwapDetails.to) },
+        { type: 'address', value: vaultSwapDetails.to },
         { type: 'uint256', value: amountToFineAmount(amountToSwap, assetDecimals(sourceAsset)) },
       ],
       getEncodedTronAddress(pubkey),
