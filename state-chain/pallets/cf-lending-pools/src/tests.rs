@@ -1547,8 +1547,6 @@ mod hybrid_boosting {
 
 			const LENDING_FEE_TOTAL: AssetAmount = TOTAL_FEE / 2; // 50_000
 
-			const LENDING_NETWORK_FEE: AssetAmount = LENDING_FEE_TOTAL * NETWORK_FEE_PERCENT / 100; // 10_000
-
 			// Total funds taken from the boost pool:
 			const LEGACY_PRINCIPAL: AssetAmount = REQUIRED_AMOUNT - LENDING_FUNDS; // 99_950_000
 
@@ -1597,12 +1595,8 @@ mod hybrid_boosting {
 			// Lending pool lost all its funds:
 			assert_eq!(get_supply_position(BOOST_ASSET, BOOSTER_1), Some(0));
 
-			// The pool additionally owes some funds to the network (a side effect from
-			// optimistically crediting network at the time of boosting):
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network,
-				LENDING_NETWORK_FEE
-			);
+			// Network loses the uncollected fees:
+			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network, 0);
 
 			// Boost pool booster lost the funds it provided for boosting (no network fee
 			// had been taken):
