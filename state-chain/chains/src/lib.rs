@@ -1446,8 +1446,12 @@ impl RetryPolicy for RetryNextBlockPolicy {
 	type BlockNumber = u32;
 	type AttemptCount = u32;
 
-	fn next_attempt_delay(_retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
-		Some(1u32)
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		if retry_attempts > 10 {
+			Some(10)
+		} else {
+			Some(1)
+		}
 	}
 }
 
