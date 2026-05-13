@@ -1313,8 +1313,10 @@ fn upkeep_for_borrower<T: Config>(
 	weight_used: &mut Weight,
 ) -> DispatchResult {
 	LoanAccounts::<T>::try_mutate_exists(borrower_id, |maybe_account| {
-		let loan_account =
-			maybe_account.as_mut().expect("The caller guarantees that the key exists");
+		let Some(loan_account) = maybe_account.as_mut() else {
+			log_or_panic!("Loan account missing for borrower {borrower_id:?} during upkeep");
+			return Ok(());
+		};
 
 		loan_account.derive_and_charge_interest(weight_used);
 
@@ -1360,7 +1362,7 @@ pub fn lending_upkeep<T: Config>(current_block: BlockNumberFor<T>) -> Weight {
 		.iter()
 	{
 		// Not being able to process a loan account is acceptable (expected when oracle
-		// prices are down).
+		// prices are down or when liquidations are disabled).
 		let _ = upkeep_for_borrower::<T>(borrower_id, &price_cache, &config, &mut weight_used);
 	}
 
