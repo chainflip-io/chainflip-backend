@@ -254,6 +254,7 @@ services:
       - JAVA_OPTS=-Xms4g -Xmx6g # Give the VM more heap size to not run into CPU TIMEOUT problems
     ports:
       - "8090:8090" # TRON HTTP API (wallet)
+      - "8091:8091" # TRON HTTP API (solidity)
       - "8555:8555" # EVM-compatible JSON-RPC
       - "50051:50051" # gRPC
     volumes:
