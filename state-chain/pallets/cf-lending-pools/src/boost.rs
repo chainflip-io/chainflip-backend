@@ -2,8 +2,9 @@ use cf_traits::lending::BoostFinalisationOutcome;
 
 use crate::{
 	core_lending_pool::{CoreLendingPool, CoreLoanId},
-	general_lending::{create_new_loan, fund_loan, OraclePriceCache},
+	general_lending::{check_pool_caps_after_borrow, create_new_loan, fund_loan, OraclePriceCache},
 };
+use sp_std::collections::btree_set::BTreeSet;
 
 use super::*;
 
@@ -204,15 +205,17 @@ impl<T: Config> BoostApi for Pallet<T> {
 				principal_amount: lending_pool_principal,
 			});
 
-			fund_loan::<T>(
-				&mut loan,
-				lending_pool_principal,
-				pool_fee,
-				network_fee,
+			fund_loan::<T>(&mut loan, lending_pool_principal, pool_fee, network_fee)?;
+
+			BoostLoans::<T>::insert(loan_id, loan);
+
+			// Boost loans are not collateralised, so only the loan-asset pool is affected.
+			check_pool_caps_after_borrow::<T>(
+				asset,
+				BTreeSet::new(),
 				&OraclePriceCache::<T>::default(),
 			)?;
 
-			BoostLoans::<T>::insert(loan_id, loan);
 			Some(loan_id)
 		} else {
 			None

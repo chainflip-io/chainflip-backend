@@ -139,9 +139,14 @@ where
 		Ok(())
 	}
 
+	/// Pool balance that can actually be drawn for a new borrow: the available balance
+	/// minus what's earmarked for the network.
+	pub fn available_for_borrowing(&self) -> AssetAmount {
+		self.available_amount.saturating_sub(self.owed_to_network)
+	}
+
 	pub fn get_utilisation(&self) -> Permill {
-		let available_for_borrowing = self.available_amount.saturating_sub(self.owed_to_network);
-		let in_use = self.total_amount.saturating_sub(available_for_borrowing);
+		let in_use = self.total_amount.saturating_sub(self.available_for_borrowing());
 
 		// Note: `from_rational` does not panic on invalid inputs and instead returns 100%.
 		Permill::from_rational(in_use, self.total_amount)

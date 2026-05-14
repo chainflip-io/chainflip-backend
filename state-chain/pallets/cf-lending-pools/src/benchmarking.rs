@@ -438,6 +438,82 @@ mod benchmarks {
 		);
 	}
 
+	/// Measures the cost of `request_loan` as a function of `n`, the number of
+	/// pre-existing borrower accounts in `LoanAccounts`.
+	///
+	/// Setup: three collateral pools and one loan pool seeded by a lender, `n`
+	/// pre-existing borrowers each with collateral and a small loan, then a target
+	/// borrower with supply in every collateral pool requesting a loan against the
+	/// loan-asset pool.
+	#[benchmark]
+	fn request_loan_with_borrowers(n: Linear<1, 50>) {
+		const LOAN: Asset = Asset::Btc;
+		const COLLATERALS: [Asset; 3] = [Asset::Eth, Asset::Usdc, Asset::Usdt];
+
+		const PER_BORROWER_COLLATERAL: AssetAmount = 10_000_000;
+		const PER_BORROWER_LOAN: AssetAmount = 1_000_000;
+		const TARGET_COLLATERAL: AssetAmount = 200_000_000;
+		const TARGET_LOAN: AssetAmount = 50_000_000;
+		const LENDER_SUPPLY: AssetAmount = 1_000_000_000_000;
+
+		disable_whitelist::<T>();
+
+		set_asset_price_in_usd::<T>(LOAN, 100_000_000_000);
+		assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), LOAN));
+		for asset in COLLATERALS {
+			set_asset_price_in_usd::<T>(asset, 100_000_000_000);
+			assert_ok!(Pallet::<T>::create_lending_pool(gov_origin::<T>(), asset));
+		}
+
+		// Deep liquidity so only the cap check (not LTV or available balance) bites.
+		let lender = setup_lp_account::<T>(LOAN, 100_000);
+		for asset in core::iter::once(LOAN).chain(COLLATERALS) {
+			T::Balance::credit_account(&lender, asset, LENDER_SUPPLY);
+			assert_ok!(Pallet::<T>::add_lender_funds(
+				RawOrigin::Signed(lender.clone()).into(),
+				asset,
+				LENDER_SUPPLY,
+			));
+		}
+
+		// `n` pre-existing borrowers, each contributing one record to `LoanAccounts`
+		// with non-zero α-weights on two collateral pools and a debt in a third.
+		for i in 0..n {
+			let b = setup_lp_account::<T>(COLLATERALS[0], 1_000 + i);
+			for asset in [COLLATERALS[0], COLLATERALS[1]] {
+				T::Balance::credit_account(&b, asset, PER_BORROWER_COLLATERAL);
+				assert_ok!(Pallet::<T>::add_lender_funds(
+					RawOrigin::Signed(b.clone()).into(),
+					asset,
+					PER_BORROWER_COLLATERAL,
+				));
+			}
+			assert_ok!(Pallet::<T>::request_loan(
+				RawOrigin::Signed(b).into(),
+				COLLATERALS[2],
+				PER_BORROWER_LOAN,
+				None,
+			));
+		}
+
+		// Target borrower holds supply in all three collateral pools — maximises the
+		// number of pools the post-borrow cap check has to visit.
+		let target = setup_lp_account::<T>(COLLATERALS[0], 0);
+		for asset in COLLATERALS {
+			T::Balance::credit_account(&target, asset, TARGET_COLLATERAL);
+			assert_ok!(Pallet::<T>::add_lender_funds(
+				RawOrigin::Signed(target.clone()).into(),
+				asset,
+				TARGET_COLLATERAL,
+			));
+		}
+
+		#[extrinsic_call]
+		request_loan(RawOrigin::Signed(target.clone()), LOAN, TARGET_LOAN, None);
+
+		assert!(LoanAccounts::<T>::contains_key(&target));
+	}
+
 	#[benchmark]
 	fn expand_loan() {
 		setup_lending_pool::<T>(NUMBER_OF_LENDERS);
