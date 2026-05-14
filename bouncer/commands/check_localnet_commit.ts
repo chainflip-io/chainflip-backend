@@ -1,11 +1,11 @@
 #!/usr/bin/env -S pnpm tsx
-// Checks whether the running localnet and the local debug binary are built from the current git HEAD.
+// Checks whether the running localnet is built from the current git HEAD.
 //
 // Usage (from bouncer/):
 //   ./commands/check_localnet_commit.ts
 //
 // Exit codes:
-//   0 — both running localnet and binary match HEAD
+//   0 — running localnet matches HEAD
 //   1 — mismatch or localnet not running
 
 import { execSync } from 'child_process';
@@ -49,29 +49,14 @@ async function main() {
     logger.warn('Running localnet: not reachable (is it running?)');
   }
 
-  // Check debug binary
-  let binaryOk = false;
-  try {
-    const binaryVersion = execSync('../target/debug/chainflip-node -V', {
-      encoding: 'utf-8',
-    }).trim();
-    const binaryHash = extractCommitHash(binaryVersion);
-    binaryOk = matches(binaryHash, head);
-    logger.info(
-      `Debug binary:    ${binaryVersion} → ${binaryOk ? '✓ matches HEAD' : `✗ STALE (${binaryHash} ≠ ${head.slice(0, binaryHash.length)})`}`,
-    );
-  } catch {
-    logger.warn('Debug binary: not found at ../target/debug/chainflip-node');
-  }
-
-  if (!localnetOk || !binaryOk) {
+  if (!localnetOk) {
     logger.error(
-      'One or more components are not on the current HEAD — rebuild with ./localnet/build_and_run.sh',
+      'Running localnet is not on the current HEAD — rebuild with ./localnet/build_and_run.sh',
     );
     process.exit(1);
   }
 
-  logger.info('All good — localnet and binary are on the current HEAD.');
+  logger.info('All good — localnet is on the current HEAD.');
   process.exit(0);
 }
 

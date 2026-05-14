@@ -1,11 +1,13 @@
 ---
 name: bouncer
-description: Use for anything involving the chainflip bouncer or localnet — running end-to-end tests, starting/stopping a localnet, getting a localnet ready for testing, running setup scripts, or regenerating the bouncer's event schemas. Triggered by phrases like "run the bouncer test", "test this in the bouncer", "kick off LpApi", "run the lending test", "spin up a localnet", "start a localnet", "get a localnet ready", "tear down the localnet", "regenerate the schemas", "regenerate event types", or naming a specific bouncer test. Covers localnet lifecycle, test setup scripts, schema regeneration, running individual tests, finding test names, debugging logs, and pre-commit checks.
+description: Use for Chainflip bouncer or localnet tasks: run end-to-end tests, start or rebuild localnet, run bouncer setup scripts, regenerate event schemas, debug bouncer logs, and run pre-commit TypeScript checks. Trigger on requests like "run the bouncer test", "run the fast bouncer tests", "start a localnet", "rebuild the localnet", "regenerate schemas", "run bouncer lints", or when a specific bouncer test is named.
 ---
 
 # Running bouncer tests
 
 The bouncer is a TypeScript end-to-end test suite at `bouncer/`. It runs against a local Chainflip network (state chain node + engine + chainflip-broker-api + chainflip-lp-api + simulated external chains) booted by scripts in `./localnet/`.
+
+> ⚠️ **STOP — destructive command rule.** Before running **any** command that tears down or recreates a localnet — `./localnet/build_and_run.sh`, `./localnet/recreate.sh` (with or without `-d`), `./localnet/manage.sh` with `destroy`/`recreate`/`build-localnet`, `./fast_bouncer.sh`, `./full_bouncer.sh`, or anything else that wipes `/tmp/chainflip` — you **must** ask the user explicitly and wait for confirmation. Once the user has confirmed a destructive command in this session (until the terminal is closed), further destructive commands in the same session don't need a fresh prompt. Running tests (`pnpm vitest …`, `./commands/run_test.ts`, `./bouncer/setup_for_test.sh`, schema regeneration) against an existing localnet is fine without prompting.
 
 ## TL;DR
 
@@ -19,31 +21,35 @@ cd bouncer && pnpm vitest run -t "LpApiLending"
 
 `build_and_run.sh` does `cargo build && ./localnet/recreate.sh -d && (cd bouncer && ./setup_for_test.sh)`. Event schemas are regenerated as part of the boot — see Section 5.
 
-One-time per checkout: `cd bouncer && pnpm install`.
+> 🚨 **Check for rtk once at the start of the session, then wrap every vitest call.** Run `command -v rtk` once. If it prints a path, the user has the rtk shell hook installed and bare `pnpm vitest …` will have its stdout mangled — you'll see `PASS (0) FAIL (0)` and exit 1 even when nothing is wrong. **If rtk is present**, prefix `rtk proxy ` to every `pnpm vitest …` invocation in this skill, including the shell scripts that wrap it (`./commands/run_test.ts`, `./fast_bouncer.sh`, `./full_bouncer.sh`) — e.g. `rtk proxy pnpm vitest run -t "..."`, `rtk proxy ./commands/run_test.ts …`. **If rtk is not present**, run the commands as written. Examples below show the bare `pnpm vitest …` form; add `rtk proxy` in front when rtk is installed.
+
+> 🛠️ **Run `pnpm install` in `bouncer/` before booting or setting up a localnet** — i.e. before `build_and_run.sh`, `recreate.sh`, `setup_for_test.sh`, or schema regeneration. Dependencies drift between branches and stale `node_modules` cause confusing failures. **Skip it if the localnet is already running and setup has completed** (Section 1 / `./commands/check_setup_complete.ts`); just `pnpm vitest …` against an existing setup doesn't need a reinstall. If a test fails to resolve imports, fall back to `pnpm install` then retry.
 
 ## 1. Liveness and version check
 
-Before doing anything, find out what state you're in.
+Before doing anything, find out what state you're in. **Run all three checks in parallel** (single message, three Bash calls) — they're independent and fast:
 
-### Is a localnet running?
+1. **Liveness** — is anything answering on the state-chain RPC port?
 
-```bash
-curl -s -X POST -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"system_chain","params":[]}' \
-  http://127.0.0.1:9944
-```
+   ```bash
+   curl -s -X POST -H 'Content-Type: application/json' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"system_chain","params":[]}' \
+     http://127.0.0.1:9944
+   ```
 
-`{"jsonrpc":"2.0","id":1,"result":"CF Develop"}` → up. Connection refused / nothing → not running.
+   `{"jsonrpc":"2.0","id":1,"result":"CF Develop"}` → up. Connection refused / nothing → not running.
 
-### Is the running localnet (and binary) on the current git HEAD?
+2. **Version match** — is the running localnet on the current git HEAD? From `bouncer/`:
 
-From `bouncer/`:
+   ```bash
+   ./commands/check_localnet_commit.ts
+   ```
 
-```bash
-./commands/check_localnet_commit.ts
-```
+   Compares the `system_version` RPC against `git rev-parse HEAD`. Exits 0 if it matches, 1 if stale or unreachable. If stale, see Section 2.
 
-Compares `system_version` RPC and `./target/debug/chainflip-node -V` against `git rev-parse HEAD`. Exits 0 if both match, 1 if either is stale or unreachable. If stale, see Section 2.
+3. **Setup status** — has `setup_for_test.sh` already run against this localnet? Run `./commands/check_setup_complete.ts` from `bouncer/` (Section 3).
+
+If all three pass, skip straight to Section 4 and run the test.
 
 ## 2. Starting a localnet
 
@@ -55,7 +61,9 @@ Compares `system_version` RPC and `./target/debug/chainflip-node -V` against `gi
 | Tear down only                                       | `./localnet/manage.sh` → `destroy`     |
 | Localnet up and only test code changed               | Skip — just `pnpm vitest run -t "..."` |
 
-**Always confirm with the user before running anything that destroys an existing localnet** (`build_and_run.sh`, `recreate.sh`, `destroy`).
+**Destructive command rule (repeat from top):** `build_and_run.sh`, `recreate.sh`, and `manage.sh` `destroy`/`recreate`/`build-localnet` all wipe the running localnet. Ask the user before the first one in a session; once they've confirmed, subsequent destructive commands in the same session don't need a fresh prompt.
+
+If localnet startup fails or services crash, check `/tmp/chainflip/*.log` first. If the failure looks like stale or partial state, run `./localnet/recreate.sh -d` and retry.
 
 `recreate.sh` reuses settings (node count, binary path) from `/tmp/chainflip/settings.sh`, saved by a prior `manage.sh build-localnet`. `-d` falls back to defaults (`./target/debug`, 1 node) when no settings file exists. `manage.sh` interactive options: `1` build-localnet, `2` recreate, `3` destroy, `4` logs.
 
@@ -70,24 +78,19 @@ A fresh boot starts everything: state chain node, engine, chainflip-broker-api, 
 
 `build_and_run.sh` runs this for you. Only invoke manually if you booted via `recreate.sh` or `manage.sh` directly.
 
-### Has setup already run? Check before re-running.
+If `setup_for_test.sh` fails, **run `cd bouncer && pnpm install` first** before investigating anything else — stale dependencies are the most common cause. (Not needed if you've already installed for this checkout and the localnet has been running fine.)
+
+### Has setup already run? Use this single check before re-running.
 
 `setup_for_test.sh` is **not idempotent** — `setup_vaults.ts` calls `validator.forceRotation()` unconditionally; `setup_concurrent.ts` emits `governance:FailedExecution` when target objects already exist.
 
-The most reliable signal is the BTC lending pool — it doesn't exist at genesis, only after `setup_concurrent.ts`:
+From `bouncer/`:
 
 ```bash
-cd bouncer
-pnpm tsx -e "
-import { getChainflipApi } from 'shared/utils/substrate';
-const api = await getChainflipApi();
-const btcPool = (await api.query.lendingPools.generalLendingPools('Btc')).toJSON();
-console.log(btcPool === null ? 'NOT_SET_UP' : 'READY');
-process.exit(0);
-"
+./commands/check_setup_complete.ts
 ```
 
-`cf_available_pools` is **not** a reliable signal — the dev chainspec pre-populates swap pools at genesis, so it returns 11 even before setup.
+Exits 0 (`READY`) if the BTC lending pool exists — a marker that `setup_concurrent.ts` ran — and 1 (`NOT_SET_UP`) otherwise.
 
 If setup is partially done (e.g. `setup_concurrent.ts` crashed mid-way), recreate the localnet rather than re-running setup — `forceRotation` can't cleanly re-run.
 
@@ -106,16 +109,29 @@ BOUNCER_LOG_LEVEL=debug pnpm vitest run -t "LpApiLending"
 
 # By test file (auto-resolves the name)
 ./commands/run_test.ts ./tests/lp_api_lending_test.ts
+
+# By swap number (re-run a single AllSwaps case, e.g. after a flake)
+./commands/run_test.ts 318
 ```
 
-`run_test.ts` is the most ergonomic single-test runner: it sets `BOUNCER_LOG_LEVEL=debug` and resolves the test name by matching the exported function name against `pnpm vitest list`.
+`run_test.ts` is the most ergonomic single-test runner: it sets `BOUNCER_LOG_LEVEL=debug` and accepts either a test file path (resolves the test name by matching the exported function name against `pnpm vitest list`) or a bare integer (runs `Swap <N>:` from `tests/fast_bouncer.test.ts`). It does **not** take `-t` or any other flags — just the one positional arg.
 
-Test names are the first arg to `concurrentTest(...)` / `serialTest(...)` in `bouncer/tests/fast_bouncer.test.ts` and `bouncer/tests/full_bouncer.test.ts` — not the function name. `pnpm vitest list` prints them all.
+Test names are the first arg to `concurrentTest(...)` / `serialTest(...)` in `bouncer/tests/fast_bouncer.test.ts` and `bouncer/tests/full_bouncer.test.ts` — not the function name. To find one:
+
+```bash
+# From bouncer/. Writes /tmp/chainflip/test_info.csv with `TestName,functionName` rows.
+pnpm vitest list >/dev/null
+grep -i "<keyword>" /tmp/chainflip/test_info.csv
+```
+
+The CSV is the cleanest source — one row per test, both the runnable test name and the exported function name. `pnpm vitest list` on its own prints to stdout too, but the CSV is easier to grep.
+
+If the first grep returns a single clean row, that's your test — don't re-grep with a broader pattern to "make sure." The CSV is exhaustive; a unique hit is unique.
 
 ### Multiple / all tests
 
 ```bash
-# All concurrent tests
+# All concurrent tests. This is the default when asked to "run the bouncer" without a specific test name/group.
 pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
 
 # Everything in a file
@@ -135,6 +151,51 @@ pnpm vitest --maxConcurrency=100 run tests/fast_bouncer.test.ts
 ```bash
 pnpm vitest --maxConcurrency=100 run -t "AllSwaps"
 ```
+
+### Long runs: background + Monitor
+
+Rough durations on a healthy 1-node localnet:
+
+| Run                                   | Wall time  |
+| ------------------------------------- | ---------- |
+| Single test (e.g. `LpApi`)            | 1–5 min    |
+| `AllSwaps` describe block             | ~10 min    |
+| `ConcurrentTests` (default "bouncer") | ~15–20 min |
+| `./fast_bouncer.sh`                   | ~25 min    |
+| `./full_bouncer.sh 1-node`            | 40 min+    |
+
+Anything `AllSwaps` or larger: **always run in the background** and tee to a log file. Foreground tool calls cap at 10 minutes, and even within that the lack of streamed output makes debugging painful.
+
+Pattern:
+
+```bash
+# Background run, all output to a file
+pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests" > /tmp/chainflip/bouncer_run.log 2>&1
+# (launch with run_in_background: true)
+```
+
+Attach a `Monitor` to stream just the signal you care about — don't tail the whole log, the volume is large:
+
+```bash
+tail -f /tmp/chainflip/bouncer_run.log | grep -E --line-buffered "✓|✗|FAIL|Test Files |Tests |Duration|Error"
+```
+
+When the background task completes, the run summary is at the bottom of the log file. Extract it directly:
+
+```bash
+grep -E "Test Files|^ +Tests |Duration|^ FAIL " /tmp/chainflip/bouncer_run.log | tail -20
+```
+
+You'll get something like:
+
+```
+ Test Files  1 failed | 2 skipped (3)
+      Tests  1 failed | 659 passed | 677 skipped (1337)
+   Duration  1096.58s
+ FAIL  tests/fast_bouncer.test.ts > ConcurrentTests > AllSwaps > Swap 318: Sol to SolUsdt (CCM VaultSwap)
+```
+
+That's enough to report the result without re-reading the full log. To re-run a single failed `AllSwaps` case, use `./commands/run_test.ts <swap_number>` (see "A single test" above).
 
 ## 5. Regenerating event schemas
 
