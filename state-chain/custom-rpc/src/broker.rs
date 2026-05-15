@@ -21,7 +21,9 @@ use crate::{
 	CfApiError,
 };
 pub use cf_chains::evm::Address as EvmAddress;
-use cf_chains::{address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters};
+use cf_chains::{
+	address::AddressString, CcmChannelMetadataUnchecked, ChannelRefundParameters, TransactionInId,
+};
 use cf_node_client::{
 	extract_from_first_matching_event, subxt_state_chain_config::cf_static_runtime, ExtrinsicData,
 };
@@ -30,8 +32,8 @@ use cf_rpc_apis::{
 	broker::{
 		try_into_swap_extra_params_encoded, vault_swap_input_encoded_to_rpc,
 		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
-		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, TransactionInId,
-		VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
+		GetOpenDepositChannelsQuery, RpcBytes, SwapDepositAddress, VaultSwapExtraParametersRpc,
+		VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	NotificationBehaviour, RefundParametersRpc, RpcResult, H256,
 };

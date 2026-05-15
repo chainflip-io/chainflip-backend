@@ -3,7 +3,11 @@ import { Logger } from 'shared/utils/logger';
 import { TronWeb } from 'tronweb';
 import { HexString } from '@polkadot/util/types';
 
-export async function sendTrx(logger: Logger, toAddress: string, amount: string): Promise<HexString> {
+export async function sendTrx(
+  logger: Logger,
+  toAddress: string,
+  amount: string,
+): Promise<HexString> {
   const tronWeb = getTronWebClient();
   const sun = Number(TronWeb.toSun(parseFloat(amount)));
 

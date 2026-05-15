@@ -89,9 +89,11 @@ pub mod tron;
 
 pub mod address;
 pub mod deposit_channel;
+use crate::sol::SolAddress;
 use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+
 pub mod ccm_checker;
 pub mod cf_parameters;
 pub mod instances;
@@ -1088,18 +1090,23 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-#[derive(
-	Debug,
-	Clone,
-	TypeInfo,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	PartialEq,
-	Eq,
-	Serialize,
-	Deserialize,
-)]
+pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TransactionInId {
+	Bitcoin(TransactionInIdFor<crate::Bitcoin>),
+	Ethereum(TransactionInIdFor<crate::Ethereum>),
+	Arbitrum(TransactionInIdFor<crate::Arbitrum>),
+	Tron(TransactionInIdFor<crate::Tron>),
+
+	// Deposit channels are marked differently than vault swaps
+	Solana(TransactionInIdFor<crate::Solana>),
+	SolanaDepositChannel(SolAddress),
+	// other variants reserved for other chains.
+}
+
+#[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
 pub enum TransactionInIdForAnyChain {
 	Evm(H256),
 	Bitcoin(H256),

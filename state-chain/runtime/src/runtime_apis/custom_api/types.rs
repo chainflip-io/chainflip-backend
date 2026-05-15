@@ -25,8 +25,7 @@ use cf_chains::{
 	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
-	TransactionInIdForAnyChain, Tron,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
@@ -678,7 +677,7 @@ pub struct DepositWitnessInfo {
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct VaultDepositWitnessInfo {
-	pub tx_id: TransactionInIdForAnyChain,
+	pub tx_id: TransactionInId,
 	pub deposit_chain_block_height: u64,
 	pub input_asset: Asset,
 	pub output_asset: Asset,

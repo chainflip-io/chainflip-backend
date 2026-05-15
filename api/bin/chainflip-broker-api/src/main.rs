@@ -14,11 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::{CcmChannelMetadataUnchecked, ForeignChain};
+use cf_chains::{CcmChannelMetadataUnchecked, ForeignChain, TransactionInId};
 use cf_rpc_apis::{
 	broker::{
 		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
-		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
+		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress,
 		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,

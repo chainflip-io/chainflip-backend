@@ -40,7 +40,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, ScriptPubkey},
 	cf_parameters::build_and_encode_cf_parameters,
 	evm::{api::EvmCall, Address as EvmAddress, U256},
-	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
+	CcmChannelMetadataUnchecked, Chain, ChainCrypto, ChannelRefundParametersUncheckedEncoded,
 	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
@@ -2147,7 +2147,7 @@ mod witnessed_events {
 	use crate::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
 	use cf_chains::{
 		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
-		ChainCrypto, IntoTransactionInIdForAnyChain,
+		TransactionInId,
 	};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
 	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
@@ -2286,21 +2286,27 @@ mod witnessed_events {
 
 	fn convert_vault_deposit_witness<T, I>(
 		items: Vec<(u64, VaultDepositWitness<T, I>)>,
+		to_tx_id: impl Fn(
+			<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
+		) -> TransactionInId,
 		to_deposit_details: impl Fn(<T::TargetChain as Chain>::DepositDetails) -> DepositDetails,
 	) -> Vec<VaultDepositWitnessInfo>
 	where
 		T: pallet_cf_ingress_egress::Config<I>,
 		I: 'static,
 	{
-		items.into_iter().map(|(height, witness)| VaultDepositWitnessInfo {
-			tx_id:<<T::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId::into_transaction_in_id_for_any_chain(witness.tx_id),
-			deposit_chain_block_height: height,
-			input_asset: witness.input_asset.into(),
-			output_asset: witness.output_asset,
-			amount: witness.deposit_amount.into(),
-			deposit_details: to_deposit_details(witness.deposit_details),
-			destination_address: witness.destination_address,
-		}).collect()
+		items
+			.into_iter()
+			.map(|(height, witness)| VaultDepositWitnessInfo {
+				tx_id: to_tx_id(witness.tx_id),
+				deposit_chain_block_height: height,
+				input_asset: witness.input_asset.into(),
+				output_asset: witness.output_asset,
+				amount: witness.deposit_amount.into(),
+				deposit_details: to_deposit_details(witness.deposit_details),
+				destination_address: witness.destination_address,
+			})
+			.collect()
 	}
 
 	pub fn extract_ingress_events(
@@ -2324,6 +2330,7 @@ mod witnessed_events {
 					),
 					vault_deposits: convert_vault_deposit_witness(
 						vault_deposits,
+						TransactionInId::Bitcoin,
 						DepositDetails::Bitcoin,
 					),
 				})
@@ -2351,6 +2358,7 @@ mod witnessed_events {
 					),
 					vault_deposits: convert_vault_deposit_witness(
 						vault_deposits,
+						TransactionInId::Ethereum,
 						DepositDetails::Ethereum,
 					),
 				})
@@ -2384,6 +2392,7 @@ mod witnessed_events {
 					),
 					vault_deposits: convert_vault_deposit_witness(
 						vault_deposits,
+						TransactionInId::Arbitrum,
 						DepositDetails::Arbitrum,
 					),
 				})
@@ -2411,6 +2420,7 @@ mod witnessed_events {
 					),
 					vault_deposits: convert_vault_deposit_witness(
 						vault_deposits,
+						TransactionInId::Tron,
 						DepositDetails::Tron,
 					),
 				})
