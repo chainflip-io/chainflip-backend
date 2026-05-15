@@ -195,7 +195,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> Option<SqrtPrice> {
 		let limit_orders_sqrt_price = self.limit_orders.current_sqrt_price::<SD>();
 		let range_orders_sqrt_price =
-			self.range_orders.current_sqrt_price::<SD>().and_then(|sqrt_price| {
+			self.range_orders.current_sqrt_price::<SD>().map(|sqrt_price| {
 				sqrt_price_adjusted_by_pool_fee::<SD>(
 					sqrt_price,
 					self.range_orders.fee_hundredth_pips,
@@ -260,7 +260,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			// (We do this instead of adjusting the range order's price to avoid
 			// having to both adjust and "inverse adjust" the price, which due to
 			// rounding errors could lead to an infinite loop):
-			let limit_orders_sqrt_price = limit_orders_sqrt_price.and_then(|price| {
+			let limit_orders_sqrt_price = limit_orders_sqrt_price.map(|price| {
 				sqrt_price_adjusted_by_pool_fee::<SD::Inverse>(
 					price,
 					self.range_orders.fee_hundredth_pips,
@@ -559,21 +559,19 @@ fn grow_by_pool_fee(input: U256, fee_hundredth_pips: u32) -> U256 {
 	.unwrap_or(U256::MAX)
 }
 
-/// Adjusts a valid range-order sqrt price by the pool fee in the swap direction.
-///
-/// The result is clamped to `[MIN_SQRT_PRICE, MAX_SQRT_PRICE]`.
+/// Adjusts a range-order sqrt price by the pool fee in the swap direction, clamping the result into
+/// `[MIN_SQRT_PRICE, MAX_SQRT_PRICE]`.
 fn sqrt_price_adjusted_by_pool_fee<SD: common::SwapDirection>(
 	sqrt_price: SqrtPrice,
 	fee_hundredth_pips: u32,
-) -> Option<SqrtPrice> {
+) -> SqrtPrice {
 	let price = Price::from(sqrt_price);
 
-	let adjusted_price = Price::from_raw(match SD::INPUT_SIDE.sell_order() {
+	Price::from_raw(match SD::INPUT_SIDE.sell_order() {
 		Side::Buy => grow_by_pool_fee(price.as_raw(), fee_hundredth_pips),
 		Side::Sell => reduce_by_pool_fee(price.as_raw(), fee_hundredth_pips),
-	});
-
-	adjusted_price.try_into_sqrt_price()
+	})
+	.to_sqrt_price_clamped()
 }
 
 pub fn input_amount_from_fee(fee: U256, fee_hundredth_pips: u32) -> Option<U256> {

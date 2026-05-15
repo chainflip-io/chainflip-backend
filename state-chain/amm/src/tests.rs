@@ -277,9 +277,8 @@ fn check_price_adjustment_by_pool_fee() {
 		// Output is computed by adjusting the price instead:
 		let output = {
 			let sqrt_price = price.try_into_sqrt_price().unwrap();
-			let adjusted_sqrt_price =
-				sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips).unwrap();
-			let adjusted_price = Price::from(adjusted_sqrt_price);
+			let adjusted_price =
+				Price::from(sqrt_price_adjusted_by_pool_fee::<SD>(sqrt_price, fee_hundredth_pips));
 
 			SD::output_amount_floor(input, adjusted_price)
 		};
@@ -294,11 +293,20 @@ fn check_price_adjustment_by_pool_fee() {
 	}
 }
 
+// Near `MAX_TICK` the buy-side fee adjustment pushes the price past the representable tick range.
+// It must be clamped to `MAX_SQRT_PRICE` (rather than rejected) so a swap can still execute against
+// the order at the extreme price. The sell-side adjustment stays in range.
 #[test]
-fn fee_adjustment_rejects_out_of_range_buy_prices() {
+fn fee_adjustment_clamps_out_of_range_buy_prices() {
 	for (tick, fee) in [(887271, 100), (887267, 500), (MAX_TICK, 1), (MAX_TICK, 500_000)] {
 		let sqrt_price = Price::from_tick(tick).unwrap().try_into_sqrt_price().unwrap();
-		assert_eq!(sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee), None);
-		assert!(sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee).is_some());
+
+		assert_eq!(
+			sqrt_price_adjusted_by_pool_fee::<QuoteToBase>(sqrt_price, fee),
+			MAX_SQRT_PRICE,
+			"tick {tick} fee {fee}: buy-side adjusted price should clamp to MAX_SQRT_PRICE"
+		);
+
+		assert!(sqrt_price_adjusted_by_pool_fee::<BaseToQuote>(sqrt_price, fee) < MAX_SQRT_PRICE);
 	}
 }

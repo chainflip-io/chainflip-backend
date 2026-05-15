@@ -74,17 +74,20 @@ pub enum ConversionError {
 	OutsideValidRange,
 }
 
+/// The raw (unbounded) sqrt price corresponding to a price, before range validation.
+fn raw_sqrt_price_from_price(price: Price) -> Result<U256, ConversionError> {
+	U256::try_from(
+		(U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
+			(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS),
+	)
+	.map_err(|_| ConversionError::Overflow)
+}
+
 impl TryFrom<Price> for SqrtPrice {
 	type Error = ConversionError;
 
 	fn try_from(price: Price) -> Result<Self, Self::Error> {
-		let sqrt_price = U256::try_from(
-			(U512::from(price.0) << Price::FRACTIONAL_BITS).integer_sqrt() >>
-				(Price::FRACTIONAL_BITS - SqrtPrice::FRACTIONAL_BITS),
-		)
-		.map_err(|_| ConversionError::Overflow)?;
-
-		SqrtPrice::try_from_raw(sqrt_price)
+		raw_sqrt_price_from_price(price).and_then(SqrtPrice::try_from_raw)
 	}
 }
 
@@ -427,6 +430,14 @@ impl Price {
 
 	pub fn as_raw(self) -> U256 {
 		self.0
+	}
+
+	/// Converts to a valid `SqrtPrice`, clamping into `[MIN_SQRT_PRICE, MAX_SQRT_PRICE]` when the
+	/// price lies outside the representable tick range.
+	pub fn to_sqrt_price_clamped(self) -> SqrtPrice {
+		raw_sqrt_price_from_price(self)
+			.map(SqrtPrice::clamp_from_raw)
+			.unwrap_or(MAX_SQRT_PRICE)
 	}
 
 	pub fn one() -> Self {
