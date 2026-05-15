@@ -1808,6 +1808,26 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Clears all storage items in this pallet, returning it to an uninitialized state.
+		pub fn clear_all_storage() {
+			let _ = SharedDataReferenceCount::<T, I>::clear(u32::MAX, None);
+			let _ = SharedData::<T, I>::clear(u32::MAX, None);
+			let _ = BitmapComponents::<T, I>::clear(u32::MAX, None);
+			let _ = IndividualComponents::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistory::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionConsensusHistoryUpToDate::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralSettings::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionProperties::<T, I>::clear(u32::MAX, None);
+			let _ = ElectionState::<T, I>::clear(u32::MAX, None);
+			let _ = ElectoralUnsynchronisedStateMap::<T, I>::clear(u32::MAX, None);
+			let _ = ContributingAuthorities::<T, I>::clear(u32::MAX, None);
+			ElectoralUnsynchronisedState::<T, I>::kill();
+			ElectoralUnsynchronisedSettings::<T, I>::kill();
+			NextElectionIdentifier::<T, I>::kill();
+			SharedDataReferenceLifetime::<T, I>::kill();
+			Status::<T, I>::kill();
+		}
+
 		/// Provides access into the ElectoralSystem's current election
 		/// identifiers.
 		pub fn with_election_identifiers<
