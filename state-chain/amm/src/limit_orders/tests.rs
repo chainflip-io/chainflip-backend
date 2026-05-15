@@ -637,6 +637,25 @@ fn swap() {
 	}
 }
 
+// Regression test: a limit order placed at the extreme boundary tick must still be matched by a
+// swap with no price limit.
+#[test]
+fn boundary_tick_limit_order_consumed_without_price_limit() {
+	for tick in [MIN_TICK, MAX_TICK] {
+		let mut pool_state = PoolState::new();
+		assert_ok!(pool_state.collect_and_mint::<BaseToQuote>(
+			&LiquidityProvider::from([0; 32]),
+			tick,
+			1000.into()
+		));
+		assert_eq!(
+			pool_state.swap::<BaseToQuote>(Amount::MAX, None, 0).0,
+			1000.into(),
+			"limit order at tick {tick} should be fully consumed by an unbounded swap"
+		);
+	}
+}
+
 #[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
