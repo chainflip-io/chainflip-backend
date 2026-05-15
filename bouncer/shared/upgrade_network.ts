@@ -184,7 +184,7 @@ export async function restartDepositMonitorAndLpAndBrokerApi(
 
 // Delay between the proposal and the second approval. Gives the node's runtime
 // warmer time to pre-compile the new wasm before `set_code` runs.
-const RUNTIME_WARMER_LEAD_TIME_MS = 15_000;
+const RUNTIME_WARMER_LEAD_TIME_MS = 30_000;
 
 async function upgradeNoBuild<A = []>(
   cf: ChainflipIO<A>,
