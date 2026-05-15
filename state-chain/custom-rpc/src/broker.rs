@@ -518,7 +518,7 @@ where
 	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Best,
+				NotificationBehaviour::Finalized,
 				false,
 				true,
 				pending_sink,

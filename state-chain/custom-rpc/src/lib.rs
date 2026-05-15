@@ -2718,7 +2718,7 @@ where
 	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Best,
+				NotificationBehaviour::Finalized,
 				false, /* only_on_changes */
 				true,  /* end_on_error */
 				pending_sink,
