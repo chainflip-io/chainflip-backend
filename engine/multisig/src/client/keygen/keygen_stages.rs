@@ -460,7 +460,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				),
 		};
 
-		let KeygenCommon { common, resharing_context, keygen_context, .. } = &self.keygen_common;
+		let KeygenCommon { common, resharing_context, keygen_context, sharing_params } =
+			&self.keygen_common;
 
 		// In the case of key handover, remove data from all non-sharing
 		// parties so we don't accidentally use it
@@ -483,12 +484,19 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				),
 		};
 
+		// Every honest party commits to exactly `threshold + 1` coefficients
+		// for the key being generated. This is the per-ceremony bound, derived
+		// from the current ceremony's parameters (for key handover this is the
+		// new key's threshold), not the global `MAX_AUTHORITIES` byte cap.
+		let expected_coeff_count = sharing_params.key_params.threshold as usize + 1;
+
 		let commitments = match validate_commitments(
 			commitments,
 			self.hash_commitments,
 			resharing_context.as_ref(),
 			keygen_context,
 			common.validator_mapping.clone(),
+			expected_coeff_count,
 		) {
 			Ok(comms) => comms,
 			Err((blamed_parties, reason)) => return StageResult::Error(blamed_parties, reason),
