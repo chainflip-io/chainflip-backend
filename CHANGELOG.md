@@ -2,28 +2,142 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.19] - 2026-05-13
+
+### Fixes
+
+- Apply depth limit when decoding untrusted Assethub calls.
+- Assethub CCM restricted to XCM calls only.
+
+## [2.1.18] - 2026-05-11
+
+### Fixes
+
+- Bump Polkadot dependency to latest tag.
+
+## [2.1.17] - 2026-05-08
+
+### Fixes
+
+- Ignore address mismatch during Solana fetches.
+- Clamp range order prices at boundaries.
+
+## [2.1.16] - 2026-05-06
+
+### Features
+
+- Drop vote tasks for closed elections ([#6525](https://github.com/chainflip-io/chainflip-backend/issues/6525))
+- Restart hub voter process
+- Deduplicate scheduled set/close orders for the same order ([#6548](https://github.com/chainflip-io/chainflip-backend/issues/6548))
+- Impl is_vote_needed for state machine ES ([#6511](https://github.com/chainflip-io/chainflip-backend/issues/6511))
+- Simplify nonce tracking & timeout after ImmediatelyDropped ([#6500](https://github.com/chainflip-io/chainflip-backend/issues/6500))
+- Follow up on transaction submission ([#6474](https://github.com/chainflip-io/chainflip-backend/issues/6474))
+- Add spawn_with_restart + use it for election witnessing tasks ([#6453](https://github.com/chainflip-io/chainflip-backend/issues/6453))
+
+### Fixes
+
+- Properly track submissions in case of POOL_ALREADY_IMPORTED error ([#6488](https://github.com/chainflip-io/chainflip-backend/issues/6488))
+- Extrinsic submitter sometimes not finding events  ([#6494](https://github.com/chainflip-io/chainflip-backend/issues/6494))
+- cf_btc_utxos RPC checks all the available callbacks ([#6506](https://github.com/chainflip-io/chainflip-backend/issues/6506))
+- Handle all TransactionStatus ([#6503](https://github.com/chainflip-io/chainflip-backend/issues/6503))
+- GRANDPA RPC initialization ([#6495](https://github.com/chainflip-io/chainflip-backend/issues/6495))
+- Scheduled swaps takes safe mode into account ([#6484](https://github.com/chainflip-io/chainflip-backend/issues/6484))
+- Unify evm tx sending and add semaphore ([#6458](https://github.com/chainflip-io/chainflip-backend/issues/6458))
+- Don't report order fills if prev pool could not be decoded ([#6485](https://github.com/chainflip-io/chainflip-backend/issues/6485))
+- Ignore bad vault swap data instead of propagating the error ([#6479](https://github.com/chainflip-io/chainflip-backend/issues/6479))
+
+## [2.1.15] - 2026-05-05
+
+### Fixes
+
+- Prevent Bitcoin signature verification spoof.
+
+## [2.1.14] - 2026-04-30
+
+### Fixes
+
+## [2.1.13] - 2026-04-23
+
+### Fixes
+
+- Update Assethub metadata.
+- Unify Assethub channel ID source across swap and ccm channels.
+- Consistent account derivation within assethub ccm calls.
+- Correctly Enforce max Validators per operator.
+
+## [2.1.12] - 2026-04-20
+
+### Fixes
+
+- Handle edge case when bitcoin OP_RETURN contains invalid script.
+- Graceful recovery when Solana SPL address is owned by System program.
+
+## [2.1.11] - 2026-04-13
+
+- Apply unsigned validation checks during pre-dispatch.
+
+## [2.1.10] - 2026-03-23
+
+### Fixes
+
+- Upgrade Assethub metadata to 2.1.1
+
+## [2.1.9] - 2026-03-18
+
+### Fixes
+
+- Don't panic in cf_scheduled_swaps rpc
+- Map network fee calculation error to the correct reason it failed
+- Don't use BTC oracle price for WBTC.
+
+## [2.1.8] - 2026-03-13
+
+### Fixes
+
+- Improved logging on startup.
+
+## [2.1.7] - 2026-03-13
+
+### Fixes
+
+- Optimistically increment nonce for engine submissions.
+- Add timeout for ImmediatelyDropped error.
+- Handle ImmediatelyDropped error.
+
 ## [2.1.6] - 2026-03-12
 
-- fix: Make safe mode RPC backwards compatible.
-- fix: Always sweep on free_balance query.
+### Fixes
+
+- Make safe mode RPC backwards compatible.
+- Always sweep on free_balance query.
 
 ## [2.1.5] - 2026-03-10
 
-- fix: Log and ignore invalid EVM vault swaps.
+### Fixes
+
+- Log and ignore invalid EVM vault swaps.
 
 ## [2.1.4] - 2026-03-03
 
-- fix: RPC backwards compatibility for cf_liquidity_provider_info and cf_free_balances.
+### Fixes
+
+- RPC backwards compatibility for cf_liquidity_provider_info and cf_free_balances.
 
 ## [2.1.3] - 2026-03-03
 
-- fix: Better RPC backwards compatibility for account_info and related RPCs.
+### Fixes
+
+- Better RPC backwards compatibility for account_info and related RPCs.
 
 ## [2.1.2] - 2026-03-03
 
-- fix: switch to deposit channel origin for `account_creation_deposit_channels` ([#6452](https://github.com/chainflip-io/chainflip-backend/issues/6452))
+### Fixes
+
+- switch to deposit channel origin for `account_creation_deposit_channels` ([#6452](https://github.com/chainflip-io/chainflip-backend/issues/6452))
 
 ## [2.1.1] - 2026-03-02
+
+### Fixes
 
 - Fix an issue with light RPC mode.
 
