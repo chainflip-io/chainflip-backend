@@ -2718,9 +2718,9 @@ where
 	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized, /* only_finalized */
-				false,                            /* only_on_changes */
-				true,                             /* end_on_error */
+				NotificationBehaviour::Best,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
 				pending_sink,
 				move |client, hash| {
 					Ok((*client.runtime_api())
@@ -2738,9 +2738,9 @@ where
 	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized, /* only_finalized */
-				false,                            /* only_on_changes */
-				true,                             /* end_on_error */
+				NotificationBehaviour::Best,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
 				pending_sink,
 				move |client, hash| {
 					Ok((*client.runtime_api())
