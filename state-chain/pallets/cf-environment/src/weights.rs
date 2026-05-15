@@ -55,6 +55,7 @@ pub trait WeightInfo {
 	fn witness_current_bitcoin_block_number_for_key() -> Weight;
 	fn witness_initialize_arbitrum_vault() -> Weight;
 	fn witness_initialize_solana_vault() -> Weight;
+	fn witness_initialize_tron_vault() -> Weight;
 	fn witness_assethub_vault_creation() -> Weight;
 	fn dispatch_solana_gov_call() -> Weight;
 	fn non_native_signed_call() -> Weight;
@@ -119,6 +120,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(24_883_000, 0)
 	}
 	fn witness_initialize_solana_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `529`
+		//  Estimated: `0`
+		// Minimum execution time: 25_756_000 picoseconds.
+		Weight::from_parts(26_300_000, 0)
+	}
+	fn witness_initialize_tron_vault() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `529`
 		//  Estimated: `0`
@@ -287,6 +295,13 @@ impl WeightInfo for () {
 		Weight::from_parts(24_883_000, 0)
 	}
 	fn witness_initialize_solana_vault() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `529`
+		//  Estimated: `0`
+		// Minimum execution time: 25_756_000 picoseconds.
+		Weight::from_parts(26_300_000, 0)
+	}
+	fn witness_initialize_tron_vault() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `529`
 		//  Estimated: `0`

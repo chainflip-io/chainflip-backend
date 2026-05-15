@@ -183,6 +183,18 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn witness_initialize_tron_vault() {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call = Call::<T>::witness_initialize_tron_vault { block_number: 10u64 };
+
+		T::TronVaultKeyWitnessedHandler::setup_key_activation();
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+	}
+
+	#[benchmark]
 	fn witness_assethub_vault_creation() {
 		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
 
