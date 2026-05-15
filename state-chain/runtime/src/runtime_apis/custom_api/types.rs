@@ -655,7 +655,8 @@ pub enum RawWitnessedEvents {
 	},
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum DepositDetails {
 	Bitcoin(<Bitcoin as Chain>::DepositDetails),
 	Ethereum(<Ethereum as Chain>::DepositDetails),
