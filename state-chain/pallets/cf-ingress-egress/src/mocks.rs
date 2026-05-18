@@ -113,9 +113,7 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 		))
 	}
 
-	fn is_channel_state_current(
-		channel_state: &<Bitcoin as Chain>::DepositChannelState,
-	) -> bool {
+	fn is_channel_state_current(channel_state: &<Bitcoin as Chain>::DepositChannelState) -> bool {
 		channel_state.pubkey_x == mock_btc_active_key()
 	}
 }
