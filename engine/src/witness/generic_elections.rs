@@ -155,9 +155,9 @@ impl VoterApi<ChainlinkOraclePriceES> for OraclePriceVoter {
 					return None;
 				};
 
-				let positive_price: U256 = if price_data.answer < 0 {
+				let positive_price: U256 = if price_data.answer <= 0 {
 					tracing::debug!(
-						"Ignoring negative price data for {:?}: {}",
+						"Ignoring invalid price data for {:?}: {}",
 						asset_pair,
 						price_data.answer
 					);

@@ -16,8 +16,8 @@
 
 use crate::{limit_orders, range_orders};
 use cf_amm_math::{
-	mul_div, mul_div_ceil, mul_div_floor, test_utilities::rng_u256_inclusive_bound, MAX_SQRT_PRICE,
-	MAX_TICK, MIN_SQRT_PRICE, MIN_TICK,
+	mul_div, mul_div_ceil_checked, mul_div_floor_checked, test_utilities::rng_u256_inclusive_bound,
+	MAX_SQRT_PRICE, MAX_TICK, MIN_SQRT_PRICE, MIN_TICK,
 };
 
 use super::*;
@@ -27,6 +27,14 @@ use rand::{Rng, SeedableRng};
 
 type LiquidityProvider = cf_primitives::AccountId;
 type PoolState = super::PoolState<LiquidityProvider>;
+
+fn mul_div_ceil(a: U256, b: U256, c: U256) -> U256 {
+	mul_div_ceil_checked(a, b, c).unwrap()
+}
+
+fn mul_div_floor(a: U256, b: U256, c: U256) -> U256 {
+	mul_div_floor_checked(a, b, c).unwrap()
+}
 
 /// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are
 /// guaranteed to be <= MAX_FIXED_POOL_LIQUIDITY. This test checks that MAX_FIXED_POOL_LIQUIDITY is

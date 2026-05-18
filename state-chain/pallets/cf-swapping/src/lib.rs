@@ -2050,14 +2050,14 @@ pub mod pallet {
 			output_asset: Asset,
 		) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
 			if input_amount == 0 {
-				// Price is undefined when input is zero (would cause division by zero).
+				// Price is undefined when input is zero
 				return Ok(None);
 			}
 			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
 				Some(oracle_price) if oracle_price.stale =>
 					Err(SwapFailureReason::OraclePriceStale),
 				Some(oracle_price) =>
-					Ok(Price::sell_price(input_amount.into(), output_amount.into()).map(
+					Ok(Price::sell_price(input_amount.into(), output_amount.into()).and_then(
 						|execution_price| {
 							execution_price.hundredth_bps_difference_from(&oracle_price.price)
 						},
@@ -3397,14 +3397,14 @@ pub mod pallet {
 				};
 				let output_price = get_usd_price(output_asset, Side::Buy); // USD / output_asset
 				let input_price = get_usd_price(input_asset, Side::Sell); // USD / input_asset
-				if input_price.is_zero() || output_price.is_zero() {
+
+				// (USD / output_asset) / (USD / input_asset) = input_asset / output_asset
+				let Some(relative_price) = output_price.divide_by(input_price) else {
 					log_or_panic!(
 						"Estimated Price for input or output asset is zero: {input_asset:?} = {input_price:?}, {output_asset:?} = {output_price:?}"
 					);
 					return 0;
-				}
-				// (USD / output_asset) / (USD / input_asset) = input_asset / output_asset
-				let relative_price = output_price.divide_by(input_price);
+				};
 
 				// Finally calculate the required input amount
 				relative_price

@@ -1712,14 +1712,14 @@ mod oracle_strategy {
 
 		let btc_price = Price::from_usd(BTC, 10);
 		let usdc_price = Price::from_usd(USDC, 1);
-		let oracle_tick = btc_price.divide_by(usdc_price).into_tick().unwrap();
+		let oracle_tick = btc_price.divide_by(usdc_price).unwrap().into_tick().unwrap();
 
 		const BTC_AMOUNT: AssetAmount = 1_000_000_000; // 10 BTC with 8 decimals
 		const USDC_AMOUNT: AssetAmount = 100_000_000; // 100 USDC with 6 decimals
 
 		// $101/BTC: 1% price increase
 		let new_btc_price = Price::from_usd_cents(BTC, 10_10);
-		let new_oracle_tick = new_btc_price.divide_by(usdc_price).into_tick().unwrap();
+		let new_oracle_tick = new_btc_price.divide_by(usdc_price).unwrap().into_tick().unwrap();
 
 		new_test_ext()
 			.then_execute_at_next_block(|_| {
