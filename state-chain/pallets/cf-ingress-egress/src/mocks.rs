@@ -22,6 +22,7 @@ use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError},
 	assets,
 	btc::{deposit_address::DepositAddress, BitcoinTrackedData},
+	deposit_channel::{AlwaysFresh, DepositChannelFreshness},
 	eth::EthereumTrackedData,
 	Bitcoin, Chain, ChannelRefundParametersForChain, Ethereum, ForeignChainAddress,
 };
@@ -53,6 +54,7 @@ use cf_traits::{
 use frame_support::{
 	assert_ok, derive_impl,
 	instances::{Instance1, Instance2},
+	parameter_types,
 	sp_runtime::traits::Zero,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -109,8 +111,15 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	> {
 		Ok((
 			<Self as AddressDerivationApi<Bitcoin>>::generate_address(source_asset, channel_id)?,
-			DepositAddress::new([1u8; 32], 123),
+			DepositAddress::new(MockBtcActiveKey::get(), 123),
 		))
+	}
+}
+
+pub struct MockBtcChannelFreshness;
+impl DepositChannelFreshness<Bitcoin> for MockBtcChannelFreshness {
+	fn is_fresh(state: &<Bitcoin as Chain>::DepositChannelState) -> bool {
+		state.pubkey_x == MockBtcActiveKey::get()
 	}
 }
 
@@ -124,6 +133,7 @@ impl Config<Instance1> for Test {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
 	type ChainApiCall = MockEthereumApiCall<MockEvmEnvironment>;
@@ -158,6 +168,7 @@ impl Config<Instance2> for Test {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Self>>;
 	type AddressDerivation = MockAddressDerivation;
+	type DepositChannelFreshness = MockBtcChannelFreshness;
 	type AddressConverter = MockAddressConverter;
 	type Balance = MockBalance;
 	type ChainApiCall = MockBitcoinApiCall<MockBtcEnvironment>;
@@ -196,6 +207,11 @@ pub struct MockDepositHandler;
 impl<C: Chain> OnDeposit<C> for MockDepositHandler {}
 
 pub struct MockAddressDerivation;
+
+parameter_types! {
+	/// The Bitcoin aggregate key the mock address derivation treats as active.
+	pub static MockBtcActiveKey: [u8; 32] = [1u8; 32];
+}
 
 pub struct MockNetworkEnvironmentProvider {}
 
