@@ -3105,8 +3105,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents> {
-		self.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_transaction_screening_events_before_version_17(hash).map(Into::into)
+			} else {
+				api.cf_transaction_screening_events(hash)
+			}
+		})
 	}
 
 	fn cf_get_trading_strategies(

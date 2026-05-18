@@ -316,6 +316,8 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 			chain: ForeignChain,
 		) -> Vec<ChannelId>;
+		#[changed_in(17)]
+		fn cf_transaction_screening_events() -> before_version_17::TransactionScreeningEvents;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
