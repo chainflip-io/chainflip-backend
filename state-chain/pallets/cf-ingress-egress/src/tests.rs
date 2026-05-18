@@ -1979,6 +1979,74 @@ fn preallocated_channels_no_global_pool() {
 }
 
 #[test]
+fn stale_preallocated_channels_are_discarded_after_key_rotation() {
+	const MAX_PREALLOCATED: u8 = 2;
+	const OLD_KEY: [u8; 32] = [1u8; 32];
+	const NEW_KEY: [u8; 32] = [2u8; 32];
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+				&ALICE,
+			)
+		);
+		assert_ok!(BitcoinIngressEgress::update_pallet_config(
+			OriginTrait::root(),
+			vec![PalletConfigUpdate::SetMaximumPreallocatedChannels {
+				account_role: AccountRole::LiquidityProvider,
+				num_channels: MAX_PREALLOCATED
+			}]
+			.try_into()
+			.unwrap()
+		));
+
+		let chan_action = ChannelAction::LiquidityProvision {
+			lp_account: ALICE,
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+			additional_action: None,
+		};
+
+		// Channel opened while OLD_KEY is active: returned channel and the whole
+		// pre-allocation queue commit to OLD_KEY.
+		let (channel_old, _, _) =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+		assert_eq!(channel_old.state.pubkey_x, OLD_KEY);
+		let stale_ids = PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.map(|c| c.channel_id)
+			.collect::<Vec<_>>();
+		assert_eq!(stale_ids, vec![2, 3]);
+		assert!(PreallocatedChannels::<Test, Instance2>::get(ALICE)
+			.iter()
+			.all(|c| c.state.pubkey_x == OLD_KEY));
+
+		// The Bitcoin aggregate key rotates. Every queued channel is now unspendable.
+		set_mock_btc_active_key(NEW_KEY);
+
+		// The next open must not hand back a stale channel: the queued ones are
+		// discarded and a fresh channel derived from NEW_KEY is returned instead.
+		let (channel_new, _, _) =
+			BitcoinIngressEgress::open_channel(&ALICE, btc::Asset::Btc, chan_action.clone(), 0)
+				.unwrap();
+		assert_eq!(
+			channel_new.state.pubkey_x, NEW_KEY,
+			"a stale (old-key) pre-allocated channel was assigned to the user"
+		);
+		assert!(
+			!stale_ids.contains(&channel_new.channel_id),
+			"a discarded stale channel id was reused"
+		);
+		assert!(
+			PreallocatedChannels::<Test, Instance2>::get(ALICE)
+				.iter()
+				.all(|c| c.state.pubkey_x == NEW_KEY),
+			"stale channels remain in the pre-allocation queue"
+		);
+	});
+}
+
+#[test]
 fn broker_pays_a_fee_for_each_deposit_address() {
 	new_test_ext().execute_with(|| {
 		const CHANNEL_REQUESTER: u64 = 789;

@@ -109,8 +109,14 @@ impl AddressDerivationApi<Bitcoin> for MockAddressDerivation {
 	> {
 		Ok((
 			<Self as AddressDerivationApi<Bitcoin>>::generate_address(source_asset, channel_id)?,
-			DepositAddress::new([1u8; 32], 123),
+			DepositAddress::new(mock_btc_active_key(), 123),
 		))
+	}
+
+	fn is_channel_state_current(
+		channel_state: &<Bitcoin as Chain>::DepositChannelState,
+	) -> bool {
+		channel_state.pubkey_x == mock_btc_active_key()
 	}
 }
 
@@ -196,6 +202,21 @@ pub struct MockDepositHandler;
 impl<C: Chain> OnDeposit<C> for MockDepositHandler {}
 
 pub struct MockAddressDerivation;
+
+thread_local! {
+	/// The Bitcoin aggregate key that the mock address derivation currently considers
+	/// active. Defaults to `[1u8; 32]` to preserve historical mock behaviour.
+	static MOCK_BTC_ACTIVE_KEY: std::cell::RefCell<[u8; 32]> =
+		const { std::cell::RefCell::new([1u8; 32]) };
+}
+
+pub fn set_mock_btc_active_key(key: [u8; 32]) {
+	MOCK_BTC_ACTIVE_KEY.with(|k| *k.borrow_mut() = key);
+}
+
+fn mock_btc_active_key() -> [u8; 32] {
+	MOCK_BTC_ACTIVE_KEY.with(|k| *k.borrow())
+}
 
 pub struct MockNetworkEnvironmentProvider {}
 

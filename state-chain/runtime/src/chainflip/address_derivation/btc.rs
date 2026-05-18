@@ -92,6 +92,11 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 		Ok((channel_state.script_pubkey(), channel_state))
 	}
+
+	fn is_channel_state_current(channel_state: &<Bitcoin as Chain>::DepositChannelState) -> bool {
+		BitcoinThresholdSigner::active_epoch_key()
+			.is_some_and(|epoch_key| channel_state.pubkey_x == epoch_key.key.current)
+	}
 }
 pub fn derive_current_and_previous_epoch_private_btc_vaults(
 	channel_id: ChannelId,

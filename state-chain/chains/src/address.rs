@@ -64,6 +64,11 @@ pub trait AddressDerivationApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<(C::ChainAccount, C::DepositChannelState), AddressDerivationError>;
+
+	/// Whether a (possibly pre-allocated or recycled) channel state is spendable by the network.
+	fn is_channel_state_current(_channel_state: &C::DepositChannelState) -> bool {
+		true
+	}
 }
 
 #[derive(

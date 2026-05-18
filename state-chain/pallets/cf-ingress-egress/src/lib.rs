@@ -1773,10 +1773,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			DepositChannelLookup::<T, I>::take(address)
 		{
 			if let Some(state) = deposit_channel.state.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(
-					deposit_channel.channel_id,
-					DepositChannel { state, ..deposit_channel },
-				);
+				if !T::AddressDerivation::is_channel_state_current(&state) {
+					log_or_panic!(
+						"Logic error: Attempting to recycle a channel that is no longer valid: {:?}",
+						state
+					);
+				} else {
+					DepositChannelPool::<T, I>::insert(
+						deposit_channel.channel_id,
+						DepositChannel { state, ..deposit_channel },
+					);
+				}
 				*used_weight = used_weight.saturating_add(
 					frame_support::weights::constants::ParityDbWeight::get().reads_writes(0, 1),
 				);
@@ -3322,12 +3329,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let deposit_channel = PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+			// Discard any pre-allocated channels that are no longer valid. This is necessary for
+			// Bitcoin, for example, where the channel is tied to a specific AggKey.
+			queue.retain(|channel| T::AddressDerivation::is_channel_state_current(&channel.state));
+
 			// Always fill up the list to one above capacity, then pop the first channel.
 			for _ in queue.len()..=
 				MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
 					requester,
 				)) as usize
 			{
+				// Assumption: DepositChannelPool only contains channels where
+				// `is_channel_state_current` always remains true.`
 				if let Some((_id, channel)) = DepositChannelPool::<T, I>::drain().next() {
 					queue.push_back(channel);
 				} else if T::ONLY_PREALLOCATE_FROM_POOL {
