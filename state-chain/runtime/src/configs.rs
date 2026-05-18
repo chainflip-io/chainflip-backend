@@ -21,6 +21,7 @@ pub use cf_chains::instances::{
 use cf_chains::{
 	arb::api::ArbitrumApi,
 	btc::{BitcoinCrypto, BitcoinRetryPolicy},
+	deposit_channel::AlwaysFresh,
 	dot::{self, PolkadotCrypto},
 	eth::{self, api::EthereumApi, Ethereum},
 	evm::EvmCrypto,
@@ -298,7 +299,7 @@ impl pallet_cf_vaults::Config<Instance7> for Runtime {
 	type CfeMultisigRequest = CfeInterface;
 }
 
-use chainflip::address_derivation::AddressDerivation;
+use chainflip::address_derivation::{btc::BtcDepositChannelFreshness, AddressDerivation};
 
 impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	type RuntimeCall = RuntimeCall;
@@ -306,6 +307,7 @@ impl pallet_cf_ingress_egress::Config<Instance1> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Ethereum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = eth::api::EthereumApi<EvmEnvironment>;
@@ -336,6 +338,7 @@ impl pallet_cf_ingress_egress::Config<Instance2> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Polkadot, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
@@ -366,6 +369,7 @@ impl pallet_cf_ingress_egress::Config<Instance3> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Bitcoin, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = BtcDepositChannelFreshness;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
@@ -396,6 +400,7 @@ impl pallet_cf_ingress_egress::Config<Instance4> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Arbitrum, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = ArbitrumApi<EvmEnvironment>;
@@ -426,6 +431,7 @@ impl pallet_cf_ingress_egress::Config<Instance5> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = SolanaIngress;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = cf_chains::sol::api::SolanaApi<SolEnvironment>;
@@ -456,6 +462,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Assethub, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = hub::api::AssethubApi<chainflip::HubEnvironment>;
@@ -486,6 +493,7 @@ impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
 	type IngressSource = DummyIngressSource<Tron, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
+	type DepositChannelFreshness = AlwaysFresh;
 	type AddressConverter = ChainAddressConverter;
 	type Balance = AssetBalances;
 	type ChainApiCall = cf_chains::tron::api::TronApi<EvmEnvironment>;
