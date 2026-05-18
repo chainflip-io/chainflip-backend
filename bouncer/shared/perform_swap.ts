@@ -136,7 +136,7 @@ export enum SenderType {
   Vault,
 }
 
-async function waitForEgressScheduled<A = []>(
+export async function waitForEgressScheduled<A = []>(
   cf: ChainflipIO<A>,
   swapRequestId: bigint,
   swapContext?: SwapContext,

@@ -93,13 +93,13 @@ use state_chain_runtime::{
 		types::{
 			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
 			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
-			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, LendingPosition,
-			LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees, NonceOrAccount,
-			OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems, RpcLendingConfig,
-			RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty, ShouldSweep,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
+			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
+			RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty,
+			ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+			VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -1084,6 +1084,9 @@ pub trait CustomApi {
 
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
+
+	#[subscription(name = "subscribe_ingress_events", item = BlockUpdate<IngressEvents>)]
+	async fn cf_subscribe_ingress_events(&self, chain: ForeignChain);
 
 	#[method(name = "lp_get_order_fills")]
 	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
@@ -2715,13 +2718,34 @@ where
 	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized, /* only_finalized */
-				false,                            /* only_on_changes */
-				true,                             /* end_on_error */
+				NotificationBehaviour::Finalized,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
 				pending_sink,
 				move |client, hash| {
 					Ok((*client.runtime_api())
 						.cf_transaction_screening_events(hash)
+						.map_err(CfApiError::from)?)
+				},
+			)
+			.await;
+	}
+
+	async fn cf_subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Best,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok((*client.runtime_api())
+						.cf_ingress_events(hash, chain)
+						.map_err(CfApiError::from)?
 						.map_err(CfApiError::from)?)
 				},
 			)
@@ -3081,8 +3105,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents> {
-		self.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_transaction_screening_events_before_version_17(hash).map(Into::into)
+			} else {
+				api.cf_transaction_screening_events(hash)
+			}
+		})
 	}
 
 	fn cf_get_trading_strategies(
