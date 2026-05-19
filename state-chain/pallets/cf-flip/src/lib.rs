@@ -33,7 +33,8 @@ use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
 use cf_traits::{
-	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Issuance, Slashing,
+	AccountInfo, Bonding, DeregistrationCheck, FeePayment, FundingInfo, Issuance,
+	RewardsDistribution, Slashing,
 };
 use imbalances::{Deficit, ImbalanceSource, Surplus};
 
@@ -46,7 +47,7 @@ use frame_support::{
 	ensure,
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{AtLeast32BitUnsigned, Zero},
+		traits::{AtLeast32BitUnsigned, Hash as HashT, Zero},
 		DispatchError, Permill, RuntimeDebug,
 	},
 	traits::{Get, Imbalance, OnKilledAccount, SignedImbalance},
@@ -121,6 +122,12 @@ pub mod pallet {
 
 		type CallIndexer: CallIndexer<<Self as frame_system::Config>::RuntimeCall>;
 
+		/// An implementation of `RewardsDistribution` defining how to distribute rewards.
+		type RewardsDistribution: RewardsDistribution<
+			Balance = Self::Balance,
+			AccountId = Self::AccountId,
+		>;
+
 		/// Required in order to inject a HoldReason for impls in [substrate_impls]
 		type RuntimeHoldReason: Encode + TypeInfo + 'static;
 	}
@@ -167,6 +174,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type FeeScalingRate<T: Config> = StorageValue<_, FeeScalingRateConfig, ValueQuery>;
 
+	#[pallet::storage]
+	pub type FlipToDistribute<T: Config> = StorageValue<_, i128, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -193,6 +203,9 @@ pub mod pallet {
 		BondUpdated {
 			account_id: T::AccountId,
 			new_bond: T::Balance,
+		},
+		FlipDistributed {
+			amount: Vec<(T::AccountId, T::Balance)>,
 		},
 	}
 
@@ -515,6 +528,51 @@ impl<T: Config> Pallet<T> {
 				amount: slash_amount,
 			})
 		}
+	}
+
+	pub fn trigger_flip_reward_distribution(authorities: Vec<T::AccountId>) -> T::Balance {
+		let flip_to_distribute = FlipToDistribute::<T>::take();
+		if flip_to_distribute <= Zero::zero() {
+			FlipToDistribute::<T>::put(flip_to_distribute);
+			return Zero::zero()
+		}
+		let flip_to_distribute: u128 =
+			flip_to_distribute.try_into().expect("checked for negative number above");
+
+		let count = authorities.len();
+		let count_u128 = count as u128;
+		let (per_authority_reward, remainder) =
+			(flip_to_distribute / count_u128, flip_to_distribute % count_u128);
+
+		let winner_authority = if remainder > 0 {
+			let parent_hash = frame_system::Pallet::<T>::parent_hash();
+			let seed =
+				<T as frame_system::Config>::Hashing::hash_of(&(parent_hash, b"flip_distribution"));
+			let random_num = u64::from_le_bytes(seed.as_ref()[..8].try_into().unwrap_or([0u8; 8]));
+			let winner_idx = (random_num % count as u64) as usize;
+			Some(&authorities[winner_idx])
+		} else {
+			None
+		};
+
+		let mut flip_minted_list = vec![];
+		for authority in &authorities {
+			T::RewardsDistribution::distribute(
+				if winner_authority.is_some_and(|wa| authority == wa) {
+					(per_authority_reward + remainder).into()
+				} else {
+					per_authority_reward.into()
+				},
+				authority,
+				|account, amount| {
+					Pallet::<T>::settle(account, Pallet::<T>::bridge_in(amount).into());
+					flip_minted_list.push((account.clone(), amount));
+				},
+			);
+		}
+
+		Self::deposit_event(Event::FlipDistributed { amount: flip_minted_list });
+		return flip_to_distribute.into();
 	}
 }
 

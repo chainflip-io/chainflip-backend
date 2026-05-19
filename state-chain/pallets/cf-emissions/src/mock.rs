@@ -154,7 +154,11 @@ impl RewardsDistribution for FlipDistribution {
 	type Balance = FlipBalance;
 	type AccountId = AccountId;
 
-	fn distribute(reward_amount: Self::Balance, beneficiary: &Self::AccountId) {
+	fn distribute(
+		reward_amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
 		pallet_cf_flip::FlipIssuance::<Test>::mint(beneficiary, reward_amount);
 	}
 }
