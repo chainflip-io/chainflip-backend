@@ -13,7 +13,7 @@ macro_rules! generate_module {
         $(
             #[$($Attributes)*]
         )*
-        #[cfg_attr(any(feature = "test", test), derive(proptest_derive::Arbitrary))]
+        #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
         $vis struct $struct$(<$T $(: $TBound)?>)? {
             $(
                 $( #[$($Field_Attributes)*])*
