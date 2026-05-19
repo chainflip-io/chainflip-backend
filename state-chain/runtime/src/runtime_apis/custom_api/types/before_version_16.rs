@@ -14,6 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use cf_utilities::migrations::v0200;
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
@@ -241,32 +242,4 @@ impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFeeDetails {
-	pub standard_rate_and_minimum: FeeRateAndMinimum,
-	pub rates: AssetMap<Permill>,
-}
-
-impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
-	fn from(value: NetworkFeeDetails) -> Self {
-		Self {
-			standard_rate_and_minimum: value.standard_rate_and_minimum,
-			rates: value.rates.into(),
-		}
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone)]
-pub struct NetworkFees {
-	pub regular_network_fee: NetworkFeeDetails,
-	pub internal_swap_network_fee: NetworkFeeDetails,
-}
-
-impl From<NetworkFees> for super::NetworkFees {
-	fn from(value: NetworkFees) -> Self {
-		Self {
-			regular_network_fee: value.regular_network_fee.into(),
-			internal_swap_network_fee: value.internal_swap_network_fee.into(),
-		}
-	}
-}
+pub type NetworkFees = <super::NetworkFees as HasVersion<v0200>>::HistoricalType;
