@@ -83,8 +83,8 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaApi, SolanaEnvironment, SolanaTransactionType,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, SolanaApi,
+			SolanaEnvironment, SolanaTransactionType,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -722,12 +722,6 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvi
 		} else {
 			Some(nonce_accounts)
 		}
-	}
-}
-
-impl RecoverDurableNonce for SolEnvironment {
-	fn recover_durable_nonce(nonce_account: SolAddress) {
-		Environment::recover_sol_durable_nonce(nonce_account)
 	}
 }
 
