@@ -47,6 +47,6 @@ std = [
 	"sp-std/std",
 	"strum/std",
 ]
-test = ["dep:proptest-derive", "dep:proptest"]
+proptest = ["dep:proptest-derive", "dep:proptest"]
 turbo = []
 production = []
