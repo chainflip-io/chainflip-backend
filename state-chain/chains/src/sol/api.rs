@@ -94,7 +94,7 @@ pub trait SolanaEnvironment:
 	+ ChainEnvironment<
 		BTreeSet<SolAddress>,
 		AltWitnessingConsensusResult<Vec<SolAddressLookupTableAccount>>,
-	> + RecoverDurableNonce
+	>
 {
 	fn compute_price() -> Result<SolAmount, SolanaTransactionBuildingError> {
 		Self::lookup(ComputePrice).ok_or(SolanaTransactionBuildingError::CannotLookupComputePrice)
@@ -136,15 +136,6 @@ pub trait SolanaEnvironment:
 			None => Err(SolanaTransactionBuildingError::AltsNotYetWitnessed),
 		}
 	}
-}
-
-/// IMPORTANT: This should only be used if the nonce has not been used to sign a transaction.
-///
-/// Once a nonce is actually used, it should ONLY be recovered via Witnessing.
-/// Only use this if you know what you are doing.
-pub trait RecoverDurableNonce {
-	/// Set a unused durable nonce back as available.
-	fn recover_durable_nonce(_nonce_account: SolAddress) {}
 }
 
 /// Errors that can arise when building Solana Transactions.
