@@ -112,6 +112,10 @@ pub type EgressId = (ForeignChain, EgressCounter);
 
 pub type AssetAmount = u128;
 
+/// In order to trigger the sending of vault FLIP to the SC Gateway, the egress amount must be at
+/// least this many times greater than the egress fee.
+pub const FLIP_TO_GATEWAY_MULTIPLE: AssetAmount = 100;
+
 pub type BasisPoints = u16;
 
 pub type BroadcastId = u32;
