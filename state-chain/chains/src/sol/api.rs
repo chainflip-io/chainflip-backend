@@ -386,20 +386,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 			durable_nonce,
 			compute_price,
 			vec![sol_api_environment.address_lookup_table_account],
-		)
-		.inspect_err(|e| {
-			// Vault Rotation call building NOT transactional - meaning when this fails,
-			// storage is not rolled back. We must recover the durable nonce here,
-			// since it has been taken from storage but not actually used.
-			log::error!(
-				"Solana RotateAggKey call building failed. Nonce recovered. Error: {:?}
-				new aggkey: {:?}
-				Nonce recovered: {:?}",
-				e,
-				new_agg_key,
-				durable_nonce
-			);
-		})?;
+		)?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::RotateAggKey,
@@ -436,12 +423,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 		let external_alts = ccm_additional_data
 			.alt_addresses()
 			.map(|alts| Environment::get_address_lookup_tables(BTreeSet::from_iter(alts)))
-			.transpose()
-			.inspect_err(|_| {
-				// This can be removed once the transaction building is made transactional.
-				// Recover the durable nonce when transaction building fails.
-				Environment::recover_durable_nonce(durable_nonce.0);
-			})?
+			.transpose()?
 			.unwrap_or_default();
 
 		let address_lookup_tables =
@@ -526,20 +508,7 @@ impl<Environment: SolanaEnvironment> SolanaApi<Environment> {
 					compute_limit,
 					address_lookup_tables,
 				),
-			}
-			.inspect_err(|e| {
-				// CCM call building is NOT transactional - meaning when this fails,
-				// storage is not rolled back. We must recover the durable nonce here,
-				// since it has been taken from storage but not actually used.
-				log::error!(
-					"CCM building failed. Nonce recovered. Error: {:?}
-					Transfer param: {:?}
-					Nonce recovered: {:?}",
-					e,
-					transfer_param,
-					durable_nonce
-				);
-			})?,
+			}?,
 			signer: None,
 			_phantom: Default::default(),
 		})
@@ -829,18 +798,7 @@ impl<Environment: SolanaEnvironment> SetGovKeyWithAggKey<SolanaCrypto> for Solan
 			compute_price,
 			vec![sol_api_environment.address_lookup_table_account],
 		)
-		.map_err(|e| {
-			// SetGovKeyWithAggKey call building NOT transactional - meaning when this fails,
-			// storage is not rolled back. We must recover the durable nonce here,
-			// since it has been taken from storage but not actually used.
-			log::error!(
-				"Solana SetGovKeyWithAggKey call building failed. Nonce recovered. Error: {:?}
-				Nonce recovered: {:?}",
-				e,
-				durable_nonce
-			);
-			SetGovKeyWithAggKeyError::FailedToBuildAPICall
-		})?;
+		.map_err(|_e| SetGovKeyWithAggKeyError::FailedToBuildAPICall)?;
 
 		Ok(Self {
 			call_type: SolanaTransactionType::SetGovKeyWithAggKey,
