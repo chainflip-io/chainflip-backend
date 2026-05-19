@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::AssetBalances;
+use crate::{AssetBalances, Environment, Flip, Swapping, Validator};
 use cf_primitives::EpochIndex;
 use cf_traits::EpochTransitionHandler;
 
@@ -31,7 +31,11 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<ArbitrumVault as EpochTransitionHandler>::on_expired_epoch(expired);
 		<SolanaVault as EpochTransitionHandler>::on_expired_epoch(expired);
 	}
-	fn on_new_epoch(_new: EpochIndex) {
+	fn on_new_epoch(new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();
+		let flip_distributed =
+			Flip::trigger_flip_reward_distribution(Validator::historical_authorities(new - 1));
+
+		Swapping::maybe_trigger_flip_to_gateway_egress(Environment::state_chain_gateway_address());
 	}
 }

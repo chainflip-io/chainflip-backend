@@ -677,6 +677,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = ConstU32<DAYS>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
 	type CallIndexer = chainflip::LpOrderCallIndexer;
 	// Required to satisfy trait bounds on InspectHold implementation, required by
 	// pallet_session::Config::Currency.
@@ -736,7 +737,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
 	type FlipToBurnOrMove = Swapping;

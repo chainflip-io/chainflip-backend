@@ -315,6 +315,8 @@ pub mod pallet {
 
 	/// A map between an epoch and the set of authorities (participating in this epoch).
 	#[pallet::storage]
+	#[pallet::getter(fn historical_authorities)]
+
 	pub type HistoricalAuthorities<T: Config> =
 		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
 

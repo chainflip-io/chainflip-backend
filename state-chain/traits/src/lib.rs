@@ -386,7 +386,11 @@ pub trait RewardsDistribution {
 	type AccountId;
 
 	/// Distribute some rewards.
-	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId);
+	fn distribute(
+		amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		settle: impl FnMut(&Self::AccountId, Self::Balance),
+	);
 }
 
 /// A representation of the current network state for this heartbeat interval.
