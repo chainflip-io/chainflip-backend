@@ -340,18 +340,21 @@ impl<Account: Ord + Clone, Bid> DelegationSnapshot<Account, Bid> {
 	}
 }
 
-pub struct DelegatedRewardsDistribution<T, I>(PhantomData<(T, I)>);
+pub struct DelegatedRewardsDistribution<T>(PhantomData<T>);
 
-impl<T, I> RewardsDistribution for DelegatedRewardsDistribution<T, I>
+impl<T> RewardsDistribution for DelegatedRewardsDistribution<T>
 where
 	T: Config,
-	I: Issuance<AccountId = T::AccountId, Balance = T::Amount>,
 {
-	type Balance = I::Balance;
-	type AccountId = I::AccountId;
+	type Balance = T::Amount;
+	type AccountId = T::AccountId;
 
-	fn distribute(reward_amount: Self::Balance, beneficiary: &Self::AccountId) {
-		distribute::<T>(beneficiary, reward_amount, I::mint);
+	fn distribute(
+		reward_amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		settle: impl FnMut(&T::AccountId, T::Amount),
+	) {
+		distribute::<T>(beneficiary, reward_amount, settle);
 	}
 }
 
@@ -385,7 +388,7 @@ where
 pub fn distribute<T: Config>(
 	validator: &T::AccountId,
 	total: T::Amount,
-	settle: impl Fn(&T::AccountId, T::Amount),
+	mut settle: impl FnMut(&T::AccountId, T::Amount),
 ) {
 	use frame_support::sp_runtime::traits::Zero;
 	if total.is_zero() {

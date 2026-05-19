@@ -344,7 +344,7 @@ impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>>
 	fn note_author(author: T::AccountId) {
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
 		if reward_amount != Zero::zero() {
-			T::RewardsDistribution::distribute(reward_amount, &author);
+			T::RewardsDistribution::distribute(reward_amount, &author, T::Issuance::mint);
 		}
 	}
 }

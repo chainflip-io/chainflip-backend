@@ -27,7 +27,11 @@ impl<T: Chainflip> RewardsDistribution for MockRewardsDistribution<T> {
 	type Balance = T::Amount;
 	type AccountId = T::AccountId;
 
-	fn distribute(amount: Self::Balance, beneficiary: &Self::AccountId) {
+	fn distribute(
+		amount: Self::Balance,
+		beneficiary: &Self::AccountId,
+		_settle: impl FnMut(&Self::AccountId, Self::Balance),
+	) {
 		<Self as MockPalletStorage>::mutate_storage(
 			b"REWARDS",
 			beneficiary,
