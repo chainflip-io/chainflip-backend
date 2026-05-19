@@ -90,4 +90,4 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 ]
-test = ["dep:proptest", "dep:proptest-derive", "sp-arithmetic/proptest"]
+proptest = ["dep:proptest", "dep:proptest-derive", "sp-arithmetic/proptest"]
