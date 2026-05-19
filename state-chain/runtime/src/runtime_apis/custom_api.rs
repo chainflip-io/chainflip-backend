@@ -454,4 +454,11 @@ pub fn test_historical_conversions() {
 		"cf_network_fees",
 		20117,
 	);
+
+	// test_runtime_call::<v0200, (), NetworkFees>(
+	// 	v0200,
+	// 	"CustomRuntimeApi",
+	// 	"cf_network_fees",
+	// 	20117,
+	// );
 }

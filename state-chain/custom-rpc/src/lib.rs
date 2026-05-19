@@ -48,7 +48,7 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
-	migrations::{basics::migrate_from_historical_type, v0201},
+	migrations::{basics::migrate_from_historical_type, v0200, v0201},
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
@@ -2584,7 +2584,7 @@ where
 			let swap_limits = api.cf_swap_limits(hash)?;
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
-				api.cf_network_fees_before_version_16(hash)?.into()
+				migrate_from_historical_type(v0200, api.cf_network_fees_before_version_16(hash)?)
 			} else if version < 17 {
 				#[expect(deprecated)]
 				migrate_from_historical_type(v0201, api.cf_network_fees_before_version_17(hash)?)
