@@ -2139,6 +2139,10 @@ impl_runtime_apis! {
 		fn cf_ingress_events(chain: ForeignChain) -> Result<IngressEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_ingress_events(chain)
 		}
+
+		fn cf_supported_assets() -> Vec<Asset> {
+			Asset::all().collect()
+		}
 	}
 }
 
