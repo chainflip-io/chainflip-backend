@@ -378,17 +378,73 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 	}
 
 	fn requires_signature_refresh(
-		_call: &BitcoinApi<BtcEnvironment>,
-		_payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
-		_maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
+		call: &BitcoinApi<BtcEnvironment>,
+		payload: &<<Bitcoin as Chain>::ChainCrypto as ChainCrypto>::Payload,
+		maybe_current_onchain_key: Option<<BitcoinCrypto as ChainCrypto>::AggKey>,
 	) -> RequiresSignatureRefresh<BitcoinCrypto, BitcoinApi<BtcEnvironment>> {
-		// The payload for a Bitcoin transaction will never change and so it doesn't need to be
-		// checked here. We also don't need to check for the signature here because even if we are
-		// in the next epoch and the key has changed, the old signature for the btc tx is still
-		// valid since its based on those old input UTXOs. In fact, we never have to resign btc
-		// txs and the btc tx is always valid as long as the input UTXOs are valid. Therefore, we
-		// don't have to check anything here and just rebroadcast.
-		RequiresSignatureRefresh::False
+		if &call.threshold_signature_payload() != payload {
+			return RequiresSignatureRefresh::True(None)
+		}
+
+		if call.signatures_use_expected_input_keys() {
+			return RequiresSignatureRefresh::False
+		}
+
+		maybe_current_onchain_key.map_or(RequiresSignatureRefresh::True(None), |agg_key| {
+			let mut modified_call = call.clone();
+			if modified_call.refresh_signing_key_selection(&agg_key) {
+				RequiresSignatureRefresh::True(Some(modified_call))
+			} else {
+				RequiresSignatureRefresh::True(None)
+			}
+		})
+	}
+}
+
+#[cfg(test)]
+mod bitcoin_transaction_builder_tests {
+	use super::*;
+	use cf_chains::btc::{
+		deposit_address::DepositAddress, AggKey, BitcoinOutput, BitcoinTransaction, ScriptPubkey,
+		Utxo, UtxoId,
+	};
+
+	#[test]
+	fn btc_retry_refreshes_stale_key_selection_after_rotation() {
+		let deposit_key = [0x12; 32];
+		let old_agg_key = AggKey { previous: None, current: deposit_key };
+		let rotated_agg_key = AggKey { previous: Some(deposit_key), current: [0x34; 32] };
+
+		let mut tx = BitcoinTransaction::create_new_unsigned(
+			&old_agg_key,
+			vec![Utxo {
+				amount: 100_000,
+				id: UtxoId { tx_id: Default::default(), vout: 0 },
+				deposit_address: DepositAddress::new(deposit_key, 1),
+			}],
+			vec![BitcoinOutput {
+				amount: 90_000,
+				script_pubkey: ScriptPubkey::Taproot([0x56; 32]),
+			}],
+		);
+		tx.add_signer_and_signatures(rotated_agg_key, vec![[1u8; 64]]);
+
+		let call = BitcoinApi::<BtcEnvironment>::NoChangeTransfer(tx);
+		let original_payload = call.threshold_signature_payload();
+
+		match BtcTransactionBuilder::requires_signature_refresh(
+			&call,
+			&original_payload,
+			Some(rotated_agg_key),
+		) {
+			RequiresSignatureRefresh::True(Some(modified_call)) => {
+				let modified_payload = modified_call.threshold_signature_payload();
+				assert!(modified_payload.first().is_some_and(|(previous_or_current, _)| {
+					*previous_or_current == cf_chains::btc::PreviousOrCurrent::Previous
+				}));
+			},
+			_ => panic!("stale Bitcoin signing key selection should be refreshed"),
+		}
 	}
 }
 

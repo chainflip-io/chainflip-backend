@@ -828,6 +828,25 @@ fn extend_with_inputs_outputs(bytes: &mut Vec<u8>, inputs: &[Utxo], outputs: &[B
 }
 
 impl BitcoinTransaction {
+	fn old_utxo_input_indices_for(agg_key: &AggKey, inputs: &[Utxo]) -> VecDeque<u32> {
+		(0..)
+			.zip(inputs)
+			.filter_map(|(i, Utxo { deposit_address, .. })| {
+				if deposit_address.pubkey_x == agg_key.current {
+					None
+				} else if agg_key
+					.previous
+					.is_some_and(|previous| deposit_address.pubkey_x == previous)
+				{
+					Some(i)
+				} else {
+					log_or_panic!("Utxo is not spendable by the current or previous key");
+					None
+				}
+			})
+			.collect()
+	}
+
 	pub fn create_new_unsigned(
 		agg_key: &AggKey,
 		inputs: Vec<Utxo>,
@@ -836,25 +855,7 @@ impl BitcoinTransaction {
 		const SEGWIT_MARKER: u8 = 0u8;
 		const SEGWIT_FLAG: u8 = 1u8;
 
-		let old_utxo_input_indices = (0..)
-			.zip(&inputs)
-			.filter_map(|(i, Utxo { deposit_address, .. })| {
-				if deposit_address.pubkey_x == agg_key.current {
-					None
-				} else {
-					agg_key.previous.and_then(|previous| {
-						if deposit_address.pubkey_x == previous {
-							Some(i)
-						} else {
-							cf_runtime_utilities::log_or_panic!(
-								"Utxo is not spendable by the current or previous key"
-							);
-							None
-						}
-					})
-				}
-			})
-			.collect::<VecDeque<_>>();
+		let old_utxo_input_indices = Self::old_utxo_input_indices_for(agg_key, &inputs);
 
 		let mut transaction_bytes = Vec::default();
 		transaction_bytes.extend(VERSION);
@@ -880,6 +881,46 @@ impl BitcoinTransaction {
 			signatures.len() == self.inputs.len() &&
 				!signatures.iter().any(|signature| signature == &[0u8; 64])
 		})
+	}
+
+	fn selected_signing_key<'a>(
+		signer: &'a AggKey,
+		previous_or_current: PreviousOrCurrent,
+	) -> Option<&'a [u8; 32]> {
+		match previous_or_current {
+			PreviousOrCurrent::Previous => signer.previous.as_ref(),
+			PreviousOrCurrent::Current => Some(&signer.current),
+		}
+	}
+
+	pub fn signatures_use_expected_input_keys(&self) -> bool {
+		if !self.is_signed() {
+			return false
+		}
+		let Some((signer, signatures)) = self.signer_and_signatures.as_ref() else {
+			return false
+		};
+		if signatures.len() != self.inputs.len() {
+			return false
+		}
+		self.get_signing_payloads()
+			.iter()
+			.zip(&self.inputs)
+			.all(|((previous_or_current, _), input)| {
+				Self::selected_signing_key(signer, *previous_or_current)
+					.is_some_and(|key| *key == input.deposit_address.pubkey_x)
+			})
+	}
+
+	pub fn refresh_signing_key_selection(&mut self, agg_key: &AggKey) -> bool {
+		let old_utxo_input_indices = Self::old_utxo_input_indices_for(agg_key, &self.inputs);
+		if old_utxo_input_indices == self.old_utxo_input_indices {
+			false
+		} else {
+			self.old_utxo_input_indices = old_utxo_input_indices;
+			self.signer_and_signatures = None;
+			true
+		}
 	}
 
 	pub fn txid(&self) -> Hash {
@@ -1458,9 +1499,11 @@ mod test {
 		}
 	}
 
+	const TEST_PUBKEY_X: [u8; 32] =
+		hex_literal::hex!("78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB");
+
 	fn create_test_unsigned_transaction(sign_with: PreviousOrCurrent) -> BitcoinTransaction {
-		let pubkey_x =
-			hex_literal::hex!("78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB");
+		let pubkey_x = TEST_PUBKEY_X;
 		let script_pubkey = ScriptPubkey::try_from_address(
 			"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
 			&BitcoinNetwork::Mainnet,
@@ -1483,6 +1526,26 @@ mod test {
 		};
 		let output = BitcoinOutput { amount: 100000000, script_pubkey };
 		BitcoinTransaction::create_new_unsigned(&agg_key, vec![input], vec![output])
+	}
+
+	#[test]
+	fn detects_and_refreshes_stale_bitcoin_signing_key_selection() {
+		let mut tx = create_test_unsigned_transaction(PreviousOrCurrent::Current);
+		let rotated_agg_key = AggKey { previous: Some(TEST_PUBKEY_X), current: [0xcf; 32] };
+
+		tx.add_signer_and_signatures(rotated_agg_key, vec![[1u8; 64]]);
+		assert!(!tx.signatures_use_expected_input_keys());
+
+		assert!(tx.refresh_signing_key_selection(&rotated_agg_key));
+		assert_eq!(
+			tx.get_signing_payloads()
+				.first()
+				.map(|(previous_or_current, _)| *previous_or_current),
+			Some(PreviousOrCurrent::Previous)
+		);
+
+		tx.add_signer_and_signatures(rotated_agg_key, vec![[1u8; 64]]);
+		assert!(tx.signatures_use_expected_input_keys());
 	}
 
 	#[test]

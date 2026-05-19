@@ -61,6 +61,26 @@ pub enum UtxoSelectionType {
 	Some { output_amount: BtcAmount, number_of_outputs: u64 },
 }
 
+impl<E> BitcoinApi<E> {
+	pub fn signatures_use_expected_input_keys(&self) -> bool {
+		match self {
+			BitcoinApi::BatchTransfer(call) =>
+				call.bitcoin_transaction.signatures_use_expected_input_keys(),
+			BitcoinApi::NoChangeTransfer(call) => call.signatures_use_expected_input_keys(),
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
+	}
+
+	pub fn refresh_signing_key_selection(&mut self, agg_key: &AggKey) -> bool {
+		match self {
+			BitcoinApi::BatchTransfer(call) =>
+				call.bitcoin_transaction.refresh_signing_key_selection(agg_key),
+			BitcoinApi::NoChangeTransfer(call) => call.refresh_signing_key_selection(agg_key),
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
+	}
+}
+
 impl<E> ConsolidateCall<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount>
