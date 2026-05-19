@@ -2,6 +2,47 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.0] - 2026-05-18
+
+### Features
+
+- Tron deposit monitoring ([#6584](https://github.com/chainflip-io/chainflip-backend/issues/6584))
+- Changed LPP behaviour with stale prices ([#6586](https://github.com/chainflip-io/chainflip-backend/issues/6586))
+- Collect just enough collateral for liquidation ([#6566](https://github.com/chainflip-io/chainflip-backend/issues/6566))
+- New `cf_all_account_infos` rpc call to get account info for all accounts ([#6565](https://github.com/chainflip-io/chainflip-backend/issues/6565))
+- Lending hardening ([#6568](https://github.com/chainflip-io/chainflip-backend/issues/6568))
+- Tron ([#6508](https://github.com/chainflip-io/chainflip-backend/issues/6508))
+- Remove collateral auto-topup ([#6560](https://github.com/chainflip-io/chainflip-backend/issues/6560))
+- Lending broker fees ([#6549](https://github.com/chainflip-io/chainflip-backend/issues/6549))
+- Grandpa vote delegation support ([#6496](https://github.com/chainflip-io/chainflip-backend/issues/6496))
+- Scheduled swaps rpc uses oracle price for estimation ([#6554](https://github.com/chainflip-io/chainflip-backend/issues/6554))
+- Add extra fields to SystemLiquidationExcessAmount ([#6557](https://github.com/chainflip-io/chainflip-backend/issues/6557))
+- Utilisation cap ([#6546](https://github.com/chainflip-io/chainflip-backend/issues/6546))
+- No passive collateral ([#6536](https://github.com/chainflip-io/chainflip-backend/issues/6536))
+- Exclude nodes failing keygen from delegation snapshots ([#6166](https://github.com/chainflip-io/chainflip-backend/issues/6166))
+- Lending pools can be used in boosting ([#6498](https://github.com/chainflip-io/chainflip-backend/issues/6498))
+- Remove ingress-egress-tracker and old witnessing code ([#6460](https://github.com/chainflip-io/chainflip-backend/issues/6460))
+- Add asset based basic rpc tests ([#6524](https://github.com/chainflip-io/chainflip-backend/issues/6524))
+- Add signed payload to CallResigned event ([#6520](https://github.com/chainflip-io/chainflip-backend/issues/6520))
+- Election dashboard ([#6512](https://github.com/chainflip-io/chainflip-backend/issues/6512))
+- Add basic rpc_tests to fast_bouncer ([#6521](https://github.com/chainflip-io/chainflip-backend/issues/6521))
+- Oracle stable coin strategy ([#6423](https://github.com/chainflip-io/chainflip-backend/issues/6423))
+- Allow broker affiliate deregistration ([#6459](https://github.com/chainflip-io/chainflip-backend/issues/6459))
+- Add tron and bsc assets support to bouncer ([#6478](https://github.com/chainflip-io/chainflip-backend/issues/6478))
+- Refactor deregistration checks ([#6427](https://github.com/chainflip-io/chainflip-backend/issues/6427))
+- Supplied funds can be used as collateral ([#6410](https://github.com/chainflip-io/chainflip-backend/issues/6410))
+
+### Fixes
+
+- Correct accounting in some rare edge cases ([#6582](https://github.com/chainflip-io/chainflip-backend/issues/6582))
+- Ed25519 point deserialisation checks prime-order subgroup member… ([#6573](https://github.com/chainflip-io/chainflip-backend/issues/6573))
+- Use full swap logic for get scheduled swaps rpc ([#6531](https://github.com/chainflip-io/chainflip-backend/issues/6531))
+- Emit operator removed event when validator deregisters ([#6519](https://github.com/chainflip-io/chainflip-backend/issues/6519))
+- Set solana ingress delay to 10 blocks in bouncer ([#6439](https://github.com/chainflip-io/chainflip-backend/issues/6439))
+- Demote log to info ([#6480](https://github.com/chainflip-io/chainflip-backend/issues/6480))
+- Use correct asset for contract deployment ([#6463](https://github.com/chainflip-io/chainflip-backend/issues/6463))
+- Prevent duplicate Authorization header in benchmark PR creation ([#6442](https://github.com/chainflip-io/chainflip-backend/issues/6442))
+
 ## [2.1.19] - 2026-05-13
 
 ### Fixes
