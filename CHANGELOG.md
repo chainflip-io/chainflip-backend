@@ -2,6 +2,10 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.1.20] - 2026-05-18
+
+- Prevent re-use of expired BTC channels.
+
 ## [2.1.19] - 2026-05-13
 
 ### Fixes
