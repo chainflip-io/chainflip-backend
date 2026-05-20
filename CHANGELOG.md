@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.2] - 2026-05-20
+
+### Fixes
+
+- cf_account_info includes collateral in supply-only accounts
+
 ## [2.2.1] - 2026-05-20
 
 ### Fixes
