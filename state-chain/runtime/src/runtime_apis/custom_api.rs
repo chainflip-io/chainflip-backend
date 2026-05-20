@@ -16,7 +16,7 @@
 
 pub mod types;
 
-use cf_utilities::migrations::v0201;
+use cf_utilities::migrations::{v0200, v0201};
 pub use types::RawWitnessedEvents;
 
 use crate::runtime_apis::types::*;
@@ -451,18 +451,19 @@ decl_runtime_apis!(
 
 #[test]
 pub fn test_historical_conversions() {
-	use crate::runtime_apis::historical_compatibility::test_runtime_call;
-	test_runtime_call::<v0201, (), NetworkFees>(
+	use crate::runtime_apis::historical_compatibility::*;
+	test_runtime_call_for_codec_compatibility_with_static_runtime::<v0201, (), NetworkFees>(
 		v0201,
 		"CustomRuntimeApi",
 		"cf_network_fees",
-		20117,
+		20119,
 	);
 
-	// test_runtime_call::<v0200, (), NetworkFees>(
-	// 	v0200,
-	// 	"CustomRuntimeApi",
-	// 	"cf_network_fees",
-	// 	20117,
-	// );
+	test_runtime_call_for_codec_compatibility_with_historical_node::<v0200, (), NetworkFees>(
+		v0200,
+		"CustomRuntimeApi",
+		"cf_network_fees",
+		20012,
+		"https://mainnet-archive.chainflip.io",
+	);
 }

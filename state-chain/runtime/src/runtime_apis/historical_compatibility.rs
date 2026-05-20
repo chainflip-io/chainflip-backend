@@ -1,6 +1,8 @@
 #![cfg(test)]
 
-use cf_utilities::migrations::basics::{migrate_to_historical_type, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{
+	migrate_from_historical_type, migrate_to_historical_type, HasVersion, VariantName,
+};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::{
@@ -13,10 +15,10 @@ use scale_json::ScaleDecodedToJson;
 /// Load historical metadata for a given spec version.
 ///
 /// Metadata files are stored in `state-chain/runtime_historical_metadata/` with the naming
-/// convention `mainnet_v{spec_version}.scale`.
+/// convention `runtime_{spec_version}.scale`.
 fn load_metadata(spec_version: u32) -> RuntimeMetadataV15 {
 	let path = format!(
-		"{}/state-chain/runtime_historical_metadata/mainnet_v{}.scale",
+		"{}/state-chain/runtime_historical_metadata/runtime_{}.scale",
 		env!("CARGO_MANIFEST_DIR").trim_end_matches("/state-chain/runtime"),
 		spec_version,
 	);
@@ -86,7 +88,7 @@ fn assert_decodable(encoded: &[u8], type_id: u32, metadata: &RuntimeMetadataV15)
 /// - `api_name`: The runtime API trait name (e.g. `"CustomRuntimeApi"`)
 /// - `method_name`: The method name within the API (e.g. `"cf_pool_info"`)
 /// - `test_against_version`: The historical spec version to test against
-pub fn test_runtime_call<
+pub fn test_runtime_call_for_codec_compatibility_with_static_runtime<
 	V: VariantName,
 	I: Arbitrary + std::fmt::Debug + HasVersion<V, HistoricalType: Encode>,
 	O: Arbitrary + std::fmt::Debug + HasVersion<V, HistoricalType: Encode>,
@@ -149,4 +151,102 @@ pub fn test_runtime_call<
 			Ok(())
 		})
 		.unwrap();
+}
+
+pub fn lookup_blockhash_from_runtime_version_mainnet(version: u32) -> Option<&'static str> {
+	match version {
+		20012 => Some("0xc2068ad859fc5c3b3c7c5ecb3bd84033f1b5a0ce60e8c3b52cab4d22840eec37"),
+		_ => None,
+	}
+}
+
+pub fn test_runtime_call_for_codec_compatibility_with_historical_node<
+	V: VariantName,
+	I: Arbitrary + std::fmt::Debug + HasVersion<V, HistoricalType: Encode>,
+	O: Arbitrary + std::fmt::Debug + HasVersion<V, HistoricalType: Encode + Decode>,
+>(
+	version: V,
+	api_name: &'static str,
+	method_name: &'static str,
+	test_against_version: u32,
+	archive_node_url: &'static str,
+) {
+	let blockhash = lookup_blockhash_from_runtime_version_mainnet(test_against_version).unwrap();
+
+	let client = reqwest::blocking::Client::new();
+
+	let path = module_path!();
+
+	let mut runner = TestRunner::new(Config {
+		source_file: Some(path),
+		failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+			"proptest-regressions",
+		))),
+		cases: 10,
+		..Default::default()
+	});
+
+	runner
+		.run(&I::arbitrary(), |input| {
+			// Encode the input using the legacy type
+			let old_input = migrate_to_historical_type(version, input);
+			let encoded_input = old_input.encode();
+
+			// Call runtime API on the archive node at the given block hash
+			let call_method = format!("{}_{}", api_name, method_name);
+			let params_hex = format!("0x{}", hex::encode(&encoded_input));
+
+			let response = client
+				.post(archive_node_url)
+				.json(&serde_json::json!({
+					"id": 1,
+					"jsonrpc": "2.0",
+					"method": "state_call",
+					"params": [call_method, params_hex, blockhash]
+				}))
+				.send()
+				.map_err(|e| {
+					proptest::test_runner::TestCaseError::Fail(
+						format!("RPC request failed: {e}").into(),
+					)
+				})?;
+
+			let body: serde_json::Value = response.json().map_err(|e| {
+				proptest::test_runner::TestCaseError::Fail(
+					format!("Failed to parse RPC response: {e}").into(),
+				)
+			})?;
+
+			let result_hex = body["result"].as_str().ok_or_else(|| {
+				proptest::test_runner::TestCaseError::Fail(
+					format!("RPC response missing 'result' field: {body}").into(),
+				)
+			})?;
+
+			let encoded_output = hex::decode(result_hex.trim_start_matches("0x")).map_err(|e| {
+				proptest::test_runner::TestCaseError::Fail(
+					format!("Failed to decode hex output: {e}").into(),
+				)
+			})?;
+
+			let encoded_output_slice = &mut &encoded_output[..];
+
+			// Decode into O::HistoricalType and migrate to O
+			let historical_output = <O as HasVersion<V>>::HistoricalType::decode(
+				encoded_output_slice,
+			)
+			.map_err(|e| {
+				proptest::test_runner::TestCaseError::Fail(
+					format!("Failed to decode output into HistoricalType: {e}").into(),
+				)
+			})?;
+
+			assert!(encoded_output_slice.is_empty(), "Decoding output did not consume all bytes!");
+
+			let current_output: O = migrate_from_historical_type(version, historical_output);
+			println!("Successfully migrated output: {current_output:?}");
+
+			Ok(())
+		})
+		.unwrap()
 }
