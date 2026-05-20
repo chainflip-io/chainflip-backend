@@ -176,7 +176,7 @@ async function main() {
 
     const metadata = Buffer.from(opaqueMetadata);
     const outputPath = values['output'] ??
-        path.join(__dirname, '..', '..', 'state-chain', 'runtime_historical_metadata', `runtime_${targetVersion}_${blockHash}.scale`);
+        path.join(__dirname, '..', '..', 'state-chain', 'runtime_historical_metadata', `runtime_${targetVersion}.scale`);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, metadata);
     console.log(`Metadata v15 (${metadata.length} bytes) written to ${outputPath}`);
