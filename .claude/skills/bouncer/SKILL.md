@@ -219,6 +219,68 @@ Pino levels: 30=info, 40=warn, 50=error.
 
 For chain-side issues (engine, state chain), look in `/tmp/chainflip/<service>.log` (`chainflip-node.log`, `chainflip-engine.log`, `chainflip-lp-api.log`, `chainflip-broker-api.log`).
 
+### Querying the indexer DB
+
+The localnet boots a Postgres-backed Substrate event indexer (squid-sdk) as part of docker-compose. It's the easiest way to trace on-chain events after a test failure — every block, extrinsic, call, and event is queryable.
+
+Connect (creds and DB name come from `bouncer/.env`):
+
+```bash
+psql "postgres://postgres:postgres@127.0.0.1:5432/squid_archive"
+```
+
+Key tables (full schema in `bouncer/prisma/schema.prisma`):
+
+| Table       | Useful columns                                                       |
+| ----------- | -------------------------------------------------------------------- |
+| `event`     | `name` (e.g. `Swapping.SwapRequested`), `args` (JSONB), `block_id`   |
+| `extrinsic` | `hash`, `success`, `error`, `block_id`                               |
+| `call`      | `name`, `args`, `success`, `error`, `extrinsic_id`                   |
+| `block`     | `height`, `hash`, `timestamp`                                        |
+
+`event.args` has a GIN index, so JSONB lookups are fast. Typical recipes:
+
+```sql
+-- All events for a swap, ordered chronologically
+SELECT b.height, e.name, e.args
+FROM event e JOIN block b ON e.block_id = b.id
+WHERE e.args @> '{"swapRequestId":"42"}'::jsonb
+ORDER BY b.height, e.index_in_block;
+
+-- Find the swap request that came from a given deposit tx hash
+SELECT e.name, e.args
+FROM event e
+WHERE e.name = 'Swapping.SwapRequested'
+  AND e.args::text LIKE '%<tx_hash>%';
+
+-- Most common event names in the last N blocks (sanity check)
+SELECT name, COUNT(*) FROM event
+WHERE block_id IN (SELECT id FROM block ORDER BY height DESC LIMIT 200)
+GROUP BY name ORDER BY count DESC LIMIT 20;
+```
+
+### Swap lifecycle reference
+
+A successful swap walks this event chain — linked by `swapRequestId` in `args`:
+
+`Swapping.SwapRequested` → `Swapping.SwapScheduled` → `Swapping.SwapExecuted` → `Swapping.SwapEgressScheduled` → `<Chain>IngressEgress.CcmBroadcastRequested` or `BatchBroadcastRequested` → `<Chain>Broadcaster.BroadcastSuccess`
+
+A missing link points at the failure stage. Common failure events to grep for:
+
+- **`Swapping.SwapEgressIgnored` / `Swapping.RefundEgressIgnored`** — output too small to cover gas; swap got stuck post-execution.
+- **Missing `BroadcastSuccess`** for an egress that was requested — signing or broadcast infrastructure problem (check engine logs and `<Chain>Broadcaster.*` events).
+- **`<Chain>IngressEgress.DepositFailed`** — deposit rejected or not witnessed.
+
+The bouncer log records the deposit tx hash; use it to find the originating `swapRequestId` in `event.args`.
+
+### Format gotchas when correlating across sources
+
+The same value can appear in different encodings in logs, RPC output, and the indexer:
+
+- **EVM addresses**: lowercased in some logs, EIP-55 mixed-case in others. Compare with `lower()`.
+- **Bitcoin addresses**: standard BECH32/etc. in user-facing logs vs. internal state-chain enum representation in events.
+- **Bitcoin tx hashes**: appear in reversed byte order in some logs/DB fields. If a lookup misses, try the reverse.
+
 ## 7. Pre-commit checks
 
 Run before every commit that touches `bouncer/`. Run in any order.
