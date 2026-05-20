@@ -34,6 +34,7 @@ mod new_epoch;
 mod solana;
 mod swapping;
 mod trading_strategy;
+mod unsigned_validation;
 mod witnessing;
 
 use cf_chains::evm::Address as EvmAddress;
