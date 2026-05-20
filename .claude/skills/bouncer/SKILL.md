@@ -47,6 +47,8 @@ Prints `Liveness`, `Commit`, `Setup` lines, ending with `State: <STATE>`. Exits 
 | `UNREADY` | Running and on HEAD, but `setup_for_test.sh` not run | `./setup_for_test.sh`. See §3.                                             |
 | `READY`   | Running, on HEAD, setup complete                     | Skip to §4 and run the test.                                               |
 
+> **Note on `STALE`:** the commit hash is baked into the node binary by a build script that's cache-keyed on Rust source. A commit that changes only non-binary files (docs, `bouncer/**` TypeScript, `.github/**`) won't trigger a rebuild, so the binary keeps the _previous_ commit hash and the check reports `STALE` even though the running code is effectively current. If the only commits since the running hash are non-binary changes, a rebuild won't help and it's safe to proceed.
+
 ## 2. Starting a localnet
 
 | Want                                                 | Script                                 |
@@ -229,14 +231,16 @@ Connect (creds and DB name come from `bouncer/.env`):
 psql "postgres://postgres:postgres@127.0.0.1:5432/squid_archive"
 ```
 
+If `psql` isn't installed, ask the user before installing it (on macOS: `brew install libpq && brew link --force libpq`).
+
 Key tables (full schema in `bouncer/prisma/schema.prisma`):
 
-| Table       | Useful columns                                                       |
-| ----------- | -------------------------------------------------------------------- |
-| `event`     | `name` (e.g. `Swapping.SwapRequested`), `args` (JSONB), `block_id`   |
-| `extrinsic` | `hash`, `success`, `error`, `block_id`                               |
-| `call`      | `name`, `args`, `success`, `error`, `extrinsic_id`                   |
-| `block`     | `height`, `hash`, `timestamp`                                        |
+| Table       | Useful columns                                                     |
+| ----------- | ------------------------------------------------------------------ |
+| `event`     | `name` (e.g. `Swapping.SwapRequested`), `args` (JSONB), `block_id` |
+| `extrinsic` | `hash`, `success`, `error`, `block_id`                             |
+| `call`      | `name`, `args`, `success`, `error`, `extrinsic_id`                 |
+| `block`     | `height`, `hash`, `timestamp`                                      |
 
 `event.args` has a GIN index, so JSONB lookups are fast. Typical recipes:
 
@@ -247,7 +251,8 @@ FROM event e JOIN block b ON e.block_id = b.id
 WHERE e.args @> '{"swapRequestId":"42"}'::jsonb
 ORDER BY b.height, e.index_in_block;
 
--- Find the swap request that came from a given deposit tx hash
+-- Find a VAULT swap by its deposit tx hash (vault origins carry origin.txId;
+-- deposit-channel origins do NOT — correlate those by deposit address/channel instead)
 SELECT e.name, e.args
 FROM event e
 WHERE e.name = 'Swapping.SwapRequested'
@@ -271,7 +276,7 @@ A missing link points at the failure stage. Common failure events to grep for:
 - **Missing `BroadcastSuccess`** for an egress that was requested — signing or broadcast infrastructure problem (check engine logs and `<Chain>Broadcaster.*` events).
 - **`<Chain>IngressEgress.DepositFailed`** — deposit rejected or not witnessed.
 
-The bouncer log records the deposit tx hash; use it to find the originating `swapRequestId` in `event.args`.
+For **vault swaps**, the `SwapRequested` origin carries the deposit `txId`, so you can find the originating `swapRequestId` by searching `event.args` for the tx hash from the bouncer log. **Deposit-channel swaps** carry no tx hash in `SwapRequested` (only `deposit_address`, `channel_id`, `deposit_block_height`) — correlate those by deposit address or channel id.
 
 ### Format gotchas when correlating across sources
 
@@ -290,6 +295,29 @@ pnpm prettier:write        # Format (auto-fix)
 pnpm tsc --noEmit          # Type-check
 pnpm eslint:check          # Lint (use eslint:fix for auto-fix)
 ```
+
+## 8. Bouncer commands
+
+`bouncer/commands/` holds standalone CLI scripts — run them directly from `bouncer/` (e.g. `./commands/<name>.ts`). Each one has a header comment documenting its arguments. The ones this skill leans on:
+
+| Command                     | Purpose                                                | Section   |
+| --------------------------- | ------------------------------------------------------ | --------- |
+| `check_localnet_state.ts`   | Report localnet `State` (DOWN/STALE/UNREADY/READY)     | §1        |
+| `run_test.ts`               | Run a single test by name, file, or swap number        | §4        |
+| `generate_event_schemas.ts` | Regenerate the zod event schemas from runtime metadata | §5        |
+| `perform_swap.ts`           | Run one real end-to-end swap                           | see below |
+
+### `perform_swap.ts` — a one-off test swap
+
+Exercises the full deposit → swap → egress path without running a vitest test — handy for generating real swap activity.
+
+```bash
+# ./commands/perform_swap.ts <source_asset> <dest_asset> [dest_address]
+./commands/perform_swap.ts Eth Usdc            # dest address auto-generated
+./commands/perform_swap.ts Btc Eth 0xYourAddr  # explicit dest address
+```
+
+Omitting the destination address generates a fresh one for the destination asset. It opens a deposit channel, sends the deposit, and waits through to egress (a couple of minutes).
 
 ## When _not_ to use the bouncer
 

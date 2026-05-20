@@ -15,6 +15,13 @@
 // Exit codes:
 //   0 — READY (safe to run tests against it)
 //   1 — any other state
+//
+// NOTE — false STALE after a rebuild: the commit hash is baked into the node binary
+// by a build script that's cache-keyed on Rust source. A commit that changes only
+// non-binary files (docs, bouncer/** TypeScript, .github/**) won't trigger a rebuild,
+// so the binary keeps the *previous* commit hash and this reports STALE even though
+// the running code is effectively current. If the only commits since the running hash
+// are non-binary changes, a rebuild won't help and it's safe to proceed.
 
 import { execSync } from 'child_process';
 
