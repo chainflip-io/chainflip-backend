@@ -125,6 +125,8 @@ frame-metadata = { workspace = true, default-features = true, features = [
 ] }
 scale-decode = { workspace = true }
 scale-json = { workspace = true }
+reqwest = { workspace = true, features = ["blocking", "json"] }
+serde_json = { workspace = true, default-features = true }
 
 # enable the `proptest` feature for all (required) dependency crates if we are buiding for a test
 pallet-cf-swapping = { workspace = true, features = ["proptest"] }
