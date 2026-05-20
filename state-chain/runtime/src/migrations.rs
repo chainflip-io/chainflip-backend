@@ -16,6 +16,7 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod bitcoin_testnet4;
 pub mod housekeeping;
 pub mod safe_mode;
 pub mod tron_integration;
