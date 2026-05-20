@@ -65,6 +65,7 @@ pub use pallet::*;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 mod benchmarking;
+mod benchmarking_types;
 mod mock;
 mod tests;
 
@@ -782,7 +783,7 @@ pub mod pallet {
 		pub fn benchmark_realistic_call(
 			_origin: OriginFor<T>,
 			#[cfg(feature = "runtime-benchmarks")]
-			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
+			_params: crate::benchmarking_types::RealisticCallParams,
 		) -> DispatchResult {
 			Ok(())
 		}
