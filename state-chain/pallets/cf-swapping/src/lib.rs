@@ -3377,7 +3377,7 @@ pub mod pallet {
 							// than hard-coded prices.
 							.map(|price_data| price_data.price)
 							.unwrap_or_else(Price::one);
-						asset_price.multiply_by(usdc_price) // USD / Asset
+						asset_price.multiply_by(usdc_price).unwrap_or(asset_price) // USD / Asset
 					} else {
 						// Using stale prices here is fine as its just for fees/gas
 						T::PriceFeedApi::get_price(asset)

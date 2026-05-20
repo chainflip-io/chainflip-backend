@@ -316,41 +316,34 @@ impl TryFrom<U512> for SqrtPrice {
 	}
 }
 
-pub fn mul_div_floor_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
+/// Computes the floor and ceil of `a * b / c` in `U512` space. Returns `None` if `c` is zero.
+fn mul_div_floor_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<(U512, U512)> {
 	let c: U512 = c.into();
 	if c.is_zero() {
 		return None
 	}
-	(U256::full_mul(a, b) / c).try_into().ok()
+	let (floor, m) = U512::div_mod(U256::full_mul(a, b), c);
+	// Cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore
+	// a*b/c < U512::MAX
+	let ceil = if m.is_zero() { floor } else { floor + U512::from(1) };
+	Some((floor, ceil))
+}
+
+pub fn mul_div_floor_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
+	mul_div_floor_ceil(a, b, c).and_then(|(floor, _)| floor.try_into().ok())
 }
 
 pub fn mul_div_ceil_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
-	let c: U512 = c.into();
-	if c.is_zero() {
-		return None
-	}
-	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
-	let ceil = if m.is_zero() { d } else { d + U512::from(1) };
-	ceil.try_into().ok()
+	mul_div_floor_ceil(a, b, c).and_then(|(_, ceil)| ceil.try_into().ok())
 }
 
+/// Computes both the floor and ceil of `a * b / c`. Panics if `c` is zero or either result
+/// overflows `U256`. Test-only (gated behind the `test` feature); production code uses the
+/// `*_checked` variants.
+#[cfg(any(test, feature = "test"))]
 pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
-	let c: U512 = c.into();
-
-	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
-
-	(
-		d.try_into().unwrap(),
-		if m > U512::from(0) {
-			// cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore
-			// a*b/c < U512::MAX
-			d + 1
-		} else {
-			d
-		}
-		.try_into()
-		.unwrap(),
-	)
+	let (floor, ceil) = mul_div_floor_ceil(a, b, c).expect("mul_div requires a non-zero divisor");
+	(floor.try_into().unwrap(), ceil.try_into().unwrap())
 }
 
 #[derive(
@@ -470,16 +463,16 @@ impl Price {
 		Some(Price(mul_div_floor_checked(self.0, Self::one().0, price.0)?))
 	}
 
-	pub fn multiply_by(self, price: Price) -> Self {
-		Price(mul_div_floor_checked(self.0, price.0, Self::one().0).unwrap())
+	pub fn multiply_by(self, price: Price) -> Option<Self> {
+		Some(Price(mul_div_floor_checked(self.0, price.0, Self::one().0)?))
 	}
 
 	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_floor_checked(input.into(), self.0, Self::one().0).unwrap()
+		mul_div_floor_checked(input.into(), self.0, Self::one().0).unwrap_or_default()
 	}
 
 	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_ceil_checked(input.into(), self.0, Self::one().0).unwrap()
+		mul_div_ceil_checked(input.into(), self.0, Self::one().0).unwrap_or_default()
 	}
 
 	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Amount {
