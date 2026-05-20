@@ -29,6 +29,7 @@ pub mod runtime_apis;
 pub mod safe_mode;
 #[cfg(any(test, all(feature = "std", feature = "mocks")))]
 pub mod test_runner;
+mod tests;
 mod weights;
 
 pub use configs::*;

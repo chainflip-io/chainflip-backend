@@ -7,14 +7,16 @@ use crate::migrations::basics::VariantName;
 
 macro_rules! all_runtime_versions {
 	($(
-		$version:ident => $Migration:ident,
+		$version:ident ($latest_patch:literal) => $Migration:ident,
 	)*) => {
 		// every version is a struct that implements `VariantName`
 		$(
 			#[derive(Clone, Copy)]
 			#[allow(nonstandard_style)]
 			pub struct $version;
-			impl VariantName for $version {}
+			impl VariantName for $version {
+				const LATEST_RUNTIME_PATCH_VERSION: u32 = $latest_patch;
+			}
 		)*
 
 		/// List of all migrations for this type.
@@ -69,7 +71,7 @@ macro_rules! generate_migration_helpers {
 }
 
 all_runtime_versions! {
-	v0200 => MigrationTo0200,
-	v0201 => MigrationTo0201,
-	v0202 => MigrationTo0202,
+	v0200 (20012) => MigrationTo0200,
+	v0201 (20119) => MigrationTo0201,
+	v0202 (20201) => MigrationTo0202,
 }

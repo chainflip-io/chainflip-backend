@@ -2,7 +2,9 @@
 
 use crate::migrations::Migrations;
 
-pub trait VariantName: Copy {}
+pub trait VariantName: Copy {
+	const LATEST_RUNTIME_PATCH_VERSION: u32;
+}
 
 pub trait Migration<To: ?Sized, V: VariantName> {
 	type From: IsHistoricalType;
@@ -89,7 +91,10 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: VariantName> 
 #[derive(Clone, Copy)]
 #[allow(nonstandard_style)]
 pub struct vCurrent;
-impl VariantName for vCurrent {}
+impl VariantName for vCurrent {
+	// TODO this should be synchronized with the one in runtime/lib.rs
+	const LATEST_RUNTIME_PATCH_VERSION: u32 = 20201;
+}
 
 pub trait HasGenericVariant: Sized {
 	type MigrationFromGeneric: Migration<Self, vCurrent>;
