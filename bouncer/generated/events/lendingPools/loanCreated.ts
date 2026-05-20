@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  accountId,
   cfPrimitivesChainsAssetsAnyAsset,
   numberOrHex,
   palletCfLendingPoolsGeneralLendingLoanType,
@@ -10,4 +11,5 @@ export const lendingPoolsLoanCreated = z.object({
   asset: cfPrimitivesChainsAssetsAnyAsset,
   loanType: palletCfLendingPoolsGeneralLendingLoanType,
   principalAmount: numberOrHex,
+  brokerId: accountId.nullish(),
 });

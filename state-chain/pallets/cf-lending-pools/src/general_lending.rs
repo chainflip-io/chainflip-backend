@@ -1483,6 +1483,8 @@ impl<T: Config> LendingApi for Pallet<T> {
 			Error::<T>::AmountBelowMinimum
 		);
 
+		let broker_id = broker.as_ref().map(|b| b.account.clone());
+
 		// Creating a loan with 0 principal first, then using `expand_loan_inner` to update it
 		let loan = create_new_loan::<T>(asset, broker);
 		let loan_id = loan.id;
@@ -1498,6 +1500,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 					loan_type: LoanType::User(borrower_id.clone()),
 					asset,
 					principal_amount: amount_to_borrow,
+					broker_id,
 				});
 
 				account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
