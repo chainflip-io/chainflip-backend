@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.1] - 2026-05-20
+
+### Fixes
+
+- RPC backwards compatibility for cf_boost_pool_details and cf_boost_pool_pending_fees
+
 ## [2.2.0] - 2026-05-18
 
 ### Features

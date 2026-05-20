@@ -1,6 +1,6 @@
 [package]
 name = "state-chain-runtime"
-version = "2.2.0"
+version = "2.2.1"
 authors = ["Chainflip Team <https://github.com/chainflip-io>"]
 edition = "2021"
 homepage = "https://chainflip.io"
@@ -114,7 +114,10 @@ n-functor = { workspace = true }
 sp-io = { workspace = true, default-features = true }
 proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }
-cf-chains = { workspace = true, features = ["mocks", "runtime-integration-tests"] }
+cf-chains = { workspace = true, features = [
+	"mocks",
+	"runtime-integration-tests",
+] }
 cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]

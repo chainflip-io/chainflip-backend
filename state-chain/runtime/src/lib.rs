@@ -97,7 +97,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_02_00,
+	spec_version: 2_02_01,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
