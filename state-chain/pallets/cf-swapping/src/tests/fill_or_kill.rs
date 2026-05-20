@@ -1015,7 +1015,7 @@ mod oracle_swaps {
 				AfterBrokerFee4 {
 					network_fee_taken: NETWORK_FEE,
 					broker_fee_taken: BROKER_FEE,
-					intermediate: Some(AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }),
+					intermediates: vec![AssetAndAmount { asset: Asset::Usdc, amount: USDC_AMOUNT }],
 					output_amount_before_fees: OUTPUT_AMOUNT + BROKER_FEE,
 					output_amount_after_fees: OUTPUT_AMOUNT,
 					input_amount_after_fees: INPUT_AMOUNT - NETWORK_FEE,

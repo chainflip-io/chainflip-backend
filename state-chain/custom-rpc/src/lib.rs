@@ -589,7 +589,11 @@ pub struct RpcSwapOutputV2 {
 impl From<SimulatedSwapInformation> for RpcSwapOutputV2 {
 	fn from(simulated_swap_info: SimulatedSwapInformation) -> Self {
 		RpcSwapOutputV2 {
-			intermediary: simulated_swap_info.intermediary.map(Into::into),
+			// TODO JAMIE: Currently this only supports a single intermediary.
+			intermediary: simulated_swap_info
+				.intermediates
+				.first()
+				.map(|intermediate| intermediate.amount.into()),
 			output: simulated_swap_info.output.into(),
 			network_fee: simulated_swap_info.network_fee.into(),
 			ingress_fee: simulated_swap_info.ingress_fee.into(),

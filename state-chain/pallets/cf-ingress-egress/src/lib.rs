@@ -2292,7 +2292,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									Asset::Flip,
 									flip_amount_to_credit,
 									false, // No network fee
-									false, // Not internal
 								);
 							let input_amount =
 								core::cmp::min(input_amount, amount_after_fees.into());

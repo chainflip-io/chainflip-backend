@@ -27,16 +27,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, SwapId, SwapLeg,
-	SwapRequestId, FLIPPERINOS_PER_FLIP, SECONDS_PER_BLOCK, SWAP_DELAY_BLOCKS,
+	Beneficiaries, Beneficiary, BlockNumber, ChannelId, ForeignChain, LegacySwapLegDirection,
+	SwapId, SwapRequestId, FLIPPERINOS_PER_FLIP, SECONDS_PER_BLOCK, SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, BalanceApi, Bonding, ChainflipNetworkInfo,
 	ChannelIdAllocator, DepositApi, DeregistrationCheck, FundingInfo, GetMinimumFunding,
 	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestTypeEncoded, SwapType, SwappingApi,
+	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
+	SwappingApi,
 };
+pub use execution::SwapLeg;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -75,7 +77,6 @@ pub mod migrations;
 pub mod weights;
 pub use dca_state::DcaState;
 pub use fees::{BrokerFeesTracker, FeeRateAndMinimum, NetworkFeeTracker};
-pub(crate) use swap_state::{GroupSwapState, SwapGroupPair};
 pub use weights::WeightInfo;
 
 use crate::swap_state::SuccessfulSwap;
@@ -85,6 +86,8 @@ pub(crate) type AssetAndAmount = cf_primitives::AssetAndAmount<AssetAmount>;
 
 pub const STORAGE_VERSION_U16: u16 = 18;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
+
+pub const ENABLE_WBTC_BTC_ROUTE: bool = true;
 
 pub(crate) const DEFAULT_SWAP_RETRY_DELAY_BLOCKS: u32 = 5;
 const DEFAULT_MAX_SWAP_RETRY_DURATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32; // 1 hour
@@ -180,11 +183,6 @@ impl<T: Config> Swap<T> {
 	) -> Self {
 		Self { swap_id, swap_request_id, from, to, input_amount, refund_params, execute_at }
 	}
-
-	/// Remove the refund params from the swap. Used for simulating swaps without price protection.
-	fn without_price_protection(self) -> Self {
-		Self { refund_params: None, ..self }
-	}
 }
 
 #[derive(Debug, Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq)]
@@ -262,6 +260,55 @@ pub(crate) enum SwapRequestState<T: Config> {
 	BrokerFee {
 		account_id: T::AccountId,
 	},
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum NetworkFeeType {
+	/// Used for standard swaps
+	Standard,
+	/// Used for standard swaps that are going to be credited on-chain
+	// TODO: see if we want to treat lending swaps as internal for
+	// the purposes of determining network fee?
+	Internal,
+	/// Used for Ingress and Egress and broker fee swaps
+	NoMinimum,
+	/// Used for NetworkFee swaps
+	None,
+}
+
+impl NetworkFeeType {
+	fn from_swap_request_type<AccountId>(
+		swap_request_type: &SwapRequestType<AccountId>,
+	) -> NetworkFeeType {
+		match swap_request_type {
+			SwapRequestType::Regular { output_action } |
+			SwapRequestType::RegularNoNetworkFee { output_action } => match output_action {
+				SwapOutputAction::CreditOnChain { .. } => NetworkFeeType::Internal,
+				_ => NetworkFeeType::Standard,
+			},
+			SwapRequestType::BrokerFee { .. } | SwapRequestType::IngressEgressFee =>
+				NetworkFeeType::NoMinimum,
+			SwapRequestType::NetworkFee => NetworkFeeType::None,
+		}
+	}
+
+	fn from_swap_request_state<T: Config>(
+		swap_request_state: &SwapRequestState<T>,
+	) -> NetworkFeeType {
+		match swap_request_state {
+			SwapRequestState::UserSwap { output_action, .. } => match output_action {
+				SwapOutputAction::CreditOnChain { .. } => NetworkFeeType::Internal,
+				_ => NetworkFeeType::Standard,
+			},
+			SwapRequestState::BrokerFee { .. } | SwapRequestState::IngressEgressFee =>
+				NetworkFeeType::NoMinimum,
+			SwapRequestState::NetworkFee => NetworkFeeType::None,
+		}
+	}
+
+	fn has_minimum(&self) -> bool {
+		!matches!(self, NetworkFeeType::NoMinimum | NetworkFeeType::None)
+	}
 }
 
 #[derive(DebugNoBound, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -639,7 +686,7 @@ pub mod pallet {
 			output: AssetAndAmount,
 			network_fee: AssetAndAmount,
 			broker_fee: AssetAndAmount,
-			intermediate: Option<AssetAndAmount>,
+			intermediates: Vec<AssetAndAmount>,
 			// Total difference between final swap output price and oracle price (including fees).
 			// Negative means worse price than oracle.
 			oracle_delta: Option<SignedBasisPoints>,
@@ -677,7 +724,8 @@ pub mod pallet {
 		/// liquidity in the Pool. Also this could happen if the result overflowed u128::MAX
 		BatchSwapFailed {
 			asset: Asset,
-			direction: SwapLeg,
+			// TODO JAMIE: breaking change: need to use SwapLeg here instead of direction.
+			direction: LegacySwapLegDirection,
 			amount: AssetAmount,
 		},
 		SwapAmountConfiscated {
