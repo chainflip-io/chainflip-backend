@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.2] - 2026-05-20
+
+### Features
+
+- Add broker_id to LoanCreated event.
+
 ## [2.2.1] - 2026-05-20
 
 ### Fixes
