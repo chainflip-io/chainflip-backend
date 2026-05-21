@@ -51,7 +51,10 @@ use monitor::MonitorEvent;
 
 use crate::{EdPublicKey, OutgoingMultisigStageMessages, P2PKey, XPublicKey};
 
-use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
+use socket::{
+	ConnectedOutgoingSocket, OutgoingSocket, INCOMING_MESSAGES_BUFFER_SIZE, MAX_MESSAGE_SIZE,
+	RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX,
+};
 
 /// How long to keep the TCP connection open for while waiting
 /// for the client to authenticate themselves. We want to keep
@@ -628,6 +631,12 @@ impl P2PContext {
 		socket.set_curve_server(true).unwrap();
 		socket.set_curve_secretkey(&self.key.secret_key.to_bytes()).unwrap();
 		socket.set_handshake_ivl(HANDSHAKE_TIMEOUT.as_millis() as i32).unwrap();
+
+		// Disconnect any peer that sends a message larger than this. This mirrors the
+		// cap applied to outgoing DEALER sockets and bounds a single inbound allocation.
+		socket.set_maxmsgsize(MAX_MESSAGE_SIZE).unwrap();
+		// Bound how many messages ZMQ buffers per peer before dropping further input.
+		socket.set_rcvhwm(INCOMING_MESSAGES_BUFFER_SIZE).unwrap();
 
 		// Listen on all interfaces
 		let endpoint = format!("tcp://0.0.0.0:{port}");
