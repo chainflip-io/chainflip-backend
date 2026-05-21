@@ -239,7 +239,7 @@ impl TradingStrategy {
 				ensure!(*base_asset != STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 				ensure!(*quote_asset == STABLE_ASSET, Error::<T>::InvalidAssetsForStrategy);
 				ensure!(
-					T::PriceFeedApi::get_relative_price(*base_asset, *quote_asset).is_some(),
+					T::PriceFeedApi::is_oracle_supported(*base_asset),
 					Error::<T>::InvalidAssetsForStrategy
 				);
 			},

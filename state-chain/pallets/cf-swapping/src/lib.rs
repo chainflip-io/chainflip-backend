@@ -3055,7 +3055,9 @@ pub mod pallet {
 		/// Returns the configured default oracle price slippage protection for a single pool leg.
 		/// Returns `None` if the asset has no oracle price feed or no valid pool pair.
 		pub fn default_oracle_lpp_for_asset(asset: Asset) -> Option<BasisPoints> {
-			T::PriceFeedApi::get_price(asset)?;
+			if !T::PriceFeedApi::is_oracle_supported(asset) {
+				return None;
+			}
 			Some(DefaultOraclePriceSlippageProtection::<T>::get(AssetPair::new(
 				asset,
 				STABLE_ASSET,
@@ -3369,7 +3371,7 @@ pub mod pallet {
 				// Get the price of both assets using oracles or simulated swap, both with fallback
 				// to hard coded prices
 				let get_usd_price = |asset, side: Side| -> Price {
-					if asset == Asset::Flip || asset == Asset::Dot || asset == Asset::Trx {
+					if !T::PriceFeedApi::is_oracle_supported(asset) {
 						let asset_price =
 							Self::estimate_usdc_price_using_simulated_swap_or_fallback(asset, side); // USDC / Asset
 						let usdc_price = T::PriceFeedApi::get_price(STABLE_ASSET) // USD / USDC
@@ -3489,10 +3491,10 @@ impl<T: Config> SwapParameterValidation for Pallet<T> {
 			return Err(DispatchError::from(Error::<T>::RetryDurationTooHigh));
 		}
 
-		// Check that the oracle prices are available for the assets.
+		// Check that the oracle prices are supported for the assets.
 		if let Some(_max_oracle_price_slippage) = max_oracle_price_slippage {
-			if T::PriceFeedApi::get_price(input_asset).is_none() ||
-				T::PriceFeedApi::get_price(output_asset).is_none()
+			if !T::PriceFeedApi::is_oracle_supported(input_asset) ||
+				!T::PriceFeedApi::is_oracle_supported(output_asset)
 			{
 				return Err(DispatchError::from(Error::<T>::OraclePriceNotAvailable));
 			}
