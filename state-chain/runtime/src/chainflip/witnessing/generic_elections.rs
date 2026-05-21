@@ -58,7 +58,7 @@ use pallet_cf_elections::{
 	RunnerStorageAccess,
 };
 
-fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAssetpair> {
+pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAssetpair> {
 	use ChainlinkAssetpair::*;
 
 	match asset {
@@ -84,10 +84,6 @@ fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAssetpair> {
 }
 
 //--------------- api provided to other pallets -------------
-
-pub fn is_oracle_supported(asset: any::Asset) -> bool {
-	get_chainlink_assetpair(asset).is_some()
-}
 
 pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Option<OraclePrice> {
 	use PriceStatus::*;

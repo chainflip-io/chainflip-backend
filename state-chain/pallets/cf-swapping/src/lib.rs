@@ -3371,30 +3371,32 @@ pub mod pallet {
 				// Get the price of both assets using oracles or simulated swap, both with fallback
 				// to hard coded prices
 				let get_usd_price = |asset, side: Side| -> Price {
-					if !T::PriceFeedApi::is_oracle_supported(asset) {
-						let asset_price =
-							Self::estimate_usdc_price_using_simulated_swap_or_fallback(asset, side); // USDC / Asset
+					if let Some(oracle) = T::PriceFeedApi::get_price(asset) {
+						// Apply a hard coded slippage in the correct direction.
+						let slippage_bps = if asset == STABLE_ASSET {
+							0
+						} else if asset.is_usd_stablecoin() {
+							ORACLE_SLIPPAGE_STABLE
+						} else {
+							ORACLE_SLIPPAGE
+						};
+						// Using stale prices here is fine as its just for fees/gas.
+						oracle.price.adjust_by_bps(slippage_bps, side == Side::Buy)
+					} else {
 						let usdc_price = T::PriceFeedApi::get_price(STABLE_ASSET) // USD / USDC
 							// Ignore staleness because it will always be less stale
 							// than hard-coded prices.
 							.map(|price_data| price_data.price)
 							.unwrap_or_else(Price::one);
-						asset_price.multiply_by(usdc_price) // USD / Asset
-					} else {
-						// Using stale prices here is fine as its just for fees/gas
-						T::PriceFeedApi::get_price(asset)
-							.map(|price_data| {
-								// Apply a hard coded slippage in the correct direction
-								let slippage_bps = if asset == STABLE_ASSET {
-									0
-								} else if asset.is_usd_stablecoin() {
-									ORACLE_SLIPPAGE_STABLE
-								} else {
-									ORACLE_SLIPPAGE
-								};
-								price_data.price.adjust_by_bps(slippage_bps, side == Side::Buy)
-							})
-							.unwrap_or_else(|| utilities::hard_coded_price_for_asset(asset))
+						if asset == STABLE_ASSET {
+							usdc_price
+						} else {
+							let asset_price =
+								Self::estimate_usdc_price_using_simulated_swap_or_fallback(
+									asset, side,
+								); // USDC / Asset
+							asset_price.multiply_by(usdc_price) // USD / Asset
+						}
 					}
 				};
 				let output_price = get_usd_price(output_asset, Side::Buy); // USD / output_asset
