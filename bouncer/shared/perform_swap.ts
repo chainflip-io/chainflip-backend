@@ -11,7 +11,6 @@ import {
   chainFromAsset,
   observeSwapRequested,
   SwapRequestType,
-  evmChains,
   createEvmWalletAndFund,
   getSolWhaleKeyPair,
   decodeSolAddress,
@@ -24,6 +23,7 @@ import {
   decodeDispatchError,
   Asset,
   getTronWhaleKeyPair,
+  isEvmChain,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
 import { getChainflipApi } from 'shared/utils/substrate';
@@ -54,6 +54,10 @@ import { tronIngressEgressCcmEgressInvalid } from 'generated/events/tronIngressE
 import { tronIngressEgressCcmBroadcastFailed } from 'generated/events/tronIngressEgress/ccmBroadcastFailed';
 import { tronBroadcasterBroadcastSuccess } from 'generated/events/tronBroadcaster/broadcastSuccess';
 import { executeTronVaultSwap } from './vault_swap/tron_vault_swap';
+import { bscIngressEgressCcmBroadcastRequested } from '../generated/events/bscIngressEgress/ccmBroadcastRequested';
+import { bscIngressEgressCcmEgressInvalid } from '../generated/events/bscIngressEgress/ccmEgressInvalid';
+import { bscBroadcasterBroadcastSuccess } from '../generated/events/bscBroadcaster/broadcastSuccess';
+import { bscIngressEgressCcmBroadcastFailed } from '../generated/events/bscIngressEgress/ccmBroadcastFailed';
 
 export type SwapParams = {
   sourceAsset: Asset;
@@ -253,6 +257,52 @@ async function waitForCcmExecution<A = []>(
         ccmBroadcastFailed: {
           name: 'ArbitrumIngressEgress.CcmBroadcastFailed',
           schema: arbitrumIngressEgressCcmBroadcastFailed.refine(
+            (event) => event.broadcastId === broadcastId,
+          ),
+        },
+      });
+
+      if (broadcastResult.key === 'ccmBroadcastFailed') {
+        throw new Error(`CCM broadcast failed for ${destAsset} broadcast ${broadcastId}`);
+      }
+      break;
+    }
+    case 'Bsc': {
+      const ccmEgressResult = await cf.stepUntilOneEventOf({
+        ccmBroadcastRequested: {
+          name: 'BscIngressEgress.CcmBroadcastRequested',
+          schema: bscIngressEgressCcmBroadcastRequested.refine(
+            (event) =>
+              event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
+          ),
+        },
+        ccmEgressInvalid: {
+          name: 'BscIngressEgress.CcmEgressInvalid',
+          schema: bscIngressEgressCcmEgressInvalid.refine(
+            (event) =>
+              event.egressId[0] === egressId[0] && `${event.egressId[1]}` === `${egressId[1]}`,
+          ),
+        },
+      });
+
+      if (ccmEgressResult.key === 'ccmEgressInvalid') {
+        throw new Error(
+          `CCM egress invalid for egress ${JSON.stringify(egressId)}: ${JSON.stringify(ccmEgressResult.data.error)}`,
+        );
+      }
+
+      broadcastId = ccmEgressResult.data.broadcastId;
+
+      const broadcastResult = await cf.stepUntilOneEventOf({
+        broadcastSuccess: {
+          name: 'BscBroadcaster.BroadcastSuccess',
+          schema: bscBroadcasterBroadcastSuccess.refine(
+            (event) => event.broadcastId === broadcastId,
+          ),
+        },
+        ccmBroadcastFailed: {
+          name: 'BscIngressEgress.CcmBroadcastFailed',
+          schema: bscIngressEgressCcmBroadcastFailed.refine(
             (event) => event.broadcastId === broadcastId,
           ),
         },
@@ -507,7 +557,7 @@ export async function prepareVaultSwapSource<A = []>(
   const srcChain = chainFromAsset(sourceAsset);
   let vaultSwapSource: VaultSwapSource;
 
-  if (evmChains.includes(srcChain)) {
+  if (isEvmChain(srcChain)) {
     // Generate a new wallet for each vault swap to prevent nonce issues when running in parallel
     // with other swaps via deposit channels.
     const wallet = await createEvmWalletAndFund(cf.logger, sourceAsset, amount);
