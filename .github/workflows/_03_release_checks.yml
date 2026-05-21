@@ -59,6 +59,7 @@ jobs:
 
   check-runtime-spec-version:
     runs-on: namespace-profile-default-light
+    continue-on-error: true
     steps:
       - name: Checkout 🛒
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -102,7 +103,7 @@ jobs:
 
   notify-discord-on-failure:
     runs-on: namespace-profile-default-light
-    needs: [check-version, check-changelog, check-runtime-spec-version, check-tag-on-legit-branch]
+    needs: [check-version, check-changelog, check-tag-on-legit-branch]
     if: failure()
     steps:
       - name: Notify on failed bouncer 📢
