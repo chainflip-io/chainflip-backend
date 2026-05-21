@@ -25,6 +25,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use crate::core::{ed25519_secret_key_to_x25519_secret_key, X25519KeyPair};
 
 pub mod core;
+pub mod fair_channel;
 pub mod muxer;
 
 type EdPublicKey = ed25519::Public;

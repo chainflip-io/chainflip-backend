@@ -19,6 +19,8 @@ use cf_chains::{btc::BitcoinCrypto, dot::PolkadotCrypto, evm::EvmCrypto, sol::So
 use cf_primitives::AccountId;
 use futures::Future;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use crate::fair_channel::FairReceiver;
 use tracing::{info_span, trace, Instrument};
 
 use crate::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
@@ -27,7 +29,7 @@ pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTO
 use multisig::ChainTag;
 
 pub struct P2PMuxer {
-	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+	all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
 	all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	eth_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
@@ -103,7 +105,7 @@ fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 impl P2PMuxer {
 	#[expect(clippy::type_complexity)]
 	pub fn start(
-		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+		all_incoming_receiver: FairReceiver<AccountId, Vec<u8>>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
 		MultisigMessageSender<EvmCrypto>,
@@ -249,7 +251,7 @@ mod tests {
 
 	use super::*;
 
-	use crate::OutgoingMultisigStageMessages;
+	use crate::{core::INCOMING_MESSAGE_PER_PEER_LIMIT, fair_channel::fair_channel, OutgoingMultisigStageMessages};
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);
@@ -264,7 +266,8 @@ mod tests {
 	async fn correctly_prepends_chain_tag_broadcast() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -290,7 +293,8 @@ mod tests {
 	async fn correctly_prepends_chain_tag_private() {
 		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
-		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (_p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -329,7 +333,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_parse_and_remove_headers() {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
-		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) =
+			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let (_eth_outgoing_sender, mut eth_incoming_receiver, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
@@ -338,7 +343,7 @@ mod tests {
 
 		let bytes = [VERSION_PREFIX, ETH_TAG_PREFIX, DATA_1].concat();
 
-		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		p2p_incoming_sender.try_send(ACC_1, bytes).unwrap();
 
 		let received = expect_recv_with_timeout(&mut eth_incoming_receiver.0).await;
 

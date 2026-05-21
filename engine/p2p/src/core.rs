@@ -43,6 +43,8 @@ use cf_utilities::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use crate::fair_channel::{fair_channel, FairReceiver, FairSender, FairSendError};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use x25519_dalek::StaticSecret;
 
@@ -67,6 +69,15 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 /// How often to check for "stale" connections
 pub const ACTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+
+/// Per-peer in-flight message limit for the incoming-path channels between the
+/// listening thread, the control loop and the muxer. These stages have fast
+/// consumers and stay near-empty in normal operation (~1 message per peer), so
+/// this allowance comfortably absorbs bursts from concurrent ceremonies while
+/// ensuring a single flooding peer can only ever fill its own slots and never
+/// crowd out honest peers. Messages over the limit are dropped rather than
+/// blocking.
+pub const INCOMING_MESSAGE_PER_PEER_LIMIT: usize = 100;
 
 #[derive(Clone)]
 pub struct X25519KeyPair {
@@ -268,7 +279,7 @@ struct P2PContext {
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
 	/// Channel through which we send incoming messages to the multisig
-	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
 	reconnect_context: ReconnectContext,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
@@ -295,7 +306,7 @@ pub async fn start(
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
-	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	incoming_message_sender: FairSender<AccountId, Vec<u8>>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 ) -> anyhow::Result<()> {
@@ -354,7 +365,7 @@ impl P2PContext {
 	async fn control_loop(
 		mut self,
 		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-		mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
+		mut incoming_message_receiver: FairReceiver<XPublicKey, Vec<u8>>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
@@ -446,7 +457,17 @@ impl P2PContext {
 	fn forward_incoming_message(&mut self, pubkey: XPublicKey, payload: Vec<u8>) {
 		if let Some(acc_id) = self.x25519_to_account_id.get(&pubkey) {
 			trace!("Received a message from {acc_id}");
-			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
+			// Drop rather than block the control loop. A peer over its in-flight
+			// limit can only crowd out its own messages.
+			match self.incoming_message_sender.try_send(acc_id.clone(), payload) {
+				Ok(()) => {},
+				Err(FairSendError::PeerQuotaExceeded) => {
+					P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+					warn!("Dropping incoming p2p message from {acc_id}: over its in-flight limit");
+				},
+				// The receiver is dropped only when we are shutting down.
+				Err(FairSendError::Closed) => {},
+			}
 		} else {
 			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
@@ -623,7 +644,7 @@ impl P2PContext {
 	fn start_listening_thread(
 		&mut self,
 		port: Port,
-	) -> anyhow::Result<UnboundedReceiver<(XPublicKey, Vec<u8>)>> {
+	) -> anyhow::Result<FairReceiver<XPublicKey, Vec<u8>>> {
 		let socket = self.zmq_context.socket(zmq::SocketType::ROUTER).unwrap();
 
 		socket.set_router_mandatory(true).unwrap();
@@ -654,7 +675,7 @@ impl P2PContext {
 		info!("Started listening for incoming p2p connections on: {endpoint}");
 
 		let (incoming_message_sender, incoming_message_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
+			fair_channel(INCOMING_MESSAGE_PER_PEER_LIMIT);
 
 		let stop_thread = self.stop_thread.clone();
 
@@ -691,7 +712,20 @@ impl P2PContext {
 				let pubkey: [u8; 32] = hex::decode(pubkey).unwrap().try_into().unwrap();
 				let pubkey = XPublicKey::from(pubkey);
 
-				incoming_message_sender.send((pubkey, msg.to_vec())).unwrap();
+				// Drop the message rather than block the listening thread. A peer
+				// over its in-flight limit can only crowd out its own messages; a
+				// `Closed` error just means we are shutting down.
+				match incoming_message_sender.try_send(pubkey, msg.to_vec()) {
+					Ok(()) => {},
+					Err(FairSendError::PeerQuotaExceeded) => {
+						P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+						warn!(
+							"Dropping incoming p2p message: sender {} is over its in-flight limit",
+							pk_to_string(&pubkey),
+						);
+					},
+					Err(FairSendError::Closed) => {},
+				}
 			} else {
 				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 				warn!(
