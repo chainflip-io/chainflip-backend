@@ -1,0 +1,27 @@
+[package]
+name = "runtime-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Local dependencies
+state-chain-runtime = { path = "../runtime", features = ["std"] }
+cf-primitives = { path = "../primitives", features = ["std"] }
+
+# Polkadot SDK dependencies
+frame-remote-externalities = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+frame-support = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-state-machine = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-runtime = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sp-io = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sc-executor = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+sc-executor-common = { git = "https://github.com/chainflip-io/polkadot-sdk.git", tag = "chainflip-substrate-stable2509-3" }
+codec = { version = "3.7.4", package = "parity-scale-codec", features = [
+    "std",
+] }
+
+tokio = { version = "1.38.0", features = ["full"] }
+anyhow = "1.0.86"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
+log = "0.4.21"
+hex = "0.4.3"

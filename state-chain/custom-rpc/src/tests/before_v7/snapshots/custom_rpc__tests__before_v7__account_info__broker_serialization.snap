@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests/before_v7/account_info.rs
+assertion_line: 43
 expression: broker
 ---
 {
@@ -34,6 +35,10 @@ expression: broker
       "DOT": "0x0",
       "USDT": "0x0",
       "USDC": "0x0"
+    },
+    "Tron": {
+      "TRX": "0x0",
+      "USDT": "0x0"
     },
     "Bsc": {
       "BNB": "0x0",

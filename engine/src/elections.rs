@@ -34,7 +34,7 @@ use pallet_cf_elections::{
 };
 use rand::Rng;
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	sync::Arc,
 };
 use tokio::sync::mpsc;
@@ -243,6 +243,21 @@ where
 								}
 							}
 						}
+
+						let open_election_identifiers =
+							electoral_data.current_elections.keys().copied().collect::<BTreeSet<_>>();
+						for election_identifier in vote_tasks.remove_where(|election_identifier| {
+								!open_election_identifiers.contains(election_identifier)
+							}) {
+							self.log(
+								Level::DEBUG,
+								&format!(
+									"Voting task for election: '{:?}' aborted as election is no longer open.",
+									election_identifier
+								),
+							);
+						}
+
 						for (election_identifier, election_data) in electoral_data.current_elections {
 							if election_data.is_vote_desired {
 								if !vote_tasks.contains_key(&election_identifier) {

@@ -22,7 +22,7 @@ use codec::{Decode, Encode};
 use frame_support::instances::*;
 use pallet_cf_elections::{ElectionIdentifierOf, ElectoralDataFor, VoteOf};
 use state_chain_runtime::{
-	ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, SolanaInstance,
+	ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, SolanaInstance, TronInstance,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
@@ -181,6 +181,13 @@ impl_electoral_api!(
 
 impl_electoral_api!(
 	impl_instance = Instance7,
+	runtime_instance = TronInstance,
+	electoral_data = cf_tron_electoral_data,
+	filter_votes = cf_tron_filter_votes,
+);
+
+impl_electoral_api!(
+	impl_instance = Instance8,
 	runtime_instance = BscInstance,
 	electoral_data = cf_bsc_electoral_data,
 	filter_votes = cf_bsc_filter_votes,

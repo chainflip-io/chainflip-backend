@@ -10,6 +10,7 @@ export enum AccountRole {
   LiquidityProvider,
   Broker,
   Operator,
+  Validator,
 }
 
 async function getAccountRole(address: string): Promise<AccountRole> {

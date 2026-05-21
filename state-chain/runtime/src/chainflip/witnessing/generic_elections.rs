@@ -76,7 +76,7 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 		any::Asset::Flip => None,
 		any::Asset::Usdc => Some(UsdcUsd),
 		any::Asset::Usdt => Some(UsdtUsd),
-		any::Asset::Wbtc => Some(BtcUsd),
+		any::Asset::Wbtc => None,
 		any::Asset::Dot => None,
 		any::Asset::Btc => Some(BtcUsd),
 		any::Asset::ArbEth => Some(EthUsd),
@@ -88,6 +88,8 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 		any::Asset::HubDot => None,
 		any::Asset::HubUsdt => Some(UsdtUsd),
 		any::Asset::HubUsdc => Some(UsdcUsd),
+		any::Asset::Trx => None,
+		any::Asset::TrxUsdt => Some(UsdtUsd),
 		any::Asset::Bnb => None,
 		any::Asset::BscUsdt => Some(UsdtUsd),
 	}?;

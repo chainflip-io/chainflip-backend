@@ -73,7 +73,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   const amount = Math.round(givenAmount * 10 ** assetDecimals(ccy)) / 10 ** assetDecimals(ccy);
 
   const lp = cf.requirements.account.keypair;
-  cf.debug(`Depositing ${amount}${ccy} of liquidity for ${cf.requirements.account.uri}`);
+  cf.debug(`Depositing ${amount} ${ccy} of liquidity for ${cf.requirements.account.uri}`);
 
   // If no liquidity refund address is registered, then do that now
   await registerLiquidityRefundAddressForChain(cf, chainFromAsset(ccy), false);
@@ -95,7 +95,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
 
   const txHash = await runWithTimeout(
     send(cf.logger, ccy, ingressAddress, String(amount)),
-    400,
+    200,
     cf.logger,
     `sending liquidity ${amount} ${ccy}.`,
   );
@@ -113,7 +113,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
           return true;
         }
         cf.info(
-          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset: ${ccy}.`,
+          `Received amount ${event.amountCredited} is not within 1% of expected amount ${amountToFineAmount(String(amount), assetDecimals(ccy))} for asset ${ccy}.`,
         );
         return false;
       }

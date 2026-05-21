@@ -17,14 +17,12 @@
 pub mod address_checker;
 pub mod node_interface;
 
-use anyhow::bail;
-
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 use futures_core::Future;
 
-use crate::constants::{RPC_RETRY_CONNECTION_INTERVAL, SYNC_POLL_INTERVAL};
-use anyhow::{anyhow, Context, Result};
+use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
+use anyhow::{anyhow, Result};
 use cf_utilities::make_periodic_tick;
 use std::{path::PathBuf, str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
@@ -63,9 +61,9 @@ impl EvmRpcClient {
 					Ok(chain_id) if chain_id == expected_chain_id.into() => break client,
 					Ok(chain_id) => {
 						tracing::error!(
-								"Connected to {chain_name} node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
-								Please check your CFE configuration file...", 
-							);
+							"Connected to {chain_name} node but with incorrect chain_id {chain_id}, expected {expected_chain_id} from {http_endpoint}. \
+								Please check your CFE configuration file...",
+						);
 					},
 					Err(e) => tracing::error!(
 						"Cannot connect to an {chain_name:?} node at {http_endpoint} with error: {e}. \
@@ -323,63 +321,6 @@ impl EvmSigningRpcApi for EvmRpcSigningClient {
 		}
 
 		Ok(res?.tx_hash())
-	}
-}
-
-/// On each subscription this will create a new WS connection.
-#[derive(Clone)]
-pub struct ReconnectSubscriptionClient {
-	ws_endpoint: SecretUrl,
-	// This value comes from the SC.
-	chain_id: U256,
-	chain_name: &'static str,
-}
-
-impl ReconnectSubscriptionClient {
-	pub fn new(ws_endpoint: SecretUrl, chain_id: U256, chain_name: &'static str) -> Self {
-		Self { ws_endpoint, chain_id, chain_name }
-	}
-}
-
-#[async_trait::async_trait]
-pub trait ReconnectSubscribeApi {
-	async fn subscribe_blocks(&self) -> Result<ConscientiousEvmWebsocketBlockHeaderStream>;
-}
-
-use crate::evm::ConscientiousEvmWebsocketBlockHeaderStream;
-
-#[async_trait::async_trait]
-impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
-	async fn subscribe_blocks(&self) -> Result<ConscientiousEvmWebsocketBlockHeaderStream> {
-		let web3 =
-			web3::Web3::new(web3::transports::WebSocket::new(self.ws_endpoint.as_ref()).await?);
-
-		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
-
-		while let web3::types::SyncState::Syncing(info) = web3
-			.eth()
-			.syncing()
-			.await
-			.context("Failure while syncing WS {self.chain_name} client")?
-		{
-			tracing::info!(
-				"Waiting for {:?} node to sync. Sync state is: {info:?}. Checking again in {:?} ...",
-				self.chain_name,
-				poll_interval.period(),
-			);
-			poll_interval.tick().await;
-		}
-
-		let client_chain_id = web3.eth().chain_id().await.context("Failed to fetch chain id.")?;
-		if self.chain_id.0 != client_chain_id.0 {
-			bail!(
-				"Expected chain id {}, {} ws client returned {client_chain_id}.",
-				self.chain_id,
-				self.chain_name
-			)
-		}
-
-		ConscientiousEvmWebsocketBlockHeaderStream::new(web3, self.chain_name).await
 	}
 }
 

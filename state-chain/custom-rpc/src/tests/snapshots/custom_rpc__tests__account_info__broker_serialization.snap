@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests/account_info.rs
+assertion_line: 117
 expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
 ---
 {
@@ -33,6 +34,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0x0",
       "USDT": "0x0",
       "USDC": "0x0"
+    },
+    "Tron": {
+      "TRX": "0x0",
+      "USDT": "0x0"
     },
     "Bsc": {
       "BNB": "0x0",
@@ -74,6 +79,10 @@ expression: "serde_json::to_string_pretty(&wrapper).unwrap()"
       "DOT": "0x77359400",
       "USDT": "0xc350",
       "USDC": "0x186a0"
+    },
+    "Tron": {
+      "TRX": "0x4c4b40",
+      "USDT": "0x7a120"
     },
     "Bsc": {
       "BNB": "0x429d069189e0000",

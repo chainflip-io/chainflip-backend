@@ -47,14 +47,14 @@ use cf_chains::{
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
-	Beneficiary, BoostPoolTier, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId,
-	EpochIndex, ForeignChain, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	Beneficiary, BroadcastId, ChannelId, DcaParameters, EgressCounter, EgressId, EpochIndex,
+	ForeignChain, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
 	ThresholdSignatureRequestId, SECONDS_PER_BLOCK,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode,
-	lending::{BoostApi, BoostOutcome},
+	lending::{BoostApi, BoostOutcome, BoostSource},
 	AccountRoleRegistry, AdditionalDepositAction, AdjustedFeeEstimationApi, AffiliateRegistry,
 	AssetConverter, AssetWithholding, BalanceApi, Broadcaster, CcmAdditionalDataHandler, Chainflip,
 	ChannelIdAllocator, DepositApi, EgressApi, EpochInfo, FeePayment,
@@ -73,7 +73,7 @@ use generic_typeinfo_derive::GenericTypeInfo;
 pub use pallet::*;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::UniqueSaturatedInto;
-use sp_std::{boxed::Box, vec, vec::Vec};
+use sp_std::{boxed::Box, collections::btree_map::BTreeMap, vec, vec::Vec};
 pub use weights::WeightInfo;
 
 const MARKED_TX_EXPIRATION_BLOCKS: u32 = 3600 / SECONDS_PER_BLOCK as u32;
@@ -365,7 +365,8 @@ impl<C: Chain> CrossChainMessage<C> {
 	}
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(30);
+pub const STORAGE_VERSION_U16: u16 = 30;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 impl_pallet_safe_mode! {
 	PalletSafeMode<I>;
@@ -451,10 +452,7 @@ pub mod pallet {
 	use frame_support::traits::{ConstU128, EnsureOrigin, IsType};
 	use frame_system::WeightInfo as SystemWeightInfo;
 	use sp_runtime::SaturatedConversion;
-	use sp_std::{
-		collections::{btree_map::BTreeMap, vec_deque::VecDeque},
-		vec::Vec,
-	};
+	use sp_std::{collections::vec_deque::VecDeque, vec::Vec};
 
 	pub(crate) type ChannelRecycleQueue<T, I> =
 		Vec<(TargetChainBlockNumber<T, I>, TargetChainAccount<T, I>)>;
@@ -750,7 +748,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -914,11 +912,16 @@ pub mod pallet {
 	pub type DepositChannelRecycleBlocks<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelRecycleQueue<T, I>, ValueQuery>;
 
-	// Determines the number of block confirmations is required for a block on
-	// an external chain before CFE can submit any witness extrinsics for it.
+	// Election based witnessing: Determines the number of block confirmations required for a block
+	// to be considered safe and all contained transactions to be forwarded to the ingress egress
+	// pallet.
 	//
-	// This storage item won't be used for any chains using the elections witnessing and
-	// will be removed once all chains are migrated
+	// This value is mirrored to the `safety_margin` setting of all ingress related BlockWitnesser
+	// instances in the respective elections pallet.
+	//
+	// Legacy witnessing (only used for Assethub): Determines the number of block confirmations
+	// required for a block on an external chain before CFE can submit any witness extrinsics for
+	// it.
 	#[pallet::storage]
 	#[pallet::getter(fn witness_safety_margin)]
 	pub type WitnessSafetyMargin<T: Config<I>, I: 'static = ()> =
@@ -1124,7 +1127,9 @@ pub mod pallet {
 		DepositBoosted {
 			deposit_address: Option<TargetChainAccount<T, I>>,
 			asset: TargetChainAsset<T, I>,
-			amounts: BTreeMap<BoostPoolTier, TargetChainAmount<T, I>>,
+			/// Per-source amounts funded, including the boost fee charged by that source
+			/// (entries present only if that source contributed).
+			amounts: BTreeMap<BoostSource, TargetChainAmount<T, I>>,
 			deposit_details: <T::TargetChain as Chain>::DepositDetails,
 			prewitnessed_deposit_id: PrewitnessedDepositId,
 			channel_id: Option<ChannelId>,
@@ -1133,8 +1138,9 @@ pub mod pallet {
 			// a non-gas asset. The ingress fee is taken *after* the boost fee.
 			ingress_fee: TargetChainAmount<T, I>,
 			max_boost_fee_bps: BasisPoints,
-			// Total fee the user paid for their deposit to be boosted.
-			boost_fee: TargetChainAmount<T, I>,
+			/// Per-source boost fees the user paid for their deposit to be boosted
+			/// (entries present only if that source contributed).
+			boost_fee: BTreeMap<BoostSource, TargetChainAmount<T, I>>,
 			action: DepositAction<T, I>,
 			origin_type: DepositOriginType,
 		},
@@ -1254,6 +1260,7 @@ pub mod pallet {
 									ForeignChain::Arbitrum |
 									ForeignChain::Bitcoin |
 									ForeignChain::Ethereum |
+									ForeignChain::Tron |
 									ForeignChain::Bsc => ProcessedUpTo::<T, I>::get(),
 									ForeignChain::Assethub | ForeignChain::Polkadot =>
 										T::ChainTracking::get_block_height(),
@@ -2669,9 +2676,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				amount.into(),
 				boost_fee,
 			) {
-				Ok(BoostOutcome { used_pools, total_fee }) => {
-					let boost_fee_amount = total_fee.unique_saturated_into();
-					let amount_after_boost_fee = amount.saturating_sub(boost_fee_amount);
+				Ok(BoostOutcome { amounts, fees }) => {
+					let total_boost_fee: AssetAmount = fees.values().copied().sum();
+					let amount_after_boost_fee =
+						amount.saturating_sub(total_boost_fee.unique_saturated_into());
 
 					// Note that ingress fee is deducted at the time of boosting rather than the
 					// time the deposit is finalised (which allows us to perform the channel
@@ -2683,11 +2691,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							&origin,
 						);
 
-					let used_pools = used_pools
-						.into_iter()
-						.map(|(fee, amount)| (fee, amount.unique_saturated_into()))
-						.collect();
-
 					let action = Self::perform_channel_action(
 						action,
 						asset,
@@ -2698,14 +2701,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Self::deposit_event(Event::DepositBoosted {
 						deposit_address,
 						asset,
-						amounts: used_pools,
+						amounts: amounts
+							.into_iter()
+							.map(|(source, amount)| (source, amount.unique_saturated_into()))
+							.collect(),
 						block_height,
 						prewitnessed_deposit_id,
 						channel_id,
 						deposit_details,
 						ingress_fee,
 						max_boost_fee_bps: boost_fee,
-						boost_fee: boost_fee_amount,
+						boost_fee: fees
+							.into_iter()
+							.map(|(source, fee)| (source, fee.unique_saturated_into()))
+							.collect(),
 						action,
 						origin_type: origin.into(),
 					});
@@ -3466,7 +3475,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
+	pub fn allocate_next_channel_id() -> Result<ChannelId, Error<T, I>> {
 		ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
 			*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 			Ok(*id)

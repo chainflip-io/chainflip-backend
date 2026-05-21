@@ -17,7 +17,8 @@ extern crate alloc;
 
 use crate::{
 	chainflip::{
-		ethereum_sc_calls::*, witnessing::solana_elections::SolanaChainTrackingProvider, *,
+		ethereum_sc_calls::*, key_owner_proof::CurrentSessionProofSystem,
+		witnessing::solana_elections::SolanaChainTrackingProvider, *,
 	},
 	runtime_apis::{
 		custom_api::{runtime_decl_for_custom_runtime_api::CustomRuntimeApi as _, *},
@@ -28,7 +29,7 @@ use crate::{
 	*,
 };
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -39,7 +40,7 @@ use cf_chains::{
 	btc::{api::BitcoinApi, ScriptPubkey},
 	cf_parameters::build_and_encode_cf_parameters,
 	evm::{api::EvmCall, Address as EvmAddress, U256},
-	CcmChannelMetadataUnchecked, Chain, ChannelRefundParametersUncheckedEncoded,
+	CcmChannelMetadataUnchecked, Chain, ChainCrypto, ChannelRefundParametersUncheckedEncoded,
 	EvmVaultSwapExtraParameters, TransactionBuilder, VaultSwapExtraParameters,
 	VaultSwapExtraParametersEncoded, VaultSwapInputEncoded,
 };
@@ -71,8 +72,8 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders,
-	PoolPriceV1, PoolPriceV2, UnidirectionalPoolDepth,
+	HistoricalEarnedFees, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1,
+	PoolPriceV2, UnidirectionalPoolDepth,
 };
 use pallet_cf_reputation::HeartbeatQualification;
 use pallet_cf_swapping::{AffiliateDetails, BrokerPrivateBtcChannels, SwapLegInfo};
@@ -230,7 +231,7 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			Historical::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
+			CurrentSessionProofSystem::prove((sp_consensus_grandpa::KEY_TYPE, authority_id))
 				.map(|p| p.encode())
 				.map(sp_consensus_grandpa::OpaqueKeyOwnershipProof::new)
 		}
@@ -404,6 +405,8 @@ impl_runtime_apis! {
 			let arb = pallet_cf_chain_tracking::CurrentChainState::<Runtime, ArbitrumInstance>::get().unwrap();
 			let sol = SolanaChainTrackingProvider::get_block_height();
 			let hub = pallet_cf_chain_tracking::CurrentChainState::<Runtime, AssethubInstance>::get().unwrap();
+			let tron = pallet_cf_chain_tracking::CurrentChainState::<Runtime, TronInstance>::get().unwrap();
+			let bsc = pallet_cf_chain_tracking::CurrentChainState::<Runtime, BscInstance>::get().unwrap();
 
 			ExternalChainsBlockHeight {
 				bitcoin: btc.block_height,
@@ -412,20 +415,26 @@ impl_runtime_apis! {
 				solana: sol,
 				arbitrum: arb.block_height,
 				assethub: hub.block_height.into(),
+				tron: tron.block_height,
+				bsc: bsc.block_height,
 			}
 		}
 
 		fn cf_btc_utxos() -> BtcUtxos {
 			let utxos = pallet_cf_environment::BitcoinAvailableUtxos::<Runtime>::get();
 			let mut btc_balance = utxos.iter().fold(0, |acc, elem| acc + elem.amount);
-			//Sum the btc balance contained in the change utxos to the btc "free_balance"
-			let btc_ceremonies = pallet_cf_threshold_signature::PendingCeremonies::<Runtime,BitcoinInstance>::iter_values().map(|ceremony|{
-				ceremony.request_context.request_id
-			}).collect::<Vec<_>>();
-			let EpochKey { key, .. } = pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
-				.expect("We should always have a key for the current epoch");
-			for ceremony in btc_ceremonies {
-				if let RuntimeCall::BitcoinBroadcaster(pallet_cf_broadcast::pallet::Call::on_signature_ready{ api_call, ..}) = pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::get(ceremony).unwrap() {
+			// Sum the btc balance contained in the change utxos to the btc "free_balance".
+			// RequestCallback contains all in-flight signing requests
+			let EpochKey { key, .. } =
+				pallet_cf_threshold_signature::Pallet::<Runtime, BitcoinInstance>::active_epoch_key()
+					.expect("We should always have a key for the current epoch");
+			for (_request_id, callback) in
+				pallet_cf_threshold_signature::RequestCallback::<Runtime, BitcoinInstance>::iter()
+			{
+				if let RuntimeCall::BitcoinBroadcaster(
+					pallet_cf_broadcast::pallet::Call::on_signature_ready { api_call, .. },
+				) = callback
+				{
 					if let BitcoinApi::BatchTransfer(batch_transfer) = *api_call {
 						for output in batch_transfer.bitcoin_transaction.outputs {
 							if [
@@ -471,7 +480,7 @@ impl_runtime_apis! {
 				epoch_duration: Validator::epoch_duration(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
 				current_epoch_index: Validator::current_epoch(),
-				min_active_bid: Validator::resolve_auction_iteratively()
+				min_active_bid: Validator::resolve_auction_iteratively(&Default::default())
 					.ok()
 					.map(|(auction_outcome, _)| auction_outcome.bond),
 				rotation_phase: Validator::current_rotation_phase().to_str().to_owned(),
@@ -492,6 +501,8 @@ impl_runtime_apis! {
 				arbitrum: pallet_cf_broadcast::PendingBroadcasts::<Runtime, ArbitrumInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				solana: pallet_cf_broadcast::PendingBroadcasts::<Runtime, SolanaInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 				assethub: pallet_cf_broadcast::PendingBroadcasts::<Runtime, AssethubInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				tron: pallet_cf_broadcast::PendingBroadcasts::<Runtime, TronInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
+				bsc: pallet_cf_broadcast::PendingBroadcasts::<Runtime, BscInstance>::decode_non_dedup_len().unwrap_or(0) as u32,
 			}
 		}
 		fn cf_pending_tss_ceremonies_count() -> PendingTssCeremonies {
@@ -519,6 +530,8 @@ impl_runtime_apis! {
 				arbitrum: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, ArbitrumInstance>, ArbitrumInstance>(),
 				solana: open_channels::<SolanaChainTrackingProvider, SolanaInstance>(),
 				assethub: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, AssethubInstance>, AssethubInstance>(),
+				tron: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, TronInstance>, TronInstance>(),
+				bsc: open_channels::<pallet_cf_chain_tracking::Pallet<Runtime, BscInstance>, BscInstance>(),
 			}
 		}
 		fn cf_fee_imbalance() -> FeeImbalance<AssetAmount> {
@@ -529,6 +542,8 @@ impl_runtime_apis! {
 				bitcoin: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bitcoin.gas_asset()),
 				solana: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Solana.gas_asset()),
 				assethub: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Assethub.gas_asset()),
+				tron: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Tron.gas_asset()),
+				bsc: pallet_cf_asset_balances::Pallet::<Runtime>::vault_imbalance(ForeignChain::Bsc.gas_asset()),
 			}
 		}
 		fn cf_build_version() -> LastRuntimeUpgradeInfo {
@@ -549,6 +564,8 @@ impl_runtime_apis! {
 					(broadcast_id, pallet_cf_broadcast::AwaitingBroadcast::<Runtime, SolanaInstance>::get(broadcast_id.unwrap_or_default()).map(|broadcast_data| broadcast_data.transaction_out_id))
 				},
 				assethub: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, AssethubInstance>::get().map(|val| val.1),
+				tron: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, TronInstance>::get().map(|val| val.1),
+				bsc: pallet_cf_broadcast::IncomingKeyAndBroadcastId::<Runtime, BscInstance>::get().map(|val| val.1),
 			}
 		}
 		fn cf_sol_nonces() -> SolanaNonces{
@@ -604,7 +621,7 @@ impl_runtime_apis! {
 			DispatchErrorWithMessage
 		>
 		{
-			let next_auction = Validator::resolve_auction_iteratively()
+			let next_auction = Validator::resolve_auction_iteratively(&Default::default())
 				.map_err(|e| DispatchErrorWithMessage::from(<pallet_cf_validator::Error<Runtime>>::from(e)))?;
 			let next_set: BTreeSet<AccountId> = next_auction.0.winners.iter().cloned().collect();
 			let current_set: BTreeSet<AccountId> = Validator::current_authorities().into_iter().collect();
@@ -655,6 +672,14 @@ impl_runtime_apis! {
 
 		fn cf_arbitrum_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
 			ArbitrumElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
+		}
+
+		fn cf_tron_electoral_data(account_id: AccountId) -> Vec<u8> {
+			TronElections::electoral_data(&account_id).encode()
+		}
+
+		fn cf_tron_filter_votes(account_id: AccountId, proposed_votes: Vec<u8>) -> Vec<u8> {
+			TronElections::filter_votes(&account_id, Decode::decode(&mut &proposed_votes[..]).unwrap_or_default()).encode()
 		}
 
 		fn cf_bsc_electoral_data(account_id: AccountId) -> Vec<u8> {
@@ -785,6 +810,7 @@ impl_runtime_apis! {
 		}
 		fn cf_common_account_info(
 			account_id: &AccountId,
+			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance> {
 			let flip_account = pallet_cf_flip::Account::<Runtime>::get(account_id);
 			let upcoming_delegation_status = pallet_cf_validator::DelegationChoice::<Runtime>::get(account_id)
@@ -794,13 +820,20 @@ impl_runtime_apis! {
 					DelegationInfo { operator, bid }
 				));
 
+			// Call optimized version if we know that we don't have to sweep
+			let asset_balances = match should_sweep {
+				ShouldSweep::Yes => AssetBalances::free_balances(account_id),
+				ShouldSweep::No => AssetBalances::free_balances_dont_sweep(account_id),
+			};
+
 			RpcAccountInfoCommonItems {
+				account_id: Some(account_id.clone()),
 				vanity_name: pallet_cf_account_roles::VanityNames::<Runtime>::get().get(account_id)
 					.cloned()
 					.unwrap_or_default()
 					.into(),
 				flip_balance: flip_account.total(),
-				asset_balances: AssetBalances::free_balances(account_id),
+				asset_balances,
 				bond: flip_account.bond(),
 				estimated_redeemable_balance: pallet_cf_funding::Redemption::<Runtime>::for_rpc(
 					account_id,
@@ -872,6 +905,31 @@ impl_runtime_apis! {
 			}
 		}
 
+		fn cf_all_account_infos(requested_roles: Option<Vec<AccountRole>>) -> Vec<RuntimeApiAccountInfoWrapper> {
+
+			let _ = <pallet_cf_pools::Pallet<Runtime> as PoolApi>::sweep_all();
+
+			Self::cf_accounts().into_iter().filter_map(|(account_id, _)| {
+				let role = Self::cf_account_role(account_id.clone()).unwrap_or(AccountRole::Unregistered);
+
+				// only compute account info if this role was requested
+				if requested_roles.as_ref().is_none_or(|roles| roles.contains(&role)) {
+					let common_items = Self::cf_common_account_info(&account_id, ShouldSweep::No);
+					let role_specific =
+						match role {
+							AccountRole::Unregistered => RuntimeApiAccountInfo::Unregistered,
+							AccountRole::Broker => RuntimeApiAccountInfo::Broker(Box::new(Self::cf_broker_info(account_id))),
+							AccountRole::LiquidityProvider => RuntimeApiAccountInfo::LiquidityProvider(Box::new(Self::cf_liquidity_provider_info(account_id, ShouldSweep::No))),
+							AccountRole::Validator => RuntimeApiAccountInfo::Validator(Box::new(Self::cf_validator_info(&account_id))),
+							AccountRole::Operator => RuntimeApiAccountInfo::Operator(Box::new(Self::cf_operator_info(&account_id))),
+						};
+					Some(RuntimeApiAccountInfoWrapper { common_items, role: role_specific })
+				} else {
+					None
+				}
+			}).collect()
+		}
+
 		fn cf_penalties() -> Vec<(Offence, RuntimeApiPenalty)> {
 			pallet_cf_reputation::Penalties::<Runtime>::iter_keys()
 				.map(|offence| {
@@ -906,7 +964,7 @@ impl_runtime_apis! {
 				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				min_bid: pallet_cf_validator::MinimumAuctionBid::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size),
-				min_active_bid: Validator::resolve_auction_iteratively()
+				min_active_bid: Validator::resolve_auction_iteratively(&Default::default())
 				.ok()
 				.map(|(auction_outcome, _)| auction_outcome.bond)
 			}
@@ -1002,8 +1060,8 @@ impl_runtime_apis! {
 			quote_asset: Asset,
 			lp: Option<AccountId>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage> {
-			LiquidityPools::pool_orders(base_asset, quote_asset, lp, filled_orders).map_err(Into::into)
+		) -> Result<PoolOrders<AccountId>, DispatchErrorWithMessage> {
+			LiquidityPools::pool_orders(base_asset, quote_asset, &lp.map(|lp| BTreeSet::from([lp])).unwrap_or_default(), filled_orders).map_err(Into::into)
 		}
 
 		fn cf_pool_range_order_liquidity_value(
@@ -1038,6 +1096,7 @@ impl_runtime_apis! {
 				any::ForeignChainAndAsset::Bsc(asset) => EgressDustLimit::<Runtime, BscInstance>::get(asset),
 				any::ForeignChainAndAsset::Solana(asset) => EgressDustLimit::<Runtime, SolanaInstance>::get(asset),
 				any::ForeignChainAndAsset::Assethub(asset) => EgressDustLimit::<Runtime, AssethubInstance>::get(asset),
+				any::ForeignChainAndAsset::Tron(asset) => EgressDustLimit::<Runtime, TronInstance>::get(asset),
 			}
 		}
 
@@ -1075,9 +1134,14 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
 					))
 				},
+				any::ForeignChainAndAsset::Tron(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, TronInstance>::estimate_fee(asset, IngressOrEgress::IngressDepositChannel)
+					))
+				},
 			}
 		}
-
 		fn cf_egress_fee(generic_asset: Asset) -> Option<AssetAmount> {
 			match generic_asset.into() {
 				any::ForeignChainAndAsset::Ethereum(asset) => {
@@ -1112,6 +1176,12 @@ impl_runtime_apis! {
 						pallet_cf_chain_tracking::Pallet::<Runtime, AssethubInstance>::estimate_fee(asset, IngressOrEgress::Egress)
 					))
 				},
+				any::ForeignChainAndAsset::Tron(asset) => {
+					Some(pallet_cf_swapping::Pallet::<Runtime>::calculate_input_for_gas_output::<Tron>(
+						asset,
+						pallet_cf_chain_tracking::Pallet::<Runtime, TronInstance>::estimate_fee(asset, IngressOrEgress::Egress)
+					))
+				},
 			}
 		}
 
@@ -1123,18 +1193,22 @@ impl_runtime_apis! {
 				ForeignChain::Arbitrum => pallet_cf_ingress_egress::Pallet::<Runtime, ArbitrumInstance>::witness_safety_margin(),
 				ForeignChain::Bsc => pallet_cf_ingress_egress::Pallet::<Runtime, BscInstance>::witness_safety_margin(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::witness_safety_margin(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::Pallet::<Runtime, TronInstance>::witness_safety_margin(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::witness_safety_margin().map(Into::into),
 			}
 		}
 
 		fn cf_liquidity_provider_info(
 			account_id: AccountId,
+			should_sweep: ShouldSweep,
 		) -> LiquidityProviderInfo {
 			let refund_addresses = ForeignChain::iter().map(|chain| {
 				(chain, pallet_cf_lp::LiquidityRefundAddress::<Runtime>::get(&account_id, chain))
 			}).collect();
 
-			LiquidityPools::sweep(&account_id).unwrap();
+			if should_sweep == ShouldSweep::Yes {
+				LiquidityPools::sweep(&account_id).unwrap();
+			}
 
 			LiquidityProviderInfo {
 				refund_addresses,
@@ -1243,6 +1317,7 @@ impl_runtime_apis! {
 
 		fn cf_scheduled_swaps(base_asset: Asset, quote_asset: Asset) -> Vec<(SwapLegInfo, BlockNumber)> {
 			assert_eq!(quote_asset, STABLE_ASSET, "Only USDC is supported as quote asset");
+			assert_ne!(base_asset, quote_asset, "Invalid asset pair: base and quote asset must be different");
 			Swapping::get_scheduled_swap_legs(base_asset)
 		}
 
@@ -1260,6 +1335,16 @@ impl_runtime_apis! {
 			if ArbitrumIngressEgress::get_failed_call(broadcast_id).is_some() {
 				ArbitrumBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
 					chainflip::ArbTransactionBuilder::build_transaction(&api_call)
+				})
+			} else {
+				None
+			}
+		}
+
+		fn cf_failed_call_tron(broadcast_id: BroadcastId) -> Option<<cf_chains::Tron as cf_chains::Chain>::Transaction> {
+			if TronIngressEgress::get_failed_call(broadcast_id).is_some() {
+				TronBroadcaster::threshold_signature_data(broadcast_id).map(|api_call|{
+					chainflip::TronTransactionBuilder::build_transaction(&api_call)
 				})
 			} else {
 				None
@@ -1293,6 +1378,7 @@ impl_runtime_apis! {
 				ForeignChain::Bsc => pallet_cf_ingress_egress::Pallet::<Runtime, BscInstance>::channel_opening_fee(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::Pallet::<Runtime, SolanaInstance>::channel_opening_fee(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::Pallet::<Runtime, AssethubInstance>::channel_opening_fee(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::Pallet::<Runtime, TronInstance>::channel_opening_fee(),
 			}
 		}
 
@@ -1305,6 +1391,7 @@ impl_runtime_apis! {
 				ForeignChain::Bsc => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, BscInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, AssethubInstance>::get(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::IngressDelayBlocks::<Runtime, TronInstance>::get(),
 			}
 		}
 
@@ -1317,6 +1404,7 @@ impl_runtime_apis! {
 				ForeignChain::Bsc => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, BscInstance>::get(),
 				ForeignChain::Solana => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, SolanaInstance>::get(),
 				ForeignChain::Assethub => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, AssethubInstance>::get(),
+				ForeignChain::Tron => pallet_cf_ingress_egress::BoostDelayBlocks::<Runtime, TronInstance>::get(),
 			}
 		}
 
@@ -1411,6 +1499,10 @@ impl_runtime_apis! {
 					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
 					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
 				},
+				VaultSwapExtraParametersEncoded::Tron(EvmVaultSwapExtraParameters { refund_parameters, .. }) => {
+					refund_parameters.clone().try_map_refund_address_to_foreign_chain_address::<ChainAddressConverter>()?.into_checked(None, source_asset)?;
+					(refund_parameters.retry_duration, refund_parameters.max_oracle_price_slippage)
+				}
 			};
 
 			let checked_ccm = crate::chainflip::vault_swaps::validate_parameters(
@@ -1481,6 +1573,10 @@ impl_runtime_apis! {
 				(
 					ForeignChain::Arbitrum,
 					VaultSwapExtraParametersEncoded::Arbitrum(extra_params)
+				)|
+				(
+					ForeignChain::Tron,
+					VaultSwapExtraParametersEncoded::Tron(extra_params)
 				)|
 				(
 					ForeignChain::Bsc,
@@ -1616,6 +1712,7 @@ impl_runtime_apis! {
 			Ok(match ForeignChain::from(source_asset) {
 				ForeignChain::Ethereum => build_and_encode_cf_parameters_for_chain!(Ethereum),
 				ForeignChain::Arbitrum => build_and_encode_cf_parameters_for_chain!(Arbitrum),
+				ForeignChain::Tron => build_and_encode_cf_parameters_for_chain!(Tron),
 				ForeignChain::Bsc => build_and_encode_cf_parameters_for_chain!(Bsc),
 				ForeignChain::Solana => build_and_encode_cf_parameters_for_chain!(Solana),
 				_ => Err(DispatchErrorWithMessage::from("Unsupported source chain for encoding cf_parameters"))?,
@@ -1641,6 +1738,7 @@ impl_runtime_apis! {
 				ForeignChain::Bsc => preallocated_deposit_channels_for_chain::<Runtime, BscInstance>(&account_id),
 				ForeignChain::Solana => preallocated_deposit_channels_for_chain::<Runtime, SolanaInstance>(&account_id),
 				ForeignChain::Assethub => preallocated_deposit_channels_for_chain::<Runtime, AssethubInstance>(&account_id),
+				ForeignChain::Tron => preallocated_deposit_channels_for_chain::<Runtime, TronInstance>(&account_id),
 			}
 		}
 
@@ -1669,6 +1767,8 @@ impl_runtime_apis! {
 					open_deposit_channels_for_account::<Runtime, EthereumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, ArbitrumInstance>(account_id.as_ref()),
 					open_deposit_channels_for_account::<Runtime, SolanaInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, TronInstance>(account_id.as_ref()),
+					open_deposit_channels_for_account::<Runtime, BscInstance>(account_id.as_ref()),
 				].into_iter().flatten().collect()
 			}
 		}
@@ -1701,10 +1801,15 @@ impl_runtime_apis! {
 			let eth_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, EthereumInstance>();
 			let arb_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, ArbitrumInstance>();
 			let sol_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, SolanaInstance>();
+			let tron_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, TronInstance>();
+			let bsc_chain_accounts = open_deposit_channels_for_chain_instance::<Runtime, BscInstance>();
+
 			let accounts = btc_chain_accounts.keys()
 				.chain(eth_chain_accounts.keys())
 				.chain(arb_chain_accounts.keys())
 				.chain(sol_chain_accounts.keys())
+				.chain(tron_chain_accounts.keys())
+				.chain(bsc_chain_accounts.keys())
 				.cloned().collect::<BTreeSet<_>>();
 
 			accounts.into_iter().map(|key| {
@@ -1715,6 +1820,8 @@ impl_runtime_apis! {
 						eth_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						arb_chain_accounts.get(&key).cloned().unwrap_or_default(),
 						sol_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						tron_chain_accounts.get(&key).cloned().unwrap_or_default(),
+						bsc_chain_accounts.get(&key).cloned().unwrap_or_default(),
 					].into_iter().flatten().collect()
 				})
 			}).collect()
@@ -1744,12 +1851,15 @@ impl_runtime_apis! {
 			let mut eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>> = Default::default();
 			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
 			let mut sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>> = Default::default();
+			let mut tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>> = Default::default();
+
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
 					RuntimeEvent::BitcoinIngressEgress(event) => btc_events.extend(extract_screening_events::<Runtime, BitcoinInstance>(event)),
 					RuntimeEvent::EthereumIngressEgress(event) => eth_events.extend(extract_screening_events::<Runtime, EthereumInstance>(event)),
 					RuntimeEvent::ArbitrumIngressEgress(event) => arb_events.extend(extract_screening_events::<Runtime, ArbitrumInstance>(event)),
 					RuntimeEvent::SolanaIngressEgress(event) => sol_events.extend(extract_screening_events::<Runtime, SolanaInstance>(event)),
+					RuntimeEvent::TronIngressEgress(event) => tron_events.extend(extract_screening_events::<Runtime, TronInstance>(event)),
 					_ => {},
 				}
 			}
@@ -1759,6 +1869,7 @@ impl_runtime_apis! {
 				eth_events,
 				arb_events,
 				sol_events,
+				tron_events
 			}
 		}
 
@@ -1813,6 +1924,7 @@ impl_runtime_apis! {
 						Environment::network_environment(),
 					)
 				}),
+				tron: EncodedAddress::Tron(Environment::tron_vault_address().into()),
 				predicted_seconds_until_next_vault_rotation: {
 					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
 					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();
@@ -1900,6 +2012,10 @@ impl_runtime_apis! {
 			pallet_cf_lending_pools::get_loan_accounts::<Runtime>(borrower_id)
 		}
 
+		fn cf_all_loans() -> Vec<RpcLoan<AccountId, AssetAmount>> {
+			pallet_cf_lending_pools::get_all_loans::<Runtime>()
+		}
+
 		fn cf_lending_pool_supply_balances(
 			asset: Option<Asset>,
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId, AssetAmount>> {
@@ -1932,7 +2048,7 @@ impl_runtime_apis! {
 				minimum_loan_amount_usd: config.minimum_loan_amount_usd.into(),
 				minimum_supply_amount_usd: config.minimum_supply_amount_usd.into(),
 				minimum_update_loan_amount_usd: config.minimum_update_loan_amount_usd.into(),
-				minimum_update_collateral_amount_usd: config.minimum_update_collateral_amount_usd.into(),
+				minimum_update_supply_amount_usd: config.minimum_update_supply_amount_usd.into(),
 			}
 		}
 
@@ -2065,13 +2181,22 @@ impl_runtime_apis! {
 		fn cf_ingress_egress_events(chain: ForeignChain) -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_witnessed_events(chain)
 		}
+
+		fn cf_ingress_events(chain: ForeignChain) -> Result<IngressEvents, DispatchErrorWithMessage> {
+			witnessed_events::extract_ingress_events(chain)
+		}
 	}
 }
 
 mod witnessed_events {
 	use super::*;
-	use cf_chains::instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance};
+	use crate::chainflip::witnessing::pallet_hooks::EvmVaultContractEvent;
+	use cf_chains::{
+		instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+		TransactionInId,
+	};
 	use pallet_cf_elections::ElectoralUnsynchronisedState;
+	use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 
 	pub fn extract_witnessed_events(
 		chain: ForeignChain,
@@ -2080,6 +2205,7 @@ mod witnessed_events {
 			ForeignChain::Bitcoin => extract_bitcoin_witnessed_events(),
 			ForeignChain::Ethereum => extract_ethereum_witnessed_events(),
 			ForeignChain::Arbitrum => extract_arbitrum_witnessed_events(),
+			ForeignChain::Tron => extract_tron_witnessed_events(),
 			_ => Err(DispatchErrorWithMessage::RawMessage(
 				b"Chain not supported for witnessed events".to_vec(),
 			)),
@@ -2164,5 +2290,190 @@ mod witnessed_events {
 		);
 
 		Ok(RawWitnessedEvents::Arbitrum { deposits, vault_deposits, broadcasts })
+	}
+
+	fn extract_tron_witnessed_events() -> Result<RawWitnessedEvents, DispatchErrorWithMessage> {
+		let state =
+			ElectoralUnsynchronisedState::<Runtime, TronInstance>::get().ok_or_else(|| {
+				DispatchErrorWithMessage::RawMessage(
+					b"Tron electoral state not initialized".to_vec(),
+				)
+			})?;
+
+		let (deposits, vault_deposits, broadcasts) = extract_witnessed_events_for_state!(
+			deposits: &state.1,
+			vault_deposits: &state.2,
+			broadcasts: &state.3,
+			height: |h: &u64| *h,
+		);
+
+		Ok(RawWitnessedEvents::Tron { deposits, vault_deposits, broadcasts })
+	}
+
+	fn convert_deposit_witness<C: Chain>(
+		items: Vec<(u64, DepositWitness<C>)>,
+		to_deposit_details: impl Fn(<C as Chain>::DepositDetails) -> DepositDetails,
+		network: NetworkEnvironment,
+	) -> Vec<DepositWitnessInfo> {
+		items
+			.into_iter()
+			.map(|(height, witness)| DepositWitnessInfo {
+				deposit_chain_block_height: height,
+				deposit_address: witness
+					.deposit_address
+					.into_foreign_chain_address()
+					.to_encoded_address(network),
+				amount: witness.amount.into(),
+				asset: witness.asset.into(),
+				deposit_details: to_deposit_details(witness.deposit_details),
+			})
+			.collect()
+	}
+
+	fn convert_vault_deposit_witness<T, I>(
+		items: Vec<(u64, VaultDepositWitness<T, I>)>,
+		to_tx_id: impl Fn(
+			<<<T as ChainflipWithTargetChain<I>>::TargetChain as Chain>::ChainCrypto as ChainCrypto>::TransactionInId,
+		) -> TransactionInId,
+		to_deposit_details: impl Fn(<T::TargetChain as Chain>::DepositDetails) -> DepositDetails,
+	) -> Vec<VaultDepositWitnessInfo>
+	where
+		T: pallet_cf_ingress_egress::Config<I>,
+		I: 'static,
+	{
+		items
+			.into_iter()
+			.map(|(height, witness)| VaultDepositWitnessInfo {
+				tx_id: to_tx_id(witness.tx_id),
+				deposit_chain_block_height: height,
+				input_asset: witness.input_asset.into(),
+				output_asset: witness.output_asset,
+				amount: witness.deposit_amount.into(),
+				deposit_details: to_deposit_details(witness.deposit_details),
+				destination_address: witness.destination_address,
+			})
+			.collect()
+	}
+
+	pub fn extract_ingress_events(
+		chain: ForeignChain,
+	) -> Result<IngressEvents, DispatchErrorWithMessage> {
+		match chain {
+			ForeignChain::Bitcoin => {
+				let state = ElectoralUnsynchronisedState::<Runtime, BitcoinInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Bitcoin electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h);
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Bitcoin,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						TransactionInId::Bitcoin,
+						DepositDetails::Bitcoin,
+					),
+				})
+			},
+			ForeignChain::Ethereum => {
+				let state = ElectoralUnsynchronisedState::<Runtime, EthereumInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Ethereum electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h)
+					.into_iter()
+					.filter_map(|(height, event)| match event {
+						EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+						_ => None,
+					})
+					.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Ethereum,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						TransactionInId::Ethereum,
+						DepositDetails::Ethereum,
+					),
+				})
+			},
+			ForeignChain::Arbitrum => {
+				let state = ElectoralUnsynchronisedState::<Runtime, ArbitrumInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Arbitrum electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(
+					&state.1,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root()
+				);
+				let vault_deposits = extract_block_data!(
+					&state.2,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Arbitrum>| *h.root()
+				)
+				.into_iter()
+				.filter_map(|(height, event)| match event {
+					EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+					_ => None,
+				})
+				.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Arbitrum,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						TransactionInId::Arbitrum,
+						DepositDetails::Arbitrum,
+					),
+				})
+			},
+			ForeignChain::Tron => {
+				let state = ElectoralUnsynchronisedState::<Runtime, TronInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Tron electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(&state.1, |h: &u64| *h);
+				let vault_deposits = extract_block_data!(&state.2, |h: &u64| *h)
+					.into_iter()
+					.filter_map(|(height, event)| match event {
+						EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+						_ => None,
+					})
+					.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Tron,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						TransactionInId::Tron,
+						DepositDetails::Tron,
+					),
+				})
+			},
+			_ => Err(DispatchErrorWithMessage::RawMessage(
+				b"Chain not supported for witnessed events".to_vec(),
+			)),
+		}
 	}
 }

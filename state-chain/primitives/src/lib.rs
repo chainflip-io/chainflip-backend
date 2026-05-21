@@ -622,12 +622,15 @@ impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {
 	}
 }
 /// Used in cf_ingress_egress and in cf_chains.
+#[derive(Clone)]
 pub enum IngressOrEgress {
 	IngressDepositChannel,
 	IngressVaultSwap,
 	Egress,
 	EgressCcm { gas_budget: AssetAmount, message_length: usize },
 }
+
+pub type OrderId = u64;
 
 // ------ election based witnessing ------
 
@@ -655,4 +658,17 @@ impl<T> BlockWitnesserEvent<T> {
 			BlockWitnesserEvent::PreWitness(w) | BlockWitnesserEvent::Witness(w) => w,
 		}
 	}
+}
+
+/// Identifies a witnessing task running in the engine.
+/// Each variant maps to a `spawn_with_restart` task.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum WitnessingTaskName {
+	Ethereum,
+	Bitcoin,
+	Arbitrum,
+	Solana,
+	Assethub,
+	Oracle,
+	Tron,
 }

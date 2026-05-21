@@ -11,7 +11,12 @@ import {
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
+import {
+  executeVaultSwap,
+  prepareVaultSwapSource,
+  requestNewSwap,
+  waitForEgressScheduled,
+} from 'shared/perform_swap';
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -135,8 +140,9 @@ async function testDCASwap<A = []>(
     `Swapping.SwapRequestCompleted`,
     swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
   );
-
   cf.debug(`Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`);
+
+  await waitForEgressScheduled(cf, swapRequestId);
 
   await observeBalanceIncrease(cf.logger, destAsset, destAddress, destBalanceBefore);
 }
@@ -148,5 +154,7 @@ export async function testDCASwaps(testContext: TestContext) {
     (subcf) => testDCASwap(subcf, Assets.ArbEth, 1, 4, 1),
     (subcf) => testDCASwap(subcf, Assets.Sol, 10, 2, 3, true),
     (subcf) => testDCASwap(subcf, Assets.SolUsdc, 10, 2, 1, true),
+    (subcf) => testDCASwap(subcf, Assets.Trx, 100, 2, 2),
+    (subcf) => testDCASwap(subcf, Assets.TrxUsdt, 10, 2, 4, true),
   ]);
 }

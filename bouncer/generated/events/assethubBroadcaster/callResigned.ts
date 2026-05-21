@@ -1,3 +1,7 @@
 import { z } from 'zod';
+import { cfChainsDotPolkadotTransactionData } from '../common';
 
-export const assethubBroadcasterCallResigned = z.object({ broadcastId: z.number() });
+export const assethubBroadcasterCallResigned = z.object({
+  broadcastId: z.number(),
+  transactionPayload: cfChainsDotPolkadotTransactionData,
+});

@@ -213,6 +213,12 @@ pub enum CliCommand {
 	#[clap(about = "Rotate your session keys")]
 	Rotate,
 	#[clap(
+		about = "Delegate your GRANDPA vote - generates a delegate key on the node if no key exists and delegates the vote to it"
+	)]
+	DelegateGrandpaVote,
+	#[clap(about = "Revoke your GRANDPA vote delegation")]
+	RevokeGrandpaDelegation,
+	#[clap(
 		about = "Stop bidding, thereby stop participating in auctions. [DEPRECATED - use 'validator stop-bidding' instead]"
 	)]
 	StopBidding,
@@ -317,13 +323,12 @@ mod tests {
 
 	use super::*;
 
-	use chainflip_engine::constants::{ETH_HTTP_ENDPOINT, ETH_WS_ENDPOINT};
+	use chainflip_engine::constants::ETH_HTTP_ENDPOINT;
 
 	pub fn set_test_env() {
 		use std::env;
 
 		env::set_var(ETH_HTTP_ENDPOINT, "http://localhost:8545");
-		env::set_var(ETH_WS_ENDPOINT, "ws://localhost:8545");
 	}
 
 	#[test]

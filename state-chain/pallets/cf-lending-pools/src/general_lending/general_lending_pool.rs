@@ -139,9 +139,14 @@ where
 		Ok(())
 	}
 
+	/// Pool balance that can actually be drawn for a new borrow: the available balance
+	/// minus what's earmarked for the network.
+	pub fn available_for_borrowing(&self) -> AssetAmount {
+		self.available_amount.saturating_sub(self.owed_to_network)
+	}
+
 	pub fn get_utilisation(&self) -> Permill {
-		let available_for_borrowing = self.available_amount.saturating_sub(self.owed_to_network);
-		let in_use = self.total_amount.saturating_sub(available_for_borrowing);
+		let in_use = self.total_amount.saturating_sub(self.available_for_borrowing());
 
 		// Note: `from_rational` does not panic on invalid inputs and instead returns 100%.
 		Permill::from_rational(in_use, self.total_amount)
@@ -177,11 +182,27 @@ where
 		available_for_collection
 	}
 
+	/// Collects funds from the pool's available liquidity in order to pay fees before the
+	/// principal is repaid. The borrower's principal is responsible for repaying this back to the
+	/// pool, so the pool's `total_amount` is unaffected. Returns the actually-deducted amount,
+	/// which may be less than `amount` if available liquidity is insufficient.
+	pub fn collect_fee_from_available(&mut self, amount: AssetAmount) -> AssetAmount {
+		let collected = core::cmp::min(self.available_amount, amount);
+		self.available_amount.saturating_reduce(collected);
+		collected
+	}
+
 	/// Inform the pool that it won't be receiving `amount` as a result of account liquidation
-	/// not being able to recover the debt in full. This effectively socialises the loss by
-	/// reducing the pool's total amount.
+	/// not being able to recover the debt in full. The loss is split between the network and
+	/// the lenders: any outstanding network IOU is forgiven first (up to `amount`), and the
+	/// remainder is socialised across lenders by reducing `total_amount`. Forgiving the
+	/// network IOU first is necessary because `total_amount` was never grown by the network
+	/// portion of the loan's fees, so absorbing the full write-off into `total_amount` can
+	/// saturate it below `available_amount` and violate the pool's invariant.
 	pub fn write_off_unrecoverable_debt(&mut self, amount: AssetAmount) {
-		self.total_amount.saturating_reduce(amount);
+		let network_portion = core::cmp::min(amount, self.owed_to_network);
+		self.owed_to_network.saturating_reduce(network_portion);
+		self.total_amount.saturating_reduce(amount.saturating_sub(network_portion));
 	}
 
 	/// Receives repayment funds in the pool's asset (after they has been swapped)
@@ -397,5 +418,46 @@ mod tests {
 				(LENDER_3, Perquintill::from_rational(1u64, 6)),
 			],
 		);
+	}
+
+	#[test]
+	fn write_off_forgives_network_iou_before_charging_lenders() {
+		// Lender deposits 1000, pool lends out everything, then accrues 50 pool fees
+		// and 20 network fees (which cannot be collected because available_amount is 0).
+		// A subsequent full default of 1070 must reduce both owed_to_network and the pool's
+		// total amount.
+		let mut chp_pool = LendingPool::<AccountId>::new();
+		chp_pool.add_funds(&LENDER_1, 1000);
+		assert_ok!(chp_pool.provide_funds_for_loan(1000));
+
+		chp_pool.record_pool_fee(50);
+		let collected = chp_pool.record_and_collect_network_fee(20);
+		assert_eq!(collected, 0);
+		assert_eq!(chp_pool.total_amount, 1050);
+		assert_eq!(chp_pool.available_amount, 0);
+		assert_eq!(chp_pool.owed_to_network, 20);
+
+		chp_pool.write_off_unrecoverable_debt(1070);
+
+		assert_eq!(chp_pool.total_amount, 0);
+		assert_eq!(chp_pool.available_amount, 0);
+		assert_eq!(chp_pool.owed_to_network, 0);
+	}
+
+	#[test]
+	fn write_off_smaller_than_network_iou_leaves_total_amount_untouched() {
+		// When the write-off is smaller than the pool's outstanding network IOU, the IOU
+		// absorbs the full write-off and lenders' `total_amount` is unaffected.
+		let mut chp_pool = LendingPool::<AccountId>::new();
+		chp_pool.add_funds(&LENDER_1, 1000);
+		assert_ok!(chp_pool.provide_funds_for_loan(1000));
+		chp_pool.record_and_collect_network_fee(50);
+		assert_eq!(chp_pool.owed_to_network, 50);
+		assert_eq!(chp_pool.total_amount, 1000);
+
+		chp_pool.write_off_unrecoverable_debt(10);
+
+		assert_eq!(chp_pool.owed_to_network, 40);
+		assert_eq!(chp_pool.total_amount, 1000);
 	}
 }

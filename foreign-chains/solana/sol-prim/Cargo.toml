@@ -71,3 +71,4 @@ std = [
 	"cf-primitives/std",
 ]
 runtime-integration-tests = []
+test = []

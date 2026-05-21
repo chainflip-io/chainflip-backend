@@ -19,7 +19,7 @@
 use crate::{backend::CustomRpcBackend, boost_pool_rpc::BoostPoolFeesRpc};
 use boost_pool_rpc::BoostPoolDetailsRpc;
 use cf_amm::{
-	common::{PoolPairsMap, Side},
+	common::{AskBidMap, PoolPairsMap, Side},
 	math::{Amount as AmmAmount, Tick},
 	range_orders::Liquidity,
 };
@@ -28,7 +28,11 @@ use cf_chains::{
 	evm::Address as EvmAddress,
 	CcmChannelMetadataUnchecked, Chain, MAX_CCM_MSG_LENGTH,
 };
-use cf_node_client::events_decoder;
+use cf_node_client::{
+	events_decoder,
+	events_decoder::{DynamicEventError, DynamicEvents},
+	ExtrinsicData,
+};
 use cf_primitives::{
 	chains::assets::any::{self, AssetMap},
 	AccountRole, Affiliates, Asset, AssetAmount, AssetAndAmount, BasisPoints, BlockNumber,
@@ -65,7 +69,7 @@ use pallet_cf_lending_pools::{
 	LendingPoolAndSupplyPositions, LendingSupplyPosition, RpcLoan, RpcLoanAccount,
 };
 use pallet_cf_pools::{
-	AskBidMap, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
+	PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
 use sc_client_api::{
@@ -87,15 +91,15 @@ use state_chain_runtime::{
 		custom_api::CustomRuntimeApi,
 		elections_api::ElectoralRuntimeApi,
 		types::{
-			AuctionState, BoostPoolDepth, BoostPoolDetails, BrokerInfo, CcmData, ChainAccounts,
-			DelegationSnapshot, DispatchErrorWithMessage, EncodedNonNativeCall,
-			EncodedNonNativeCallGeneric, EncodingType, EvmCallDetails, FailingWitnessValidators,
-			FeeTypes, LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo,
-			NetworkFees, NonceOrAccount, OpenedDepositChannels, OperatorInfo,
-			RpcAccountInfoCommonItems, RpcLendingConfig, RpcLendingPool, RuntimeApiPenalty,
-			SimulateSwapAdditionalOrder, SimulatedSwapInformation, TradingStrategyInfo,
-			TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo, VaultAddresses,
-			VaultSwapDetails,
+			AuctionState, BoostPoolDepth, BrokerInfo, CcmData, ChainAccounts, DelegationSnapshot,
+			DispatchErrorWithMessage, EncodedNonNativeCall, EncodedNonNativeCallGeneric,
+			EncodingType, EvmCallDetails, FailingWitnessValidators, FeeTypes, IngressEvents,
+			LendingPosition, LiquidityProviderBoostPoolInfo, LiquidityProviderInfo, NetworkFees,
+			NonceOrAccount, OpenedDepositChannels, OperatorInfo, RpcAccountInfoCommonItems,
+			RpcLendingConfig, RpcLendingPool, RuntimeApiAccountInfo, RuntimeApiPenalty,
+			ShouldSweep, SimulateSwapAdditionalOrder, SimulatedSwapInformation,
+			TradingStrategyInfo, TradingStrategyLimits, TransactionScreeningEvents, ValidatorInfo,
+			VaultAddresses, VaultSwapDetails,
 		},
 	},
 	safe_mode::RuntimeSafeMode,
@@ -110,6 +114,7 @@ use std::{
 
 pub mod backend;
 pub mod broker;
+pub mod grandpa_ext;
 pub mod ingress_egress_tracker;
 pub mod lp;
 pub mod monitoring;
@@ -696,12 +701,13 @@ type TradingStrategyInfoHexAmounts = TradingStrategyInfo<NumberOrHex>;
 
 mod boost_pool_rpc {
 
-	use std::collections::BTreeSet;
-
 	use cf_primitives::PrewitnessedDepositId;
+	use pallet_cf_lending_pools::BoostPoolDetails;
 	use sp_runtime::AccountId32;
 
 	use super::*;
+
+	use std::collections::BTreeSet;
 
 	#[derive(Serialize, Deserialize, Clone)]
 	struct AccountAndAmount {
@@ -891,6 +897,12 @@ pub trait CustomApi {
 		account_id: state_chain_runtime::AccountId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcAccountInfoV2>;
+	#[method(name = "all_account_infos")]
+	fn cf_all_account_infos(
+		&self,
+		roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>>;
 	#[method(name = "free_balances", aliases = ["cf_asset_balances"])]
 	fn cf_free_balances(
 		&self,
@@ -1010,7 +1022,7 @@ pub trait CustomApi {
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::Runtime>>;
+	) -> RpcResult<pallet_cf_pools::PoolOrders<state_chain_runtime::AccountId>>;
 	#[method(name = "pool_range_order_liquidity_value")]
 	fn cf_pool_range_order_liquidity_value(
 		&self,
@@ -1073,6 +1085,9 @@ pub trait CustomApi {
 	#[subscription(name = "subscribe_transaction_screening_events", item = BlockUpdate<TransactionScreeningEvents>)]
 	async fn cf_subscribe_transaction_screening_events(&self);
 
+	#[subscription(name = "subscribe_ingress_events", item = BlockUpdate<IngressEvents>)]
+	async fn cf_subscribe_ingress_events(&self, chain: ForeignChain);
+
 	#[method(name = "lp_get_order_fills")]
 	fn cf_lp_get_order_fills(&self, at: Option<Hash>) -> RpcResult<BlockUpdate<OrderFills>>;
 
@@ -1100,6 +1115,13 @@ pub trait CustomApi {
 		broadcast_id: BroadcastId,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<<cf_chains::Arbitrum as Chain>::Transaction>>;
+
+	#[method(name = "failed_call_tron")]
+	fn cf_failed_call_tron(
+		&self,
+		broadcast_id: BroadcastId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<<cf_chains::Tron as Chain>::Transaction>>;
 
 	#[method(name = "witness_count")]
 	fn cf_witness_count(
@@ -1189,6 +1211,21 @@ pub trait CustomApi {
 
 	#[method(name = "arbitrum_filter_votes")]
 	fn cf_arbitrum_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "tron_electoral_data")]
+	fn cf_tron_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>>;
+
+	#[method(name = "tron_filter_votes")]
+	fn cf_tron_filter_votes(
 		&self,
 		validator: state_chain_runtime::AccountId,
 		proposed_votes: Vec<u8>,
@@ -1349,6 +1386,12 @@ pub trait CustomApi {
 		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>>;
+
+	#[method(name = "all_loans")]
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>>;
 
 	#[method(name = "lending_pool_supply_balances")]
 	fn cf_lending_pool_supply_balances(
@@ -1560,6 +1603,47 @@ impl From<CfApiError> for RpcApiError {
 	}
 }
 
+pub fn rpc_api_error_with_custom_message(
+	cf_api_error: CfApiError,
+	message: impl std::fmt::Display,
+) -> RpcApiError {
+	let rpc_api_error: RpcApiError = cf_api_error.into();
+	let error_obj: ErrorObjectOwned = rpc_api_error.into();
+	RpcApiError::ErrorObject(ErrorObject::owned(
+		error_obj.code(),
+		format!("{}: {}", message, error_obj.message()),
+		error_obj.data(),
+	))
+}
+
+fn handle_dynamic_event_error(
+	err: DynamicEventError,
+	extrinsic_data: &ExtrinsicData<DynamicEvents>,
+) -> RpcApiError {
+	match err {
+		DynamicEventError::StaticEventNotFound(expected_event) => {
+			log::warn!(
+				target: "custom_rpc",
+				"Expected {expected_event} event was not found. tx_hash={:?}, block_hash={:?}, tx_index={}, events={:?}",
+				extrinsic_data.tx_hash,
+				extrinsic_data.block_hash,
+				extrinsic_data.tx_index,
+				extrinsic_data.events.event_names(),
+			);
+			rpc_api_error_with_custom_message(
+				err.into(),
+				format!(
+					"The extrinsic was submitted successfully but an error occurred while trying to extract the event: {expected_event}"
+				),
+			)
+		},
+		other => rpc_api_error_with_custom_message(
+			other.into(),
+			"The extrinsic was submitted successfully but an error occurred while trying to decode the extrinsic's dynamic events.",
+		),
+	}
+}
+
 #[macro_export]
 macro_rules! pass_through {
 	($( $name:ident ( $( $arg:ident: $argt:ty ),* $(,)? ) -> $result_type:ty $([map: $mapping:expr])? ),+ $(,)?) => {
@@ -1658,12 +1742,12 @@ where
 		cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash,
 		cf_failed_call_ethereum(broadcast_id: BroadcastId) -> Option<<cf_chains::Ethereum as Chain>::Transaction>,
 		cf_failed_call_arbitrum(broadcast_id: BroadcastId) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>,
+		cf_failed_call_tron(broadcast_id: BroadcastId) -> Option<<cf_chains::Tron as Chain>::Transaction>,
 		cf_boost_pools_depth() -> Vec<BoostPoolDepth>,
 		cf_pool_price(from_asset: Asset, to_asset: Asset) -> Option<PoolPriceV1>,
 		cf_get_open_deposit_channels(account_id: Option<state_chain_runtime::AccountId>) -> ChainAccounts,
 		cf_affiliate_details(broker: state_chain_runtime::AccountId, affiliate: Option<state_chain_runtime::AccountId>) -> Vec<(state_chain_runtime::AccountId, AffiliateDetails)>,
 		cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>,
-		cf_lending_config() -> RpcLendingConfig,
 		cf_auction_state() -> RpcAuctionState [map: Into::into],
 	}
 
@@ -1691,8 +1775,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RuntimeSafeMode> {
-		self.rpc_backend
-			.with_versioned_runtime_api(at, |api, hash, _version| api.cf_safe_mode_statuses(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				Ok(api.cf_safe_mode_statuses_before_version_17(hash)?.into())
+			} else {
+				api.cf_safe_mode_statuses(hash)
+			}
+		})
 	}
 
 	fn cf_free_balances(
@@ -1704,6 +1794,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}
@@ -1720,6 +1813,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_lp_total_balances_before_version_16(hash, account_id).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lp_total_balances_before_version_17(hash, account_id).map(Into::into)
 			} else {
 				api.cf_lp_total_balances(hash, account_id)
 			}
@@ -1735,6 +1831,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_trading_strategy_limits_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_trading_strategy_limits_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_trading_strategy_limits(hash)
 			}
@@ -1763,9 +1862,9 @@ where
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLendingPool<U256>>> {
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
-			if version < 12 {
+			if version < 17 {
 				#[expect(deprecated)]
-				api.cf_lending_pools_before_version_12(hash, asset)
+				api.cf_lending_pools_before_version_17(hash, asset)
 					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
 			} else {
 				api.cf_lending_pools(hash, asset)
@@ -1779,6 +1878,7 @@ where
 						available_amount: pool.available_amount.into(),
 						owed_to_network: pool.owed_to_network.into(),
 						utilisation_rate: pool.utilisation_rate,
+						utilisation_cap: pool.utilisation_cap,
 						current_interest_rate: pool.current_interest_rate,
 						config: pool.config,
 					})
@@ -1792,29 +1892,38 @@ where
 		borrower_id: Option<state_chain_runtime::AccountId>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Vec<RpcLoanAccount<state_chain_runtime::AccountId, U256>>> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+			if api_version < 17 {
+				#[expect(deprecated)]
+				api.cf_loan_accounts_before_version_17(hash, borrower_id.clone())
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			} else {
+				api.cf_loan_accounts(hash, borrower_id.clone())
+					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			}
+		})
+	}
+
+	fn cf_lending_config(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcLendingConfig> {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_lending_config_before_version_17(hash).map(Into::into)
+			} else {
+				api.cf_lending_config(hash)
+			}
+		})
+	}
+
+	fn cf_all_loans(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcLoan<state_chain_runtime::AccountId, U256>>> {
 		self.rpc_backend.with_runtime_api(at, |api, hash| {
-			api.cf_loan_accounts(hash, borrower_id).map(|accounts| {
-				accounts
-					.into_iter()
-					.map(|acc| RpcLoanAccount::<_, U256> {
-						account: acc.account,
-						collateral_topup_asset: acc.collateral_topup_asset,
-						ltv_ratio: acc.ltv_ratio,
-						collateral: acc.collateral.into_iter().map(Into::into).collect(),
-						loans: acc
-							.loans
-							.into_iter()
-							.map(|loan| RpcLoan {
-								loan_id: loan.loan_id,
-								asset: loan.asset,
-								created_at: loan.created_at,
-								principal_amount: loan.principal_amount.into(),
-							})
-							.collect(),
-						liquidation_status: acc.liquidation_status,
-					})
-					.collect()
-			})
+			api.cf_all_loans(hash).map(|loans| loans.into_iter().map(Into::into).collect())
 		})
 	}
 
@@ -1880,7 +1989,7 @@ where
 		lp: Option<state_chain_runtime::AccountId>,
 		filled_orders: Option<bool>,
 		at: Option<Hash>,
-	) -> RpcResult<PoolOrders<state_chain_runtime::Runtime>> {
+	) -> RpcResult<PoolOrders<state_chain_runtime::AccountId>> {
 		flatten_into_error(self.rpc_backend.with_runtime_api(at, |api, hash| {
 			api.cf_pool_orders(hash, base_asset, quote_asset, lp, filled_orders.unwrap_or_default())
 		}))
@@ -1897,6 +2006,157 @@ where
 				quote_asset,
 				price: api.cf_pool_price_v2(hash, base_asset, quote_asset)??,
 			})
+		})
+	}
+
+	fn cf_all_account_infos(
+		&self,
+		roles: Option<Vec<AccountRole>>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<RpcAccountInfoWrapper>> {
+		let maybe_accounts_info: Option<_> =
+			self.rpc_backend.with_versioned_runtime_api(at, |api, hash, api_version| {
+				if api_version >= 17 {
+					let network: cf_chains::btc::BitcoinNetwork =
+						api.cf_network_environment(hash)?.into();
+					let network_env = api.cf_network_environment(hash)?;
+
+					api.cf_all_account_infos(hash, roles)?
+						.into_iter()
+						.map(|info| {
+							let common_items = info
+								.common_items
+								.try_map_balances(TryInto::try_into)
+								.map_err(|_| {
+									CfApiError::ErrorObject(ErrorObject::owned(
+										ErrorCode::InternalError.code(),
+										"Unable to convert balances.",
+										None::<()>,
+									))
+								})?;
+
+							let role_specific = match info.role {
+								RuntimeApiAccountInfo::Unregistered =>
+									RpcAccountInfo::Unregistered {},
+								RuntimeApiAccountInfo::Broker(broker_info) => {
+									let broker_info =
+										broker_info.map(|pubkey| pubkey.to_address(&network));
+									RpcAccountInfo::Broker {
+										earned_fees: AssetMap::from_iter_or_default(
+											broker_info
+												.earned_fees
+												.into_iter()
+												.map(|(k, v)| (k, v.into())),
+										),
+										affiliates: broker_info
+											.affiliates
+											.into_iter()
+											.map(Into::into)
+											.collect(),
+										btc_vault_deposit_address: broker_info
+											.btc_vault_deposit_address,
+										bound_fee_withdrawal_address: broker_info
+											.bound_fee_withdrawal_address,
+									}
+								},
+								RuntimeApiAccountInfo::LiquidityProvider(lp_info) =>
+									RpcAccountInfo::LiquidityProvider {
+										refund_addresses: lp_info
+											.refund_addresses
+											.into_iter()
+											.map(|(chain, address)| {
+												(
+													chain,
+													address
+														.map(|a| a.to_humanreadable(network_env)),
+												)
+											})
+											.collect(),
+										earned_fees: lp_info
+											.earned_fees
+											.iter()
+											.map(|(asset, balance)| (asset, (*balance).into()))
+											.collect(),
+										boost_balances: lp_info
+											.boost_balances
+											.iter()
+											.map(|(asset, infos)| {
+												(
+													asset,
+													infos.iter().map(|info| info.into()).collect(),
+												)
+											})
+											.collect(),
+										lending_positions: lp_info
+											.lending_positions
+											.into_iter()
+											.map(|pos| LendingPosition {
+												asset: pos.asset,
+												total_amount: pos.total_amount.into(),
+												available_amount: pos.available_amount.into(),
+											})
+											.collect(),
+										collateral_balances: lp_info
+											.collateral_balances
+											.into_iter()
+											.map(|(asset, amount)| AssetAndAmount {
+												asset,
+												amount: amount.into(),
+											})
+											.collect(),
+									},
+								RuntimeApiAccountInfo::Validator(validator_info) => {
+									let ValidatorInfo {
+										last_heartbeat,
+										reputation_points,
+										keyholder_epochs,
+										is_current_authority,
+										#[expect(deprecated)]
+										is_current_backup,
+										is_qualified,
+										is_online,
+										is_bidding,
+										apy_bp,
+										operator,
+										..
+									} = *validator_info;
+									RpcAccountInfo::Validator {
+										last_heartbeat,
+										reputation_points,
+										keyholder_epochs,
+										is_current_authority,
+										is_current_backup,
+										is_qualified,
+										is_online,
+										is_bidding,
+										apy_bp,
+										operator,
+									}
+								},
+								RuntimeApiAccountInfo::Operator(operator_info) =>
+									RpcAccountInfo::Operator {
+										info: operator_info.map_amounts(NumberOrHex::from),
+									},
+							};
+
+							Ok(RpcAccountInfoWrapper { common_items, role_specific })
+						})
+						.collect::<Result<Vec<_>, CfApiError>>()
+						.map(Some)
+				} else {
+					Ok(None)
+				}
+			})?;
+
+		maybe_accounts_info.map(Ok).unwrap_or_else(|| {
+			// fallback to calling old account info in a loop if above code returned None (runtime
+			// version < 17)
+			let accounts = self.cf_accounts(at)?;
+			let info = accounts
+				.into_iter()
+				.map(|(account_id, _)| self.cf_account_info(account_id, at))
+				.collect::<Result<Vec<_>, _>>()?;
+			Ok(info)
 		})
 	}
 
@@ -1965,8 +2225,11 @@ where
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
 					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+				} else if api_version < 17 {
+					#[expect(deprecated)]
+					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
 				} else {
-					api.cf_common_account_info(hash, &account_id)?
+					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}
 				.try_map_balances(TryInto::try_into)
 				.map_err(|_| {
@@ -2034,8 +2297,15 @@ where
 									account_id.clone(),
 								)?
 								.into()
+							} else if api_version < 17 {
+								#[expect(deprecated)]
+								api.cf_liquidity_provider_info_before_version_17(
+									hash,
+									account_id.clone(),
+								)?
+								.into()
 							} else {
-								api.cf_liquidity_provider_info(hash, account_id)?
+								api.cf_liquidity_provider_info(hash, account_id, ShouldSweep::Yes)?
 							};
 
 							let network = api.cf_network_environment(hash)?;
@@ -2260,6 +2530,9 @@ where
 			let mut boost_delays = HashMap::new();
 
 			for chain in ForeignChain::iter() {
+				if version < 17 && chain == ForeignChain::Tron {
+					continue;
+				}
 				witness_safety_margins.insert(chain, api.cf_witness_safety_margin(hash, chain)?);
 				channel_opening_fees.insert(chain, api.cf_channel_opening_fee(hash, chain)?.into());
 				// These fields were added in version 8 of the runtime API
@@ -2271,32 +2544,43 @@ where
 
 			Ok::<_, CfApiError>(IngressEgressEnvironment {
 				minimum_deposit_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_min_deposit_amount(hash, asset).map(Into::into)
 				})?,
 				ingress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_ingress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				egress_fees: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_egress_fee(hash, asset).map(|value| value.map(Into::into))
 				})?,
 				witness_safety_margins,
 				egress_dust_limits: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_egress_dust_limit(hash, asset).map(Into::into)
 				})?,
 				channel_opening_fees,
 				ingress_delays,
 				boost_delays,
 				boost_minimum_add_funds_amounts: if version >= 14 {
-					any::AssetMap::try_from_fn(|asset| {
-						api.cf_boost_config(hash).map(|config| {
-							config
-								.minimum_add_funds_amount
-								.get(&asset)
-								.cloned()
-								.unwrap_or(1_u128)
-								.into()
-						})
-					})?
+					let minimum_add_funds_amount = if version < 17 {
+						#[expect(deprecated)]
+						api.cf_boost_config_before_version_17(hash)?.minimum_add_funds_amount
+					} else {
+						api.cf_boost_config(hash)?.minimum_add_funds_amount
+					};
+					any::AssetMap::from_fn(|asset| {
+						minimum_add_funds_amount.get(&asset).cloned().unwrap_or(1_u128).into()
+					})
 				} else {
 					any::AssetMap::default()
 				},
@@ -2313,11 +2597,17 @@ where
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
 				api.cf_network_fees_before_version_16(hash)?.into()
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_network_fees_before_version_17(hash)?.into()
 			} else {
 				api.cf_network_fees(hash)?
 			};
 			Ok::<_, CfApiError>(SwappingEnvironment {
 				maximum_swap_amounts: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(None);
+					}
 					api.cf_max_swap_amount(hash, asset).map(|option| option.map(Into::into))
 				})?,
 				#[expect(deprecated)]
@@ -2329,10 +2619,22 @@ where
 				max_swap_retry_duration_blocks: swap_limits.max_swap_retry_duration_blocks,
 				max_swap_request_duration_blocks: swap_limits.max_swap_request_duration_blocks,
 				minimum_chunk_size: any::AssetMap::try_from_fn(|asset| {
+					if version < 17 && ForeignChain::from(asset) == ForeignChain::Tron {
+						return Ok(0u128.into());
+					}
 					api.cf_minimum_chunk_size(hash, asset).map(Into::into)
 				})?,
 				network_fees,
-				default_oracle_price_protection: api.cf_default_oracle_price_protection(hash)?,
+				default_oracle_price_protection: if version < 17 {
+					if version < 16 {
+						any::AssetMap::default()
+					} else {
+						#[expect(deprecated)]
+						api.cf_default_oracle_price_protection_before_version_17(hash)?.into()
+					}
+				} else {
+					api.cf_default_oracle_price_protection(hash)?
+				},
 			})
 		})
 	}
@@ -2431,13 +2733,34 @@ where
 	) {
 		self.rpc_backend
 			.new_subscription(
-				NotificationBehaviour::Finalized, /* only_finalized */
-				false,                            /* only_on_changes */
-				true,                             /* end_on_error */
+				NotificationBehaviour::Finalized,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
 				pending_sink,
 				move |client, hash| {
 					Ok((*client.runtime_api())
 						.cf_transaction_screening_events(hash)
+						.map_err(CfApiError::from)?)
+				},
+			)
+			.await;
+	}
+
+	async fn cf_subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		self.rpc_backend
+			.new_subscription(
+				NotificationBehaviour::Best,
+				false, /* only_on_changes */
+				true,  /* end_on_error */
+				pending_sink,
+				move |client, hash| {
+					Ok((*client.runtime_api())
+						.cf_ingress_events(hash, chain)
+						.map_err(CfApiError::from)?
 						.map_err(CfApiError::from)?)
 				},
 			)
@@ -2671,6 +2994,26 @@ where
 		})
 	}
 
+	fn cf_tron_electoral_data(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend
+			.with_runtime_api(at, |api, hash| api.cf_tron_electoral_data(hash, validator))
+	}
+
+	fn cf_tron_filter_votes(
+		&self,
+		validator: state_chain_runtime::AccountId,
+		proposed_votes: Vec<u8>,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<u8>> {
+		self.rpc_backend.with_runtime_api(at, |api, hash| {
+			api.cf_tron_filter_votes(hash, validator, proposed_votes)
+		})
+	}
+
 	fn cf_bsc_electoral_data(
 		&self,
 		validator: state_chain_runtime::AccountId,
@@ -2797,8 +3140,14 @@ where
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<TransactionScreeningEvents> {
-		self.rpc_backend
-			.with_runtime_api(at, |api, hash| api.cf_transaction_screening_events(hash))
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 17 {
+				#[expect(deprecated)]
+				api.cf_transaction_screening_events_before_version_17(hash).map(Into::into)
+			} else {
+				api.cf_transaction_screening_events(hash)
+			}
+		})
 	}
 
 	fn cf_get_trading_strategies(
@@ -2980,6 +3329,9 @@ where
 			if version < 16 {
 				#[expect(deprecated)]
 				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
 			} else {
 				api.cf_vault_addresses(hash)
 			}
@@ -3007,6 +3359,7 @@ where
 			solana_usdc_token_vault_ata,
 			solana_usdt_token_vault_ata,
 			solana_vault_swap_account,
+			tron,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
@@ -3076,7 +3429,7 @@ where
 					name: "solana_sol_vault_swap_account".into(),
 					address: AddressString::from_encoded_address(solana_vault_swap_account),
 					explanation: none_if_compact("Special account for vault swap support for SOL on Solana. Receives user funds for SOL vault swaps before they are fetched into the vault.".into()),
-					rotation_policy: rotates_never,
+					rotation_policy: rotates_never.clone(),
 					next_predicted_rotation: None,
 				})
 			}
@@ -3106,6 +3459,16 @@ where
 				}
 			}));
 			result.insert(ForeignChain::Bitcoin, bitcoin_addresses);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Tron) {
+			result.insert(ForeignChain::Tron, vec![AddressAndExplanation {
+				name: "tron_vault_contract".into(),
+				address: AddressString::from_encoded_address(tron),
+				explanation: none_if_compact("Holds TRX and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
 		}
 
 		Ok(result)

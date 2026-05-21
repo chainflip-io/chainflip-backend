@@ -47,7 +47,7 @@ use sp_core::H160;
 use state_chain_runtime::{
 	chainflip::witnessing::bsc_elections::{
 		BscBlockHeightWitnesserES, BscChain, BscElectoralSystemRunner, BscFeeTracking, BscLiveness,
-		BSC_MAINNET_SAFETY_BUFFER,
+		BSC_MAINNET_SAFETY_BUFFER, BSC_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 	},
 	BscInstance,
 };
@@ -68,6 +68,7 @@ impl VoterApi<BscBlockHeightWitnesserES> for EvmVoter<BscChain, EvmBlockRangeQue
 			self,
 			properties,
 			BSC_MAINNET_SAFETY_BUFFER,
+			BSC_MAX_SUBMIT_HEADERS_IN_BHW_VOTER,
 			"BSC BHW",
 		)
 		.await

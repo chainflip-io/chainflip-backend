@@ -16,144 +16,20 @@
 
 use std::collections::HashMap;
 
-use cf_primitives::{AccountId, ChannelId, EpochIndex};
-use futures_core::Future;
+use cf_primitives::{AccountId, ChannelId};
 use itertools::Itertools;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 use state_chain_runtime::BitcoinInstance;
 
-use super::{
-	super::common::chunked_chain_source::chunked_by_vault::{
-		builder::ChunkedByVaultBuilder, private_deposit_channels::BrokerPrivateChannels,
-		ChunkedByVault,
-	},
-	vault_swaps::BtcIngressEgressCall,
-};
-use crate::{
-	btc::rpc::VerboseTransaction,
-	witness::{
-		btc::vault_swaps::try_extract_vault_swap_witness,
-		common::{
-			chunked_chain_source::chunked_by_vault::deposit_addresses::Addresses,
-			RuntimeCallHasChain, RuntimeHasChain,
-		},
-	},
-};
-use bitcoin::{hashes::Hash, BlockHash};
+use super::vault_swaps::try_extract_vault_swap_witness;
+use crate::btc::rpc::VerboseTransaction;
+use bitcoin::hashes::Hash;
 use cf_chains::{
 	assets::btc,
 	btc::{deposit_address::DepositAddress, Utxo, UtxoId},
 	Bitcoin, DepositChannel,
 };
 use pallet_cf_broadcast::TransactionConfirmation;
-
-impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
-	pub fn btc_deposits<ProcessCall, ProcessingFut>(
-		self,
-		process_call: ProcessCall,
-	) -> ChunkedByVaultBuilder<
-		impl ChunkedByVault<
-			Index = u64,
-			Hash = BlockHash,
-			Data = Vec<VerboseTransaction>,
-			Chain = Bitcoin,
-		>,
-	>
-	where
-		Inner: ChunkedByVault<
-			Index = u64,
-			Hash = BlockHash,
-			Data = ((((), Vec<VerboseTransaction>), Addresses<Inner>), BrokerPrivateChannels),
-			Chain = Bitcoin,
-		>,
-		ProcessCall: Fn(state_chain_runtime::RuntimeCall, EpochIndex) -> ProcessingFut
-			+ Send
-			+ Sync
-			+ Clone
-			+ 'static,
-		ProcessingFut: Future<Output = ()> + Send + 'static,
-		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-		state_chain_runtime::RuntimeCall:
-			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
-	{
-		self.then(move |epoch, header| {
-			let process_call = process_call.clone();
-			async move {
-				// TODO: Make addresses a Map of some kind?
-				let ((((), txs), deposit_channels), private_channels) = header.data;
-
-				let vault_addresses = {
-					use cf_chains::btc::{deposit_address::DepositAddress, AggKey};
-
-					let key: &AggKey = &epoch.info.0;
-
-					// Take all current private broker channels and use them to build a list of all
-					// deposit addresses that we should check for vault swaps. Note that we
-					// monitor previous epoch key (if exists) in addition to the current one, which
-					// means we get up to two deposit addresses per broker.
-					[key.current].into_iter().chain(key.previous).flat_map(|key| {
-						private_channels.clone().into_iter().map(move |(broker_id, channel_id)| {
-							(
-								broker_id,
-								channel_id,
-								DepositAddress::new(
-									key,
-									channel_id.try_into().expect("BTC channel id must fit in u32"),
-								),
-							)
-						})
-					})
-				};
-
-				let mut process_calls = vec![];
-				for (broker_id, channel_id, vault_address) in vault_addresses {
-					for tx in &txs {
-						if let Some(deposit) = super::vault_swaps::try_extract_vault_swap_witness(
-							tx,
-							&vault_address,
-							channel_id,
-							&broker_id,
-						) {
-							process_calls.push(process_call(
-								BtcIngressEgressCall::vault_swap_request {
-									block_height: header.index,
-									deposit: Box::new(deposit),
-								}
-								.into(),
-								epoch.index,
-							));
-						}
-					}
-				}
-
-				futures::future::join_all(process_calls).await;
-
-				let deposit_addresses = map_script_addresses(
-					deposit_channels
-						.into_iter()
-						.map(|deposit_channel| deposit_channel.deposit_channel)
-						.collect(),
-				);
-
-				let deposit_witnesses = deposit_witnesses(&txs, &deposit_addresses);
-
-				// Submit all deposit witnesses for the block.
-				if !deposit_witnesses.is_empty() {
-					process_call(
-						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-							deposit_witnesses,
-							block_height: header.index,
-						}
-						.into(),
-						epoch.index,
-					)
-					.await;
-				}
-				txs
-			}
-		})
-	}
-}
 
 pub fn vault_deposits(
 	txs: &[VerboseTransaction],

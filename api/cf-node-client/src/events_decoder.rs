@@ -144,6 +144,13 @@ impl Iterator for DynamicEvents {
 }
 
 impl DynamicEvents {
+	pub fn event_names(&self) -> Vec<String> {
+		self.events
+			.iter()
+			.map(|event| format!("{}::{}", event.pallet_name(), event.variant_name()))
+			.collect()
+	}
+
 	/// Finds the first event of type E, parameter `is_strict` determines if the event should be
 	/// decoded strictly.
 	///   * True: Performs checks that the event fields match the static metadata fields and that no

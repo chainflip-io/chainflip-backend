@@ -21,4 +21,5 @@ pub mod dot;
 pub mod eth;
 pub mod hub;
 pub mod sol;
+pub mod tron;
 pub struct AddressDerivation;

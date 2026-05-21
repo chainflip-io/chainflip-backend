@@ -26,7 +26,7 @@ use rand::{RngCore, SeedableRng};
 use sp_std::{prelude::*, vec};
 
 pub struct Pallet<T: Config>(pallet_session::Pallet<T>);
-pub trait Config: pallet_session::Config + pallet_session::historical::Config {}
+pub trait Config: pallet_session::Config {}
 
 fn generate_key<T: Config>(seed: u64) -> T::Keys {
 	let mut key = [0u8; 128];

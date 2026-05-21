@@ -23,8 +23,10 @@ use crate::{
 	sol::{self, SolAddress, SolPubkey},
 	Chain,
 };
+
+use crate::tron::TronAddress;
 use cf_primitives::{
-	chains::{Arbitrum, Assethub, Bitcoin, Bsc, Ethereum, Polkadot, Solana},
+	chains::{Arbitrum, Assethub, Bitcoin, Bsc, Ethereum, Polkadot, Solana, Tron},
 	ChannelId, ForeignChain, NetworkEnvironment,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
@@ -86,6 +88,7 @@ pub enum ForeignChainAddress {
 	Arb(<Arbitrum as Chain>::ChainAccount),
 	Sol(<Solana as Chain>::ChainAccount),
 	Hub(<Assethub as Chain>::ChainAccount),
+	Tron(<Tron as Chain>::ChainAccount),
 	Bsc(<Bsc as Chain>::ChainAccount),
 }
 
@@ -98,6 +101,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Arb(_) => ForeignChain::Arbitrum,
 			ForeignChainAddress::Sol(_) => ForeignChain::Solana,
 			ForeignChainAddress::Hub(_) => ForeignChain::Assethub,
+			ForeignChainAddress::Tron(_) => ForeignChain::Tron,
 			ForeignChainAddress::Bsc(_) => ForeignChain::Bsc,
 		}
 	}
@@ -109,6 +113,7 @@ impl ForeignChainAddress {
 			ForeignChainAddress::Dot(source_address) => source_address.aliased_ref().to_vec(),
 			ForeignChainAddress::Btc(script_pubkey) => script_pubkey.bytes(),
 			ForeignChainAddress::Hub(source_address) => source_address.aliased_ref().to_vec(),
+			ForeignChainAddress::Tron(source_address) => source_address.0.to_vec(),
 			ForeignChainAddress::Bsc(source_address) => source_address.0.to_vec(),
 		}
 	}
@@ -139,6 +144,7 @@ pub enum EncodedAddress {
 	Arb([u8; 20]),
 	Sol([u8; sol_prim::consts::SOLANA_ADDRESS_LEN]),
 	Hub([u8; 32]),
+	Tron([u8; 20]),
 	Bsc([u8; 20]),
 }
 
@@ -160,6 +166,8 @@ impl core::fmt::Display for EncodedAddress {
 		match self {
 			EncodedAddress::Eth(addr) | EncodedAddress::Arb(addr) | EncodedAddress::Bsc(addr) =>
 				write!(f, "0x{}", hex::encode(&addr[..])),
+			EncodedAddress::Tron(addr) =>
+				write!(f, "{}", TronAddress::from_evm_address(EvmAddress::from(*addr))),
 			EncodedAddress::Dot(addr) => write!(f, "0x{}", hex::encode(&addr[..])),
 			EncodedAddress::Btc(addr) => write!(
 				f,
@@ -204,6 +212,7 @@ impl TryFrom<ForeignChainAddress> for EvmAddress {
 			ForeignChainAddress::Eth(addr) |
 			ForeignChainAddress::Arb(addr) |
 			ForeignChainAddress::Bsc(addr) => Ok(addr),
+			ForeignChainAddress::Tron(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -282,6 +291,12 @@ impl IntoForeignChainAddress<Solana> for SolAddress {
 	}
 }
 
+impl IntoForeignChainAddress<Tron> for EvmAddress {
+	fn into_foreign_chain_address(self) -> ForeignChainAddress {
+		ForeignChainAddress::Tron(self)
+	}
+}
+
 impl EncodedAddress {
 	pub fn inner_bytes(&self) -> &[u8] {
 		match self {
@@ -291,6 +306,7 @@ impl EncodedAddress {
 			EncodedAddress::Arb(inner) => &inner[..],
 			EncodedAddress::Sol(inner) => &inner[..],
 			EncodedAddress::Hub(inner) => &inner[..],
+			EncodedAddress::Tron(inner) => &inner[..],
 			EncodedAddress::Bsc(inner) => &inner[..],
 		}
 	}
@@ -332,6 +348,14 @@ impl EncodedAddress {
 				address.copy_from_slice(&bytes);
 				Ok(EncodedAddress::Hub(address))
 			},
+			ForeignChain::Tron => {
+				if bytes.len() != 20 {
+					return Err("Invalid Tron address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Tron(address))
+			},
 			ForeignChain::Bsc => {
 				if bytes.len() != 20 {
 					return Err("Invalid BSC address length")
@@ -351,6 +375,7 @@ impl EncodedAddress {
 			EncodedAddress::Arb(_) => ForeignChain::Arbitrum,
 			EncodedAddress::Sol(_) => ForeignChain::Solana,
 			EncodedAddress::Hub(_) => ForeignChain::Assethub,
+			EncodedAddress::Tron(_) => ForeignChain::Tron,
 			EncodedAddress::Bsc(_) => ForeignChain::Bsc,
 		}
 	}
@@ -362,6 +387,7 @@ impl EncodedAddress {
 			EncodedAddress::Dot(bytes) => bytes.to_vec(),
 			EncodedAddress::Btc(byte_vec) => byte_vec,
 			EncodedAddress::Hub(bytes) => bytes.to_vec(),
+			EncodedAddress::Tron(bytes) => bytes.to_vec(),
 			EncodedAddress::Bsc(bytes) => bytes.to_vec(),
 		}
 	}
@@ -387,6 +413,7 @@ pub fn to_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		ForeignChainAddress::Arb(address) => EncodedAddress::Arb(address.0),
 		ForeignChainAddress::Sol(address) => EncodedAddress::Sol(address.into()),
 		ForeignChainAddress::Hub(address) => EncodedAddress::Hub(*address.aliased_ref()),
+		ForeignChainAddress::Tron(address) => EncodedAddress::Tron(address.0),
 		ForeignChainAddress::Bsc(address) => EncodedAddress::Bsc(address.0),
 	}
 }
@@ -411,6 +438,7 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 		EncodedAddress::Sol(address_bytes) => Ok(ForeignChainAddress::Sol(address_bytes.into())),
 		EncodedAddress::Hub(address_bytes) =>
 			Ok(ForeignChainAddress::Hub(PolkadotAccountId::from_aliased(address_bytes))),
+		EncodedAddress::Tron(address_bytes) => Ok(ForeignChainAddress::Tron(address_bytes.into())),
 		EncodedAddress::Bsc(address_bytes) => Ok(ForeignChainAddress::Bsc(address_bytes.into())),
 	}
 }
@@ -476,6 +504,16 @@ impl ToHumanreadableAddress for PolkadotAccountId {
 	}
 }
 
+impl ToHumanreadableAddress for TronAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = String;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.to_base58check()
+	}
+}
+
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
@@ -492,6 +530,7 @@ pub enum ForeignChainAddressHumanreadable {
 	Arb(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 	Sol(<SolAddress as ToHumanreadableAddress>::Humanreadable),
 	Hub(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
+	Tron(<TronAddress as ToHumanreadableAddress>::Humanreadable),
 	Bsc(<EvmAddress as ToHumanreadableAddress>::Humanreadable),
 }
 
@@ -505,7 +544,8 @@ impl std::fmt::Display for ForeignChainAddressHumanreadable {
 			ForeignChainAddressHumanreadable::Dot(address) |
 			ForeignChainAddressHumanreadable::Hub(address) => write!(f, "{}", address),
 			ForeignChainAddressHumanreadable::Btc(address) |
-			ForeignChainAddressHumanreadable::Sol(address) => write!(f, "{}", address),
+			ForeignChainAddressHumanreadable::Sol(address) |
+			ForeignChainAddressHumanreadable::Tron(address) => write!(f, "{}", address),
 		}
 	}
 }
@@ -539,6 +579,9 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 				ForeignChainAddressHumanreadable::Sol(address.to_humanreadable(network_environment)),
 			ForeignChainAddress::Hub(address) =>
 				ForeignChainAddressHumanreadable::Hub(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Tron(address) => ForeignChainAddressHumanreadable::Tron(
+				TronAddress::from_evm_address(*address).to_humanreadable(network_environment),
+			),
 			ForeignChainAddress::Bsc(address) =>
 				ForeignChainAddressHumanreadable::Bsc(address.to_humanreadable(network_environment)),
 		}
@@ -546,7 +589,7 @@ impl ToHumanreadableAddress for ForeignChainAddress {
 }
 
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressString(String);
 
 #[cfg(feature = "std")]
@@ -625,45 +668,115 @@ pub fn clean_foreign_chain_address(
 		},
 		ForeignChain::Assethub =>
 			EncodedAddress::Hub(PolkadotAccountId::from_str(address).map(|id| *id.aliased_ref())?),
+		// Support Tron string addresses and EVM addresses with and without the 0x41 prefix
+		ForeignChain::Tron => match TronAddress::from_str(address) {
+			Ok(tron_addr) => EncodedAddress::Tron(tron_addr.to_evm_address().into()),
+			Err(_) => {
+				// Try 21-byte hex (0x41 prefix + 20 bytes), then fall back to raw
+				// 20-byte EVM hex.
+				if let Ok(tron_addr) = clean_hex_address::<TronAddress>(address) {
+					EncodedAddress::Tron(tron_addr.to_evm_address().into())
+				} else {
+					EncodedAddress::Tron(clean_hex_address(address)?)
+				}
+			},
+		},
 		ForeignChain::Bsc => EncodedAddress::Bsc(clean_hex_address(address)?),
 	})
 }
 
-#[test]
-fn encode_and_decode_address() {
-	#[track_caller]
-	fn test(address: &str, case_sensitive: bool) {
-		let network = || NetworkEnvironment::Mainnet;
-		let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec());
-		let foreign_chain_addr = try_from_encoded_address(encoded_addr.clone(), network).unwrap();
-		let recovered_addr = to_encoded_address(foreign_chain_addr, network);
-		if case_sensitive {
-			assert_eq!(recovered_addr, encoded_addr, "{recovered_addr} != {encoded_addr}");
-		} else {
-			assert!(
-				recovered_addr.to_string().eq_ignore_ascii_case(&encoded_addr.to_string()),
-				"{recovered_addr} != {encoded_addr}"
-			);
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn encode_and_decode_address() {
+		#[track_caller]
+		fn test(address: &str, case_sensitive: bool) {
+			let network = || NetworkEnvironment::Mainnet;
+			let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec());
+			let foreign_chain_addr =
+				try_from_encoded_address(encoded_addr.clone(), network).unwrap();
+			let recovered_addr = to_encoded_address(foreign_chain_addr, network);
+			if case_sensitive {
+				assert_eq!(recovered_addr, encoded_addr, "{recovered_addr} != {encoded_addr}");
+			} else {
+				assert!(
+					recovered_addr.to_string().eq_ignore_ascii_case(&encoded_addr.to_string()),
+					"{recovered_addr} != {encoded_addr}"
+				);
+			}
+		}
+		for addr in [
+			"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx",
+			"3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
+			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+			"BC1SW50QGDZ25J",
+			"bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs",
+			"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0",
+		] {
+			test(addr, false);
+		}
+		for addr in [
+			"1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i",
+			"1Q1pE5vPGEEMqRcVRMbtBK842Y6Pzo6nK9",
+			"1BNGaR29FmfAqidXmD9HLwsGv9p5WVvvhq",
+			"17NdbrSGoUotzeGCcMMCqnFkEvLymoou9j",
+			"16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM",
+			"1111111111111111111114oLvT2",
+		] {
+			test(addr, true);
 		}
 	}
-	for addr in [
-		"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx",
-		"3P14159f73E4gFr7JterCCQh9QjiTjiZrG",
-		"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
-		"BC1SW50QGDZ25J",
-		"bc1zw508d6qejxtdg4y5r3zarvaryvaxxpcs",
-		"bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0",
-	] {
-		test(addr, false);
+
+	#[test]
+	fn display_uses_base58check() {
+		let evm_hex = "9df3e70fc7ea8128d6d0634664118d16bc856e1c";
+		let evm_bytes: [u8; 20] = hex::decode(evm_hex).unwrap().try_into().unwrap();
+		let encoded = EncodedAddress::Tron(evm_bytes);
+		assert_eq!(encoded.to_string(), "TQNPGpohiZLiWQvc6wTWjHCae8VoxaXnej");
 	}
-	for addr in [
-		"1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i",
-		"1Q1pE5vPGEEMqRcVRMbtBK842Y6Pzo6nK9",
-		"1BNGaR29FmfAqidXmD9HLwsGv9p5WVvvhq",
-		"17NdbrSGoUotzeGCcMMCqnFkEvLymoou9j",
-		"16UwLL9Risc3QfPqBUvKofHmBQ7wMtjvM",
-		"1111111111111111111114oLvT2",
-	] {
-		test(addr, true);
+
+	#[test]
+	fn clean_foreign_chain_address_base58check() {
+		let addr =
+			clean_foreign_chain_address(ForeignChain::Tron, "TQNPGpohiZLiWQvc6wTWjHCae8VoxaXnej")
+				.unwrap();
+		assert_eq!(
+			addr,
+			EncodedAddress::Tron(
+				hex::decode("9df3e70fc7ea8128d6d0634664118d16bc856e1c")
+					.unwrap()
+					.try_into()
+					.unwrap()
+			)
+		);
+	}
+
+	#[test]
+	fn clean_foreign_chain_address_hex_fallback() {
+		let hex_addr = "419df3e70fc7ea8128d6d0634664118d16bc856e1c";
+		let addr = clean_foreign_chain_address(ForeignChain::Tron, hex_addr).unwrap();
+		assert_eq!(
+			addr,
+			EncodedAddress::Tron(
+				hex::decode("9df3e70fc7ea8128d6d0634664118d16bc856e1c")
+					.unwrap()
+					.try_into()
+					.unwrap()
+			)
+		);
+	}
+
+	#[test]
+	fn clean_foreign_chain_address_20_byte_evm_hex() {
+		let evm_hex = "9df3e70fc7ea8128d6d0634664118d16bc856e1c";
+		let addr = clean_foreign_chain_address(ForeignChain::Tron, evm_hex).unwrap();
+		assert_eq!(addr, EncodedAddress::Tron(hex::decode(evm_hex).unwrap().try_into().unwrap()));
+
+		// Also works with 0x prefix
+		let addr =
+			clean_foreign_chain_address(ForeignChain::Tron, &format!("0x{evm_hex}")).unwrap();
+		assert_eq!(addr, EncodedAddress::Tron(hex::decode(evm_hex).unwrap().try_into().unwrap()));
 	}
 }

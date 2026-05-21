@@ -6,6 +6,7 @@ use super::*;
 fn test_no_account_serialization() {
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"NO_ACCOUNT".to_vec(),
 			flip_balance: 1500000000000000000u128.into(), // 1.5 FLIP
 			asset_balances: any::AssetMap {
@@ -21,6 +22,7 @@ fn test_no_account_serialization() {
 				arb: arb::AssetMap { eth: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 				sol: sol::AssetMap { sol: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
 				hub: hub::AssetMap { dot: 0u128.into(), usdc: 0u128.into(), usdt: 0u128.into() },
+				tron: tron::AssetMap { trx: 0u128.into(), usdt: 0u128.into() },
 				bsc: bsc::AssetMap { bnb: 0u128.into(), usdt: 0u128.into() },
 			},
 			bond: 0u32.into(),
@@ -70,6 +72,10 @@ fn test_broker_serialization() {
 			usdc: 100000u128.into(),    // 0.1 USDC
 			usdt: 50000u128.into(),     // 0.05 USDT
 		},
+		tron: tron::AssetMap {
+			trx: 5000000u128.into(), // 5 TRX
+			usdt: 500000u128.into(), // 0.5 USDT
+		},
 		bsc: bsc::AssetMap {
 			//todo: revisit this
 			bnb: 300000000000000000u128.into(),  // 0.3 BNB
@@ -79,6 +85,7 @@ fn test_broker_serialization() {
 
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: 5000000000000000000u128.into(), // 5 FLIP
 			asset_balances: Default::default(),
@@ -162,6 +169,7 @@ fn test_lp_serialization() {
 			usdc: 1000000u128.into(),
 			usdt: 500000u128.into(),
 		},
+		tron: tron::AssetMap { trx: 8u128.into(), usdt: 10u128.into() },
 		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
 
@@ -204,9 +212,9 @@ fn test_lp_serialization() {
 			usdc: 3000000u128.into(),
 			usdt: 2000000u128.into(),
 		},
+		tron: tron::AssetMap { trx: 5u128.into(), usdt: 5u128.into() },
 		bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 	};
-
 	let collateral_balances =
 		vec![AssetAndAmount { asset: Asset::Flip, amount: 500_000u128.into() }];
 	let lending_positions = vec![LendingPosition {
@@ -217,6 +225,7 @@ fn test_lp_serialization() {
 
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: 25000000000000000000u128.into(), // 25 FLIP
 			asset_balances,
@@ -243,6 +252,7 @@ fn test_lp_serialization() {
 fn test_validator_serialization() {
 	let wrapper = RpcAccountInfoWrapper {
 		common_items: RpcAccountInfoCommonItems {
+			account_id: None,
 			vanity_name: b"TEST".to_vec(),
 			flip_balance: (FLIPPERINOS_PER_FLIP * 50).into(), // 50 FLIP
 			asset_balances: any::AssetMap {
@@ -269,6 +279,10 @@ fn test_validator_serialization() {
 					dot: 10000000000u128.into(),
 					usdc: 500000u128.into(),
 					usdt: 250000u128.into(),
+				},
+				tron: tron::AssetMap {
+					trx: 10000000u128.into(), // 10 TRX
+					usdt: 1500000u128.into(), // 1.5 USDT
 				},
 				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},

@@ -23,8 +23,6 @@ on:
 env:
   FORCE_COLOR: 1
   SOLANA_VERSION: v2.1.13
-  SOLANA_PROGRAMS_VERSION: v1.3.0
-  EVM_CONTRACTS_VERSION: v1.4.1
   NODE_COUNT: "1-node"
   CHAIN: "dev"
 
@@ -183,9 +181,36 @@ jobs:
           docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
+      - name: Setup bouncer tests initial state 📦
+        if: inputs.run-job
+        run: |
+          git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
+          set -x
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./setup_for_test.sh
+          git reset --hard
+
+      - name: Upgrade binaries 💾
+        if: inputs.run-job
+        shell: bash
+        id: upgrade-binaries
+        run: |
+          git checkout ${{ github.sha }}
+          git rev-parse HEAD
+          cd bouncer
+          pnpm install --frozen-lockfile
+          ./commands/upgrade_binaries.ts \
+            --bins ./../upgrade-to-bins \
+            --localnet_init ./../localnet/init
+          # Remove after 2.2 is release because the new rpc_tests are already part of fast-bouncer
+          ./commands/run_test.ts  ./tests/rpc_tests.ts
+
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
+        env:
+          SKIP_BLS_TESTS: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
@@ -193,25 +218,36 @@ jobs:
           sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
-          ./fast_bouncer.sh
+          ./test_commands/all_cuncurrent_tests.sh
           git reset --hard
 
-      - name: Upgrade network 🚀
+      # TODO: This is a temporary workaround to setup Tron in the upgrade test.
+      # To remove after TRON is released.
+      - name: Start Tron containers 🌞
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron tron-peer --quiet-pull -d
+          source localnet/helper.sh
+          echo "🌞 Waiting for TRON node to start"
+          check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock
+          git reset --hard
+
+      - name: Upgrade runtime 🚀
         if: inputs.run-job
         shell: bash
-        id: upgrade-network
-        env:
-          SKIP_BLS_TESTS: "true"
+        id: upgrade-runtime
         run: |
           git checkout ${{ github.sha }}
           git rev-parse HEAD
           cd bouncer
           pnpm install --frozen-lockfile
-          ./commands/upgrade_network.ts prebuilt \
+          ./commands/submit_runtime_upgrade.ts \
             --runtime ./../upgrade-to-runtime/state_chain_runtime.compact.compressed.wasm \
+            --try_runtime
+          ./commands/start_dm_localnet_apis.ts \
             --bins ./../upgrade-to-bins \
-            --localnet_init ./../localnet/init \
-            --oldVersion "${{ env.OLD_BIN_VERSION }}"
+            --localnet_init ./../localnet/init
 
       - name: Run bouncer after upgrade 🙅‍♂️
         if: inputs.run-job
@@ -224,7 +260,10 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
+          # TODO: This is a temporary workaround to setup Tron.
+          # To remove after TRON is released.
+          ./commands/setup_new_chain.ts
+          ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
@@ -239,18 +278,17 @@ jobs:
           cat /tmp/solana/*.log
           cat /tmp/solana/test-ledger/validator.log
 
-      - name: Print new pre-upgrade chainflip-engine logs 🚗
+      - name: Print during-upgrade chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
-        # In the case of a compatible upgrade, we don't expect any logs here
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-pre-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-1.*log
 
-      - name: Print new post-upgrade chainflip-engine logs 🚗
+      - name: Print post-upgrade chainflip-engine logs 🚗
         if: inputs.run-job || failure() || cancelled()
         continue-on-error: true
         run: |
-          cat /tmp/chainflip/*/chainflip-engine-post-upgrade.*log
+          cat /tmp/chainflip/*/chainflip-engine-upgrade-test-2.*log
 
       - name: Print chainflip-node logs 📡
         if: inputs.run-job || failure() || cancelled()
@@ -290,6 +328,9 @@ jobs:
           name: localnet-logs-upgrade-test
           path: |
             /tmp/chainflip/*/chainflip-*.*log
+            /tmp/chainflip/chainflip-*.*log
+            /tmp/chainflip/debug.*log
+            /tmp/solana/*.*log
 
       - name: Upload Chainflip Logs 💾
         if: inputs.run-job || failure() || cancelled()

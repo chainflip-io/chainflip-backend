@@ -27,6 +27,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 10 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 10 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 10 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 10 * 60 / 12;
+pub const TRON_EXPIRY_BLOCKS: u32 = 10 * 60 / 3;
 pub const BSC_EXPIRY_BLOCKS: u32 = 10 * 60 * 1000 / 450; // 450ms block time
 
 pub const MIN_AUTHORITIES: AuthorityCount = 1;
@@ -40,3 +41,4 @@ pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
+pub const TRON_SAFETY_MARGIN: u64 = 19;

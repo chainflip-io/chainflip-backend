@@ -14,11 +14,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_chains::CcmChannelMetadataUnchecked;
+use cf_chains::{CcmChannelMetadataUnchecked, ForeignChain, TransactionInId};
 use cf_rpc_apis::{
 	broker::{
 		AccountCreationDepositAddress, BrokerRpcApiServer, DcaParameters, DeregisteredAffiliate,
-		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress, TransactionInId,
+		GetOpenDepositChannelsQuery, RpcBytes, SignatureData, SwapDepositAddress,
 		TransactionMetadata, VaultSwapExtraParametersRpc, VaultSwapInputRpc, WithdrawFeesDetail,
 	},
 	RefundParametersRpc, RpcApiError, RpcResult,
@@ -43,7 +43,12 @@ use chainflip_api::{
 use clap::Parser;
 use custom_rpc::CustomApiClient;
 use futures::{stream, FutureExt, StreamExt};
-use jsonrpsee::{core::async_trait, server::ServerBuilder, PendingSubscriptionSink};
+use jsonrpsee::{
+	core::{__reexports::serde_json, async_trait, client::SubscriptionClientT},
+	rpc_params,
+	server::ServerBuilder,
+	PendingSubscriptionSink,
+};
 use sc_rpc::utils::{BoundedVecDeque, PendingSubscription};
 use std::{
 	path::PathBuf,
@@ -226,13 +231,71 @@ impl BrokerRpcApiServer for RpcServerImpl {
 	}
 
 	async fn subscribe_transaction_screening_events(&self, pending_sink: PendingSubscriptionSink) {
-		// pipe results through from custom-rpc subscription
-		match self.api.raw_client().cf_subscribe_transaction_screening_events().await {
+		// Pipe raw JSON from custom-rpc subscription without deserializing.
+		match self
+			.api
+			.raw_client()
+			.subscribe::<Box<serde_json::value::RawValue>, _>(
+				"cf_subscribe_transaction_screening_events",
+				rpc_params![],
+				"cf_unsubscribe_transaction_screening_events",
+			)
+			.await
+		{
 			Ok(subscription) => {
 				let stream = stream::unfold(subscription, move |mut sub| async move {
 					match sub.next().await {
-						Some(Ok(block_update)) => Some((block_update, sub)),
-						_ => None,
+						Some(Ok(raw)) => Some((raw, sub)),
+						Some(Err(e)) => {
+							log::error!(
+								"subscribe_transaction_screening_events: subscription error (dropping subscription): {e}"
+							);
+							None
+						},
+						None => None,
+					}
+				})
+				.boxed();
+
+				tokio::spawn(async move {
+					PendingSubscription::from(pending_sink)
+						.pipe_from_stream(stream, BoundedVecDeque::default())
+						.await;
+				});
+			},
+			Err(e) => {
+				pending_sink.reject(RpcApiError::ClientError(e)).await;
+			},
+		}
+	}
+
+	async fn subscribe_ingress_events(
+		&self,
+		pending_sink: PendingSubscriptionSink,
+		chain: ForeignChain,
+	) {
+		// Pipe raw JSON from custom-rpc subscription without deserializing
+		match self
+			.api
+			.raw_client()
+			.subscribe::<Box<serde_json::value::RawValue>, _>(
+				"cf_subscribe_ingress_events",
+				rpc_params![chain],
+				"cf_unsubscribe_ingress_events",
+			)
+			.await
+		{
+			Ok(subscription) => {
+				let stream = stream::unfold(subscription, move |mut sub| async move {
+					match sub.next().await {
+						Some(Ok(raw)) => Some((raw, sub)),
+						Some(Err(e)) => {
+							log::error!(
+								"subscribe_ingress_events({chain:?}): subscription error (dropping subscription): {e}"
+							);
+							None
+						},
+						None => None,
 					}
 				})
 				.boxed();

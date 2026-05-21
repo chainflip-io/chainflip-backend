@@ -15,7 +15,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{self as pallet_cf_pools, mock::*, *};
-use cf_amm::{common::Side, math::Tick};
+use cf_amm::{
+	common::{AskBidMap, LimitOrder, Side},
+	math::Tick,
+};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_test_utilities::{
 	assert_events_eq, assert_events_match, assert_matching_event_count, last_event,
@@ -191,7 +194,7 @@ fn pallet_limit_order_is_in_sync_with_pool() {
 			None,
 		));
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![LimitOrder {
@@ -320,7 +323,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 		assert_eq!(MockBalance::get_balance(&BOB, Asset::Eth), 0);
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(ALICE), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &ALICE, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -333,7 +336,7 @@ fn update_pool_liquidity_fee_collects_fees_for_range_order() {
 			})
 		);
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, Some(BOB), false),
+			LiquidityPools::pool_orders_for_account(Asset::Eth, STABLE_ASSET, &BOB, false),
 			Ok(PoolOrders {
 				limit_orders: AskBidMap { asks: vec![], bids: vec![] },
 				range_orders: vec![RangeOrder {
@@ -447,6 +450,220 @@ fn can_execute_scheduled_limit_order_updates() {
 			)
 		},
 	);
+}
+
+#[test]
+fn scheduled_set_replaces_existing_set_for_same_order() {
+	const DISPATCH_AT: u64 = 2;
+	const ORDER_ID: OrderId = 0;
+	const FIRST_AMOUNT: AssetAmount = 55;
+	const SECOND_AMOUNT: AssetAmount = 77;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				400_000u32,
+				Price::at_tick_zero(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, FIRST_AMOUNT + SECOND_AMOUNT);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				ORDER_ID,
+				Some(100),
+				FIRST_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				ORDER_ID,
+				Some(101),
+				SECOND_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 1);
+
+			let scheduled_updates = ScheduledLimitOrderUpdates::<Test>::get(DISPATCH_AT);
+			assert_eq!(scheduled_updates.len(), 1);
+			assert_eq!(
+				scheduled_updates[0].details,
+				LimitOrderUpdateDetails::Set {
+					option_tick: Some(101),
+					sell_amount: SECOND_AMOUNT,
+					close_order_at: None,
+				}
+			);
+		})
+		.then_process_blocks_until_block(DISPATCH_AT)
+		.then_execute_with(|_| {
+			let order =
+				LiquidityPools::pool_orders_for_account(Asset::Flip, STABLE_ASSET, &ALICE, false)
+					.unwrap()
+					.limit_orders
+					.bids
+					.into_iter()
+					.next()
+					.unwrap();
+
+			assert_eq!(order.tick, 101);
+			assert_eq!(order.sell_amount, SECOND_AMOUNT.into());
+		});
+}
+
+#[test]
+fn scheduled_close_replaces_existing_close_for_same_order() {
+	const CURRENT_BLOCK: u64 = 10;
+	const CLOSE_ORDER_AT: u64 = CURRENT_BLOCK + 1;
+	const ORDER_ID: OrderId = 0;
+	const AMOUNT: AssetAmount = 55;
+
+	new_test_ext()
+		.then_execute_at_block(CURRENT_BLOCK as u32, |_| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				400_000u32,
+				Price::at_tick_zero(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, AMOUNT * 2);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				ORDER_ID,
+				Some(100),
+				AMOUNT,
+				None,
+				Some(CLOSE_ORDER_AT),
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				ORDER_ID,
+				Some(101),
+				AMOUNT,
+				None,
+				Some(CLOSE_ORDER_AT),
+			));
+
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, CLOSE_ORDER_AT)), 1);
+
+			let scheduled_updates = ScheduledLimitOrderUpdates::<Test>::get(CLOSE_ORDER_AT);
+			assert_eq!(scheduled_updates.len(), 1);
+			assert_eq!(scheduled_updates[0].details, LimitOrderUpdateDetails::Close);
+		})
+		.then_process_blocks_until_block(CLOSE_ORDER_AT)
+		.then_execute_with(|_| {
+			assert_eq!(
+				LiquidityPools::pool_orders_for_account(Asset::Flip, STABLE_ASSET, &ALICE, false)
+					.unwrap()
+					.limit_orders
+					.bids
+					.len(),
+				0
+			);
+		});
+}
+
+#[test]
+fn scheduled_set_does_not_override_different_order() {
+	const DISPATCH_AT: u64 = 2;
+	const FIRST_ORDER_ID: OrderId = 0;
+	const SECOND_ORDER_ID: OrderId = 1;
+	const FIRST_AMOUNT: AssetAmount = 55;
+	const SECOND_AMOUNT: AssetAmount = 77;
+
+	new_test_ext()
+		.execute_with(|| {
+			assert_ok!(LiquidityPools::new_pool(
+				RuntimeOrigin::root(),
+				Asset::Flip,
+				STABLE_ASSET,
+				400_000u32,
+				Price::at_tick_zero(),
+			));
+
+			MockBalance::credit_account(&ALICE, STABLE_ASSET, FIRST_AMOUNT + SECOND_AMOUNT);
+
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				FIRST_ORDER_ID,
+				Some(100),
+				FIRST_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+			assert_ok!(LiquidityPools::set_limit_order(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Flip,
+				STABLE_ASSET,
+				Side::Buy,
+				SECOND_ORDER_ID,
+				Some(101),
+				SECOND_AMOUNT,
+				Some(DISPATCH_AT),
+				None,
+			));
+
+			assert_eq!(ScheduledLimitOrderUpdateCount::<Test>::get((ALICE, DISPATCH_AT)), 2);
+
+			let scheduled_updates = ScheduledLimitOrderUpdates::<Test>::get(DISPATCH_AT);
+			assert_eq!(scheduled_updates.len(), 2);
+			assert_eq!(scheduled_updates[0].id, FIRST_ORDER_ID);
+			assert_eq!(
+				scheduled_updates[0].details,
+				LimitOrderUpdateDetails::Set {
+					option_tick: Some(100),
+					sell_amount: FIRST_AMOUNT,
+					close_order_at: None,
+				}
+			);
+			assert_eq!(scheduled_updates[1].id, SECOND_ORDER_ID);
+			assert_eq!(
+				scheduled_updates[1].details,
+				LimitOrderUpdateDetails::Set {
+					option_tick: Some(101),
+					sell_amount: SECOND_AMOUNT,
+					close_order_at: None,
+				}
+			);
+		})
+		.then_process_blocks_until_block(DISPATCH_AT)
+		.then_execute_with(|_| {
+			let bids =
+				LiquidityPools::pool_orders_for_account(Asset::Flip, STABLE_ASSET, &ALICE, false)
+					.unwrap()
+					.limit_orders
+					.bids;
+
+			assert_eq!(bids.len(), 2);
+			let by_tick: std::collections::BTreeMap<_, _> =
+				bids.into_iter().map(|o| (o.tick, o.sell_amount)).collect();
+			assert_eq!(by_tick.get(&100), Some(&FIRST_AMOUNT.into()));
+			assert_eq!(by_tick.get(&101), Some(&SECOND_AMOUNT.into()));
+		});
 }
 
 #[test]
@@ -597,8 +814,8 @@ fn can_get_all_pool_orders() {
 		));
 
 		assert_eq!(
-			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, None, false),
-			Ok(PoolOrders::<Test> {
+			LiquidityPools::pool_orders(Asset::Eth, STABLE_ASSET, &BTreeSet::new(), false),
+			Ok(PoolOrders {
 				limit_orders: AskBidMap {
 					asks: vec![
 						LimitOrder {
@@ -1180,9 +1397,10 @@ fn cancel_all_limit_orders_for_account() {
 		}
 
 		let count_orders = |base_asset, lp| {
-			let orders = LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
-				.unwrap()
-				.limit_orders;
+			let orders =
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
+					.unwrap()
+					.limit_orders;
 
 			(orders.asks.len(), orders.bids.len())
 		};
@@ -1586,7 +1804,7 @@ fn test_limit_order_auto_close() {
 
 			// The order should be present in the pool
 			assert_eq!(
-				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
+				LiquidityPools::pool_orders_for_account(ASSET, STABLE_ASSET, &ALICE, false)
 					.unwrap()
 					.limit_orders
 					.asks
@@ -1605,7 +1823,7 @@ fn test_limit_order_auto_close() {
 				}) => ()
 			);
 			assert_eq!(
-				LiquidityPools::pool_orders(ASSET, STABLE_ASSET, Some(ALICE), false)
+				LiquidityPools::pool_orders_for_account(ASSET, STABLE_ASSET, &ALICE, false)
 					.unwrap()
 					.limit_orders
 					.asks
@@ -1664,12 +1882,12 @@ fn cancel_all_pool_positions() {
 
 		let count_orders = |base_asset, lp| {
 			let limit_orders =
-				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
 					.unwrap()
 					.limit_orders;
 
 			let range_orders =
-				LiquidityPools::pool_orders(base_asset, STABLE_ASSET, Some(lp), false)
+				LiquidityPools::pool_orders_for_account(base_asset, STABLE_ASSET, &lp, false)
 					.unwrap()
 					.range_orders;
 
@@ -1686,5 +1904,51 @@ fn cancel_all_pool_positions() {
 		// All orders in the pool should be closed
 		assert_eq!(count_orders(BASE_ASSET, ALICE), (0, 0, 0));
 		assert_eq!(count_orders(BASE_ASSET, BOB), (0, 0, 0));
+	});
+}
+
+#[test]
+fn test_get_limit_orders() {
+	const ASSET: Asset = Asset::Flip;
+	const AMOUNT: AssetAmount = 100_000;
+
+	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			ASSET,
+			STABLE_ASSET,
+			Default::default(),
+			Price::at_tick_zero(),
+		));
+
+		MockBalance::credit_account(&ALICE, ASSET, 1_000_000);
+		assert_ok!(LiquidityPools::set_limit_order(
+			RuntimeOrigin::signed(ALICE),
+			ASSET,
+			STABLE_ASSET,
+			Side::Sell,
+			0,
+			Some(0),
+			AMOUNT,
+			None,
+			None,
+		));
+
+		let orders =
+			LiquidityPools::limit_orders(ASSET, STABLE_ASSET, &BTreeSet::from([ALICE])).unwrap();
+		assert_eq!(
+			orders,
+			AskBidMap {
+				asks: vec![LimitOrder {
+					lp: ALICE,
+					id: 0.into(),
+					tick: 0,
+					sell_amount: AMOUNT.into(),
+					fees_earned: 0.into(),
+					original_sell_amount: AMOUNT.into(),
+				}],
+				bids: vec![],
+			}
+		);
 	});
 }

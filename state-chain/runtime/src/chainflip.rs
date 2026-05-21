@@ -30,6 +30,7 @@ mod signer_nomination;
 #[macro_use]
 pub mod witnessing;
 pub mod ethereum_sc_calls;
+pub mod key_owner_proof;
 pub mod simulate_swap;
 pub mod vault_swaps;
 
@@ -45,7 +46,8 @@ use crate::{
 	BscChainTracking, BscIngressEgress, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, Hash, PolkadotBroadcaster,
 	PolkadotChainTracking, PolkadotIngressEgress, PolkadotThresholdSigner, Runtime, RuntimeCall,
-	SolanaBroadcaster, SolanaIngressEgress, SolanaThresholdSigner, System, Validator,
+	SolanaBroadcaster, SolanaIngressEgress, SolanaThresholdSigner, System, TronIngressEgress,
+	Validator,
 };
 #[cfg(any(feature = "runtime-integration-tests", feature = "runtime-benchmarks"))]
 use cf_amm::math::Price;
@@ -78,7 +80,7 @@ use cf_chains::{
 	hub::{api::AssethubApi, OutputAccountId},
 	instances::{
 		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
-		PolkadotInstance, SolanaInstance,
+		PolkadotInstance, SolanaInstance, TronInstance,
 	},
 	sol::{
 		api::{
@@ -89,11 +91,12 @@ use cf_chains::{
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
 	},
+	tron::{api::TronApi, TronTransaction},
 	AnyChain, ApiCall, Arbitrum, Assethub, Bsc, CcmChannelMetadataChecked,
 	CcmDepositMetadataChecked, Chain, ChainCrypto, ChainEnvironment, ChainState,
 	ChannelRefundParametersForChain, ForeignChain, ReplayProtectionProvider,
 	RequiresSignatureRefresh, SetCommKeyWithAggKey, SetGovKeyWithAggKey, SetGovKeyWithAggKeyError,
-	Solana, TransactionBuilder,
+	Solana, TransactionBuilder, Tron,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, BasisPoints, Beneficiaries, ChainflipNetwork,
@@ -102,8 +105,8 @@ use cf_primitives::{
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, AdditionalDepositAction, BroadcastAnyChainGovKey,
 	Broadcaster, CcmAdditionalDataHandler, Chainflip, CommKeyBroadcaster, DepositApi, EgressApi,
-	FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider, OnBroadcastReady, OnDeposit,
-	OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
+	FeeMultiplierProvider, FetchesTransfersLimitProvider, IngressEgressFeeApi, KeyProvider,
+	OnBroadcastReady, OnDeposit, OraclePrice, QualifyNode, RuntimeUpgrade, ScheduledEgressDetails,
 };
 
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -212,6 +215,57 @@ impl_transaction_builder_for_evm_chain!(
 	// we use priority fee multiplier in bsc's case since base fee is anyways always 0 in bsc
 	BSC_PRIORITY_FEE_MULTIPLIER
 );
+
+pub struct TronTransactionBuilder;
+impl TransactionBuilder<Tron, TronApi<EvmEnvironment>> for TronTransactionBuilder {
+	fn build_transaction(signed_call: &TronApi<EvmEnvironment>) -> TronTransaction {
+		TronTransaction {
+			contract: signed_call.replay_protection().contract_address,
+			data: signed_call.chain_encoded(),
+			fee_limit: Self::calculate_gas_limit(signed_call)
+				.map(|v| v.min(u64::MAX.into()).as_u64()),
+			value: Default::default(),
+			function_selector: signed_call.function_selector_string(),
+		}
+	}
+
+	fn refresh_unsigned_data(_unsigned_tx: &mut TronTransaction) {
+		// Nothing to update (unless we were to track the energy available via chaintracking)
+	}
+
+	fn requires_signature_refresh(
+		call: &TronApi<EvmEnvironment>,
+		_payload: &<EvmCrypto as ChainCrypto>::Payload,
+		maybe_current_on_chain_key: Option<<EvmCrypto as ChainCrypto>::AggKey>,
+	) -> RequiresSignatureRefresh<EvmCrypto, TronApi<EvmEnvironment>> {
+		maybe_current_on_chain_key.map_or(RequiresSignatureRefresh::False, |current_on_chain_key| {
+			if call.signer().is_some_and(|signer| current_on_chain_key != signer) {
+				RequiresSignatureRefresh::True(None)
+			} else {
+				RequiresSignatureRefresh::False
+			}
+		})
+	}
+
+	// This will calculate the fee_limit
+	fn calculate_gas_limit(call: &TronApi<EvmEnvironment>) -> Option<U256> {
+		use cf_chains::tron::TronTrackedData;
+		let tracked_data = TronTrackedData::new();
+		if let (Some((gas_budget, message_length, transfer_asset)), Some(native_asset)) = (
+			call.ccm_transfer_data(),
+			<EvmEnvironment as EvmEnvironmentProvider<Tron>>::token_address(Tron::GAS_ASSET),
+		) {
+			let is_native_asset = transfer_asset == native_asset;
+			Some(
+				tracked_data
+					.calculate_ccm_fee_limit(is_native_asset, gas_budget, message_length)
+					.into(),
+			)
+		} else {
+			None
+		}
+	}
+}
 
 #[macro_export]
 macro_rules! impl_transaction_builder_for_evm_chain {
@@ -536,6 +590,50 @@ impl EvmEnvironmentProvider<Bsc> for EvmEnvironment {
 	}
 }
 
+impl EvmEnvironmentProvider<Tron> for EvmEnvironment {
+	fn token_address(asset: assets::tron::Asset) -> Option<EvmAddress> {
+		match asset {
+			assets::tron::Asset::Trx => Some(ETHEREUM_ETH_ADDRESS),
+			assets::tron::Asset::TrxUsdt => Environment::supported_tron_assets(asset),
+		}
+	}
+
+	fn vault_address() -> EvmAddress {
+		Environment::tron_vault_address()
+	}
+
+	fn key_manager_address() -> EvmAddress {
+		Environment::tron_key_manager_address()
+	}
+
+	fn chain_id() -> EvmChainId {
+		Environment::tron_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_tron_signature_nonce()
+	}
+}
+
+/// Tron-specific fee multiplier: bypasses the multiplier for CCM transactions because we can't
+/// control the energy a CCM transaction spends, only the TRX burnt. For all other transaction
+/// types the multiplier is applied normally.
+pub struct TronFeeMultiplier;
+
+impl FeeMultiplierProvider<Tron> for TronFeeMultiplier {
+	fn adjust_fee(
+		estimated_fee: <Tron as cf_chains::Chain>::ChainAmount,
+		fee_multiplier: sp_runtime::FixedU128,
+		ingress_or_egress: &cf_primitives::IngressOrEgress,
+	) -> <Tron as cf_chains::Chain>::ChainAmount {
+		if matches!(ingress_or_egress, cf_primitives::IngressOrEgress::EgressCcm { .. }) {
+			estimated_fee
+		} else {
+			sp_runtime::FixedPointNumber::saturating_mul_int(fee_multiplier, estimated_fee)
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
 pub struct DotEnvironment;
 
@@ -594,9 +692,11 @@ impl Get<RuntimeVersion> for HubEnvironment {
 	}
 }
 
-impl Get<OutputAccountId> for HubEnvironment {
-	fn get() -> OutputAccountId {
-		Environment::next_assethub_output_account_id()
+impl Get<Option<OutputAccountId>> for HubEnvironment {
+	fn get() -> Option<OutputAccountId> {
+		// Use deposit channel ids without opening a deposit channel, to prevent
+		// collisions.
+		AssethubIngressEgress::allocate_next_channel_id().ok()
 	}
 }
 
@@ -744,6 +844,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Solana, SolanaBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Assethub =>
 				Self::broadcast_gov_key::<Assethub, AssethubBroadcaster>(maybe_old_key, new_key),
+			ForeignChain::Tron => Err(SetGovKeyWithAggKeyError::UnsupportedChain),
 		}
 	}
 
@@ -760,6 +861,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::is_govkey_compatible::<<Solana as Chain>::ChainCrypto>(key),
 			ForeignChain::Assethub =>
 				Self::is_govkey_compatible::<<Assethub as Chain>::ChainCrypto>(key),
+			ForeignChain::Tron => false,
 		}
 	}
 }
@@ -873,7 +975,8 @@ impl_deposit_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
-	(Assethub, AssethubIngressEgress)
+	(Assethub, AssethubIngressEgress),
+	(Tron, TronIngressEgress)
 );
 
 impl_egress_api_for_anychain!(
@@ -884,7 +987,8 @@ impl_egress_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
-	(Assethub, AssethubIngressEgress)
+	(Assethub, AssethubIngressEgress),
+	(Tron, TronIngressEgress)
 );
 
 pub struct DepositHandler;
@@ -896,6 +1000,7 @@ impl OnDeposit<Bitcoin> for DepositHandler {
 	}
 }
 impl OnDeposit<Arbitrum> for DepositHandler {}
+impl OnDeposit<Tron> for DepositHandler {}
 impl OnDeposit<Solana> for DepositHandler {}
 impl OnDeposit<Assethub> for DepositHandler {}
 impl OnDeposit<Bsc> for DepositHandler {}
@@ -962,6 +1067,9 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 
 impl OnBroadcastReady<Arbitrum> for BroadcastReadyProvider {
 	type ApiCall = ArbitrumApi<EvmEnvironment>;
+}
+impl OnBroadcastReady<Tron> for BroadcastReadyProvider {
+	type ApiCall = TronApi<EvmEnvironment>;
 }
 impl OnBroadcastReady<Solana> for BroadcastReadyProvider {
 	type ApiCall = SolanaApi<SolEnvironment>;
@@ -1050,7 +1158,8 @@ impl_ingress_egress_fee_api_for_anychain!(
 	(Arbitrum, ArbitrumIngressEgress),
 	(Bsc, BscIngressEgress),
 	(Solana, SolanaIngressEgress),
-	(Assethub, AssethubIngressEgress)
+	(Assethub, AssethubIngressEgress),
+	(Tron, TronIngressEgress)
 );
 
 pub struct SolanaLimit;
@@ -1115,6 +1224,8 @@ impl cf_traits::MinimumDeposit for MinimumDepositProvider {
 				MinimumDeposit::<Runtime, SolanaInstance>::get(asset).into(),
 			ForeignChainAndAsset::Assethub(asset) =>
 				MinimumDeposit::<Runtime, AssethubInstance>::get(asset),
+			ForeignChainAndAsset::Tron(asset) =>
+				MinimumDeposit::<Runtime, TronInstance>::get(asset),
 		}
 	}
 }

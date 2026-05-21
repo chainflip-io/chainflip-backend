@@ -65,3 +65,8 @@ impl<
 	> StreamApi<IS_FINALIZED> for StateChainStream<IS_FINALIZED, S>
 {
 }
+
+impl<const IS_FINALIZED: bool, S> StreamApi<IS_FINALIZED> for Box<S> where
+	S: StreamApi<IS_FINALIZED> + ?Sized
+{
+}

@@ -75,8 +75,6 @@ pub struct LtvThresholds {
 	/// Borrowers aren't allowed to borrow more (or withdraw collateral) if their Loan-to-value
 	/// ratio (principal/collateral) would exceed this threshold.
 	pub target: Permill,
-	/// Reaching this threshold will trigger a top-up of the collateral
-	pub topup: Option<Permill>,
 	/// Reaching this threshold will trigger soft liquidation account's loans
 	pub soft_liquidation: Permill,
 	/// If a loan that's being liquidated reaches this threshold, it will be considered
@@ -97,11 +95,6 @@ pub struct LtvThresholds {
 impl LtvThresholds {
 	pub fn validate(&self) -> DispatchResult {
 		ensure!(self.soft_liquidation <= self.hard_liquidation, "Invalid LTV thresholds");
-		ensure!(
-			self.topup
-				.is_none_or(|topup| self.target <= topup && topup <= self.soft_liquidation),
-			"Invalid LTV thresholds"
-		);
 
 		ensure!(
 			self.hard_liquidation_abort < self.hard_liquidation &&
@@ -178,8 +171,12 @@ pub struct LendingConfiguration {
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: AssetAmount,
-	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
-	pub minimum_update_collateral_amount_usd: AssetAmount,
+	/// Minimum equivalent amount that can be added to or removed from a lending pool supply.
+	pub minimum_update_supply_amount_usd: AssetAmount,
+	/// Fraction of outstanding loans the pool must remain able to liquidate with available (i.e.
+	/// not borrowed) liquidity at current oracle prices. Used when computing the utilisation cap
+	/// enforced on new borrows.
+	pub liquidation_coverage_factor: Percent,
 }
 
 impl LendingConfiguration {
@@ -214,7 +211,7 @@ impl LendingConfiguration {
 		}
 	}
 
-	fn interest_per_year_to_per_payment_interval(
+	pub fn interest_per_year_to_per_payment_interval(
 		&self,
 		interest_per_year: Permill,
 		interval_blocks: u32,

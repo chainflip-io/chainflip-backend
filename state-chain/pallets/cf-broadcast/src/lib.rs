@@ -88,7 +88,8 @@ pub enum PalletConfigUpdate {
 	BroadcastTimeout { blocks: u32 },
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(14);
+pub const STORAGE_VERSION_U16: u16 = 14;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -237,8 +238,15 @@ pub mod pallet {
 		/// by this number of blocks every time it runs out.
 		type SafeModeChainBlockMargin: Get<ChainBlockNumberFor<Self, I>>;
 
-		/// The policy on which decide when we slow down the retry of a broadcast.
-		type RetryPolicy: RetryPolicy<
+		/// The policy which defines when to retry with a delay a broadcast
+		/// (i.e. no authorities available/waiting for the broadcast barrier).
+		type DelayRetryPolicy: RetryPolicy<
+			BlockNumber = BlockNumberFor<Self>,
+			AttemptCount = AttemptCount,
+		>;
+
+		/// The policy which defines when to retry a broadcast failure.
+		type BroadcastFailureRetryPolicy: RetryPolicy<
 			BlockNumber = BlockNumberFor<Self>,
 			AttemptCount = AttemptCount,
 		>;
@@ -290,7 +298,7 @@ pub mod pallet {
 	pub struct Origin<T: Config<I>, I: 'static = ()>(pub(super) PhantomData<(T, I)>);
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -424,7 +432,7 @@ pub mod pallet {
 		/// The fee paid for broadcasting a transaction has been refused.
 		TransactionFeeDeficitRefused { beneficiary: SignerIdFor<T, I> },
 		/// A Call has been re-threshold-signed, and its signature data is inserted into storage.
-		CallResigned { broadcast_id: BroadcastId },
+		CallResigned { broadcast_id: BroadcastId, transaction_payload: TransactionFor<T, I> },
 		/// Some pallet configuration has been updated.
 		PalletConfigUpdated { update: PalletConfigUpdate },
 		/// A signature/broadcast with a historical (expired) key was requested via governance.
@@ -517,10 +525,7 @@ pub mod pallet {
 						nominee,
 					))
 				}
-				// Timeouts::<T, I>::append((
-				// 	current_chain_block.saturating_add(T::SafeModeChainBlockMargin::get()),
-				// 	expiries,
-				// ));
+
 				DelayedBroadcastRetryQueue::<T, I>::mutate(
 					block_number.saturating_add(T::SafeModeBlockMargin::get()),
 					|current| current.append(&mut delayed_retries),
@@ -567,7 +572,8 @@ pub mod pallet {
 					let signed_api_call = api_call.signed(&signature, signer);
 
 					PendingApiCalls::<T, I>::insert(broadcast_id, signed_api_call.clone());
-
+					let transaction_payload =
+						T::TransactionBuilder::build_transaction(&signed_api_call);
 					// If a signed call already exists, update the storage and do not broadcast.
 					if should_broadcast {
 						let transaction_out_id = signed_api_call.transaction_out_id();
@@ -591,9 +597,7 @@ pub mod pallet {
 
 						let broadcast_data = BroadcastData::<T, I> {
 							broadcast_id,
-							transaction_payload: T::TransactionBuilder::build_transaction(
-								&signed_api_call,
-							),
+							transaction_payload,
 							threshold_signature_payload,
 							transaction_out_id,
 							nominee: None,
@@ -603,12 +607,15 @@ pub mod pallet {
 						if BroadcastBarriers::<T, I>::get().first().is_some_and(
 							|broadcast_barrier_id| broadcast_id > *broadcast_barrier_id,
 						) {
-							Self::schedule_for_retry(broadcast_id);
+							Self::schedule_for_retry::<T::DelayRetryPolicy>(broadcast_id);
 						} else {
 							Self::start_broadcast_attempt(broadcast_data);
 						}
 					} else {
-						Self::deposit_event(Event::<T, I>::CallResigned { broadcast_id });
+						Self::deposit_event(Event::<T, I>::CallResigned {
+							broadcast_id,
+							transaction_payload,
+						});
 					}
 				},
 				Err(_offenders) => {
@@ -1036,15 +1043,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_id
 			);
 			// Schedule for retry later, when more broadcasters become available.
-			Self::schedule_for_retry(broadcast_id);
+			Self::schedule_for_retry::<T::DelayRetryPolicy>(broadcast_id);
 		}
 	}
 
-	fn schedule_for_retry(broadcast_id: BroadcastId) {
+	fn schedule_for_retry<
+		P: RetryPolicy<BlockNumber = BlockNumberFor<T>, AttemptCount = AttemptCount>,
+	>(
+		broadcast_id: BroadcastId,
+	) {
 		// If no delay, retry in the next block.
 		let retry_block = frame_system::Pallet::<T>::block_number().saturating_add(
-			T::RetryPolicy::next_attempt_delay(Self::attempt_count(broadcast_id))
-				.unwrap_or(One::one()),
+			P::next_attempt_delay(Self::attempt_count(broadcast_id)).unwrap_or(One::one()),
 		);
 
 		DelayedBroadcastRetryQueue::<T, I>::append(retry_block, broadcast_id);
@@ -1084,7 +1094,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if attempt_count >= T::EpochInfo::current_authority_count() as usize {
 				Self::abort_broadcast(broadcast_id);
 			} else {
-				Self::schedule_for_retry(broadcast_id);
+				Self::schedule_for_retry::<T::BroadcastFailureRetryPolicy>(broadcast_id);
 			}
 		} else {
 			// Do nothing since this failure has already been reported.

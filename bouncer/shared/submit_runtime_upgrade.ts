@@ -1,7 +1,7 @@
 import { compactAddLength } from '@polkadot/util';
 import { promises as fs } from 'fs';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { decodeDispatchError } from 'shared/utils';
+import { decodeDispatchError, sleep } from 'shared/utils';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
@@ -39,6 +39,16 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
     versionPercentRestriction = undefined;
   }
 
+  cf.info('Temporarily disabling MissedAuthorshipSlot punishment during runtime upgrade.');
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+        reputation: 0,
+        suspension: 0,
+      }),
+    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+  });
+
   cf.info(`Submitting runtime upgrade. WASM size is ${wasmStats.size} bytes.`);
   await submitGovernanceExtrinsic((api) =>
     api.tx.governance.chainflipRuntimeUpgrade(versionPercentRestriction, runtimeWasm),
@@ -61,7 +71,20 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
     throwError(cf.logger, new Error(`Runtime upgrade failed: ${reason}`));
   }
 
+  // waiting for some time so that the new runtime version is reflected through the rpc layer
+  await sleep(20000);
+
   cf.info('Runtime upgrade completed.');
+
+  cf.info('Restoring MissedAuthorshipSlot penalty defaults after runtime upgrade.');
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
+        reputation: 120,
+        suspension: 150,
+      }),
+    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+  });
 }
 
 export async function submitRuntimeUpgradeWasmPath<A = []>(cf: ChainflipIO<A>, wasmPath: string) {

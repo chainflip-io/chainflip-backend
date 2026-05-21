@@ -1,6 +1,7 @@
 use crate::{
 	chainflip::{
 		epoch_transition::ChainflipEpochTransitions,
+		key_owner_proof::CurrentSessionProofSystem,
 		multi_vault_activator::MultiVaultActivator,
 		witnessing::solana_elections::{
 			SolanaChainTrackingProvider, SolanaEgressWitnessingTrigger, SolanaIngress,
@@ -15,7 +16,7 @@ use crate::{
 };
 pub use cf_chains::instances::{
 	ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
-	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaInstance,
+	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaInstance, TronInstance,
 };
 use cf_chains::{
 	arb::api::ArbitrumApi,
@@ -27,19 +28,21 @@ use cf_chains::{
 	hub,
 	instances::ChainInstanceAlias,
 	sol::SolanaCrypto,
-	Arbitrum, Assethub, Bitcoin, Bsc, DefaultRetryPolicy, Polkadot, Solana,
+	Arbitrum, Assethub, Bitcoin, Bsc, DefaultRetryPolicy, Polkadot, RetryNextBlockPolicy, Solana,
+	Tron,
 };
 pub use cf_primitives::{
-	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, SemVer,
-	SwapOutput,
+	chains::assets::any, AccountRole, Asset, AssetAmount, BlockNumber, FlipBalance, OrderId,
+	SemVer, SwapOutput,
 };
 pub use cf_traits::{
-	AccountInfo, Chainflip, EpochInfo, OrderId, PoolApi, QualifyNode, SessionKeysRegistered,
-	SwappingApi,
+	AccountInfo, Chainflip, EpochInfo, PoolApi, QualifyNode, SessionKeysRegistered, SwappingApi,
 };
 use cf_traits::{
-	ChainflipWithTargetChain, DummyEgressSuccessWitnesser, DummyIngressSource, NoLimit,
+	ChainflipWithTargetChain, DefaultFeeMultiplier, DummyEgressSuccessWitnesser,
+	DummyIngressSource, NoLimit,
 };
+
 pub use frame_support::{
 	debug, parameter_types,
 	traits::{
@@ -95,6 +98,7 @@ impl pallet_cf_validator::Config for Runtime {
 		ArbitrumBroadcaster,
 		SolanaBroadcaster,
 		AssethubBroadcaster,
+		TronBroadcaster,
 		BscBroadcaster
 	);
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
@@ -126,6 +130,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ReputationResetter = Reputation;
 	type MinimumFunding = Funding;
 	type CfePeerRegistration = CfeInterface;
+	type GrandpaDelegation = Grandpa;
 }
 
 parameter_types! {
@@ -180,6 +185,9 @@ impl ChainflipWithTargetChain<Instance6> for Runtime {
 	type TargetChain = Assethub;
 }
 impl ChainflipWithTargetChain<Instance7> for Runtime {
+	type TargetChain = Tron;
+}
+impl ChainflipWithTargetChain<Instance8> for Runtime {
 	type TargetChain = Bsc;
 }
 
@@ -192,6 +200,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BscVaultKeyWitnessedHandler = BscVault;
 	type SolanaVaultKeyWitnessedHandler = SolanaVault;
 	type AssethubVaultKeyWitnessedHandler = AssethubVault;
+	type TronVaultKeyWitnessedHandler = TronVault;
 	type SolanaNonceWatch = SolanaNonceTrackingTrigger;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type BitcoinKeyProvider = BitcoinThresholdSigner;
@@ -288,6 +297,15 @@ impl pallet_cf_vaults::Config<Instance6> for Runtime {
 }
 
 impl pallet_cf_vaults::Config<Instance7> for Runtime {
+	type SetAggKeyWithAggKey = cf_chains::tron::api::TronApi<EvmEnvironment>;
+	type Broadcaster = TronBroadcaster;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type ChainTracking = TronChainTracking;
+	type SafeMode = RuntimeSafeMode;
+	type CfeMultisigRequest = CfeInterface;
+}
+
+impl pallet_cf_vaults::Config<Instance8> for Runtime {
 	type SetAggKeyWithAggKey = BscApi<EvmEnvironment>;
 	type Broadcaster = BscBroadcaster;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
@@ -481,6 +499,36 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	type IngressSource = DummyIngressSource<Tron, BlockNumberFor<Runtime>>;
+	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
+	type Balance = AssetBalances;
+	type ChainApiCall = cf_chains::tron::api::TronApi<EvmEnvironment>;
+	type Broadcaster = TronBroadcaster;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type DepositHandler = chainflip::DepositHandler;
+	type ChainTracking = TronChainTracking;
+	type NetworkEnvironment = Environment;
+	type AssetConverter = Swapping;
+	type FeePayment = Flip;
+	type SwapRequestHandler = Swapping;
+	type CcmAdditionalDataHandler = CfCcmAdditionalDataHandler;
+	type AssetWithholding = AssetBalances;
+	type FetchesTransfersLimitProvider = EvmLimit;
+	type SafeMode = RuntimeSafeMode;
+	type SwapParameterValidation = Swapping;
+	type AffiliateRegistry = Swapping;
+	type AllowTransactionReports = ConstBool<true>;
+	type ScreeningBrokerId = ScreeningBrokerId;
+	type BoostApi = LendingPools;
+	type FundAccount = Funding;
+	type LpRegistrationApi = LiquidityProvider;
+}
+
+impl pallet_cf_ingress_egress::Config<Instance8> for Runtime {
+	type RuntimeCall = RuntimeCall;
+	const MANAGE_CHANNEL_LIFETIME: bool = true;
 	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Bsc, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
@@ -558,12 +606,6 @@ impl pallet_session::Config for Runtime {
 	type WeightInfo = weights::pallet_session::SubstrateWeight<Runtime>;
 }
 
-impl pallet_session::historical::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type FullIdentification = ();
-	type FullIdentificationOf = ();
-}
-
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(50);
 const BLOCK_LENGTH_RATIO: Perbill = Perbill::from_percent(40);
 pub const MAX_BLOCK_LENGTH: u32 = 1024 * 1024 * 625 / 100; // 6.25 MB
@@ -639,8 +681,9 @@ type KeyOwnerIdentification<T, Id> =
 	<T as KeyOwnerProofSystem<(KeyTypeId, Id)>>::IdentificationTuple;
 type GrandpaOffenceReporter<T> = pallet_cf_reputation::ChainflipOffenceReportingAdapter<
 	T,
-	pallet_grandpa::EquivocationOffence<KeyOwnerIdentification<Historical, GrandpaId>>,
-	<T as pallet_session::historical::Config>::FullIdentification,
+	pallet_grandpa::EquivocationOffence<
+		KeyOwnerIdentification<CurrentSessionProofSystem, GrandpaId>,
+	>,
 >;
 
 impl pallet_grandpa::Config for Runtime {
@@ -651,11 +694,13 @@ impl pallet_grandpa::Config for Runtime {
 	type MaxNominators = ConstU32<0>;
 
 	type MaxSetIdSessionEntries = ConstU64<8>;
-	type KeyOwnerProof = sp_session::MembershipProof;
+	type MaxDelegatorsPerGrandpaAuthority = ConstU32<5>;
+	type KeyOwnerProof =
+		<CurrentSessionProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
 	type EquivocationReportSystem = pallet_grandpa::EquivocationReportSystem<
 		Self,
 		GrandpaOffenceReporter<Self>,
-		Historical,
+		CurrentSessionProofSystem,
 		ConstU64<14400>,
 	>;
 }
@@ -785,8 +830,7 @@ impl pallet_cf_threshold_signature::Config<Instance16> for Runtime {
 	type ThresholdCallable = RuntimeCall;
 	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
 	type TargetChainCrypto = EvmCrypto;
-	type VaultActivator =
-		MultiVaultActivator<EthereumVault, MultiVaultActivator<ArbitrumVault, BscVault>>;
+	type VaultActivator = MultiVaultActivator<EthereumVault, ArbitrumVault, TronVault, BscVault>;
 	type OffenceReporter = Reputation;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type SafeMode = RuntimeSafeMode;
@@ -858,7 +902,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ETHEREUM>;
 	type ChainTracking = EthereumChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
@@ -882,7 +927,8 @@ impl pallet_cf_broadcast::Config<Instance2> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = PolkadotChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
@@ -906,7 +952,8 @@ impl pallet_cf_broadcast::Config<Instance3> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<1>; // 10 minutes
 	type ChainTracking = BitcoinChainTracking;
-	type RetryPolicy = BitcoinRetryPolicy;
+	type DelayRetryPolicy = BitcoinRetryPolicy;
+	type BroadcastFailureRetryPolicy = BitcoinRetryPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<BitcoinCrypto>;
@@ -930,7 +977,8 @@ impl pallet_cf_broadcast::Config<Instance4> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_ARBITRUM>;
 	type ChainTracking = ArbitrumChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
@@ -954,7 +1002,8 @@ impl pallet_cf_broadcast::Config<Instance5> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_SOLANA>;
 	type ChainTracking = SolanaChainTrackingProvider;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = SolanaEgressWitnessingTrigger;
@@ -978,13 +1027,39 @@ impl pallet_cf_broadcast::Config<Instance6> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU32<BLOCKS_PER_MINUTE_POLKADOT>;
 	type ChainTracking = AssethubChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<PolkadotCrypto>;
 }
 
 impl pallet_cf_broadcast::Config<Instance7> for Runtime {
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type Offence = chainflip::Offence;
+	type ApiCall = cf_chains::tron::api::TronApi<EvmEnvironment>;
+	type ThresholdSigner = EvmThresholdSigner;
+	type TransactionBuilder = chainflip::TronTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EvmInstance>;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
+	type BroadcastOutcomeHandler = pallet_cf_ingress_egress::Pallet<Runtime, TronInstance>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type SafeMode = RuntimeSafeMode;
+	type SafeModeBlockMargin = ConstU32<10>;
+	type SafeModeChainBlockMargin = ConstU64<10>;
+	type ChainTracking = TronChainTracking;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
+	type LiabilityTracker = AssetBalances;
+	type CfeBroadcastRequest = CfeInterface;
+	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
+}
+
+impl pallet_cf_broadcast::Config<Instance8> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Offence = chainflip::Offence;
@@ -1002,7 +1077,8 @@ impl pallet_cf_broadcast::Config<Instance7> for Runtime {
 	type SafeModeBlockMargin = ConstU32<10>;
 	type SafeModeChainBlockMargin = ConstU64<BLOCKS_PER_MINUTE_BSC>;
 	type ChainTracking = BscChainTracking;
-	type RetryPolicy = DefaultRetryPolicy;
+	type DelayRetryPolicy = DefaultRetryPolicy;
+	type BroadcastFailureRetryPolicy = RetryNextBlockPolicy;
 	type LiabilityTracker = AssetBalances;
 	type CfeBroadcastRequest = CfeInterface;
 	type ElectionEgressWitnesser = DummyEgressSuccessWitnesser<EvmCrypto>;
@@ -1017,36 +1093,49 @@ impl pallet_cf_asset_balances::Config for Runtime {
 
 impl pallet_cf_chain_tracking::Config<Instance1> for Runtime {
 	type TargetChain = Ethereum;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance2> for Runtime {
 	type TargetChain = Polkadot;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance3> for Runtime {
 	type TargetChain = Bitcoin;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance4> for Runtime {
 	type TargetChain = Arbitrum;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance5> for Runtime {
 	type TargetChain = Solana;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance6> for Runtime {
 	type TargetChain = Assethub;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_chain_tracking::Config<Instance7> for Runtime {
+	type TargetChain = Tron;
+	type FeeMultiplierProvider = chainflip::TronFeeMultiplier;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+}
+
+impl pallet_cf_chain_tracking::Config<Instance8> for Runtime {
 	type TargetChain = Bsc;
+	type FeeMultiplierProvider = DefaultFeeMultiplier;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 }
 
@@ -1101,6 +1190,15 @@ impl pallet_cf_elections::Config<Instance4> for Runtime {
 }
 
 impl pallet_cf_elections::Config<Instance7> for Runtime {
+	const TYPE_INFO_SUFFIX: &'static str = <Tron as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
+	type ElectoralSystemRunner = chainflip::witnessing::tron_elections::TronElectoralSystemRunner;
+	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
+	type ElectoralSystemConfiguration =
+		chainflip::witnessing::tron_elections::ElectoralSystemConfiguration;
+	type SafeMode = RuntimeSafeMode;
+}
+
+impl pallet_cf_elections::Config<Instance8> for Runtime {
 	const TYPE_INFO_SUFFIX: &'static str = <Bsc as ChainInstanceAlias>::TYPE_INFO_SUFFIX;
 	type ElectoralSystemRunner = chainflip::witnessing::bsc_elections::BscElectoralSystemRunner;
 	type WeightInfo = pallet_cf_elections::weights::PalletWeight<Runtime>;
@@ -1116,12 +1214,14 @@ impl pallet_cf_trading_strategy::Config for Runtime {
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type LpRegistrationApi = LiquidityProvider;
+	type PriceFeedApi = ChainlinkOracle;
 }
 
 impl pallet_cf_lending_pools::Config for Runtime {
 	type WeightInfo = pallet_cf_lending_pools::weights::PalletWeight<Runtime>;
 	type Balance = AssetBalances;
 	type SwapRequestHandler = Swapping;
+	type NetworkFeeApi = Swapping;
 	type SafeMode = RuntimeSafeMode;
 	type PoolApi = LiquidityPools;
 	type PriceApi = ChainlinkOracle;

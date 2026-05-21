@@ -1,7 +1,10 @@
 import assert from 'assert';
 import { Assets, defaultAssetAmounts, newAssetAddress, sleep, Asset } from 'shared/utils';
 import { getEarnedBrokerFees } from 'tests/broker_fee_collection';
-import { buildAndSendInvalidBtcVaultSwap, registerAffiliate } from 'shared/btc_vault_swap';
+import {
+  buildAndSendInvalidBtcVaultSwap,
+  registerAffiliate,
+} from 'shared/vault_swap/btc_vault_swap';
 import { AccountRole, setupAccount } from 'shared/setup_account';
 import { executeVaultSwap, prepareVaultSwapSource, performVaultSwap } from 'shared/perform_swap';
 import { prepareSwap } from 'shared/swapping';
@@ -240,6 +243,7 @@ export async function testVaultSwap(testContext: TestContext) {
     (subcf) => testFeeCollection(subcf, Assets.ArbEth, testContext.swapContext),
     (subcf) => testFeeCollection(subcf, Assets.Bnb, testContext.swapContext),
     (subcf) => testFeeCollection(subcf, Assets.Sol, testContext.swapContext),
+    (subcf) => testFeeCollection(subcf, Assets.Trx, testContext.swapContext),
     (subcf) => testFeeCollectionWithdrawal(subcf, Assets.Btc, testContext.swapContext),
     (subcf) => testRefundVaultSwap(subcf),
     (subcf) => testInvalidBtcVaultSwap(subcf),

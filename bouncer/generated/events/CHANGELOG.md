@@ -34,7 +34,6 @@ New or removed pallets:
   GenericElections: added
   Governance: added
   Grandpa: added
-  Historical: added
   LendingPools: added
   LiquidityPools: added
   LiquidityProvider: added
@@ -56,6 +55,11 @@ New or removed pallets:
   TokenholderGovernance: added
   TradingStrategy: added
   TransactionPayment: added
+  TronBroadcaster: added
+  TronChainTracking: added
+  TronElections: added
+  TronIngressEgress: added
+  TronVault: added
   Validator: added
   Witnesser: added
 

@@ -21,40 +21,46 @@ use cf_traits::{AsyncResult, StartKeyActivationResult, VaultActivator};
 use core::marker::PhantomData;
 use sp_std::vec::Vec;
 
-pub struct MultiVaultActivator<A, B> {
-	_phantom: PhantomData<(A, B)>,
+pub struct MultiVaultActivator<A, B, C, D> {
+	_phantom: PhantomData<(A, B, C, D)>,
 }
 
-impl<A, B, C: ChainCrypto> VaultActivator<C> for MultiVaultActivator<A, B>
+impl<A, B, C, D, CC: ChainCrypto> VaultActivator<CC> for MultiVaultActivator<A, B, C, D>
 where
-	A: VaultActivator<C>,
-	B: VaultActivator<C, ValidatorId = A::ValidatorId>,
+	A: VaultActivator<CC>,
+	B: VaultActivator<CC, ValidatorId = A::ValidatorId>,
+	C: VaultActivator<CC, ValidatorId = A::ValidatorId>,
+	D: VaultActivator<CC, ValidatorId = A::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 
 	fn activate_key() {
 		A::activate_key();
 		B::activate_key();
+		C::activate_key();
+		D::activate_key();
 	}
 
 	/// Start all key rotations with the provided `candidates`.
 	fn start_key_activation(
-		new_key: C::AggKey,
-		maybe_old_key: Option<C::AggKey>,
+		new_key: CC::AggKey,
+		maybe_old_key: Option<CC::AggKey>,
 	) -> Vec<StartKeyActivationResult> {
 		[
 			A::start_key_activation(new_key, maybe_old_key),
 			B::start_key_activation(new_key, maybe_old_key),
+			C::start_key_activation(new_key, maybe_old_key),
+			D::start_key_activation(new_key, maybe_old_key),
 		]
 		.concat()
 	}
 
 	fn status() -> AsyncResult<()> {
-		let async_results = [A::status(), B::status()];
+		let async_results = [A::status(), B::status(), C::status(), D::status()];
 
 		// if any of the inner rotations are void, then the overall key rotation result is void.
 		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
-			return AsyncResult::Void
+			return AsyncResult::Void;
 		}
 
 		// We must wait until all of these are ready before we do any action
@@ -69,5 +75,7 @@ where
 	fn set_status(outcome: AsyncResult<()>) {
 		A::set_status(outcome);
 		B::set_status(outcome);
+		C::set_status(outcome);
+		D::set_status(outcome);
 	}
 }

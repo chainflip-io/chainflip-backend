@@ -1,7 +1,7 @@
 import { describe } from 'vitest';
 import { testBoostingSwap } from 'tests/boost';
 import { testVaultSwap } from 'tests/vault_swap_tests';
-import { checkSolEventAccountsClosure } from 'shared/sol_vault_swap';
+import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { testAllSwaps } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
@@ -20,6 +20,7 @@ import { testSpecialBitcoinSwaps } from 'tests/special_btc_swaps';
 import { testSignedRuntimeCall } from 'tests/signed_runtime_call';
 import { lendingTest } from 'tests/lending';
 import { testGovernanceDepositWitnessing } from 'tests/governance_deposit_witnessing';
+import { testRpcCalls } from 'tests/rpc_tests';
 
 // Tests that will run in parallel by both the ci-development and the ci-main-merge
 describe('ConcurrentTests', () => {
@@ -27,7 +28,7 @@ describe('ConcurrentTests', () => {
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
-  const singleSwapTimeout = numberOfNodes === 1 ? 260 : 300;
+  const singleSwapTimeout = numberOfNodes === 1 ? 300 : 320;
   const inCi = !!process.env.GITHUB_ACTIONS;
   // CI runners are slower, use a larger timeout factor
   const ciTimeoutFactor = inCi ? 2.3 : 2.0;
@@ -65,6 +66,7 @@ describe('ConcurrentTests', () => {
     testGovernanceDepositWitnessing,
     265 * ciTimeoutFactor,
   );
+  concurrentTest('RpcCalls', testRpcCalls, 160 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);

@@ -25,13 +25,14 @@ use cf_chains::{
 	assets::any::ForeignChainAndAsset,
 	instances::{
 		ArbitrumInstance, AssethubInstance, BitcoinInstance, BscInstance, EthereumInstance,
-		PolkadotInstance, SolanaInstance,
+		PolkadotInstance, SolanaInstance, TronInstance,
 	},
 };
 use cf_primitives::{
 	AccountId, Asset, AssetAmount, BasisPoints, Beneficiary, DcaParameters, IngressOrEgress,
+	OrderId,
 };
-use cf_traits::{AssetConverter, OrderId};
+use cf_traits::AssetConverter;
 use pallet_cf_ingress_egress::AmountAndFeesWithheld;
 use pallet_cf_swapping::{BatchExecutionError, FeeType, NetworkFeeTracker};
 use scale_info::prelude::format;
@@ -278,6 +279,15 @@ fn take_ingress_or_egress_fee(
 		ForeignChainAndAsset::Assethub(asset) => pallet_cf_ingress_egress::Pallet::<
 			Runtime,
 			AssethubInstance,
+		>::withhold_ingress_or_egress_fee(
+			ingress_or_egress,
+			asset,
+			amount.unique_saturated_into(),
+		)
+		.map_amounts(Into::into),
+		ForeignChainAndAsset::Tron(asset) => pallet_cf_ingress_egress::Pallet::<
+			Runtime,
+			TronInstance,
 		>::withhold_ingress_or_egress_fee(
 			ingress_or_egress,
 			asset,

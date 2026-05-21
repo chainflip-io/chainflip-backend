@@ -22,7 +22,6 @@ use state_chain_runtime::{
 	chainflip::ChainlinkOracle, AssetBalances, LendingPools, Runtime, RuntimeEvent, RuntimeOrigin,
 	Timestamp,
 };
-use std::collections::BTreeMap;
 
 use crate::{
 	network::register_refund_addresses,
@@ -98,14 +97,16 @@ fn basic_lending() {
 			register_refund_addresses(&BORROWER);
 			credit_account(&BORROWER, COLLATERAL_ASSET, COLLATERAL_AMOUNT);
 
-			// open the loan with the collateral
-			assert_ok!(LendingPools::new_loan(
-				BORROWER.clone(),
-				LOAN_ASSET,
-				LOAN_AMOUNT,
-				Some(COLLATERAL_ASSET),
-				BTreeMap::from([(COLLATERAL_ASSET, COLLATERAL_AMOUNT)]),
+			// Supply collateral into a lending pool
+			assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
+			assert_ok!(LendingPools::add_lender_funds(
+				RuntimeOrigin::signed(BORROWER.clone()),
+				COLLATERAL_ASSET,
+				COLLATERAL_AMOUNT,
 			));
+
+			// open the loan
+			assert_ok!(LendingPools::new_loan(BORROWER.clone(), LOAN_ASSET, LOAN_AMOUNT, None));
 
 			// Check that we got the loan amount
 			assert_eq!(AssetBalances::get_balance(&BORROWER, LOAN_ASSET), LOAN_AMOUNT);

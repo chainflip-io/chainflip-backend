@@ -20,7 +20,7 @@ use crate::{
 	evm::api::{EvmEnvironmentProvider, EvmReplayProtection},
 	ReplayProtectionProvider,
 };
-use cf_primitives::chains::{assets::arb, Arbitrum};
+use cf_primitives::chains::Arbitrum;
 
 use crate::{
 	benchmarking_value::BenchmarkValue,
@@ -35,12 +35,6 @@ use super::{api::ArbitrumApi, ArbitrumTrackedData};
 impl BenchmarkValue for ArbitrumTrackedData {
 	fn benchmark_value() -> Self {
 		Self { base_fee: 10_000_000_000, l1_base_fee_estimate: 1u128 }
-	}
-}
-
-impl BenchmarkValue for arb::Asset {
-	fn benchmark_value() -> Self {
-		arb::Asset::ArbEth
 	}
 }
 

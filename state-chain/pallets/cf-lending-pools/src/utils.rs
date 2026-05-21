@@ -2,7 +2,7 @@ use super::*;
 use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 
 /// Distributes exactly `total_to_distribute` proportionally to the `distribution` map.
-pub(super) fn distribute_proportionally<'a, K, N, I>(
+pub(crate) fn distribute_proportionally<'a, K, N, I>(
 	total_to_distribute: N,
 	distribution: I,
 ) -> BTreeMap<&'a K, N>
@@ -45,14 +45,17 @@ where
 		.collect();
 
 	// Due to always rounding down we may have a small amount left over, give it a random key
-	let remaining_to_distribute = total_to_distribute.saturating_sub(total_distributed);
-	let lucky_index = {
-		// Convert to u64 by ignoring high bits
-		let seed = u128::from(total_to_distribute) as u64;
-		nanorand::WyRand::new_seed(seed).generate_range(0..distribution.len())
-	};
-	if let Some((_lp_id, amount)) = distribution.iter_mut().nth(lucky_index) {
-		amount.saturating_accrue(remaining_to_distribute);
+	if !distribution.is_empty() {
+		let remaining_to_distribute = total_to_distribute.saturating_sub(total_distributed);
+
+		let lucky_index = {
+			// Convert to u64 by ignoring high bits
+			let seed = u128::from(total_to_distribute) as u64;
+			nanorand::WyRand::new_seed(seed).generate_range(0..distribution.len())
+		};
+		if let Some((_lp_id, amount)) = distribution.iter_mut().nth(lucky_index) {
+			amount.saturating_accrue(remaining_to_distribute);
+		}
 	}
 
 	distribution

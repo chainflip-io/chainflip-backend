@@ -48,6 +48,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 24 * 3600 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 24 * 3600 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 24 * 3600 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 24 * 3600 / 12;
+pub const TRON_EXPIRY_BLOCKS: u32 = 24 * 3600 / 3;
 pub const BSC_EXPIRY_BLOCKS: u32 = 24 * 3600 * 1000 / 450; // 450ms block time
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
@@ -65,6 +66,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("af88d065e77c8cC2239327C5EDb3A432268e5831"),
 	arb_usdt_token_address: hex_literal::hex!("Fd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"),
 	arb_address_checker_address: hex_literal::hex!("69C700A0DEBAb9e349dd1f52ED62eb253a3c9892"),
+	tron_key_manager_address: hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039"), /* TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB */
+	tron_vault_address: hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e"), /* TDKihjArLMEfF8ebeEWdfiuoqHC8nmydBy */
+	trx_usdt_token_address: hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c"), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
 	// TODO: fill in real BSC mainnet contract addresses
 	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
 	bsc_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
@@ -73,6 +77,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	bsc_chain_id: cf_chains::bsc::CHAIN_ID_MAINNET,
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_MAINNET,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_MAINNET,
+	tron_chain_id: cf_chains::tron::CHAIN_ID_MAINNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"022a1d7efa522ce746bc40a04016178ce38154be1f0537c6957bdeed17057bb955"
 	),
@@ -456,3 +461,4 @@ pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
+pub const TRON_SAFETY_MARGIN: u64 = 19;

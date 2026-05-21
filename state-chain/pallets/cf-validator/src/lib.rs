@@ -68,6 +68,9 @@ use sp_std::{
 
 use crate::rotation_state::RotationState;
 
+pub use pallet_grandpa::GrandpaVoteDelegation;
+use sp_consensus_grandpa::AuthorityId as GrandpaAuthorityId;
+
 type SessionIndex = u32;
 
 type Version = SemVer;
@@ -112,7 +115,8 @@ pub enum PalletConfigUpdate {
 type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(9);
+pub const STORAGE_VERSION_U16: u16 = 10;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 // Might be better to add the enum inside a struct rather than struct inside enum
 #[derive(
@@ -151,6 +155,12 @@ impl<T: pallet::Config> RotationPhase<T> {
 }
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum RotationError {
+	AuctionFailed { context: &'static str, error: AuctionError },
+	NotEnoughCandidates { candidates: u32, min_size: u32 },
+}
+
 #[derive(
 	Copy,
 	Clone,
@@ -180,7 +190,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -225,6 +235,9 @@ pub mod pallet {
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
+
+		/// GRANDPA vote delegation manager.
+		type GrandpaDelegation: GrandpaVoteDelegation;
 	}
 
 	/// Percentage of epoch we allow redemptions.
@@ -464,6 +477,11 @@ pub mod pallet {
 		/// The maximum bit of an delegator was updated. If the value is None it means that the
 		/// max_bid has been removed entirly.
 		MaxBidUpdated { delegator: T::AccountId, change: Change<T::Amount> },
+		/// A validator reported that a witnessing task crashed and was restarted.
+		WitnessingTaskRestarted {
+			task: cf_primitives::WitnessingTaskName,
+			reporter: ValidatorIdOf<T>,
+		},
 	}
 
 	#[pallet::error]
@@ -536,6 +554,14 @@ pub mod pallet {
 		TooManyValidators,
 		/// Delegation amount must be at least as large as minimum funding amount.
 		DelegationAmountBelowMinimum,
+		/// The caller's GRANDPA key does not match their session key registration.
+		GrandpaKeyOwnershipMismatch,
+		/// The delegate key proof signature is invalid.
+		InvalidDelegateProof,
+		/// Cannot rotate session keys while a GRANDPA delegation is active. Revoke first.
+		GrandpaDelegationActive,
+		/// Delegator funds cannot be transferred between accounts.
+		DelegatorTransferRestricted,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -563,15 +589,20 @@ pub mod pallet {
 						T::ValidatorWeightInfo::rotation_phase_idle()
 					}
 				},
-				RotationPhase::KeygensInProgress(mut rotation_state) => {
+				RotationPhase::KeygensInProgress( rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::KeyRotator::status() {
 						AsyncResult::Ready(KeyRotationStatusOuter::KeygenComplete) => {
 							Self::try_start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(KeyRotationStatusOuter::Failed(offenders)) => {
-							rotation_state.ban(offenders);
-							Self::try_restart_keygen(rotation_state);
+							if let Err(error) =
+								Self::try_restart_keygen(rotation_state, &offenders, "keygen failure")
+							{
+								Self::handle_rotation_error(error);
+								Self::abort_rotation();
+								return T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+							}
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -601,16 +632,22 @@ pub mod pallet {
 							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
 							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
 							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
-							rotation_state.ban(offenders);
 							if num_failed_candidates > 0 {
 								log::warn!(
 									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
 								);
-								Self::try_restart_keygen(rotation_state);
+								if let Err(error) =
+									Self::try_restart_keygen(rotation_state, &offenders, "handover failure")
+								{
+									Self::handle_rotation_error(error);
+									Self::abort_rotation();
+									return T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+								}
 							} else {
 								log::warn!(
 									"Key handover attempt failed. Retrying with a new participant set.",
 								);
+								rotation_state.banned.extend(offenders);
 								Self::try_start_key_handover(rotation_state, block_number)
 							};
 						},
@@ -756,7 +793,19 @@ pub mod pallet {
 		#[pallet::call_index(2)]
 		#[pallet::weight((< T as pallet_session::Config >::WeightInfo::set_keys(), DispatchClass::Operational))]
 		pub fn set_keys(origin: OriginFor<T>, keys: T::Keys, proof: Vec<u8>) -> DispatchResult {
-			T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin.clone())?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			// Block key rotation while a GRANDPA delegation is active.
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				ensure!(
+					T::GrandpaDelegation::get_delegate(&grandpa_key).is_none(),
+					Error::<T>::GrandpaDelegationActive
+				);
+			}
+
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
 			Ok(())
 		}
@@ -875,6 +924,11 @@ pub mod pallet {
 				<T as frame_system::Config>::AccountId,
 			>>::from_ref(&account_id);
 
+			// Revoke any active GRANDPA delegation before purging keys.
+			if let Some(grandpa_key) = Self::grandpa_key_for(validator_id) {
+				let _ = T::GrandpaDelegation::remove_vote_delegation(grandpa_key);
+			}
+
 			// This can only error if the validator didn't register any keys, in which case we want
 			// to continue with the deregistration anyway.
 			let _ = pallet_session::Pallet::<T>::purge_keys(origin);
@@ -884,11 +938,7 @@ pub mod pallet {
 				T::CfePeerRegistration::peer_deregistered(validator_id.clone(), peer_id);
 			}
 
-			if let Some(operator) = OperatorChoice::<T>::take(&account_id) {
-				ManagedValidators::<T>::mutate(&operator, |validators| {
-					validators.remove(&account_id);
-				});
-			}
+			Self::do_remove_from_operator(account_id.clone());
 
 			ClaimedValidators::<T>::remove(&account_id);
 
@@ -967,6 +1017,10 @@ pub mod pallet {
 				!OperatorChoice::<T>::contains_key(&validator_id),
 				Error::<T>::AlreadyManagedByOperator
 			);
+			ensure!(
+				ManagedValidators::<T>::get(&operator).len() < MAX_VALIDATORS_PER_OPERATOR,
+				Error::<T>::TooManyValidators
+			);
 
 			ClaimedValidators::<T>::try_mutate(&validator_id, |claimed_by| {
 				if claimed_by.remove(&operator) {
@@ -998,12 +1052,7 @@ pub mod pallet {
 			let operator =
 				OperatorChoice::<T>::get(&validator).ok_or(Error::<T>::ValidatorDoesNotExist)?;
 			ensure!(account_id == operator || account_id == validator, Error::<T>::NotAuthorized);
-			OperatorChoice::<T>::remove(&validator);
-			ManagedValidators::<T>::mutate(&operator, |validators| {
-				validators.remove(&validator);
-			});
-
-			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
+			Self::do_remove_from_operator(validator);
 
 			Ok(())
 		}
@@ -1354,6 +1403,86 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(20)]
+		#[pallet::weight(T::ValidatorWeightInfo::report_witnessing_task_restart())]
+		pub fn report_witnessing_task_restart(
+			origin: OriginFor<T>,
+			task: cf_primitives::WitnessingTaskName,
+		) -> DispatchResult {
+			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::deposit_event(Event::<T>::WitnessingTaskRestarted { task, reporter: who.into() });
+			Ok(())
+		}
+
+		/// Delegate this validator's GRANDPA vote to a delegate key.
+		#[pallet::call_index(21)]
+		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		pub fn delegate_grandpa_vote(
+			origin: OriginFor<T>,
+			caller_grandpa_key: GrandpaAuthorityId,
+			delegate_key: GrandpaAuthorityId,
+			proof: sp_consensus_grandpa::AuthoritySignature,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
+				Error::<T>::RotationInProgress
+			);
+
+			let key_owner = pallet_session::Pallet::<T>::key_owner(
+				sp_consensus_grandpa::KEY_TYPE,
+				caller_grandpa_key.as_ref(),
+			);
+			ensure!(
+				key_owner.as_ref() == Some(validator_id),
+				Error::<T>::GrandpaKeyOwnershipMismatch
+			);
+
+			let session_index = pallet_session::Pallet::<T>::current_index();
+			let payload = (account_id, session_index).encode();
+			let delegate_pub = sp_core::ed25519::Public::from(delegate_key.clone());
+			let delegate_sig = sp_core::ed25519::Signature::from(proof);
+			ensure!(
+				RuntimePublic::verify(&delegate_pub, &payload, &delegate_sig),
+				Error::<T>::InvalidDelegateProof
+			);
+
+			T::GrandpaDelegation::add_vote_delegation(caller_grandpa_key, delegate_key)
+		}
+
+		/// Revoke this validator's GRANDPA vote delegation.
+		#[pallet::call_index(22)]
+		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		pub fn revoke_grandpa_delegation(
+			origin: OriginFor<T>,
+			caller_grandpa_key: GrandpaAuthorityId,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			let validator_id = <ValidatorIdOf<T> as IsType<
+				<T as frame_system::Config>::AccountId,
+			>>::from_ref(&account_id);
+
+			ensure!(
+				matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle),
+				Error::<T>::RotationInProgress
+			);
+
+			let key_owner = pallet_session::Pallet::<T>::key_owner(
+				sp_consensus_grandpa::KEY_TYPE,
+				caller_grandpa_key.as_ref(),
+			);
+			ensure!(
+				key_owner.as_ref() == Some(validator_id),
+				Error::<T>::GrandpaKeyOwnershipMismatch
+			);
+
+			T::GrandpaDelegation::remove_vote_delegation(caller_grandpa_key)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -1492,6 +1621,43 @@ impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T
 }
 
 impl<T: Config> Pallet<T> {
+	/// Look up a validator's GRANDPA key from their registered session keys.
+	///
+	/// Returns `None` if the validator has no session keys registered.
+	/// Panics in tests (logs in production) if session keys are registered but
+	/// the GRANDPA key cannot be decoded.
+	fn grandpa_key_for(validator_id: &ValidatorIdOf<T>) -> Option<GrandpaAuthorityId> {
+		use frame_support::sp_runtime::traits::OpaqueKeys;
+		let keys = pallet_session::Pallet::<T>::load_keys(validator_id)?;
+		let raw = keys.get_raw(sp_consensus_grandpa::KEY_TYPE);
+		if raw.is_empty() {
+			return None;
+		}
+		match GrandpaAuthorityId::decode(&mut &raw[..]) {
+			Ok(key) => Some(key),
+			Err(e) => {
+				cf_runtime_utilities::log_or_panic!(
+					"Failed to decode GRANDPA key for {:?}: {:?}",
+					validator_id,
+					e
+				);
+				None
+			},
+		}
+	}
+
+	/// Removes a validator from an operator's managed pool, cleaning up both storage items and
+	/// emitting the `ValidatorRemovedFromOperator` event. This is the single source of truth for
+	/// this operation, called from both `remove_validator` and `deregister_as_validator`.
+	fn do_remove_from_operator(validator: T::AccountId) {
+		if let Some(operator) = OperatorChoice::<T>::take(&validator) {
+			ManagedValidators::<T>::mutate(&operator, |validators| {
+				validators.remove(&validator);
+			});
+			Self::deposit_event(Event::ValidatorRemovedFromOperator { validator, operator });
+		}
+	}
+
 	/// Makes the transition to the next epoch.
 	///
 	/// Among other things, updates the authority, historical and backup sets.
@@ -1644,7 +1810,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[expect(clippy::type_complexity)]
-	pub fn run_initial_auction() -> Result<
+	pub fn run_initial_auction(
+		excluded: &BTreeSet<ValidatorIdOf<T>>,
+	) -> Result<
 		(
 			AuctionOutcome<T::AccountId, T::Amount>,
 			SetSizeMaximisingAuctionResolver,
@@ -1656,7 +1824,7 @@ impl<T: Config> Pallet<T> {
 		AuctionError,
 	> {
 		let (delegation_snapshots, independent_bids) =
-			Self::build_delegation_snapshots::<T::KeygenQualification>();
+			Self::build_delegation_snapshots::<T::KeygenQualification>(excluded);
 
 		let minimum_auction_bid = MinimumAuctionBid::<T>::get();
 
@@ -1691,19 +1859,21 @@ impl<T: Config> Pallet<T> {
 	}
 
 	#[expect(clippy::type_complexity)]
-	pub fn resolve_auction_iteratively() -> Result<
+	pub fn resolve_auction_iteratively(
+		excluded: &BTreeSet<ValidatorIdOf<T>>,
+	) -> Result<
 		(
 			AuctionOutcome<T::AccountId, T::Amount>,
 			BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
 		),
 		AuctionError,
 	> {
-		Self::run_initial_auction().map(
-			|(auction_outcome, resolver, mut delegation_snapshots, auction_bids)| {
-				let mut current_outcome = auction_outcome;
+		Self::run_initial_auction(excluded).map(
+			|(initial_outcome, resolver, mut delegation_snapshots, auction_bids)| {
+				let mut current_outcome = initial_outcome;
 				loop {
 					let old_snapshots = delegation_snapshots.clone();
-					for (_operator, snapshot) in delegation_snapshots.iter_mut() {
+					for snapshot in delegation_snapshots.values_mut() {
 						snapshot.maybe_optimize_bid(&current_outcome);
 					}
 					if delegation_snapshots == old_snapshots {
@@ -1723,14 +1893,14 @@ impl<T: Config> Pallet<T> {
 
 	fn start_authority_rotation() -> Weight {
 		if !T::SafeMode::get().authority_rotation_enabled {
-			log::warn!(
+			log::info!(
 				target: "cf-validator",
 				"Failed to start Authority Rotation: Disabled due to Runtime Safe Mode."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
 		}
 		if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
-			log::error!(
+			log::info!(
 				target: "cf-validator",
 				"Failed to start authority rotation: Authority rotation already in progress."
 			);
@@ -1738,7 +1908,7 @@ impl<T: Config> Pallet<T> {
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
-		match Self::resolve_auction_iteratively() {
+		match Self::resolve_auction_iteratively(&BTreeSet::new()) {
 			Ok((auction_outcome, delegation_snapshots)) => {
 				let auction_outcome =
 					auction_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
@@ -1767,7 +1937,12 @@ impl<T: Config> Pallet<T> {
 					snapshot.register_for_epoch::<T>(next_epoch_index);
 				}
 
-				Self::try_start_keygen(RotationState::from_auction_outcome::<T>(auction_outcome));
+				// This only errors if there are less than min_size candidates after the auction.
+				let rotation_state = RotationState::from_auction_outcome::<T>(auction_outcome);
+				if let Err(error) = Self::start_keygen_attempt(rotation_state) {
+					Self::handle_rotation_error(error);
+					Self::abort_rotation();
+				}
 
 				weight
 			},
@@ -1783,12 +1958,46 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn try_restart_keygen(rotation_state: RuntimeRotationState<T>) {
-		T::KeyRotator::reset_key_rotation();
-		Self::try_start_keygen(rotation_state);
+	fn try_restart_keygen(
+		mut rotation_state: RuntimeRotationState<T>,
+		offenders: &BTreeSet<ValidatorIdOf<T>>,
+		context: &'static str,
+	) -> Result<(), RotationError> {
+		rotation_state.ban(offenders.clone());
+
+		let (new_outcome, new_snapshots) =
+			Self::resolve_auction_iteratively(&rotation_state.banned)
+				.map_err(|error| RotationError::AuctionFailed { context, error })?;
+
+		let new_outcome = new_outcome.map_ids(|id| ValidatorIdOf::<T>::from_ref(&id).clone());
+
+		log::info!(
+			target: "cf-validator",
+			"Re-resolved auction after {}. New bond: {:?}",
+			context,
+			new_outcome.bond
+		);
+
+		// Persist the new snapshots (clear old ones first)
+		DelegationSnapshot::clear_epoch_registrations::<T>(rotation_state.new_epoch_index);
+		for snapshot in new_snapshots.into_values() {
+			snapshot.register_for_epoch::<T>(rotation_state.new_epoch_index);
+		}
+
+		Self::deposit_event(Event::AuctionCompleted(new_outcome.winners.clone(), new_outcome.bond));
+
+		rotation_state.primary_candidates = new_outcome.winners;
+		rotation_state.bond = new_outcome.bond;
+
+		debug_assert!(rotation_state
+			.banned
+			.is_disjoint(&rotation_state.primary_candidates.iter().cloned().collect()));
+
+		Self::start_keygen_attempt(rotation_state)
 	}
 
-	fn try_start_keygen(rotation_state: RuntimeRotationState<T>) {
+	fn start_keygen_attempt(rotation_state: RuntimeRotationState<T>) -> Result<(), RotationError> {
+		T::KeyRotator::reset_key_rotation();
 		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
 
@@ -1798,18 +2007,37 @@ impl<T: Config> Pallet<T> {
 				Self::current_authority_count(),
 		);
 
-		if (candidates.len() as u32) < min_size {
-			log::warn!(
-				target: "cf-validator",
-				"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}. - aborting rotation.",
-				candidates.len(),
-				min_size
-			);
-			Self::abort_rotation();
-		} else {
+		if (candidates.len() as u32) >= min_size {
 			T::KeyRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
+			Ok(())
+		} else {
+			Err(RotationError::NotEnoughCandidates {
+				candidates: candidates.len() as u32,
+				min_size,
+			})
+		}
+	}
+
+	fn handle_rotation_error(error: RotationError) {
+		match error {
+			RotationError::AuctionFailed { context, error } => {
+				log::error!(
+					target: "cf-validator",
+					"Failed to re-resolve auction after {}: {:?}.",
+					context,
+					error
+				);
+			},
+			RotationError::NotEnoughCandidates { candidates, min_size } => {
+				log::error!(
+					target: "cf-validator",
+					"Only {:?} authority candidates available, not enough to satisfy the minimum set size of {:?}.",
+					candidates,
+					min_size
+				);
+			},
 		}
 	}
 
@@ -1818,7 +2046,7 @@ impl<T: Config> Pallet<T> {
 		block_number: BlockNumberFor<T>,
 	) {
 		if !T::SafeMode::get().authority_rotation_enabled {
-			log::warn!(
+			log::info!(
 				target: "cf-validator",
 				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
@@ -1840,7 +2068,7 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 		} else {
-			log::warn!(
+			log::error!(
 				target: "cf-validator",
 				"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
 			);
@@ -1953,8 +2181,14 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Return a tuple of the delegation snapshots and the independent bidders (standalone
 	/// validators).
+	///
+	/// Bidders in `excluded` are handled as follows:
+	/// - managed validators become delegators
+	/// - independent validators are dropped entirely.
 	#[expect(clippy::type_complexity)]
-	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>() -> (
+	pub fn build_delegation_snapshots<Q: QualifyNode<ValidatorIdOf<T>>>(
+		excluded: &BTreeSet<ValidatorIdOf<T>>,
+	) -> (
 		BTreeMap<T::AccountId, DelegationSnapshot<T::AccountId, T::Amount>>,
 		BTreeMap<T::AccountId, T::Amount>,
 	) {
@@ -1962,32 +2196,37 @@ impl<T: Config> Pallet<T> {
 		let mut snapshots = BTreeMap::new();
 
 		for Bid { bidder_id, amount } in Self::get_qualified_bidders::<Q>() {
+			let is_excluded = excluded.contains(&bidder_id);
 			// `into_ref` is used to cast between AccountId and ValidatorId.
 			let bidder_id = bidder_id.into_ref();
 			if let Some(operator) = OperatorChoice::<T>::get(bidder_id) {
-				snapshots
-					.entry(operator.clone())
-					.or_insert_with(|| {
-						DelegationSnapshot::init(
-							&operator,
-							OperatorSettingsLookup::<T>::get(&operator)
-								.map(|settings| settings.fee_bps)
-								.unwrap_or(MinimumOperatorFee::<T>::get()),
-						)
-					})
-					.validators
-					.insert(bidder_id.clone(), amount);
-			} else {
+				let snapshot = snapshots.entry(operator.clone()).or_insert_with(|| {
+					DelegationSnapshot::init(
+						&operator,
+						OperatorSettingsLookup::<T>::get(&operator)
+							.map(|settings| settings.fee_bps)
+							.unwrap_or(MinimumOperatorFee::<T>::get()),
+					)
+				});
+				if is_excluded {
+					// Excluded managed validator: still appears as a delegator so their
+					// stake contributes to the operator, but they cannot be selected.
+					snapshot.delegators.insert(bidder_id.clone(), amount);
+				} else {
+					snapshot.validators.insert(bidder_id.clone(), amount);
+				}
+			} else if !is_excluded {
+				// Independent validator (excluded independents are dropped entirely).
 				let _ = independent_bidders.insert(bidder_id.clone(), amount);
 			}
 		}
 
 		for (delegator, (operator, max_bid)) in DelegationChoice::<T>::iter() {
 			if let Some(snapshot) = snapshots.get_mut(&operator) {
-				let delegator_balance = T::FundingInfo::balance(&delegator);
-				snapshot
-					.delegators
-					.insert(delegator.clone(), core::cmp::min(max_bid, delegator_balance));
+				let bid = core::cmp::min(max_bid, T::FundingInfo::balance(&delegator));
+				if bid > Zero::zero() {
+					snapshot.delegators.insert(delegator.clone(), bid);
+				}
 			}
 		}
 
@@ -2085,7 +2324,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 		let genesis_authorities = Self::current_authorities();
 		if !genesis_authorities.is_empty() {
 			frame_support::print(
-				"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
+				"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet.",
 			);
 		};
 		Some(genesis_authorities.into_iter().collect())
@@ -2199,9 +2438,8 @@ impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for QualifyByMinimumS
 	}
 }
 
-impl<T: Config> RedemptionCheck for Pallet<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
+impl<T: Config> Pallet<T> {
+	fn ensure_not_active_bidder_during_auction(validator_id: &ValidatorIdOf<T>) -> DispatchResult {
 		if Self::is_auction_phase() {
 			ensure!(
 				!ActiveBidder::<T>::get()
@@ -2209,8 +2447,54 @@ impl<T: Config> RedemptionCheck for Pallet<T> {
 				Error::<T>::StillBidding
 			);
 		}
-
 		Ok(())
+	}
+}
+
+impl<T: Config> RedemptionCheck for Pallet<T> {
+	type ValidatorId = ValidatorIdOf<T>;
+	type Amount = T::Amount;
+
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		amount: Self::Amount,
+	) -> DispatchResult {
+		Self::ensure_not_active_bidder_during_auction(validator_id)?;
+		// A delegator may redeem from the portion of their balance that is not
+		// reserved by their stored max_bid — the amount visible to the auction
+		// (capped at max_bid) cannot drop, but funds the user never pledged
+		// remain freely redeemable.
+		if let Some((_, max_bid)) = DelegationChoice::<T>::get(<ValidatorIdOf<T> as IsType<
+			T::AccountId,
+		>>::into_ref(validator_id))
+		{
+			let balance = T::FundingInfo::balance(
+				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(validator_id),
+			);
+			ensure!(balance.saturating_sub(amount) >= max_bid, Error::<T>::StillBidding);
+		}
+		Ok(())
+	}
+
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
+		// If the source can move funds out freely, the transfer is fine.
+		// Otherwise the destination account must also be restricted according to this trait's
+		// definition of "restricted". Additional checks (like balance checks) are
+		// outside the scope of this implementation.
+		ensure!(
+			!DelegationChoice::<T>::contains_key(
+				<ValidatorIdOf<T> as IsType<T::AccountId>>::into_ref(source),
+			),
+			Error::<T>::DelegatorTransferRestricted
+		);
+
+		if Self::ensure_not_active_bidder_during_auction(source).is_ok() ||
+			Self::ensure_not_active_bidder_during_auction(dest).is_err()
+		{
+			Ok(())
+		} else {
+			Err(Error::<T>::StillBidding.into())
+		}
 	}
 }
 

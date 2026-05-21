@@ -29,7 +29,9 @@ pub use cf_chains::{
 pub use cf_utilities::rpc::NumberOrHex;
 pub use sp_core::{bounded::BoundedVec, crypto::AccountId32, ConstU32, H256, U256};
 pub use state_chain_runtime::{
-	chainflip::BlockUpdate, runtime_apis::types::OpenedDepositChannels, Hash,
+	chainflip::BlockUpdate,
+	runtime_apis::types::{IngressEvents, OpenedDepositChannels},
+	Hash,
 };
 
 /// Defines all broker related RPC types

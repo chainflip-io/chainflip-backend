@@ -1,3 +1,4 @@
+use cf_amm::common::{AskBidMap, LimitOrder};
 // Copyright 2025 Chainflip Labs GmbH
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,19 +14,16 @@
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-
 pub use cf_amm::common::{PoolPairsMap, Side};
 #[cfg(feature = "runtime-benchmarks")]
 use cf_amm::math::Price;
 use cf_chains::assets::any::AssetMap;
-use cf_primitives::{Asset, AssetAmount, Tick};
+use cf_primitives::{Asset, AssetAmount, OrderId, Tick};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
-use sp_std::vec::Vec;
-
-pub type OrderId = u64;
+use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
 /// Indicates if an LP wishes to increase or decrease the size of an order.
 #[derive(
@@ -122,11 +120,21 @@ pub trait PoolApi {
 	/// debited from their free balance)
 	fn sweep(who: &Self::AccountId) -> Result<(), DispatchError>;
 
+	/// Sweeps all LP accounts. Since sweeping is expensive, it is more performant to do it once for
+	/// all accounts instead of iterating over all accounts and sweeping each on individually.
+	fn sweep_all() -> Result<(), DispatchError>;
+
 	/// Returns the number of open orders for the given account and pair.
 	fn open_order_count(
 		who: &Self::AccountId,
 		asset_pair: &PoolPairsMap<Asset>,
 	) -> Result<u32, DispatchError>;
+
+	fn limit_orders(
+		base_asset: Asset,
+		quote_asset: Asset,
+		accounts: &BTreeSet<Self::AccountId>,
+	) -> Result<AskBidMap<Vec<LimitOrder<Self::AccountId>>>, DispatchError>;
 
 	fn open_order_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 

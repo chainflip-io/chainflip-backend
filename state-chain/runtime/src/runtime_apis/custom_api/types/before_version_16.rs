@@ -1,7 +1,7 @@
 use super::*;
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct VaultAddresses {
 	pub ethereum: EncodedAddress,
 	pub arbitrum: EncodedAddress,
@@ -31,6 +31,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 			solana_sol_vault: old.solana_sol_vault,
 			solana_usdc_token_vault_ata: old.solana_usdc_token_vault_ata,
 			solana_vault_swap_account: old.solana_vault_swap_account,
+			tron: EncodedAddress::Tron([0u8; 20]),
 			predicted_seconds_until_next_vault_rotation: old
 				.predicted_seconds_until_next_vault_rotation,
 			// Set usdt token pubkey and ata to null addresses
@@ -40,23 +41,16 @@ impl From<VaultAddresses> for super::VaultAddresses {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
-#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
+#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
 pub struct RpcAccountInfoCommonItems<Balance> {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
 	pub vanity_name: VanityName,
 	pub flip_balance: Balance,
 	pub asset_balances: AssetMap<Balance>,
 	pub bond: Balance,
 	pub estimated_redeemable_balance: Balance,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub bound_redeem_address: Option<EvmAddress>,
-	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
 	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
 }
 
@@ -67,8 +61,6 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	PartialEq,
 	Eq,
 	Hash,
-	Serialize,
-	Deserialize,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -76,29 +68,13 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	MaxEncodedLen,
 	Default,
 )]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 pub struct AssetMap<T> {
-	#[serde(rename = "Ethereum")]
-	#[serde(default)]
 	pub eth: EthAssetMap<T>,
-	#[serde(rename = "Polkadot")]
-	#[serde(default)]
 	pub dot: cf_primitives::chains::assets::dot::AssetMap<T>,
-	#[serde(rename = "Bitcoin")]
-	#[serde(default)]
 	pub btc: cf_primitives::chains::assets::btc::AssetMap<T>,
-	#[serde(rename = "Arbitrum")]
-	#[serde(default)]
 	pub arb: ArbAssetMap<T>,
-	#[serde(rename = "Solana")]
-	#[serde(default)]
 	pub sol: SolAssetMap<T>,
-	#[serde(rename = "Assethub")]
-	#[serde(default)]
 	pub hub: cf_primitives::chains::assets::hub::AssetMap<T>,
-	#[serde(rename = "Bsc")]
-	#[serde(default)]
-	pub bsc: BscAssetMap<T>,
 }
 
 #[derive(
@@ -108,8 +84,6 @@ pub struct AssetMap<T> {
 	PartialEq,
 	Eq,
 	Hash,
-	Serialize,
-	Deserialize,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -117,19 +91,10 @@ pub struct AssetMap<T> {
 	MaxEncodedLen,
 	Default,
 )]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 pub struct EthAssetMap<T> {
-	#[serde(rename = "ETH")]
-	#[serde(default)]
 	pub eth: T,
-	#[serde(rename = "FLIP")]
-	#[serde(default)]
 	pub flip: T,
-	#[serde(rename = "USDC")]
-	#[serde(default)]
 	pub usdc: T,
-	#[serde(rename = "USDT")]
-	#[serde(default)]
 	pub usdt: T,
 }
 impl<T: Default> From<EthAssetMap<T>> for cf_primitives::chains::assets::eth::AssetMap<T> {
@@ -151,8 +116,6 @@ impl<T: Default> From<EthAssetMap<T>> for cf_primitives::chains::assets::eth::As
 	PartialEq,
 	Eq,
 	Hash,
-	Serialize,
-	Deserialize,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -160,13 +123,8 @@ impl<T: Default> From<EthAssetMap<T>> for cf_primitives::chains::assets::eth::As
 	MaxEncodedLen,
 	Default,
 )]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 pub struct ArbAssetMap<T> {
-	#[serde(rename = "ETH")]
-	#[serde(default)]
 	pub eth: T,
-	#[serde(rename = "USDC")]
-	#[serde(default)]
 	pub usdc: T,
 }
 impl<T: Default> From<ArbAssetMap<T>> for cf_primitives::chains::assets::arb::AssetMap<T> {
@@ -182,8 +140,6 @@ impl<T: Default> From<ArbAssetMap<T>> for cf_primitives::chains::assets::arb::As
 	PartialEq,
 	Eq,
 	Hash,
-	Serialize,
-	Deserialize,
 	Encode,
 	Decode,
 	DecodeWithMemTracking,
@@ -191,49 +147,13 @@ impl<T: Default> From<ArbAssetMap<T>> for cf_primitives::chains::assets::arb::As
 	MaxEncodedLen,
 	Default,
 )]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
 pub struct SolAssetMap<T> {
-	#[serde(rename = "SOL")]
-	#[serde(default)]
 	pub sol: T,
-	#[serde(rename = "USDC")]
-	#[serde(default)]
 	pub usdc: T,
 }
 impl<T: Default> From<SolAssetMap<T>> for cf_primitives::chains::assets::sol::AssetMap<T> {
 	fn from(value: SolAssetMap<T>) -> Self {
 		Self { sol: value.sol, usdc: value.usdc, usdt: T::default() }
-	}
-}
-
-#[derive(
-	Copy,
-	Clone,
-	Debug,
-	PartialEq,
-	Eq,
-	Hash,
-	Serialize,
-	Deserialize,
-	Encode,
-	Decode,
-	DecodeWithMemTracking,
-	TypeInfo,
-	MaxEncodedLen,
-	Default,
-)]
-#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
-pub struct BscAssetMap<T> {
-	#[serde(rename = "BNB")]
-	#[serde(default)]
-	pub bnb: T,
-	#[serde(rename = "USDT")]
-	#[serde(default)]
-	pub usdt: T,
-}
-impl<T: Default> From<BscAssetMap<T>> for cf_primitives::chains::assets::bsc::AssetMap<T> {
-	fn from(value: BscAssetMap<T>) -> Self {
-		Self { bnb: value.bnb, usdt: value.usdt }
 	}
 }
 
@@ -246,7 +166,8 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 			arb: value.arb.into(),
 			sol: value.sol.into(),
 			hub: value.hub,
-			bsc: value.bsc.into(),
+			tron: Default::default(),
+			bsc: Default::default(),
 		}
 	}
 }
@@ -254,6 +175,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
 	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
 		Self {
+			account_id: None,
 			vanity_name: value.vanity_name,
 			flip_balance: value.flip_balance,
 			asset_balances: value.asset_balances.into(),
@@ -290,7 +212,7 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct TradingStrategyLimits {
 	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
@@ -305,7 +227,7 @@ impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
@@ -320,7 +242,7 @@ impl From<NetworkFeeDetails> for super::NetworkFeeDetails {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
+#[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,

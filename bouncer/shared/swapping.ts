@@ -25,7 +25,7 @@ const MAX_CCM_ADDITIONAL_DATA_LENGTH = 3000;
 // In Arbitrum's localnet large messages (~ >4k) end up with large gas estimations
 // of >70M gas, surpassing our hardcoded gas limit (25M) and Arbitrum's block gas
 // gas limit (32M). We cap it to a lower value than Ethereum to work around that.
-const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 5;
+const ARB_MAX_CCM_MSG_LENGTH = MAX_CCM_MSG_LENGTH / 8;
 
 // Solana transactions have a length of 1232. Capping it to some reasonable values
 // that when construction the call the Solana length is not exceeded. Technically the
@@ -118,6 +118,7 @@ function newCcmAdditionalData(destAsset: Asset, message: string, maxLength?: num
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Tron':
     case 'Bsc':
       return '0x';
     case 'Solana': {
@@ -159,6 +160,9 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
     case 'Arbitrum':
       length = ARB_MAX_CCM_MSG_LENGTH;
       break;
+    case 'Tron':
+      length = MAX_CCM_MSG_LENGTH;
+      break;
     case 'Solana':
       if (destAsset === 'Sol') {
         length = MAX_CCM_BYTES_SOL;
@@ -182,6 +186,7 @@ function newCcmMessage(destAsset: Asset, maxLength?: number): string {
 }
 // Minimum overhead to ensure simple CCM transactions succeed
 const OVERHEAD_COMPUTE_UNITS = 30000;
+const OVERHEAD_ENERGY = 20000;
 
 export async function newCcmMetadata(
   destAsset: Asset,
@@ -203,6 +208,8 @@ export async function newCcmMetadata(
   } else if (destChain === 'Solana') {
     // We don't bother estimating in Solana since the gas needed doesn't really change upon the message length.
     userLogicGasBudget = OVERHEAD_COMPUTE_UNITS.toString();
+  } else if (destChain === 'Tron') {
+    userLogicGasBudget = OVERHEAD_ENERGY.toString();
   } else {
     throw new Error(`Unsupported chain: ${destChain}`);
   }
@@ -301,7 +308,6 @@ export async function testSwap<A = []>(
     tagSuffix,
     swapContext,
   );
-
   return performSwap(
     cf.withChildLogger(tag),
     sourceAsset,

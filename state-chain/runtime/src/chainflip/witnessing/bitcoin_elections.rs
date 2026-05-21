@@ -391,6 +391,17 @@ impl
 	) -> Result<(), CorruptStorageError> {
 		let current_sc_block_number = crate::System::block_number();
 
+		if let Some(ingress_safety_margin) =
+			pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, BitcoinInstance>::get()
+		{
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, BitcoinInstance>::mutate_extant(|settings|  {
+				// We apply the safety margin *only* to the ingress BlockWitnessers. The egress witnessing is not critical
+				// and it keeps its own lower safety margin (which has to be updated from the election pallet settings).
+				settings.1.safety_margin = ingress_safety_margin as u32;
+				settings.2.safety_margin = ingress_safety_margin as u32;
+			});
+		}
+
 		let chain_progress = BitcoinBlockHeightWitnesserES::on_finalize::<
 			DerivedElectoralAccess<
 				_,
@@ -456,6 +467,7 @@ impl
 }
 
 pub const BITCOIN_MAINNET_SAFETY_BUFFER: u32 = 8;
+pub const BITCOIN_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 pub fn initial_state() -> InitialStateOf<Runtime, BitcoinInstance> {
 	InitialState {

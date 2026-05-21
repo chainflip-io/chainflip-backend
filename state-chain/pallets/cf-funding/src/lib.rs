@@ -69,7 +69,8 @@ use sp_std::{
 pub enum Pending {
 	Pending,
 }
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(4);
+pub const STORAGE_VERSION_U16: u16 = 4;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[derive(Encode, Decode, PartialEq, Debug, TypeInfo)]
 pub struct PendingRedemptionInfo<FlipBalance> {
@@ -320,7 +321,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::RedemptionCheck;
+	use cf_traits::{Issuance, RedemptionCheck};
 	use frame_support::{pallet_prelude::*, storage::with_transaction, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -386,7 +387,8 @@ pub mod pallet {
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
 			+ AccountInfo<AccountId = Self::AccountId, Amount = Self::Amount>
-			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
+			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>
+			+ Issuance<Balance = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -400,7 +402,10 @@ pub mod pallet {
 		type TimeSource: UnixTime;
 
 		/// Provide information on current bidders
-		type RedemptionChecker: RedemptionCheck<ValidatorId = Self::AccountId>;
+		type RedemptionChecker: RedemptionCheck<
+			ValidatorId = Self::AccountId,
+			Amount = Self::Amount,
+		>;
 
 		/// Calls that are dispatchable via ethereum contract
 		type EthereumSCApi: UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
@@ -416,7 +421,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -655,9 +660,6 @@ pub mod pallet {
 
 			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
-			// Not allowed to redeem if we are an active bidder in the auction phase
-			T::RedemptionChecker::ensure_can_redeem(&account_id)?;
-
 			// The redemption must be executed before a new one can be requested.
 			ensure!(
 				!PendingRedemptions::<T>::contains_key(&account_id),
@@ -684,6 +686,12 @@ pub mod pallet {
 
 			let redemption @ Redemption { redeem_amount, restricted_redeem_amount, .. } =
 				Redemption::<T>::for_redeem(&account_id, amount, &address)?;
+
+			T::RedemptionChecker::ensure_can_redeem_amount(
+				&account_id,
+				redemption.total_debit_amount(),
+			)?;
+
 			redemption.burn_fee()?;
 			redemption.update_restricted_balances(None)?;
 
@@ -852,12 +860,10 @@ pub mod pallet {
 				ensure!(amount >= MinimumFunding::<T>::get(), Error::<T>::MinimumRebalanceAmount);
 			}
 
-			if !T::RedemptionChecker::can_redeem(&source_account_id) {
-				ensure!(
-					!T::RedemptionChecker::can_redeem(&recipient_account_id),
-					Error::<T>::CanNotRebalanceToNotBiddingValidator
-				);
-			}
+			ensure!(
+				T::RedemptionChecker::can_transfer(&source_account_id, &recipient_account_id),
+				Error::<T>::CanNotRebalanceToNotBiddingValidator
+			);
 
 			ensure!(
 				BoundExecutorAddress::<T>::get(&source_account_id) ==
@@ -912,11 +918,25 @@ pub mod pallet {
 
 			// process the deposit
 			match deposit_and_call.deposit {
-				EthereumDeposit::FlipToSCGateway { amount } => Self::fund_account(
-					caller_account_id.clone(),
-					amount.into(),
-					FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
-				),
+				EthereumDeposit::FlipToSCGateway { amount } =>
+					if !frame_system::Pallet::<T>::account_exists(&caller_account_id) &&
+						amount < MinimumFunding::<T>::get().into()
+					{
+						// Insufficient funds to create an account.
+						T::Flip::burn_offchain(amount.into());
+						Self::deposit_event(Event::FailedFundingAttempt {
+							account_id: caller_account_id,
+							withdrawal_address: caller,
+							amount: amount.into(),
+						});
+						return Ok(())
+					} else {
+						Self::fund_account(
+							caller_account_id.clone(),
+							amount.into(),
+							FundingSource::EthTransaction { tx_hash: eth_tx_hash, funder: caller },
+						)
+					},
 
 				// nothing to do
 				EthereumDeposit::NoDeposit => {},
@@ -1111,16 +1131,16 @@ impl<T: Config> SpawnAccount for Pallet<T> {
 			!ParentAccount::<T>::contains_key(parent_account_id),
 			Error::<T>::CannotSpawnFromSubAccount
 		);
-		ensure!(
-			T::RedemptionChecker::can_redeem(parent_account_id),
-			Error::<T>::CannotSpawnDuringAuctionPhase
-		);
 
 		let sub_account_id = Self::derive_sub_account_id(parent_account_id, index)?;
 
 		ensure!(
 			!frame_system::Pallet::<T>::account_exists(&sub_account_id),
 			Error::<T>::AccountAlreadyExists
+		);
+		ensure!(
+			T::RedemptionChecker::can_transfer(parent_account_id, &sub_account_id),
+			Error::<T>::CannotSpawnDuringAuctionPhase
 		);
 
 		// FRAME reference counting:

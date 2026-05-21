@@ -86,12 +86,15 @@ pub mod evm;
 pub mod hub;
 pub mod none;
 pub mod sol;
+pub mod tron;
 
 pub mod address;
 pub mod deposit_channel;
+use crate::sol::SolAddress;
 use cf_primitives::chains::assets::any::GetChainAssetMap;
 pub use deposit_channel::*;
 use strum::IntoEnumIterator;
+
 pub mod ccm_checker;
 pub mod cf_parameters;
 pub mod instances;
@@ -1007,6 +1010,8 @@ pub enum ExecutexSwapAndCallError {
 	NoVault,
 	/// Auxiliary data required to build the transaction is not ready.
 	AuxDataNotReady,
+	/// There is no deposit channel available.
+	NoChannelAvailable,
 }
 
 pub trait ExecutexSwapAndCall<C: Chain>: ApiCall<C::ChainCrypto> {
@@ -1084,6 +1089,22 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
+}
+
+pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TransactionInId {
+	Bitcoin(TransactionInIdFor<crate::Bitcoin>),
+	Ethereum(TransactionInIdFor<crate::Ethereum>),
+	Arbitrum(TransactionInIdFor<crate::Arbitrum>),
+	Tron(TransactionInIdFor<crate::Tron>),
+
+	// Deposit channels are marked differently than vault swaps
+	Solana(TransactionInIdFor<crate::Solana>),
+	SolanaDepositChannel(SolAddress),
+	// other variants reserved for other chains.
 }
 
 #[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
@@ -1439,6 +1460,19 @@ impl RetryPolicy for DefaultRetryPolicy {
 		Some(10u32)
 	}
 }
+pub struct RetryNextBlockPolicy;
+impl RetryPolicy for RetryNextBlockPolicy {
+	type BlockNumber = u32;
+	type AttemptCount = u32;
+
+	fn next_attempt_delay(retry_attempts: Self::AttemptCount) -> Option<Self::BlockNumber> {
+		if retry_attempts > 10 {
+			Some(10)
+		} else {
+			Some(1)
+		}
+	}
+}
 
 pub enum RequiresSignatureRefresh<C: ChainCrypto, Api: ApiCall<C>> {
 	True(Option<Api>),
@@ -1524,6 +1558,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		refund_parameters: ChannelRefundParametersUnchecked<Address>,
 		from_token_account: Option<Address>,
 	},
+	Tron(EvmVaultSwapExtraParameters<Address, Amount>),
 }
 
 impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
@@ -1562,6 +1597,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				refund_parameters: refund_parameters.try_map_address(&f)?,
 				from_token_account: from_token_account.map(&f).transpose()?,
 			},
+			VaultSwapExtraParameters::Tron(extra_parameter) =>
+				VaultSwapExtraParameters::Tron(extra_parameter.try_map_address(f)?),
 		})
 	}
 
@@ -1600,6 +1637,8 @@ impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
 				refund_parameters,
 				from_token_account,
 			},
+			VaultSwapExtraParameters::Tron(extra_parameter) =>
+				VaultSwapExtraParameters::Tron(extra_parameter.try_map_amounts(f)?),
 		})
 	}
 }

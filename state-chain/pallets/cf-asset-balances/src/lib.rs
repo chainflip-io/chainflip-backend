@@ -42,7 +42,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
@@ -151,7 +152,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -230,7 +231,10 @@ impl<T: Config> Pallet<T> {
 		available: &mut AssetAmount,
 	) -> Result<(), DispatchError> {
 		let amount_reconciled = match chain {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc => match owner {
+			ForeignChain::Ethereum |
+			ForeignChain::Arbitrum |
+			ForeignChain::Tron |
+			ForeignChain::Bsc => match owner {
 				ExternalOwner::Account(address) =>
 					if *amount_owed > *available {
 						0
@@ -383,8 +387,10 @@ impl<T: Config> LiabilityTracker for Pallet<T> {
 		debug_assert_eq!(ForeignChain::from(asset), address.chain());
 		Liabilities::<T>::mutate(asset, |fees| {
 			fees.entry(match ForeignChain::from(asset) {
-				ForeignChain::Ethereum | ForeignChain::Arbitrum | ForeignChain::Bsc =>
-					address.into(),
+				ForeignChain::Ethereum |
+				ForeignChain::Arbitrum |
+				ForeignChain::Tron |
+				ForeignChain::Bsc => address.into(),
 				ForeignChain::Polkadot | ForeignChain::Assethub => ExternalOwner::AggKey,
 				ForeignChain::Bitcoin | ForeignChain::Solana => ExternalOwner::Vault,
 			})
@@ -480,6 +486,10 @@ where
 
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		let _ = T::PoolApi::sweep(who);
+		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
+	}
+
+	fn free_balances_dont_sweep(who: &Self::AccountId) -> AssetMap<AssetAmount> {
 		AssetMap::from_fn(|asset| FreeBalances::<T>::get(who, asset))
 	}
 

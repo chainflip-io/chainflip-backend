@@ -26,12 +26,12 @@ use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
 	rpc::{
-		before_v12, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
+		get_all_loans, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
 		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
 		RpcLoanAccount,
 	},
-	LendingPool, LiquidationCompletionReason, LiquidationType, OraclePriceCache, WhitelistStatus,
-	WhitelistUpdate, WithdrawnAndRemainingAmounts,
+	LendingPool, LiquidationCompletionReason, LiquidationType, LoanType, OraclePriceCache,
+	WhitelistStatus, WhitelistUpdate, WithdrawnAndRemainingAmounts,
 };
 
 pub use general_lending::config::{
@@ -40,7 +40,7 @@ pub use general_lending::config::{
 };
 
 pub use boost::{boost_pools_iter, get_boost_pool_details, BoostPoolDetails, OwedAmount};
-use boost::{BoostPool, BoostPoolContribution, BoostPoolId};
+use boost::{BoostPool, BoostPoolId};
 
 pub mod migrations;
 pub mod weights;
@@ -71,14 +71,13 @@ use frame_support::{
 	transactional,
 };
 
-use cf_traits::lending::{BoostApi, BoostFinalisationOutcome, BoostOutcome, LoanId};
+use cf_traits::lending::{BoostApi, BoostOutcome, BoostSource, LoanId};
 
 use cf_runtime_utilities::log_or_panic;
 use frame_system::pallet_prelude::*;
 use weights::WeightInfo;
 
-pub use core_lending_pool::{CoreLendingPool, CoreLoanId};
-
+use crate::{boost::BOOST_FEE, core_lending_pool::CoreLendingPool};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	vec,
@@ -87,7 +86,8 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const STORAGE_VERSION_U16: u16 = 6;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +97,10 @@ pub struct BoostConfiguration {
 	pub network_fee_deduction_from_boost_percent: Percent,
 	/// The minimum amount that can be added to the boost pool.
 	pub minimum_add_funds_amount: BTreeMap<Asset, AssetAmount>,
+	/// Minimum share of the borrowed amount that must come from the lending pool
+	/// (when it has enough available liquidity to cover it). The remainder is split
+	/// proportionally to each pool's available liquidity.
+	pub min_lending_pool_share: Percent,
 }
 
 #[derive(
@@ -120,10 +124,6 @@ pub struct PalletSafeMode {
 	pub add_lender_funds: SafeModeSet<Asset>,
 	// whether lenders can withdraw funds from lending pools (stale oracle also disables this)
 	pub withdraw_lender_funds: SafeModeSet<Asset>,
-	// whether borrowers can add collateral
-	pub add_collateral: SafeModeSet<Asset>,
-	// whether borrowers can withdraw collateral (stale oracle also disables this)
-	pub remove_collateral: SafeModeSet<Asset>,
 	// whether liquidations can be started, both voluntarily and system-initiated
 	pub liquidations_enabled: bool,
 }
@@ -136,8 +136,6 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			borrowing: SafeModeSet::code_red(),
 			add_lender_funds: SafeModeSet::code_red(),
 			withdraw_lender_funds: SafeModeSet::code_red(),
-			add_collateral: SafeModeSet::code_red(),
-			remove_collateral: SafeModeSet::code_red(),
 			liquidations_enabled: false,
 		}
 	}
@@ -149,8 +147,6 @@ impl cf_traits::SafeMode for PalletSafeMode {
 			borrowing: SafeModeSet::code_green(),
 			add_lender_funds: SafeModeSet::code_green(),
 			withdraw_lender_funds: SafeModeSet::code_green(),
-			add_collateral: SafeModeSet::code_green(),
-			remove_collateral: SafeModeSet::code_green(),
 			liquidations_enabled: true,
 		}
 	}
@@ -191,9 +187,10 @@ pub enum PalletConfigUpdate {
 	SetMinimumAmounts {
 		minimum_loan_amount_usd: AssetAmount,
 		minimum_update_loan_amount_usd: AssetAmount,
-		minimum_update_collateral_amount_usd: AssetAmount,
+		minimum_update_supply_amount_usd: AssetAmount,
 		minimum_supply_amount_usd: AssetAmount,
 	},
+	SetLiquidationCoverageFactor(Percent),
 }
 
 define_wrapper_type!(CorePoolId, u32);
@@ -208,17 +205,26 @@ pub enum LoanUsage {
 	Boost(PrewitnessedDepositId),
 }
 
-/// Indicates how the action of adding collateral was triggered.
+/// Indicates how the action of supplying funds was triggered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
-pub enum CollateralAddedActionType {
-	/// Triggered manually by the user. Collateral is taken from the user's free balance.
+pub enum SupplyAddedActionType {
+	/// Triggered manually by the user. Funds are taken from the user's free balance.
 	Manual,
-	/// Triggered by the protocol due to high LTV. Collateral is taken from the user's free
-	/// balance.
-	SystemTopup,
 	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
 	/// than was required.
 	SystemLiquidationExcessAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
+	/// Triggered by the protocol when liquidation did not swap all of input amount.
+	SystemLiquidationUnusedAmount { loan_id: LoanId, swap_request_id: SwapRequestId },
+}
+
+/// Indicates how the action of supplying funds was triggered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
+pub enum SupplyRemovedActionType {
+	/// Triggered manually by the user. Funds are taken from the user's free balance.
+	Manual,
+	/// Triggered by the protocol as a result of liquidation obtaining more of the loan asset
+	/// than was required.
+	SystemLiquidation,
 }
 
 /// Indicates how the action of repaying a loan was triggered.
@@ -229,6 +235,8 @@ pub enum LoanRepaidActionType {
 	/// Triggered by the protocol as a result of liquidation. Loan is repaid from a liquidation
 	/// swap's output.
 	Liquidation { swap_request_id: SwapRequestId },
+	/// Triggered when a boosted deposit is finalised. Loan is repaid from the deposit amount.
+	BoostFinalisation,
 }
 
 pub struct BoostConfigDefault {}
@@ -238,6 +246,7 @@ impl Get<BoostConfiguration> for BoostConfigDefault {
 		BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(50),
 			minimum_add_funds_amount: BTreeMap::from([(Asset::Btc, 11000_u128)]), // ~$10 usd
+			min_lending_pool_share: Percent::from_percent(30),
 		}
 	}
 }
@@ -259,7 +268,6 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	},
 	ltv_thresholds: LtvThresholds {
 		target: Permill::from_percent(80),
-		topup: None,
 		soft_liquidation: Permill::from_percent(90),
 		soft_liquidation_abort: Permill::from_percent(88),
 		hard_liquidation: Permill::from_percent(95),
@@ -287,10 +295,11 @@ const LENDING_DEFAULT_CONFIG: LendingConfiguration = LendingConfiguration {
 	hard_liquidation_swap_chunk_size_usd: 50_000_000_000, //50k USD
 	fee_swap_max_oracle_slippage: 50,   // 0.5%
 	pool_config_overrides: BTreeMap::new(),
-	minimum_loan_amount_usd: 100_000_000,             // 100 USD
-	minimum_update_loan_amount_usd: 10_000_000,       // 10 USD
-	minimum_supply_amount_usd: 100_000_000,           // 100 USD
-	minimum_update_collateral_amount_usd: 10_000_000, // 10 USD
+	minimum_loan_amount_usd: 100_000_000,         // 100 USD
+	minimum_update_loan_amount_usd: 10_000_000,   // 10 USD
+	minimum_supply_amount_usd: 100_000_000,       // 100 USD
+	minimum_update_supply_amount_usd: 10_000_000, // 10 USD
+	liquidation_coverage_factor: Percent::from_percent(100),
 };
 
 impl Get<LendingConfiguration> for LendingConfigDefault {
@@ -302,7 +311,13 @@ impl Get<LendingConfiguration> for LendingConfigDefault {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_primitives::SwapRequestId;
+	use cf_primitives::{Beneficiary, SwapRequestId};
+
+	use crate::{
+		boost::{BoostPool, BoostedDeposit, BOOST_FEE},
+		core_lending_pool::CoreLendingPool,
+		general_lending::{GeneralLoan, LoanType},
+	};
 
 	use super::*;
 
@@ -316,6 +331,8 @@ pub mod pallet {
 
 		type SwapRequestHandler: SwapRequestHandler<AccountId = Self::AccountId>;
 
+		type NetworkFeeApi: cf_traits::NetworkFeeApi;
+
 		type PoolApi: PoolApi<AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type PriceApi: PriceFeedApi;
@@ -327,7 +344,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -356,6 +373,12 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Loans created as a result of boosting deposits. These loans a short-lived and will be
+	/// settled upon deposit finalisation.
+	#[pallet::storage]
+	pub type BoostLoans<T: Config> =
+		StorageMap<_, Twox64Concat, LoanId, GeneralLoan<T>, OptionQuery>;
+
 	#[pallet::storage]
 	pub type BoostedDeposits<T: Config> = StorageDoubleMap<
 		_,
@@ -363,7 +386,7 @@ pub mod pallet {
 		Asset,
 		Twox64Concat,
 		PrewitnessedDepositId,
-		BTreeMap<BoostPoolTier, BoostPoolContribution>,
+		BoostedDeposit,
 		OptionQuery,
 	>;
 
@@ -431,34 +454,23 @@ pub mod pallet {
 			lender_id: T::AccountId,
 			asset: Asset,
 			amount: AssetAmount,
+			action_type: SupplyAddedActionType,
 		},
 		LendingFundsRemoved {
 			lender_id: T::AccountId,
 			asset: Asset,
 			unlocked_amount: AssetAmount,
-		},
-		CollateralAdded {
-			borrower_id: T::AccountId,
-			collateral: BTreeMap<Asset, AssetAmount>,
-			action_type: CollateralAddedActionType,
-		},
-		CollateralRemoved {
-			borrower_id: T::AccountId,
-			collateral: BTreeMap<Asset, AssetAmount>,
+			action_type: SupplyRemovedActionType,
 		},
 		LoanCreated {
 			loan_id: LoanId,
 			asset: Asset,
-			borrower_id: T::AccountId,
+			loan_type: LoanType<T::AccountId>,
 			principal_amount: AssetAmount,
 		},
 		LoanUpdated {
 			loan_id: LoanId,
 			extra_principal_amount: AssetAmount,
-		},
-		CollateralTopupAssetUpdated {
-			borrower_id: T::AccountId,
-			collateral_topup_asset: Option<Asset>,
 		},
 		OriginationFeeTaken {
 			loan_id: LoanId,
@@ -535,10 +547,6 @@ pub mod pallet {
 		AddLenderFundsDisabled,
 		/// Removing lending funds is disabled due to safe mode.
 		RemoveLenderFundsDisabled,
-		/// Adding collateral is disabled due to safe mode.
-		AddingCollateralDisabled,
-		/// Removing collateral is disabled due to safe mode.
-		RemovingCollateralDisabled,
 		/// Creating general loans is disabled due to safe mode.
 		LoanCreationDisabled,
 		/// Requested loan not found
@@ -580,6 +588,18 @@ pub mod pallet {
 		BoostedFundsRemaining,
 		/// Can't removed funds due to LTV check
 		InsufficientLtvHeadroom,
+		/// The new loan would leave the loan-asset pool unable to liquidate the configured
+		/// fraction of outstanding loans.
+		UtilisationCapExceeded,
+		/// The new loan would leave one of the borrower's collateral pools unable to
+		/// liquidate the configured fraction of outstanding loans.
+		CollateralPoolUtilisationCapExceeded,
+		/// The broker fee specified on the loan request exceeds the maximum allowed.
+		BrokerFeeTooHigh,
+		/// The broker fee (if specified) can't be zero.
+		InvalidZeroBrokerFee,
+		/// Provided broker does not exist.
+		UnknownBroker,
 	}
 
 	#[pallet::hooks]
@@ -687,7 +707,7 @@ pub mod pallet {
 						PalletConfigUpdate::SetMinimumAmounts {
 							minimum_loan_amount_usd,
 							minimum_update_loan_amount_usd,
-							minimum_update_collateral_amount_usd,
+							minimum_update_supply_amount_usd,
 							minimum_supply_amount_usd,
 						} => {
 							ensure!(
@@ -696,9 +716,12 @@ pub mod pallet {
 							);
 							config.minimum_loan_amount_usd = *minimum_loan_amount_usd;
 							config.minimum_update_loan_amount_usd = *minimum_update_loan_amount_usd;
-							config.minimum_update_collateral_amount_usd =
-								*minimum_update_collateral_amount_usd;
+							config.minimum_update_supply_amount_usd =
+								*minimum_update_supply_amount_usd;
 							config.minimum_supply_amount_usd = *minimum_supply_amount_usd;
+						},
+						PalletConfigUpdate::SetLiquidationCoverageFactor(coverage_factor) => {
+							config.liquidation_coverage_factor = *coverage_factor;
 						},
 					}
 					Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
@@ -719,6 +742,9 @@ pub mod pallet {
 			let booster_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(T::SafeMode::get().add_boost_funds_enabled, Error::<T>::AddBoostFundsDisabled);
+
+			// We no longer support boost pools other than the 5bps one:
+			ensure!(pool_tier == BOOST_FEE, Error::<T>::PoolDoesNotExist);
 
 			let minimum = BoostConfig::<T>::get()
 				.minimum_add_funds_amount
@@ -742,7 +768,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::BoostFundsAdded {
 				booster_id,
-				boost_pool: BoostPoolId { asset, tier: pool_tier },
+				boost_pool: BoostPoolId { asset, tier: BOOST_FEE },
 				amount,
 			});
 
@@ -815,6 +841,7 @@ pub mod pallet {
 
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::add_lender_funds())]
+		#[transactional]
 		pub fn add_lender_funds(
 			origin: OriginFor<T>,
 			asset: Asset,
@@ -833,24 +860,35 @@ pub mod pallet {
 			);
 
 			let config = LendingConfig::<T>::get();
+			let price_cache = OraclePriceCache::<T>::default();
 
+			// Note that we allow stale prices as it is more important that the user can top up
+			// their supply (used as collateral) to avoid liquidation:
 			ensure!(
-				OraclePriceCache::<T>::default().usd_value_of(asset, amount)? >=
-					config.minimum_supply_amount_usd,
+				price_cache.usd_value_of_allow_stale(asset, amount)? >=
+					config.minimum_update_supply_amount_usd,
 				Error::<T>::AmountBelowMinimum
 			);
 
 			T::Balance::try_debit_account(&lender_id, asset, amount)?;
 
-			GeneralLendingPools::<T>::try_mutate(asset, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+			general_lending::supply_funds::<T>(
+				lender_id.clone(),
+				asset,
+				amount,
+				SupplyAddedActionType::Manual,
+			)?;
 
-				pool.add_funds(&lender_id, amount);
-
-				Ok::<_, DispatchError>(())
-			})?;
-
-			Self::deposit_event(Event::<T>::LendingFundsAdded { lender_id, asset, amount });
+			// Ensure the lender's resulting supply position is at least the minimum supply amount
+			// (to avoid dust positions accumulating):
+			let resulting_position = GeneralLendingPools::<T>::get(asset)
+				.and_then(|pool| pool.get_supply_position_for_account(&lender_id).ok())
+				.unwrap_or(0);
+			ensure!(
+				price_cache.usd_value_of_allow_stale(asset, resulting_position)? >=
+					config.minimum_supply_amount_usd,
+				Error::<T>::AmountBelowMinimum
+			);
 
 			Ok(())
 		}
@@ -872,42 +910,13 @@ pub mod pallet {
 			general_lending::remove_lender_funds::<T>(lender_id, asset, amount)
 		}
 
-		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::add_collateral())]
-		pub fn add_collateral(
-			origin: OriginFor<T>,
-			collateral_topup_asset: Option<Asset>,
-			collateral: BTreeMap<Asset, AssetAmount>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			ensure!(
-				Whitelist::<T>::get().is_allowed(&borrower_id),
-				Error::<T>::AccountNotWhitelisted
-			);
-
-			<Self as LendingApi>::add_collateral(&borrower_id, collateral_topup_asset, collateral)
-		}
-
-		#[pallet::call_index(8)]
-		#[pallet::weight(T::WeightInfo::remove_collateral())]
-		pub fn remove_collateral(
-			origin: OriginFor<T>,
-			collateral: BTreeMap<Asset, AssetAmount>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			<Self as LendingApi>::remove_collateral(&borrower_id, collateral)
-		}
-
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::request_loan())]
 		pub fn request_loan(
 			origin: OriginFor<T>,
 			loan_asset: Asset,
 			loan_amount: AssetAmount,
-			collateral_topup_asset: Option<Asset>,
-			extra_collateral: BTreeMap<Asset, AssetAmount>,
+			broker: Option<Beneficiary<T::AccountId>>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
@@ -916,29 +925,9 @@ pub mod pallet {
 				Error::<T>::AccountNotWhitelisted
 			);
 
-			Self::new_loan(
-				borrower_id,
-				loan_asset,
-				loan_amount,
-				collateral_topup_asset,
-				extra_collateral,
-			)?;
+			Self::new_loan(borrower_id, loan_asset, loan_amount, broker)?;
 
 			Ok(())
-		}
-
-		#[pallet::call_index(10)]
-		#[pallet::weight(T::WeightInfo::update_collateral_topup_asset())]
-		pub fn update_collateral_topup_asset(
-			origin: OriginFor<T>,
-			collateral_topup_asset: Option<Asset>,
-		) -> DispatchResult {
-			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			<Self as LendingApi>::update_collateral_topup_asset(
-				&borrower_id,
-				collateral_topup_asset,
-			)
 		}
 
 		#[pallet::call_index(11)]
@@ -947,16 +936,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			loan_id: LoanId,
 			extra_amount_to_borrow: AssetAmount,
-			extra_collateral: BTreeMap<Asset, AssetAmount>,
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			<Self as LendingApi>::expand_loan(
-				borrower_id,
-				loan_id,
-				extra_amount_to_borrow,
-				extra_collateral,
-			)
+			<Self as LendingApi>::expand_loan(borrower_id, loan_id, extra_amount_to_borrow)
 		}
 
 		#[pallet::call_index(12)]
@@ -1017,7 +1000,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn new_boost_pool(pool_id: BoostPoolId) -> DispatchResult {
-		ensure!(pool_id.tier != 0, Error::<T>::InvalidBoostPoolTier);
+		ensure!(pool_id.tier == BOOST_FEE, Error::<T>::InvalidBoostPoolTier);
 		Ok(BoostPools::<T>::try_mutate_exists(pool_id.asset, pool_id.tier, |pool| {
 			ensure!(pool.is_none(), Error::<T>::PoolAlreadyExists);
 

@@ -21,10 +21,6 @@ use std::time::Duration;
 /// Average time it takes to mine a block on Ethereum.
 pub const ETH_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(14);
 
-/// Duration between each poll of the web3 client, to check if we are synced to the head of the
-/// chain
-pub const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
-
 // ======= Dot Rpc Client =======
 
 pub const DOT_AVERAGE_BLOCK_TIME: Duration = Duration::from_secs(6);
@@ -36,16 +32,12 @@ pub const RPC_RETRY_CONNECTION_INTERVAL: Duration = Duration::from_secs(10);
 // ======= Settings environment variables =======
 
 pub const ETH_HTTP_ENDPOINT: &str = "ETH__RPC__HTTP_ENDPOINT";
-pub const ETH_WS_ENDPOINT: &str = "ETH__RPC__WS_ENDPOINT";
 
 pub const ETH_BACKUP_HTTP_ENDPOINT: &str = "ETH__BACKUP_RPC__HTTP_ENDPOINT";
-pub const ETH_BACKUP_WS_ENDPOINT: &str = "ETH__BACKUP_RPC__WS_ENDPOINT";
 
 pub const ARB_HTTP_ENDPOINT: &str = "ARB__RPC__HTTP_ENDPOINT";
-pub const ARB_WS_ENDPOINT: &str = "ARB__RPC__WS_ENDPOINT";
 
 pub const ARB_BACKUP_HTTP_ENDPOINT: &str = "ARB__BACKUP_RPC__HTTP_ENDPOINT";
-pub const ARB_BACKUP_WS_ENDPOINT: &str = "ARB__BACKUP_RPC__WS_ENDPOINT";
 
 pub const BSC_HTTP_ENDPOINT: &str = "BSC__RPC__HTTP_ENDPOINT";
 pub const BSC_WS_ENDPOINT: &str = "BSC__RPC__WS_ENDPOINT";
@@ -61,12 +53,6 @@ pub const BTC_BACKUP_HTTP_ENDPOINT: &str = "BTC__BACKUP_RPC__HTTP_ENDPOINT";
 pub const BTC_BACKUP_RPC_USER: &str = "BTC__BACKUP_RPC__BASIC_AUTH_USER";
 pub const BTC_BACKUP_RPC_PASSWORD: &str = "BTC__BACKUP_RPC__BASIC_AUTH_PASSWORD";
 
-pub const DOT_WS_ENDPOINT: &str = "DOT__RPC__WS_ENDPOINT";
-pub const DOT_HTTP_ENDPOINT: &str = "DOT__RPC__HTTP_ENDPOINT";
-
-pub const DOT_BACKUP_WS_ENDPOINT: &str = "DOT__BACKUP_RPC__WS_ENDPOINT";
-pub const DOT_BACKUP_HTTP_ENDPOINT: &str = "DOT__BACKUP_RPC__HTTP_ENDPOINT";
-
 pub const SOL_HTTP_ENDPOINT: &str = "SOL__RPC__HTTP_ENDPOINT";
 
 pub const SOL_BACKUP_HTTP_ENDPOINT: &str = "SOL__BACKUP_RPC__HTTP_ENDPOINT";
@@ -76,6 +62,12 @@ pub const HUB_HTTP_ENDPOINT: &str = "HUB__RPC__HTTP_ENDPOINT";
 
 pub const HUB_BACKUP_WS_ENDPOINT: &str = "HUB__BACKUP_RPC__WS_ENDPOINT";
 pub const HUB_BACKUP_HTTP_ENDPOINT: &str = "HUB__BACKUP_RPC__HTTP_ENDPOINT";
+
+pub const TRON_HTTP_ENDPOINT: &str = "TRON__RPC__HTTP_ENDPOINT";
+pub const TRON_JSON_RPC_ENDPOINT: &str = "TRON__RPC__JSON_RPC_ENDPOINT";
+
+pub const TRON_BACKUP_HTTP_ENDPOINT: &str = "TRON__BACKUP_RPC__HTTP_ENDPOINT";
+pub const TRON_BACKUP_JSON_RPC_ENDPOINT: &str = "TRON__BACKUP_RPC__JSON_RPC_ENDPOINT";
 
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";

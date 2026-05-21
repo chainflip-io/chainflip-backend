@@ -19,7 +19,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 #![allow(clippy::allow_attributes)]
 
-use crate::submit_runtime_call::{batch_all, weight_and_dispatch_class, SignatureData};
+use crate::submit_runtime_call::{
+	batch_all, weight_and_dispatch_class, ChainflipExtrinsic, SignatureData,
+};
 pub use crate::submit_runtime_call::{
 	build_domain_data, is_valid_signature, BatchedCalls, EthEncodingType, SolEncodingType,
 	TransactionMetadata, DOMAIN_OFFCHAIN_PREFIX, MAX_BATCHED_CALLS,
@@ -39,10 +41,14 @@ use cf_chains::{
 		verify_sol_signature, SolAddress, SolApiEnvironment, SolHash, SolSignature, Solana,
 		NONCE_NUMBER_CRITICAL_NONCES,
 	},
+	tron::Tron,
 	Chain,
 };
 use cf_primitives::{
-	chains::assets::{arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset},
+	chains::assets::{
+		arb::Asset as ArbAsset, bsc::Asset as BscAsset, eth::Asset as EthAsset,
+		tron::Asset as TrxAsset,
+	},
 	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
 };
 use cf_traits::{
@@ -70,7 +76,8 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(22);
+pub const STORAGE_VERSION_U16: u16 = 23;
+pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
 	utxo_selection::ConsolidationParameters {
@@ -105,7 +112,7 @@ pub enum SafeModeUpdate<T: Config> {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use crate::submit_runtime_call::{validate_metadata, ChainflipExtrinsic};
+	use crate::submit_runtime_call::ChainflipExtrinsic;
 
 	use super::*;
 	use cf_chains::{btc::Utxo, sol::api::DurableNonceAndAccount, Arbitrum, Bsc};
@@ -133,6 +140,8 @@ pub mod pallet {
 		type SolanaVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Solana>;
 		/// On new key witnessed handler for Assethub
 		type AssethubVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Assethub>;
+		/// On new key witnessed handler for Tron
+		type TronVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Tron>;
 
 		/// For getting the current active AggKey. Used for rotating Utxos from previous vault.
 		type BitcoinKeyProvider: KeyProvider<<Bitcoin as Chain>::ChainCrypto>;
@@ -206,7 +215,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::storage_version(PALLET_VERSION)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
@@ -372,6 +381,30 @@ pub mod pallet {
 	/// Current id used in "as_derivative" calls for CCM calls into Assethub
 	pub type AssethubOutputAccountId<T> = StorageValue<_, OutputAccountId, ValueQuery>;
 
+	// TRON CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn supported_tron_assets)]
+	/// Map of supported assets for TRON
+	pub type TronSupportedAssets<T: Config> = StorageMap<_, Blake2_128Concat, TrxAsset, EvmAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_key_manager_address)]
+	/// The address of the TRON key manager contract
+	pub type TronKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_vault_address)]
+	/// The address of the TRON vault contract
+	pub type TronVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn tron_chain_id)]
+	/// The TRON chain id
+	pub type TronChainId<T> = StorageValue<_, cf_chains::evm::api::EvmChainId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type TronSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
 	// OTHER ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn safe_mode)]
@@ -424,8 +457,6 @@ pub mod pallet {
 		ArbitrumInitialized,
 		/// Solana Initialized: contract addresses have been set, first key activated
 		SolanaInitialized,
-		/// BSC Initialized: contract addresses have been set, first key activated
-		BscInitialized,
 		/// Some unspendable Utxos are discarded from storage.
 		StaleUtxosDiscarded {
 			utxos: Vec<Utxo>,
@@ -448,6 +479,10 @@ pub mod pallet {
 		NonNativeSignedCall,
 		// Runtime Call Batch was dispatched
 		BatchCompleted,
+		/// Tron Initialized: contract addresses have been set, first key activated
+		TronInitialized,
+		/// BSC Initialized: contract addresses have been set, first key activated
+		BscInitialized,
 	}
 
 	#[pallet::call]
@@ -583,26 +618,6 @@ pub mod pallet {
 			T::SolanaVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::SolanaInitialized);
-
-			Ok(())
-		}
-
-		#[pallet::call_index(18)]
-		// This weight is not strictly correct but since it's a governance call, weight is
-		// irrelevant.
-		#[pallet::weight(T::WeightInfo::witness_initialize_bsc_vault())]
-		pub fn witness_initialize_bsc_vault(
-			origin: OriginFor<T>,
-			block_number: u64,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			use cf_traits::VaultKeyWitnessedHandler;
-
-			// Witness the agg_key rotation manually in the vaults pallet for BSC
-			T::BscVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
-
-			Self::deposit_event(Event::<T>::BscInitialized);
 
 			Ok(())
 		}
@@ -807,6 +822,48 @@ pub mod pallet {
 		) -> DispatchResult {
 			Ok(())
 		}
+
+		/// Manually witnesses the current Tron block number to complete the pending vault
+		/// rotation.
+		#[pallet::call_index(12)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(T::WeightInfo::witness_initialize_tron_vault())]
+		pub fn witness_initialize_tron_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for Tron
+			T::TronVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::TronInitialized);
+
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		// This weight is not strictly correct but since it's a governance call, weight is
+		// irrelevant.
+		#[pallet::weight(T::WeightInfo::witness_initialize_bsc_vault())]
+		pub fn witness_initialize_bsc_vault(
+			origin: OriginFor<T>,
+			block_number: u64,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			use cf_traits::VaultKeyWitnessedHandler;
+
+			// Witness the agg_key rotation manually in the vaults pallet for BSC
+			T::BscVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
+
+			Self::deposit_event(Event::<T>::BscInitialized);
+
+			Ok(())
+		}
 	}
 
 	#[pallet::validate_unsigned]
@@ -814,67 +871,15 @@ pub mod pallet {
 		type Call = Call<T>;
 
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
-			use frame_support::sp_runtime::traits::TxBaseImplication;
-
-			if let Call::non_native_signed_call {
-				chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
-				signature_data,
-			} = call
-			{
-				let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
-					return Err(InvalidTransaction::BadSigner.into());
-				};
-				ensure!(
-					frame_system::Account::<T>::contains_key(&signer_account),
-					InvalidTransaction::BadSigner
-				);
-				T::GetTransactionPayments::get().0.validate(
-					OriginTrait::signed(signer_account.clone()),
-					inner_call,
-					&inner_call.get_dispatch_info(),
-					inner_call.encoded_size(),
-					(),
-					&TxBaseImplication(()),
-					source,
-				)?;
-				let valid_tx = validate_metadata::<T>(transaction_metadata, &signer_account)?;
-
-				let runtime_version = <T as frame_system::Config>::Version::get();
-
-				match is_valid_signature(
-					(*inner_call).clone(),
-					&ChainflipNetworkName::<T>::get(),
-					transaction_metadata,
-					signature_data,
-					runtime_version.spec_version,
-				) {
-					Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
-					Err(_) => return Err(InvalidTransaction::Custom(0).into()),
-				}
-				Ok(valid_tx)
-			} else {
-				Err(InvalidTransaction::Call.into())
-			}
+			let (_, valid_tx) = Self::validate_unsigned_call(source, call)?;
+			Ok(valid_tx)
 		}
 
 		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
-			if let Call::non_native_signed_call {
-				chainflip_extrinsic: ChainflipExtrinsic { transaction_metadata, .. },
-				signature_data,
-				..
-			} = call
-			{
-				let Ok(signer_account) = signature_data.signer_account() else {
-					return Err(InvalidTransaction::BadSigner.into());
-				};
-
-				// Signature validity already checked in `validate_unsigned`
-				let _ = validate_metadata::<T>(transaction_metadata, &signer_account)?;
-				frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
-				Ok(())
-			} else {
-				Err(InvalidTransaction::Call.into())
-			}
+			let (signer_account, _valid_tx) =
+				Self::validate_unsigned_call(TransactionSource::InBlock, call)?;
+			frame_system::Pallet::<T>::inc_account_nonce(&signer_account);
+			Ok(())
 		}
 	}
 
@@ -899,6 +904,10 @@ pub mod pallet {
 		pub arb_vault_address: EvmAddress,
 		pub arb_address_checker_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
+		pub trx_usdt_address: EvmAddress,
+		pub tron_key_manager_address: EvmAddress,
+		pub tron_vault_address: EvmAddress,
+		pub tron_chain_id: u64,
 		pub bsc_usdt_address: EvmAddress,
 		pub bsc_key_manager_address: EvmAddress,
 		pub bsc_vault_address: EvmAddress,
@@ -944,6 +953,11 @@ pub mod pallet {
 			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdt, self.arb_usdt_address);
 			ArbitrumAddressCheckerAddress::<T>::set(self.arb_address_checker_address);
 
+			TronKeyManagerAddress::<T>::set(self.tron_key_manager_address);
+			TronVaultAddress::<T>::set(self.tron_vault_address);
+			TronChainId::<T>::set(self.tron_chain_id);
+			TronSupportedAssets::<T>::insert(TrxAsset::TrxUsdt, self.trx_usdt_address);
+
 			BscKeyManagerAddress::<T>::set(self.bsc_key_manager_address);
 			BscVaultAddress::<T>::set(self.bsc_vault_address);
 			BscAddressCheckerAddress::<T>::set(self.bsc_address_checker_address);
@@ -982,6 +996,13 @@ impl<T: Config> Pallet<T> {
 
 	pub fn next_arbitrum_signature_nonce() -> SignatureNonce {
 		ArbitrumSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+
+	pub fn next_tron_signature_nonce() -> SignatureNonce {
+		TronSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})
@@ -1190,6 +1211,54 @@ impl<T: Config> Pallet<T> {
 			*id += 1;
 			current_id
 		})
+	}
+
+	fn validate_unsigned_call(
+		source: TransactionSource,
+		call: &Call<T>,
+	) -> Result<(T::AccountId, ValidTransaction), TransactionValidityError> {
+		use frame_support::sp_runtime::traits::{TransactionExtension, TxBaseImplication};
+
+		if let Call::non_native_signed_call {
+			chainflip_extrinsic: ChainflipExtrinsic { call: inner_call, transaction_metadata },
+			signature_data,
+		} = call
+		{
+			let Ok(signer_account) = signature_data.signer_account::<T::AccountId>() else {
+				return Err(InvalidTransaction::BadSigner.into());
+			};
+			ensure!(
+				frame_system::Account::<T>::contains_key(&signer_account),
+				InvalidTransaction::BadSigner
+			);
+			T::GetTransactionPayments::get().0.validate(
+				OriginTrait::signed(signer_account.clone()),
+				inner_call,
+				&inner_call.get_dispatch_info(),
+				inner_call.encoded_size(),
+				(),
+				&TxBaseImplication(()),
+				source,
+			)?;
+			let valid_tx =
+				submit_runtime_call::validate_metadata::<T>(transaction_metadata, &signer_account)?;
+
+			let runtime_version = <T as frame_system::Config>::Version::get();
+
+			match is_valid_signature(
+				(*inner_call).clone(),
+				&ChainflipNetworkName::<T>::get(),
+				transaction_metadata,
+				signature_data,
+				runtime_version.spec_version,
+			) {
+				Ok(is_valid) => ensure!(is_valid, InvalidTransaction::BadProof),
+				Err(_) => return Err(InvalidTransaction::Custom(0).into()),
+			}
+			Ok((signer_account, valid_tx))
+		} else {
+			Err(InvalidTransaction::Call.into())
+		}
 	}
 }
 

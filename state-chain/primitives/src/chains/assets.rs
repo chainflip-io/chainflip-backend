@@ -900,6 +900,34 @@ assets!(
 		],
 	},
 	Chain {
+		variant: Tron,
+		member_and_module: tron,
+		string: "Tron" (aliases: ["TRON", "tron"]),
+		json: "Tron",
+		assets: [
+			Asset {
+				variant: Trx,
+				member: trx,
+				string: "TRX" (aliases: ["Trx", "trx"]),
+				json: "TRX",
+				gas: true,
+				index: 17,
+				usd_stablecoin: false,
+				decimals: 6,
+			},
+			Asset {
+				variant: TrxUsdt,
+				member: usdt,
+				string: "USDT" (aliases: ["Usdt", "usdt"]),
+				json: "USDT",
+				gas: false,
+				index: 18,
+				usd_stablecoin: true,
+				decimals: 6,
+			},
+		],
+	},
+	Chain {
 		variant: Bsc,
 		member_and_module: bsc,
 		string: "Bsc" (aliases: ["BSC", "bsc"]),
@@ -911,7 +939,7 @@ assets!(
 				string: "BNB" (aliases: ["Bnb", "bnb"]),
 				json: "BNB",
 				gas: true,
-				index: 17,
+				index: 19,
 				usd_stablecoin: false,
 				decimals: 18,
 			},
@@ -921,7 +949,7 @@ assets!(
 				string: "USDT" (aliases: ["Usdt", "usdt"]),
 				json: "USDT",
 				gas: false,
-				index: 18,
+				index: 20,
 				usd_stablecoin: true,
 				decimals: 18,
 			},
@@ -966,6 +994,10 @@ mod test_assets {
 		assert_eq!(any::Asset::try_from(14).unwrap(), any::Asset::Wbtc);
 		assert_eq!(any::Asset::try_from(15).unwrap(), any::Asset::ArbUsdt);
 		assert_eq!(any::Asset::try_from(16).unwrap(), any::Asset::SolUsdt);
+		assert_eq!(any::Asset::try_from(17).unwrap(), any::Asset::Trx);
+		assert_eq!(any::Asset::try_from(18).unwrap(), any::Asset::TrxUsdt);
+		assert_eq!(any::Asset::try_from(19).unwrap(), any::Asset::Bnb);
+		assert_eq!(any::Asset::try_from(20).unwrap(), any::Asset::BscUsdt);
 	}
 
 	#[test]
@@ -984,6 +1016,8 @@ mod test_assets {
 		assert_conversion!(sol, SolUsdc);
 		assert_conversion!(sol, SolUsdt);
 		assert_conversion!(hub, HubDot);
+		assert_conversion!(tron, Trx);
+		assert_conversion!(tron, TrxUsdt);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);

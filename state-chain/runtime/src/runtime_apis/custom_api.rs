@@ -22,7 +22,7 @@ use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
 use cf_amm::{
-	common::PoolPairsMap,
+	common::{AskBidMap, PoolPairsMap},
 	math::{Amount, Tick},
 	range_orders::Liquidity,
 };
@@ -48,7 +48,7 @@ use pallet_cf_governance::GovCallHash;
 pub use pallet_cf_ingress_egress::ChannelAction;
 pub use pallet_cf_lending_pools::{BoostConfiguration, BoostPoolDetails};
 use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, SwapLegInfo};
@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(16)]
+	#[api_version(17)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -174,7 +174,7 @@ decl_runtime_apis!(
 			quote_asset: Asset,
 			lp: Option<AccountId32>,
 			filled_orders: bool,
-		) -> Result<PoolOrders<Runtime>, DispatchErrorWithMessage>;
+		) -> Result<PoolOrders<AccountId32>, DispatchErrorWithMessage>;
 		fn cf_pool_range_order_liquidity_value(
 			base_asset: Asset,
 			quote_asset: Asset,
@@ -197,7 +197,14 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_16::LiquidityProviderInfo;
-		fn cf_liquidity_provider_info(account_id: AccountId32) -> LiquidityProviderInfo;
+		#[changed_in(17)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+		) -> before_version_17::LiquidityProviderInfo;
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+			should_sweep: ShouldSweep,
+		) -> LiquidityProviderInfo;
 		#[changed_in(3)]
 		fn cf_broker_info(account_id: AccountId32) -> before_version_3::BrokerInfo;
 		#[changed_in(10)]
@@ -210,11 +217,17 @@ decl_runtime_apis!(
 		fn cf_account_role(account_id: AccountId32) -> Option<AccountRole>;
 		#[changed_in(16)]
 		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		#[changed_in(16)]
 		fn cf_lp_total_balances(
 			account_id: AccountId32,
 		) -> before_version_16::AssetMap<AssetAmount>;
+		#[changed_in(17)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_17::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -224,6 +237,11 @@ decl_runtime_apis!(
 		fn cf_failed_call_arbitrum(
 			broadcast_id: BroadcastId,
 		) -> Option<<cf_chains::Arbitrum as Chain>::Transaction>;
+		#[changed_in(17)]
+		fn cf_failed_call_tron();
+		fn cf_failed_call_tron(
+			broadcast_id: BroadcastId,
+		) -> Option<<cf_chains::Tron as Chain>::Transaction>;
 		fn cf_ingress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_egress_fee(asset: Asset) -> Option<AssetAmount>;
 		fn cf_witness_count(
@@ -234,6 +252,8 @@ decl_runtime_apis!(
 		fn cf_channel_opening_fee(chain: ForeignChain) -> FlipBalance;
 		fn cf_boost_pools_depth() -> Vec<BoostPoolDepth>;
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails<AccountId32>>;
+		#[changed_in(17)]
+		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -296,6 +316,8 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 			chain: ForeignChain,
 		) -> Vec<ChannelId>;
+		#[changed_in(17)]
+		fn cf_transaction_screening_events() -> before_version_17::TransactionScreeningEvents;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
@@ -303,6 +325,8 @@ decl_runtime_apis!(
 		) -> Vec<(AccountId32, AffiliateDetails)>;
 		#[changed_in(16)]
 		fn cf_vault_addresses() -> before_version_16::VaultAddresses;
+		#[changed_in(17)]
+		fn cf_vault_addresses() -> before_version_17::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
@@ -310,19 +334,34 @@ decl_runtime_apis!(
 		) -> Vec<TradingStrategyInfo<AssetAmount>>;
 		#[changed_in(16)]
 		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
+		#[changed_in(17)]
+		fn cf_trading_strategy_limits() -> before_version_17::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		#[changed_in(16)]
 		fn cf_network_fees() -> before_version_16::NetworkFees;
+		#[changed_in(17)]
+		fn cf_network_fees() -> before_version_17::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
-		#[changed_in(12)]
-		fn cf_lending_pools(asset: Option<Asset>) -> Vec<before_v12::RpcLendingPool<AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_lending_pools(
+			asset: Option<Asset>,
+		) -> Vec<before_version_17::RpcLendingPool<AssetAmount>>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_loan_accounts(
+			borrower_id: Option<AccountId32>,
+		) -> Vec<before_version_17::RpcLoanAccount<AccountId32, AssetAmount>>;
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
 		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_all_loans();
+		fn cf_all_loans() -> Vec<RpcLoan<AccountId32, AssetAmount>>;
 		fn cf_lending_pool_supply_balances(
 			asset: Option<Asset>,
 		) -> Vec<LendingPoolAndSupplyPositions<AccountId32, AssetAmount>>;
+		#[changed_in(17)]
+		fn cf_lending_config() -> before_version_17::RpcLendingConfig;
 		fn cf_lending_config() -> RpcLendingConfig;
 		fn cf_evm_calldata(
 			caller: EvmAddress,
@@ -343,9 +382,19 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> before_version_16::RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(17)]
 		fn cf_common_account_info(
 			account_id: &AccountId32,
+		) -> before_version_17::RpcAccountInfoCommonItems<FlipBalance>;
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(17)]
+		fn cf_all_account_infos();
+		fn cf_all_account_infos(
+			roles: Option<Vec<AccountRole>>,
+		) -> Vec<RuntimeApiAccountInfoWrapper>;
 		#[changed_in(7)]
 		fn cf_active_delegations();
 		fn cf_active_delegations(
@@ -359,6 +408,8 @@ decl_runtime_apis!(
 		fn cf_boost_delay(chain: ForeignChain) -> u32;
 		#[changed_in(14)]
 		fn cf_boost_config();
+		#[changed_in(17)]
+		fn cf_boost_config() -> before_version_17::BoostConfiguration;
 		fn cf_boost_config() -> BoostConfiguration;
 		#[changed_in(9)]
 		fn cf_encode_non_native_call();
@@ -370,6 +421,8 @@ decl_runtime_apis!(
 		) -> Result<(EncodedNonNativeCall, TransactionMetadata), DispatchErrorWithMessage>;
 		#[changed_in(16)]
 		fn cf_default_oracle_price_protection();
+		#[changed_in(17)]
+		fn cf_default_oracle_price_protection() -> before_version_17::AssetMap<Option<BasisPoints>>;
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.
@@ -378,5 +431,12 @@ decl_runtime_apis!(
 		fn cf_ingress_egress_events(
 			chain: ForeignChain,
 		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
+		/// Returns the witnessed ingress events (deposits, vault deposits) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(17)]
+		fn cf_ingress_events();
+		fn cf_ingress_events(
+			chain: ForeignChain,
+		) -> Result<IngressEvents, DispatchErrorWithMessage>;
 	}
 );

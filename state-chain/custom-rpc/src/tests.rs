@@ -1,10 +1,15 @@
+use std::str::FromStr;
+
 use crate::*;
 
 pub mod account_info;
 pub mod before_v7;
 pub mod eip712;
 
-use cf_amm::math::{Price, SqrtPrice};
+use cf_amm::{
+	common::LimitOrder,
+	math::{Price, SqrtPrice},
+};
 use cf_rpc_apis::{
 	broker::{SwapDepositAddress, WithdrawFeesDetail},
 	lp::{
@@ -13,14 +18,15 @@ use cf_rpc_apis::{
 	OrderFilled, RefundParametersRpc, SwapChannelInfo,
 };
 use codec::Encode;
-use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions, OwedAmount};
+use pallet_cf_lending_pools::{
+	BoostPoolDetails, LoanType, LtvThresholds, NetworkFeeContributions, OwedAmount,
+};
 use pallet_cf_pools::{
-	IncreaseOrDecrease, LimitOrder, LimitOrderLiquidity, PoolOrder, RangeOrder,
-	RangeOrderLiquidity, UnidirectionalSubPoolDepth,
+	IncreaseOrDecrease, LimitOrderLiquidity, PoolOrder, RangeOrder, RangeOrderLiquidity,
+	UnidirectionalSubPoolDepth,
 };
 use pallet_cf_swapping::FeeRateAndMinimum;
 use pallet_cf_validator::{DelegationAcceptance, OperatorSettings};
-use std::{collections::BTreeSet, str::FromStr};
 
 use cf_chains::{
 	address::EncodedAddress,
@@ -39,7 +45,7 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets::{any, arb, bsc, btc, dot, eth, hub},
+	chains::assets::{any, arb, bsc, btc, dot, eth, hub, tron},
 	ApiWaitForResult, AssetAndAmount, Beneficiary, DcaParameters, PrewitnessedDepositId,
 	FLIPPERINOS_PER_FLIP,
 };
@@ -52,9 +58,9 @@ use state_chain_runtime::{
 	Runtime,
 };
 
+use cf_primitives::chains::Tron;
 use sp_core::{H160, H256};
 use sp_runtime::{AccountId32, FixedU64};
-
 /*
 	changing any of these serialization tests signifies a breaking change in the
 	API. please make sure to get approval from the product team before merging
@@ -81,7 +87,8 @@ fn asset_map<T: Clone>(v: T) -> any::AssetMap<T> {
 		arb: arb::AssetMap { eth: v.clone(), usdc: v.clone(), usdt: v.clone() },
 		bsc: bsc::AssetMap { bnb: v.clone(), usdt: v.clone() },
 		sol: sol::AssetMap { sol: v.clone(), usdc: v.clone(), usdt: v.clone() },
-		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v },
+		hub: hub::AssetMap { dot: v.clone(), usdc: v.clone(), usdt: v.clone() },
+		tron: tron::AssetMap { trx: v.clone(), usdt: v },
 	}
 }
 
@@ -151,6 +158,7 @@ fn test_environment_serialization() {
 				bsc: bsc::AssetMap { bnb: None, usdt: None },
 				sol: sol::AssetMap { sol: None, usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: None, usdc: None, usdt: None },
+				tron: tron::AssetMap { trx: Some(0u32.into()), usdt: None },
 			},
 			network_fee_hundredth_pips: Permill::from_percent(100),
 			swap_retry_delay_blocks: 5,
@@ -173,6 +181,7 @@ fn test_environment_serialization() {
 				},
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				tron: tron::AssetMap { trx: 0u32.into(), usdt: 0u32.into() },
 				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			network_fees: NetworkFees {
@@ -204,6 +213,10 @@ fn test_environment_serialization() {
 						hub: hub::AssetMap {
 							dot: Permill::from_perthousand(1),
 							usdc: Permill::from_perthousand(1),
+							usdt: Permill::from_perthousand(1),
+						},
+						tron: tron::AssetMap {
+							trx: Permill::from_perthousand(1),
 							usdt: Permill::from_perthousand(1),
 						},
 						bsc: bsc::AssetMap {
@@ -242,6 +255,10 @@ fn test_environment_serialization() {
 							usdc: Permill::from_perthousand(789),
 							usdt: Permill::from_perthousand(101),
 						},
+						tron: tron::AssetMap {
+							trx: Permill::from_perthousand(20),
+							usdt: Permill::from_perthousand(123),
+						},
 						bsc: bsc::AssetMap {
 							bnb: Permill::from_perthousand(30),
 							usdt: Permill::from_perthousand(40),
@@ -263,6 +280,7 @@ fn test_environment_serialization() {
 				bsc: bsc::AssetMap { bnb: Some(55), usdt: Some(25) },
 				sol: sol::AssetMap { sol: Some(55), usdc: Some(25), usdt: Some(25) },
 				hub: hub::AssetMap { dot: None, usdc: Some(25), usdt: Some(25) },
+				tron: tron::AssetMap { trx: None, usdt: Some(25) },
 			},
 		},
 		ingress_egress: IngressEgressEnvironment {
@@ -279,6 +297,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into(), usdt: 0u32.into() },
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				tron: tron::AssetMap { trx: 0u32.into(), usdt: 0u32.into() },
 				bsc: bsc::AssetMap { bnb: 10u128.into(), usdt: 40u128.into() },
 			},
 			ingress_fees: any::AssetMap {
@@ -294,6 +313,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None, usdt: None },
 				sol: sol::AssetMap { sol: Some(0u32.into()), usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+				tron: tron::AssetMap { trx: Some(0u32.into()), usdt: None },
 				bsc: bsc::AssetMap { bnb: Some(10u32.into()), usdt: None },
 			},
 			egress_fees: any::AssetMap {
@@ -309,6 +329,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: Some(0u32.into()), usdc: None, usdt: None },
 				sol: sol::AssetMap { sol: Some(1u32.into()), usdc: None, usdt: None },
 				hub: hub::AssetMap { dot: Some((u64::MAX / 2 - 1).into()), usdc: None, usdt: None },
+				tron: tron::AssetMap { trx: Some(0u32.into()), usdt: None },
 				bsc: bsc::AssetMap { bnb: Some(10u32.into()), usdt: None },
 			},
 			witness_safety_margins: HashMap::from([
@@ -318,6 +339,7 @@ fn test_environment_serialization() {
 				(ForeignChain::Arbitrum, None),
 				(ForeignChain::Solana, None),
 				(ForeignChain::Assethub, None),
+				(ForeignChain::Tron, None),
 			]),
 			egress_dust_limits: any::AssetMap {
 				eth: eth::AssetMap {
@@ -332,6 +354,7 @@ fn test_environment_serialization() {
 				arb: arb::AssetMap { eth: 0u32.into(), usdc: u64::MAX.into(), usdt: 0u32.into() },
 				sol: sol::AssetMap { sol: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
 				hub: hub::AssetMap { dot: 0u32.into(), usdc: 0u32.into(), usdt: 0u32.into() },
+				tron: tron::AssetMap { trx: 0u32.into(), usdt: 0u32.into() },
 				bsc: bsc::AssetMap { bnb: 10u32.into(), usdt: 40u32.into() },
 			},
 			channel_opening_fees: HashMap::from([
@@ -341,6 +364,7 @@ fn test_environment_serialization() {
 				(ForeignChain::Arbitrum, 1000u32.into()),
 				(ForeignChain::Solana, 1000u32.into()),
 				(ForeignChain::Assethub, 1000u32.into()),
+				(ForeignChain::Tron, 1000u32.into()),
 			]),
 			ingress_delays: HashMap::from([
 				(ForeignChain::Bitcoin, 0u32),
@@ -349,6 +373,7 @@ fn test_environment_serialization() {
 				(ForeignChain::Arbitrum, 5u32),
 				(ForeignChain::Solana, 123u32),
 				(ForeignChain::Assethub, 2u32),
+				(ForeignChain::Tron, 5u32),
 			]),
 			boost_delays: HashMap::from([
 				(ForeignChain::Bitcoin, 0u32),
@@ -357,6 +382,7 @@ fn test_environment_serialization() {
 				(ForeignChain::Arbitrum, 0u32),
 				(ForeignChain::Solana, 456u32),
 				(ForeignChain::Assethub, 2u32),
+				(ForeignChain::Tron, 5u32),
 			]),
 			boost_minimum_add_funds_amounts: any::AssetMap {
 				btc: btc::AssetMap { btc: 10000u128.into() },
@@ -482,6 +508,7 @@ fn test_vault_addresses_custom_rpc() {
 		predicted_seconds_until_next_vault_rotation: 9,
 		usdt_token_mint_pubkey: EncodedAddress::Sol([10; 32]),
 		solana_usdt_token_vault_ata: EncodedAddress::Sol([11; 32]),
+		tron: EncodedAddress::Tron([12; 20]),
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -672,7 +699,7 @@ fn pool_liquidity_serialization() {
 
 #[test]
 fn pool_orders_serialization() {
-	let val = PoolOrders::<Runtime> {
+	let val = PoolOrders {
 		limit_orders: AskBidMap {
 			asks: vec![LimitOrder {
 				lp: ID_1,
@@ -1171,6 +1198,22 @@ fn transaction_screening_events_serialization() {
 				deposit_details: VaultSwapOrDepositChannelId::Channel(SolAddress([0xe3; 32])),
 			},
 		],
+		tron_events: vec![
+			BrokerRejectionEventFor::<Tron>::TransactionRejectionRequestReceived {
+				account_id: ID_1,
+				tx_id: H256([0xe0; 32]),
+			},
+			BrokerRejectionEventFor::<Tron>::TransactionRejectionRequestExpired {
+				account_id: ID_2,
+				tx_id: H256([0xe1; 32]),
+			},
+			BrokerRejectionEventFor::<Tron>::TransactionRejectedByBroker {
+				refund_broadcast_id: 3u32,
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
+			},
+		],
 	};
 
 	insta::assert_json_snapshot!(val);
@@ -1328,6 +1371,7 @@ fn lending_pools_serialization() {
 		available_amount: 1_500u128.into(),
 		owed_to_network: 155u128.into(),
 		utilisation_rate: Permill::from_percent(90),
+		utilisation_cap: Permill::from_percent(95),
 		current_interest_rate: Permill::from_percent(8),
 		config: LendingPoolConfiguration {
 			origination_fee: Permill::from_parts(100),
@@ -1353,14 +1397,15 @@ fn loan_account_serialization() {
 
 	let loan_account = RpcLoanAccount::<_, U256> {
 		account: ID_1,
-		collateral_topup_asset: Some(Asset::Btc),
 		ltv_ratio: Some(FixedU64::from_rational(4, 3)),
 		collateral: vec![(AssetAndAmount { asset: Asset::Btc, amount: 3u128.into() })],
 		loans: vec![RpcLoan {
 			loan_id: LoanId(1),
 			asset: Asset::Usdc,
 			created_at: 400,
+			loan_type: LoanType::User(ID_1),
 			principal_amount: 1000u128.into(),
+			broker: Some(Beneficiary { account: ID_2, bps: 100 }),
 		}],
 		liquidation_status: Some(RpcLiquidationStatus {
 			liquidation_swaps: vec![RpcLiquidationSwap {
@@ -1399,7 +1444,6 @@ fn lending_config_serialization() {
 		ltv_thresholds: LtvThresholds {
 			low_ltv: Permill::from_percent(50),
 			target: Permill::from_percent(75),
-			topup: Some(Permill::from_percent(80)),
 			soft_liquidation: Permill::from_percent(90),
 			soft_liquidation_abort: Permill::from_percent(88),
 			hard_liquidation: Permill::from_percent(95),
@@ -1423,7 +1467,7 @@ fn lending_config_serialization() {
 		minimum_loan_amount_usd: U256::from(100_000),
 		minimum_supply_amount_usd: U256::from(100_000),
 		minimum_update_loan_amount_usd: U256::from(50_000),
-		minimum_update_collateral_amount_usd: U256::from(25_000),
+		minimum_update_supply_amount_usd: U256::from(25_000),
 	};
 
 	insta::assert_json_snapshot!(config);

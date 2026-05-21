@@ -20,15 +20,15 @@ pub mod rotate_vault_proxy;
 
 use crate::{
 	dot::{PolkadotAccountId, PolkadotCrypto, PolkadotPublicKey, RuntimeVersion},
-	hub::Assethub,
+	hub::{Assethub, XcmCall},
 	*,
 };
-use codec::DecodeWithMemTracking;
+use codec::{DecodeLimit, DecodeWithMemTracking};
 use frame_support::{
 	traits::{Defensive, Get},
-	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound,
+	CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, MAX_EXTRINSIC_DEPTH,
 };
-use hub::{AssethubExtrinsicBuilder, AssethubRuntimeCall, OutputAccountId};
+use hub::{AssethubExtrinsicBuilder, OutputAccountId};
 
 use sp_std::marker::PhantomData;
 
@@ -61,13 +61,13 @@ pub trait AssethubEnvironment {
 	}
 
 	fn runtime_version() -> RuntimeVersion;
-	fn get_new_output_channel_id() -> OutputAccountId;
+	fn get_new_output_channel_id() -> Option<OutputAccountId>;
 }
 
 impl<
 		T: ChainEnvironment<VaultAccount, PolkadotAccountId>
 			+ Get<RuntimeVersion>
-			+ Get<OutputAccountId>,
+			+ Get<Option<OutputAccountId>>,
 	> AssethubEnvironment for T
 {
 	fn try_vault_account() -> Option<PolkadotAccountId> {
@@ -78,7 +78,7 @@ impl<
 		Self::get()
 	}
 
-	fn get_new_output_channel_id() -> OutputAccountId {
+	fn get_new_output_channel_id() -> Option<OutputAccountId> {
 		Self::get()
 	}
 }
@@ -168,10 +168,14 @@ where
 		message: Vec<u8>,
 		_ccm_additional_data: DecodedCcmAdditionalData,
 	) -> Result<Self, ExecutexSwapAndCallError> {
-		match <AssethubRuntimeCall as codec::Decode>::decode(&mut message.as_ref()) {
+		match <XcmCall as DecodeLimit>::decode_all_with_depth_limit(
+			MAX_EXTRINSIC_DEPTH,
+			&mut message.as_ref(),
+		) {
 			Ok(xcm_call) => {
 				let vault = E::try_vault_account().ok_or(ExecutexSwapAndCallError::NoVault)?;
-				let output_channel_id = E::get_new_output_channel_id();
+				let output_channel_id = E::get_new_output_channel_id()
+					.ok_or(ExecutexSwapAndCallError::NoChannelAvailable)?;
 				Ok(Self::ExecuteXSwapAndCall(execute_x_swap_and_call::extrinsic_builder(
 					E::replay_protection(false),
 					output_channel_id,

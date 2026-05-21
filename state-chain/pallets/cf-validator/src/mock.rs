@@ -156,6 +156,30 @@ impl RotationBroadcastsPending for MockRotationBroadcastsPending {
 	}
 }
 
+use crate::{GrandpaAuthorityId, GrandpaVoteDelegation};
+
+/// No-op GRANDPA delegation for mock tests.
+pub struct MockGrandpaDelegation;
+
+impl GrandpaVoteDelegation for MockGrandpaDelegation {
+	fn add_vote_delegation(
+		_delegator: GrandpaAuthorityId,
+		_delegate: GrandpaAuthorityId,
+	) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
+	fn remove_vote_delegation(_delegator: GrandpaAuthorityId) -> sp_runtime::DispatchResult {
+		Ok(())
+	}
+	fn get_delegate(_delegator: &GrandpaAuthorityId) -> Option<GrandpaAuthorityId> {
+		None
+	}
+	fn vote_delegations(
+	) -> sp_std::collections::btree_map::BTreeMap<GrandpaAuthorityId, GrandpaAuthorityId> {
+		Default::default()
+	}
+}
+
 impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type Offence = PalletOffence;
@@ -171,6 +195,7 @@ impl Config for Test {
 	type ValidatorWeightInfo = ();
 	type MinimumFunding = MockMinimumFundingProvider;
 	type CfePeerRegistration = MockCfeInterface;
+	type GrandpaDelegation = MockGrandpaDelegation;
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -291,6 +316,12 @@ macro_rules! assert_invariants {
 				"Managed validator {:?} not found in their own delegation snapshot {:?} at block {:?}",
 				managed_validator,
 				snapshot,
+				System::block_number()
+			);
+			assert!(
+				CurrentAuthorities::<Test>::get().contains(&managed_validator),
+				"Managed validator {:?} in snapshot but not in current authorities at block {:?}",
+				managed_validator,
 				System::block_number()
 			);
 		}

@@ -103,6 +103,14 @@ expression: val
         "asset": "USDT"
       },
       {
+        "chain": "Tron",
+        "asset": "TRX"
+      },
+      {
+        "chain": "Tron",
+        "asset": "USDT"
+      },
+      {
         "chain": "Bsc",
         "asset": "BNB"
       },
@@ -174,6 +182,14 @@ expression: val
       },
       {
         "chain": "Solana",
+        "asset": "USDT"
+      },
+      {
+        "chain": "Tron",
+        "asset": "TRX"
+      },
+      {
+        "chain": "Tron",
         "asset": "USDT"
       },
       {
@@ -251,151 +267,11 @@ expression: val
         "asset": "USDT"
       },
       {
-        "chain": "Bsc",
-        "asset": "BNB"
+        "chain": "Tron",
+        "asset": "TRX"
       },
       {
-        "chain": "Bsc",
-        "asset": "USDT"
-      }
-    ],
-    "add_collateral": [
-      {
-        "chain": "Ethereum",
-        "asset": "ETH"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "FLIP"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Polkadot",
-        "asset": "DOT"
-      },
-      {
-        "chain": "Bitcoin",
-        "asset": "BTC"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "ETH"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Solana",
-        "asset": "SOL"
-      },
-      {
-        "chain": "Solana",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "DOT"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "WBTC"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Solana",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Bsc",
-        "asset": "BNB"
-      },
-      {
-        "chain": "Bsc",
-        "asset": "USDT"
-      }
-    ],
-    "remove_collateral": [
-      {
-        "chain": "Ethereum",
-        "asset": "ETH"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "FLIP"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Polkadot",
-        "asset": "DOT"
-      },
-      {
-        "chain": "Bitcoin",
-        "asset": "BTC"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "ETH"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Solana",
-        "asset": "SOL"
-      },
-      {
-        "chain": "Solana",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "DOT"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Assethub",
-        "asset": "USDC"
-      },
-      {
-        "chain": "Ethereum",
-        "asset": "WBTC"
-      },
-      {
-        "chain": "Arbitrum",
-        "asset": "USDT"
-      },
-      {
-        "chain": "Solana",
+        "chain": "Tron",
         "asset": "USDT"
       },
       {
@@ -451,6 +327,10 @@ expression: val
     "retry_enabled": true,
     "egress_witnessing_enabled": true
   },
+  "broadcast_tron": {
+    "retry_enabled": true,
+    "egress_witnessing_enabled": true
+  },
   "broadcast_bsc": {
     "retry_enabled": true,
     "egress_witnessing_enabled": true
@@ -492,6 +372,12 @@ expression: val
     "deposit_channel_witnessing_enabled": true,
     "vault_deposit_witnessing_enabled": true
   },
+  "ingress_egress_tron": {
+    "boost_deposits_enabled": true,
+    "deposit_channel_creation_enabled": true,
+    "deposit_channel_witnessing_enabled": true,
+    "vault_deposit_witnessing_enabled": true
+  },
   "ingress_egress_bsc": {
     "boost_deposits_enabled": true,
     "deposit_channel_creation_enabled": true,
@@ -507,6 +393,9 @@ expression: val
     "sc_utils_witnessing": true
   },
   "arbitrum_elections": {
+    "key_manager_witnessing": true
+  },
+  "tron_elections": {
     "key_manager_witnessing": true
   },
   "bsc_elections": {

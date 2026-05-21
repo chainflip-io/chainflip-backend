@@ -45,7 +45,7 @@ use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::{
 	btc::rpc::BtcRpcApi, dot::retry_rpc::DotRetryRpcApi, evm::retry_rpc::EvmRetrySigningRpcApi,
-	sol::retry_rpc::SolRetryRpcApi,
+	sol::retry_rpc::SolRetryRpcApi, tron::retry_rpc::TronRetrySigningRpcApi,
 };
 use cf_utilities::task_scope::{task_scope, Scope};
 use engine_sc_client::{
@@ -238,6 +238,7 @@ pub async fn start<
 	DotRpc,
 	BtcRpc,
 	SolRpc,
+	TronRpc,
 	EthMultisigClient,
 	PolkadotMultisigClient,
 	BitcoinMultisigClient,
@@ -250,6 +251,7 @@ pub async fn start<
 	btc_rpc: BtcRpc,
 	sol_rpc: SolRpc,
 	hub_rpc: DotRpc,
+	tron_rpc: TronRpc,
 	bsc_rpc: EvmRpc,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
@@ -262,6 +264,7 @@ where
 	DotRpc: DotRetryRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + Clone + 'static,
 	SolRpc: SolRetryRpcApi + Send + Sync + 'static,
+	TronRpc: TronRetrySigningRpcApi + Send + Sync + Clone + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
@@ -522,6 +525,29 @@ where
                                                         error!("Error on Arbitrum TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
                                                         state_chain_client.finalize_signed_extrinsic(
                                                             RuntimeCall::ArbitrumBroadcaster(
+                                                                pallet_cf_broadcast::Call::transaction_failed {
+                                                                    broadcast_id,
+                                                                },
+                                                            ),
+                                                        )
+                                                        .await;
+                                                    }
+                                                }
+                                                Ok(())
+                                            })
+                                        }
+                                    }
+                                    CfeEvent::TronTxBroadcastRequest(TxBroadcastRequest::<Runtime, _> { broadcast_id, nominee, payload }) => {
+                                        if nominee == account_id {
+                                            let tron_rpc = tron_rpc.clone();
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                match tron_rpc.broadcast_transaction(payload).await {
+                                                    Ok(tx_hash) => info!("Tron TransactionBroadcastRequest {broadcast_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                    Err(error) => {
+                                                        error!("Error on Tron TransactionBroadcastRequest {broadcast_id:?}: {error:?}");
+                                                        state_chain_client.finalize_signed_extrinsic(
+                                                            RuntimeCall::TronBroadcaster(
                                                                 pallet_cf_broadcast::Call::transaction_failed {
                                                                     broadcast_id,
                                                                 },

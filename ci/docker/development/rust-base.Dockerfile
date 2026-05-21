@@ -7,14 +7,12 @@ FROM ubuntu:22.04
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Substrate and rust compiler dependencies.
-RUN DEBIAN_FRONTEND=noninteractive && export DEBIAN_FRONTEND; \
-    apt-get update && \
-    apt-get -y install --no-install-recommends \
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends \
     cmake \
     build-essential \
-    clang \
-    libclang-dev \
-    lld \
     python3-dev \
     jq \
     protobuf-compiler \
@@ -24,27 +22,41 @@ RUN DEBIAN_FRONTEND=noninteractive && export DEBIAN_FRONTEND; \
     curl \
     git \
     wget \
-    nodejs \
-    npm \
     ca-certificates \
     gnupg \
-    lsb-core; \
-    # Add LLVM 14 Repository \
-    curl https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
-    DEBIAN_CODENAME="$(lsb_release -sc)" && export DEBIAN_CODENAME; \
-    echo "deb     http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-"${DEBIAN_CODENAME}"-14.list; \
-    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> /etc/apt/sources.list.d/llvm-toolchain-"${DEBIAN_CODENAME}"-14.list; \
-    apt-get update && \
-    apt-get -y install --no-install-recommends clang-14 lldb-14 lld-14 libclang-14-dev && \
-    apt-get autoremove -y && \
-    apt-get clean && \
+    lsb-release; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends \
+    nodejs \
+    npm; \
+    command -v node; \
+    command -v npm; \
+    npm --version; \
+    npm install -g pnpm; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
+    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -; \
+    DEBIAN_CODENAME="$(lsb_release -sc)"; \
+    echo "deb http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" > "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
+    echo "deb-src http://apt.llvm.org/${DEBIAN_CODENAME}/ llvm-toolchain-${DEBIAN_CODENAME}-14 main" >> "/etc/apt/sources.list.d/llvm-toolchain-${DEBIAN_CODENAME}-14.list"; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update; \
+    apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 -y install --no-install-recommends clang-14 lldb-14 lld-14 libclang-14-dev; \
+    apt-get autoremove -y; \
+    apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
 # Set a links to clang and ldd
 RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 100; \
     update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld-14 100;
-
-RUN npm install -g pnpm
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y

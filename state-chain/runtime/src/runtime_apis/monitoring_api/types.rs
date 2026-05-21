@@ -26,6 +26,174 @@ use scale_info::{prelude::string::String, TypeInfo};
 use serde::{Deserialize, Serialize};
 use sp_std::vec::Vec;
 
+pub mod before_monitoring_v3 {
+	use super::*;
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct ExternalChainsBlockHeight {
+		pub bitcoin: u64,
+		pub ethereum: u64,
+		pub polkadot: u64,
+		pub solana: u64,
+		pub arbitrum: u64,
+		pub assethub: u64,
+	}
+
+	impl From<super::ExternalChainsBlockHeight> for ExternalChainsBlockHeight {
+		fn from(new: super::ExternalChainsBlockHeight) -> Self {
+			Self {
+				bitcoin: new.bitcoin,
+				ethereum: new.ethereum,
+				polkadot: new.polkadot,
+				solana: new.solana,
+				arbitrum: new.arbitrum,
+				assethub: new.assethub,
+			}
+		}
+	}
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct PendingBroadcasts {
+		pub ethereum: u32,
+		pub bitcoin: u32,
+		pub polkadot: u32,
+		pub arbitrum: u32,
+		pub solana: u32,
+		pub assethub: u32,
+	}
+
+	impl From<super::PendingBroadcasts> for PendingBroadcasts {
+		fn from(new: super::PendingBroadcasts) -> Self {
+			Self {
+				ethereum: new.ethereum,
+				bitcoin: new.bitcoin,
+				polkadot: new.polkadot,
+				arbitrum: new.arbitrum,
+				solana: new.solana,
+				assethub: new.assethub,
+			}
+		}
+	}
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct OpenDepositChannels {
+		pub ethereum: u32,
+		pub bitcoin: u32,
+		pub polkadot: u32,
+		pub arbitrum: u32,
+		pub solana: u32,
+		pub assethub: u32,
+	}
+
+	impl From<super::OpenDepositChannels> for OpenDepositChannels {
+		fn from(new: super::OpenDepositChannels) -> Self {
+			Self {
+				ethereum: new.ethereum,
+				bitcoin: new.bitcoin,
+				polkadot: new.polkadot,
+				arbitrum: new.arbitrum,
+				solana: new.solana,
+				assethub: new.assethub,
+			}
+		}
+	}
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct FeeImbalance<A> {
+		pub ethereum: VaultImbalance<A>,
+		pub polkadot: VaultImbalance<A>,
+		pub arbitrum: VaultImbalance<A>,
+		pub bitcoin: VaultImbalance<A>,
+		pub solana: VaultImbalance<A>,
+		pub assethub: VaultImbalance<A>,
+	}
+
+	impl<A: Clone> From<super::FeeImbalance<A>> for FeeImbalance<A> {
+		fn from(new: super::FeeImbalance<A>) -> Self {
+			Self {
+				ethereum: new.ethereum,
+				polkadot: new.polkadot,
+				arbitrum: new.arbitrum,
+				bitcoin: new.bitcoin,
+				solana: new.solana,
+				assethub: new.assethub,
+			}
+		}
+	}
+
+	#[derive(
+		Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone, Default,
+	)]
+	pub struct ActivateKeysBroadcastIds {
+		pub ethereum: Option<u32>,
+		pub bitcoin: Option<u32>,
+		pub polkadot: Option<u32>,
+		pub arbitrum: Option<u32>,
+		pub solana: (Option<u32>, Option<SolSignature>),
+		pub assethub: Option<u32>,
+	}
+
+	impl From<super::ActivateKeysBroadcastIds> for ActivateKeysBroadcastIds {
+		fn from(new: super::ActivateKeysBroadcastIds) -> Self {
+			Self {
+				ethereum: new.ethereum,
+				bitcoin: new.bitcoin,
+				polkadot: new.polkadot,
+				arbitrum: new.arbitrum,
+				solana: new.solana,
+				assethub: new.assethub,
+			}
+		}
+	}
+
+	#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+	pub struct MonitoringDataV2 {
+		pub external_chains_height: ExternalChainsBlockHeight,
+		pub btc_utxos: super::BtcUtxos,
+		pub epoch: super::EpochState,
+		pub pending_redemptions: super::RedemptionsInfo,
+		pub pending_broadcasts: PendingBroadcasts,
+		pub pending_tss: super::PendingTssCeremonies,
+		pub open_deposit_channels: OpenDepositChannels,
+		pub fee_imbalance: FeeImbalance<AssetAmount>,
+		pub authorities: super::AuthoritiesInfo,
+		pub build_version: super::LastRuntimeUpgradeInfo,
+		pub suspended_validators: Vec<(Offence, u32)>,
+		pub pending_swaps: u32,
+		pub dot_aggkey: PolkadotAccountId,
+		pub flip_supply: super::FlipSupply,
+		pub sol_aggkey: SolAddress,
+		pub sol_onchain_key: SolAddress,
+		pub sol_nonces: super::SolanaNonces,
+		pub activating_key_broadcast_ids: ActivateKeysBroadcastIds,
+	}
+
+	impl From<super::MonitoringDataV2> for MonitoringDataV2 {
+		fn from(new: super::MonitoringDataV2) -> Self {
+			Self {
+				external_chains_height: new.external_chains_height.into(),
+				btc_utxos: new.btc_utxos,
+				epoch: new.epoch,
+				pending_redemptions: new.pending_redemptions,
+				pending_broadcasts: new.pending_broadcasts.into(),
+				pending_tss: new.pending_tss,
+				open_deposit_channels: new.open_deposit_channels.into(),
+				fee_imbalance: new.fee_imbalance.into(),
+				authorities: new.authorities,
+				build_version: new.build_version,
+				suspended_validators: new.suspended_validators,
+				pending_swaps: new.pending_swaps,
+				dot_aggkey: new.dot_aggkey,
+				flip_supply: new.flip_supply,
+				sol_aggkey: new.sol_aggkey,
+				sol_onchain_key: new.sol_onchain_key,
+				sol_nonces: new.sol_nonces,
+				activating_key_broadcast_ids: new.activating_key_broadcast_ids.into(),
+			}
+		}
+	}
+}
+
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct ExternalChainsBlockHeight {
 	pub bitcoin: u64,
@@ -34,6 +202,8 @@ pub struct ExternalChainsBlockHeight {
 	pub solana: u64,
 	pub arbitrum: u64,
 	pub assethub: u64,
+	pub tron: u64,
+	pub bsc: u64,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct BtcUtxos {
@@ -63,6 +233,8 @@ pub struct PendingBroadcasts {
 	pub arbitrum: u32,
 	pub solana: u32,
 	pub assethub: u32,
+	pub tron: u32,
+	pub bsc: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct PendingTssCeremonies {
@@ -79,6 +251,8 @@ pub struct OpenDepositChannels {
 	pub arbitrum: u32,
 	pub solana: u32,
 	pub assethub: u32,
+	pub tron: u32,
+	pub bsc: u32,
 }
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
 pub struct FeeImbalance<A> {
@@ -88,6 +262,8 @@ pub struct FeeImbalance<A> {
 	pub bitcoin: VaultImbalance<A>,
 	pub solana: VaultImbalance<A>,
 	pub assethub: VaultImbalance<A>,
+	pub tron: VaultImbalance<A>,
+	pub bsc: VaultImbalance<A>,
 }
 
 impl<A> FeeImbalance<A> {
@@ -99,6 +275,8 @@ impl<A> FeeImbalance<A> {
 			bitcoin: self.bitcoin.map(&f),
 			solana: self.solana.map(&f),
 			assethub: self.assethub.map(&f),
+			tron: self.tron.map(&f),
+			bsc: self.bsc.map(&f),
 		}
 	}
 }
@@ -143,6 +321,8 @@ pub struct ActivateKeysBroadcastIds {
 	pub arbitrum: Option<u32>,
 	pub solana: (Option<u32>, Option<SolSignature>),
 	pub assethub: Option<u32>,
+	pub tron: Option<u32>,
+	pub bsc: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]

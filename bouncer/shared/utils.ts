@@ -18,6 +18,7 @@ import {
   AssetSymbol,
 } from '@chainflip/utils/chainflip';
 import Web3 from 'web3';
+import { TronWeb } from 'tronweb';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
@@ -61,7 +62,7 @@ const cfTesterIdl = await getCfTesterIdl();
 export const cfMutex = new KeyedMutex();
 export const btcClientMutex = new Mutex();
 
-export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Bsc', 'Solana'] as Chain[];
+export const ccmSupportedChains = ['Ethereum', 'Arbitrum', 'Bsc', 'Solana', 'Tron'] as Chain[];
 export const vaultSwapSupportedChains = [
   'Ethereum',
   'Arbitrum',
@@ -246,6 +247,21 @@ export function getContractAddress(chain: Chain, contract: string): string {
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }
+    case 'Tron':
+      switch (contract) {
+        case 'Vault':
+          return '41814f36c1bbfd8aabec86273f0d61521e0c2d5287';
+        case 'KEY_MANAGER':
+          return '41f7229affc93ee042e750ce66a062b381f393b25a';
+        case 'Trx':
+          return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+        case 'TrxUsdt':
+          return process.env.TRX_USDT_ADDRESS ?? '41a24205e83c1805fcdae7a93db837dc6a0b843340';
+        case 'CFTESTER':
+          return '0xc2e3368ee755d7e48e69e7f149ba5882d6235591';
+        default:
+          throw new Error(`Unsupported contract: ${contract}`);
+      }
     case 'Bsc':
       switch (contract) {
         case 'VAULT':
@@ -280,6 +296,8 @@ export function shortChainFromChain(chain: Chain) {
       return 'Sol';
     case 'Assethub':
       return 'Hub';
+    case 'Tron':
+      return 'Tron';
     case 'Bsc':
       return 'Bsc';
     default:
@@ -309,6 +327,9 @@ export function shortChainFromAsset(asset: Asset) {
     case 'HubUsdc':
     case 'HubUsdt':
       return 'Hub';
+    case 'Trx':
+    case 'TrxUsdt':
+      return 'Tron';
     case 'Bnb':
     case 'BscUsdt':
       return 'Bsc';
@@ -346,9 +367,12 @@ export function defaultAssetAmounts(asset: Asset): string {
     case 'SolUsdt':
     case 'HubUsdc':
     case 'HubUsdt':
+    case 'TrxUsdt':
       return '1000';
     case 'Sol':
       return '100';
+    case 'Trx':
+      return '1000';
     default:
       throw new Error(`Unsupported asset: ${asset}`);
   }
@@ -383,6 +407,8 @@ export function chainGasAsset(chain: Chain): Asset {
       return Assets.Sol;
     case 'Assethub':
       return Assets.HubDot;
+    case 'Tron':
+      return Assets.Trx;
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
@@ -734,7 +760,7 @@ export function doBtcAddressesMatch(
 }
 
 // Takes an address from index events and checks whether it matches an input chain address to
-// For Eth, Arb, Sol nad hub it expects a HexString
+// For Eth, Arb, Sol, Hub and Tron it expects a HexString
 export function doAddressesMatch(
   eventAddress: z.infer<typeof cfChainsAddressForeignChainAddress>,
   chain: Chain,
@@ -752,6 +778,7 @@ export function doAddressesMatch(
   switch (chain) {
     case 'Ethereum':
     case 'Arbitrum':
+    case 'Tron':
     case 'Bsc':
     case 'Solana':
     case 'Assethub': {
@@ -787,6 +814,8 @@ export async function newAddress(
     case Assets.ArbEth:
     case Assets.ArbUsdc:
     case Assets.ArbUsdt:
+    case Assets.Trx:
+    case Assets.TrxUsdt:
     case Assets.Bnb:
     case Assets.BscUsdt:
       rawAddress = newEvmAddress(seed);
@@ -799,9 +828,9 @@ export async function newAddress(
     case Assets.Btc:
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
-    case 'Sol':
-    case 'SolUsdc':
-    case 'SolUsdt':
+    case Assets.Sol:
+    case Assets.SolUsdc:
+    case Assets.SolUsdt:
       rawAddress = newSolAddress(seed);
       break;
     default:
@@ -903,6 +932,11 @@ export function getSolWhaleKeyPair(): Keypair {
   return Keypair.fromSecretKey(new Uint8Array(secretKey));
 }
 
+// TRON HTTP API runs on port 8090 (see localnet/docker-compose.yml)
+export function getTronWebClient(): TronWeb {
+  return new TronWeb({ fullHost: process.env.TRON_HTTP_URL ?? 'http://localhost:8090' });
+}
+
 export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: string } {
   switch (chain) {
     case 'Ethereum':
@@ -919,54 +953,10 @@ export function getEvmWhaleKeypair(chain: Chain): { privkey: string; pubkey: str
   }
 }
 
-export async function observeBalanceIncrease(
-  logger: Logger,
-  dstCcy: Asset,
-  address: string,
-  oldBalance?: string,
-  timeoutSeconds = 400,
-): Promise<number> {
-  const initialBalance = oldBalance
-    ? Number(oldBalance)
-    : Number(await getBalance(dstCcy, address));
-  logger.debug(
-    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
-  );
-  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
-    const newBalance = Number(await getBalance(dstCcy, address));
-    if (newBalance > initialBalance) {
-      logger.debug(
-        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
-      );
-      return newBalance;
-    }
-    await sleep(3000);
-  }
-
-  return throwError(
-    logger,
-    new Error(
-      `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
-    ),
-  );
-}
-
-export async function observeFetch(asset: Asset, address: string): Promise<void> {
-  for (let i = 0; i < 360; i++) {
-    const balance = Number(await getBalance(asset, address));
-    if (balance === 0) {
-      const chain = chainFromAsset(asset);
-      if (chain === 'Ethereum' || chain === 'Arbitrum' || chain === 'Bsc') {
-        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
-          throw new Error('EVM address has no bytecode');
-        }
-      }
-      return;
-    }
-    await sleep(3000);
-  }
-
-  throw new Error('Failed to observe the fetch');
+// Deployer = hardhat account #0, same key as ETH whale (TYBNgWfhGuNzdLtjKtxXTfskAhTbMcqbaG)
+export function getTronWhaleKeyPair(): { privkey: string; pubkey: string } {
+  const { privkey, pubkey } = getEvmWhaleKeypair('Ethereum');
+  return { privkey: privkey.replace(/^0x/, ''), pubkey };
 }
 
 type ContractEvent = {
@@ -986,7 +976,12 @@ export async function observeEVMEvent(
   stopObserveEvent?: () => boolean,
   initialBlockNumber?: number,
 ): Promise<ContractEvent | undefined> {
-  const web3 = getWeb3(chain);
+  // Supporting the TRON endpoint only here instead of in `getEvmEndpoint` because
+  // we want to ensure we use Tronweb for everything outside of this event witnessing.
+  const web3 =
+    chain === 'Tron'
+      ? new Web3(process.env.TRON_JSON_RPC_ENDPOINT ?? 'http://127.0.0.1:8555/jsonrpc')
+      : getWeb3(chain);
   const contract = new web3.eth.Contract(contractAbi, destAddress);
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
   const stopObserve = stopObserveEvent ?? (() => false);
@@ -1139,7 +1134,9 @@ export async function observeCcmReceived(
   switch (destChain) {
     case 'Ethereum':
     case 'Arbitrum':
-    case 'Bsc':
+    case 'Tron':
+    case 'Bsc': {
+      const assetAddress = getContractAddress(destChain, destAsset.toString());
       return observeEVMEvent(
         destChain,
         cfTesterAbi,
@@ -1149,13 +1146,17 @@ export async function observeCcmReceived(
           getChainContractId(chainFromAsset(sourceAsset)).toString(),
           sourceAddress ?? null,
           messageMetadata.message,
-          getContractAddress(destChain, destAsset.toString()),
+          // We need to convert the address TRON->ETH as we use web3 to get a Tron event
+          destChain === 'Tron'
+            ? Web3.utils.toChecksumAddress('0x' + assetAddress.slice(2))
+            : assetAddress,
           '*',
           '*',
           '*',
         ],
         stopObserveEvent,
       );
+    }
     case 'Solana':
       return observeSolanaCcmEvent(
         'ReceivedCcm',
@@ -1213,6 +1214,74 @@ export function encodeSolAddress(address: string): string {
 
 export function getEncodedSolAddress(address: string): string {
   return /^0x[a-fA-F0-9]+$/.test(address) ? encodeSolAddress(address) : address;
+}
+
+export function getEncodedTronAddress(address: string): string {
+  if (address.startsWith('0x')) {
+    return TronWeb.address.fromHex(address);
+  }
+  return address;
+}
+
+export async function observeBalanceIncrease(
+  logger: Logger,
+  dstCcy: Asset,
+  address: string,
+  oldBalance?: string,
+  timeoutSeconds = 200,
+): Promise<number> {
+  const initialBalance = oldBalance
+    ? Number(oldBalance)
+    : Number(await getBalance(dstCcy, address));
+  logger.debug(
+    `Observing balance increase of ${dstCcy} at ${address} oldBalance: ${initialBalance}`,
+  );
+  for (let i = 0; i < Math.max(timeoutSeconds / 3, 1); i++) {
+    const newBalance = Number(await getBalance(dstCcy, address));
+    if (newBalance > initialBalance) {
+      logger.debug(
+        `Observed balance increase of ${newBalance - initialBalance} ${dstCcy} in ${i * 3} seconds`,
+      );
+      return newBalance;
+    }
+    await sleep(3000);
+  }
+
+  return throwError(
+    logger,
+    new Error(
+      `Failed to observe ${dstCcy} balance increase in ${timeoutSeconds} seconds for ${address}`,
+    ),
+  );
+}
+
+export async function observeFetch(asset: Asset, address: string): Promise<void> {
+  for (let i = 0; i < 360; i++) {
+    const balance = await getBalance(asset, address);
+    // In TRON the fetches will leave 1 dust amount of USDT to make deposits cheaper.
+    if (asset === Assets.TrxUsdt) {
+      if (balance === fineAmountToAmount('1', assetDecimals(Assets.TrxUsdt))) {
+        const tronWeb = getTronWebClient();
+        const contract = await tronWeb.trx.getContract(getEncodedTronAddress(address));
+        if (!(contract && contract.code_hash)) {
+          throw new Error('Tron address has no bytecode');
+        }
+        return;
+      }
+    }
+    if (Number(balance) === 0) {
+      const chain = chainFromAsset(asset);
+      if (chain === 'Ethereum' || chain === 'Arbitrum') {
+        if ((await getWeb3(chain).eth.getCode(address)) === '0x') {
+          throw new Error('EVM address has no bytecode');
+        }
+      }
+      return;
+    }
+    await sleep(3000);
+  }
+
+  throw new Error('Failed to observe the fetch');
 }
 
 // Left pad the external chain's address to convert it to a Statechain address.
@@ -1426,38 +1495,6 @@ export async function getNodesInfo(numberOfNodes: 1 | 3) {
   return { SELECTED_NODES, nodeCount };
 }
 
-export async function killEngines() {
-  execSync(`kill $(ps aux | grep engine-runner | grep -v grep | awk '{print $2}')`);
-}
-
-export async function startEngines(
-  localnetInitPath: string,
-  binaryPath: string,
-  numberOfNodes: 1 | 3,
-  logSuffix = '',
-) {
-  console.log('Starting all the engines');
-
-  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
-  await execWithLog(
-    `${localnetInitPath}/scripts/start-all-engines.sh`,
-    [],
-    'start-all-engines' + logSuffix,
-    {
-      INIT_RUN: 'false',
-      LOG_SUFFIX: logSuffix,
-      NODE_COUNT: nodeCount,
-      SELECTED_NODES,
-      LOCALNET_INIT_DIR: localnetInitPath,
-      BINARY_ROOT_PATH: binaryPath,
-    },
-  );
-
-  await sleep(7000);
-
-  console.log('Engines started');
-}
-
 // Check that all Solana Nonces are available
 export async function checkAvailabilityAllSolanaNonces(testContext: TestContext) {
   testContext.info('Checking Solana Nonce Availability');
@@ -1619,4 +1656,218 @@ export async function submitExtrinsic(
     );
   }
   return eventRecord.event as unknown as Event;
+}
+
+const nodeHealthSchema = z.object({
+  peers: z.number(),
+  isSyncing: z.boolean(),
+  shouldHavePeers: z.boolean(),
+  isResponsive: z.boolean().optional().default(true),
+});
+
+export async function getNodeHealthStatus(
+  logger: Logger,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+): Promise<z.infer<typeof nodeHealthSchema>> {
+  const nodeUrl = `${nodeAddress}:${nodePort}`;
+  logger.debug(`Checking health status of node at ${nodeUrl}`);
+
+  try {
+    const response = await fetch(nodeUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'system_health',
+        params: [],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const jsonResponse = await response.json();
+    const data = nodeHealthSchema.parse(jsonResponse.result);
+    logger.debug(`Node health status: ${JSON.stringify(data)}`);
+    return data;
+  } catch (error) {
+    logger.debug(`Checking health status of node at ${nodeUrl} error ${error}`);
+    return { peers: 0, isSyncing: false, shouldHavePeers: false, isResponsive: false };
+  }
+}
+
+export async function waitForNodeHealthy(
+  logger: Logger,
+  waitForSynced: boolean = true,
+  nodeAddress: string = 'http://localhost',
+  nodePort: number = 9944,
+  checkForPeers: boolean = true,
+): Promise<void> {
+  logger.info(`Waiting for node at ${nodeAddress}:${nodePort} to be healthy`);
+
+  const maxRetries = 30;
+  const retryIntervalMs = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const healthStatus = await getNodeHealthStatus(logger, nodeAddress, nodePort);
+
+    const isHealthy =
+      healthStatus.isResponsive &&
+      (!checkForPeers || !healthStatus.shouldHavePeers || healthStatus.peers > 0) &&
+      (!waitForSynced || !healthStatus.isSyncing);
+
+    if (isHealthy) {
+      logger.debug(`Node is healthy after ${attempt} attempt(s)`);
+      return;
+    }
+
+    if (attempt === maxRetries) {
+      throw new Error(
+        `Node at ${nodeAddress}:${nodePort} health check timed out after ${maxRetries} attempts. Status: ${JSON.stringify(healthStatus)}`,
+      );
+    }
+    logger.debug(
+      `Node not healthy yet (Attempt ${attempt}/${maxRetries}): ${JSON.stringify(healthStatus)}`,
+    );
+    await sleep(retryIntervalMs);
+  }
+}
+
+// Polls until a process is listening on `port` via lsof, or throws on timeout.
+// Preferred over waitForProcessStart for APIs since it confirms the service is actually ready.
+export async function waitForPortOpen(port: number, timeoutMs = 15000): Promise<void> {
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      execSync(`lsof -t -i:${port}`, { stdio: 'ignore' });
+      return;
+    } catch {
+      await sleep(intervalMs);
+    }
+  }
+
+  throw new Error(`Timed out waiting for port ${port} to open after ${timeoutMs}ms`);
+}
+
+async function waitForProcess(
+  processName: string,
+  condition: 'started' | 'exited',
+  timeoutMs = 15000,
+): Promise<void> {
+  const intervalMs = 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const pids = execSync(`ps -o pid -o comm | grep ${processName} | awk '{print $1}'`)
+      .toString()
+      .trim();
+    const running = pids.length > 0;
+    if (condition === 'started' ? running : !running) return;
+    await sleep(intervalMs);
+  }
+
+  throw new Error(`Timed out waiting for '${processName}' to ${condition} after ${timeoutMs}ms`);
+}
+
+export const waitForProcessStart = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'started', timeoutMs);
+
+export const waitForProcessExit = (processName: string, timeoutMs = 15000) =>
+  waitForProcess(processName, 'exited', timeoutMs);
+
+// Kills all processes that match the provided process name
+export async function killProcess(
+  processName: string,
+  logger: Logger = globalLogger,
+): Promise<void> {
+  try {
+    execSync(`kill $(ps aux | grep ${processName} | grep -v grep | awk '{print $2}')`);
+    await waitForProcessExit(processName);
+  } catch {
+    logger.info(`${processName} was not running, skipping`);
+  }
+}
+
+export async function killEngines(logger: Logger = globalLogger) {
+  logger.info('Killing engine-runner processes');
+  await killProcess('engine-runner', logger);
+  logger.info('All engine-runner processes have exited');
+}
+
+export async function startEngines(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+  logSuffix = '',
+  logger: Logger = globalLogger,
+) {
+  logger.info(`Starting ${numberOfNodes} engine(s) from: ${binaryPath}`);
+
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-engines.sh`,
+    [],
+    'start-all-engines' + logSuffix,
+    {
+      INIT_RUN: 'false',
+      LOG_SUFFIX: logSuffix,
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
+
+  await sleep(7000);
+
+  logger.info('Engines started');
+}
+
+export async function killNodes(logger: Logger = globalLogger) {
+  logger.info('Killing chainflip-node processes');
+  await killProcess('chainflip-node', logger);
+  logger.info('All chainflip-node processes have exited');
+}
+
+export async function startNodes(
+  localnetInitPath: string,
+  binaryPath: string,
+  numberOfNodes: 1 | 3,
+  logSuffix = '',
+  logger: Logger = globalLogger,
+) {
+  logger.info(`Starting ${numberOfNodes} node(s) from: ${binaryPath}`);
+
+  const KEYS_DIR = `${localnetInitPath}/keys`;
+  const { SELECTED_NODES, nodeCount } = await getNodesInfo(numberOfNodes);
+
+  await execWithLog(
+    `${localnetInitPath}/scripts/start-all-nodes.sh`,
+    [],
+    'start-all-nodes' + logSuffix,
+    {
+      CHAIN: 'dev',
+      INIT_RPC_PORT: '9944',
+      KEYS_DIR,
+      NODE_COUNT: nodeCount,
+      SELECTED_NODES,
+      LOCALNET_INIT_DIR: localnetInitPath,
+      BINARY_ROOT_PATH: binaryPath,
+    },
+  );
+
+  // wait for nodes to be ready
+  await Promise.all(
+    Array.from({ length: numberOfNodes }, (_, i) => i).map((portOffset) =>
+      // For each port offset, wait for the node to be responsive
+      waitForNodeHealthy(logger, true, 'http://localhost', 9944 + portOffset, numberOfNodes !== 1),
+    ),
+  );
+
+  logger.info('Nodes started');
 }

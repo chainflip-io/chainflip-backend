@@ -86,7 +86,7 @@ async function deltaBasedIngressTest(
 
   cf.info('Killing the engines');
   await killEngines();
-  await startEngines(localnetInitPath, binariesPath, numberOfNodes);
+  await startEngines(localnetInitPath, binariesPath, numberOfNodes, '-delta-ingress-restart-1');
 
   // Wait to ensure no new swap is being triggered after restart.
   cf.info('Waiting for 40 seconds to ensure no swap is being triggered after restart');
@@ -113,7 +113,7 @@ async function deltaBasedIngressTest(
     test: (event) => handleSwapScheduled(event, amountSecondDeposit, 2),
     abortable: true,
   });
-  await startEngines(localnetInitPath, binariesPath, numberOfNodes);
+  await startEngines(localnetInitPath, binariesPath, numberOfNodes, '-delta-ingress-restart-2');
 
   // Wait to ensure no additional new swap is being triggered after restart
   // and check that swap completes.

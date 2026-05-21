@@ -1,5 +1,6 @@
 ---
 source: state-chain/custom-rpc/src/tests.rs
+assertion_line: 1213
 expression: val
 ---
 {
@@ -31,6 +32,10 @@ expression: val
       "DOT": 123456,
       "USDT": 123456,
       "USDC": 123456
+    },
+    "Tron": {
+      "TRX": 123456,
+      "USDT": 123456
     },
     "Bsc": {
       "BNB": 123456,
@@ -65,6 +70,10 @@ expression: val
       "DOT": 654321,
       "USDT": 654321,
       "USDC": 654321
+    },
+    "Tron": {
+      "TRX": 654321,
+      "USDT": 654321
     },
     "Bsc": {
       "BNB": 654321,

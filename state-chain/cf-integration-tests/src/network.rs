@@ -20,7 +20,7 @@ use crate::threshold_signing::{
 	BtcThresholdSigner, DotThresholdSigner, EthThresholdSigner, SolThresholdSigner,
 };
 
-use cf_chains::{address::EncodedAddress, evm::TransactionFee};
+use cf_chains::{address::EncodedAddress, evm::TransactionFee, tron::TronTransactionFee};
 
 use cf_primitives::{AccountRole, BlockNumber, FlipBalance, TxId, FLIPPERINOS_PER_FLIP};
 
@@ -47,7 +47,7 @@ use state_chain_runtime::{
 	AccountRoles, AllPalletsWithSystem, ArbitrumInstance, AssethubInstance, AssethubVault,
 	BitcoinInstance, BscInstance, Environment, EthereumInstance, Funding, LiquidityProvider,
 	PalletExecutionOrder, PolkadotInstance, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
-	SolanaInstance, Validator, Weight,
+	SolanaInstance, TronInstance, Validator, Weight,
 };
 use std::{
 	cell::RefCell,
@@ -68,6 +68,16 @@ pub enum ContractEvent {
 }
 
 pub const EVM_FEE: TransactionFee = TransactionFee { effective_gas_price: 1000000, gas_used: 100 };
+pub const TRON_FEE: TronTransactionFee = TronTransactionFee {
+	fee: 1000,
+	energy_usage: None,
+	energy_fee: Some(1000),
+	origin_energy_usage: None,
+	energy_usage_total: None,
+	net_usage: None,
+	net_fee: None,
+	energy_penalty_total: None,
+};
 
 macro_rules! on_events {
 	($events:expr, $($(#[$cfg_param:meta])? $p:pat => $b:block)+) => {
@@ -106,7 +116,7 @@ macro_rules! witness_broadcast {
 }
 
 // An SC Gateway contract
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ScGatewayContract {
 	// List of balances
 	pub balances: HashMap<NodeId, FlipBalance>,
@@ -196,6 +206,7 @@ impl Cli {
 }
 
 // Engine monitoring contract
+#[derive(Clone)]
 pub struct Engine {
 	pub node_id: NodeId,
 	// Automatically responds to events and responds with "OK".
@@ -210,6 +221,18 @@ pub struct Engine {
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 	pub sol_threshold_signer: Rc<RefCell<SolThresholdSigner>>,
+}
+
+impl core::fmt::Debug for Engine {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Don't print signing keys
+		f.debug_struct("Engine")
+			.field("node_id", &self.node_id)
+			.field("live", &self.live)
+			.field("auto_submit_heartbeat", &self.auto_submit_heartbeat)
+			.field("last_heartbeat", &self.last_heartbeat)
+			.finish()
+	}
 }
 
 impl Engine {
@@ -311,6 +334,16 @@ impl Engine {
 						queue_dispatch_extrinsic(
 							RuntimeCall::Environment(
 								pallet_cf_environment::Call::witness_initialize_solana_vault {
+									block_number: 1,
+								},
+							),
+							pallet_cf_governance::RawOrigin::GovernanceApproval.into()
+						);
+					}
+					RuntimeEvent::TronVault(pallet_cf_vaults::Event::<_, TronInstance>::AwaitingGovernanceActivation { .. }) => {
+						queue_dispatch_extrinsic(
+							RuntimeCall::Environment(
+								pallet_cf_environment::Call::witness_initialize_tron_vault {
 									block_number: 1,
 								},
 							),
@@ -553,7 +586,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 	));
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
 	pub auto_witness_broadcasts: bool,
@@ -786,6 +819,8 @@ impl Network {
 					witness_broadcast!(PolkadotInstance, broadcast_id, 1_000u128,),
 				CfeEvent::HubTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
 					witness_broadcast!(AssethubInstance, broadcast_id, 1_000u128,),
+				CfeEvent::TronTxBroadcastRequest(TxBroadcastRequest { broadcast_id, .. }) =>
+					witness_broadcast!(TronInstance, broadcast_id, TRON_FEE,),
 				_ => {
 					// ignored
 				},
@@ -963,4 +998,5 @@ pub fn witness_all_outstanding_broadcasts() {
 	});
 	witness_all_broadcasts!(PolkadotInstance, 1_000u128);
 	witness_all_broadcasts!(AssethubInstance, 1_000u128);
+	witness_all_broadcasts!(TronInstance, TRON_FEE);
 }

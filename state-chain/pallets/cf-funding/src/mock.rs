@@ -147,10 +147,26 @@ pub struct MockRedemptionChecker;
 
 impl RedemptionCheck for MockRedemptionChecker {
 	type ValidatorId = AccountId;
+	type Amount = u128;
 
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult {
-		frame_support::ensure!(CanRedeem::get().get(validator_id).unwrap_or(&true), BIDDING_ERR);
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		_amount: Self::Amount,
+	) -> DispatchResult {
+		frame_support::ensure!(MockRedemptionChecker::is_unrestricted(validator_id), BIDDING_ERR);
 		Ok(())
+	}
+
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult {
+		// Mirrors the validator-pallet impl: source's lock applies unless the
+		// recipient shares it (so funds can't escape the lock by hopping).
+		if MockRedemptionChecker::is_unrestricted(source) ||
+			!MockRedemptionChecker::is_unrestricted(dest)
+		{
+			Ok(())
+		} else {
+			Err(BIDDING_ERR)
+		}
 	}
 }
 
@@ -159,6 +175,10 @@ impl MockRedemptionChecker {
 		let mut can_redeem_map = CanRedeem::get();
 		can_redeem_map.insert(validator_id, can_redeem);
 		CanRedeem::set(can_redeem_map);
+	}
+
+	fn is_unrestricted(validator_id: &AccountId) -> bool {
+		*CanRedeem::get().get(validator_id).unwrap_or(&true)
 	}
 }
 

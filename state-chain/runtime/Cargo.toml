@@ -75,7 +75,7 @@ pallet-session = { workspace = true, features = ["historical"] }
 frame-benchmarking = { workspace = true, optional = true }
 frame-executive = { workspace = true }
 frame-metadata-hash-extension = { workspace = true }
-frame-support = { workspace = true }
+frame-support = { workspace = true, features = ["tuples-96"] }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-try-runtime = { workspace = true, optional = true }
@@ -114,7 +114,7 @@ n-functor = { workspace = true }
 sp-io = { workspace = true, default-features = true }
 proptest = { version = "1.6" }
 proptest-derive = { version = "0.5.1" }
-cf-chains = { workspace = true, features = ["mocks"] }
+cf-chains = { workspace = true, features = ["mocks", "runtime-integration-tests"] }
 cf-traits = { workspace = true, features = ["mocks"] }
 
 [features]

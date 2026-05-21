@@ -3,7 +3,7 @@ export WORKFLOW=build-localnet
 export GENESIS_NODES=("bashful" "doc" "dopey")
 export REQUIRED_BINARIES="engine-runner chainflip-node chainflip-broker-api chainflip-lp-api"
 export INIT_CONTAINERS="eth-init solana-init"
-export CORE_CONTAINERS="bitcoin geth bsc polkadot1 polkadot2 assethub redis"
+export CORE_CONTAINERS="bitcoin geth bsc polkadot1 polkadot2 assethub redis tron tron-peer"
 export DEPOSIT_MONITOR_CONTAINER="deposit-monitor"
 export ARB_CONTAINERS="sequencer staker-unsafe poster"
 export SOLANA_BASE_PATH="/tmp/solana"
@@ -105,6 +105,9 @@ build-localnet() {
   echo "💎 Waiting for ETH node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 >>$DEBUG_OUTPUT_DESTINATION
   wscat -c ws://127.0.0.1:8546 -x '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' >>$DEBUG_OUTPUT_DESTINATION
+
+  echo "🌞 Waiting for TRON node to start"
+  check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock >>$DEBUG_OUTPUT_DESTINATION
 
   echo "🔶 Waiting for BSC node to start"
   check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8645 >>$DEBUG_OUTPUT_DESTINATION
@@ -233,11 +236,6 @@ build-localnet() {
   echo "🗂️ Starting Indexer ..."
   $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" up postgres indexer $additional_docker_compose_up_args -d >>$DEBUG_OUTPUT_DESTINATION 2>&1
 
-  if [[ $START_TRACKER == "y" ]]; then
-    echo "👁 Starting Ingress-Egress-tracker ..."
-    KEYS_DIR=$KEYS_DIR ./$LOCALNET_INIT_DIR/scripts/start-ingress-egress-tracker.sh $BINARY_ROOT_PATH
-  fi
-
   echo "📐 Updating event schemas ..."
   cd bouncer && ./commands/generate_event_schemas.ts && cd ..
 
@@ -302,7 +300,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis all ingress-egress-tracker deposit-monitor; do
+  select SERVICE in node engine broker lp polkadot1 polkadot2 assethub geth bitcoin solana poster sequencer staker debug redis tron all deposit-monitor; do
     if [[ $SERVICE == "all" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f $CHAINFLIP_BASE_PATH/*/chainflip-*.log
@@ -334,6 +332,9 @@ logs() {
     if [[ $SERVICE == "staker" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow staker-unsafe
     fi
+    if [[ $SERVICE == "tron" ]]; then
+      $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow tron
+    fi
     if [[ $SERVICE == "deposit-monitor" ]]; then
       $DOCKER_COMPOSE_CMD -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow deposit-monitor
     fi
@@ -347,9 +348,6 @@ logs() {
     fi
     if [[ $SERVICE == "lp" ]]; then
       tail -f $CHAINFLIP_BASE_PATH/chainflip-lp-api.*log
-    fi
-    if [[ $SERVICE == "ingress-egress-tracker" ]]; then
-      tail -f $CHAINFLIP_BASE_PATH/chainflip-ingress-egress-tracker.*log
     fi
     if [[ $SERVICE == "solana" ]]; then
       tail -f $SOLANA_BASE_PATH/solana.*log
@@ -375,7 +373,6 @@ function save_settings() {
 cat <<EOF > $CHAINFLIP_BASE_PATH/settings.sh
 export NODE_COUNT=${NODE_COUNT}
 export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
-export START_TRACKER=${START_TRACKER}
 export BINARY_ROOT_PATH=${BINARY_ROOT_PATH}
 EOF
 }

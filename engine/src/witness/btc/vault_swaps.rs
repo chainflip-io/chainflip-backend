@@ -54,7 +54,12 @@ fn try_extract_utxo_encoded_data(script: &bitcoin::ScriptBuf) -> Option<&[u8]> {
 		// Opcode encodes the length directly
 		data_len @ 1..=OP_PUSHBYTES_75 => (data_len, &bytes[2..]),
 		// The length is encoded in the following byte:
-		OP_PUSHDATA1 => (bytes[2], &bytes[3..]),
+		OP_PUSHDATA1 => {
+			if bytes.len() < 3 {
+				return None;
+			}
+			(bytes[2], &bytes[3..])
+		},
 		_ => {
 			return None;
 		},
@@ -92,9 +97,6 @@ fn script_buf_to_script_pubkey(script: &ScriptBuf) -> Option<ScriptPubkey> {
 
 	Some(pubkey)
 }
-
-pub(super) type BtcIngressEgressCall =
-	pallet_cf_ingress_egress::Call<state_chain_runtime::Runtime, BitcoinInstance>;
 
 type VaultDepositWitness =
 	pallet_cf_ingress_egress::VaultDepositWitness<state_chain_runtime::Runtime, BitcoinInstance>;
@@ -390,6 +392,12 @@ mod tests {
 			vec![],                                   // too few bytes
 			vec![OP_RETURN.to_u8()],                  // too few bytes
 			vec![OP_RETURN.to_u8(), OP_PUSHBYTES_75], // no bytes follow "pushbytes"
+			vec![OP_RETURN.to_u8(), OP_PUSHBYTES_75, 1, 2, 3], /* not enough bytes follow
+			                                           * "pushbytes" */
+			vec![OP_RETURN.to_u8(), OP_PUSHDATA1], // no length byte follows OP_PUSHDATA1
+			vec![OP_RETURN.to_u8(), OP_PUSHDATA1, 1], // length byte present but no data
+			vec![OP_RETURN.to_u8(), OP_PUSHDATA1, 2, 0], /* length byte present but insufficient
+			                                        * data */
 		] {
 			let script_buf = ScriptBuf::from_bytes(data);
 

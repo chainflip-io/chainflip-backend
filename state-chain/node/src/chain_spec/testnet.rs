@@ -43,6 +43,7 @@ pub const ARBITRUM_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 4;
 pub const POLKADOT_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 6;
 pub const SOLANA_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 10 / 4;
 pub const ASSETHUB_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 12;
+pub const TRON_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 / 3;
 pub const BSC_EXPIRY_BLOCKS: u32 = 2 * 60 * 60 * 1000 / 450; // 450ms block time
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
@@ -62,6 +63,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
 	arb_usdt_token_address: hex_literal::hex!("9A676e781A523b5d0C0e43731313A708CB607508"),
 
+	tron_key_manager_address: hex_literal::hex!("f7229affc93ee042e750ce66a062b381f393b25a"),
+	tron_vault_address: hex_literal::hex!("814f36c1bbfd8aabec86273f0d61521e0c2d5287"),
+	trx_usdt_token_address: hex_literal::hex!("a24205e83c1805fcdae7a93db837dc6a0b843340"),
+
 	bsc_key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
 	bsc_vault_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	bsc_usdt_token_address: hex_literal::hex!("Dc64a140Aa3E981100a9becA4E685f962f0cF6C9"),
@@ -70,6 +75,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+	tron_chain_id: cf_chains::tron::CHAIN_ID_NILE_TESTNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"0361ef4fcc2f464a81f4f1a60387056e937d67e6f7f717936c143b4b0102f710d6"
 	),
@@ -501,4 +507,5 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 pub const BITCOIN_SAFETY_MARGIN: u64 = 2;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
-pub const SOLANA_SAFETY_MARGIN: u64 = 1; //todo
+pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
+pub const TRON_SAFETY_MARGIN: u64 = 19;

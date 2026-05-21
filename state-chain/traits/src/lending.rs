@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use cf_primitives::{
-	define_wrapper_type, Asset, AssetAmount, BasisPoints, BoostPoolTier, PrewitnessedDepositId,
+	define_wrapper_type, Asset, AssetAmount, BasisPoints, Beneficiary, PrewitnessedDepositId,
 	SwapRequestId,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
@@ -28,10 +28,32 @@ use frame_support::pallet_prelude::DispatchError;
 
 use crate::LendingSwapType;
 
-#[derive(Debug)]
+#[derive(
+	Debug,
+	Clone,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Serialize,
+	Deserialize,
+)]
+pub enum BoostSource {
+	LendingPool,
+	BoostPool,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct BoostOutcome {
-	pub used_pools: BTreeMap<BoostPoolTier, AssetAmount>,
-	pub total_fee: AssetAmount,
+	/// Per-source amounts funded, including the boost fee charged by that source
+	/// (entries present only if that source contributed).
+	pub amounts: BTreeMap<BoostSource, AssetAmount>,
+	/// Per-source boost fees charged (entries present only if that source contributed).
+	pub fees: BTreeMap<BoostSource, AssetAmount>,
 }
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -79,37 +101,19 @@ pub trait LendingApi {
 		borrower: Self::AccountId,
 		loan_id: LoanId,
 		extra_amount_to_borrow: AssetAmount,
-		extra_collateral: BTreeMap<Asset, AssetAmount>,
 	) -> DispatchResult;
 
 	fn new_loan(
 		borrower: Self::AccountId,
 		asset: Asset,
 		amount_to_borrow: AssetAmount,
-		collateral_topup_asset: Option<Asset>,
-		collateral: BTreeMap<Asset, AssetAmount>,
+		broker: Option<Beneficiary<Self::AccountId>>,
 	) -> Result<LoanId, DispatchError>;
 
 	fn try_making_repayment(
 		borrower_id: &Self::AccountId,
 		loan_id: LoanId,
 		amount: RepaymentAmount,
-	) -> DispatchResult;
-
-	fn add_collateral(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> DispatchResult;
-
-	fn remove_collateral(
-		borrower_id: &Self::AccountId,
-		collateral: BTreeMap<Asset, AssetAmount>,
-	) -> DispatchResult;
-
-	fn update_collateral_topup_asset(
-		borrower_id: &Self::AccountId,
-		collateral_topup_asset: Option<Asset>,
 	) -> DispatchResult;
 
 	/// Can be used to indicate user's intent to trigger (value=true) or stop (value=false)

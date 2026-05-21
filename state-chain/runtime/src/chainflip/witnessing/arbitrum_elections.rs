@@ -75,6 +75,7 @@ impl ChainTypes for ArbitrumChain {
 }
 
 pub const ARBITRUM_MAINNET_SAFETY_BUFFER: u32 = 8;
+pub const ARBITRUM_MAX_SUBMIT_HEADERS_IN_BHW_VOTER: u32 = 8;
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, TypeInfo)]
 pub enum ArbitrumElectoralEvents {
@@ -322,6 +323,18 @@ impl
 		),
 	) -> Result<(), CorruptStorageError> {
 		let current_sc_block_number = crate::System::block_number();
+
+		if let Some(ingress_safety_margin) =
+			pallet_cf_ingress_egress::WitnessSafetyMargin::<Runtime, ArbitrumInstance>::get()
+		{
+			pallet_cf_elections::ElectoralUnsynchronisedSettings::<Runtime, ArbitrumInstance>::mutate_extant(|settings|  {
+				// We apply the safety margin to *all* BlockWitnessers. On EVM chains we have the same safety margin for
+				// ingresses and egresses since egresses are entangled with other other stuff in the KeyManager BW.
+				settings.1.safety_margin = ingress_safety_margin as u32;
+				settings.2.safety_margin = ingress_safety_margin as u32;
+				settings.3.safety_margin = ingress_safety_margin as u32;
+			});
+		}
 
 		let chain_progress = ArbitrumBlockHeightWitnesserES::on_finalize::<
 			DerivedElectoralAccess<

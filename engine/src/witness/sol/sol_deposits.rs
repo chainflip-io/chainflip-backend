@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::ensure;
+use anyhow::{ensure, Ok};
 use base64::Engine;
 use cf_chains::sol::{SolAddress, SolAmount};
 use cf_primitives::chains::assets::sol::Asset;
@@ -235,10 +235,10 @@ fn parse_account_amount_from_data(
 			Ok(deposit_channel_info.lamports as u128)
 		},
 		DepositChannelType::TokenDepositChannel(deposit_channel_address, _, token_mint_pubkey) => {
-			ensure!(
-				owner_pub_key == TOKEN_PROGRAM_ID,
-				"Unexpected owner for token deposit channel"
-			);
+			// ATA not initialized as a token account but it could be owned by the System Program.
+			if owner_pub_key != TOKEN_PROGRAM_ID {
+				return Ok(0);
+			}
 
 			// Fetch data and ensure it's encoding is JsonParsed
 			match deposit_channel_info.data {
@@ -288,7 +288,10 @@ fn parse_fetch_account_amount(
 ) -> Result<u128, anyhow::Error> {
 	let owner_pub_key = SolAddress::from_str(fetch_account_info.owner.as_str()).unwrap();
 
-	ensure!(owner_pub_key == vault_address, "Unexpected owner for fetch account");
+	if owner_pub_key != vault_address {
+		return Ok(0)
+	}
+
 	match fetch_account_info.data {
 		// Fetch Data Account
 		UiAccountData::Binary(base64_string, encoding) => {

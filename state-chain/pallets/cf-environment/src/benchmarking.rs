@@ -34,12 +34,11 @@ pub mod benchmark_types {
 	use sp_std::collections::btree_map::BTreeMap;
 
 	/// Mimics a realistic pallet call similar to `request_loan`.
-	/// Parameters: asset enum, amount (u128), optional asset, BTreeMap<Asset, Amount>
+	/// Parameters: asset enum, amount (u128), BTreeMap<Asset, Amount>
 	#[derive(TypeInfo, Clone, Encode, Decode, DecodeWithMemTracking, Debug, PartialEq, Eq)]
 	pub struct RealisticCallParams {
 		pub loan_asset: Asset,
 		pub loan_amount: AssetAmount,
-		pub collateral_topup_asset: Option<Asset>,
 		pub extra_collateral: BTreeMap<Asset, AssetAmount>,
 	}
 
@@ -53,7 +52,6 @@ pub mod benchmark_types {
 				RealisticCallParams {
 					loan_asset: Asset::Usdc,
 					loan_amount: 100_000_000_000u128,
-					collateral_topup_asset: Some(Asset::Eth),
 					extra_collateral,
 				}
 			}
@@ -178,6 +176,18 @@ mod benchmarks {
 		let call = Call::<T>::witness_initialize_solana_vault { block_number: 10u64 };
 
 		T::SolanaVaultKeyWitnessedHandler::setup_key_activation();
+		#[block]
+		{
+			assert_ok!(call.dispatch_bypass_filter(origin));
+		}
+	}
+
+	#[benchmark]
+	fn witness_initialize_tron_vault() {
+		let origin = T::EnsureGovernance::try_successful_origin().unwrap();
+		let call = Call::<T>::witness_initialize_tron_vault { block_number: 10u64 };
+
+		T::TronVaultKeyWitnessedHandler::setup_key_activation();
 		#[block]
 		{
 			assert_ok!(call.dispatch_bypass_filter(origin));

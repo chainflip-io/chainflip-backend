@@ -19,7 +19,8 @@ use cf_chains::Ethereum;
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
-		balance_api::MockLpRegistration, egress_handler::MockEgressHandler, pool_api::MockPoolApi,
+		balance_api::MockLpRegistration, egress_handler::MockEgressHandler,
+		network_fee_api::MockNetworkFeeApi, pool_api::MockPoolApi,
 		swap_request_api::MockSwapRequestHandler,
 	},
 	AccountRoleRegistry,
@@ -47,6 +48,7 @@ impl pallet_cf_lending_pools::Config for Test {
 	type WeightInfo = ();
 	type Balance = cf_traits::mocks::balance_api::MockBalance;
 	type SwapRequestHandler = MockSwapRequestHandler<(Ethereum, MockEgressHandler<Ethereum>)>;
+	type NetworkFeeApi = MockNetworkFeeApi;
 	type PoolApi = MockPoolApi;
 	type PriceApi = cf_traits::mocks::price_feed_api::MockPriceFeedApi;
 	type LpRegistrationApi = MockLpRegistration;
@@ -57,7 +59,6 @@ pub type AccountId = <Test as frame_system::Config>::AccountId;
 
 pub const LP: AccountId = 123u64;
 pub const OTHER_LP: AccountId = 234u64;
-pub const NON_LP: AccountId = 345u64;
 pub const BOOSTER_1: AccountId = 1;
 pub const BOOSTER_2: AccountId = 2;
 pub const BOOSTER_3: AccountId = 3;

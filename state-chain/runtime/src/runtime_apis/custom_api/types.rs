@@ -22,12 +22,13 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance},
+	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress,
+	tron::TronAddress,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, ForeignChain};
+use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -39,11 +40,11 @@ use pallet_cf_environment::{EthEncodingType, SolEncodingType};
 pub use pallet_cf_ingress_egress::ChannelAction;
 use pallet_cf_ingress_egress::{DepositWitness, VaultDepositWitness};
 pub use pallet_cf_lending_pools::{
-	before_v12, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
-	RpcLendingPool, RpcLoanAccount,
+	BoostConfiguration, BoostPoolDetails, LendingPoolAndSupplyPositions, LendingSupplyPosition,
+	LoanType, RpcLendingPool, RpcLiquidationStatus, RpcLoan, RpcLoanAccount,
 };
 pub use pallet_cf_pools::{
-	AskBidMap, PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
+	PoolInfo, PoolLiquidity, PoolOrderbook, PoolOrders, PoolPriceV1, PoolPriceV2,
 	UnidirectionalPoolDepth,
 };
 use pallet_cf_swapping::{AffiliateDetails, FeeRateAndMinimum};
@@ -117,21 +118,29 @@ pub enum VaultSwapDetails<BtcAddress> {
 		#[serde(flatten)]
 		instruction: SolInstructionRpc,
 	},
+	Tron {
+		#[serde(flatten)]
+		details: TronCallDetails,
+		#[serde(with = "sp_core::bytes")]
+		note: Vec<u8>,
+	},
 }
 
+pub type TronCallDetails = EvmCallDetails<String>;
+
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, Serialize, Deserialize)]
-pub struct EvmCallDetails {
+pub struct EvmCallDetails<Address = sp_core::H160> {
 	/// The encoded calldata payload including function selector.
 	#[serde(with = "sp_core::bytes")]
 	pub calldata: Vec<u8>,
 	/// The ETH/ArbETH amount. Always 0 for ERC-20 tokens.
 	pub value: sp_core::U256,
-	/// The vault address for either Ethereum or Arbitrum.
-	pub to: sp_core::H160,
+	/// The vault address.
+	pub to: Address,
 	/// The address of the source token that requires user approval for the swap to succeed, if
 	/// any.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub source_token_address: Option<sp_core::H160>,
+	pub source_token_address: Option<Address>,
 }
 
 impl<BtcAddress> VaultSwapDetails<BtcAddress> {
@@ -141,6 +150,20 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 
 	pub fn arbitrum(details: EvmCallDetails) -> Self {
 		VaultSwapDetails::Arbitrum { details }
+	}
+
+	pub fn tron(evm_details: EvmCallDetails, note: Vec<u8>) -> Self {
+		VaultSwapDetails::Tron {
+			details: TronCallDetails {
+				calldata: evm_details.calldata,
+				value: evm_details.value,
+				to: TronAddress::from_evm_address(evm_details.to).to_base58check(),
+				source_token_address: evm_details
+					.source_token_address
+					.map(|a| TronAddress::from_evm_address(a).to_base58check()),
+			},
+			note,
+		}
 	}
 
 	pub fn bsc(details: EvmCallDetails) -> Self {
@@ -157,6 +180,7 @@ impl<BtcAddress> VaultSwapDetails<BtcAddress> {
 			VaultSwapDetails::Solana { instruction } => VaultSwapDetails::Solana { instruction },
 			VaultSwapDetails::Ethereum { details } => VaultSwapDetails::Ethereum { details },
 			VaultSwapDetails::Arbitrum { details } => VaultSwapDetails::Arbitrum { details },
+			VaultSwapDetails::Tron { details, note } => VaultSwapDetails::Tron { details, note },
 			VaultSwapDetails::Bsc { details } => VaultSwapDetails::Bsc { details },
 		}
 	}
@@ -336,6 +360,7 @@ pub struct RuntimeApiPenalty {
 pub mod before_version_10;
 pub mod before_version_15;
 pub mod before_version_16;
+pub mod before_version_17;
 pub mod before_version_3;
 pub mod before_version_9;
 
@@ -549,6 +574,7 @@ pub struct TransactionScreeningEvents {
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
+	pub tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -566,6 +592,8 @@ pub struct VaultAddresses {
 	pub solana_usdc_token_vault_ata: EncodedAddress,
 	pub solana_usdt_token_vault_ata: EncodedAddress,
 	pub solana_vault_swap_account: Option<EncodedAddress>,
+
+	pub tron: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
@@ -628,6 +656,51 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, ArbitrumInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, ArbitrumInstance>)>,
 	},
+	Tron {
+		deposits: Vec<(u64, DepositWitness<Tron>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
+	},
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum DepositDetails {
+	Bitcoin(<Bitcoin as Chain>::DepositDetails),
+	Ethereum(<Ethereum as Chain>::DepositDetails),
+	Arbitrum(<Arbitrum as Chain>::DepositDetails),
+	Tron(<Tron as Chain>::DepositDetails),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct DepositWitnessInfo {
+	pub deposit_chain_block_height: u64,
+	pub deposit_address: EncodedAddress,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
+	pub asset: Asset,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct VaultDepositWitnessInfo {
+	pub tx_id: TransactionInId,
+	pub deposit_chain_block_height: u64,
+	pub input_asset: Asset,
+	pub output_asset: Asset,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
+	pub destination_address: EncodedAddress,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct IngressEvents {
+	pub deposits: Vec<DepositWitnessInfo>,
+	pub vault_deposits: Vec<VaultDepositWitnessInfo>,
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};
@@ -665,13 +738,15 @@ pub struct RpcLendingConfig {
 	/// Minimum equivalent amount of principal that can be used to expand or repay an existing
 	/// loan.
 	pub minimum_update_loan_amount_usd: U256,
-	/// Minimum equivalent amount of collateral that can be added or removed from a loan account.
-	pub minimum_update_collateral_amount_usd: U256,
+	/// Minimum equivalent amount that can be added to or removed from a lending pool supply.
+	pub minimum_update_supply_amount_usd: U256,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub account_id: Option<AccountId32>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
 	pub vanity_name: VanityName,
@@ -695,6 +770,7 @@ impl<A> RpcAccountInfoCommonItems<A> {
 		f: impl Fn(A) -> Result<B, E>,
 	) -> Result<RpcAccountInfoCommonItems<B>, E> {
 		Ok(RpcAccountInfoCommonItems {
+			account_id: self.account_id,
 			vanity_name: self.vanity_name,
 			flip_balance: f(self.flip_balance)?,
 			asset_balances: self.asset_balances.try_map(&f)?,
@@ -716,4 +792,25 @@ impl<A> RpcAccountInfoCommonItems<A> {
 				.transpose()?,
 		})
 	}
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub struct RuntimeApiAccountInfoWrapper {
+	pub common_items: RpcAccountInfoCommonItems<FlipBalance>,
+	pub role: RuntimeApiAccountInfo,
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+pub enum RuntimeApiAccountInfo {
+	Unregistered,
+	Broker(Box<BrokerInfo<<Bitcoin as Chain>::ChainAccount>>),
+	LiquidityProvider(Box<LiquidityProviderInfo>),
+	Validator(Box<ValidatorInfo>),
+	Operator(Box<OperatorInfo<FlipBalance>>),
+}
+
+#[derive(Encode, Decode, TypeInfo, PartialEq)]
+pub enum ShouldSweep {
+	Yes,
+	No,
 }

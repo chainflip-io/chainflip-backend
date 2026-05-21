@@ -17,11 +17,11 @@
 use super::*;
 use cf_chains::{DepositOriginType, FeeEstimationApi};
 use cf_primitives::{
-	AssetAmount, BasisPoints, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
+	AssetAmount, BasisPoints, BoostPoolTier, IngressOrEgress, PrewitnessedDepositId, SwapRequestId,
 	ONE_AS_BASIS_POINTS,
 };
 use cf_traits::{
-	mocks::tracked_data_provider::TrackedDataProvider, BalanceApi,
+	lending::BoostSource, mocks::tracked_data_provider::TrackedDataProvider, BalanceApi,
 	ExpiryBehaviour::RefundIfExpires, SafeMode, SetSafeMode,
 };
 use frame_support::instances::Instance1;
@@ -29,21 +29,15 @@ use mocks::lending_pools::MockBoostApi;
 use sp_runtime::Percent;
 use sp_std::collections::btree_map::BTreeMap;
 
-use crate::{BoostDelayBlocks, BoostPoolTier, Event, PalletSafeMode, PendingPrewitnessedDeposits};
+use crate::{BoostDelayBlocks, Event, PalletSafeMode, PendingPrewitnessedDeposits};
 
 type AccountId = u64;
 
 const LP_ACCOUNT: AccountId = 100;
-// const BOOSTER_1: AccountId = 101;
-// const BOOSTER_2: AccountId = 102;
 
-// const INIT_BOOSTER_ETH_BALANCE: AssetAmount = 1_000_000_000;
-// const INIT_BOOSTER_FLIP_BALANCE: AssetAmount = 1_000_000_000;
 const INIT_LP_BALANCE: AssetAmount = 0;
 
-const TIER_5_BPS: BoostPoolTier = 5;
-// const TIER_10_BPS: BoostPoolTier = 10;
-// const TIER_30_BPS: BoostPoolTier = 30;
+const BOOST_FEE_BPS: BoostPoolTier = 5;
 
 // Amounts as computed by `setup`:
 const INGRESS_FEE: AssetAmount = 1_000_000;
@@ -144,25 +138,25 @@ fn basic_passive_boosting() {
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
 		assert_eq!(get_lp_eth_balance(&LP_ACCOUNT), INIT_LP_BALANCE);
 
-		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
+		let (channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
 
 		let prewitnessed_deposit_id = prewitness_deposit(deposit_address, ASSET, DEPOSIT_AMOUNT);
 		// All of BOOSTER_AMOUNT_1 should be used:
-		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
 		const LP_BALANCE_AFTER_BOOST: AssetAmount =
 			INIT_LP_BALANCE + DEPOSIT_AMOUNT - BOOST_FEE - INGRESS_FEE;
 		{
 			System::assert_last_event(RuntimeEvent::EthereumIngressEgress(Event::DepositBoosted {
 				deposit_address: Some(deposit_address),
 				asset: ASSET,
-				amounts: BTreeMap::from_iter(vec![(TIER_5_BPS, DEPOSIT_AMOUNT)]),
+				amounts: [(BoostSource::LendingPool, DEPOSIT_AMOUNT)].into(),
 				block_height: Default::default(),
 				channel_id: Some(channel_id),
 				prewitnessed_deposit_id,
 				deposit_details: Default::default(),
 				ingress_fee: INGRESS_FEE,
-				max_boost_fee_bps: TIER_5_BPS,
-				boost_fee: BOOST_FEE,
+				max_boost_fee_bps: BOOST_FEE_BPS,
+				boost_fee: [(BoostSource::LendingPool, BOOST_FEE)].into(),
 				action: DepositAction::LiquidityProvision { lp_account: LP_ACCOUNT },
 				origin_type: DepositOriginType::DepositChannel,
 			}));
@@ -186,7 +180,7 @@ fn basic_passive_boosting() {
 					block_height: Default::default(),
 					deposit_details: Default::default(),
 					ingress_fee: 0,
-					max_boost_fee_bps: TIER_5_BPS,
+					max_boost_fee_bps: BOOST_FEE_BPS,
 					action: DepositAction::BoostersCredited {
 						prewitnessed_deposit_id,
 						network_fee_from_boost: 0,
@@ -243,12 +237,12 @@ fn witnessed_amount_does_not_match_boosted() {
 		MockBoostApi::set_available_amount(PREWITNESSED_DEPOSIT_AMOUNT * 10);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
-		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
+		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
 		let deposit_id =
 			prewitness_deposit(deposit_address, EthAsset::Eth, PREWITNESSED_DEPOSIT_AMOUNT);
 
 		const BOOST_FEE: AssetAmount =
-			PREWITNESSED_DEPOSIT_AMOUNT * TIER_5_BPS as u128 / ONE_AS_BASIS_POINTS as u128;
+			PREWITNESSED_DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / ONE_AS_BASIS_POINTS as u128;
 
 		assert_boosted(deposit_address, deposit_id);
 		assert!(MockBoostApi::is_deposit_boosted(deposit_id));
@@ -401,12 +395,12 @@ fn insufficient_funds_for_boost() {
 fn lost_funds_are_acknowledged_by_boost_pool() {
 	new_test_ext().execute_with(|| {
 		const DEPOSIT_AMOUNT: AssetAmount = 250_000_000;
-		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+		const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
 
 		setup();
 		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
-		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS);
+		let (_channel_id, deposit_address) = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS);
 
 		let deposit_id = prewitness_deposit(deposit_address, EthAsset::Eth, DEPOSIT_AMOUNT);
 
@@ -496,7 +490,7 @@ fn failed_prewitness_does_not_discard_remaining_deposits_in_a_batch() {
 		let (deposit_channel, _, _) = EthereumIngressEgress::open_channel(
 			&ALICE, EthAsset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0, refund_address: ForeignChainAddress::Eth([0u8; 20].into()), additional_action: None },
-			TIER_5_BPS,
+			BOOST_FEE_BPS,
 		)
 		.unwrap();
 
@@ -541,7 +535,7 @@ fn taking_network_fee_from_boost_fee() {
 		MockBoostApi::set_available_amount(DEPOSIT_AMOUNT);
 
 		// ==== LP sends funds to liquidity deposit address, which gets pre-witnessed ====
-		let deposit_address = request_deposit_address_eth(LP_ACCOUNT, TIER_5_BPS).1;
+		let deposit_address = request_deposit_address_eth(LP_ACCOUNT, BOOST_FEE_BPS).1;
 
 		// First check that with a zero network fee portion, no network fee is collected:
 		{
@@ -633,7 +627,7 @@ mod vault_swaps {
 			const INPUT_ASSET: Asset = Asset::Eth;
 			const OUTPUT_ASSET: Asset = Asset::Flip;
 
-			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * TIER_5_BPS as u128 / 10_000;
+			const BOOST_FEE: AssetAmount = DEPOSIT_AMOUNT * BOOST_FEE_BPS as u128 / 10_000;
 			const INGRESS_FEE: AssetAmount = 1000000;
 			const EGRESS_FEE: AssetAmount = INGRESS_FEE;
 			const PREWITNESS_DEPOSIT_ID: PrewitnessedDepositId = PrewitnessedDepositId(1);

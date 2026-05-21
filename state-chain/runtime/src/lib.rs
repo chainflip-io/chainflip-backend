@@ -26,7 +26,7 @@ pub mod constants;
 pub mod migrations;
 pub mod runtime_apis;
 pub mod safe_mode;
-#[cfg(all(feature = "std", feature = "mocks"))]
+#[cfg(any(test, all(feature = "std", feature = "mocks")))]
 pub mod test_runner;
 mod weights;
 
@@ -38,7 +38,6 @@ use frame_support::sp_runtime::{
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
 };
-use pallet_session::historical as session_historical;
 use sp_runtime::generic;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
@@ -141,8 +140,6 @@ mod runtime {
 	pub type Validator = pallet_cf_validator;
 	#[runtime::pallet_index(10)]
 	pub type Session = pallet_session;
-	#[runtime::pallet_index(11)]
-	pub type Historical = session_historical;
 	#[runtime::pallet_index(12)]
 	pub type Aura = pallet_aura;
 	#[runtime::pallet_index(13)]
@@ -253,15 +250,26 @@ mod runtime {
 	pub type ArbitrumElections = pallet_cf_elections<Instance4>;
 
 	#[runtime::pallet_index(58)]
-	pub type BscChainTracking = pallet_cf_chain_tracking<Instance7>;
+	pub type TronChainTracking = pallet_cf_chain_tracking<Instance7>;
 	#[runtime::pallet_index(59)]
-	pub type BscVault = pallet_cf_vaults<Instance7>;
+	pub type TronVault = pallet_cf_vaults<Instance7>;
 	#[runtime::pallet_index(60)]
-	pub type BscBroadcaster = pallet_cf_broadcast<Instance7>;
+	pub type TronBroadcaster = pallet_cf_broadcast<Instance7>;
 	#[runtime::pallet_index(61)]
-	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance7>;
+	pub type TronIngressEgress = pallet_cf_ingress_egress<Instance7>;
 	#[runtime::pallet_index(62)]
-	pub type BscElections = pallet_cf_elections<Instance7>;
+	pub type TronElections = pallet_cf_elections<Instance7>;
+
+	#[runtime::pallet_index(63)]
+	pub type BscChainTracking = pallet_cf_chain_tracking<Instance8>;
+	#[runtime::pallet_index(64)]
+	pub type BscVault = pallet_cf_vaults<Instance8>;
+	#[runtime::pallet_index(65)]
+	pub type BscBroadcaster = pallet_cf_broadcast<Instance8>;
+	#[runtime::pallet_index(66)]
+	pub type BscIngressEgress = pallet_cf_ingress_egress<Instance8>;
+	#[runtime::pallet_index(67)]
+	pub type BscElections = pallet_cf_elections<Instance8>;
 }
 
 /// The address format for describing accounts.
@@ -336,7 +344,6 @@ pub type PalletExecutionOrder = (
 	Witnesser,
 	Validator,
 	Session,
-	Historical,
 	Aura,
 	Authorship,
 	Grandpa,
@@ -351,6 +358,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumChainTracking,
 	SolanaChainTracking,
 	AssethubChainTracking,
+	TronChainTracking,
 	BscChainTracking,
 	// Elections
 	GenericElections,
@@ -358,6 +366,7 @@ pub type PalletExecutionOrder = (
 	BitcoinElections,
 	EthereumElections,
 	ArbitrumElections,
+	TronElections,
 	BscElections,
 	// Vaults
 	EthereumVault,
@@ -366,6 +375,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumVault,
 	SolanaVault,
 	AssethubVault,
+	TronVault,
 	BscVault,
 	// Threshold Signers
 	EvmThresholdSigner,
@@ -379,6 +389,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumBroadcaster,
 	SolanaBroadcaster,
 	AssethubBroadcaster,
+	TronBroadcaster,
 	BscBroadcaster,
 	// Swapping and Liquidity Provision
 	Swapping,
@@ -390,6 +401,7 @@ pub type PalletExecutionOrder = (
 	ArbitrumIngressEgress,
 	SolanaIngressEgress,
 	AssethubIngressEgress,
+	TronIngressEgress,
 	BscIngressEgress,
 	// Liquidity Pools
 	LiquidityPools,
@@ -435,6 +447,7 @@ type PalletMigrations = (
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_chain_tracking::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, EthereumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, PolkadotInstance>,
@@ -442,6 +455,7 @@ type PalletMigrations = (
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_vaults::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_vaults::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, EvmInstance>,
 	pallet_cf_threshold_signature::migrations::PalletMigration<Runtime, PolkadotCryptoInstance>,
@@ -453,6 +467,7 @@ type PalletMigrations = (
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_broadcast::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_broadcast::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_swapping::migrations::PalletMigration<Runtime>,
 	pallet_cf_lp::migrations::PalletMigration<Runtime>,
@@ -462,6 +477,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, ArbitrumInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, SolanaInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, AssethubInstance>,
+	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, BscInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
@@ -515,7 +531,19 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = ();
+type MigrationsForV2_2 = (
+	migrations::safe_mode::SafeModeMigration,
+	frame_support::migrations::VersionedMigration<
+		5,
+		6,
+		NoopMigration,
+		pallet_grandpa::Pallet<Runtime>,
+		DbWeight,
+	>,
+	migrations::tron_integration::TronElectionsInit,
+	migrations::tron_integration::TronIngressEgressInit,
+	migrations::tron_integration::TronChainstate,
+);
 
 #[cfg(test)]
 mod test {

@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-	hub::AssethubRuntimeCall,
+	hub::XcmCall,
 	sol::{
 		sol_tx_core::consts::{
 			ACCOUNT_KEY_LENGTH_IN_TRANSACTION, ACCOUNT_REFERENCE_LENGTH_IN_TRANSACTION,
@@ -29,6 +29,7 @@ use crate::{
 };
 use cf_primitives::{Asset, ForeignChain};
 use codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
+use frame_support::MAX_EXTRINSIC_DEPTH;
 use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::DispatchError;
@@ -291,10 +292,12 @@ impl CcmValidityChecker {
 
 				Ok(DecodedCcmAdditionalData::Solana(decoded_data))
 			},
-			ForeignChain::Assethub =>
-				<AssethubRuntimeCall as codec::Decode>::decode(&mut ccm.message.as_ref())
-					.map(|_| DecodedCcmAdditionalData::NotRequired)
-					.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
+			ForeignChain::Assethub => <XcmCall as codec::DecodeLimit>::decode_all_with_depth_limit(
+				MAX_EXTRINSIC_DEPTH,
+				&mut ccm.message.as_ref(),
+			)
+			.map(|_| DecodedCcmAdditionalData::NotRequired)
+			.map_err(|_| CcmValidityError::CannotDecodeCcmAdditionalData),
 			_ =>
 				if !ccm.ccm_additional_data.0.is_empty() {
 					Err(CcmValidityError::RedundantDataSupplied)

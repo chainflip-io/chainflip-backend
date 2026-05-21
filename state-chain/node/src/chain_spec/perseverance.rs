@@ -18,7 +18,7 @@ pub use super::{
 	common::*,
 	testnet::{
 		ARBITRUM_EXPIRY_BLOCKS, ASSETHUB_EXPIRY_BLOCKS, BITCOIN_EXPIRY_BLOCKS, BSC_EXPIRY_BLOCKS,
-		ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS,
+		ETHEREUM_EXPIRY_BLOCKS, POLKADOT_EXPIRY_BLOCKS, SOLANA_EXPIRY_BLOCKS, TRON_EXPIRY_BLOCKS,
 	},
 };
 use super::{parse_account, StateChainEnvironment};
@@ -62,6 +62,9 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdc_token_address: hex_literal::hex!("75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"),
 	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
+	tron_key_manager_address: hex_literal::hex!("391362ed6f5f649868eede354d3e833d6165dd9a"), /* TFAzjzAnaFWRmXNvpNngTbBBDuo4WjRQyy */
+	tron_vault_address: hex_literal::hex!("2523ae929fecd9d665f472f59b99a8ce6b179510"), /* TDMakP1fbWc7XXoSWZpujpjRAuePPEn4oi */
+	trx_usdt_token_address: hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
 	// TODO: fill in real BSC perseverance contract addresses
 	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
 	bsc_vault_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
@@ -70,6 +73,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	bsc_chain_id: cf_chains::bsc::CHAIN_ID_TESTNET,
 	ethereum_chain_id: cf_chains::eth::CHAIN_ID_SEPOLIA,
 	arbitrum_chain_id: cf_chains::arb::CHAIN_ID_ARBITRUM_SEPOLIA,
+	tron_chain_id: cf_chains::tron::CHAIN_ID_NILE_TESTNET,
 	eth_init_agg_key: hex_literal::hex!(
 		"021cf3c105fbc7112f3394c3e176463ec59600f1e7005ad8d68f66840264998667"
 	),
@@ -457,3 +461,4 @@ pub const BITCOIN_SAFETY_MARGIN: u64 = 5;
 pub const ETHEREUM_SAFETY_MARGIN: u64 = 2;
 pub const ARBITRUM_SAFETY_MARGIN: u64 = 1;
 pub const SOLANA_SAFETY_MARGIN: u64 = 1; // Unused - we use "finalized" instead
+pub const TRON_SAFETY_MARGIN: u64 = 19;

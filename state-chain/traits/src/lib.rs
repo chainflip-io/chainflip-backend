@@ -35,7 +35,7 @@ mod validate;
 pub use validate::*;
 
 pub use swapping::{
-	ExpiryBehaviour, LendingSwapType, PriceLimitsAndExpiry, SwapExecutionProgress,
+	ExpiryBehaviour, LendingSwapType, NetworkFeeApi, PriceLimitsAndExpiry, SwapExecutionProgress,
 	SwapOutputAction, SwapOutputActionEncoded, SwapRequestHandler, SwapRequestType,
 	SwapRequestTypeEncoded, SwapType,
 };
@@ -66,7 +66,8 @@ use frame_support::{
 	pallet_prelude::{DispatchResultWithPostInfo, Member},
 	sp_runtime::{
 		traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
-		BoundedVec, DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
+		BoundedVec, DispatchError, DispatchResult, FixedPointNumber, FixedPointOperand, FixedU128,
+		Percent, RuntimeDebug,
 	},
 	traits::{ConstU32, EnsureOrigin, Get, IsType, UnfilteredDispatchable},
 	weights::Weight,
@@ -297,9 +298,24 @@ pub trait ReputationResetter {
 
 pub trait RedemptionCheck {
 	type ValidatorId;
-	fn ensure_can_redeem(validator_id: &Self::ValidatorId) -> DispatchResult;
-	fn can_redeem(validator_id: &Self::ValidatorId) -> bool {
-		Self::ensure_can_redeem(validator_id).is_ok()
+	type Amount;
+
+	/// Amount-aware redemption gate, used by `redeem`. Enforces auction-phase /
+	/// active-bidder restrictions, and (for delegators) ensures the requested
+	/// amount does not eat into the balance reserved by their stored max_bid.
+	fn ensure_can_redeem_amount(
+		validator_id: &Self::ValidatorId,
+		amount: Self::Amount,
+	) -> DispatchResult;
+
+	/// Transfer gate, used by `rebalance` and sub-account spawning. Allows the
+	/// transfer if the source has no redemption restrictions, or if the
+	/// recipient is subject to the same restrictions (so funds cannot escape a
+	/// lock by hopping to an unrestricted account).
+	fn ensure_can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> DispatchResult;
+
+	fn can_transfer(source: &Self::ValidatorId, dest: &Self::ValidatorId) -> bool {
+		Self::ensure_can_transfer(source, dest).is_ok()
 	}
 }
 
@@ -1069,6 +1085,29 @@ pub trait AdjustedFeeEstimationApi<C: Chain> {
 	fn estimate_fee(asset: C::ChainAsset, ingress_or_egress: IngressOrEgress) -> C::ChainAmount;
 }
 
+/// Trait for adjusting the fee estimate with the fee multiplier.
+/// Different chains can provide different implementations to customize fee adjustment behavior.
+pub trait FeeMultiplierProvider<C: Chain> {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount;
+}
+
+/// Default implementation: always applies the fee multiplier.
+pub struct DefaultFeeMultiplier;
+
+impl<C: Chain> FeeMultiplierProvider<C> for DefaultFeeMultiplier {
+	fn adjust_fee(
+		estimated_fee: C::ChainAmount,
+		fee_multiplier: FixedU128,
+		_ingress_or_egress: &IngressOrEgress,
+	) -> C::ChainAmount {
+		fee_multiplier.saturating_mul_int(estimated_fee)
+	}
+}
+
 pub trait CallDispatchFilter<RuntimeCall> {
 	fn should_dispatch(&self, call: &RuntimeCall) -> bool;
 }
@@ -1184,6 +1223,13 @@ pub trait BalanceApi {
 
 	/// Returns the asset free balances of the given account.
 	fn free_balances(who: &Self::AccountId) -> AssetMap<AssetAmount>;
+
+	/// Returns the asset free balances of the given account, but **without sweeping**.
+	/// This function exists for performance reasons (for the cf_all_account_infos rpc call),
+	/// because sweeping is an expensive operation.
+	///
+	/// Only use this if you can guarantee that the `who` account has been swept already.
+	fn free_balances_dont_sweep(who: &Self::AccountId) -> AssetMap<AssetAmount>;
 
 	/// Returns the balance of the given account for the given asset.
 	fn get_balance(who: &Self::AccountId, asset: Asset) -> AssetAmount;

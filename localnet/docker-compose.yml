@@ -224,8 +224,55 @@ services:
       retries: 5
       start_period: 10s
 
+  tron:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.0.0-${NODE_COUNT}
+    pull_policy: if_not_present
+    container_name: tron
+    restart: unless-stopped
+    environment:
+      - JAVA_OPTS=-Xms4g -Xmx6g # Give the VM more heap size to not run into CPU TIMEOUT problems
+    ports:
+      - "8090:8090" # TRON HTTP API (wallet)
+      - "8091:8091" # TRON HTTP API (solidity)
+      - "8555:8555" # EVM-compatible JSON-RPC
+      - "50051:50051" # gRPC
+    volumes:
+      - "./init/tron:/tron/config"
+    command: -c /tron/config/config.conf -d /tron/output-directory -w -p ef895dc87b545ba42ece3162b8441f712c892d0681ae34682eeb3e5443afefaa
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl",
+          "-s",
+          "-X",
+          "POST",
+          "-H",
+          "Content-Type: application/json",
+          "http://127.0.0.1:8090/wallet/getnowblock",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Observer-only peer node. Its sole purpose is to give the witness node above
+  # an active peer connection so that wallet/broadcasttransaction is unblocked
+  # (java-tron returns NO_CONNECTION when activePeerCount < 1).
+  tron-peer:
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.0.0-${NODE_COUNT}
+    pull_policy: if_not_present
+    container_name: tron-peer
+    restart: unless-stopped
+    depends_on:
+      - tron
+    volumes:
+      - "./init/tron:/tron/config"
+      - "/tmp/chainflip/data/tron-peer-data:/tron/output-directory"
+    command: -c /tron/config/config-peer.conf -d /tron/output-directory
+
   deposit-monitor:
-    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-7f2557281a3a1b1dd5410a4e3df980fea71adc93}
+    image: ghcr.io/chainflip-io/chainflip-deposit-monitor/chainflip-deposit-monitor:${DEPOSIT_MONITOR_IMAGE_TAG:-development-d565d33b98fad1c0c60018e59ea171e757dacbe5}
     platform: linux/amd64
     container_name: deposit-monitor
     restart: unless-stopped
@@ -308,6 +355,9 @@ services:
       - CFDM_SOL_ENABLE_DEPOSIT_MONITORING=true
       - CFDM_SOL_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
       - CFDM_SOL_RPC_HTTP_ENDPOINT=${CFDM_SOL_RPC_HTTP_ENDPOINT}
+
+      - CFDM_TRON_ENABLE_DEPOSIT_MONITORING=true
+      - CFDM_TRON_JUDGEMENT_PROCESSOR_CONFIRMATION_TIMEOUT_SECS=300
 
   postgres:
     image: postgres:15.3

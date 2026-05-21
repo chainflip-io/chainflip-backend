@@ -336,6 +336,9 @@ impl ChainCrypto for BitcoinCrypto {
 		payloads: &Self::Payload,
 		signatures: &Self::ThresholdSignature,
 	) -> bool {
+		if payloads.is_empty() || payloads.len() != signatures.len() {
+			return false;
+		}
 		payloads
 			.iter()
 			.zip(signatures)

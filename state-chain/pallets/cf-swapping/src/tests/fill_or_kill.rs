@@ -1097,107 +1097,101 @@ mod oracle_swaps {
 				);
 			});
 		}
+
+		#[test]
+		fn stale_oracle_price_only_fails_when_slippage_limit_set() {
+			new_test_ext().execute_with(|| {
+				set_prices();
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(Asset::Btc, STABLE_ASSET).unwrap(),
+					10,
+				);
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(Asset::Eth, STABLE_ASSET).unwrap(),
+					10,
+				);
+				MockPriceFeedApi::set_stale(Asset::Btc, true);
+
+				// With no slippage limit configured, the stale-price error is silently
+				// dropped. No default LPP is enforced.
+				assert_eq!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(None)),
+					Ok(None),
+				);
+
+				// With a slippage limit configured, the stale-price error is surfaced.
+				assert_err!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(Some(100))),
+					SwapFailureReason::OraclePriceStale,
+				);
+
+				// Check that a stale price will not fail a simulated swap (no refund params)
+				assert_eq!(
+					Pallet::<Test>::check_swap_price_violation(&SwapState {
+						swap: Swap::new(
+							0.into(),
+							0.into(),
+							Asset::Btc,
+							Asset::Eth,
+							INPUT_AMOUNT,
+							None,
+							Default::default(),
+						),
+
+						network_fee_taken: Some(NETWORK_FEE),
+						broker_fee_taken: Some(BROKER_FEE),
+						stable_amount: Some(STABLE_AMOUNT),
+						final_output: Some(OUTPUT_AMOUNT),
+						oracle_delta: None,
+						oracle_delta_ex_fees: None,
+					}),
+					Ok(None),
+				);
+
+				// Confirm that the default LPP is enforced when not stale.
+				MockPriceFeedApi::set_stale(Asset::Btc, false);
+				assert_err!(
+					Pallet::<Test>::check_swap_price_violation(&test_swap_state(None)),
+					SwapFailureReason::OraclePriceSlippageExceeded,
+				);
+			});
+		}
 	}
 
 	#[test]
 	fn will_use_default_oracle_price_protection() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
 		const INPUT_ASSET: Asset = Asset::Eth;
 		const OUTPUT_ASSET: Asset = Asset::Btc;
 		const INPUT_PROTECTION_BPS: BasisPoints = 100;
 		const OUTPUT_PROTECTION_BPS: BasisPoints = 200;
-		// We want a non-zero network fee and broker fee to ensure they don't affect the
-		// price protection calculation.
-		const NETWORK_FEE_BPS: BasisPoints = 50;
-		const BROKER1_FEE_BPS: BasisPoints = 15;
-
-		const EXPECTED_PRICE_PROTECTION_BPS: BasisPoints =
-			INPUT_PROTECTION_BPS + OUTPUT_PROTECTION_BPS;
-
-		new_test_ext().execute_with(|| {
-			// Set the price, default oracle protections and network fee.
-			MockPriceFeedApi::set_price_usd(INPUT_ASSET, 10_000_000);
-			MockPriceFeedApi::set_price_usd(OUTPUT_ASSET, 40_000_000);
-			DefaultOraclePriceSlippageProtection::<Test>::set(
-				AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
-				INPUT_PROTECTION_BPS,
-			);
-			DefaultOraclePriceSlippageProtection::<Test>::set(
-				AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
-				OUTPUT_PROTECTION_BPS,
-			);
-			InternalSwapNetworkFee::<Test>::set(FeeRateAndMinimum {
-				rate: Permill::from_parts(NETWORK_FEE_BPS as u32 * 100),
-				minimum: 0,
-			});
-
-			// Init a swap request that has no oracle price protection set. Triggering the
-			// default to be calculated and used.
-			let _ = Swapping::init_swap_request(
-				INPUT_ASSET,
-				INPUT_AMOUNT,
-				OUTPUT_ASSET,
-				SwapRequestType::Regular {
-					output_action: SwapOutputAction::CreditOnChain { account_id: 1 },
-				},
-				vec![Beneficiary { account: BROKER, bps: BROKER1_FEE_BPS }].try_into().unwrap(),
-				Some(PriceLimitsAndExpiry {
-					expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
-						retry_duration: SWAP_DELAY_BLOCKS,
-						refund_address: AccountOrAddress::InternalAccount(1),
-						refund_ccm_metadata: None,
-					},
-					min_price: Price::zero(),
-					// No max oracle slippage is set
-					max_oracle_price_slippage: None,
-				}),
-				None,
-				SwapOrigin::OnChainAccount(0),
-			);
-
-			// Check the event for the adjusted price protection
-			assert_has_matching_event!(
-			Test,
-			RuntimeEvent::Swapping(Event::SwapRequested {
-				price_limits_and_expiry,
-				..
-			}) if *price_limits_and_expiry == Some(PriceLimitsAndExpiry {
-				expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
-					retry_duration: SWAP_DELAY_BLOCKS,
-					refund_address: AccountOrAddress::InternalAccount(1),
-					refund_ccm_metadata: None,
-				},
-				min_price: Price::zero(),
-				// Just the max oracle slippage has been changed
-				max_oracle_price_slippage: Some(EXPECTED_PRICE_PROTECTION_BPS),
-			}));
-		});
-	}
-
-	/// A single-sided oracle swap is where one of the assets supports oracle price but the other
-	/// does not. In this case, we should still be able to use oracle price protection for the
-	/// supported asset.
-	#[test]
-	fn single_sided_oracle_swap() {
-		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64; // TODO JAMIE: can we factor this out? .then_process_blocks(
-
-		const INPUT_ASSET: Asset = Asset::Eth;
-		const OUTPUT_ASSET: Asset = Asset::Flip;
-		const INPUT_PROTECTION_BPS: BasisPoints = 100;
 
 		new_test_ext()
 			.execute_with(|| {
-				// Set the price and default oracle protection for just one asset
-				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, 10_000_000);
+				// Prices consistent with the default swap rate so the oracle delta is ~0
+				// when the rate is unchanged.
+				const OUTPUT_PRICE: u128 = 100_000_000;
+				const STABLE_PRICE: u128 = OUTPUT_PRICE * DEFAULT_SWAP_RATE;
+				const INPUT_PRICE: u128 = STABLE_PRICE * DEFAULT_SWAP_RATE;
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, INPUT_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, STABLE_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, OUTPUT_PRICE);
+
 				DefaultOraclePriceSlippageProtection::<Test>::set(
 					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
 					INPUT_PROTECTION_BPS,
 				);
-				// USDC needs to also have a price set for the oracle price protection to work.
-				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, 10_000_000 * DEFAULT_SWAP_RATE);
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
+					OUTPUT_PROTECTION_BPS,
+				);
 
-				// Init a swap request that has no oracle price protection set. Triggering the
-				// default to be calculated and used.
-				let _ = Swapping::init_swap_request(
+				// Drop the swap rate well below the combined default tolerance so the
+				// LPP check has something to reject.
+				SwapRate::set(0.1);
+
+				// Swap with no user-supplied oracle slippage — the per-chunk default applies.
+				Swapping::init_swap_request(
 					INPUT_ASSET,
 					INPUT_AMOUNT,
 					OUTPUT_ASSET,
@@ -1212,32 +1206,12 @@ mod oracle_swaps {
 							refund_ccm_metadata: None,
 						},
 						min_price: Price::zero(),
-						// No max oracle slippage is set
+						// No user-supplied slippage, so the default protection should be used
 						max_oracle_price_slippage: None,
 					}),
 					None,
 					SwapOrigin::OnChainAccount(0),
 				);
-
-				// Check the event for the adjusted price protection
-				assert_has_matching_event!(
-				Test,
-				RuntimeEvent::Swapping(Event::SwapRequested {
-					price_limits_and_expiry,
-					..
-				}) if *price_limits_and_expiry == Some(PriceLimitsAndExpiry {
-					expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
-						retry_duration: 0,
-						refund_address: AccountOrAddress::InternalAccount(1),
-						refund_ccm_metadata: None,
-					},
-					min_price: Price::zero(),
-					// Just the max oracle slippage has been changed
-					max_oracle_price_slippage: Some(INPUT_PROTECTION_BPS),
-				}));
-
-				// Set the swap rate so the swap will fail
-				SwapRate::set(0.1);
 			})
 			.then_process_blocks_until_block(SWAP_BLOCK)
 			.then_execute_with(|_| {
@@ -1249,5 +1223,130 @@ mod oracle_swaps {
 					})
 				);
 			});
+	}
+
+	#[test]
+	fn oracle_price_protection_user_specified() {
+		const SWAP_BLOCK: u64 = INIT_BLOCK + SWAP_DELAY_BLOCKS as u64;
+		const INPUT_ASSET: Asset = Asset::Eth;
+		const OUTPUT_ASSET: Asset = Asset::Btc;
+		const PROTECTION_BPS: BasisPoints = 100;
+		// Set the default protection to a high value so it would not trigger if it is used
+		const DEFAULT_PROTECTION_BPS: BasisPoints = 10000;
+
+		new_test_ext()
+			.execute_with(|| {
+				// Prices consistent with the default swap rate so the oracle delta is ~0
+				// when the rate is unchanged.
+				const OUTPUT_PRICE: u128 = 100_000_000;
+				const STABLE_PRICE: u128 = OUTPUT_PRICE * DEFAULT_SWAP_RATE;
+				const INPUT_PRICE: u128 = STABLE_PRICE * DEFAULT_SWAP_RATE;
+				MockPriceFeedApi::set_price_usd_fine(INPUT_ASSET, INPUT_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(STABLE_ASSET, STABLE_PRICE);
+				MockPriceFeedApi::set_price_usd_fine(OUTPUT_ASSET, OUTPUT_PRICE);
+
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(INPUT_ASSET, STABLE_ASSET).unwrap(),
+					DEFAULT_PROTECTION_BPS,
+				);
+				DefaultOraclePriceSlippageProtection::<Test>::set(
+					AssetPair::new(OUTPUT_ASSET, STABLE_ASSET).unwrap(),
+					DEFAULT_PROTECTION_BPS,
+				);
+
+				// Drop the swap rate so the user-specified protection will trigger.
+				SwapRate::set(0.9);
+
+				// Swap with no user-supplied oracle slippage — the per-chunk default applies.
+				Swapping::init_swap_request(
+					INPUT_ASSET,
+					INPUT_AMOUNT,
+					OUTPUT_ASSET,
+					SwapRequestType::Regular {
+						output_action: SwapOutputAction::CreditOnChain { account_id: 1 },
+					},
+					vec![].try_into().unwrap(),
+					Some(PriceLimitsAndExpiry {
+						expiry_behaviour: ExpiryBehaviour::RefundIfExpires {
+							retry_duration: 0,
+							refund_address: AccountOrAddress::InternalAccount(1),
+							refund_ccm_metadata: None,
+						},
+						min_price: Price::zero(),
+						// We set a user-specified slippage that is different from the default
+						max_oracle_price_slippage: Some(PROTECTION_BPS),
+					}),
+					None,
+					SwapOrigin::OnChainAccount(0),
+				);
+			})
+			.then_process_blocks_until_block(SWAP_BLOCK)
+			.then_execute_with(|_| {
+				assert_has_matching_event!(
+					Test,
+					RuntimeEvent::Swapping(Event::SwapAborted {
+						reason: SwapFailureReason::OraclePriceSlippageExceeded,
+						..
+					})
+				);
+			});
+	}
+
+	#[test]
+	fn default_oracle_price_protection_values() {
+		const ASSET_A: Asset = Asset::Eth;
+		const ASSET_B: Asset = Asset::Btc;
+		const PROTECTION_A_BPS: BasisPoints = 100;
+		const PROTECTION_B_BPS: BasisPoints = 200;
+		const UNCONFIGURED_ASSET: Asset = Asset::Flip;
+
+		new_test_ext().execute_with(|| {
+			MockPriceFeedApi::set_price_usd(ASSET_A, 10_000_000);
+			MockPriceFeedApi::set_price_usd(ASSET_B, 40_000_000);
+			MockPriceFeedApi::set_price_usd(UNCONFIGURED_ASSET, 1);
+
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				AssetPair::new(ASSET_A, STABLE_ASSET).unwrap(),
+				PROTECTION_A_BPS,
+			);
+			DefaultOraclePriceSlippageProtection::<Test>::set(
+				AssetPair::new(ASSET_B, STABLE_ASSET).unwrap(),
+				PROTECTION_B_BPS,
+			);
+
+			// Two-leg swap: both legs contribute, slippage is summed.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(ASSET_A, ASSET_B),
+				Some(PROTECTION_A_BPS + PROTECTION_B_BPS),
+			);
+			// Direction doesn't matter — the sum is symmetric.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(ASSET_B, ASSET_A),
+				Some(PROTECTION_A_BPS + PROTECTION_B_BPS),
+			);
+
+			// Single-leg swap (stable in): only the non-stable leg contributes.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(STABLE_ASSET, ASSET_B),
+				Some(PROTECTION_B_BPS),
+			);
+			// Single-leg swap (stable out): same on the other side.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(ASSET_A, STABLE_ASSET),
+				Some(PROTECTION_A_BPS),
+			);
+
+			// Stable to stable, not a real swap, but make sure it doesn't cause any issues.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(STABLE_ASSET, STABLE_ASSET),
+				None,
+			);
+
+			// An unconfigured leg falls back to FALLBACK_DEFAULT_LPP_LIMIT_BPS rather than 0.
+			assert_eq!(
+				Pallet::<Test>::get_default_oracle_price_protection(ASSET_A, UNCONFIGURED_ASSET),
+				Some(PROTECTION_A_BPS + FALLBACK_DEFAULT_LPP_LIMIT_BPS),
+			);
+		});
 	}
 }
