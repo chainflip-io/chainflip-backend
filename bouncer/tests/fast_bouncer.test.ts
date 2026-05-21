@@ -61,11 +61,14 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
   concurrentTest('Lending', lendingTest, 360 * ciTimeoutFactor);
-  concurrentTest(
-    'GovernanceDepositWitnessing',
-    testGovernanceDepositWitnessing,
-    265 * ciTimeoutFactor,
-  );
+  if (!process.env.PRE_UPGRADE_BOUNCER) {
+    // This test is disabled in the pre-upgrade bouncer run to prevent it from interfering with the post-upgrade run.
+    concurrentTest(
+      'GovernanceDepositWitnessing',
+      testGovernanceDepositWitnessing,
+      265 * ciTimeoutFactor,
+    );
+  }
   concurrentTest('RpcCalls', testRpcCalls, 160 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
