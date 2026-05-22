@@ -25,7 +25,8 @@ use cf_traits::{
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter, waived_fees::WaivedFeesMock,
+		reputation_resetter::MockReputationResetter,
+		rewards_distribution::MockRewardsDistribution, waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };
@@ -80,6 +81,7 @@ impl pallet_cf_flip::Config for Test {
 	type BlocksPerDay = sp_core::ConstU64<14400>;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock<Self>;
+	type RewardsDistribution = MockRewardsDistribution<Self>;
 	// Required to satisfy trait bounds on InspectHold implementation, required by
 	// pallet_session::Config::Currency.
 	type RuntimeHoldReason = pallet_session::HoldReason;

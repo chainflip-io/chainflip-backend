@@ -74,6 +74,7 @@ impl pallet_cf_flip::Config for Test {
 	type Balance = FlipBalance;
 	type BlocksPerDay = BlocksPerDay;
 	type WeightInfo = ();
+	type RewardsDistribution = FlipDistribution;
 	type WaivedFees = WaivedFeesMock<Self>;
 	type CallIndexer = ();
 	type RuntimeHoldReason = ();
