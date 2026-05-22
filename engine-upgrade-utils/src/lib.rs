@@ -33,41 +33,12 @@ pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to adapt arguments between the new and old versions while both CFEs can be run
-// by the upgrade runner.
+// by the upgrade runner. The old engine (OLD_VERSION) and the new engine (NEW_VERSION) currently
+// share the same CLI argument schema, so this is a passthrough. If a future version bump changes
+// the engine's arguments, adapt them here so the old engine still parses them during the upgrade
+// fallback path.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
-	let mut compatible_args = args;
-
-	copy_arg(&mut compatible_args, "hub.rpc.ws_endpoint", "dot.rpc.ws_endpoint");
-	copy_arg(&mut compatible_args, "hub.rpc.http_endpoint", "dot.rpc.http_endpoint");
-	copy_arg(&mut compatible_args, "hub.backup_rpc.ws_endpoint", "dot.backup_rpc.ws_endpoint");
-	copy_arg(&mut compatible_args, "hub.backup_rpc.http_endpoint", "dot.backup_rpc.http_endpoint");
-
-	compatible_args.retain(|arg| !arg.starts_with("--tron."));
-
-	compatible_args
-}
-
-fn copy_arg(args: &mut Vec<String>, source_key: &str, target_key: &str) {
-	if has_arg(args, target_key) {
-		return;
-	}
-
-	if let Some(value) = find_arg_value(args, source_key) {
-		args.push(format!("--{target_key}={value}"));
-	}
-}
-
-fn has_arg(args: &[String], key: &str) -> bool {
-	args.iter().any(|arg| {
-		arg.strip_prefix("--").is_some_and(|arg_without_prefix| {
-			arg_without_prefix == key || arg_without_prefix.starts_with(&format!("{key}="))
-		})
-	})
-}
-
-fn find_arg_value(args: &[String], key: &str) -> Option<String> {
-	args.iter()
-		.find_map(|arg| arg.strip_prefix(&format!("--{key}=")).map(ToString::to_string))
+	args
 }
 
 pub use std::ffi::c_char;
@@ -193,23 +164,14 @@ fn test_c_str_array_with_args() {
 }
 
 #[test]
-fn test_args_compatible_with_old_adds_removed_settings() {
+fn test_args_compatible_with_old_is_passthrough() {
+	// The old and new engines currently share the same CLI argument schema, so the
+	// arguments are passed through unchanged.
 	let args = vec![
 		"chainflip-engine".to_string(),
 		"--hub.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string(),
-		"--hub.rpc.http_endpoint=https://hub-rpc.example.com/secret".to_string(),
-		"--hub.backup_rpc.ws_endpoint=ws://hub-backup.example.com".to_string(),
-		"--hub.backup_rpc.http_endpoint=http://hub-backup.example.com".to_string(),
+		"--tron.rpc.http_endpoint=http://tron.example.com".to_string(),
 	];
 
-	let compatible_args = args_compatible_with_old(args);
-
-	assert!(compatible_args
-		.contains(&"--dot.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.rpc.http_endpoint=https://hub-rpc.example.com/secret".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.backup_rpc.ws_endpoint=ws://hub-backup.example.com".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.backup_rpc.http_endpoint=http://hub-backup.example.com".to_string()));
+	assert_eq!(args_compatible_with_old(args.clone()), args);
 }
