@@ -493,24 +493,6 @@ mod tests {
 	use core::str::FromStr;
 
 	#[test]
-	fn f() {
-		for s in [
-			"0x08d0f52233472608bbed97f05ec6dfb3b44b15a7",
-			"0x64d7716c6dee7a7898ecd53770c515faab079f27",
-			"0x58f63aa23974665ecf2b08b7c0b72e4286aa822b",
-			"0x8a64ac13b9c271cde34fa1a540cef0a12ed340f2",
-			"0xa3f3cd7a99fff4ef3a0fb53c392ec2ba2b3dd7a4",
-			"0x93bba670696ad5412c9d40d0326b1fa608fe02b3",
-			"0xf7a8fe41b578b3c12a00845a7bb148a266071b8d",
-			"0xc8b667fde50ad86e07fb11b3224deca6394e0518",
-			"0x381329586b3e0658fb2a3026e25bc7c494bfb897",
-			"0x653f773aef9c28870b4e0f88afd11f659c021955",
-		] {
-			println!("{}", TronAddress(Address::from_str(s).unwrap()).to_base58check());
-		}
-	}
-
-	#[test]
 	fn fee_estimation_trx_ingress() {
 		let tracked_data = TronTrackedData::new();
 
