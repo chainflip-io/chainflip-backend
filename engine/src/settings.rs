@@ -290,13 +290,9 @@ pub struct ArbOptions {
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct BscOptions {
-	#[clap(long = "bsc.rpc.ws_endpoint")]
-	pub bsc_ws_endpoint: Option<String>,
 	#[clap(long = "bsc.rpc.http_endpoint")]
 	pub bsc_http_endpoint: Option<String>,
 
-	#[clap(long = "bsc.backup_rpc.ws_endpoint")]
-	pub bsc_backup_ws_endpoint: Option<String>,
 	#[clap(long = "bsc.backup_rpc.http_endpoint")]
 	pub bsc_backup_http_endpoint: Option<String>,
 
@@ -881,10 +877,8 @@ impl ArbOptions {
 impl BscOptions {
 	/// Inserts all the BSC Options into the given map (if Some)
 	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
-		insert_command_line_option(map, "bsc.rpc.ws_endpoint", &self.bsc_ws_endpoint);
 		insert_command_line_option(map, "bsc.rpc.http_endpoint", &self.bsc_http_endpoint);
 
-		insert_command_line_option(map, "bsc.backup_rpc.ws_endpoint", &self.bsc_backup_ws_endpoint);
 		insert_command_line_option(
 			map,
 			"bsc.backup_rpc.http_endpoint",
@@ -1004,7 +998,7 @@ pub mod tests {
 
 	use crate::constants::{
 		ARB_BACKUP_HTTP_ENDPOINT, ARB_HTTP_ENDPOINT, BSC_BACKUP_HTTP_ENDPOINT,
-		BSC_BACKUP_WS_ENDPOINT, BSC_HTTP_ENDPOINT, BSC_WS_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT,
+		BSC_HTTP_ENDPOINT, BTC_BACKUP_HTTP_ENDPOINT,
 		BTC_BACKUP_RPC_PASSWORD, BTC_BACKUP_RPC_USER, BTC_HTTP_ENDPOINT, BTC_RPC_PASSWORD,
 		BTC_RPC_USER, ETH_BACKUP_HTTP_ENDPOINT, ETH_HTTP_ENDPOINT, HUB_BACKUP_HTTP_ENDPOINT,
 		HUB_BACKUP_WS_ENDPOINT, HUB_HTTP_ENDPOINT, HUB_WS_ENDPOINT, NODE_P2P_IP_ADDRESS,
@@ -1071,9 +1065,7 @@ pub mod tests {
 		TRON_BACKUP_JSON_RPC_ENDPOINT => "http://second.localhost:8091/jsonrpc",
 
 		BSC_HTTP_ENDPOINT => "http://localhost:8549",
-		BSC_WS_ENDPOINT => "ws://localhost:8550",
-		BSC_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8549",
-		BSC_BACKUP_WS_ENDPOINT => "ws://second.localhost:8550"
+		BSC_BACKUP_HTTP_ENDPOINT => "http://second.localhost:8549"
 	}
 
 	// We do them like this so they run sequentially, which is necessary so the environment doesn't
@@ -1223,9 +1215,7 @@ pub mod tests {
 				arb_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
 			bsc_opts: BscOptions {
-				bsc_ws_endpoint: Some("ws://endpoint:4322".to_owned()),
 				bsc_http_endpoint: Some("http://endpoint:4322".to_owned()),
-				bsc_backup_ws_endpoint: Some("ws://second_endpoint:4322".to_owned()),
 				bsc_backup_http_endpoint: Some("http://second_endpoint:4322".to_owned()),
 				bsc_private_key_file: Some(PathBuf::from_str("keys/eth_private_key_2").unwrap()),
 			},
@@ -1300,21 +1290,13 @@ pub mod tests {
 		);
 
 		assert!(settings.arb.private_key_file.ends_with("eth_private_key_2"));
-
-		assert_eq!(
-			opts.bsc_opts.bsc_ws_endpoint.clone().unwrap(),
-			settings.bsc.nodes.primary.ws_endpoint.as_ref()
-		);
+		
 		assert_eq!(
 			opts.bsc_opts.bsc_http_endpoint.clone().unwrap(),
 			settings.bsc.nodes.primary.http_endpoint.as_ref()
 		);
 
 		let bsc_backup_node = settings.bsc.nodes.backup.unwrap();
-		assert_eq!(
-			opts.bsc_opts.bsc_backup_ws_endpoint.unwrap(),
-			bsc_backup_node.ws_endpoint.as_ref()
-		);
 		assert_eq!(
 			opts.bsc_opts.bsc_backup_http_endpoint.unwrap(),
 			bsc_backup_node.http_endpoint.as_ref()
