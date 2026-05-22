@@ -175,8 +175,6 @@ mod tests {
 			format!("--bsc.private_key_file={some_file}"),
 			"--bsc.rpc.http_endpoint=http://localhost:8549".to_string(),
 			"--bsc.backup_rpc.http_endpoint=http://localhost:8550".to_string(),
-			"--bsc.rpc.ws_endpoint=ws://localhost:8549".to_string(),
-			"--bsc.backup_rpc.ws_endpoint=ws://localhost:8550".to_string(),
 			// p2p
 			format!("--p2p.node_key_file={some_file}"),
 			"--p2p.ip_address=0.1.2.3".to_string(),
