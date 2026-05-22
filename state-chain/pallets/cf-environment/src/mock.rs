@@ -385,7 +385,7 @@ cf_test_utilities::impl_test_helpers! {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarks_mock {
-	use cf_traits::WaivedFees;
+	use cf_traits::{mocks::rewards_distribution::MockRewardsDistribution, WaivedFees};
 	use sp_core::ConstU64;
 
 	use super::*;
@@ -441,6 +441,7 @@ pub mod benchmarks_mock {
 		type BlocksPerDay = ConstU64<14400>;
 		type WeightInfo = ();
 		type WaivedFees = MockWaivedFees;
+		type RewardsDistribution = MockRewardsDistribution<Self>;
 		type RuntimeHoldReason = ();
 		type CallIndexer = ();
 	}
