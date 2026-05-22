@@ -30,19 +30,18 @@ use cf_chains::{
 };
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
-	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, EpochIndex, ForeignChain,
-	SwapId, SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
+	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
 	FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
 	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
 	impl_pallet_safe_mode, AffiliateRegistry, AssetConverter, BalanceApi, Bonding,
-	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck,
-	EpochTransitionHandler, ExpiryBehaviour, FundingInfo, FundingSource, GetMinimumFunding,
-	IngressEgressFeeApi, PriceFeedApi, PriceLimitsAndExpiry, SwapOutputAction,
-	SwapParameterValidation, SwapRequestHandler, SwapRequestType, SwapRequestTypeEncoded, SwapType,
-	SwappingApi,
+	ChainflipNetworkInfo, ChannelIdAllocator, DepositApi, DeregistrationCheck, ExpiryBehaviour,
+	FundingInfo, FundingSource, GetMinimumFunding, IngressEgressFeeApi, PriceFeedApi,
+	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
+	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
@@ -3117,13 +3116,14 @@ pub mod pallet {
 			}
 		}
 
-		pub fn add_to_flip_to_be_sent_to_gateway(amount: AssetAmount) {
+		pub fn maybe_trigger_flip_to_gateway_egress(
+			state_chain_gateway_address: EthereumAddress,
+			amount: AssetAmount,
+		) {
+			// Add flip that was just distributed to validators, to be sent to the gateway
 			FlipToBeSentToGateway::<T>::mutate(|total| {
 				total.saturating_accrue(amount);
 			});
-		}
-
-		pub fn maybe_trigger_flip_to_gateway_egress(state_chain_gateway_address: EthereumAddress) {
 			match with_storage_layer(|| {
 				T::EgressHandler::schedule_egress(
 					cf_chains::assets::any::Asset::Flip,

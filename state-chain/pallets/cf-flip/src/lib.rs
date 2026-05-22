@@ -572,7 +572,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::deposit_event(Event::FlipDistributed { amount: flip_minted_list });
-		return flip_to_distribute.into();
+		flip_to_distribute.into()
 	}
 }
 

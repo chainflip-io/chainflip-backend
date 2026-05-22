@@ -29,6 +29,9 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		let flip_distributed =
 			Flip::trigger_flip_reward_distribution(Validator::historical_authorities(new - 1));
 
-		Swapping::maybe_trigger_flip_to_gateway_egress(Environment::state_chain_gateway_address());
+		Swapping::maybe_trigger_flip_to_gateway_egress(
+			Environment::state_chain_gateway_address(),
+			flip_distributed,
+		);
 	}
 }

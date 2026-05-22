@@ -81,7 +81,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
-use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 pub use pallet_cf_validator::SetSizeParameters;
 use pallet_cf_validator::{DelegatedRewardsDistribution, DelegationSlasher};
