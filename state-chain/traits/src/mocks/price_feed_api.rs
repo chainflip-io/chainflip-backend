@@ -36,6 +36,10 @@ impl MockPriceFeedApi {
 }
 
 impl PriceFeedApi for MockPriceFeedApi {
+	fn is_oracle_supported(asset: Asset) -> bool {
+		Self::get_price(asset).is_some()
+	}
+
 	fn get_price(asset: Asset) -> Option<OraclePrice> {
 		let stale = Self::get_storage::<_, bool>(ORACLE_STALE, asset).unwrap_or_default();
 		Self::get_storage::<_, Option<Price>>(ORACLE_PRICE, asset)

@@ -405,7 +405,7 @@ fn fok_swap_gets_refunded_due_to_price_impact_protection(is_ccm: bool) {
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
 			// This simulates not having enough liquidity/triggering price impact protection
-			MockSwappingApi::set_swaps_should_fail(true);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		})
 		.then_execute_with(|_| {
 			// Both swaps should fail here and be rescheduled for a later block
@@ -478,7 +478,7 @@ fn fok_test_zero_refund_duration(is_ccm: bool) {
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
 			// This simulates not having enough liquidity/triggering price impact protection
-			MockSwappingApi::set_swaps_should_fail(true);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		})
 		.then_execute_with(|_| {
 			// The swap should fail and be refunded immediately instead of being retried
@@ -562,7 +562,7 @@ fn test_zero_refund_amount_remaining() {
 		})
 		.then_execute_at_block(SWAPS_SCHEDULED_FOR_BLOCK, |_| {
 			// Trigger a refund
-			MockSwappingApi::set_swaps_should_fail(true);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		})
 		.then_execute_with(|_| {
 			// The refund should ignored and all of the swap amount should be swapped for fees
