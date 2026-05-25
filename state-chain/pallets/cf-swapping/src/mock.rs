@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use core::cell::Cell;
+use core::cell::RefCell;
 
 use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
@@ -64,19 +64,35 @@ parameter_types! {
 	pub storage NextChannelId: u64 = 0;
 }
 
+/// Controls which swaps the [`MockSwappingApi`] should make fail.
+#[derive(Clone, Default)]
+pub enum SwapFailureMode {
+	/// Every swap fails.
+	All,
+	/// Only swaps involving any of the listed assets fail (matched on either leg of the swap).
+	Assets(Vec<Asset>),
+	/// No swaps fail.
+	#[default]
+	None,
+}
+
 thread_local! {
-	pub static SWAPS_SHOULD_FAIL: Cell<bool> = Cell::new(false);
+	pub static SWAP_FAILURE_MODE: RefCell<SwapFailureMode> = RefCell::new(SwapFailureMode::None);
 }
 
 pub struct MockSwappingApi;
 
 impl MockSwappingApi {
-	pub fn set_swaps_should_fail(should_fail: bool) {
-		SWAPS_SHOULD_FAIL.with(|cell| cell.set(should_fail));
+	pub fn set_swaps_should_fail(mode: SwapFailureMode) {
+		SWAP_FAILURE_MODE.with(|cell| *cell.borrow_mut() = mode);
 	}
 
-	fn swaps_should_fail() -> bool {
-		SWAPS_SHOULD_FAIL.with(|cell| cell.get())
+	fn swap_should_fail(from: Asset, to: Asset) -> bool {
+		SWAP_FAILURE_MODE.with(|cell| match &*cell.borrow() {
+			SwapFailureMode::All => true,
+			SwapFailureMode::Assets(assets) => assets.contains(&from) || assets.contains(&to),
+			SwapFailureMode::None => false,
+		})
 	}
 
 	pub fn add_liquidity(asset: Asset, amount: AssetAmount) {
@@ -100,7 +116,7 @@ impl SwappingApi for MockSwappingApi {
 		to: Asset,
 		input_amount: AssetAmount,
 	) -> Result<AssetAmount, DispatchError> {
-		if Self::swaps_should_fail() {
+		if Self::swap_should_fail(from, to) {
 			return Err(DispatchError::from("Test swap failed"))
 		}
 		assert!(

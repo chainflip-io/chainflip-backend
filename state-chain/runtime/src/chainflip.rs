@@ -36,7 +36,9 @@ pub mod vault_swaps;
 
 use crate::{
 	chainflip::witnessing::{
-		generic_elections::{decode_and_get_latest_oracle_price, Chainlink},
+		generic_elections::{
+			decode_and_get_latest_oracle_price, get_chainlink_assetpair, Chainlink,
+		},
 		solana_elections::SolanaChainTrackingProvider,
 	},
 	constants::common::YEAR,
@@ -1224,6 +1226,10 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 
 pub struct ChainlinkOracle;
 impl cf_traits::PriceFeedApi for ChainlinkOracle {
+	fn is_oracle_supported(asset: Asset) -> bool {
+		get_chainlink_assetpair(asset).is_some()
+	}
+
 	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<Chainlink>(asset)
 	}
