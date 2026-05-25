@@ -457,9 +457,6 @@ impl Price {
 	/// Both prices must have the same quote asset (eg. USD).
 	/// Returns None if either price is zero.
 	pub fn divide_by(self, price: Price) -> Option<Self> {
-		if self.is_zero() || price.is_zero() {
-			return None
-		}
 		Some(Price(mul_div_floor_checked(self.0, Self::one().0, price.0)?))
 	}
 
@@ -467,20 +464,20 @@ impl Price {
 		Some(Price(mul_div_floor_checked(self.0, price.0, Self::one().0)?))
 	}
 
-	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_floor_checked(input.into(), self.0, Self::one().0).unwrap_or_default()
+	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Option<Amount> {
+		mul_div_floor_checked(input.into(), self.0, Self::one().0)
 	}
 
-	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_ceil_checked(input.into(), self.0, Self::one().0).unwrap_or_default()
+	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Option<Amount> {
+		mul_div_ceil_checked(input.into(), self.0, Self::one().0)
 	}
 
-	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_floor_checked(output.into(), Self::one().0, self.0).unwrap_or_default()
+	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Option<Amount> {
+		mul_div_floor_checked(output.into(), Self::one().0, self.0)
 	}
 
-	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_ceil_checked(output.into(), Self::one().0, self.0).unwrap_or_default()
+	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Option<Amount> {
+		mul_div_ceil_checked(output.into(), Self::one().0, self.0)
 	}
 
 	/// Given price of asset 1 in terms of asset 2, compute the price of asset 2 in terms of asset 1

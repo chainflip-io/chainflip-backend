@@ -217,16 +217,16 @@ impl FloatBetweenZeroAndOne {
 
 pub(super) trait SwapDirection: crate::common::SwapDirection {
 	/// Calculates the swap input amount needed to produce an output amount at a price
-	fn input_amount_ceil(output: Amount, price: Price) -> Amount;
+	fn input_amount_ceil(output: Amount, price: Price) -> Option<Amount>;
 
 	/// Calculates the swap input amount needed to produce an output amount at a price
-	fn input_amount_floor(output: Amount, price: Price) -> Amount;
+	fn input_amount_floor(output: Amount, price: Price) -> Option<Amount>;
 
 	/// Calculates the swap output amount produced for an input amount at a price
-	fn output_amount_ceil(input: Amount, price: Price) -> Amount;
+	fn output_amount_ceil(input: Amount, price: Price) -> Option<Amount>;
 
 	/// Calculates the swap output amount produced for an input amount at a price
-	fn output_amount_floor(input: Amount, price: Price) -> Amount;
+	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount>;
 
 	/// Gets entry for best prices pool
 	fn best_priced_fixed_pool(
@@ -234,19 +234,19 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPrice, FixedPool>>;
 }
 impl SwapDirection for BaseToQuote {
-	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
+	fn input_amount_ceil(output: Amount, price: Price) -> Option<Amount> {
 		price.input_amount_ceil(output)
 	}
 
-	fn input_amount_floor(output: Amount, price: Price) -> Amount {
+	fn input_amount_floor(output: Amount, price: Price) -> Option<Amount> {
 		price.input_amount_floor(output)
 	}
 
-	fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+	fn output_amount_ceil(input: Amount, price: Price) -> Option<Amount> {
 		price.output_amount_ceil(input)
 	}
 
-	fn output_amount_floor(input: Amount, price: Price) -> Amount {
+	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount> {
 		price.output_amount_floor(input)
 	}
 
@@ -257,19 +257,19 @@ impl SwapDirection for BaseToQuote {
 	}
 }
 impl SwapDirection for QuoteToBase {
-	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
+	fn input_amount_ceil(output: Amount, price: Price) -> Option<Amount> {
 		BaseToQuote::output_amount_ceil(output, price)
 	}
 
-	fn input_amount_floor(output: Amount, price: Price) -> Amount {
+	fn input_amount_floor(output: Amount, price: Price) -> Option<Amount> {
 		BaseToQuote::output_amount_floor(output, price)
 	}
 
-	fn output_amount_ceil(input: Amount, price: Price) -> Amount {
+	fn output_amount_ceil(input: Amount, price: Price) -> Option<Amount> {
 		BaseToQuote::input_amount_ceil(input, price)
 	}
 
-	fn output_amount_floor(input: Amount, price: Price) -> Amount {
+	fn output_amount_floor(input: Amount, price: Price) -> Option<Amount> {
 		BaseToQuote::input_amount_floor(input, price)
 	}
 
@@ -556,7 +556,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 			let price = Price::from(sqrt_price);
 			let amount_required_to_consume_pool =
-				SD::input_amount_ceil(fixed_pool.available, price);
+				SD::input_amount_ceil(fixed_pool.available, price)
+					.expect("Amount and price are assumed to be valid");
 
 			let (output_amount, swapped_amount) = if amount >= amount_required_to_consume_pool {
 				let fixed_pool = fixed_pool_entry.remove();
@@ -566,7 +567,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 				(fixed_pool.available, amount_required_to_consume_pool)
 			} else {
-				let initial_output_amount = SD::output_amount_floor(amount, price);
+				let initial_output_amount = SD::output_amount_floor(amount, price)
+					.expect("Amount and price are assumed to be valid");
 
 				// We calculate (output_amount, next_percent_remaining) so that
 				// next_percent_remaining is an under-estimate of the remaining liquidity, but also
@@ -651,7 +653,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			(position.amount, None)
 		};
 
-		let bought_amount = SD::input_amount_floor(used_liquidity, price);
+		let bought_amount = SD::input_amount_floor(used_liquidity, price)
+			.expect("Amount and price are assumed to be valid");
 
 		(
 			Collected {

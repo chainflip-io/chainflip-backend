@@ -1865,7 +1865,10 @@ pub mod pallet {
 											.ok()
 											.map(|p| p.sell)
 									})?;
-							sell_price.output_amount_ceil(swap.input_amount).unique_saturated_into()
+							sell_price
+								.output_amount_ceil(swap.input_amount)
+								.unwrap_or_default()
+								.unique_saturated_into()
 						};
 
 						let fee = core::cmp::max(
@@ -2077,13 +2080,12 @@ pub mod pallet {
 
 			if let Some(params) = swap.refund_params() {
 				// Minimum price protection, aka FoK price protection
-				let min_price_output = params
-					.price_limits
-					.min_price
-					.output_amount_floor(swap.swap.input_amount)
-					.unique_saturated_into();
-				if final_output < min_price_output {
-					return Err(SwapFailureReason::MinPriceViolation);
+				if let Some(min_price_output) =
+					params.price_limits.min_price.output_amount_floor(swap.swap.input_amount)
+				{
+					if final_output < min_price_output.unique_saturated_into() {
+						return Err(SwapFailureReason::MinPriceViolation);
+					}
 				}
 			}
 
@@ -2906,7 +2908,8 @@ pub mod pallet {
 				Side::Sell => {
 					let estimated_input = utilities::hard_coded_price_for_asset(asset) // USD / Asset
 						// How much input is required for the output?
-						.input_amount_floor(ESTIMATION_AMOUNT_USDC) // Asset
+						.input_amount_floor(ESTIMATION_AMOUNT_USDC)
+						.unwrap_or_default() // Asset
 						.saturated_into();
 					with_transaction_unchecked(|| {
 						TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
@@ -3409,6 +3412,7 @@ pub mod pallet {
 				// Finally calculate the required input amount
 				relative_price
 					.output_amount_ceil(desired_output_amount)
+					.unwrap_or_default()
 					.saturated_into::<AssetAmount>()
 			};
 
