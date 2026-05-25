@@ -22,17 +22,16 @@ pub mod benchmarking;
 pub mod fees {
 	pub const ENERGY_BASE_COST_PER_BATCH: u128 = 40_000; // Base energy transaction cost
 	pub const ENERGY_COST_PER_FETCH_NATIVE: u128 = 5_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 70_000; // Cost to fetch tokens from deposit channel
-	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 10_000; // Native TRX transfers included in base
-	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 60_000; // TRC-20 token transfer
-	pub const ENERGY_CCM_OVERHEAD: u128 = 45_000;
+	pub const ENERGY_COST_PER_FETCH_TOKEN: u128 = 65_000; // Cost to fetch tokens from deposit channel
+	pub const ENERGY_COST_PER_TRANSFER_NATIVE: u128 = 10_000; // Native TRX transfer
+	pub const ENERGY_COST_PER_TRANSFER_TOKEN: u128 = 75_000; // TRC-20 token transfer
+	pub const ENERGY_CCM_OVERHEAD: u128 = 40_000;
 
 	// Bandwidth in out case depends on the length. Both types of fetches have the same length
 	// and transferring and fetching is the same length for native and token assets.
-	pub const BANDWITH_BASE_COST_PER_BATCH: u128 = 268 + 100;
-	pub const BANDWITH_BASE_COST_PER_TRANSFER: u128 = 288;
-	pub const BANDWITH_BASE_COST_PER_FETCH: u128 = 288;
-	pub const BANDWITH_CCM_OVERHEAD: u128 = BANDWITH_BASE_COST_PER_TRANSFER;
+	pub const BANDWITH_PER_TRANSFER: u128 = 668;
+	pub const BANDWITH_PER_FETCH: u128 = 636;
+	pub const BANDWITH_CCM_OVERHEAD: u128 = 668;
 
 	pub const ENERGY_PER_TX_TRX_BURN: u128 = 10_000; // 10_000 Energy per 1 TRX burned as fee
 	pub const BANDWIDTH_PER_TX_TRX_BURN: u128 = 1_000; // 0.0001 TRX per 1 Bandwidth
@@ -173,16 +172,12 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 					assets::tron::Asset::Trx => ENERGY_COST_PER_FETCH_NATIVE,
 					assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_FETCH_TOKEN,
 				});
-				let bandwidth = BANDWITH_BASE_COST_PER_BATCH.saturating_add(match asset {
-					assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_FETCH,
-					assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_FETCH,
-				});
 
 				energy
 					.saturating_mul(SUN_PER_TRX)
 					.saturating_div(ENERGY_PER_TX_TRX_BURN)
 					.saturating_add(
-						bandwidth
+						BANDWITH_PER_FETCH
 							.saturating_mul(SUN_PER_TRX)
 							.saturating_div(BANDWIDTH_PER_TX_TRX_BURN),
 					)
@@ -193,16 +188,12 @@ impl FeeEstimationApi<Tron> for TronTrackedData {
 					assets::tron::Asset::Trx => ENERGY_COST_PER_TRANSFER_NATIVE,
 					assets::tron::Asset::TrxUsdt => ENERGY_COST_PER_TRANSFER_TOKEN,
 				});
-				let bandwidth = BANDWITH_BASE_COST_PER_BATCH.saturating_add(match asset {
-					assets::tron::Asset::Trx => BANDWITH_BASE_COST_PER_TRANSFER,
-					assets::tron::Asset::TrxUsdt => BANDWITH_BASE_COST_PER_TRANSFER,
-				});
 
 				energy
 					.saturating_mul(SUN_PER_TRX)
 					.saturating_div(ENERGY_PER_TX_TRX_BURN)
 					.saturating_add(
-						bandwidth
+						BANDWITH_PER_TRANSFER
 							.saturating_mul(SUN_PER_TRX)
 							.saturating_div(BANDWIDTH_PER_TX_TRX_BURN),
 					)
@@ -499,7 +490,7 @@ mod tests {
 		let fee = tracked_data
 			.estimate_fee(assets::tron::Asset::Trx, IngressOrEgress::IngressDepositChannel);
 
-		assert_eq!(fee, 5_156_000);
+		assert_eq!(fee, 5_136_000);
 	}
 
 	#[test]
