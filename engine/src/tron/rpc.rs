@@ -155,6 +155,11 @@ impl TronRpcSigningClient<TronRpcClient> {
 			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
 		)?;
 
+		tracing::info!(
+			"Loaded {chain_name} signing key with address {}",
+			TronAddress::from_evm_address(wallet.address())
+		);
+
 		Ok(async move {
 			let rpc_client = rpc_client_fut.await?;
 
