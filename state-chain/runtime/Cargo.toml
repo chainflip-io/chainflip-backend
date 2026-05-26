@@ -131,6 +131,7 @@ serde_json = { workspace = true, default-features = true }
 # enable the `proptest` feature for all (required) dependency crates if we are buiding for a test
 pallet-cf-swapping = { workspace = true, features = ["proptest"] }
 cf-primitives = { workspace = true, features = ["proptest"] }
+sp-core = { workspace = true, features = ["serde", "proptest"] }
 
 
 [features]

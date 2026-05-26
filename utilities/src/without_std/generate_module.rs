@@ -69,7 +69,7 @@ macro_rules! generate_module {
                 pub _phantom: sp_std::marker::PhantomData<($($T,)?)>,
             }
 
-            impl<$( T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
+            impl<$( $T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
             where $struct$(<$T>)?: Migrations
             {
                 type GetCurrentType = $struct$(<$T>)?;
@@ -78,7 +78,7 @@ macro_rules! generate_module {
 
             pub struct MigrateFields<M = ()>(M);
 
-            impl<M: CustomMigration<To, V>, $( T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
+            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
             where
                 Struct< ($( <M::$field as Migration<To::$field, V>>::From,)+), $($T)? >: IsHistoricalType
             {
@@ -115,7 +115,7 @@ macro_rules! generate_module {
                 )*
             }
 
-            impl $(< T $(: $TBound)?, >)? HasGenericVariant for $struct $(<$T>)?
+            impl $(< $T $(: $TBound)?, >)? HasGenericVariant for $struct $(<$T>)?
             where $( $field_ty: HasGenericVariant,)*
                 Struct<(
                     $(
@@ -126,7 +126,7 @@ macro_rules! generate_module {
                 type MigrationFromGeneric = GlobalMigrationFromGeneric;
             }
 
-            impl $(<T $(: $TBound)? >)? Migration<$struct $(<$T>)?, vCurrent> for GlobalMigrationFromGeneric
+            impl $(< $T $(: $TBound)? >)? Migration<$struct $(<$T>)?, vCurrent> for GlobalMigrationFromGeneric
             where $( $field_ty: HasGenericVariant,)*
                 Struct<(
                     $(

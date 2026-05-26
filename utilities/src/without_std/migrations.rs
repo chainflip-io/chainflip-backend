@@ -33,6 +33,18 @@ macro_rules! all_runtime_versions {
 			)*
 		}
 
+		pub trait OrdMigrations = Migrations<
+			MigrationFromGeneric: Migration<Self, vCurrent, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
+
+			DefaultMigration: $(
+				Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>> +
+			)*,
+
+			$(
+				$Migration: Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
+			)*
+		>;
+
 		// helper trait implementations to get access to the type at an arbitrary version
 		$(
 			impl<X: Migrations> HasVersion<$version> for X {
