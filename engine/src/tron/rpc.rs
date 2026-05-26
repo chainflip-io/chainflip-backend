@@ -77,10 +77,13 @@ impl TronRpcClient {
 			};
 
 			// Verify the HTTP API node has the historical balance query feature enabled.
+			// Use a block behind the tip to avoid a race where the node hasn't caught up
+			// to the latest block yet, especially since it might be a different node.
 			let block_number = client
 				.get_block_number()
 				.await
-				.context("Failed to get block number during startup check")?;
+				.context("Failed to get block number during startup check")?
+				.saturating_sub(20.into());
 			let block = client
 				.block(block_number)
 				.await
