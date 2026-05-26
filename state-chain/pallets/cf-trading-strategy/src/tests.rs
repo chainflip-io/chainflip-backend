@@ -534,6 +534,7 @@ fn strategy_deployment_validation() {
 
 		MockLpRegistration::register_refund_address(LP, BASE_ASSET.into());
 		MockLpRegistration::register_refund_address(LP, QUOTE_ASSET.into());
+		MockLpRegistration::register_refund_address(LP, Asset::Btc.into());
 
 		MockPriceFeedApi::set_price_usd(BASE_ASSET, 1);
 		MockPriceFeedApi::set_price_usd(STABLE_ASSET, 1);
@@ -541,6 +542,7 @@ fn strategy_deployment_validation() {
 		MinimumDeploymentAmountForStrategy::<Test>::set(BTreeMap::from_iter([
 			(BASE_ASSET, MIN_BASE_AMOUNT),
 			(QUOTE_ASSET, MIN_QUOTE_AMOUNT),
+			(Asset::Btc, MIN_BASE_AMOUNT),
 		]));
 
 		// Below minimum threshold should fail
@@ -775,6 +777,23 @@ fn strategy_deployment_validation() {
 						quote_asset: STABLE_ASSET,
 					},
 					[(BASE_ASSET, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
+				),
+				Error::<Test>::InvalidAssetsForStrategy
+			);
+
+			// InventoryBased treats the two assets as 1:1, so the base asset must have the same
+			// number of decimals as the stable (quote) asset.
+			assert_err!(
+				TradingStrategyPallet::deploy_strategy(
+					RuntimeOrigin::signed(LP),
+					TradingStrategy::InventoryBased {
+						min_buy_tick: -1,
+						max_buy_tick: 0,
+						min_sell_tick: 0,
+						max_sell_tick: 1,
+						base_asset: Asset::Btc,
+					},
+					[(Asset::Btc, MIN_BASE_AMOUNT), (QUOTE_ASSET, MIN_QUOTE_AMOUNT)].into()
 				),
 				Error::<Test>::InvalidAssetsForStrategy
 			);
@@ -1699,8 +1718,13 @@ mod oracle_strategy {
 	/// Tests that the oracle strategy produces correct ticks and amounts when
 	/// the base and quote assets have different numbers of decimals.
 	/// Uses Btc (8 decimals) as base and Usdc (6 decimals) as quote.
+	///
+	/// The quote asset is deliberately priced at $2 (not $1) so that the relative price of the
+	/// base in terms of the quote (0.1) differs from the base's absolute USD price (0.2). This
+	/// pins down that the strategy sizes orders using the *relative* price, not the base's USD
+	/// price.
 	#[test]
-	fn different_decimals_correct_ticks_and_amounts() {
+	fn non_equivalent_assets() {
 		const BTC: Asset = Asset::Btc;
 		const USDC: Asset = Asset::Usdc;
 		const MIN_BUY_TICK_OFFSET: Tick = -10;
@@ -1710,15 +1734,16 @@ mod oracle_strategy {
 		const AVERAGE_BUY_TICK_OFFSET: Tick = -8;
 		const AVERAGE_SELL_TICK_OFFSET: Tick = 8;
 
-		let btc_price = Price::from_usd(BTC, 10);
-		let usdc_price = Price::from_usd(USDC, 1);
+		// $20/BTC and $2/USDC => relative price of 0.1 (BTC in terms of USDC)
+		let btc_price = Price::from_usd(BTC, 20);
+		let usdc_price = Price::from_usd(USDC, 2);
 		let oracle_tick = btc_price.divide_by(usdc_price).into_tick().unwrap();
 
 		const BTC_AMOUNT: AssetAmount = 1_000_000_000; // 10 BTC with 8 decimals
 		const USDC_AMOUNT: AssetAmount = 100_000_000; // 100 USDC with 6 decimals
 
-		// $101/BTC: 1% price increase
-		let new_btc_price = Price::from_usd_cents(BTC, 10_10);
+		// $20.20/BTC: 1% price increase
+		let new_btc_price = Price::from_usd_cents(BTC, 20_20);
 		let new_oracle_tick = new_btc_price.divide_by(usdc_price).into_tick().unwrap();
 
 		new_test_ext()
@@ -1775,7 +1800,7 @@ mod oracle_strategy {
 					]
 				);
 
-				// Change BTC price from $100 to $101 (1% increase).
+				// Change BTC price from $20 to $20.20 (1% increase).
 				// Despite different decimals (8 vs 6), the oracle tick should
 				// shift by the same amount as a same-decimal 1% increase.
 				MockPriceFeedApi::set_price(BTC, Some(new_btc_price));
@@ -1820,8 +1845,9 @@ mod oracle_strategy {
 				let expected_new_sell_tick = AVERAGE_SELL_TICK_OFFSET + new_oracle_tick - 1;
 				// Now the orders are unbalanced but the shift should still be proportional due to
 				// the decimals being accounted for in the logic.
-				// $100 on one side and $202 on the other side.
-				// (100 + (20 * 10.1)) /2 = 151 // half total in usd
+				// Counting both assets in the quote asset, at a relative price of 10.1 USDC/BTC:
+				// 100 USDC on the buy side and 20 BTC * 10.1 = 202 USDC on the sell side.
+				// (100 + 202) / 2 = 151 USDC // half total
 				// 20 - (151 / 10.1) = 5.049504950495049 BTC on the aggressive sell order
 				let expected_aggressive_sell_amount = 504950495;
 
@@ -1854,7 +1880,7 @@ mod oracle_strategy {
 							order_id: STRATEGY_ORDER_ID_1,
 							tick: AVERAGE_SELL_TICK_OFFSET + new_oracle_tick,
 							// The rest of the BTC is in the non-aggressive sell order.
-							// Rounding error of 1 due to usd conversion.
+							// Rounding error of 1 due to the relative-price conversion.
 							amount: BTC_AMOUNT * 2 - expected_aggressive_sell_amount - 1
 						}
 					]
