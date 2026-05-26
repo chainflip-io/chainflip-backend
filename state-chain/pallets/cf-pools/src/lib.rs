@@ -286,7 +286,7 @@ pub enum PalletConfigUpdate {
 	LimitOrderAutoSweepingThreshold { asset: Asset, amount: AssetAmount },
 }
 
-pub const STORAGE_VERSION_U16: u16 = 8;
+pub const STORAGE_VERSION_U16: u16 = 9;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 #[frame_support::pallet]
@@ -421,6 +421,12 @@ pub mod pallet {
 	pub(super) type LimitOrderAutoSweepingThresholds<T: Config> =
 		StorageValue<_, SweepingThresholds, ValueQuery, StablecoinDefaults<1_000_000_000>>; // $1000 USD
 
+	/// Minimum amount of the sold asset that a limit order may hold. Set per asset by
+	/// governance. A value of `0` disables the check for that asset.
+	#[pallet::storage]
+	pub type MinimumLimitOrderAmount<T: Config> =
+		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
+
 	#[pallet::storage]
 	/// Historical earned fees for an account.
 	pub type HistoricalEarnedFees<T: Config> =
@@ -503,6 +509,8 @@ pub mod pallet {
 		SheduledUpdateLimitReached,
 		/// The account still has open orders.
 		OpenOrdersRemaining,
+		/// The resulting limit order amount is below the configured per-asset minimum.
+		BelowMinimumOrderAmount,
 	}
 
 	#[pallet::event]
@@ -581,6 +589,11 @@ pub mod pallet {
 		},
 		PalletConfigUpdated {
 			update: PalletConfigUpdate,
+		},
+		/// A per-asset minimum limit order amount has been set by governance.
+		MinimumLimitOrderAmountSet {
+			asset: Asset,
+			amount: AssetAmount,
 		},
 	}
 
@@ -855,6 +868,7 @@ pub mod pallet {
 				&lp,
 				[base_asset, quote_asset],
 			)?;
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, sell_amount)?;
 
 			if let Some(dispatch_at) = dispatch_at {
 				LimitOrderUpdate::<T> {
@@ -1069,6 +1083,28 @@ pub mod pallet {
 					},
 				}
 				Self::deposit_event(Event::<T>::PalletConfigUpdated { update });
+			}
+
+			Ok(())
+		}
+
+		/// Set the per-asset minimum amount required for a limit order to be created or to
+		/// remain open. The minimum applies to the asset being sold (`base_asset` for
+		/// `Side::Sell`, `quote_asset` for `Side::Buy`). Set to `0` to disable the check
+		/// for an asset.
+		///
+		/// Requires Governance.
+		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::set_minimum_limit_order_amounts(minimums.len() as u32))]
+		pub fn set_minimum_limit_order_amounts(
+			origin: OriginFor<T>,
+			minimums: BoundedVec<(Asset, AssetAmount), ConstU32<20>>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			for (asset, amount) in minimums {
+				MinimumLimitOrderAmount::<T>::set(asset, amount);
+				Self::deposit_event(Event::<T>::MinimumLimitOrderAmountSet { asset, amount });
 			}
 
 			Ok(())
@@ -1654,6 +1690,29 @@ impl<T: Config> Pallet<T> {
 		Ok((collected, position_info))
 	}
 
+	/// Enforce the per-asset minimum on the resulting amount of a limit order. The asset
+	/// checked is the one being sold by the order (`base_asset` for `Side::Sell`,
+	/// `quote_asset` for `Side::Buy`). A `resulting_sold_amount` of `0` is always allowed
+	/// (the order is being closed); any other value below the configured minimum is
+	/// rejected.
+	fn ensure_min_order_amount(
+		base_asset: Asset,
+		quote_asset: Asset,
+		side: Side,
+		resulting_sold_amount: AssetAmount,
+	) -> DispatchResult {
+		let sold_asset = match side {
+			Side::Buy => quote_asset,
+			Side::Sell => base_asset,
+		};
+		let min = MinimumLimitOrderAmount::<T>::get(sold_asset);
+		ensure!(
+			resulting_sold_amount == 0 || resulting_sold_amount >= min,
+			Error::<T>::BelowMinimumOrderAmount,
+		);
+		Ok(())
+	}
+
 	pub fn inner_set_limit_order(
 		lp: &T::AccountId,
 		base_asset: any::Asset,
@@ -1720,13 +1779,27 @@ impl<T: Config> Pallet<T> {
 		let asset_pair = asset_pair_try_from::<T>(base_asset, quote_asset)?;
 		Self::inner_sweep(Select::Single(lp))?;
 		Self::try_mutate_pool(asset_pair, |asset_pair, pool| {
-			let tick = match (
-				pool.limit_orders_cache[side.to_sold_pair()]
-					.get(lp)
-					.and_then(|limit_orders| limit_orders.get(&id))
-					.copied(),
-				option_tick,
-			) {
+			let existing_tick = pool.limit_orders_cache[side.to_sold_pair()]
+				.get(lp)
+				.and_then(|limit_orders| limit_orders.get(&id))
+				.copied();
+			// Resolve the existing order amount (in the sold asset) before any mutation, so
+			// that we can validate the resulting amount against the per-asset minimum.
+			let existing_amount: AssetAmount = match existing_tick {
+				Some(tick) => pool
+					.pool_state
+					.limit_order(&(lp.clone(), id), side, tick)
+					.map(|(_, position)| position.amount.saturated_into::<AssetAmount>())
+					.unwrap_or(0),
+				None => 0,
+			};
+			let resulting_amount = match amount_change {
+				IncreaseOrDecrease::Increase(delta) => existing_amount.saturating_add(delta),
+				IncreaseOrDecrease::Decrease(delta) => existing_amount.saturating_sub(delta),
+			};
+			Self::ensure_min_order_amount(base_asset, quote_asset, side, resulting_amount)?;
+
+			let tick = match (existing_tick, option_tick) {
 				(None, None) => Err(Error::<T>::UnspecifiedOrderPrice),
 				(None, Some(tick)) | (Some(tick), None) => Ok(tick),
 				(Some(previous_tick), Some(new_tick)) => {

@@ -55,6 +55,7 @@ pub trait WeightInfo {
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
 	fn set_maximum_price_impact(n: u32, ) -> Weight;
+	fn set_minimum_limit_order_amounts(n: u32, ) -> Weight;
 	fn cancel_orders_batch(n: u32, ) -> Weight;
 }
 
