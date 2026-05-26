@@ -55,6 +55,7 @@ pub trait WeightInfo {
 	fn set_limit_order() -> Weight;
 	fn set_pool_fees() -> Weight;
 	fn set_maximum_price_impact(n: u32, ) -> Weight;
+	fn set_minimum_limit_order_amounts(n: u32, ) -> Weight;
 	fn cancel_orders_batch(n: u32, ) -> Weight;
 }
 
@@ -112,6 +113,11 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(5_384_530, 0)
 			// Standard Error: 12_311
 			.saturating_add(Weight::from_parts(3_749_316, 0).saturating_mul(n.into()))
+	}
+	/// The range of component `n` is `[1, 20]`.
+	fn set_minimum_limit_order_amounts(n: u32, ) -> Weight {
+		Weight::from_parts(5_131_417, 0)
+			.saturating_add(Weight::from_parts(3_543_096, 0).saturating_mul(n.into()))
 	}
 	/// The range of component `n` is `[1, 100]`.
 	fn cancel_orders_batch(n: u32, ) -> Weight {
@@ -178,6 +184,11 @@ impl WeightInfo for () {
 		Weight::from_parts(5_384_530, 0)
 			// Standard Error: 12_311
 			.saturating_add(Weight::from_parts(3_749_316, 0).saturating_mul(n.into()))
+	}
+	/// The range of component `n` is `[1, 20]`.
+	fn set_minimum_limit_order_amounts(n: u32, ) -> Weight {
+		Weight::from_parts(5_131_417, 0)
+			.saturating_add(Weight::from_parts(3_543_096, 0).saturating_mul(n.into()))
 	}
 	/// The range of component `n` is `[1, 100]`.
 	fn cancel_orders_batch(n: u32, ) -> Weight {

@@ -301,6 +301,33 @@ mod benchmarks {
 	}
 
 	#[benchmark]
+	fn set_minimum_limit_order_amounts(n: Linear<1, 20>) {
+		const MIN: AssetAmount = 1_000;
+		let minimums = Asset::all()
+			.take(n as usize)
+			.zip(sp_std::iter::repeat(MIN))
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
+		let call = Call::<T>::set_minimum_limit_order_amounts { minimums };
+
+		#[block]
+		{
+			assert_ok!(
+				call.dispatch_bypass_filter(T::EnsureGovernance::try_successful_origin().unwrap())
+			);
+		}
+
+		for (i, asset) in Asset::all().enumerate() {
+			if (i as u32) < n {
+				assert_eq!(MinimumLimitOrderAmount::<T>::get(asset), MIN);
+			} else {
+				assert_eq!(MinimumLimitOrderAmount::<T>::get(asset), 0);
+			}
+		}
+	}
+
+	#[benchmark]
 	fn cancel_orders_batch(n: Linear<1, 100>) {
 		let caller = new_lp_account::<T>();
 		assert_ok!(Pallet::<T>::new_pool(
