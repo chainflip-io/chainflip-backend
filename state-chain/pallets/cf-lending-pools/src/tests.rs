@@ -1202,7 +1202,7 @@ mod hybrid_boosting {
 			// of the origination fee from `available_amount` at borrow time.
 			const LENDING_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2 + LENDING_NETWORK_FEE; // 99_960_000
 			const LEGACY_POOL_FUNDS: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
-			// Principal actually contributed by each pool (50/50 of required_amount).
+															   // Principal actually contributed by each pool (50/50 of required_amount).
 			const LENDING_PRINCIPAL: AssetAmount = REQUIRED_AMOUNT / 2; // 99_950_000
 			const LEGACY_PRINCIPAL: AssetAmount = REQUIRED_AMOUNT - LENDING_PRINCIPAL; // 99_950_000
 
@@ -1264,10 +1264,7 @@ mod hybrid_boosting {
 			// LENDING_FUNDS (99_960_000), so available is now zero and `owed_to_network` is
 			// zero (the network fee was collected up-front rather than left as an IOU).
 			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().available_amount, 0);
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network,
-				0
-			);
+			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network, 0);
 			assert_eq!(PendingNetworkFees::<Test>::get(BOOST_ASSET), LENDING_NETWORK_FEE);
 
 			assert_eq!(
@@ -1549,8 +1546,7 @@ mod hybrid_boosting {
 			const REQUIRED_AMOUNT: AssetAmount = DEPOSIT_AMOUNT - TOTAL_FEE; // 199_900_000
 
 			const LENDING_FEE_TOTAL: AssetAmount = TOTAL_FEE / 2; // 50_000
-			const LENDING_NETWORK_FEE: AssetAmount =
-				LENDING_FEE_TOTAL * NETWORK_FEE_PERCENT / 100; // 10_000
+			const LENDING_NETWORK_FEE: AssetAmount = LENDING_FEE_TOTAL * NETWORK_FEE_PERCENT / 100; // 10_000
 
 			// Equal liquidity in both pools produces a clean 50/50 split. The lending pool
 			// gets a small buffer beyond half the required amount so fund_loan can also

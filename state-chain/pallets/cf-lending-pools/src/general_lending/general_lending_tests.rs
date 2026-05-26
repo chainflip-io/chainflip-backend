@@ -3134,10 +3134,7 @@ fn origination_rejected_when_pool_cant_cover_network_fee() {
 		// Borrowing the full PRINCIPAL succeeds: the pool was funded with exactly the
 		// network-fee headroom for this principal. After the loan, `available` is zero.
 		assert_ok!(LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None));
-		assert_eq!(
-			GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount,
-			0,
-		);
+		assert_eq!(GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount, 0,);
 	});
 }
 
