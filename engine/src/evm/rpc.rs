@@ -172,6 +172,8 @@ impl EvmRpcSigningClient {
 			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
 		)?;
 
+		tracing::info!("Loaded {chain_name} signing key with address {:?}", wallet.address());
+
 		Ok(async move {
 			let rpc_client = rpc_client_fut.await;
 
