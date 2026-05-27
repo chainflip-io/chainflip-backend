@@ -222,6 +222,7 @@ impl<T: Config> BoostApi for Pallet<T> {
 				loan_type: LoanType::Boost(deposit_id),
 				asset,
 				principal_amount: lending_pool_principal,
+				broker: None,
 			});
 
 			fund_loan::<T>(&mut loan, lending_pool_principal, pool_fee, network_fee)?;

@@ -209,13 +209,10 @@ jobs:
         id: pre-upgrade-bouncer
         env:
           SKIP_BLS_TESTS: "true"
+          PRE_UPGRADE_BOUNCER: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
-          # Disable GovernanceDepositWitnessing test to prevent it from interfering with the post-upgrade bouncer run.
-          # Remove the import line and the whole (possibly multi-line) concurrentTest registration.
-          sed -i "/import { testGovernanceDepositWitnessing }/d" bouncer/tests/fast_bouncer.test.ts
-          perl -0pi -e "s/\s*concurrentTest\(\s*'GovernanceDepositWitnessing'.*?\);//s" bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh

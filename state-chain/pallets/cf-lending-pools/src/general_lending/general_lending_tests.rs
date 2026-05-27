@@ -229,6 +229,22 @@ fn create_loan_and_supply_collateral(
 }
 
 #[test]
+fn collateral_reported_for_supply_only_account() {
+	// `cf_account_info` reports collateral via `get_total_collateral_for_account`. An account
+	// that has supplied funds but never borrowed has no loan account, yet its supply positions
+	// must still be reported as collateral.
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		// LENDER supplied funds via `with_funded_pool` but never took out a loan:
+		assert!(LoanAccounts::<Test>::get(LENDER).is_none());
+
+		assert_eq!(
+			get_total_collateral_for_account::<Test>(&LENDER),
+			BTreeMap::from([(LOAN_ASSET, INIT_POOL_AMOUNT)]),
+		);
+	});
+}
+
+#[test]
 fn lender_basic_adding_and_removing_funds() {
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 		// Test that it is possible to withdraw funds if you are the sole contributor
@@ -402,6 +418,7 @@ fn basic_general_lending() {
 					loan_type: LoanType::User(BORROWER),
 					asset: LOAN_ASSET,
 					principal_amount: PRINCIPAL,
+					broker: None,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -676,6 +693,17 @@ fn broker_interest_credited_to_broker() {
 				PRINCIPAL,
 				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			));
+
+			// The loan's `LoanCreated` event records the broker's account id and bps.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
+					loan_id: LOAN_ID,
+					loan_type: LoanType::User(BORROWER),
+					broker,
+					..
+				}) if *broker == Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			);
 
 			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
 		})
@@ -1315,7 +1343,7 @@ fn basic_liquidation() {
 			// Only the collateral required to repay the loan (plus the slippage buffer) is
 			// removed from the supply pool — the rest stays available to other lenders.
 			assert_eq!(
-				loan_account.get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&loan_account.borrower_id),
 				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
 			);
 
@@ -2374,7 +2402,7 @@ mod multi_asset_collateral_liquidation {
 				// buffer, drawn from each collateral asset proportionally to its share of the
 				// available USD value. The remainder stays in the supply pools.
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(COLLATERAL_ASSET, collateral_leftover_at_init),
 						(COLLATERAL_ASSET_2, collateral_2_leftover_at_init),
@@ -2423,7 +2451,7 @@ mod multi_asset_collateral_liquidation {
 					(PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 + liquidation_fee_2);
 
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(LOAN_ASSET, excess_loan_asset_amount),
 						(COLLATERAL_ASSET, collateral_leftover_at_init),
@@ -2477,7 +2505,7 @@ mod multi_asset_collateral_liquidation {
 				);
 
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(LOAN_ASSET, excess_loan_asset_amount),
 						(COLLATERAL_ASSET, REMAINING_INPUT_SWAP_2 + collateral_leftover_at_init),
@@ -2539,7 +2567,9 @@ mod multi_asset_collateral_liquidation {
 			.then_execute_at_next_block(|_| {
 				// All collateral has been pulled into liquidation swaps (take_all path):
 				let acc = get_loan_account();
-				assert!(general_lending::is_zero_collateral(&acc.get_collateral_in_supply_pools()));
+				assert!(general_lending::is_zero_collateral(
+					&get_collateral_in_supply_pools::<Test>(&acc.borrower_id)
+				));
 				match &acc.liquidation_status {
 					LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
 						assert_eq!(liquidation_swaps.len(), 2);
@@ -2782,7 +2812,7 @@ fn small_interest_amounts_accumulate() {
 		.then_execute_with(|_| {
 			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
 			assert_eq!(
-				account.get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&account.borrower_id),
 				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 			);
 
@@ -3277,7 +3307,7 @@ fn adding_collateral_during_liquidation() {
 			// We don't bother restarting liquidation swaps to incorporate the extra supply,
 			// instead the supply is simply added to the pool:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(COLLATERAL_ASSET, EXTRA_COLLATERAL)])
 			);
 
@@ -3375,7 +3405,7 @@ fn adding_collateral_during_liquidation() {
 
 			// The unused remainder stays in the supply pool:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
 			);
 
@@ -3426,7 +3456,7 @@ fn adding_collateral_during_liquidation() {
 
 			// Collateral returned to supply pools after liquidation abort:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(
 					COLLATERAL_ASSET,
 					INIT_COLLATERAL + EXTRA_COLLATERAL + EXTRA_COLLATERAL_2 + EXTRA_COLLATERAL_3 -
@@ -3889,7 +3919,7 @@ mod voluntary_liquidation {
 				);
 				// Part of collateral was returned to supply pool:
 				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL)])
 				);
 
@@ -4024,7 +4054,7 @@ mod voluntary_liquidation {
 				let pool_leftover_after_soft_init =
 					INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - liquidation_input_2;
 				assert_eq!(
-					get_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_soft_init)])
 				);
 
@@ -4118,7 +4148,7 @@ mod voluntary_liquidation {
 					SWAPPED_COLLATERAL_2 -
 					liquidation_input_3;
 				assert_eq!(
-					get_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_voluntary_reinit)])
 				);
 
