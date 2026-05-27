@@ -61,6 +61,7 @@ members = [
 	"state-chain/test-utilities",
 	"state-chain/traits",
 	"utilities",
+	"utilities/proc-macros",
 	"utilities/scale-json",
 	"utilities/scale-json-event-logger",
 ]
@@ -319,6 +320,7 @@ cf-runtime-macros = { path = "state-chain/runtime-utilities/macros", default-fea
 cf-runtime-utilities = { path = "state-chain/runtime-utilities", default-features = false }
 cf-test-utilities = { path = "state-chain/test-utilities" }
 cf-utilities = { package = "utilities", path = "utilities", default-features = false }
+cf-utilities-proc-macros = { path = "utilities/proc-macros" }
 cfe-events = { path = "state-chain/cfe-events", default-features = false }
 engine-upgrade-utils = { path = "engine-upgrade-utils" }
 multisig = { path = "engine/multisig" }
