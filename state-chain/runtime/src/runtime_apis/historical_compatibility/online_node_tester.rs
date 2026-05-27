@@ -7,6 +7,7 @@ use proptest::{
 	arbitrary::Arbitrary,
 	test_runner::{Config, FileFailurePersistence, TestRunner},
 };
+use scale_info::TypeInfo;
 use std::fmt::Debug;
 
 use crate::runtime_apis::historical_compatibility::tester_trait::HistoricalCompatibilityTester;
@@ -22,10 +23,10 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
 		V: VariantName,
 		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode + std::fmt::Debug>
+			+ HasVersion<V, HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
@@ -51,8 +52,8 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 			..Default::default()
 		});
 
-		runner
-			.run(&<I as HasGenericVariant>::GenericType::arbitrary(), |generic_input| {
+		let result =
+			runner.run(&<I as HasGenericVariant>::GenericType::arbitrary(), |generic_input| {
 				// Encode the input using the legacy type
 				let input: I = migrate_from_generic_type(generic_input);
 				let old_input = migrate_to_historical_type(version, input);
@@ -117,7 +118,16 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				println!("Successfully migrated output: {current_output:?}");
 
 				Ok(())
-			})
-			.unwrap()
+			});
+		match result {
+			Ok(_) => (),
+			Err(err) => match err {
+				proptest::test_runner::TestError::Abort(reason) |
+				proptest::test_runner::TestError::Fail(reason, _) => {
+					println!("Test failed with:\n\n{reason}");
+					panic!("failed!");
+				},
+			},
+		}
 	}
 }

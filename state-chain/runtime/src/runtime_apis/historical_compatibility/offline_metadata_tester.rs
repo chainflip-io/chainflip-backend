@@ -6,13 +6,18 @@ use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::{
 	arbitrary::Arbitrary,
+	prelude::TestCaseError,
 	test_runner::{Config, FileFailurePersistence, TestRunner},
 };
 use scale_decode::DecodeAsType;
+use scale_info::TypeInfo;
 use scale_json::ScaleDecodedToJson;
-use std::{collections::HashMap, fmt::Debug};
+use std::collections::HashMap;
 
-use crate::runtime_apis::historical_compatibility::tester_trait::HistoricalCompatibilityTester;
+use crate::runtime_apis::historical_compatibility::{
+	tester_trait::HistoricalCompatibilityTester,
+	type_describer::{describe_expected_type, describe_metadata_type},
+};
 
 pub struct OfflineMetadataTester {
 	loaded_metadata: HashMap<u32, RuntimeMetadataV15>,
@@ -79,16 +84,19 @@ impl OfflineMetadataTester {
 		(input_type_ids, output_type_id)
 	}
 
-	fn decode_as_type(
+	fn try_decode_as_type(
 		&self,
 		spec_version: u32,
 		type_id: u32,
 		cursor: &mut &[u8],
-	) -> ScaleDecodedToJson {
+	) -> Result<ScaleDecodedToJson, TestCaseError> {
 		let metadata = self.get_loaded_metadata(spec_version);
 		<ScaleDecodedToJson as DecodeAsType>::decode_as_type(cursor, type_id, &metadata.types)
-			.map_err(|e| format!("Input decode failed for type_id {type_id}: {e}"))
-			.unwrap()
+			.map_err(|e| TestCaseError::fail(format!("Decode failed for type_id {type_id}: {e}")))
+	}
+
+	fn describe_metadata_type(&self, spec_version: u32, type_id: u32) -> String {
+		describe_metadata_type(self.get_loaded_metadata(spec_version), type_id)
 	}
 }
 
@@ -96,10 +104,10 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	fn test_call<
 		V: VariantName,
 		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode + std::fmt::Debug>
+			+ HasVersion<V, HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
@@ -130,7 +138,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			<O as HasGenericVariant>::GenericType::arbitrary(),
 		);
 
-		runner
+		let result = runner
 			.run(&strategy, |(generic_input, generic_output)| {
 				// Encode the input using the legacy type
 				let input: I = migrate_from_generic_type(generic_input);
@@ -140,37 +148,49 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 				// Verify that encoding is decodable against each input param's historical type
 				let mut cursor = &encoded_input[..];
 				for &type_id in &input_type_ids {
-					let _decoded = self.decode_as_type(spec_version, type_id, &mut cursor);
+					self.try_decode_as_type(spec_version, type_id, &mut cursor)?;
 				}
-				assert!(
-					cursor.is_empty(),
-					"Encoding mismatch: {} trailing bytes remain after decoding inputs (type ids {input_type_ids:?})",
-					cursor.len(),
-				);
+				if !cursor.is_empty() {
+					return Err(TestCaseError::fail(format!(
+						"Encoding mismatch: {} trailing bytes remain after decoding inputs (type ids {input_type_ids:?})",
+						cursor.len(),
+					)));
+				}
 
 				// Encode the output using the legacy type
 				let output: O = migrate_from_generic_type(generic_output);
 				let old_output = migrate_to_historical_type(version, output);
 				let encoded_output = old_output.encode();
 				let mut cursor = &encoded_output[..];
-				let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-					self.decode_as_type(spec_version, output_type_id, &mut cursor)
-				}));
-				if let Err(e) = result {
-					panic!(
-						"Output decode panicked for old_output: {:?}\n\nOriginal panic: {:?}",
-						old_output, e
-					);
+				let expected_output_type = describe_expected_type::<O::HistoricalType>();
+				let actual_output_type = self.describe_metadata_type(spec_version, output_type_id);
+				self.try_decode_as_type(spec_version, output_type_id, &mut cursor)
+					.map_err(|e| TestCaseError::fail(format!(
+						"Output decode failed for old_output: {:?}\n\nExpected encoded type:\n{}\n\nMetadata type:\n{}\n\nError: {e}",
+						old_output,
+						expected_output_type,
+						actual_output_type,
+					)))?;
+
+				if !cursor.is_empty() {
+					return Err(TestCaseError::fail(format!(
+						"Encoding mismatch: {} trailing bytes remain after decoding output (type_id {output_type_id})",
+						cursor.len(),
+					)));
 				}
 
-				assert!(
-					cursor.is_empty(),
-					"Encoding mismatch: {} trailing bytes remain after decoding output (type_id {output_type_id})",
-					cursor.len(),
-				);
-
 				Ok(())
-			})
-			.unwrap();
+			});
+
+		match result {
+			Ok(_) => (),
+			Err(err) => match err {
+				proptest::test_runner::TestError::Abort(reason) |
+				proptest::test_runner::TestError::Fail(reason, _) => {
+					println!("Test failed with:\n\n{reason}");
+					panic!("failed!");
+				},
+			},
+		}
 	}
 }
