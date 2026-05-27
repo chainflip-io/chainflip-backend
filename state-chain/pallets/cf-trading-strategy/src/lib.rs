@@ -1078,18 +1078,35 @@ impl<T: Config> Pallet<T> {
 			}
 			*weight_used += limit_order_update_weight * CANCEL_ALL_ORDERS_WEIGHT_UNITS;
 
-			// Create the new desired orders
+			// Create the new desired orders.
 			let mut remaining_base_amount = total_base_asset;
 			let mut remaining_quote_amount = total_quote_asset;
+			let mut remaining_sell_orders =
+				new_orders.iter().filter(|order| order.side == Side::Sell).count();
+			let mut remaining_buy_orders = new_orders.len() - remaining_sell_orders;
 			new_orders.into_iter().for_each(
 				|StrategyLimitOrder { base_asset, side, order_id, tick, amount, .. }| {
 					let amount = if side == Side::Sell {
-						// Convert the base amount back from the quote denomination.
-						let base_amount = pricing.quote_to_base(amount).min(remaining_base_amount);
+						remaining_sell_orders -= 1;
+						let base_amount = if remaining_sell_orders == 0 {
+							// The last order on each side takes all
+							// of that side's remaining balance, so rounding never leaves dust in
+							// the free balance.
+							remaining_base_amount
+						} else {
+							// Amounts are sized in the quote denomination, so the
+							// sell side is converted back to the base asset.
+							pricing.quote_to_base(amount).min(remaining_base_amount)
+						};
 						remaining_base_amount = remaining_base_amount.saturating_sub(base_amount);
 						base_amount
 					} else {
-						let quote_amount = amount.min(remaining_quote_amount);
+						remaining_buy_orders -= 1;
+						let quote_amount = if remaining_buy_orders == 0 {
+							remaining_quote_amount
+						} else {
+							amount.min(remaining_quote_amount)
+						};
 						remaining_quote_amount =
 							remaining_quote_amount.saturating_sub(quote_amount);
 						quote_amount

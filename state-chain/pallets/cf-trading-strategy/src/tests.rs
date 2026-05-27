@@ -1879,9 +1879,9 @@ mod oracle_strategy {
 							side: Side::Sell,
 							order_id: STRATEGY_ORDER_ID_1,
 							tick: AVERAGE_SELL_TICK_OFFSET + new_oracle_tick,
-							// The rest of the BTC is in the non-aggressive sell order.
-							// Rounding error of 1 due to the relative-price conversion.
-							amount: BTC_AMOUNT * 2 - expected_aggressive_sell_amount - 1
+							// The non-aggressive sell order absorbs the rest of the BTC, so the two
+							// sell orders together deploy the full balance with no dust left over.
+							amount: BTC_AMOUNT * 2 - expected_aggressive_sell_amount
 						}
 					]
 				);
