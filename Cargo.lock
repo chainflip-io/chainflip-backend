@@ -1802,6 +1802,7 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
+ "cf-utilities-proc-macros",
  "frame-support",
  "hex",
  "n-functor",
@@ -9572,6 +9573,7 @@ dependencies = [
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
+ "cf-utilities-proc-macros",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -15613,6 +15615,7 @@ dependencies = [
  "cf-session-benchmarking",
  "cf-test-utilities",
  "cf-traits",
+ "cf-utilities-proc-macros",
  "derive-where",
  "ethereum-eip712",
  "frame-benchmarking",

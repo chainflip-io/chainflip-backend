@@ -100,6 +100,7 @@ sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
 generic-typeinfo-derive = { workspace = true }
+cf-utilities-proc-macros = { workspace = true }
 
 # Used for RPCs
 frame-system-rpc-runtime-api = { workspace = true }

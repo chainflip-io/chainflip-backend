@@ -30,12 +30,9 @@ use cf_chains::{
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
-use cf_utilities::{
-	generate_module,
-	migrations::{
-		basics::{vCurrent, GlobalMigrationFromGeneric, HasVersion, Migration},
-		v0201, v0202, Migrations,
-	},
+use cf_utilities::migrations::{
+	basics::{vCurrent, GlobalMigrationFromGeneric, HasVersion, Migration},
+	v0201, v0202, Migrations,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -263,13 +260,11 @@ pub struct OperatorInfo<Amount> {
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
 }
 
-generate_module! {
-	#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
-	pub struct DelegationInfo<Amount> {
-		pub operator: AccountId32,
-		pub bid: Amount,
-	}
-	mod _DelegationInfo { #![migrations] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
+pub struct DelegationInfo<Amount> {
+	pub operator: AccountId32,
+	pub bid: Amount,
 }
 
 impl<Amount: Migrations> Migrations for DelegationInfo<Amount> {
@@ -617,25 +612,21 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-generate_module! {
-	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
-	pub struct NetworkFeeDetails {
-		pub standard_rate_and_minimum: FeeRateAndMinimum,
-		pub rates: AssetMap<Permill>,
-	}
-	mod _NetworkFeeDetails { #![migrations] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkFeeDetails {
+	pub standard_rate_and_minimum: FeeRateAndMinimum,
+	pub rates: AssetMap<Permill>,
 }
 impl Migrations for NetworkFeeDetails {
 	type DefaultMigration = _NetworkFeeDetails::MigrateFields;
 }
 
-generate_module! {
-	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
-	pub struct NetworkFees {
-		pub regular_network_fee: NetworkFeeDetails,
-		pub internal_swap_network_fee: NetworkFeeDetails,
-	}
-	mod _NetworkFees { #![ migrations ] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkFees {
+	pub regular_network_fee: NetworkFeeDetails,
+	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 impl Migrations for NetworkFees {
 	type DefaultMigration = _NetworkFees::MigrateFields;
@@ -759,29 +750,27 @@ pub struct RpcLendingConfig {
 	pub minimum_update_supply_amount_usd: U256,
 }
 
-generate_module! {
-	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
-	#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
-	pub struct RpcAccountInfoCommonItems<Balance> {
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub account_id: Option<AccountId32>,
-		#[serde(skip_serializing_if = "Vec::is_empty")]
-		#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
-		pub vanity_name: VanityName,
-		pub flip_balance: Balance,
-		pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
-		pub bond: Balance,
-		pub estimated_redeemable_balance: Balance,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub bound_redeem_address: Option<EvmAddress>,
-		#[serde(skip_serializing_if = "BTreeMap::is_empty")]
-		pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub current_delegation_status: Option<DelegationInfo<Balance>>,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-	}
-	mod _RpcAccountInfoCommonItems { #![migrations] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
+#[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
+pub struct RpcAccountInfoCommonItems<Balance> {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub account_id: Option<AccountId32>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	#[serde(serialize_with = "serialize_vanity_name::from_utf8")]
+	pub vanity_name: VanityName,
+	pub flip_balance: Balance,
+	pub asset_balances: cf_chains::assets::any::AssetMap<Balance>,
+	pub bond: Balance,
+	pub estimated_redeemable_balance: Balance,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub bound_redeem_address: Option<EvmAddress>,
+	#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub current_delegation_status: Option<DelegationInfo<Balance>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
 }
 
 impl<Balance: Migrations> Migrations for RpcAccountInfoCommonItems<Balance>

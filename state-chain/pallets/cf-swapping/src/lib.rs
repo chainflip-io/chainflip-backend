@@ -42,12 +42,9 @@ use cf_traits::{
 	PriceLimitsAndExpiry, SwapOutputAction, SwapParameterValidation, SwapRequestHandler,
 	SwapRequestType, SwapRequestTypeEncoded, SwapType, SwappingApi,
 };
-use cf_utilities::{
-	generate_module,
-	migrations::{
-		basics::{HasGenericVariant, IsHistoricalType},
-		Migrations,
-	},
+use cf_utilities::migrations::{
+	basics::{HasGenericVariant, IsHistoricalType},
+	Migrations,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -236,14 +233,23 @@ pub enum FeeType<T: Config> {
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
-generate_module! {
-	#[derive( Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, Default, Serialize, Deserialize,)]
-	pub struct FeeRateAndMinimum {
-		pub rate: sp_runtime::Permill,
-		pub minimum: AssetAmount,
-	}
-	mod _FeeRateAndMinimum { #![migrations] }
-
+#[cf_utilities_proc_macros::generate_module]
+#[derive(
+	Clone,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
+)]
+pub struct FeeRateAndMinimum {
+	pub rate: sp_runtime::Permill,
+	pub minimum: AssetAmount,
 }
 impl Migrations for FeeRateAndMinimum {
 	type DefaultMigration = _FeeRateAndMinimum::MigrateFields;
