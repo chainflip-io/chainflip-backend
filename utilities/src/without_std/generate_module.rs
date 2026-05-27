@@ -13,7 +13,6 @@ macro_rules! generate_module {
         $(
             #[$($Attributes)*]
         )*
-        #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
         $vis struct $struct$(<$T $(: $TBound)?>)? {
             $(
                 $( #[$($Field_Attributes)*])*
@@ -62,6 +61,7 @@ macro_rules! generate_module {
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
             #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
+            #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
             pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
                 $(
                     pub $field: Ty::$field,
@@ -123,6 +123,11 @@ macro_rules! generate_module {
                     )*
                 ), $($T)?>: IsHistoricalType
             {
+                type GenericType = Struct<(
+                    $(
+                        GetGenericVariant<$field_ty>,
+                    )*
+                ), $($T)?>;
                 type MigrationFromGeneric = GlobalMigrationFromGeneric;
             }
 

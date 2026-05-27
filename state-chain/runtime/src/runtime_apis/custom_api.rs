@@ -451,4 +451,18 @@ pub fn test_all_historical_runtime_calls(
 	use cf_utilities::migrations::{v0200, v0201};
 	tester.test_call::<v0201, (), NetworkFees>(v0201, "CustomRuntimeApi", "cf_network_fees", path);
 	tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees", path);
+
+	tester.test_call::<v0201, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
+		v0201,
+		"CustomRuntimeApi",
+		"cf_common_account_info",
+		path,
+	);
+
+	// tester.test_call::<v0200, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
+	// 	v0200,
+	// 	"CustomRuntimeApi",
+	// 	"cf_common_account_info",
+	// 	path,
+	// );
 }

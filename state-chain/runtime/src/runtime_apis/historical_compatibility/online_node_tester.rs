@@ -1,5 +1,6 @@
 use cf_utilities::migrations::basics::{
-	migrate_from_historical_type, migrate_to_historical_type, HasVersion, VariantName,
+	migrate_from_generic_type, migrate_from_historical_type, migrate_to_historical_type,
+	HasGenericVariant, HasVersion, VariantName,
 };
 use codec::{Decode, Encode};
 use proptest::{
@@ -20,8 +21,12 @@ impl OnlineNodeTester {}
 impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
 		V: VariantName,
-		I: Arbitrary + Debug + HasVersion<V, HistoricalType: Encode>,
-		O: Arbitrary + Debug + HasVersion<V, HistoricalType: Encode + Decode>,
+		I: std::fmt::Debug
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
+			+ HasGenericVariant<GenericType: Arbitrary>,
+		O: std::fmt::Debug
+			+ HasVersion<V, HistoricalType: Encode + Decode>
+			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
 		version: V,
@@ -47,8 +52,9 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		});
 
 		runner
-			.run(&I::arbitrary(), |input| {
+			.run(&<I as HasGenericVariant>::GenericType::arbitrary(), |generic_input| {
 				// Encode the input using the legacy type
+				let input: I = migrate_from_generic_type(generic_input);
 				let old_input = migrate_to_historical_type(version, input);
 				let encoded_input = old_input.encode();
 

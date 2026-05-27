@@ -1,4 +1,7 @@
-use cf_utilities::migrations::basics::{migrate_to_historical_type, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{
+	migrate_from_generic_type, migrate_to_historical_type, HasGenericVariant, HasVersion,
+	VariantName,
+};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::{
@@ -92,8 +95,12 @@ impl OfflineMetadataTester {
 impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	fn test_call<
 		V: VariantName,
-		I: Arbitrary + Debug + HasVersion<V, HistoricalType: Encode>,
-		O: Arbitrary + Debug + HasVersion<V, HistoricalType: Encode + Decode>,
+		I: std::fmt::Debug
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
+			+ HasGenericVariant<GenericType: Arbitrary>,
+		O: std::fmt::Debug
+			+ HasVersion<V, HistoricalType: Encode + Decode>
+			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
 		version: V,
@@ -118,11 +125,15 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		let (input_type_ids, output_type_id) =
 			self.find_method_types(spec_version, api_name, method_name);
 
-		let strategy = (I::arbitrary(), O::arbitrary());
+		let strategy = (
+			<I as HasGenericVariant>::GenericType::arbitrary(),
+			<O as HasGenericVariant>::GenericType::arbitrary(),
+		);
 
 		runner
-			.run(&strategy, |(input, output)| {
+			.run(&strategy, |(generic_input, generic_output)| {
 				// Encode the input using the legacy type
+				let input: I = migrate_from_generic_type(generic_input);
 				let old_input = migrate_to_historical_type(version, input);
 				let encoded_input = old_input.encode();
 
@@ -138,10 +149,19 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 				);
 
 				// Encode the output using the legacy type
+				let output: O = migrate_from_generic_type(generic_output);
 				let old_output = migrate_to_historical_type(version, output);
 				let encoded_output = old_output.encode();
-				let cursor = &mut &encoded_output[..];
-				let _decoded = self.decode_as_type(spec_version, output_type_id, cursor);
+				let mut cursor = &encoded_output[..];
+				let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+					self.decode_as_type(spec_version, output_type_id, &mut cursor)
+				}));
+				if let Err(e) = result {
+					panic!(
+						"Output decode panicked for old_input: {:?}\n\nOriginal panic: {:?}",
+						old_input, e
+					);
+				}
 
 				assert!(
 					cursor.is_empty(),

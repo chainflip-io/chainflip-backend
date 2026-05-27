@@ -97,10 +97,19 @@ impl VariantName for vCurrent {
 }
 
 pub trait HasGenericVariant: Sized {
-	type MigrationFromGeneric: Migration<Self, vCurrent>;
+	type GenericType;
+	type MigrationFromGeneric: Migration<Self, vCurrent, From = Self::GenericType>;
 }
 
 pub type GetGenericVariant<X: HasGenericVariant> =
 	<X::MigrationFromGeneric as Migration<X, vCurrent>>::From;
 
 pub struct GlobalMigrationFromGeneric;
+
+pub fn migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
+	X::MigrationFromGeneric::forwards(x)
+}
+
+pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
+	X::MigrationFromGeneric::backwards(x)
+}

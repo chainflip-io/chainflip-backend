@@ -19,6 +19,7 @@ macro_rules! impl_identity_migrations {
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
         impl HasGenericVariant for Type {
+            type GenericType = Type;
             type MigrationFromGeneric = IdentityMigration;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
@@ -68,6 +69,7 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			type GetCurrentType = $Ty;
 		}
 		impl HasGenericVariant for $Ty {
+            type GenericType = $Wrapper;
 			type MigrationFromGeneric = WrapMigration;
 		}
 		impl Migrations for $Ty {
@@ -128,6 +130,7 @@ impl<X: Migrations> Migrations for Option<X> {
 	type MigrationTo0202 = MapMigration<X::MigrationTo0202>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Option<X> {
+	type GenericType = Option<X::GenericType>;
 	type MigrationFromGeneric = MapMigration<X::MigrationFromGeneric>;
 }
 impl<X: IsHistoricalType> IsHistoricalType for Option<X> {
@@ -159,6 +162,7 @@ impl<X: Migrations> Migrations for Vec<X> {
 	type MigrationTo0202 = MapMigration<X::MigrationTo0202>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Vec<X> {
+	type GenericType = Vec<X::GenericType>;
 	type MigrationFromGeneric = MapMigration<X::MigrationFromGeneric>;
 }
 impl<X: IsHistoricalType> IsHistoricalType for Vec<X> {
@@ -200,8 +204,9 @@ impl<A: OrdMigrations + Ord, B: Migrations> Migrations for BTreeMap<A, B> {
 }
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
-	GetGenericVariant<A>: Ord + IsHistoricalTypeOrd,
+	A: HasGenericVariant<GenericType: Ord + IsHistoricalTypeOrd>,
 {
+	type GenericType = BTreeMap<A::GenericType, B::GenericType>;
 	type MigrationFromGeneric = MapMigration<(A::MigrationFromGeneric, B::MigrationFromGeneric)>;
 }
 impl<A: IsHistoricalType<GetCurrentType: OrdMigrations + Ord>, B: IsHistoricalType> IsHistoricalType
