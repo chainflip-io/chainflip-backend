@@ -274,6 +274,66 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 	.expect("runtime version refresh path should not hang");
 }
 
+/// AncientBirthBlock should be treated as recoverable: refresh the finalized block
+/// reference and retry on the next loop iteration rather than tearing the engine down.
+#[tokio::test]
+async fn should_recover_from_ancient_birth_block() {
+	tokio::time::timeout(
+		Duration::from_secs(5),
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
+				mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).returning(move |_| {
+					Err(ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some(<&'static str>::from(InvalidTransaction::AncientBirthBlock)),
+					)
+					.into())
+				});
+
+				let refreshed_finalized_hash = H256::from_low_u64_be(0xABCDEF);
+				let refreshed_finalized_number: state_chain_runtime::BlockNumber = 42;
+				mock_rpc_api
+					.expect_latest_finalized_block_hash()
+					.times(1)
+					.return_once(move || Ok(refreshed_finalized_hash));
+				mock_rpc_api
+					.expect_block_header()
+					.withf(move |hash| *hash == refreshed_finalized_hash)
+					.times(1)
+					.return_once(move |_| {
+						Ok(state_chain_runtime::Header {
+							parent_hash: H256::default(),
+							number: refreshed_finalized_number,
+							state_root: H256::default(),
+							extrinsics_root: H256::default(),
+							digest: Default::default(),
+						})
+					});
+
+				// On the retry, return a success.
+				mock_rpc_api
+					.expect_submit_and_watch_extrinsic()
+					.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
+
+				let watcher = new_watcher_and_submit_test_extrinsic(scope, mock_rpc_api).await;
+
+				assert_eq!(watcher.finalized_block_hash, refreshed_finalized_hash);
+				assert_eq!(watcher.finalized_block_number, refreshed_finalized_number);
+
+				Ok(())
+			}
+			.boxed()
+		}),
+	)
+	.await
+	.expect("ancient birth block recovery path should not hang")
+	.unwrap();
+}
+
 fn test_call() -> state_chain_runtime::RuntimeCall {
 	state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
 		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(

@@ -391,6 +391,21 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
+						// AncientBirthBlock can fire transiently when the tx pool re-validates
+						// a submission against a slightly inconsistent best-block snapshot.
+						// Refresh our finalized block reference and retry on the next loop
+						// iteration rather than tearing down the engine.
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
+						{
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing finalized block reference.");
+							let new_finalized_block_hash =
+								self.base_rpc_client.latest_finalized_block_hash().await?;
+							let new_finalized_header =
+								self.base_rpc_client.block_header(new_finalized_block_hash).await?;
+							self.finalized_block_hash = new_finalized_block_hash;
+							self.finalized_block_number = new_finalized_header.number;
+						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
 								obj.message()
