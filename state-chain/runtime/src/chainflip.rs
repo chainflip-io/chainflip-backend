@@ -36,7 +36,9 @@ pub mod vault_swaps;
 
 use crate::{
 	chainflip::witnessing::{
-		generic_elections::{decode_and_get_latest_oracle_price, Chainlink},
+		generic_elections::{
+			decode_and_get_latest_oracle_price, get_chainlink_assetpair, Chainlink,
+		},
 		solana_elections::SolanaChainTrackingProvider,
 	},
 	constants::common::YEAR,
@@ -83,8 +85,8 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaApi, SolanaEnvironment, SolanaTransactionType,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, SolanaApi,
+			SolanaEnvironment, SolanaTransactionType,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolanaCrypto,
 		SolanaTransactionData, NONCE_AVAILABILITY_THRESHOLD_FOR_INITIATING_TRANSFER,
@@ -725,12 +727,6 @@ impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for SolEnvi
 	}
 }
 
-impl RecoverDurableNonce for SolEnvironment {
-	fn recover_durable_nonce(nonce_account: SolAddress) {
-		Environment::recover_sol_durable_nonce(nonce_account)
-	}
-}
-
 impl
 	ChainEnvironment<
 		BTreeSet<SolAddress>,
@@ -1230,6 +1226,10 @@ impl CcmAdditionalDataHandler for CfCcmAdditionalDataHandler {
 
 pub struct ChainlinkOracle;
 impl cf_traits::PriceFeedApi for ChainlinkOracle {
+	fn is_oracle_supported(asset: Asset) -> bool {
+		get_chainlink_assetpair(asset).is_some()
+	}
+
 	fn get_price(asset: assets::any::Asset) -> Option<OraclePrice> {
 		decode_and_get_latest_oracle_price::<Chainlink>(asset)
 	}

@@ -25,7 +25,7 @@ use cf_chains::{
 	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
-	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, Tron,
+	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
@@ -565,6 +565,7 @@ pub struct TransactionScreeningEvents {
 	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
+	pub tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -651,6 +652,46 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum DepositDetails {
+	Bitcoin(<Bitcoin as Chain>::DepositDetails),
+	Ethereum(<Ethereum as Chain>::DepositDetails),
+	Arbitrum(<Arbitrum as Chain>::DepositDetails),
+	Tron(<Tron as Chain>::DepositDetails),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct DepositWitnessInfo {
+	pub deposit_chain_block_height: u64,
+	pub deposit_address: EncodedAddress,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
+	pub asset: Asset,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct VaultDepositWitnessInfo {
+	pub tx_id: TransactionInId,
+	pub deposit_chain_block_height: u64,
+	pub input_asset: Asset,
+	pub output_asset: Asset,
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_hex"))]
+	pub amount: AssetAmount,
+	pub destination_address: EncodedAddress,
+	pub deposit_details: DepositDetails,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct IngressEvents {
+	pub deposits: Vec<DepositWitnessInfo>,
+	pub vault_deposits: Vec<VaultDepositWitnessInfo>,
 }
 
 use pallet_cf_lending_pools::{LtvThresholds, NetworkFeeContributions};

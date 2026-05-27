@@ -1,4 +1,5 @@
 [![codecov](https://codecov.io/gh/chainflip-io/chainflip-backend/branch/main/graph/badge.svg?token=20X24B8IXC)](https://codecov.io/gh/chainflip-io/chainflip-backend)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chainflip-io/chainflip-backend)
 
 # Chainflip
 

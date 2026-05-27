@@ -17,5 +17,3 @@
 //! Chainflip runtime storage migrations.
 
 pub mod housekeeping;
-pub mod safe_mode;
-pub mod tron_integration;

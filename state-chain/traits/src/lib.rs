@@ -1447,12 +1447,16 @@ pub struct OraclePrice {
 }
 
 pub trait PriceFeedApi {
+	/// Whether the given asset is supported by the oracle price ES.
+	fn is_oracle_supported(asset: Asset) -> bool;
+
 	/// The price of the given asset.
 	///
 	/// Price is the amount of USD obtained for 1 unit of the asset.
 	///
 	/// In buy/sell terms, this is the USD-denominated sell price of the asset.
 	fn get_price(asset: Asset) -> Option<OraclePrice>;
+
 	/// Get the relative price of asset1 in terms of asset2.
 	///
 	/// If asset1 price rises or asset2 price drops, the relative price increases.
@@ -1467,6 +1471,7 @@ pub trait PriceFeedApi {
 			None
 		}
 	}
+
 	/// Get a fresh (non-stale) buy price of input_asset in terms of output_asset.
 	///
 	/// If the input price drops or output price rises, the buy price increases, meaning more
@@ -1482,6 +1487,7 @@ pub trait PriceFeedApi {
 			}
 		})
 	}
+
 	/// Get a fresh (non-stale) sell price of input_asset in terms of output_asset.
 	///
 	/// If the input price rises or output price drops, the sell price increases, meaning more
@@ -1497,6 +1503,7 @@ pub trait PriceFeedApi {
 			}
 		})
 	}
+
 	#[cfg(any(feature = "runtime-benchmarks", feature = "runtime-integration-tests"))]
 	fn set_price(asset: Asset, price: Price);
 }

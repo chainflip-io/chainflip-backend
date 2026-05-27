@@ -17,10 +17,7 @@
 use anyhow::bail;
 
 use crate::{AccountId32, RefundParametersRpc, H256, U256};
-use cf_chains::{
-	sol::SolAddress, Chain, ChainCrypto, ForeignChain, VaultSwapExtraParametersEncoded,
-	VaultSwapInputEncoded,
-};
+use cf_chains::{ForeignChain, VaultSwapExtraParametersEncoded, VaultSwapInputEncoded};
 use cf_primitives::AffiliateShortId;
 use cf_utilities::rpc::NumberOrHex;
 use serde::{Deserialize, Serialize};
@@ -91,20 +88,6 @@ impl fmt::Display for WithdrawFeesDetail {
 pub struct DeregisteredAffiliate {
 	pub account_id: AccountId32,
 	pub short_id: AffiliateShortId,
-}
-
-pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
-
-#[derive(Serialize, Deserialize)]
-pub enum TransactionInId {
-	Bitcoin(TransactionInIdFor<cf_chains::Bitcoin>),
-	Ethereum(TransactionInIdFor<cf_chains::Ethereum>),
-	Arbitrum(TransactionInIdFor<cf_chains::Arbitrum>),
-
-	// Deposit channels are marked differently than vault swaps
-	Solana(TransactionInIdFor<cf_chains::Solana>),
-	SolanaDepositChannel(SolAddress),
-	// other variants reserved for other chains.
 }
 
 #[derive(Serialize, Deserialize)]

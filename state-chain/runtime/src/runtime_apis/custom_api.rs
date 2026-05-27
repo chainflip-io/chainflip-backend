@@ -316,6 +316,8 @@ decl_runtime_apis!(
 			account_id: AccountId32,
 			chain: ForeignChain,
 		) -> Vec<ChannelId>;
+		#[changed_in(17)]
+		fn cf_transaction_screening_events() -> before_version_17::TransactionScreeningEvents;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
@@ -429,5 +431,12 @@ decl_runtime_apis!(
 		fn cf_ingress_egress_events(
 			chain: ForeignChain,
 		) -> Result<RawWitnessedEvents, DispatchErrorWithMessage>;
+		/// Returns the witnessed ingress events (deposits, vault deposits) for a given chain
+		/// from the block witnesser election's unsynchronized state.
+		#[changed_in(17)]
+		fn cf_ingress_events();
+		fn cf_ingress_events(
+			chain: ForeignChain,
+		) -> Result<IngressEvents, DispatchErrorWithMessage>;
 	}
 );

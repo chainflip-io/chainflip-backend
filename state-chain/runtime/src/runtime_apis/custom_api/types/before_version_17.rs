@@ -541,3 +541,23 @@ impl From<RuntimeSafeMode> for crate::safe_mode::RuntimeSafeMode {
 		}
 	}
 }
+
+#[derive(Serialize, Deserialize, Encode, Decode, Eq, PartialEq, TypeInfo, Debug, Clone)]
+pub struct TransactionScreeningEvents {
+	pub btc_events: Vec<BrokerRejectionEventFor<cf_chains::Bitcoin>>,
+	pub eth_events: Vec<BrokerRejectionEventFor<cf_chains::Ethereum>>,
+	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
+	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
+}
+
+impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
+	fn from(old: TransactionScreeningEvents) -> Self {
+		Self {
+			btc_events: old.btc_events,
+			eth_events: old.eth_events,
+			arb_events: old.arb_events,
+			sol_events: old.sol_events,
+			tron_events: Default::default(),
+		}
+	}
+}
