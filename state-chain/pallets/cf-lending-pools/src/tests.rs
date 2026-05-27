@@ -531,7 +531,7 @@ fn basic_boosting() {
 				loan_type: LoanType::Boost(DEPOSIT_ID),
 				asset: BOOST_ASSET,
 				principal_amount: REQUIRED_AMOUNT,
-				broker_id: None,
+				broker: None,
 			}),
 			RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 				loan_id: LOAN_ID,
@@ -667,7 +667,7 @@ fn boosted_deposit_is_lost() {
 				loan_type: LoanType::Boost(DEPOSIT_ID),
 				asset: BOOST_ASSET,
 				principal_amount: REQUIRED_AMOUNT,
-				broker_id: None,
+				broker: None,
 			}),
 			RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 				loan_id: LOAN_ID,
@@ -1248,7 +1248,7 @@ mod hybrid_boosting {
 					loan_type: LoanType::Boost(DEPOSIT_ID),
 					asset: BOOST_ASSET,
 					principal_amount: LENDING_FUNDS,
-					broker_id: None,
+					broker: None,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -1368,7 +1368,7 @@ mod hybrid_boosting {
 					loan_type: LoanType::Boost(DEPOSIT_ID),
 					asset: BOOST_ASSET,
 					principal_amount: REQUIRED_AMOUNT,
-					broker_id: None,
+					broker: None,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
