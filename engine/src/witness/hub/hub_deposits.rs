@@ -36,6 +36,7 @@ use cf_primitives::{
 };
 use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
+use sp_runtime::traits::Saturating;
 use state_chain_runtime::AssethubInstance;
 use std::collections::BTreeMap;
 use subxt::events::Phase;
@@ -125,26 +126,65 @@ fn address_and_details_to_addresses(
 		.collect()
 }
 
-async fn balance_increase<Client: DotRetryRpcApi + Send + Sync>(
+/// The liquid budget for one (address, asset) over this block:
+///
+///     budget = max(0, current_liquid - parent_liquid + outgoing_in_block)
+///
+/// i.e. the net new spendable funds for the pair, after compensating for funds the
+/// address sent out in the same block.
+async fn liquid_budget<Client: DotRetryRpcApi + Send + Sync>(
 	hub_client: &Client,
 	address: PolkadotAccountId,
 	asset: HubAsset,
 	block_hash: PolkadotHash,
 	parent_hash: Option<PolkadotHash>,
+	outgoing_in_block: u128,
 ) -> u128 {
-	let (current_block_balance, previous_block_balance): (u128, u128) =
+	let (current, parent_balance): (u128, u128) =
 		futures::join!(hub_client.liquid_account_balance(address, asset, block_hash), async move {
-			if let Some(parent_hash) = parent_hash {
-				hub_client.liquid_account_balance(address, asset, parent_hash).await
-			} else {
-				0
+			match parent_hash {
+				Some(parent_hash) =>
+					hub_client.liquid_account_balance(address, asset, parent_hash).await,
+				None => 0,
 			}
 		});
-	current_block_balance.saturating_sub(previous_block_balance)
+	current.saturating_add(outgoing_in_block).saturating_sub(parent_balance)
 }
 
-// Return the deposit witnesses and the extrinsic indices of transfers we want
-// to confirm the broadcast of.
+/// Interpret an [`EventWrapper`] as an Asset Hub asset transfer, if it is one.
+/// Returns `None` for non-transfer events and for transfers in assets we don't witness.
+fn event_as_transfer(
+	event: &EventWrapper,
+) -> Option<(PolkadotAccountId, PolkadotAccountId, u128, HubAsset)> {
+	let (asset, from, to, amount) = match event {
+		EventWrapper::BalancesTransfer { from, to, amount } => (HubAsset::HubDot, from, to, amount),
+		EventWrapper::AssetsTransfer { asset_id, from, to, amount } => {
+			let asset = match *asset_id {
+				ASSETHUB_USDT_ASSET_ID => HubAsset::HubUsdt,
+				ASSETHUB_USDC_ASSET_ID => HubAsset::HubUsdc,
+				_ => return None,
+			};
+			(asset, from, to, amount)
+		},
+		_ => return None,
+	};
+	Some((
+		PolkadotAccountId::from_aliased(from.0),
+		PolkadotAccountId::from_aliased(to.0),
+		*amount,
+		asset,
+	))
+}
+
+// Aggregate all transfer events involving monitored addresses into one DepositWitness
+// per (address, asset). The witnessed amount is the sum of incoming Transfer events,
+// clamped to the net liquid increase for the pair (see `liquid_budget`). `deposit_details` is
+// the earliest contributing extrinsic index.
+//
+// Note: aggregating sacrifices per-extrinsic attribution. If we later add deposit
+// monitoring that rejects individual extrinsics, this approach can misattribute funds
+// between transfers when a vested transfer shares a block with a legitimate one. The
+// witnessed total is still bounded by the real liquid increase.
 async fn deposit_witnesses<Client: DotRetryRpcApi + Send + Sync>(
 	block_hash: PolkadotHash,
 	parent_hash: Option<PolkadotHash>,
@@ -152,106 +192,48 @@ async fn deposit_witnesses<Client: DotRetryRpcApi + Send + Sync>(
 	monitored_addresses: Vec<PolkadotAccountId>,
 	events: &Vec<(Phase, EventWrapper)>,
 ) -> Vec<DepositWitness<Assethub>> {
-	// First we check for any outgoing transfers from the monitored addresses (fetches) so
-	// we can take these into account when calculating balance changes.
-	let mut outgoing_balance_changes = BTreeMap::default();
+	// Sum incoming (with earliest extrinsic index) and outgoing per (address, asset).
+	let mut incoming: BTreeMap<(PolkadotAccountId, HubAsset), (u128, u32)> = BTreeMap::default();
+	let mut outgoing_in_block: BTreeMap<(PolkadotAccountId, HubAsset), u128> = BTreeMap::default();
 	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(_) = phase {
-			match wrapped_event {
-				EventWrapper::BalancesTransfer { amount, from, .. } => {
-					let from = PolkadotAccountId::from_aliased(from.0);
-					if monitored_addresses.contains(&from) {
-						*outgoing_balance_changes.entry((from, HubAsset::HubDot)).or_insert(0) +=
-							*amount;
-					}
-				},
-				EventWrapper::AssetsTransfer { asset_id, amount, from, .. } => {
-					let from = PolkadotAccountId::from_aliased(from.0);
-					let asset = match *asset_id {
-						ASSETHUB_USDT_ASSET_ID => HubAsset::HubUsdt,
-						ASSETHUB_USDC_ASSET_ID => HubAsset::HubUsdc,
-						_ => continue,
-					};
-					if monitored_addresses.contains(&from) {
-						*outgoing_balance_changes.entry((from, asset)).or_insert(0) += *amount;
-					}
-				},
-				_ => continue,
-			}
+		let Phase::ApplyExtrinsic(extrinsic_index) = phase else {
+			continue;
+		};
+		let Some((from, to, amount, asset)) = event_as_transfer(wrapped_event) else {
+			continue;
+		};
+		if monitored_addresses.contains(&from) {
+			outgoing_in_block.entry((from, asset)).or_insert(0).saturating_accrue(amount);
+		}
+		if monitored_addresses.contains(&to) {
+			incoming
+				.entry((to, asset))
+				.and_modify(|(sum, _first_idx)| sum.saturating_accrue(amount))
+				.or_insert((amount, *extrinsic_index));
 		}
 	}
-	// We track the available liquid balance for each address and asset as we go through the events,
-	// so that if there are multiple transfers to the same address in the same block, we can
-	// correctly witness them up to the amount of liquid balance available. Tracking this prevents
-	// a scenario is necessary to correctly handle two specific edge cases:
-	// 1) Transfer of vesting funds: for this reason, we need track *liquid* balances changes.
-	// 2) Multiple transfers in the same block to the same address: without tracking liquid balance
-	//    changes.
+
+	// Emit one witness per incoming (address, asset), clamped to the liquid budget.
 	let mut deposit_witnesses = vec![];
-	let mut available_liquid_balances = BTreeMap::default();
-	for (phase, wrapped_event) in events {
-		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			let (asset, deposit_address, amount) = match wrapped_event {
-				EventWrapper::BalancesTransfer { to, amount, from: _ } => {
-					let deposit_address = PolkadotAccountId::from_aliased(to.0);
-					if !monitored_addresses.contains(&deposit_address) {
-						continue;
-					} else {
-						(HubAsset::HubDot, deposit_address, *amount)
-					}
-				},
-				EventWrapper::AssetsTransfer { asset_id, to, amount, from: _ } => {
-					let deposit_address = PolkadotAccountId::from_aliased(to.0);
-					if !monitored_addresses.contains(&deposit_address) {
-						continue;
-					} else {
-						(
-							match *asset_id {
-								ASSETHUB_USDT_ASSET_ID => HubAsset::HubUsdt,
-								ASSETHUB_USDC_ASSET_ID => HubAsset::HubUsdc,
-								_ => continue,
-							},
-							deposit_address,
-							*amount,
-						)
-					}
-				},
-				_ => continue,
-			};
-			let available_balance = if let Some(balance) =
-				available_liquid_balances.get(&(deposit_address, asset))
-			{
-				*balance
-			} else {
-				let balance =
-					balance_increase(hub_client, deposit_address, asset, block_hash, parent_hash)
-						.await
-						.saturating_add(
-							outgoing_balance_changes
-								.get(&(deposit_address, asset))
-								.copied()
-								.unwrap_or_default(),
-						);
-				available_liquid_balances.insert((deposit_address, asset), balance);
-				balance
-			};
-			let amount = amount.min(available_balance);
-			available_liquid_balances
-				.entry((deposit_address, asset))
-				.and_modify(|balance| *balance = balance.saturating_sub(amount));
-			if amount > 0 {
-				deposit_witnesses.push(DepositWitness {
-					deposit_address,
-					asset,
-					amount,
-					deposit_details: *extrinsic_index,
-				});
-			} else {
-				tracing::warn!(
-					"Detected transfer to monitored address {:?} of asset {:?} with amount {} in block {:?}, but no liquid balance increase was available to witness after accounting for outgoing transfers and previous events in the same block. This transfer will not be witnessed.",
-					deposit_address, asset, amount, block_hash
-				);
-			}
+	for ((deposit_address, asset), (incoming_sum, first_extrinsic_index)) in incoming {
+		let outgoing =
+			outgoing_in_block.get(&(deposit_address, asset)).copied().unwrap_or_default();
+		let budget =
+			liquid_budget(hub_client, deposit_address, asset, block_hash, parent_hash, outgoing)
+				.await;
+		let amount = incoming_sum.min(budget);
+		if amount > 0 {
+			deposit_witnesses.push(DepositWitness {
+				deposit_address,
+				asset,
+				amount,
+				deposit_details: first_extrinsic_index,
+			});
+		} else {
+			tracing::warn!(
+				"Incoming transfers to monitored address {:?} of asset {:?} totalling {} in block {:?} clamped to zero by liquid budget. Likely vested or otherwise locked.",
+				deposit_address, asset, incoming_sum, block_hash
+			);
 		}
 	}
 	deposit_witnesses
@@ -428,14 +410,9 @@ mod test {
 				DepositWitness {
 					deposit_address: transfer_2_deposit_address,
 					asset: HubAsset::HubDot,
-					amount: TRANSFER_2_AMOUNT,
+					// Same asset transfers are aggregated into one witness.
+					amount: TRANSFER_2_AMOUNT + TRANSFER_TO_SELF_AMOUNT,
 					deposit_details: TRANSFER_2_INDEX
-				},
-				DepositWitness {
-					deposit_address: transfer_3_deposit_address,
-					asset: HubAsset::HubUsdc,
-					amount: TRANSFER_3_AMOUNT,
-					deposit_details: TRANSFER_3_INDEX
 				},
 				DepositWitness {
 					deposit_address: transfer_4_deposit_address,
@@ -444,11 +421,11 @@ mod test {
 					deposit_details: TRANSFER_4_INDEX
 				},
 				DepositWitness {
-					deposit_address: transfer_2_deposit_address,
-					asset: HubAsset::HubDot,
-					amount: TRANSFER_TO_SELF_AMOUNT,
-					deposit_details: TRANSFER_TO_SELF_INDEX
-				}
+					deposit_address: transfer_3_deposit_address,
+					asset: HubAsset::HubUsdc,
+					amount: TRANSFER_3_AMOUNT,
+					deposit_details: TRANSFER_3_INDEX
+				},
 			]
 		);
 	}
@@ -513,10 +490,11 @@ mod test {
 		client
 	}
 
-	/// Two regular transfers to the same address in the same block. The recipient's
-	/// liquid balance increases by the full sum, so both witnesses are credited in full.
+	/// Two regular transfers to the same (address, asset) in the same block are
+	/// aggregated into a single witness with the summed amount and the earliest
+	/// contributing extrinsic index.
 	#[tokio::test]
-	async fn two_regular_transfers_same_address_both_credited() {
+	async fn two_regular_transfers_same_address_aggregated() {
 		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
 		const TRANSFER_A_INDEX: u32 = 1;
 		const TRANSFER_A_AMOUNT: PolkadotBalance = 10_000;
@@ -564,106 +542,125 @@ mod test {
 
 		assert_eq!(
 			witnesses,
-			vec![
-				DepositWitness {
-					deposit_address,
-					asset: HubAsset::HubDot,
-					amount: TRANSFER_A_AMOUNT,
-					deposit_details: TRANSFER_A_INDEX,
-				},
-				DepositWitness {
-					deposit_address,
-					asset: HubAsset::HubDot,
-					amount: TRANSFER_B_AMOUNT,
-					deposit_details: TRANSFER_B_INDEX,
-				},
-			]
+			vec![DepositWitness {
+				deposit_address,
+				asset: HubAsset::HubDot,
+				amount: TRANSFER_A_AMOUNT + TRANSFER_B_AMOUNT,
+				deposit_details: TRANSFER_A_INDEX,
+			}]
 		);
 	}
 
-	/// A regular transfer followed by a vested transfer in the same block. The liquid
-	/// balance only increases by the regular amount; the total credited must match.
+	/// A regular transfer and a vested transfer to the same address in the same block:
+	/// the aggregated incoming sum is clamped to the real liquid increase, so only the
+	/// regular amount is credited regardless of event order. `deposit_details` is the
+	/// earliest contributing extrinsic index — which depends on event order.
 	#[tokio::test]
-	async fn regular_then_vested_transfer_same_address() {
-		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
-		const REGULAR_INDEX: u32 = 1;
+	async fn vested_transfer_is_clamped_regardless_of_order() {
 		const REGULAR_AMOUNT: PolkadotBalance = 10_000;
-		const VESTED_INDEX: u32 = 2;
 		const VESTED_AMOUNT: PolkadotBalance = 40_000_000_000;
+		const REGULAR_FIRST: u32 = 1;
+		const VESTED_SECOND: u32 = 2;
+		const VESTED_FIRST: u32 = 3;
+		const REGULAR_SECOND: u32 = 4;
 
+		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
 		let block_hash = PolkadotHash::from([1u8; 32]);
 		let parent_hash = PolkadotHash::from([0u8; 32]);
 
 		// Liquid balance rises by exactly the regular transfer amount; the vested
-		// transfer raises `free` and `frozen` by the same amount, contributing 0.
+		// transfer raises `free` and `frozen` together, contributing 0.
 		let hub_client = mock_client_with_balances(block_hash, parent_hash, REGULAR_AMOUNT, 0);
 
-		let events = phase_and_events(vec![
+		let make_regular = |idx: u32| {
 			(
-				REGULAR_INDEX,
+				idx,
 				mock_transfer(
 					&PolkadotAccountId::from_aliased([7; 32]),
 					&deposit_address,
 					REGULAR_AMOUNT,
 				),
-			),
+			)
+		};
+		let make_vested = |idx: u32| {
 			(
-				VESTED_INDEX,
+				idx,
 				mock_transfer(
 					&PolkadotAccountId::from_aliased([8; 32]),
 					&deposit_address,
 					VESTED_AMOUNT,
 				),
+			)
+		};
+
+		// The earliest contributing extrinsic index is whichever event came first in
+		// the block. The witness amount is always clamped to REGULAR_AMOUNT regardless.
+		for (events, expected_index) in [
+			(
+				phase_and_events(vec![make_regular(REGULAR_FIRST), make_vested(VESTED_SECOND)]),
+				REGULAR_FIRST,
 			),
-		]);
-
-		let witnesses = deposit_witnesses(
-			block_hash,
-			Some(parent_hash),
-			&hub_client,
-			vec![deposit_address],
-			&events,
-		)
-		.await;
-
-		// The first (regular) event exhausts the available liquid budget. The second
-		// (vested) event clamps to zero and is suppressed.
-		assert_eq!(witnesses.len(), 1);
-		assert_eq!(witnesses[0].amount, REGULAR_AMOUNT);
-		assert_eq!(witnesses[0].deposit_details, REGULAR_INDEX);
+			(
+				phase_and_events(vec![make_vested(VESTED_FIRST), make_regular(REGULAR_SECOND)]),
+				VESTED_FIRST,
+			),
+		] {
+			let witnesses = deposit_witnesses(
+				block_hash,
+				Some(parent_hash),
+				&hub_client,
+				vec![deposit_address],
+				&events,
+			)
+			.await;
+			assert_eq!(
+				witnesses,
+				vec![DepositWitness {
+					deposit_address,
+					asset: HubAsset::HubDot,
+					amount: REGULAR_AMOUNT,
+					deposit_details: expected_index,
+				}],
+			);
+		}
 	}
 
-	/// Vested transfer first, then a regular transfer. Ordering changes the distribution
-	/// across the two witnesses, but the total credited must still equal the liquid
-	/// increase (i.e. the regular amount only).
+	/// A small vested transfer in the same block as a larger
+	/// legitimate deposit. Aggregation sums incoming (vested + legit), clamps to the
+	/// real liquid increase, and emits one witness for the legit amount. The user's
+	/// funds are fully credited on the (address, asset) total — but `deposit_details`
+	/// is the earliest contributing extrinsic, which is the smaller vesting
+	/// extrinsic if it comes first in the block.
 	#[tokio::test]
-	async fn vested_then_regular_transfer_same_address() {
-		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
+	async fn small_vested_transfer_does_not_block_larger_legit_deposit() {
+		const SMALL_VESTED_AMOUNT: PolkadotBalance = 1;
+		const LARGE_LEGIT_AMOUNT: PolkadotBalance = 100;
 		const VESTED_INDEX: u32 = 1;
-		const VESTED_AMOUNT: PolkadotBalance = 40_000_000_000;
-		const REGULAR_INDEX: u32 = 2;
-		const REGULAR_AMOUNT: PolkadotBalance = 10_000;
+		const LEGIT_INDEX: u32 = 2;
 
+		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
 		let block_hash = PolkadotHash::from([1u8; 32]);
 		let parent_hash = PolkadotHash::from([0u8; 32]);
 
-		let hub_client = mock_client_with_balances(block_hash, parent_hash, REGULAR_AMOUNT, 0);
+		// Liquid balance rises by exactly the legit amount; the vested transfer raises
+		// `free` and `frozen` together.
+		let hub_client = mock_client_with_balances(block_hash, parent_hash, LARGE_LEGIT_AMOUNT, 0);
 
 		let events = phase_and_events(vec![
 			(
 				VESTED_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
+					&PolkadotAccountId::from_aliased([8; 32]),
 					&deposit_address,
-					VESTED_AMOUNT,
+					SMALL_VESTED_AMOUNT,
 				),
 			),
 			(
-				REGULAR_INDEX,
+				LEGIT_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from_aliased([8; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&deposit_address,
-					REGULAR_AMOUNT,
+					LARGE_LEGIT_AMOUNT,
 				),
 			),
 		]);
@@ -677,12 +674,18 @@ mod test {
 		)
 		.await;
 
-		// FIFO: the vested event arrives first and absorbs the entire liquid budget
-		// (REGULAR_AMOUNT). The regular event that follows clamps to zero and is
-		// suppressed. The aggregate credited still equals the real liquid increase.
-		assert_eq!(witnesses.len(), 1);
-		assert_eq!(witnesses[0].amount, REGULAR_AMOUNT);
-		assert_eq!(witnesses[0].deposit_details, VESTED_INDEX);
+		// Aggregated incoming = SMALL_VESTED + LARGE_LEGIT, clamped to the liquid
+		// budget = LARGE_LEGIT. The legit amount is fully credited, but attributed to
+		// VESTED_INDEX because the vested event appears first in the block.
+		assert_eq!(
+			witnesses,
+			vec![DepositWitness {
+				deposit_address,
+				asset: HubAsset::HubDot,
+				amount: LARGE_LEGIT_AMOUNT,
+				deposit_details: VESTED_INDEX,
+			}],
+		);
 	}
 
 	/// Pre-existing liquid balance at the parent block must not be counted towards the
@@ -884,9 +887,9 @@ mod test {
 
 	/// A new deposit arrives, then a vault sweep takes both the prior balance and
 	/// the new deposit out of the account in the same block. The current liquid
-	/// balance drops below the parent — so `saturating_sub` clamps the delta to zero
-	/// — but the deposit is real and must be credited in full once the outgoing
-	/// transfers are added back to the budget.
+	/// balance drops below the parent (so the naive `current - parent` clamps to
+	/// zero), but the deposit is real and must be credited in full once the
+	/// outgoing sum is added back to the budget.
 	#[tokio::test]
 	async fn incoming_then_outgoing_same_block_with_balance_drop_credits_in_full() {
 		let deposit_address = PolkadotAccountId::from_aliased([1; 32]);
