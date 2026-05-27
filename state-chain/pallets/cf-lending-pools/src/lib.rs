@@ -468,7 +468,7 @@ pub mod pallet {
 			asset: Asset,
 			loan_type: LoanType<T::AccountId>,
 			principal_amount: AssetAmount,
-			broker_id: Option<T::AccountId>,
+			broker: Option<Beneficiary<T::AccountId>>,
 		},
 		LoanUpdated {
 			loan_id: LoanId,

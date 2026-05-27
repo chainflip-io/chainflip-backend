@@ -418,7 +418,7 @@ fn basic_general_lending() {
 					loan_type: LoanType::User(BORROWER),
 					asset: LOAN_ASSET,
 					principal_amount: PRINCIPAL,
-					broker_id: None,
+					broker: None,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -694,15 +694,15 @@ fn broker_interest_credited_to_broker() {
 				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			));
 
-			// The loan's `LoanCreated` event records the broker's account id.
+			// The loan's `LoanCreated` event records the broker's account id and bps.
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
 					loan_id: LOAN_ID,
 					loan_type: LoanType::User(BORROWER),
-					broker_id,
+					broker,
 					..
-				}) if *broker_id == Some(BROKER),
+				}) if *broker == Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			);
 
 			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
