@@ -774,7 +774,7 @@ mod test {
 			Price(U256::zero()).divide_by(Price(
 				U256::from_dec_str("4567845678456784567845678456784567845678").unwrap()
 			)),
-			None
+			Some(Price::zero())
 		);
 		assert_eq!(
 			Price(U256::from_dec_str("4567845678456784567845678456784567845678").unwrap())
