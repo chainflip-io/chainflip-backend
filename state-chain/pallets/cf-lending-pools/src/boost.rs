@@ -4,6 +4,7 @@ use crate::{
 	core_lending_pool::{CoreLendingPool, CoreLoanId},
 	general_lending::{check_pool_caps_after_borrow, create_new_loan, fund_loan, OraclePriceCache},
 };
+use frame_support::sp_runtime::{helpers_128bit::multiply_by_rational_with_rounding, Rounding};
 use sp_std::collections::btree_set::BTreeSet;
 
 use super::*;
@@ -178,13 +179,31 @@ impl<T: Config> BoostApi for Pallet<T> {
 			.and_then(|pool| CorePools::<T>::get(asset, pool.core_pool_id))
 			.map_or(0, |p| p.available_amount.into_asset_amount());
 
-		let (lending_pool_principal, boost_pool_principal) = try_split_required_amount(
-			required_amount,
-			lending_available,
-			boost_available,
-			BoostConfig::<T>::get().min_lending_pool_share,
-		)
-		.map_err(Error::<T>::from)?;
+		// Two-step split: first allocate proportionally using the lending pool's *full*
+		// available balance (so we don't bias toward the legacy boost pool when utilisation
+		// is healthy), then cap the lending pool's contribution to leave room for the
+		// network portion of the origination fee. The cap only kicks in when the
+		// proportional allocation would push the lending pool past what `fund_loan` can
+		// accept (i.e. near 100% utilisation) — otherwise the split is unchanged. Any
+		// overflow at the cap shifts to the boost pool.
+		let (lending_pool_principal, boost_pool_principal) = {
+			let (lending_pool_principal, boost_pool_principal) = try_split_required_amount(
+				required_amount,
+				lending_available,
+				boost_available,
+				BoostConfig::<T>::get().min_lending_pool_share,
+			)
+			.map_err(Error::<T>::from)?;
+
+			cap_lending_principal_for_fee::<T>(
+				lending_pool_principal,
+				boost_pool_principal,
+				lending_available,
+				boost_available,
+				required_amount,
+				total_fee,
+			)?
+		};
 
 		let lending_pool_fee =
 			Permill::from_rational(lending_pool_principal, required_amount) * total_fee;
@@ -422,6 +441,57 @@ impl<T: Config> From<SplitRequiredAmountError> for Error<T> {
 	fn from(_: SplitRequiredAmountError) -> Self {
 		Error::<T>::InsufficientBoostLiquidity
 	}
+}
+
+/// Largest principal the lending pool may fund without `fund_loan` rejecting the loan
+/// for failing to cover the network portion of the origination fee from `available_amount`.
+///
+/// For principal `p`, the network portion is `network_fee_full * p/required`, where
+/// `network_fee_full = split_between_network_and_pool(total_fee).0` is the network portion
+/// if the lending pool covered all of `required_amount`. `fund_loan` enforces
+/// `p + (p/required) * network_fee_full <= lending_available`, which solves to
+/// `p <= lending_available * required / (required + network_fee_full)`.
+fn lending_principal_cap_for_fee<T: Config>(
+	lending_available: AssetAmount,
+	total_fee: AssetAmount,
+	required_amount: AssetAmount,
+) -> AssetAmount {
+	if required_amount == 0 {
+		return lending_available;
+	}
+	let (network_fee_full, _) = split_between_network_and_pool::<T>(total_fee);
+	// Note: we use `multiply_by_rational_with_rounding` rather than the `Permill::from_rational`
+	// pattern used elsewhere for fee calculations because the cap is a hard liquidity
+	// constraint — `Permill`'s 1e-6 precision loss can shrink the cap enough to push the
+	// boost pool past its available balance when buffers are tight.
+	multiply_by_rational_with_rounding(
+		lending_available,
+		required_amount,
+		required_amount.saturating_add(network_fee_full),
+		Rounding::Down,
+	)
+	.unwrap_or(0)
+}
+
+/// If the proportional split would push the lending pool past the cap that leaves room for
+/// the origination network fee, shift the overflow to the boost pool. Fails if the boost
+/// pool can't absorb it.
+fn cap_lending_principal_for_fee<T: Config>(
+	lending_pool_principal: AssetAmount,
+	boost_pool_principal: AssetAmount,
+	lending_available: AssetAmount,
+	boost_available: AssetAmount,
+	required_amount: AssetAmount,
+	total_fee: AssetAmount,
+) -> Result<(AssetAmount, AssetAmount), DispatchError> {
+	let cap = lending_principal_cap_for_fee::<T>(lending_available, total_fee, required_amount);
+	if lending_pool_principal <= cap {
+		return Ok((lending_pool_principal, boost_pool_principal));
+	}
+	let overflow = lending_pool_principal.saturating_sub(cap);
+	let new_boost_pool_principal = boost_pool_principal.saturating_add(overflow);
+	ensure!(new_boost_pool_principal <= boost_available, Error::<T>::InsufficientBoostLiquidity);
+	Ok((cap, new_boost_pool_principal))
 }
 
 /// Split `required_amount` between the lending pool and the legacy boost pool

@@ -1405,7 +1405,9 @@ pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: Ass
 ///
 /// Emits [`Event::OriginationFeeTaken`].
 ///
-/// Fails if the pool for `loan.asset` does not exist or has insufficient available funds.
+/// Fails with `InsufficientLiquidity` if the pool's available balance can't cover both the
+/// principal and the network portion of the origination fee, or if the pool for `loan.asset`
+/// does not exist.
 pub fn fund_loan<T: Config>(
 	loan: &mut GeneralLoan<T>,
 	principal: AssetAmount,
@@ -1414,6 +1416,14 @@ pub fn fund_loan<T: Config>(
 ) -> Result<(), DispatchError> {
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		// The pool must hold enough liquid funds to cover both the principal *and* the
+		// network portion of the origination fee. If it can't, origination is rejected
+		// outright rather than leaving a partial obligation to the network.
+		ensure!(
+			pool.available_amount >= principal.saturating_add(origination_fee_network),
+			Error::<T>::InsufficientLiquidity,
+		);
 
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
 
