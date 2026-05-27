@@ -44,7 +44,6 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		#[derive(
 			codec::Encode,
 			codec::Decode,
-			scale_info::TypeInfo,
 			serde::Serialize,
 			serde::Deserialize,
 			Clone,
@@ -52,6 +51,14 @@ macro_rules! impl_identity_migrations_with_wrapper {
 		)]
         $(#[$meta])*
 		pub struct $Wrapper(pub $Ty);
+
+		impl scale_info::TypeInfo for $Wrapper {
+			type Identity = <$Ty as scale_info::TypeInfo>::Identity;
+
+			fn type_info() -> scale_info::Type {
+				<$Ty as scale_info::TypeInfo>::type_info()
+			}
+		}
 
 		impl Migration<$Ty, crate::migrations::vCurrent> for WrapMigration {
 			type From = $Wrapper;
