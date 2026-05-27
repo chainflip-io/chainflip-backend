@@ -11,7 +11,7 @@ pub trait HistoricalCompatibilityTester {
 			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode>
+			+ HasVersion<V, HistoricalType: Encode + Decode + std::fmt::Debug>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,

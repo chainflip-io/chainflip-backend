@@ -99,7 +99,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode>
+			+ HasVersion<V, HistoricalType: Encode + Decode + std::fmt::Debug>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
@@ -158,8 +158,8 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 				}));
 				if let Err(e) = result {
 					panic!(
-						"Output decode panicked for old_input: {:?}\n\nOriginal panic: {:?}",
-						old_input, e
+						"Output decode panicked for old_output: {:?}\n\nOriginal panic: {:?}",
+						old_output, e
 					);
 				}
 
