@@ -194,6 +194,7 @@ pub(crate) fn weight_and_dispatch_class<T: Config>(
 
 /// Checks non-native signed call metadata against current chain state.
 pub(crate) fn validate_metadata<T: Config>(
+	source: TransactionSource,
 	transaction_metadata: &TransactionMetadata,
 	signer_account: &T::AccountId,
 ) -> TransactionValidity {
@@ -208,7 +209,16 @@ pub(crate) fn validate_metadata<T: Config>(
 	let current_nonce = frame_system::Pallet::<T>::account_nonce(signer_account);
 	let tx_nonce: <T as frame_system::Config>::Nonce = transaction_metadata.nonce.into();
 
-	ensure!(tx_nonce >= current_nonce, InvalidTransaction::Stale);
+	match source {
+		// If the transaction is already in a block, the nonce must be exactly correct.
+		TransactionSource::InBlock => {
+			ensure!(tx_nonce == current_nonce, InvalidTransaction::Stale);
+		},
+		// If the transaction is in the transaction pool, it can also be a future transaction.
+		TransactionSource::Local | TransactionSource::External => {
+			ensure!(tx_nonce >= current_nonce, InvalidTransaction::Stale);
+		},
+	}
 
 	// Build transaction validity with requires/provides
 	let mut tx_builder = ValidTransaction::with_tag_prefix(<Pallet<T>>::name())

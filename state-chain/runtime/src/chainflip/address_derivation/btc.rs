@@ -19,6 +19,7 @@ use crate::{BitcoinThresholdSigner, Environment};
 use cf_chains::{
 	address::{AddressDerivationApi, AddressDerivationError, EncodedAddress},
 	btc::{deposit_address::DepositAddress, AggKey, ScriptPubkey},
+	deposit_channel::DepositChannelFreshness,
 	Bitcoin, Chain,
 };
 use cf_primitives::ChannelId;
@@ -91,6 +92,15 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		);
 
 		Ok((channel_state.script_pubkey(), channel_state))
+	}
+}
+
+/// A Bitcoin channel is spendable only while its committed key is the active-epoch key.
+pub struct BtcDepositChannelFreshness;
+impl DepositChannelFreshness<Bitcoin> for BtcDepositChannelFreshness {
+	fn is_fresh(state: &<Bitcoin as Chain>::DepositChannelState) -> bool {
+		BitcoinThresholdSigner::active_epoch_key()
+			.is_some_and(|epoch_key| state.pubkey_x == epoch_key.key.current)
 	}
 }
 pub fn derive_current_and_previous_epoch_private_btc_vaults(
