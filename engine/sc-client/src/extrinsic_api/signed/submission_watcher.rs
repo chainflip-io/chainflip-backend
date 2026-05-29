@@ -309,13 +309,20 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
+		// The era anchor used to sign the extrinsic. Initialised from the
+		// watcher's tracked finalized block, but may be refreshed locally on
+		// AncientBirthBlock without touching `self.finalized_block_*` — the
+		// watcher's bookkeeping must only advance through `on_block_finalized`
+		// to preserve the strictly-increasing invariant it asserts on.
+		let mut era_block_hash = self.finalized_block_hash;
+		let mut era_block_number = self.finalized_block_number;
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
-				self.finalized_block_hash,
-				self.finalized_block_number,
+				era_block_hash,
+				era_block_number,
 				self.extrinsic_lifetime,
 				nonce,
 			);
@@ -393,18 +400,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 						},
 						// AncientBirthBlock can fire transiently when the tx pool re-validates
 						// a submission against a slightly inconsistent best-block snapshot.
-						// Refresh our finalized block reference and retry on the next loop
-						// iteration rather than tearing down the engine.
+						// Refresh the local era anchor and retry on the next loop iteration
+						// rather than tearing down the engine. Note we deliberately do not
+						// touch `self.finalized_block_*` — `on_block_finalized` enforces
+						// strictly-increasing finalized block numbers via assert, and
+						// leapfrogging that cursor here would violate it.
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
 						{
-							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing finalized block reference.");
-							let new_finalized_block_hash =
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing era anchor.");
+							era_block_hash =
 								self.base_rpc_client.latest_finalized_block_hash().await?;
-							let new_finalized_header =
-								self.base_rpc_client.block_header(new_finalized_block_hash).await?;
-							self.finalized_block_hash = new_finalized_block_hash;
-							self.finalized_block_number = new_finalized_header.number;
+							era_block_number =
+								self.base_rpc_client.block_header(era_block_hash).await?.number;
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
