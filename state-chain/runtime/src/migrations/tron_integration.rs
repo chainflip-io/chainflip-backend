@@ -1,5 +1,5 @@
 use crate::{chainflip::witnessing::tron_elections::TRON_MAINNET_SAFETY_MARGIN, Runtime};
-use cf_chains::instances::TronInstance;
+use cf_chains::instances::{EthereumInstance, TronInstance};
 #[cfg(feature = "try-runtime")]
 use codec::Encode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -106,6 +106,12 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 			TRON_MAINNET_SAFETY_MARGIN as u64,
 		);
 
+		for id in
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, EthereumInstance>::iter_keys()
+		{
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, TronInstance>::insert(id, ());
+		}
+
 		Weight::zero()
 	}
 
@@ -120,6 +126,11 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 		frame_support::ensure!(
 			safety_margin == Some(TRON_MAINNET_SAFETY_MARGIN as u64),
 			"Tron safety margin not set correctly during migration"
+		);
+		frame_support::ensure!(
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, TronInstance>::iter_keys()
+				.count() > 0,
+			"Tron whitelisted brokers not migrated correctly"
 		);
 
 		Ok(())
