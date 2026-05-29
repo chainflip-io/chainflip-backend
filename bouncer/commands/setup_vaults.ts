@@ -19,13 +19,15 @@ import { globalLogger, loggerChild } from 'shared/utils/logger';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
-import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
-import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
-import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
-import { tronVaultAwaitingGovernanceActivation } from 'generated/events/tronVault/awaitingGovernanceActivation';
-import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
-import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
-import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
+import { bitcoinVaultAwaitingGovernanceActivationEvent } from 'generated/events/bitcoinVault/awaitingGovernanceActivation';
+import { arbitrumVaultAwaitingGovernanceActivationEvent } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
+import { solanaVaultAwaitingGovernanceActivationEvent } from 'generated/events/solanaVault/awaitingGovernanceActivation';
+import { tronVaultAwaitingGovernanceActivationEvent } from 'generated/events/tronVault/awaitingGovernanceActivation';
+import { validatorNewEpochEvent } from 'generated/events/validator/newEpoch';
+import { validatorRotationPhaseUpdatedEvent } from 'generated/events/validator/rotationPhaseUpdated';
+import { validatorRotationAbortedEvent } from 'generated/events/validator/rotationAborted';
+import { environmentBitcoinBlockNumberSetForVaultEvent } from 'generated/events/environment/bitcoinBlockNumberSetForVault';
+import { environmentSolanaInitializedEvent } from 'generated/events/environment/solanaInitialized';
 
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
@@ -51,16 +53,10 @@ async function main(): Promise<void> {
   await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
 
   const rotationEvent = await cf.stepUntilOneEventOf({
-    rotationPhaseUpdated: {
-      name: 'Validator.RotationPhaseUpdated',
-      schema: validatorRotationPhaseUpdated.refine(
-        (event) => event.newPhase.__kind === 'KeygensInProgress',
-      ),
-    },
-    rotationAborted: {
-      name: 'Validator.RotationAborted',
-      schema: validatorRotationAborted,
-    },
+    rotationPhaseUpdated: validatorRotationPhaseUpdatedEvent.refine(
+      (event) => event.newPhase.__kind === 'KeygensInProgress',
+    ),
+    rotationAborted: validatorRotationAbortedEvent,
   });
   if (rotationEvent.key === 'rotationAborted') {
     throw new Error(
@@ -71,22 +67,10 @@ async function main(): Promise<void> {
   // Step 3
   cf.info('Waiting for new keys');
   const keyEvents = await cf.stepUntilAllEventsOf({
-    btc: {
-      name: 'BitcoinVault.AwaitingGovernanceActivation',
-      schema: bitcoinVaultAwaitingGovernanceActivation,
-    },
-    arb: {
-      name: 'ArbitrumVault.AwaitingGovernanceActivation',
-      schema: arbitrumVaultAwaitingGovernanceActivation,
-    },
-    sol: {
-      name: 'SolanaVault.AwaitingGovernanceActivation',
-      schema: solanaVaultAwaitingGovernanceActivation,
-    },
-    tron: {
-      name: 'TronVault.AwaitingGovernanceActivation',
-      schema: tronVaultAwaitingGovernanceActivation,
-    },
+    btc: bitcoinVaultAwaitingGovernanceActivationEvent,
+    arb: arbitrumVaultAwaitingGovernanceActivationEvent,
+    sol: solanaVaultAwaitingGovernanceActivationEvent,
+    tron: tronVaultAwaitingGovernanceActivationEvent,
   });
 
   const btcKey = keyEvents.btc.data.newPublicKey;
@@ -132,19 +116,19 @@ async function main(): Promise<void> {
             await btcClient.getBlockCount(),
             btcKey,
           ),
-        expectedEvent: { name: 'Environment.BitcoinBlockNumberSetForVault' },
+        expectedEvent: environmentBitcoinBlockNumberSetForVaultEvent,
       }),
     (subcf) =>
       subcf.submitGovernance({
         extrinsic: async (api) =>
           api.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
-        expectedEvent: { name: 'Environment.SolanaInitialized' },
+        expectedEvent: environmentSolanaInitializedEvent,
       }),
   ]);
 
   // Confirmation
   cf.info('Waiting for new epoch...');
-  await cf.stepUntilEvent('Validator.NewEpoch', validatorNewEpoch);
+  await cf.stepUntilEvent(validatorNewEpochEvent);
   cf.info('New Epoch');
 
   // Wait for updateDefaultPriceFeeds Promise to resolve

@@ -15,8 +15,8 @@ import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBalance } from 'shared/get_balance';
 import { executeTronVaultSwap } from 'shared/vault_swap/tron_vault_swap';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { tronIngressEgressTransactionRejectedByBroker } from 'generated/events/tronIngressEgress/transactionRejectedByBroker';
-import { tronIngressEgressDepositFinalised } from 'generated/events/tronIngressEgress/depositFinalised';
+import { tronIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/tronIngressEgress/transactionRejectedByBroker';
+import { tronIngressEgressDepositFinalisedEvent } from 'generated/events/tronIngressEgress/depositFinalised';
 import { send } from 'shared/send';
 
 /**
@@ -42,18 +42,12 @@ async function waitForDepositContractDeployment(depositAddress: string) {
 
 async function waitForTronTransactionRejection<A = []>(cf: ChainflipIO<A>, txHash: string) {
   const resultEvent = await cf.stepUntilOneEventOf({
-    transactionRejected: {
-      name: 'TronIngressEgress.TransactionRejectedByBroker',
-      schema: tronIngressEgressTransactionRejectedByBroker.refine(
-        (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
-      ),
-    },
-    depositFinalized: {
-      name: 'TronIngressEgress.DepositFinalised',
-      schema: tronIngressEgressDepositFinalised.refine(
-        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-      ),
-    },
+    transactionRejected: tronIngressEgressTransactionRejectedByBrokerEvent.refine(
+      (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+    ),
+    depositFinalized: tronIngressEgressDepositFinalisedEvent.refine(
+      (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+    ),
   });
 
   if (resultEvent.key === 'depositFinalized') {
@@ -105,8 +99,7 @@ export async function testTron<A = []>(
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
     await cf.stepUntilEvent(
-      'TronIngressEgress.DepositFinalised',
-      tronIngressEgressDepositFinalised.refine(
+      tronIngressEgressDepositFinalisedEvent.refine(
         (event) =>
           event.depositAddress === swapParams.depositAddress &&
           event.channelId === BigInt(swapParams.channelId),

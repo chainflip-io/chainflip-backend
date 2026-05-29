@@ -16,8 +16,14 @@ import { requestNewSwap } from 'shared/perform_swap';
 import { jsonRpc } from 'shared/json_rpc';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
-import { lendingPoolsBoostFundsAdded } from 'generated/events/lendingPools/boostFundsAdded';
-import { lendingPoolsStoppedBoosting } from 'generated/events/lendingPools/stoppedBoosting';
+import {
+  lendingPoolsBoostFundsAdded,
+  lendingPoolsBoostFundsAddedEvent,
+} from 'generated/events/lendingPools/boostFundsAdded';
+import {
+  lendingPoolsStoppedBoosting,
+  lendingPoolsStoppedBoostingEvent,
+} from 'generated/events/lendingPools/stoppedBoosting';
 import {
   ChainflipIO,
   fullAccountFromUri,
@@ -40,15 +46,12 @@ export async function stopBoosting(
     return await cf.submitExtrinsic({
       extrinsic: (api) =>
         api.tx.lendingPools.stopBoosting(shortChainFromAsset(asset).toUpperCase(), boostTier),
-      expectedEvent: {
-        name: 'LendingPools.StoppedBoosting',
-        schema: lendingPoolsStoppedBoosting.refine(
-          (event) =>
-            event.boosterId === cf.requirements.account.keypair.address &&
-            event.boostPool.asset === asset &&
-            event.boostPool.tier === boostTier,
-        ),
-      },
+      expectedEvent: lendingPoolsStoppedBoostingEvent.refine(
+        (event) =>
+          event.boosterId === cf.requirements.account.keypair.address &&
+          event.boostPool.asset === asset &&
+          event.boostPool.tier === boostTier,
+      ),
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes('lendingPools.AccountNotFoundInPool')) {
@@ -79,15 +82,12 @@ export async function addBoostFunds(
         amountToFineAmount(amount.toString(), assetDecimals(asset)),
         boostTier,
       ),
-    expectedEvent: {
-      name: 'LendingPools.BoostFundsAdded',
-      schema: lendingPoolsBoostFundsAdded.refine(
-        (event) =>
-          event.boosterId === cf.requirements.account.keypair.address &&
-          event.boostPool.asset === asset &&
-          event.boostPool.tier === boostTier,
-      ),
-    },
+    expectedEvent: lendingPoolsBoostFundsAddedEvent.refine(
+      (event) =>
+        event.boosterId === cf.requirements.account.keypair.address &&
+        event.boostPool.asset === asset &&
+        event.boostPool.tier === boostTier,
+    ),
   });
 }
 

@@ -9,9 +9,9 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
-import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
-import { ethereumChainTrackingChainStateUpdated } from 'generated/events/ethereumChainTracking/chainStateUpdated';
-import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
+import { swappingSwapRequestCompletedEvent } from 'generated/events/swapping/swapRequestCompleted';
+import { ethereumChainTrackingChainStateUpdatedEvent } from 'generated/events/ethereumChainTracking/chainStateUpdated';
+import { ethereumIngressEgressDepositFinalisedEvent } from 'generated/events/ethereumIngressEgress/depositFinalised';
 
 // Test that governance can trigger deposit witnessing for a deposit made with the wrong asset.
 // Scenario:
@@ -38,20 +38,14 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
 
   // Step 3: Check that no swap is triggered
   const resultEvent = await cf.stepUntilOneEventOf({
-    depositFinalized: {
-      name: 'EthereumIngressEgress.DepositFinalized',
-      schema: ethereumIngressEgressDepositFinalised.refine(
-        (event) =>
-          event.depositAddress === swapParams.depositAddress &&
-          event.channelId === BigInt(swapParams.channelId),
-      ),
-    },
-    ethereumAdvancedEnough: {
-      name: 'EthereumChainTracking.ChainStateUpdated',
-      schema: ethereumChainTrackingChainStateUpdated.refine(
-        (event) => event.newChainState.blockHeight >= BigInt(depositBlockNumber + 10),
-      ),
-    },
+    depositFinalized: ethereumIngressEgressDepositFinalisedEvent.refine(
+      (event) =>
+        event.depositAddress === swapParams.depositAddress &&
+        event.channelId === BigInt(swapParams.channelId),
+    ),
+    ethereumAdvancedEnough: ethereumChainTrackingChainStateUpdatedEvent.refine(
+      (event) => event.newChainState.blockHeight >= BigInt(depositBlockNumber + 10),
+    ),
   });
 
   if (resultEvent.key === 'depositFinalized') {
@@ -110,8 +104,9 @@ export async function testGovernanceDepositWitnessing(testContext: TestContext) 
 
   // Step 7: Verify swap completes
   await cf.stepUntilEvent(
-    'Swapping.SwapRequestCompleted',
-    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapEvent.swapRequestId),
+    swappingSwapRequestCompletedEvent.refine(
+      (event) => event.swapRequestId === swapEvent.swapRequestId,
+    ),
   );
 
   cf.info('Test completed successfully! Governance-triggered witnessing worked.');

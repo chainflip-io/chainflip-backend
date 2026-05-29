@@ -50,7 +50,7 @@ import {
   spRuntimeDispatchError,
 } from 'generated/events/common';
 import z from 'zod';
-import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
+import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
@@ -680,8 +680,7 @@ export async function observeSwapRequested<A = []>(
     `Observing SwapRequested sourceAsset: ${sourceAsset} -> destAsset: ${destAsset} transaction id: ${JSON.stringify(id)} swapRequestType: ${swapRequestType}`,
   );
   return cf.stepUntilEvent(
-    'Swapping.SwapRequested',
-    swappingSwapRequested.refine((event) => {
+    swappingSwapRequestedEvent.refine((event) => {
       const channelMatches = checkTransactionInMatches(event.origin, id);
       const sourceAssetMatches = sourceAsset === event.inputAsset;
       const destAssetMatches = destAsset === event.outputAsset;

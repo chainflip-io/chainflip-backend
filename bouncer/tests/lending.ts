@@ -17,10 +17,10 @@ import { TestContext } from 'shared/utils/test_context';
 import { setupLendingPools } from 'shared/lending';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 
-import { lendingPoolsLendingFundsAdded } from 'generated/events/lendingPools/lendingFundsAdded';
-import { lendingPoolsLoanCreated } from 'generated/events/lendingPools/loanCreated';
-import { lendingPoolsLoanSettled } from 'generated/events/lendingPools/loanSettled';
-import { lendingPoolsLendingFundsRemoved } from 'generated/events/lendingPools/lendingFundsRemoved';
+import { lendingPoolsLendingFundsAddedEvent } from 'generated/events/lendingPools/lendingFundsAdded';
+import { lendingPoolsLoanCreatedEvent } from 'generated/events/lendingPools/loanCreated';
+import { lendingPoolsLoanSettledEvent } from 'generated/events/lendingPools/loanSettled';
+import { lendingPoolsLendingFundsRemovedEvent } from 'generated/events/lendingPools/lendingFundsRemoved';
 
 export interface Loan {
   loan_id: number;
@@ -86,12 +86,9 @@ async function lendingTestForAsset<A = []>(
         collateralAsset,
         amountToFineAmount(collateralAmount.toString(), assetDecimals(collateralAsset)),
       ),
-    expectedEvent: {
-      name: 'LendingPools.LendingFundsAdded',
-      schema: lendingPoolsLendingFundsAdded.refine(
-        (event) => event.lenderId === lp.address && event.asset === collateralAsset,
-      ),
-    },
+    expectedEvent: lendingPoolsLendingFundsAddedEvent.refine(
+      (event) => event.lenderId === lp.address && event.asset === collateralAsset,
+    ),
   });
   cf.debug(
     `Supplied ${fundsAddedEvent.amount} of ${fundsAddedEvent.asset} for LP: ${fundsAddedEvent.lenderId}`,
@@ -119,12 +116,9 @@ async function lendingTestForAsset<A = []>(
         amountToFineAmount(loanAmount.toString(), assetDecimals(loanAsset)),
         null,
       ),
-    expectedEvent: {
-      name: 'LendingPools.LoanCreated',
-      schema: lendingPoolsLoanCreated.refine(
-        (event) => event.loanType.__kind === 'User' && event.loanType.value === lp.address,
-      ),
-    },
+    expectedEvent: lendingPoolsLoanCreatedEvent.refine(
+      (event) => event.loanType.__kind === 'User' && event.loanType.value === lp.address,
+    ),
   });
 
   const loanId = Number(loanCreatedEvent.loanId);
@@ -190,22 +184,16 @@ async function lendingTestForAsset<A = []>(
   cf.debug(`Repaying the rest of the loan`);
   const loanSettledEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.lendingPools.makeRepayment(loanId, 'Full'),
-    expectedEvent: {
-      name: 'LendingPools.LoanSettled',
-      schema: lendingPoolsLoanSettled.refine((event) => Number(event.loanId) === loanId),
-    },
+    expectedEvent: lendingPoolsLoanSettledEvent.refine((event) => Number(event.loanId) === loanId),
   });
   cf.debug(`Loan successfully settled loanId: ${loanSettledEvent.loanId}`);
 
   // Recover the supplied collateral by withdrawing all lender funds
   const fundsRemovedEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.lendingPools.removeLenderFunds(collateralAsset, null),
-    expectedEvent: {
-      name: 'LendingPools.LendingFundsRemoved',
-      schema: lendingPoolsLendingFundsRemoved.refine(
-        (event) => event.lenderId === lp.address && event.asset === collateralAsset,
-      ),
-    },
+    expectedEvent: lendingPoolsLendingFundsRemovedEvent.refine(
+      (event) => event.lenderId === lp.address && event.asset === collateralAsset,
+    ),
   });
   cf.debug(
     `Removed ${fundsRemovedEvent.unlockedAmount} of ${fundsRemovedEvent.asset} for LP: ${fundsRemovedEvent.lenderId}`,
