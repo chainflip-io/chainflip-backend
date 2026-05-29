@@ -75,6 +75,22 @@ pub trait ChannelLifecycleHooks: Sized {
 
 impl ChannelLifecycleHooks for () {}
 
+pub trait DepositChannelFreshness<C: Chain> {
+	/// Whether a pre-allocated or recycled channel is still under our control.
+	///
+	/// For some chains (e.g. Bitcoin), the deposit address is only accessible to the current
+	/// aggregate key.
+	fn is_fresh(_state: &C::DepositChannelState) -> bool;
+}
+
+/// For chains whose deposit address is key-independent.
+pub struct AlwaysFresh;
+impl<C: Chain> DepositChannelFreshness<C> for AlwaysFresh {
+	fn is_fresh(_state: &C::DepositChannelState) -> bool {
+		true
+	}
+}
+
 impl<C: Chain> DepositChannel<C> {
 	pub fn generate_new<A: AddressDerivationApi<C>>(
 		channel_id: ChannelId,

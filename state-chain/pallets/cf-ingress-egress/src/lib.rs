@@ -40,10 +40,10 @@ use cf_chains::{
 	AccountOrAddress, AllBatch, AllBatchError, CcmChannelMetadataChecked, CcmDepositMetadata,
 	CcmDepositMetadataChecked, CcmDepositMetadataUnchecked, CcmMessage, Chain, ChainCrypto,
 	ChannelLifecycleHooks, ChannelRefundParameters, ChannelRefundParametersForChain,
-	ConsolidateCall, DepositChannel, DepositDetailsToTransactionInId, DepositOriginType,
-	ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams, FetchForRejection,
-	ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall, RejectError, SwapOrigin,
-	TransferAssetParams, TransferFallback, TransferForRejection,
+	ConsolidateCall, DepositChannel, DepositChannelFreshness, DepositDetailsToTransactionInId,
+	DepositOriginType, ExecutexSwapAndCall, ExecutexSwapAndCallError, FetchAssetParams,
+	FetchForRejection, ForeignChainAddress, IntoTransactionInIdForAnyChain, RejectCall,
+	RejectError, SwapOrigin, TransferAssetParams, TransferFallback, TransferForRejection,
 };
 use cf_primitives::{
 	AccountRole, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints, Beneficiaries,
@@ -772,6 +772,9 @@ pub mod pallet {
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
+
+		/// Whether a pre-allocated/recycled channel is still spendable (see trait docs).
+		type DepositChannelFreshness: DepositChannelFreshness<Self::TargetChain>;
 
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
@@ -3322,13 +3325,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::ChannelOpeningFeePaid { fee: channel_opening_fee });
 
 		let deposit_channel = PreallocatedChannels::<T, I>::mutate(requester, |queue| {
+			// Freshness is checked on read: drop pre-allocated channels whose committed
+			// key rotated out while queued (Bitcoin).
+			queue.retain(|channel| T::DepositChannelFreshness::is_fresh(&channel.state));
+
 			// Always fill up the list to one above capacity, then pop the first channel.
 			for _ in queue.len()..=
 				MaximumPreallocatedChannels::<T, I>::get(T::AccountRoleRegistry::account_role(
 					requester,
 				)) as usize
 			{
-				if let Some((_id, channel)) = DepositChannelPool::<T, I>::drain().next() {
+				// Likewise skip (and so drain) any stale channels from the pool.
+				if let Some((_id, channel)) = DepositChannelPool::<T, I>::drain()
+					.find(|(_, channel)| T::DepositChannelFreshness::is_fresh(&channel.state))
+				{
 					queue.push_back(channel);
 				} else if T::ONLY_PREALLOCATE_FROM_POOL {
 					break;

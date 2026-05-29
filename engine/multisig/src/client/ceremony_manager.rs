@@ -694,7 +694,13 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 }
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
-fn generate_keygen_context(ceremony_id: CeremonyId, signers: BTreeSet<AccountId>) -> HashContext {
+// NOTE: `pub(crate)` so that keygen tests can reconstruct the exact context a
+// ceremony uses, allowing them to craft a malicious commitment whose ZKP is
+// valid (rather than duplicating this derivation in test code).
+pub(crate) fn generate_keygen_context(
+	ceremony_id: CeremonyId,
+	signers: BTreeSet<AccountId>,
+) -> HashContext {
 	use blake2::{Blake2b, Digest};
 
 	let mut hasher = Blake2b::<typenum::U32>::new();
