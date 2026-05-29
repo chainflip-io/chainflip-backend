@@ -4,6 +4,7 @@ import {
   cfPrimitivesChainsAssetsDotAsset,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const polkadotIngressEgressInsufficientBoostLiquidity = z.object({
   prewitnessedDepositId: numberOrHex,
@@ -12,3 +13,8 @@ export const polkadotIngressEgressInsufficientBoostLiquidity = z.object({
   channelId: numberOrHex.nullish(),
   originType: cfChainsDepositOriginType,
 });
+
+export const polkadotIngressEgressInsufficientBoostLiquidityEvent = defineEvent(
+  'PolkadotIngressEgress.InsufficientBoostLiquidity',
+  polkadotIngressEgressInsufficientBoostLiquidity,
+);

@@ -7,6 +7,7 @@ import {
   numberOrHex,
   palletCfTronIngressEgressDepositAction,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const tronIngressEgressDepositFinalised = z.object({
   depositAddress: hexString.nullish(),
@@ -20,3 +21,8 @@ export const tronIngressEgressDepositFinalised = z.object({
   channelId: numberOrHex.nullish(),
   originType: cfChainsDepositOriginType,
 });
+
+export const tronIngressEgressDepositFinalisedEvent = defineEvent(
+  'TronIngressEgress.DepositFinalised',
+  tronIngressEgressDepositFinalised,
+);

@@ -4,6 +4,7 @@ import {
   cfChainsEvmSchnorrVerificationComponents,
   cfChainsTronTronTransaction,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const tronBroadcasterTransactionBroadcastRequest = z.object({
   broadcastId: z.number(),
@@ -11,3 +12,8 @@ export const tronBroadcasterTransactionBroadcastRequest = z.object({
   transactionPayload: cfChainsTronTronTransaction,
   transactionOutId: cfChainsEvmSchnorrVerificationComponents,
 });
+
+export const tronBroadcasterTransactionBroadcastRequestEvent = defineEvent(
+  'TronBroadcaster.TransactionBroadcastRequest',
+  tronBroadcasterTransactionBroadcastRequest,
+);
