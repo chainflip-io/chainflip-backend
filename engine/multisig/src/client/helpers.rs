@@ -705,12 +705,16 @@ macro_rules! run_stages {
 pub(crate) use run_stages;
 
 use super::{
-	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
-	common::{DelayDeserialization, ResharingContext},
-	keygen::SharingParameters,
+	ceremony_manager::{
+		deserialize_for_version, generate_keygen_context, prepare_key_handover_request,
+	},
+	common::{DelayDeserialization, ParticipantStatus, ResharingContext},
+	keygen::{generate_hash_commitment, SharingParameters},
 	signing::Comm1,
+	utils::PartyIdxMapping,
 	ThresholdParameters,
 };
+use std::sync::Arc;
 
 pub type KeygenCeremonyRunner<Chain> =
 	CeremonyTestRunner<(), KeygenCeremony<<Chain as ChainSigning>::CryptoScheme>, Chain>;
@@ -991,6 +995,87 @@ pub fn gen_dummy_keygen_comm3<P: ECPoint>(
 		None,
 	);
 	fake_comm1
+}
+
+/// Build a malicious keygen participant's contribution whose coefficient
+/// commitment vector has exactly `coeff_count` elements instead of the honest
+/// `threshold + 1`, while remaining internally consistent: the Schnorr ZKP on
+/// the lowest-degree coefficient is valid for the real ceremony context, and
+/// the returned hash commitment matches the (wrong-length) vector.
+///
+/// This models the realistic attacker that commits to the wrong polynomial
+/// degree from the very first stage, so that the ZKP and hash-commitment
+/// checks both pass and only a per-ceremony length check can reject it.
+///
+/// Returns `(hash_commitment, coeff_comm3)`, to be injected as the bad node's
+/// stage-1 (`HashComm1`) and stage-3 (`CoeffComm3`) broadcasts respectively.
+pub fn gen_keygen_contribution_with_coeff_count<P: ECPoint>(
+	rng: &mut Rng,
+	ceremony_id: CeremonyId,
+	participants: &BTreeSet<AccountId>,
+	bad_party_idx: AuthorityCount,
+	coeff_count: usize,
+) -> (HashComm1, DKGUnverifiedCommitment<P>) {
+	let context = generate_keygen_context(ceremony_id, participants.clone());
+	let params = ThresholdParameters::from_share_count(participants.len() as AuthorityCount);
+
+	let (_, mut commitment) = generate_shares_and_commitment::<P>(
+		rng,
+		&context,
+		bad_party_idx,
+		&SharingParameters::for_keygen(params),
+		None,
+	);
+
+	commitment.set_commitment_count(coeff_count, rng);
+
+	(HashComm1(generate_hash_commitment(&commitment)), commitment)
+}
+
+/// Key-handover equivalent of [`gen_keygen_contribution_with_coeff_count`].
+///
+/// The malicious node is a *sharing* participant, so its lowest-degree
+/// coefficient commitment must equal its (lagrange-scaled) original pubkey
+/// share for the resharing first-commitment check to pass. We therefore derive
+/// the contribution from the bad node's real `secret_share`, keeping c0
+/// correct and the ZKP valid, and only the vector length wrong. The honest
+/// length here is the *new* key's `threshold + 1` (derived from the receiving
+/// set), not the sharing-party count - the case most likely to be derived
+/// incorrectly.
+pub fn gen_key_handover_contribution_with_coeff_count<C: CryptoScheme>(
+	rng: &mut Rng,
+	ceremony_id: CeremonyId,
+	all_participants: &BTreeSet<AccountId>,
+	bad_party_idx: AuthorityCount,
+	resharing_context: &ResharingContext<C>,
+	new_key_params: ThresholdParameters,
+	coeff_count: usize,
+) -> (HashComm1, DKGUnverifiedCommitment<C::Point>) {
+	let context = generate_keygen_context(ceremony_id, all_participants.clone());
+	let current_mapping = Arc::new(PartyIdxMapping::from_participants(all_participants.clone()));
+
+	let secret_share = match &resharing_context.party_status {
+		ParticipantStatus::Sharing { secret_share, .. } => secret_share.clone(),
+		_ => panic!("the malicious key-handover node must be a sharing participant"),
+	};
+
+	let sharing_params = SharingParameters::for_key_handover::<C>(
+		new_key_params,
+		resharing_context,
+		&current_mapping,
+	);
+
+	let (_, mut commitment) = generate_shares_and_commitment::<C::Point>(
+		rng,
+		&context,
+		bad_party_idx,
+		&sharing_params,
+		Some(&secret_share),
+	);
+
+	commitment.set_commitment_count(coeff_count, rng);
+
+	(HashComm1(generate_hash_commitment(&commitment)), commitment)
 }
 
 pub fn gen_dummy_signing_comm1<P: ECPoint>(rng: &mut Rng, number_of_commitments: u64) -> Comm1<P> {
