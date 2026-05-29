@@ -128,7 +128,7 @@ fn address_and_details_to_addresses(
 
 /// The liquid budget for one (address, asset) over this block:
 ///
-///     budget = max(0, current_liquid - parent_liquid + outgoing_in_block)
+/// `budget = max(0, current_liquid - parent_liquid + outgoing_in_block)`
 ///
 /// i.e. the net new spendable funds for the pair, after compensating for funds the
 /// address sent out in the same block.
