@@ -32,6 +32,7 @@ import {
 } from 'shared/utils/chainflip_io';
 import { bitcoinIngressEgressDepositBoosted } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalised } from 'generated/events/bitcoinIngressEgress/depositFinalised';
+import { bitcoinIngressEgressInsufficientBoostLiquidityEvent } from 'generated/events/bitcoinIngressEgress/insufficientBoostLiquidity';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 
 /// Stops boosting for the given boost pool tier and returns the StoppedBoosting event.
@@ -147,15 +148,9 @@ async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
           doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
       ),
     },
-    insufficientLiquidity: {
-      name: `${chainFromAsset(asset)}IngressEgress.InsufficientBoostLiquidity`,
-      schema: bitcoinIngressEgressDepositBoosted.refine(
-        (event) =>
-          event.channelId === BigInt(swapRequest.channelId) &&
-          event.asset === asset &&
-          doBtcAddressesMatch(event.depositAddress!, swapRequest.depositAddress, 'Taproot'),
-      ),
-    },
+    insufficientLiquidity: bitcoinIngressEgressInsufficientBoostLiquidityEvent.refine(
+      (event) => event.channelId === BigInt(swapRequest.channelId) && event.asset === asset,
+    ),
     finalized: {
       name: `${chainFromAsset(asset)}IngressEgress.DepositFinalised`,
       schema: bitcoinIngressEgressDepositFinalised.refine(
