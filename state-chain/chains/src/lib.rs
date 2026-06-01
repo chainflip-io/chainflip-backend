@@ -1100,6 +1100,7 @@ pub enum TransactionInId {
 	Ethereum(TransactionInIdFor<crate::Ethereum>),
 	Arbitrum(TransactionInIdFor<crate::Arbitrum>),
 	Tron(TransactionInIdFor<crate::Tron>),
+	Bsc(TransactionInIdFor<crate::Bsc>),
 
 	// Deposit channels are marked differently than vault swaps
 	Solana(TransactionInIdFor<crate::Solana>),

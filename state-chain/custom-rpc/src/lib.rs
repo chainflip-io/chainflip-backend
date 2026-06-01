@@ -3360,6 +3360,7 @@ where
 			solana_usdt_token_vault_ata,
 			solana_vault_swap_account,
 			tron,
+			bsc,
 			predicted_seconds_until_next_vault_rotation,
 		} = self.cf_vault_addresses(at)?;
 
@@ -3466,6 +3467,16 @@ where
 				name: "tron_vault_contract".into(),
 				address: AddressString::from_encoded_address(tron),
 				explanation: none_if_compact("Holds TRX and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
+				rotation_policy: rotates_never.clone(),
+				next_predicted_rotation: None,
+			}]);
+		}
+
+		if chain.is_none_or(|chain| chain == ForeignChain::Bsc) {
+			result.insert(ForeignChain::Bsc, vec![AddressAndExplanation {
+				name: "bsc_vault_contract".into(),
+				address: AddressString::from_encoded_address(bsc),
+				explanation: none_if_compact("Holds BNB and all tokens on Tron. Directly receives user funds in case of smart contract-based vault swaps.".into()),
 				rotation_policy: rotates_never.clone(),
 				next_predicted_rotation: None,
 			}]);

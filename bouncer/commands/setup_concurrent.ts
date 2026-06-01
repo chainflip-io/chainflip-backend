@@ -33,4 +33,4 @@ async function main(): Promise<void> {
   cf.info('Setup concurrent complete');
 }
 
-await runWithTimeoutAndExit(main(), 240);
+await runWithTimeoutAndExit(main(), 300);

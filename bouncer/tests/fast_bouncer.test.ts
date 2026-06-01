@@ -82,7 +82,11 @@ describe('ConcurrentTests', () => {
 
 // Run only the broker level screening tests
 describe('BrokerLevelScreeningTestWithBoost', () => {
-  concurrentTest('BrokerLevelScreening', (context) => testBrokerLevelScreening(context, true), 600);
+  concurrentTest(
+    'BrokerLevelScreeningWithBoost',
+    (context) => testBrokerLevelScreening(context, true),
+    600,
+  );
 });
 
 describe('AllSwaps', () => {

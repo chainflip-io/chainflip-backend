@@ -384,5 +384,36 @@ pub(crate) fn convert_raw_witnessed_events(
 				vault_deposits: converted_vault_deposits,
 			}
 		},
+		state_chain_runtime::runtime_apis::custom_api::RawWitnessedEvents::Bsc {
+			deposits,
+			broadcasts,
+			vault_deposits,
+		} => {
+			let deposits = deposits
+				.into_iter()
+				.map(|(height, witness)| {
+					convert_deposit_witness::<cf_chains::Bsc>(&witness, height, network)
+				})
+				.collect();
+
+			let converted_vault_deposits = vault_deposits
+				.into_iter()
+				.filter_map(|(height, event)| {
+					extract_vault_deposit_from_event(&event)
+						.map(|witness| convert_vault_deposit_witness(&witness, height, network))
+				})
+				.collect();
+
+			let broadcasts_vec = broadcasts
+				.into_iter()
+				.filter_map(|(height, event)| convert_evm_broadcast(&event, height))
+				.collect();
+
+			RpcWitnessedEventsResponse {
+				deposits,
+				broadcasts: broadcasts_vec,
+				vault_deposits: converted_vault_deposits,
+			}
+		},
 	}
 }

@@ -22,13 +22,13 @@ use cf_chains::{
 	address::EncodedAddress,
 	assets::any::AssetMap,
 	evm::Address as EvmAddress,
-	instances::{ArbitrumInstance, BitcoinInstance, EthereumInstance, TronInstance},
+	instances::{ArbitrumInstance, BitcoinInstance, BscInstance, EthereumInstance, TronInstance},
 	sol::SolInstructionRpc,
 	tron::TronAddress,
 	Arbitrum, Bitcoin, Chain, ChainCrypto, Ethereum, ForeignChainAddress, TransactionInId, Tron,
 };
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
-use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
+use cf_primitives::{chains::Bsc, Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -575,6 +575,7 @@ pub struct TransactionScreeningEvents {
 	pub arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>>,
 	pub sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>>,
 	pub tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>>,
+	pub bsc_events: Vec<BrokerRejectionEventFor<cf_chains::Bsc>>,
 }
 
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
@@ -594,6 +595,7 @@ pub struct VaultAddresses {
 	pub solana_vault_swap_account: Option<EncodedAddress>,
 
 	pub tron: EncodedAddress,
+	pub bsc: EncodedAddress,
 
 	pub predicted_seconds_until_next_vault_rotation: u64,
 }
@@ -661,6 +663,11 @@ pub enum RawWitnessedEvents {
 		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, TronInstance>)>,
 		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, TronInstance>)>,
 	},
+	Bsc {
+		deposits: Vec<(u64, DepositWitness<Bsc>)>,
+		vault_deposits: Vec<(u64, EvmVaultContractEvent<Runtime, BscInstance>)>,
+		broadcasts: Vec<(u64, EvmKeyManagerEvent<Runtime, BscInstance>)>,
+	},
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
@@ -670,6 +677,7 @@ pub enum DepositDetails {
 	Ethereum(<Ethereum as Chain>::DepositDetails),
 	Arbitrum(<Arbitrum as Chain>::DepositDetails),
 	Tron(<Tron as Chain>::DepositDetails),
+	Bsc(<Bsc as Chain>::DepositDetails),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]

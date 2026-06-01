@@ -335,6 +335,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 			solana_usdt_token_vault_ata: old.solana_usdt_token_vault_ata,
 			solana_vault_swap_account: old.solana_vault_swap_account,
 			tron: EncodedAddress::Tron([0u8; 20]),
+			bsc: EncodedAddress::Bsc([0u8; 20]),
 			predicted_seconds_until_next_vault_rotation: old
 				.predicted_seconds_until_next_vault_rotation,
 		}
@@ -569,6 +570,7 @@ impl From<TransactionScreeningEvents> for super::TransactionScreeningEvents {
 			arb_events: old.arb_events,
 			sol_events: old.sol_events,
 			tron_events: Default::default(),
+			bsc_events: Default::default(),
 		}
 	}
 }

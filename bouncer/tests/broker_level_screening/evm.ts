@@ -28,17 +28,20 @@ import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereum
 import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
 import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
 import { arbitrumIngressEgressTransactionRejectedByBroker } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
+import { bscIngressEgressTransactionRejectedByBroker } from 'generated/events/bscIngressEgress/transactionRejectedByBroker';
+import { bscIngressEgressDepositFinalised } from 'generated/events/bscIngressEgress/depositFinalised';
 
 /**
  * Wait for the Deposit contract to be deployed.
  */
 async function waitForDepositContractDeployment(chain: Chain, depositAddress: string) {
   switch (chain) {
+    case 'Bsc':
     case 'Arbitrum':
     case 'Ethereum':
       break;
     default:
-      throw new Error(`Unssuported evm chain ${chain}`);
+      throw new Error(`Unsupported evm chain ${chain}`);
   }
 
   const MAX_RETRIES = 100;
@@ -54,6 +57,38 @@ async function waitForDepositContractDeployment(chain: Chain, depositAddress: st
   }
   if (!contractDeployed) {
     throw new Error(`${chain} contract not deployed at address ${depositAddress} within timeout!`);
+  }
+}
+
+async function waitForEvmDepositFinalized<A = []>(
+  cf: ChainflipIO<A>,
+  chain: Chain,
+  depositAddress: string,
+  depositChannelId: bigint,
+) {
+  if (chain === 'Ethereum') {
+    await cf.stepUntilEvent(
+      'EthereumIngressEgress.DepositFinalised',
+      ethereumIngressEgressDepositFinalised.refine(
+        (event) => event.depositAddress === depositAddress && event.channelId === depositChannelId,
+      ),
+    );
+  } else if (chain === 'Arbitrum') {
+    await cf.stepUntilEvent(
+      'ArbitrumIngressEgress.DepositFinalised',
+      arbitrumIngressEgressDepositFinalised.refine(
+        (event) => event.depositAddress === depositAddress && event.channelId === depositChannelId,
+      ),
+    );
+  } else if (chain === 'Bsc') {
+    await cf.stepUntilEvent(
+      'BscIngressEgress.DepositFinalised',
+      bscIngressEgressDepositFinalised.refine(
+        (event) => event.depositAddress === depositAddress && event.channelId === depositChannelId,
+      ),
+    );
+  } else {
+    throw Error('Unsupported EVM chain while waiting for Evm DepositFinalized event');
   }
 }
 
@@ -89,6 +124,21 @@ async function waitForEvmTransactionRejection<A = []>(
       depositFinalized: {
         name: 'ArbitrumIngressEgress.DepositFinalized',
         schema: arbitrumIngressEgressDepositFinalised.refine(
+          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+        ),
+      },
+    });
+  } else if (chain === 'Bsc') {
+    resultEvent = await cf.stepUntilOneEventOf({
+      transactionRejected: {
+        name: 'BscIngressEgress.TransactionRejectedByBroker',
+        schema: bscIngressEgressTransactionRejectedByBroker.refine(
+          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+        ),
+      },
+      depositFinalized: {
+        name: 'BscIngressEgress.DepositFinalized',
+        schema: bscIngressEgressDepositFinalised.refine(
           (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
       },
@@ -152,17 +202,15 @@ export async function testEvm<A = []>(
       )
     : Promise.resolve();
 
-  if (sourceAsset === chainGasAsset('Ethereum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     await send(cf.logger, sourceAsset, swapParams.depositAddress);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
-    await cf.stepUntilEvent(
-      'EthereumIngressEgress.DepositFinalised',
-      ethereumIngressEgressDepositFinalised.refine(
-        (event) =>
-          event.depositAddress === swapParams.depositAddress &&
-          event.channelId === BigInt(swapParams.channelId),
-      ),
+    await waitForEvmDepositFinalized(
+      cf,
+      chain,
+      swapParams.depositAddress,
+      BigInt(swapParams.channelId),
     );
     await cf.stepOneBlock();
 
@@ -290,6 +338,8 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
     ethereumRefundAddress = addressReponse.eth;
   } else if (chain === 'Arbitrum') {
     ethereumRefundAddress = addressReponse.arb;
+  } else if (chain === 'Bsc') {
+    ethereumRefundAddress = addressReponse.bsc;
   } else {
     throw new Error('Unsupported Evm chain');
   }
@@ -312,7 +362,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
 
   cf.debug(`Got deposit address: ${depositAddress}`);
 
-  if (sourceAsset === chainGasAsset('Ethereum') || sourceAsset === chainGasAsset('Arbitrum')) {
+  if (sourceAsset === chainGasAsset(chain)) {
     // The first tx cannot be rejected because we can't determine the txId for deposits to undeployed Deposit
     // contracts. We will reject the second transaction instead. We must wait until the fetch has been broadcasted
     // succesfully to make sure the Deposit contract is deployed.
@@ -321,23 +371,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
     await send(cf.logger, sourceAsset, depositAddress, amount);
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
-    if (chain === 'Ethereum') {
-      await cf.stepUntilEvent(
-        'EthereumIngressEgress.DepositFinalised',
-        ethereumIngressEgressDepositFinalised.refine(
-          (event) =>
-            event.depositAddress === depositAddress && event.channelId === depositChannelId,
-        ),
-      );
-    } else if (chain === 'Arbitrum') {
-      await cf.stepUntilEvent(
-        'ArbitrumIngressEgress.DepositFinalised',
-        arbitrumIngressEgressDepositFinalised.refine(
-          (event) =>
-            event.depositAddress === depositAddress && event.channelId === depositChannelId,
-        ),
-      );
-    }
+    await waitForEvmDepositFinalized(cf, chain, depositAddress, depositChannelId);
     cf.debug(`Initial deposit ${sourceAsset} received...`);
 
     const observeAccountCreditedEvent = await cf.stepUntilEvent(

@@ -1852,6 +1852,8 @@ impl_runtime_apis! {
 			let mut arb_events: Vec<BrokerRejectionEventFor<cf_chains::Arbitrum>> = Default::default();
 			let mut sol_events: Vec<BrokerRejectionEventFor<cf_chains::Solana>> = Default::default();
 			let mut tron_events: Vec<BrokerRejectionEventFor<cf_chains::Tron>> = Default::default();
+			let mut bsc_events: Vec<BrokerRejectionEventFor<cf_chains::Bsc>> = Default::default();
+
 
 			for event_record in System::read_events_no_consensus() {
 				match event_record.event {
@@ -1860,6 +1862,7 @@ impl_runtime_apis! {
 					RuntimeEvent::ArbitrumIngressEgress(event) => arb_events.extend(extract_screening_events::<Runtime, ArbitrumInstance>(event)),
 					RuntimeEvent::SolanaIngressEgress(event) => sol_events.extend(extract_screening_events::<Runtime, SolanaInstance>(event)),
 					RuntimeEvent::TronIngressEgress(event) => tron_events.extend(extract_screening_events::<Runtime, TronInstance>(event)),
+					RuntimeEvent::BscIngressEgress(event) => bsc_events.extend(extract_screening_events::<Runtime, BscInstance>(event)),
 					_ => {},
 				}
 			}
@@ -1869,7 +1872,8 @@ impl_runtime_apis! {
 				eth_events,
 				arb_events,
 				sol_events,
-				tron_events
+				tron_events,
+				bsc_events
 			}
 		}
 
@@ -1925,6 +1929,7 @@ impl_runtime_apis! {
 					)
 				}),
 				tron: EncodedAddress::Tron(Environment::tron_vault_address().into()),
+				bsc: EncodedAddress::Bsc(Environment::bsc_vault_address().into()),
 				predicted_seconds_until_next_vault_rotation: {
 					let started = pallet_cf_validator::CurrentEpochStartedAt::<Runtime>::get();
 					let duration = pallet_cf_validator::EpochDuration::<Runtime>::get();
@@ -2468,6 +2473,40 @@ mod witnessed_events {
 						vault_deposits,
 						TransactionInId::Tron,
 						DepositDetails::Tron,
+					),
+				})
+			},
+			ForeignChain::Bsc => {
+				let state = ElectoralUnsynchronisedState::<Runtime, BscInstance>::get()
+					.ok_or_else(|| {
+						DispatchErrorWithMessage::RawMessage(
+							b"Bsc electoral state not initialized".to_vec(),
+						)
+					})?;
+				let deposits = extract_block_data!(
+					&state.1,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Bsc>| *h.root()
+				);
+				let vault_deposits = extract_block_data!(
+					&state.2,
+					|h: &cf_chains::witness_period::BlockWitnessRange<Bsc>| *h.root()
+				)
+				.into_iter()
+				.filter_map(|(height, event)| match event {
+					EvmVaultContractEvent::VaultDeposit(w) => Some((height, *w.clone())),
+					_ => None,
+				})
+				.collect();
+				Ok(IngressEvents {
+					deposits: convert_deposit_witness(
+						deposits,
+						DepositDetails::Bsc,
+						Environment::network_environment(),
+					),
+					vault_deposits: convert_vault_deposit_witness(
+						vault_deposits,
+						TransactionInId::Bsc,
+						DepositDetails::Bsc,
 					),
 				})
 			},
