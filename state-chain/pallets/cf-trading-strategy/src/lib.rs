@@ -64,9 +64,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_
 const STRATEGY_ORDER_ID_0: OrderId = 0;
 const STRATEGY_ORDER_ID_1: OrderId = 1;
 
-// Weight constants for inventory-based and oracle-tracking strategies
-const CANCEL_ALL_ORDERS_WEIGHT_UNITS: u64 = 3;
-const OPEN_ORDERS_WEIGHT_UNITS: u64 = 4;
+const MAX_NUMBER_OF_ORDERS_FOR_STRATEGY: u64 = 4;
 
 impl_pallet_safe_mode!(PalletSafeMode; strategy_updates_enabled, strategy_closure_enabled, strategy_execution_enabled);
 
@@ -189,8 +187,7 @@ impl TradingStrategy {
 			TradingStrategy::TickZeroCentered { .. } | TradingStrategy::SimpleBuySell { .. } =>
 				limit_order_update_weight * 2,
 			TradingStrategy::InventoryBased { .. } | TradingStrategy::OracleTracking { .. } =>
-				limit_order_update_weight *
-					(CANCEL_ALL_ORDERS_WEIGHT_UNITS + OPEN_ORDERS_WEIGHT_UNITS),
+				limit_order_update_weight * (MAX_NUMBER_OF_ORDERS_FOR_STRATEGY * 2),
 		}
 	}
 
@@ -1076,7 +1073,7 @@ impl<T: Config> Pallet<T> {
 				);
 				return;
 			}
-			*weight_used += limit_order_update_weight * CANCEL_ALL_ORDERS_WEIGHT_UNITS;
+			*weight_used += limit_order_update_weight * MAX_NUMBER_OF_ORDERS_FOR_STRATEGY;
 
 			// Create the new desired orders.
 			let mut remaining_base_amount = total_base_asset;
