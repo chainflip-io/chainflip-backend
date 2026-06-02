@@ -246,7 +246,7 @@ services:
       start_period: 10s
 
   tron:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.0.0-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.1.0-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: tron
     restart: unless-stopped
@@ -281,7 +281,7 @@ services:
   # an active peer connection so that wallet/broadcasttransaction is unblocked
   # (java-tron returns NO_CONNECTION when activePeerCount < 1).
   tron-peer:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.0.0-${NODE_COUNT}
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/tron:tron-v1.1.0-${NODE_COUNT}
     pull_policy: if_not_present
     container_name: tron-peer
     restart: unless-stopped
