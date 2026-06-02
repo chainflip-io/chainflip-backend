@@ -244,15 +244,15 @@ export function getContractAddress(chain: Chain, contract: string): string {
     case 'Tron':
       switch (contract) {
         case 'Vault':
-          return '41814f36c1bbfd8aabec86273f0d61521e0c2d5287';
+          return '412fca9b8e3816e10d6c6033d0f7e0471542a09110';
         case 'KEY_MANAGER':
-          return '41f7229affc93ee042e750ce66a062b381f393b25a';
+          return '41eb99889eb704b4d58256ff25b4f033c673c166b6';
         case 'Trx':
           return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
         case 'TrxUsdt':
-          return process.env.TRX_USDT_ADDRESS ?? '41a24205e83c1805fcdae7a93db837dc6a0b843340';
+          return process.env.TRX_USDT_ADDRESS ?? '41df78fc9c3223ff2d64a5e897279ce3e35609e8da';
         case 'CFTESTER':
-          return '0xc2e3368ee755d7e48e69e7f149ba5882d6235591';
+          return '0x5960fa701b9715891aa4db7d3a9d23ae72e9ddd3';
         default:
           throw new Error(`Unsupported contract: ${contract}`);
       }

@@ -31,9 +31,9 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				),
 				_ => (
 					4271970548u64, // localnet Tron Chain ID
-					EvmAddress::from(hex_literal::hex!("a24205e83c1805fcdae7a93db837dc6a0b843340")),
-					EvmAddress::from(hex_literal::hex!("f7229affc93ee042e750ce66a062b381f393b25a")),
-					EvmAddress::from(hex_literal::hex!("814f36c1bbfd8aabec86273f0d61521e0c2d5287")),
+					EvmAddress::from(hex_literal::hex!("df78fc9c3223ff2d64a5e897279ce3e35609e8da")),
+					EvmAddress::from(hex_literal::hex!("eb99889eb704b4d58256ff25b4f033c673c166b6")),
+					EvmAddress::from(hex_literal::hex!("2fca9b8e3816e10d6c6033d0f7e0471542a09110")),
 				),
 			};
 
@@ -106,16 +106,16 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				assert_eq!(
 					TronSupportedAssets::<T>::get(TrxAsset::TrxUsdt),
 					Some(EvmAddress::from(hex_literal::hex!(
-						"a24205e83c1805fcdae7a93db837dc6a0b843340"
+						"df78fc9c3223ff2d64a5e897279ce3e35609e8da"
 					)))
 				);
 				assert_eq!(
 					TronKeyManagerAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("f7229affc93ee042e750ce66a062b381f393b25a"))
+					EvmAddress::from(hex_literal::hex!("eb99889eb704b4d58256ff25b4f033c673c166b6"))
 				);
 				assert_eq!(
 					TronVaultAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("814f36c1bbfd8aabec86273f0d61521e0c2d5287"))
+					EvmAddress::from(hex_literal::hex!("2fca9b8e3816e10d6c6033d0f7e0471542a09110"))
 				);
 			},
 		};
