@@ -298,18 +298,6 @@ jobs:
         run: |
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
 
-      - name: Notify on failed bouncer 📢
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main' || failure() && contains(github.ref_name, 'release/') || cancelled() && contains(github.ref_name, 'release/')
-        env:
-          DISCORD_USERNAME: "HEUTE LEIDER NICHT"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
-        with:
-          args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
-            The Bouncer has rejected the build on branch `${{ github.ref_name }}`
-            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
-
   chainspec-compatibility:
     runs-on: namespace-profile-default
     strategy:

@@ -51,19 +51,8 @@ jobs:
             Please review and merge if appropriate.
             Original PR: ${{ github.event.pull_request.html_url }}
           branch: pick/non-breaking
-          base: '${{ env.RELEASE_BRANCH }}'
-          reviewers: 'dandanlen'
+          base: "${{ env.RELEASE_BRANCH }}"
+          reviewers: "dandanlen"
           labels: cherry-pick
           branch-suffix: timestamp
           delete-branch: true
-
-      - name: Notify on failed cherry-pick
-        if: failure() || cancelled()
-        env:
-          DISCORD_USERNAME: "Release Picker"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
-        with:
-          args: |
-            🍒⚠️ Sorry **${{ github.actor }}**, The attempt to cherry-pick `${{ env.COMMIT_SHA }}` on to `${{ env.RELEASE_BRANCH }}` was unsuccessful
-            Please check the [GitHub job](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) to see what went wrong.
