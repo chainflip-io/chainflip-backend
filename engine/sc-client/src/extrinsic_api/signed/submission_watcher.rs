@@ -309,11 +309,8 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
-		// The era anchor used to sign the extrinsic. Initialised from the
-		// watcher's tracked finalized block, but may be refreshed locally on
-		// AncientBirthBlock without touching `self.finalized_block_*` — the
-		// watcher's bookkeeping must only advance through `on_block_finalized`
-		// to preserve the strictly-increasing invariant it asserts on.
+		// The era block hash and number used as anchor when signing the extrinsic. Stored as
+		// local copies so we can overwrite them on AncientBirthBlock failure.
 		let mut era_block_hash = self.finalized_block_hash;
 		let mut era_block_number = self.finalized_block_number;
 		loop {
@@ -398,13 +395,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 							self.runtime_version = new_runtime_version;
 						},
-						// AncientBirthBlock can fire transiently when the tx pool re-validates
-						// a submission against a slightly inconsistent best-block snapshot.
-						// Refresh the local era anchor and retry on the next loop iteration
-						// rather than tearing down the engine. Note we deliberately do not
-						// touch `self.finalized_block_*` — `on_block_finalized` enforces
-						// strictly-increasing finalized block numbers via assert, and
-						// leapfrogging that cursor here would violate it.
+						// AncientBirthBlock can fire transiently during tx pool re-validation.
+						// Handle gracefully by resubmitting with the updated era anchor.
+						// We deliberately leave `self.finalized_block_*` untouched, since
+						// `on_block_finalized` asserts strictly-increasing finalized block numbers.
 						ClientError::Call(obj)
 							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
 						{
