@@ -2,6 +2,17 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.3] - 2026-06-02
+
+### Features
+
+- Reject loan origination when pool can't cover network fee ([#6613](https://github.com/chainflip-io/chainflip-backend/issues/6613))
+- Add screening broker ids in tron migration
+
+### Fixes
+
+- Move `RealisticCallParams` type to its own file and update compilation guard. ([#6602](https://github.com/chainflip-io/chainflip-backend/issues/6602))
+
 ## [2.2.2] - 2026-05-20
 
 ### Features
@@ -55,6 +66,12 @@ All notable changes included in each Chainflip release will be documented in thi
 - Demote log to info ([#6480](https://github.com/chainflip-io/chainflip-backend/issues/6480))
 - Use correct asset for contract deployment ([#6463](https://github.com/chainflip-io/chainflip-backend/issues/6463))
 - Prevent duplicate Authorization header in benchmark PR creation ([#6442](https://github.com/chainflip-io/chainflip-backend/issues/6442))
+
+## [2.1.20] - 2026-05-18
+
+- Prevent re-use of expired BTC channels.
+- Re-impose per-ceremony DKG coefficient-commitment length check
+- Prevent in-block transaction replay of non-native tx
 
 ## [2.1.19] - 2026-05-13
 
