@@ -12,7 +12,7 @@ export type BoostPoolId = {
   tier: number;
 };
 
-const boostPoolFee = 5;
+export const boostPoolFee = 5;
 const fundBtcBoostPoolsAmount = 2; // Put 2 BTC in each Btc boost pool after creation
 
 /// Submits a single governance extrinsic that creates the boost pools for the given assets and tiers.
@@ -86,7 +86,7 @@ export async function setupBoostPools<A = []>(parentCf: ChainflipIO<A>): Promise
   const btcIngressFee = 0.0001; // Some small amount to cover the ingress fee
   await depositLiquidity(cf, Assets.Btc, fundBtcBoostPoolsAmount + btcIngressFee);
 
-  await addBoostFunds(cf, Assets.Btc, boostPoolFee, fundBtcBoostPoolsAmount);
+  await addBoostFunds(cf, fundBtcBoostPoolsAmount);
 
   cf.info('Boost Pools Setup completed');
 }
