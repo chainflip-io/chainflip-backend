@@ -1464,7 +1464,7 @@ pub trait PriceFeedApi {
 	fn get_relative_price(asset1: Asset, asset2: Asset) -> Option<OraclePrice> {
 		if let (Some(price_1), Some(price_2)) = (Self::get_price(asset1), Self::get_price(asset2)) {
 			Some(OraclePrice {
-				price: price_1.price.divide_by(price_2.price),
+				price: price_1.price.divide_by(price_2.price)?,
 				stale: price_1.stale || price_2.stale,
 			})
 		} else {

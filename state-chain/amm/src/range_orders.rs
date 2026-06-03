@@ -49,7 +49,8 @@ use crate::common::{
 	BaseToQuote, Pairs, PoolPairsMap, QuoteToBase, SetFeesError, MAX_LP_FEE, ONE_IN_HUNDREDTH_PIPS,
 };
 use cf_amm_math::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, Amount, SqrtPrice, Tick, MAX_TICK, MIN_TICK,
+	is_tick_valid, mul_div_ceil_checked, mul_div_floor_checked, Amount, SqrtPrice, Tick, MAX_TICK,
+	MIN_TICK,
 };
 
 /// This is the invariant wrt xy = k. It represents / is proportional to the depth of the
@@ -127,16 +128,17 @@ impl Position {
 			// calculate fees, therefore it is not possible to overflow the fees here.
 
 			/*
-				Proof that `mul_div_floor` does not overflow:
+				Proof that `mul_div_floor_checked` does not overflow:
 				Note position.liquidity: u128
 				U512::one() << 128 > u128::MAX
 			*/
 			// Use wrapping subtraction to match Uniswap's modular arithmetic semantics
-			mul_div_floor(
+			mul_div_floor_checked(
 				fee_growth_inside[side].overflowing_sub(self.last_fee_growth_inside[side]).0,
 				U256::from(self.liquidity),
 				U512::one() << 128,
 			)
+			.unwrap()
 		});
 		self.accumulative_fees = self
 			.accumulative_fees
@@ -260,7 +262,7 @@ pub(super) trait SwapDirection: crate::common::SwapDirection {
 		sqrt_price_current: SqrtPrice,
 		liquidity: Liquidity,
 		amount: Amount,
-	) -> SqrtPrice;
+	) -> Option<SqrtPrice>;
 
 	/// For a given tick calculates the change in current liquidity when that tick is crossed
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128;
@@ -307,26 +309,23 @@ impl SwapDirection for BaseToQuote {
 		sqrt_price_current: SqrtPrice,
 		liquidity: Liquidity,
 		amount: Amount,
-	) -> SqrtPrice {
-		assert!(0 < liquidity);
-		assert!(!sqrt_price_current.is_zero());
-
+	) -> Option<SqrtPrice> {
 		let liquidity = U256::from(liquidity) << SqrtPrice::FRACTIONAL_BITS;
 
 		/*
-			Proof that `mul_div_ceil` does not overflow:
+			Proof that `mul_div_ceil_checked` does not overflow:
 			If L ∈ u256, R ∈ u256, A ∈ u256
 			Then L <= L + R * A
 			Then L / (L + R * A) <= 1
 			Then R * L / (L + R * A) <= u256::MAX
 		*/
-		SqrtPrice::from_raw(mul_div_ceil(
+		Some(SqrtPrice::from_raw(mul_div_ceil_checked(
 			liquidity,
 			sqrt_price_current.as_raw(),
 			// Addition will not overflow as function is not called if amount >=
 			// amount_required_to_reach_target
 			U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current.as_raw()),
-		))
+		)?))
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
@@ -376,15 +375,17 @@ impl SwapDirection for QuoteToBase {
 		sqrt_price_current: SqrtPrice,
 		liquidity: Liquidity,
 		amount: Amount,
-	) -> SqrtPrice {
-		assert!(0 < liquidity);
-
+	) -> Option<SqrtPrice> {
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		SqrtPrice::from_raw(
+		Some(SqrtPrice::from_raw(
 			sqrt_price_current.as_raw() +
-				mul_div_floor(amount, U256::one() << SqrtPrice::FRACTIONAL_BITS, liquidity),
-		)
+				mul_div_floor_checked(
+					amount,
+					U256::one() << SqrtPrice::FRACTIONAL_BITS,
+					liquidity,
+				)?,
+		))
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
@@ -863,6 +864,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						self.current_liquidity,
 						amount_minus_fees,
 					)
+					.expect("Checked non-zero above")
 				};
 
 				// Cannot overflow as if the swap traversed all ticks (MIN_TICK to MAX_TICK
@@ -878,11 +880,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					(
 						amount_required_to_reach_target,
 						/* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
-						mul_div_ceil(
+						mul_div_ceil_checked(
 							amount_required_to_reach_target,
 							U256::from(self.fee_hundredth_pips),
 							U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
-						),
+						)
+						.expect("fee will never be 100%"),
 					)
 				} else {
 					let amount_swapped = SD::input_amount_delta_ceil(
@@ -914,11 +917,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				// case of reverting an extrinsic's mutations which is expensive in Substrate
 				// based chains.
 				self.global_fee_growth[SD::INPUT_SIDE] = self.global_fee_growth[SD::INPUT_SIDE]
-					.saturating_add(mul_div_floor(
-						fees,
-						U256::from(1) << 128u32,
-						self.current_liquidity,
-					));
+					.saturating_add(
+						mul_div_floor_checked(
+							fees,
+							U256::from(1) << 128u32,
+							self.current_liquidity,
+						)
+						.expect("Checked non-zero above"),
+					);
 
 				sqrt_price_next
 			};
@@ -1237,69 +1243,73 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 }
 
 fn zero_amount_delta_floor(from: SqrtPrice, to: SqrtPrice, liquidity: Liquidity) -> Amount {
-	assert_ne!(from, Default::default());
+	debug_assert_ne!(from, Default::default());
 	assert!(from <= to);
 
 	/*
-		Proof that `mul_div_floor` does not overflow:
+		Proof that `mul_div_floor_checked` does not overflow:
 		If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
 		Then A * B >= B and B - A < B
 		Then A * B > B - A
 	*/
-	mul_div_floor(
+	mul_div_floor_checked(
 		U256::from(liquidity) << SqrtPrice::FRACTIONAL_BITS,
 		to.as_raw() - from.as_raw(),
 		U256::full_mul(to.as_raw(), from.as_raw()),
 	)
+	.unwrap_or_default()
 }
 
 fn zero_amount_delta_ceil(from: SqrtPrice, to: SqrtPrice, liquidity: Liquidity) -> Amount {
-	assert_ne!(from, Default::default());
+	debug_assert_ne!(from, Default::default());
 	assert!(from <= to);
 
 	/*
-		Proof that `mul_div_ceil` does not overflow:
+		Proof that `mul_div_ceil_checked` does not overflow:
 		If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
 		Then A * B >= B and B - A < B
 		Then A * B > B - A
 	*/
-	mul_div_ceil(
+	mul_div_ceil_checked(
 		U256::from(liquidity) << SqrtPrice::FRACTIONAL_BITS,
 		to.as_raw() - from.as_raw(),
 		U256::full_mul(to.as_raw(), from.as_raw()),
 	)
+	.unwrap_or_default()
 }
 
 fn one_amount_delta_floor(from: SqrtPrice, to: SqrtPrice, liquidity: Liquidity) -> Amount {
 	assert!(from <= to);
 
 	/*
-		Proof that `mul_div_floor` does not overflow:
+		Proof that `mul_div_floor_checked` does not overflow:
 		If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 		Then B - A ∈ u160
 		Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 		Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 	*/
-	mul_div_floor(
+	mul_div_floor_checked(
 		liquidity.into(),
 		to.as_raw() - from.as_raw(),
 		U512::from(1) << SqrtPrice::FRACTIONAL_BITS,
 	)
+	.unwrap()
 }
 
 fn one_amount_delta_ceil(from: SqrtPrice, to: SqrtPrice, liquidity: Liquidity) -> Amount {
 	assert!(from <= to);
 
 	/*
-		Proof that `mul_div_ceil` does not overflow:
+		Proof that `mul_div_ceil_checked` does not overflow:
 		If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 		Then B - A ∈ u160
 		Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 		Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 	*/
-	mul_div_ceil(
+	mul_div_ceil_checked(
 		liquidity.into(),
 		to.as_raw() - from.as_raw(),
 		U512::from(1u32) << SqrtPrice::FRACTIONAL_BITS,
 	)
+	.unwrap()
 }

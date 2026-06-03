@@ -316,36 +316,34 @@ impl TryFrom<U512> for SqrtPrice {
 	}
 }
 
-pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	mul_div_floor_checked(a, b, c).unwrap()
+/// Computes the floor and ceil of `a * b / c` in `U512` space. Returns `None` if `c` is zero.
+fn mul_div_floor_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<(U512, U512)> {
+	let c: U512 = c.into();
+	if c.is_zero() {
+		return None
+	}
+	let (floor, m) = U512::div_mod(U256::full_mul(a, b), c);
+	// Cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore
+	// a*b/c < U512::MAX
+	let ceil = if m.is_zero() { floor } else { floor + U512::from(1) };
+	Some((floor, ceil))
 }
 
 pub fn mul_div_floor_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
-	let c: U512 = c.into();
-	(U256::full_mul(a, b) / c).try_into().ok()
+	mul_div_floor_ceil(a, b, c).and_then(|(floor, _)| floor.try_into().ok())
 }
 
-pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
-	mul_div(a, b, c).1
+pub fn mul_div_ceil_checked<C: Into<U512>>(a: U256, b: U256, c: C) -> Option<U256> {
+	mul_div_floor_ceil(a, b, c).and_then(|(_, ceil)| ceil.try_into().ok())
 }
 
+/// Computes both the floor and ceil of `a * b / c`. Panics if `c` is zero or either result
+/// overflows `U256`. Test-only (gated behind the `test` feature); production code uses the
+/// `*_checked` variants.
+#[cfg(any(test, feature = "test"))]
 pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
-	let c: U512 = c.into();
-
-	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
-
-	(
-		d.try_into().unwrap(),
-		if m > U512::from(0) {
-			// cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore
-			// a*b/c < U512::MAX
-			d + 1
-		} else {
-			d
-		}
-		.try_into()
-		.unwrap(),
-	)
+	let (floor, ceil) = mul_div_floor_ceil(a, b, c).expect("mul_div requires a non-zero divisor");
+	(floor.try_into().unwrap(), ceil.try_into().unwrap())
 }
 
 #[derive(
@@ -380,11 +378,14 @@ impl From<SqrtPrice> for Price {
 		// Note the value here cannot ever be zero as MIN_SQRT_PRICE has its 33th bit set, so
 		// sqrt_price will always include a bit pass the 64th bit that is set, so when we shift
 		// down below that set bit will not be removed.
-		Price(mul_div_floor(
-			sqrt_price.0,
-			sqrt_price.0,
-			U256::one() << (2 * SqrtPrice::FRACTIONAL_BITS - Price::FRACTIONAL_BITS),
-		))
+		Price(
+			mul_div_floor_checked(
+				sqrt_price.0,
+				sqrt_price.0,
+				U256::one() << (2 * SqrtPrice::FRACTIONAL_BITS - Price::FRACTIONAL_BITS),
+			)
+			.unwrap(),
+		)
 	}
 }
 
@@ -454,33 +455,34 @@ impl Price {
 
 	/// Compute the price of asset 1 (self) in terms of asset 2 (given).
 	/// Both prices must have the same quote asset (eg. USD).
-	pub fn divide_by(self, price: Price) -> Self {
-		Price(mul_div_floor(self.0, Self::one().0, price.0))
+	/// Returns None if either price is zero.
+	pub fn divide_by(self, price: Price) -> Option<Self> {
+		Some(Price(mul_div_floor_checked(self.0, Self::one().0, price.0)?))
 	}
 
-	pub fn multiply_by(self, price: Price) -> Self {
-		Price(mul_div_floor(self.0, price.0, Self::one().0))
+	pub fn multiply_by(self, price: Price) -> Option<Self> {
+		Some(Price(mul_div_floor_checked(self.0, price.0, Self::one().0)?))
 	}
 
-	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_floor(input.into(), self.0, Self::one().0)
+	pub fn output_amount_floor<I: Into<U256>>(self, input: I) -> Option<Amount> {
+		mul_div_floor_checked(input.into(), self.0, Self::one().0)
 	}
 
-	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Amount {
-		mul_div_ceil(input.into(), self.0, Self::one().0)
+	pub fn output_amount_ceil<I: Into<U256>>(self, input: I) -> Option<Amount> {
+		mul_div_ceil_checked(input.into(), self.0, Self::one().0)
 	}
 
-	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_floor(output.into(), Self::one().0, self.0)
+	pub fn input_amount_floor<I: Into<U256>>(self, output: I) -> Option<Amount> {
+		mul_div_floor_checked(output.into(), Self::one().0, self.0)
 	}
 
-	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Amount {
-		mul_div_ceil(output.into(), Self::one().0, self.0)
+	pub fn input_amount_ceil<I: Into<U256>>(self, output: I) -> Option<Amount> {
+		mul_div_ceil_checked(output.into(), Self::one().0, self.0)
 	}
 
 	/// Given price of asset 1 in terms of asset 2, compute the price of asset 2 in terms of asset 1
-	pub fn invert(self) -> Self {
-		Price(mul_div_floor(Self::one().0, Self::one().0, self.0))
+	pub fn invert(self) -> Option<Self> {
+		Some(Price(mul_div_floor_checked(Self::one().0, Self::one().0, self.0)?))
 	}
 
 	/// Converts a `price` to a `tick`. Will return `None` if the price is too high or low to be
@@ -526,19 +528,23 @@ impl Price {
 	pub fn adjust_by_bps(self, bps: BasisPoints, increase: bool) -> Self {
 		let adjusted_bps =
 			if increase { ONE_AS_BASIS_POINTS + bps } else { ONE_AS_BASIS_POINTS - bps };
-		Self(mul_div_floor(self.0, U256::from(adjusted_bps), ONE_AS_BASIS_POINTS))
+		Self(mul_div_floor_checked(self.0, U256::from(adjusted_bps), ONE_AS_BASIS_POINTS).unwrap())
 	}
 	/// Calculates the basis points difference from some other price to this one, assuming they
 	/// are both prices of the same base/quote pair.
 	///
 	/// The `from` implies that if the other price is lower than self, the result will be positive,
 	/// and if the other price is higher than self, the result will be negative.
-	pub fn hundredth_bps_difference_from(&self, other_price: &Price) -> SignedHundredthBasisPoints {
+	/// Returns None if either price is zero.
+	pub fn hundredth_bps_difference_from(
+		&self,
+		other_price: &Price,
+	) -> Option<SignedHundredthBasisPoints> {
 		let abs_diff = self.0.abs_diff(other_price.0);
 		let max_hundredth_bps = U256::from(100 * ONE_AS_BASIS_POINTS as u32);
-		let abs_diff_bps = mul_div_ceil(abs_diff, max_hundredth_bps, other_price.0);
+		let abs_diff_bps = mul_div_ceil_checked(abs_diff, max_hundredth_bps, other_price.0)?;
 		let sign = if self.0 < other_price.0 { -1 } else { 1 };
-		SignedHundredthBasisPoints(abs_diff_bps.saturated_into::<i32>() * sign)
+		Some(SignedHundredthBasisPoints(abs_diff_bps.saturated_into::<i32>() * sign))
 	}
 }
 
@@ -608,6 +614,9 @@ mod test {
 
 	#[test]
 	fn test_mul_div_floor() {
+		fn mul_div_floor(a: U256, b: U256, c: impl Into<U512>) -> U256 {
+			mul_div_floor_checked(a, b, c).unwrap()
+		}
 		assert_eq!(mul_div_floor(U256::from(1), U256::from(1), 1), 1.into());
 		assert_eq!(mul_div_floor(U256::from(1), U256::from(1), 2), 0.into());
 		assert_eq!(mul_div_floor(U256::from(1), U256::from(2), 1), 2.into());
@@ -640,6 +649,7 @@ mod test {
 
 		assert_eq!(mul_div_floor(U256::MAX, U256::MAX, U256::MAX), U256::MAX);
 		assert_eq!(mul_div_floor(U256::MAX, U256::MAX - 1, U256::MAX), U256::MAX - 1);
+		assert_eq!(mul_div_floor_checked(U256::one(), U256::one(), U256::zero()), None);
 	}
 
 	#[test]
@@ -729,7 +739,7 @@ mod test {
 	#[test]
 	fn test_relative_price() {
 		fn relative_price(price_1: U256, price_2: U256) -> U256 {
-			Price(price_1).divide_by(Price(price_2)).0
+			Price(price_1).divide_by(Price(price_2)).unwrap().0
 		}
 
 		assert_eq!(
@@ -760,6 +770,17 @@ mod test {
 			),
 			U256::from_dec_str("91965187171920516035188920897262983721").unwrap()
 		);
+		assert_eq!(
+			Price(U256::zero()).divide_by(Price(
+				U256::from_dec_str("4567845678456784567845678456784567845678").unwrap()
+			)),
+			Some(Price::zero())
+		);
+		assert_eq!(
+			Price(U256::from_dec_str("4567845678456784567845678456784567845678").unwrap())
+				.divide_by(Price(U256::zero())),
+			None
+		);
 	}
 
 	#[test]
@@ -786,10 +807,10 @@ mod test {
 	fn test_price_invert() {
 		let price = Price::from_usd_cents(Asset::Eth, 12345);
 
-		assert_eq!(price.invert().invert(), price);
+		assert_eq!(price.invert().unwrap().invert().unwrap(), price);
 		assert_eq!(
 			price.output_amount_floor(U256::from(123 * 10u128.pow(18))),
-			price.invert().input_amount_floor(U256::from(123 * 10u128.pow(18)))
+			price.invert().unwrap().input_amount_floor(U256::from(123 * 10u128.pow(18)))
 		);
 	}
 
@@ -800,9 +821,10 @@ mod test {
 		let price_1_1 = Price::from_usd_fine_amount(94999); // under the limit
 		let price_2 = Price::from_usd_fine_amount(105000); // ok
 		let price_2_1 = Price::from_usd_fine_amount(105001); // over the limit
-		assert_eq!(*price_1.hundredth_bps_difference_from(&ref_price), -500 * 100);
-		assert!(*price_1_1.hundredth_bps_difference_from(&ref_price) < -500 * 100);
-		assert_eq!(*price_2.hundredth_bps_difference_from(&ref_price), 500 * 100);
-		assert!(*price_2_1.hundredth_bps_difference_from(&ref_price) > 500 * 100);
+		assert_eq!(*price_1.hundredth_bps_difference_from(&ref_price).unwrap(), -500 * 100);
+		assert!(*price_1_1.hundredth_bps_difference_from(&ref_price).unwrap() < -500 * 100);
+		assert_eq!(*price_2.hundredth_bps_difference_from(&ref_price).unwrap(), 500 * 100);
+		assert!(*price_2_1.hundredth_bps_difference_from(&ref_price).unwrap() > 500 * 100);
+		assert_eq!(ref_price.hundredth_bps_difference_from(&Price::from_raw(U256::zero())), None);
 	}
 }

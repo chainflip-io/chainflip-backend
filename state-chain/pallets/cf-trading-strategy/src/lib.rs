@@ -962,7 +962,9 @@ impl<T: Config> Pallet<T> {
 			// Convert to USD amounts so we can compare assets with different decimals.
 			let usd_value_of = |asset, amount, default| {
 				T::PriceFeedApi::get_price(asset)
-					.map(|oracle| oracle.price.output_amount_ceil(amount).saturated_into())
+					.and_then(|oracle| {
+						oracle.price.output_amount_ceil(amount).map(|v| v.saturated_into())
+					})
 					.unwrap_or(default)
 			};
 
@@ -1045,7 +1047,9 @@ impl<T: Config> Pallet<T> {
 							(quote_asset, &mut remaining_quote_amount)
 						};
 						let amount = T::PriceFeedApi::get_price(asset)
-							.map(|oracle| oracle.price.input_amount_floor(amount).saturated_into())
+							.and_then(|oracle| {
+								oracle.price.input_amount_floor(amount).map(|v| v.saturated_into())
+							})
 							.unwrap_or(amount)
 							.min(*remaining);
 						*remaining = remaining.saturating_sub(amount);

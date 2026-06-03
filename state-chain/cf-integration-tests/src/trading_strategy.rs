@@ -399,16 +399,21 @@ fn oracle_strategy_basic_usage() {
 
 			// Check our balances
 			let balances = AssetBalances::free_balances(&DORIS);
-			let starting_value =
-				ChainlinkOracle::get_price(BASE_ASSET).unwrap().price.output_amount_ceil(AMOUNT);
+			let starting_value = ChainlinkOracle::get_price(BASE_ASSET)
+				.unwrap()
+				.price
+				.output_amount_ceil(AMOUNT)
+				.unwrap();
 			let base_value = ChainlinkOracle::get_price(BASE_ASSET)
 				.unwrap()
 				.price
-				.output_amount_ceil(balances[BASE_ASSET]);
+				.output_amount_ceil(balances[BASE_ASSET])
+				.unwrap();
 			let quote_value = ChainlinkOracle::get_price(QUOTE_ASSET)
 				.unwrap()
 				.price
-				.output_amount_ceil(balances[QUOTE_ASSET]);
+				.output_amount_ceil(balances[QUOTE_ASSET])
+				.unwrap();
 			assert!(base_value + quote_value > starting_value, "Should see increase due to tick",);
 		});
 }
