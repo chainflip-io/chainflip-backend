@@ -15,7 +15,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 					cf_chains::tron::CHAIN_ID_MAINNET,
 					EvmAddress::from(hex_literal::hex!("a614f803b6fd780986a42c78ec9c7f77e6ded13c")), /* TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t */
 					EvmAddress::from(hex_literal::hex!("67d11affdff89ba412e60ecfc8db778950486039")), /* TKS96iibRRLvLHL6cDNyTfbziC2vBPcFvB */
-					EvmAddress::from(hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e")), /* TDKihjArLMEfF8ebeEWdfiuoqHC8nmydBy */
+					EvmAddress::from(hex_literal::hex!("32e07e5dfcb75c2977adddc593eb8d6b6e71f96e")), /* TEcDijvKSXcfWT7S6rd44H5vNgufm7Y4XC */
 				),
 				cf_runtime_utilities::genesis_hashes::PERSEVERANCE => (
 					cf_chains::tron::CHAIN_ID_NILE_TESTNET,
@@ -64,7 +64,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				);
 				assert_eq!(
 					TronVaultAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("24c97d696e0db753b229be451d1a50705a09566e"))
+					EvmAddress::from(hex_literal::hex!("32e07e5dfcb75c2977adddc593eb8d6b6e71f96e"))
 				);
 			},
 			cf_runtime_utilities::genesis_hashes::PERSEVERANCE => {
