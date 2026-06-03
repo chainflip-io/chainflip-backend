@@ -27,7 +27,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 					cf_chains::tron::CHAIN_ID_NILE_TESTNET,
 					EvmAddress::from(hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f")), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
 					EvmAddress::from(hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0")), /* TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT */
-					EvmAddress::from(hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5")), /* TPcqDKqWiDyQh4vGbFiJaxpPXtKfk8RZML */
+					EvmAddress::from(hex_literal::hex!("d7ce126fafc5c3463124e275d5e18865081e9d61")), /* TVeH9SKF3GHSo663iuNVmWXqFHBYUcSSXy */
 				),
 				_ => (
 					4271970548u64, // localnet Tron Chain ID
@@ -98,7 +98,7 @@ impl<T: Config<Hash = H256>> UncheckedOnRuntimeUpgrade for TronAssetsMigration<T
 				);
 				assert_eq!(
 					TronVaultAddress::<T>::get(),
-					EvmAddress::from(hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5"))
+					EvmAddress::from(hex_literal::hex!("d7ce126fafc5c3463124e275d5e18865081e9d61"))
 				);
 			},
 			_ => {
