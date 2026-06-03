@@ -177,18 +177,8 @@ pub mod pallet {
 				Self::update_block_emissions();
 			}
 			if Self::should_update_supply_at(current_block) {
-				if T::SafeMode::get().emissions_sync_enabled {
-					Self::burn_flip_network_fee();
-					Self::broadcast_update_total_supply(
-						T::Issuance::total_issuance(),
-						current_block,
-					);
-					Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
-					LastSupplyUpdateBlock::<T>::set(current_block);
-					return T::WeightInfo::rewards_minted()
-				} else {
-					log::info!("Runtime Safe Mode is CODE RED: Flip total issuance update broadcast are paused for now.");
-				}
+				Self::burn_and_broadcast_supply_update(current_block);
+				return T::WeightInfo::rewards_minted()
 			}
 			T::WeightInfo::rewards_not_minted()
 		}
@@ -245,6 +235,19 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Burns the network fee and broadcasts an updated total supply to the gateway.
+	/// No-ops if safe mode has disabled emissions sync.
+	pub fn burn_and_broadcast_supply_update(current_block: BlockNumberFor<T>) {
+		if T::SafeMode::get().emissions_sync_enabled {
+			Self::burn_flip_network_fee();
+			Self::broadcast_update_total_supply(T::Issuance::total_issuance(), current_block);
+			Self::deposit_event(Event::SupplyUpdateBroadcastRequested(current_block));
+			LastSupplyUpdateBlock::<T>::set(current_block);
+		} else {
+			log::info!("Runtime Safe Mode is CODE RED: Flip total issuance update broadcast are paused for now.");
+		}
+	}
+
 	/// Determines if we should broadcast supply update at block number `block_number`.
 	fn should_update_supply_at(block_number: BlockNumberFor<T>) -> bool {
 		let supply_update_interval = SupplyUpdateInterval::<T>::get();

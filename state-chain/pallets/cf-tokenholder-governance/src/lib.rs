@@ -199,7 +199,7 @@ pub mod pallet {
 					Error::<T>::IncompatibleGovkey
 				);
 			}
-			T::FeePayment::try_burn_fee(&proposer, T::ProposalFee::get())?;
+			T::FeePayment::try_take_fee(&proposer, T::ProposalFee::get())?;
 			Proposals::<T>::insert(
 				<frame_system::Pallet<T>>::block_number() + T::VotingPeriod::get(),
 				proposal.clone(),
