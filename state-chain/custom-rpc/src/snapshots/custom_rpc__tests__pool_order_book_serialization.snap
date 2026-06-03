@@ -6,13 +6,13 @@ expression: val
   "bids": [
     {
       "amount": "0xbc614e",
-      "sqrt_price": "0x5397fb1"
+      "sqrt_price": "0x1000276a3"
     }
   ],
   "asks": [
     {
       "amount": "0x165ec15",
-      "sqrt_price": "0x5e30a78"
+      "sqrt_price": "0x1000276a3"
     }
   ]
 }

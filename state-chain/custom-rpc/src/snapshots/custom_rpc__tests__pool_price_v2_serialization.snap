@@ -11,7 +11,7 @@ expression: val
     "chain": "Ethereum",
     "asset": "USDC"
   },
-  "sell": "0x12d687",
-  "buy": "0x12d687",
-  "range_order": "0x12d687"
+  "sell": "0x1000276a3",
+  "buy": "0x1000276a3",
+  "range_order": "0x1000276a3"
 }
