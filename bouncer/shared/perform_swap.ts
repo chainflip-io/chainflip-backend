@@ -40,6 +40,7 @@ import {
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnoredEvent } from 'generated/events/swapping/swapEgressIgnored';
 import z from 'zod';
+import { hexToTronAddress } from '@chainflip/utils/tron';
 import { ethereumIngressEgressCcmBroadcastRequestedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastRequested';
 import { ethereumIngressEgressCcmEgressInvalidEvent } from 'generated/events/ethereumIngressEgress/ccmEgressInvalid';
 import { ethereumIngressEgressCcmBroadcastFailedEvent } from 'generated/events/ethereumIngressEgress/ccmBroadcastFailed';
@@ -93,8 +94,12 @@ export async function requestNewSwap<A = []>(
   );
   const addressReady = await cf.expectEvent(
     swappingSwapDepositAddressReadyEvent.refine((event) => {
+      const expectedAddress =
+        chainFromAsset(destAsset) === 'Tron'
+          ? hexToTronAddress(destAddress as `0x${string}`)
+          : destAddress;
       const eventMatches =
-        event.destinationAddress.address.toLowerCase() === destAddress.toLowerCase() &&
+        event.destinationAddress.address.toLowerCase() === expectedAddress.toLowerCase() &&
         event.destinationAddress.chain === chainFromAsset(destAsset) &&
         event.destinationAsset === destAsset &&
         event.sourceAsset === sourceAsset;
