@@ -101,7 +101,8 @@ export async function testTron<A = []>(
     await cf.stepUntilEvent(
       tronIngressEgressDepositFinalisedEvent.refine(
         (event) =>
-          event.depositAddress === swapParams.depositAddress &&
+          event.depositAddress != null &&
+          getEncodedTronAddress(event.depositAddress) === swapParams.depositAddress &&
           event.channelId === BigInt(swapParams.channelId),
       ),
     );
