@@ -4,17 +4,23 @@ DATETIME=$(date '+%Y-%m-%d_%H-%M-%S')
 
 source $LOCALNET_INIT_DIR/../helper.sh
 
+# The broker API port the deposit-monitor submits refunds through. Defaults to the node's
+# built-in broker RPC (9944); the "old-rpcs" setup overrides this to the standalone
+# chainflip-broker-api (10997). Kept in sync with the bouncer's BROKER_ENDPOINT by the caller
+# so that both submit through the same broker (and therefore the same nonce manager).
+BROKER_API_PORT="${BROKER_API_PORT:-9944}"
+
 # On some machines (e.g. MacOS), 172.17.0.1 is not accessible from inside the container, so we need to use host.docker.internal
 # In CI (and more generally Linux), host.docker.internal is not available, so we need to use the host's IP address
 if [[ $CI == true || $(uname -s) == Linux* ]]; then
-  export CFDM_BROKER_API_URL='ws://172.17.0.1:10997'
-  export CFDM_CHAINFLIP_RPC_URL='ws://172.17.0.1:9944'
-  export CFDM_SOL_RPC_HTTP_ENDPOINT='http://172.17.0.1:8899'
+  DOCKER_HOST_ADDRESS='172.17.0.1'
 else
-  export CFDM_BROKER_API_URL='ws://host.docker.internal:10997'
-  export CFDM_CHAINFLIP_RPC_URL='ws://host.docker.internal:9944'
-  export CFDM_SOL_RPC_HTTP_ENDPOINT='http://host.docker.internal:8899'
+  DOCKER_HOST_ADDRESS='host.docker.internal'
 fi
+
+export CFDM_BROKER_API_URL="ws://${DOCKER_HOST_ADDRESS}:${BROKER_API_PORT}"
+export CFDM_CHAINFLIP_RPC_URL="ws://${DOCKER_HOST_ADDRESS}:9944"
+export CFDM_SOL_RPC_HTTP_ENDPOINT="http://${DOCKER_HOST_ADDRESS}:8899"
 $DOCKER_COMPOSE_CMD -f $LOCALNET_INIT_DIR/../docker-compose.yml -p "chainflip-localnet" up $DEPOSIT_MONITOR_CONTAINER $additional_docker_compose_up_args -d \
   > /tmp/chainflip/chainflip-deposit-monitor.$DATETIME.log 2>&1
 
