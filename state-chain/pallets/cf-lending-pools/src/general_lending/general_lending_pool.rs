@@ -1,27 +1,20 @@
 use super::*;
 
-/// This keeps track of each lender's share in the pool, the total amount of funds
-/// owed to lenders (and how much of it is available to be borrowed), and the collected
-/// fees in various assets that are yet to be swapped into the pool's asset.
+/// This keeps track of each lender's share in the pool and the total amount of funds
+/// owed to lenders (and how much of it is available to be borrowed).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(AccountId))]
 pub struct LendingPool<AccountId>
 where
 	AccountId: Decode + Encode + Ord + Clone,
 {
-	/// Total amount owed to active lenders (includes what's currently in loans, but excluded
-	/// what's owed to the network).
+	/// Total amount owed to active lenders (includes what's currently in loans).
 	pub total_amount: AssetAmount,
 	/// Amount available to be borrowed
 	pub available_amount: AssetAmount,
 	/// Maps lenders to their shares in the pool; each lender is effectively owed their `share` *
 	/// `total_amount` of the pool's asset.
 	pub lender_shares: BTreeMap<AccountId, Perquintill>,
-	/// Interest is paid upon loan repayment so this field keeps tracks of how much in pool's
-	/// asset is owed to the network. In practice we will still try to pay the network regularly
-	/// by taking from available funds, but this field is necessary in case available funds aren't
-	/// enough (i.e. utilisation is near 100%).
-	pub owed_to_network: AssetAmount,
 }
 
 #[derive(PartialEq, Debug)]
@@ -54,12 +47,7 @@ where
 	AccountId: Decode + Encode + Ord + Clone,
 {
 	pub fn new() -> Self {
-		Self {
-			total_amount: 0,
-			available_amount: 0,
-			owed_to_network: 0,
-			lender_shares: BTreeMap::new(),
-		}
+		Self { total_amount: 0, available_amount: 0, lender_shares: BTreeMap::new() }
 	}
 
 	/// Adds funds increasing `lender`'s share in the pool.
@@ -139,14 +127,8 @@ where
 		Ok(())
 	}
 
-	/// Pool balance that can actually be drawn for a new borrow: the available balance
-	/// minus what's earmarked for the network.
-	pub fn available_for_borrowing(&self) -> AssetAmount {
-		self.available_amount.saturating_sub(self.owed_to_network)
-	}
-
 	pub fn get_utilisation(&self) -> Permill {
-		let in_use = self.total_amount.saturating_sub(self.available_for_borrowing());
+		let in_use = self.total_amount.saturating_sub(self.available_amount);
 
 		// Note: `from_rational` does not panic on invalid inputs and instead returns 100%.
 		Permill::from_rational(in_use, self.total_amount)
@@ -167,42 +149,23 @@ where
 		self.total_amount.saturating_accrue(amount);
 	}
 
-	/// Record `amount` as a fee that's owed to the network (it is to be added to some
-	/// loan's principal). This does not increase the total "value" of the pool,
-	/// but `amount` will be repaid as part of loan repayment, so we record this to know
-	/// how much the network can collect from `available_amount`. The method then tries
-	/// to collect as much as possible (it is possible that we can't collect all owed fees
-	/// immediately in case utilisation approaches 100%).
-	pub fn record_and_collect_network_fee(&mut self, amount: AssetAmount) -> AssetAmount {
-		self.owed_to_network.saturating_accrue(amount);
-
-		let available_for_collection = core::cmp::min(self.available_amount, self.owed_to_network);
-		self.owed_to_network.saturating_reduce(available_for_collection);
-		self.available_amount.saturating_reduce(available_for_collection);
-		available_for_collection
-	}
-
 	/// Collects funds from the pool's available liquidity in order to pay fees before the
 	/// principal is repaid. The borrower's principal is responsible for repaying this back to the
 	/// pool, so the pool's `total_amount` is unaffected. Returns the actually-deducted amount,
-	/// which may be less than `amount` if available liquidity is insufficient.
+	/// which may be less than `amount` if available liquidity is insufficient. Callers should
+	/// re-queue any uncollected residual (e.g. back into `pending_interest`) so it can be
+	/// retried on the next collection cycle.
 	pub fn collect_fee_from_available(&mut self, amount: AssetAmount) -> AssetAmount {
 		let collected = core::cmp::min(self.available_amount, amount);
 		self.available_amount.saturating_reduce(collected);
 		collected
 	}
 
-	/// Inform the pool that it won't be receiving `amount` as a result of account liquidation
-	/// not being able to recover the debt in full. The loss is split between the network and
-	/// the lenders: any outstanding network IOU is forgiven first (up to `amount`), and the
-	/// remainder is socialised across lenders by reducing `total_amount`. Forgiving the
-	/// network IOU first is necessary because `total_amount` was never grown by the network
-	/// portion of the loan's fees, so absorbing the full write-off into `total_amount` can
-	/// saturate it below `available_amount` and violate the pool's invariant.
+	/// Settles unrecoverable debt by reducing `total_amount` — socialising the loss across
+	/// lenders. Called when a loan's `owed_principal` can't be repaid (e.g. liquidation
+	/// collateral fell short).
 	pub fn write_off_unrecoverable_debt(&mut self, amount: AssetAmount) {
-		let network_portion = core::cmp::min(amount, self.owed_to_network);
-		self.owed_to_network.saturating_reduce(network_portion);
-		self.total_amount.saturating_reduce(amount.saturating_sub(network_portion));
+		self.total_amount.saturating_reduce(amount);
 	}
 
 	/// Receives repayment funds in the pool's asset (after they has been swapped)
@@ -421,43 +384,44 @@ mod tests {
 	}
 
 	#[test]
-	fn write_off_forgives_network_iou_before_charging_lenders() {
-		// Lender deposits 1000, pool lends out everything, then accrues 50 pool fees
-		// and 20 network fees (which cannot be collected because available_amount is 0).
-		// A subsequent full default of 1070 must reduce both owed_to_network and the pool's
-		// total amount.
+	fn collect_fee_from_available_returns_uncollected_residual() {
+		// At 100% utilisation, the pool can't pay any fee from its available balance.
+		// The caller (the loan) is expected to re-queue the uncollected residual.
 		let mut chp_pool = LendingPool::<AccountId>::new();
 		chp_pool.add_funds(&LENDER_1, 1000);
 		assert_ok!(chp_pool.provide_funds_for_loan(1000));
+		assert_eq!(chp_pool.available_amount, 0);
 
-		chp_pool.record_pool_fee(50);
-		let collected = chp_pool.record_and_collect_network_fee(20);
+		let collected = chp_pool.collect_fee_from_available(50);
 		assert_eq!(collected, 0);
-		assert_eq!(chp_pool.total_amount, 1050);
 		assert_eq!(chp_pool.available_amount, 0);
-		assert_eq!(chp_pool.owed_to_network, 20);
-
-		chp_pool.write_off_unrecoverable_debt(1070);
-
-		assert_eq!(chp_pool.total_amount, 0);
-		assert_eq!(chp_pool.available_amount, 0);
-		assert_eq!(chp_pool.owed_to_network, 0);
+		assert_eq!(chp_pool.total_amount, 1000);
 	}
 
 	#[test]
-	fn write_off_smaller_than_network_iou_leaves_total_amount_untouched() {
-		// When the write-off is smaller than the pool's outstanding network IOU, the IOU
-		// absorbs the full write-off and lenders' `total_amount` is unaffected.
+	fn collect_fee_from_available_caps_at_available() {
+		// When available is partial, only the available portion is collected; caller is
+		// expected to re-queue the rest.
+		let mut chp_pool = LendingPool::<AccountId>::new();
+		chp_pool.add_funds(&LENDER_1, 1000);
+		assert_ok!(chp_pool.provide_funds_for_loan(970));
+		assert_eq!(chp_pool.available_amount, 30);
+
+		let collected = chp_pool.collect_fee_from_available(50);
+		assert_eq!(collected, 30);
+		assert_eq!(chp_pool.available_amount, 0);
+	}
+
+	#[test]
+	fn write_off_reduces_total_amount() {
 		let mut chp_pool = LendingPool::<AccountId>::new();
 		chp_pool.add_funds(&LENDER_1, 1000);
 		assert_ok!(chp_pool.provide_funds_for_loan(1000));
-		chp_pool.record_and_collect_network_fee(50);
-		assert_eq!(chp_pool.owed_to_network, 50);
 		assert_eq!(chp_pool.total_amount, 1000);
 
-		chp_pool.write_off_unrecoverable_debt(10);
+		chp_pool.write_off_unrecoverable_debt(1000);
 
-		assert_eq!(chp_pool.owed_to_network, 40);
-		assert_eq!(chp_pool.total_amount, 1000);
+		assert_eq!(chp_pool.total_amount, 0);
+		assert_eq!(chp_pool.available_amount, 0);
 	}
 }

@@ -447,7 +447,6 @@ fn basic_general_lending() {
 					// later point)
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL - origination_fee_network,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -494,7 +493,6 @@ fn basic_general_lending() {
 						PRINCIPAL - origination_fee_network -
 						network_interest_1,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -536,7 +534,6 @@ fn basic_general_lending() {
 						origination_fee_network -
 						network_interest_1,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -572,7 +569,6 @@ fn basic_general_lending() {
 						origination_fee_network -
 						network_interest_1 - network_interest_2,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -614,7 +610,6 @@ fn basic_general_lending() {
 						origination_fee_pool +
 						pool_interest_1 + pool_interest_2,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1027,7 +1022,6 @@ fn basic_loan_aggregation() {
 						origination_fee_network_1 -
 						origination_fee_network_2,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1114,7 +1108,6 @@ fn basic_loan_aggregation() {
 						origination_fee_network_2 -
 						origination_fee_network_3,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1410,7 +1403,6 @@ fn basic_liquidation() {
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL - origination_fee_network +
 						repaid_amount_1 + liquidation_fee_pool_1,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1566,7 +1558,6 @@ fn basic_liquidation() {
 						(LENDER, Perquintill::from_parts(996_405_890_220_689_421)),
 						(BORROWER, Perquintill::from_parts(3_594_109_779_310_579)),
 					]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1698,7 +1689,6 @@ fn soft_liquidation_escalates_to_hard() {
 					// later point)
 					available_amount: total_amount_in_pool,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1875,7 +1865,6 @@ fn liquidation_with_outstanding_principal() {
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					available_amount: INIT_POOL_AMOUNT - PRINCIPAL - origination_fee_network,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -1929,7 +1918,6 @@ fn liquidation_with_outstanding_principal() {
 					total_amount: new_total_amount,
 					available_amount: new_total_amount,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 
@@ -3098,7 +3086,6 @@ fn repaying_more_than_necessary() {
 					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					available_amount: INIT_POOL_AMOUNT + origination_fee_pool,
 					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
 				}
 			);
 		});
@@ -5432,7 +5419,6 @@ mod rpcs {
 						available_amount: INIT_POOL_AMOUNT -
 							PRINCIPAL - origination_fee_network_1 -
 							network_interest_1,
-						owed_to_network: 0,
 						utilisation_rate: utilisation_after_interest_pool_1,
 						utilisation_cap: Permill::one(),
 						current_interest_rate: Permill::from_parts(53_335) +

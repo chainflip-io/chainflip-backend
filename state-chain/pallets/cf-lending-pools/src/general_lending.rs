@@ -934,6 +934,19 @@ pub struct PriceCacheAndThreshold<'a, T: Config> {
 	pub price_cache: &'a OraclePriceCache<T>,
 }
 
+/// If the pool couldn't cover the full `attempted` fee, push the uncollected residual back
+/// into `pending` so it can be retried on the next collection cycle.
+fn accrue_uncollected(
+	pending: &mut ScaledAmountHP,
+	attempted: AssetAmount,
+	collected: AssetAmount,
+) {
+	let uncollected = attempted.saturating_sub(collected);
+	if uncollected > 0 {
+		pending.saturating_accrue(ScaledAmountHP::from_asset_amount(uncollected));
+	}
+}
+
 impl<T: Config> GeneralLoan<T> {
 	fn owed_principal_usd_value(
 		&self,
@@ -1134,30 +1147,45 @@ impl<T: Config> GeneralLoan<T> {
 
 		let broker_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.broker)?;
 
-		let fees_owed_to_network = network_interest.saturating_add(low_ltv_penalty);
-
 		self.owed_principal.saturating_accrue(pool_interest);
-		self.owed_principal.saturating_accrue(fees_owed_to_network);
 
-		let broker_interest_collected = Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
-			pool.record_pool_fee(pool_interest);
+		let (network_interest_collected, low_ltv_penalty_collected, broker_interest_collected) =
+			Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
+				pool.record_pool_fee(pool_interest);
 
-			let network_fees_collected = pool.record_and_collect_network_fee(fees_owed_to_network);
-			Pallet::<T>::credit_fees_to_network(loan_asset, network_fees_collected);
+				let network_collected = pool.collect_fee_from_available(network_interest);
+				let low_ltv_collected = pool.collect_fee_from_available(low_ltv_penalty);
+				let network_total = network_collected.saturating_add(low_ltv_collected);
+				if network_total > 0 {
+					Pallet::<T>::credit_fees_to_network(loan_asset, network_total);
+				}
 
-			pool.collect_fee_from_available(broker_interest)
-		})
-		.unwrap_or_default();
+				let broker_collected = pool.collect_fee_from_available(broker_interest);
 
-		// Any portion of the broker fee that the pool couldn't cover stays in pending so the
-		// next collection round can retry once the pool has more liquidity.
-		let broker_interest_uncollected = broker_interest.saturating_sub(broker_interest_collected);
-		if broker_interest_uncollected > 0 {
-			self.pending_interest
-				.broker
-				.saturating_accrue(ScaledAmountHP::from_asset_amount(broker_interest_uncollected));
-		}
+				(network_collected, low_ltv_collected, broker_collected)
+			})
+			.unwrap_or_default();
 
+		// Any portion of network/low-ltv/broker fees the pool couldn't cover stays in pending
+		// so the next collection round can retry once the pool has more liquidity.
+		accrue_uncollected(
+			&mut self.pending_interest.network,
+			network_interest,
+			network_interest_collected,
+		);
+		accrue_uncollected(
+			&mut self.pending_interest.low_ltv_penalty,
+			low_ltv_penalty,
+			low_ltv_penalty_collected,
+		);
+		accrue_uncollected(
+			&mut self.pending_interest.broker,
+			broker_interest,
+			broker_interest_collected,
+		);
+
+		self.owed_principal.saturating_accrue(network_interest_collected);
+		self.owed_principal.saturating_accrue(low_ltv_penalty_collected);
 		self.owed_principal.saturating_accrue(broker_interest_collected);
 
 		if broker_interest_collected > 0 {
@@ -1173,16 +1201,16 @@ impl<T: Config> GeneralLoan<T> {
 		}
 
 		if pool_interest != 0 ||
-			network_interest != 0 ||
-			low_ltv_penalty != 0 ||
+			network_interest_collected != 0 ||
+			low_ltv_penalty_collected != 0 ||
 			broker_interest_collected != 0
 		{
 			Pallet::<T>::deposit_event(Event::InterestTaken {
 				loan_id: self.id,
 				pool_interest,
-				network_interest,
+				network_interest: network_interest_collected,
 				broker_interest: broker_interest_collected,
-				low_ltv_penalty,
+				low_ltv_penalty: low_ltv_penalty_collected,
 			});
 		}
 
@@ -1394,9 +1422,9 @@ pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: Ass
 
 /// Draws `principal` from the lending pool and records the origination fees against the loan.
 ///
-/// The total amount owed (`loan.owed_principal`) is increased by `principal +
-/// origination_fee_pool + origination_fee_network`. The pool fee stays in the pool (increasing
-/// lenders' share), while the network fee is immediately credited to the network.
+/// The pool fee stays in the pool (increasing lenders' share). The network fee is collected
+/// from the pool's available balance up-front — `fund_loan` requires the pool to have enough
+/// liquidity for both so that origination never leaves a partial obligation to the network.
 ///
 /// Does *not* enforce the utilisation cap — callers must check it once the loan account
 /// has been committed to storage (see [`check_pool_caps_after_borrow`]).
@@ -1415,19 +1443,16 @@ pub fn fund_loan<T: Config>(
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 
-		// The pool must hold enough liquid funds to cover both the principal *and* the
-		// network portion of the origination fee. If it can't, origination is rejected
-		// outright rather than leaving a partial obligation to the network.
-		ensure!(
-			pool.available_amount >= principal.saturating_add(origination_fee_network),
-			Error::<T>::InsufficientLiquidity,
-		);
-
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
-
 		pool.record_pool_fee(origination_fee_pool);
 
-		let network_fee_collected = pool.record_and_collect_network_fee(origination_fee_network);
+		let network_fee_collected = pool.collect_fee_from_available(origination_fee_network);
+		// The pool must hold enough liquid funds to cover both the principal *and* the
+		// network portion of the origination fee.
+		ensure!(
+			network_fee_collected == origination_fee_network,
+			Error::<T>::InsufficientLiquidity
+		);
 
 		Pallet::<T>::credit_fees_to_network(loan.asset, network_fee_collected);
 
@@ -1804,7 +1829,7 @@ pub fn check_pool_caps_after_borrow<T: Config>(
 
 	let pool = GeneralLendingPools::<T>::get(loan_asset).ok_or(Error::<T>::PoolDoesNotExist)?;
 
-	ensure!(required <= pool.available_for_borrowing(), Error::<T>::UtilisationCapExceeded);
+	ensure!(required <= pool.available_amount, Error::<T>::UtilisationCapExceeded);
 
 	Ok(())
 }

@@ -80,7 +80,7 @@ pub struct RpcLendingPool<Amount> {
 	pub config: LendingPoolConfiguration,
 }
 
-impl<Amount> From<RpcLendingPool<Amount>> for pallet_cf_lending_pools::RpcLendingPool<Amount> {
+impl<Amount> From<RpcLendingPool<Amount>> for before_version_18::RpcLendingPool<Amount> {
 	fn from(value: RpcLendingPool<Amount>) -> Self {
 		Self {
 			asset: value.asset,
