@@ -25,8 +25,8 @@ use cf_traits::{
 	mocks::{
 		cfe_interface_mock::MockCfeInterface, key_rotator::MockKeyRotatorA,
 		minimum_funding::MockMinimumFundingProvider, qualify_node::QualifyAll,
-		reputation_resetter::MockReputationResetter,
-		rewards_distribution::MockRewardsDistribution, waived_fees::WaivedFeesMock,
+		reputation_resetter::MockReputationResetter, rewards_distribution::MockRewardsDistribution,
+		waived_fees::WaivedFeesMock,
 	},
 	AccountRoleRegistry, RotationBroadcastsPending,
 };

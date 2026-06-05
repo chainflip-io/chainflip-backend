@@ -246,4 +246,3 @@ impl cf_traits::ChainflipNetworkInfo for MockChainflipNetworkProvider {
 		ChainflipNetwork::Development
 	}
 }
-
