@@ -309,13 +309,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
+		// The era block hash and number used as anchor when signing the extrinsic. Stored as
+		// local copies so we can overwrite them on AncientBirthBlock failure.
+		let mut era_block_hash = self.finalized_block_hash;
+		let mut era_block_number = self.finalized_block_number;
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
-				self.finalized_block_hash,
-				self.finalized_block_number,
+				era_block_hash,
+				era_block_number,
 				self.extrinsic_lifetime,
 				nonce,
 			);
@@ -390,6 +394,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							}
 
 							self.runtime_version = new_runtime_version;
+						},
+						// AncientBirthBlock can fire transiently during tx pool re-validation.
+						// Handle gracefully by resubmitting with the updated era anchor.
+						// We deliberately leave `self.finalized_block_*` untouched, since
+						// `on_block_finalized` asserts strictly-increasing finalized block numbers.
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
+						{
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing era anchor.");
+							era_block_hash =
+								self.base_rpc_client.latest_finalized_block_hash().await?;
+							era_block_number =
+								self.base_rpc_client.block_header(era_block_hash).await?.number;
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&

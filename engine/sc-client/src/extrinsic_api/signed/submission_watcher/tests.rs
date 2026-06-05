@@ -274,6 +274,115 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 	.expect("runtime version refresh path should not hang");
 }
 
+/// AncientBirthBlock should be recoverable:
+///  - the retry is signed with the *refreshed* era anchor (not the stale one),
+///  - the watcher's tracked finalized block (`self.finalized_block_*`) is NOT mutated — that cursor
+///    must only advance through `on_block_finalized`, otherwise its strictly-increasing invariant
+///    breaks.
+#[tokio::test]
+async fn should_recover_from_ancient_birth_block() {
+	use sp_runtime::generic::Era;
+
+	const INITIAL_FINALIZED_BLOCK_NUMBER: state_chain_runtime::BlockNumber = 5;
+	const REFRESHED_FINALIZED_BLOCK_NUMBER: state_chain_runtime::BlockNumber = 42;
+	const NONCE: state_chain_runtime::Nonce = 1;
+
+	tokio::time::timeout(
+		Duration::from_secs(5),
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(NONCE));
+				mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).returning(move |_| {
+					Err(ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some(<&'static str>::from(InvalidTransaction::AncientBirthBlock)),
+					)
+					.into())
+				});
+
+				let refreshed_finalized_hash = H256::from_low_u64_be(0xABCDEF);
+				mock_rpc_api
+					.expect_latest_finalized_block_hash()
+					.times(1)
+					.return_once(move || Ok(refreshed_finalized_hash));
+				mock_rpc_api
+					.expect_block_header()
+					.withf(move |hash| *hash == refreshed_finalized_hash)
+					.times(1)
+					.return_once(move |_| {
+						Ok(state_chain_runtime::Header {
+							parent_hash: H256::default(),
+							number: REFRESHED_FINALIZED_BLOCK_NUMBER,
+							state_root: H256::default(),
+							extrinsics_root: H256::default(),
+							digest: Default::default(),
+						})
+					});
+
+				// On the retry, return a success.
+				mock_rpc_api
+					.expect_submit_and_watch_extrinsic()
+					.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
+
+				let mut watcher = new_watcher_with_mock_rpc_api(
+					scope,
+					mock_rpc_api,
+					INITIAL_NONCE,
+					INITIAL_FINALIZED_BLOCK_NUMBER,
+				)
+				.await;
+				let mut request = new_test_request(0, false);
+				watcher.submit_extrinsic(&mut request).await.unwrap();
+
+				// The watcher's tracked finalized block must NOT have changed — only
+				// `on_block_finalized` is allowed to advance it.
+				assert_eq!(watcher.finalized_block_hash, H256::default());
+				assert_eq!(watcher.finalized_block_number, INITIAL_FINALIZED_BLOCK_NUMBER);
+
+				// The successful retry must have been signed with the REFRESHED era
+				// anchor. The stored submission lifetime is `..era.death(anchor)`,
+				// so we compare against what Era::mortal would produce for the
+				// refreshed anchor.
+				let tracked_submission = watcher
+					.submissions_by_nonce
+					.get(&NONCE)
+					.and_then(|v| v.first())
+					.expect("submission should be tracked on successful retry");
+				let expected_death = Era::mortal(
+					SIGNED_EXTRINSIC_LIFETIME as u64,
+					REFRESHED_FINALIZED_BLOCK_NUMBER as u64,
+				)
+				.death(REFRESHED_FINALIZED_BLOCK_NUMBER as u64)
+					as state_chain_runtime::BlockNumber;
+				assert_eq!(
+					tracked_submission.lifetime,
+					..expected_death,
+					"retry must be signed with refreshed era anchor"
+				);
+
+				// Sanity: the stale-era lifetime would have been a *different* value;
+				// otherwise the assertion above is vacuous.
+				let stale_death = Era::mortal(
+					SIGNED_EXTRINSIC_LIFETIME as u64,
+					INITIAL_FINALIZED_BLOCK_NUMBER as u64,
+				)
+				.death(INITIAL_FINALIZED_BLOCK_NUMBER as u64)
+					as state_chain_runtime::BlockNumber;
+				assert_ne!(expected_death, stale_death);
+
+				Ok(())
+			}
+			.boxed()
+		}),
+	)
+	.await
+	.expect("ancient birth block recovery path should not hang")
+	.unwrap();
+}
+
 fn test_call() -> state_chain_runtime::RuntimeCall {
 	state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
 		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
