@@ -1091,18 +1091,23 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub flip_buy_interval: BlockNumberFor<T>,
+		pub network_fee: FeeRateAndMinimum,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			FlipBuyInterval::<T>::set(self.flip_buy_interval);
+			NetworkFee::<T>::set(self.network_fee.clone());
 		}
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { flip_buy_interval: BlockNumberFor::<T>::zero() }
+			Self {
+				flip_buy_interval: BlockNumberFor::<T>::zero(),
+				network_fee: FeeRateAndMinimum::default(),
+			}
 		}
 	}
 
