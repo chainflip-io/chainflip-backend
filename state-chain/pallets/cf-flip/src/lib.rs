@@ -823,7 +823,12 @@ impl<T: Config> OnKilledAccount<T::AccountId> for BurnFlipAccount<T> {
 		let dust = Pallet::<T>::total_balance_of(account_id);
 		Pallet::<T>::settle(
 			account_id,
-			Pallet::<T>::add_to_onchain_flip_to_be_distributed(dust).into(),
+			if T::EpochInfo::epoch_index() >= ACCUMULATE_REWARDS_EPOCH_START {
+				Pallet::<T>::add_to_onchain_flip_to_be_distributed(dust)
+			} else {
+				Pallet::<T>::burn(dust)
+			}
+			.into(),
 		);
 		Account::<T>::remove(account_id);
 		Pallet::<T>::deposit_event(Event::AccountReaped {

@@ -19,9 +19,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{eth::api::StateChainGatewayAddressProvider, UpdateFlipSupply};
-use cf_primitives::{AssetAmount, EgressId};
+use cf_primitives::{AssetAmount, EgressId, ACCUMULATE_REWARDS_EPOCH_START};
 use cf_traits::{
-	impl_pallet_safe_mode, Broadcaster, EgressApi, FlipBurnOrMoveInfo, Issuance,
+	impl_pallet_safe_mode, Broadcaster, EgressApi, EpochInfo, FlipBurnOrMoveInfo, Issuance,
 	RewardsDistribution, ScheduledEgressDetails,
 };
 use codec::MaxEncodedLen;
@@ -176,7 +176,9 @@ pub mod pallet {
 			if current_block % T::CompoundingInterval::get() == Zero::zero() {
 				Self::update_block_emissions();
 			}
-			if Self::should_update_supply_at(current_block) {
+			if Self::should_update_supply_at(current_block) &&
+				T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+			{
 				Self::burn_and_broadcast_supply_update(current_block);
 				return T::WeightInfo::rewards_minted()
 			}
@@ -346,7 +348,9 @@ where
 impl<T: Config> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
 	fn note_author(author: T::AccountId) {
 		let reward_amount = CurrentAuthorityEmissionPerBlock::<T>::get();
-		if reward_amount != Zero::zero() {
+		if reward_amount != Zero::zero() &&
+			T::EpochInfo::epoch_index() < ACCUMULATE_REWARDS_EPOCH_START
+		{
 			T::RewardsDistribution::distribute(reward_amount, &author, T::Issuance::mint);
 		}
 	}
