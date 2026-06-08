@@ -81,6 +81,7 @@ tree --no-default-features --depth 1 --edges=features,normal
 # - RUSTSEC-2026-0114: wasmtime panic during memory allocation. Dependency of substrate.
 # - RUSTSEC-2026-0118: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
 # - RUSTSEC-2026-0119: DoS vector in hickory-proto which is used by libp2p. Dependency of substrate, related to DNS resolution. Low risk.
+# - RUSTSEC-2026-0173: Transitive unmaintained depedency proc-macro-error2, via subxt.
 
 #
 cf-audit = '''
@@ -129,6 +130,7 @@ audit -D unmaintained -D unsound
 	--ignore RUSTSEC-2026-0114
 	--ignore RUSTSEC-2026-0118
 	--ignore RUSTSEC-2026-0119
+	--ignore RUSTSEC-2026-0173
 '''
 
 [build]
