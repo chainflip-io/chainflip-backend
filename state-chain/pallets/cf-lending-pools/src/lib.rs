@@ -593,9 +593,6 @@ pub mod pallet {
 		/// The new loan would leave the loan-asset pool unable to liquidate the configured
 		/// fraction of outstanding loans.
 		UtilisationCapExceeded,
-		/// The new loan would leave one of the borrower's collateral pools unable to
-		/// liquidate the configured fraction of outstanding loans.
-		CollateralPoolUtilisationCapExceeded,
 		/// The broker fee specified on the loan request exceeds the maximum allowed.
 		BrokerFeeTooHigh,
 		/// The broker fee (if specified) can't be zero.

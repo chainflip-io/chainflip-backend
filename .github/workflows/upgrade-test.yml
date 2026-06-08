@@ -402,14 +402,3 @@ jobs:
           ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
-
-      - name: Notify on failed upgrade test 🚨
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
-        env:
-          DISCORD_USERNAME: "Upgrade Test"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
-        with:
-          args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
-            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>

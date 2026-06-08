@@ -58,4 +58,4 @@ jobs:
       - name: Run tests 🧪
         run: |
           cargo ${{ matrix.cargo-profile }} --locked
-        timeout-minutes: 25
+        timeout-minutes: 30

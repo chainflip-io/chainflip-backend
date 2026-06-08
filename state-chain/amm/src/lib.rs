@@ -21,8 +21,7 @@ mod tests;
 use core::convert::Infallible;
 
 use cf_amm_math::{
-	mul_div_floor, mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE,
-	MIN_SQRT_PRICE,
+	mul_div_floor_checked, Amount, Price, SqrtPrice, Tick, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
 };
 use codec::{Decode, DecodeWithMemTracking, Encode};
 use common::{
@@ -130,11 +129,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(mul_div_floor(
+							*sqrt_price = SqrtPrice::from_raw(mul_div_floor_checked(
 								sqrt_price.as_raw(),
 								U256::one() << 128,
 								root,
-							));
+							).expect("root !=0 because current_sqrt_price & worst_sqrt_price are always > 0"));
 							Some(*sqrt_price)
 						})
 					})
@@ -151,11 +150,14 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						);
 
 						(0..(count - 1)).scan(current_sqrt_price, move |sqrt_price, _| {
-							*sqrt_price = SqrtPrice::from_raw(mul_div_floor(
-								sqrt_price.as_raw(),
-								root,
-								U256::one() << 128,
-							));
+							*sqrt_price = SqrtPrice::from_raw(
+								mul_div_floor_checked(
+									sqrt_price.as_raw(),
+									root,
+									U256::one() << 128,
+								)
+								.unwrap(),
+							);
 							Some(*sqrt_price)
 						})
 					})

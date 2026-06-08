@@ -1865,7 +1865,10 @@ pub mod pallet {
 											.ok()
 											.map(|p| p.sell)
 									})?;
-							sell_price.output_amount_ceil(swap.input_amount).unique_saturated_into()
+							sell_price
+								.output_amount_ceil(swap.input_amount)
+								.unwrap_or_default()
+								.unique_saturated_into()
 						};
 
 						let fee = core::cmp::max(
@@ -2050,14 +2053,14 @@ pub mod pallet {
 			output_asset: Asset,
 		) -> Result<Option<SignedHundredthBasisPoints>, SwapFailureReason> {
 			if input_amount == 0 {
-				// Price is undefined when input is zero (would cause division by zero).
+				// Price is undefined when input is zero
 				return Ok(None);
 			}
 			match T::PriceFeedApi::get_relative_price(input_asset, output_asset) {
 				Some(oracle_price) if oracle_price.stale =>
 					Err(SwapFailureReason::OraclePriceStale),
 				Some(oracle_price) =>
-					Ok(Price::sell_price(input_amount.into(), output_amount.into()).map(
+					Ok(Price::sell_price(input_amount.into(), output_amount.into()).and_then(
 						|execution_price| {
 							execution_price.hundredth_bps_difference_from(&oracle_price.price)
 						},
@@ -2077,13 +2080,12 @@ pub mod pallet {
 
 			if let Some(params) = swap.refund_params() {
 				// Minimum price protection, aka FoK price protection
-				let min_price_output = params
-					.price_limits
-					.min_price
-					.output_amount_floor(swap.swap.input_amount)
-					.unique_saturated_into();
-				if final_output < min_price_output {
-					return Err(SwapFailureReason::MinPriceViolation);
+				if let Some(min_price_output) =
+					params.price_limits.min_price.output_amount_floor(swap.swap.input_amount)
+				{
+					if final_output < min_price_output.unique_saturated_into() {
+						return Err(SwapFailureReason::MinPriceViolation);
+					}
 				}
 			}
 
@@ -2906,7 +2908,8 @@ pub mod pallet {
 				Side::Sell => {
 					let estimated_input = utilities::hard_coded_price_for_asset(asset) // USD / Asset
 						// How much input is required for the output?
-						.input_amount_floor(ESTIMATION_AMOUNT_USDC) // Asset
+						.input_amount_floor(ESTIMATION_AMOUNT_USDC)
+						.unwrap_or_default() // Asset
 						.saturated_into();
 					with_transaction_unchecked(|| {
 						TransactionOutcome::Rollback(T::SwappingApi::swap_single_leg(
@@ -3395,24 +3398,25 @@ pub mod pallet {
 								Self::estimate_usdc_price_using_simulated_swap_or_fallback(
 									asset, side,
 								); // USDC / Asset
-							asset_price.multiply_by(usdc_price) // USD / Asset
+							asset_price.multiply_by(usdc_price).unwrap_or(asset_price) // USD / Asset
 						}
 					}
 				};
 				let output_price = get_usd_price(output_asset, Side::Buy); // USD / output_asset
 				let input_price = get_usd_price(input_asset, Side::Sell); // USD / input_asset
-				if input_price.is_zero() || output_price.is_zero() {
+
+				// (USD / output_asset) / (USD / input_asset) = input_asset / output_asset
+				let Some(relative_price) = output_price.divide_by(input_price) else {
 					log_or_panic!(
 						"Estimated Price for input or output asset is zero: {input_asset:?} = {input_price:?}, {output_asset:?} = {output_price:?}"
 					);
 					return 0;
-				}
-				// (USD / output_asset) / (USD / input_asset) = input_asset / output_asset
-				let relative_price = output_price.divide_by(input_price);
+				};
 
 				// Finally calculate the required input amount
 				relative_price
 					.output_amount_ceil(desired_output_amount)
+					.unwrap_or_default()
 					.saturated_into::<AssetAmount>()
 			};
 

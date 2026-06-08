@@ -100,19 +100,3 @@ jobs:
           echo "Tagged commit (${COMMIT}) is not reachable from release/${MAJOR_MINOR} or release/${TAG}."
           echo "Tags must be created from commits on the corresponding release/X.Y or release/X.Y.Z branch."
           exit 1
-
-  notify-discord-on-failure:
-    runs-on: namespace-profile-default-light
-    needs: [check-version, check-changelog, check-tag-on-legit-branch]
-    if: failure()
-    steps:
-      - name: Notify on failed bouncer 📢
-        env:
-          DISCORD_USERNAME: "WaBouncer"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_RELEASE }}
-        uses: Ilshidur/action-discord@0c4b27844ba47cb1c7bee539c8eead5284ce9fa9
-        with:
-          args: |
-            ❗️❗️❗️❗️ Hey **${{ github.actor }}**, seems like our CI just took a detour through the land of broken builds. ❗️❗️❗️❗️
-            There was an issue with release checks on `${{ github.ref_name }}`
-            🔗 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
