@@ -17,8 +17,8 @@
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use cf_chains::dot::RuntimeVersion;
-use cf_primitives::PolkadotBlockNumber;
+use cf_chains::dot::{PolkadotAccountId, RuntimeVersion};
+use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::redact_endpoint_secret::SecretUrl;
 use futures::{Stream, StreamExt, TryStreamExt};
 use subxt::{
@@ -63,6 +63,13 @@ pub trait DotRpcApi: Send + Sync {
 	async fn runtime_version(&self, at: Option<PolkadotHash>) -> Result<RuntimeVersion>;
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
+
+	async fn liquid_account_balance(
+		&self,
+		account_id: PolkadotAccountId,
+		asset: HubAsset,
+		block_hash: PolkadotHash,
+	) -> Result<u128>;
 }
 
 #[derive(Clone)]

@@ -338,7 +338,7 @@ pub fn start<StateChainClient, ProcessCall, ProcessingFut>(
 							)
 							.await
 							// Deposit witnessing
-							.hub_deposits(process_call.clone())
+							.hub_deposits(process_call.clone(), hub_client.clone())
 							// Proxy added witnessing
 							.then(proxy_added_witnessing)
 							// Broadcast success

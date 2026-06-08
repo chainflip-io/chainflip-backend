@@ -21,8 +21,11 @@ use crate::{
 	settings::{NodeContainer, WsHttpEndpoints},
 	witness::common::chain_source::{ChainClient, Header},
 };
-use cf_chains::{dot::RuntimeVersion, Polkadot};
-use cf_primitives::PolkadotBlockNumber;
+use cf_chains::{
+	dot::{PolkadotAccountId, RuntimeVersion},
+	Polkadot,
+};
+use cf_primitives::{chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber};
 use cf_utilities::task_scope::Scope;
 use core::time::Duration;
 use futures_core::Stream;
@@ -120,6 +123,13 @@ pub trait DotRetryRpcApi: Clone {
 		&self,
 		encoded_bytes: Vec<u8>,
 	) -> anyhow::Result<PolkadotHash>;
+
+	async fn liquid_account_balance(
+		&self,
+		account_id: PolkadotAccountId,
+		asset: HubAsset,
+		block_hash: PolkadotHash,
+	) -> u128;
 }
 
 #[async_trait::async_trait]
@@ -201,6 +211,31 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 					})
 				}),
 				MAX_BROADCAST_RETRIES,
+			)
+			.await
+	}
+
+	async fn liquid_account_balance(
+		&self,
+		account_id: PolkadotAccountId,
+		asset: HubAsset,
+		block_hash: PolkadotHash,
+	) -> u128 {
+		self.rpc_retry_client
+			.request(
+				RequestLog::new(
+					"liquid_account_balance".to_string(),
+					Some(format!("{account_id:?}, {asset:?}, {block_hash:?}")),
+				),
+				Box::pin(move |client| {
+					Box::pin(async move {
+						client
+							.http_client()
+							.await
+							.liquid_account_balance(account_id, asset, block_hash)
+							.await
+					})
+				}),
 			)
 			.await
 	}
@@ -321,6 +356,13 @@ pub mod mocks {
 				&self,
 				encoded_bytes: Vec<u8>,
 			) -> anyhow::Result<PolkadotHash>;
+
+			async fn liquid_account_balance(
+				&self,
+				account_id: PolkadotAccountId,
+				asset: HubAsset,
+				block_hash: PolkadotHash,
+			) -> u128;
 		}
 
 	}
