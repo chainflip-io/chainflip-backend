@@ -38,7 +38,7 @@ use futures_core::Future;
 use pallet_cf_ingress_egress::{DepositChannelDetails, DepositWitness};
 use sp_runtime::traits::Saturating;
 use state_chain_runtime::AssethubInstance;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use subxt::events::Phase;
 
 impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
@@ -112,7 +112,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 fn address_and_details_to_addresses(
 	address_and_details: Vec<DepositChannelDetails<state_chain_runtime::Runtime, AssethubInstance>>,
-) -> Vec<PolkadotAccountId> {
+) -> BTreeSet<PolkadotAccountId> {
 	address_and_details
 		.into_iter()
 		.map(|deposit_channel_details| {
@@ -189,7 +189,7 @@ async fn deposit_witnesses<Client: DotRetryRpcApi + Send + Sync>(
 	block_hash: PolkadotHash,
 	parent_hash: Option<PolkadotHash>,
 	hub_client: &Client,
-	monitored_addresses: Vec<PolkadotAccountId>,
+	monitored_addresses: BTreeSet<PolkadotAccountId>,
 	events: &Vec<(Phase, EventWrapper)>,
 ) -> Vec<DepositWitness<Assethub>> {
 	// Sum incoming (with earliest extrinsic index) and outgoing per (address, asset).
@@ -250,6 +250,16 @@ mod test {
 	};
 
 	use super::*;
+
+	macro_rules! btree_set {
+		( $( $elem:expr ),* $(,)? ) => {
+			[
+				$( $elem ),*
+			]
+			.into_iter()
+			.collect::<std::collections::BTreeSet<_>>()
+		};
+	}
 
 	fn mock_transfer(
 		from: &PolkadotAccountId,
@@ -393,7 +403,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![transfer_1_deposit_address, transfer_2_deposit_address],
+			btree_set![transfer_1_deposit_address, transfer_2_deposit_address],
 			&block_event_details,
 		)
 		.await;
@@ -460,7 +470,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -535,7 +545,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -609,7 +619,7 @@ mod test {
 				block_hash,
 				Some(parent_hash),
 				&hub_client,
-				vec![deposit_address],
+				btree_set![deposit_address],
 				&events,
 			)
 			.await;
@@ -669,7 +679,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -723,7 +733,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -762,7 +772,8 @@ mod test {
 		)]);
 
 		let witnesses =
-			deposit_witnesses(block_hash, None, &hub_client, vec![deposit_address], &events).await;
+			deposit_witnesses(block_hash, None, &hub_client, btree_set![deposit_address], &events)
+				.await;
 
 		assert_eq!(witnesses.len(), 1);
 		assert_eq!(witnesses[0].amount, TRANSFER_AMOUNT);
@@ -821,7 +832,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -876,7 +887,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -917,7 +928,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
@@ -971,7 +982,7 @@ mod test {
 			block_hash,
 			Some(parent_hash),
 			&hub_client,
-			vec![deposit_address],
+			btree_set![deposit_address],
 			&events,
 		)
 		.await;
