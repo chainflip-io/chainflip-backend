@@ -107,7 +107,7 @@ async function waitForEvmTransactionRejection<A = []>(
         ),
       },
       depositFinalized: {
-        name: 'EthereumIngressEgress.DepositFinalized',
+        name: 'EthereumIngressEgress.DepositFinalised',
         schema: ethereumIngressEgressDepositFinalised.refine(
           (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
@@ -122,7 +122,7 @@ async function waitForEvmTransactionRejection<A = []>(
         ),
       },
       depositFinalized: {
-        name: 'ArbitrumIngressEgress.DepositFinalized',
+        name: 'ArbitrumIngressEgress.DepositFinalised',
         schema: arbitrumIngressEgressDepositFinalised.refine(
           (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
@@ -137,7 +137,7 @@ async function waitForEvmTransactionRejection<A = []>(
         ),
       },
       depositFinalized: {
-        name: 'BscIngressEgress.DepositFinalized',
+        name: 'BscIngressEgress.DepositFinalised',
         schema: bscIngressEgressDepositFinalised.refine(
           (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
         ),
