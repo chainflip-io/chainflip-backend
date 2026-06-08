@@ -18,7 +18,9 @@ use crate::AssetBalances;
 use cf_primitives::EpochIndex;
 use cf_traits::EpochTransitionHandler;
 
-use crate::{ArbitrumVault, BitcoinVault, EthereumVault, PolkadotVault, SolanaVault, Witnesser};
+use crate::{
+	ArbitrumVault, BitcoinVault, EthereumVault, PolkadotVault, SolanaVault, TronVault, Witnesser,
+};
 
 pub struct ChainflipEpochTransitions;
 
@@ -30,6 +32,8 @@ impl EpochTransitionHandler for ChainflipEpochTransitions {
 		<BitcoinVault as EpochTransitionHandler>::on_expired_epoch(expired);
 		<ArbitrumVault as EpochTransitionHandler>::on_expired_epoch(expired);
 		<SolanaVault as EpochTransitionHandler>::on_expired_epoch(expired);
+		<TronVault as EpochTransitionHandler>::on_expired_epoch(expired);
+		// TODO: assethub will require special handling because of its long history
 	}
 	fn on_new_epoch(_new: EpochIndex) {
 		AssetBalances::trigger_reconciliation();

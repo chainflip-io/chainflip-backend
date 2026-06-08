@@ -15,6 +15,7 @@ All notable changes included in each Chainflip release will be documented in thi
 - Move `RealisticCallParams` type to its own file and update compilation guard. ([#6602](https://github.com/chainflip-io/chainflip-backend/issues/6602))
 - Treat AncientBirthBlock as recoverable in submission_watcher ([#6622](https://github.com/chainflip-io/chainflip-backend/issues/6622))
 - Invalidate nonce when a submission is removed from the pool ([#6636](https://github.com/chainflip-io/chainflip-backend/issues/6636))
+- Tron Vault expiry handing.
 
 ## [2.2.2] - 2026-05-20
 
