@@ -97,7 +97,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	impl_name: sp_std::borrow::Cow::Borrowed("chainflip-node"),
 	authoring_version: 1,
-	spec_version: 2_02_00,
+	spec_version: 2_03_00,
 	impl_version: 1,
 	apis: crate::runtime_apis::impl_api::RUNTIME_API_VERSIONS,
 	transaction_version: 13,
@@ -427,7 +427,7 @@ type AllMigrations = (
 	pallet_cf_environment::migrations::VersionUpdate<Runtime>,
 	PalletMigrations,
 	migrations::housekeeping::Migration,
-	MigrationsForV2_2,
+	MigrationsForV2_3,
 );
 
 /// All the pallet-specific migrations and migrations that depend on pallet migration order. Do not
@@ -531,19 +531,7 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_2 = (
-	migrations::safe_mode::SafeModeMigration,
-	frame_support::migrations::VersionedMigration<
-		5,
-		6,
-		NoopMigration,
-		pallet_grandpa::Pallet<Runtime>,
-		DbWeight,
-	>,
-	migrations::tron_integration::TronElectionsInit,
-	migrations::tron_integration::TronIngressEgressInit,
-	migrations::tron_integration::TronChainstate,
-);
+type MigrationsForV2_3 = ();
 
 #[cfg(test)]
 mod test {

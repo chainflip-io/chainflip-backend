@@ -101,6 +101,8 @@ Use bouncer tests when:
 - Testing features that depend on the engine (threshold signing, chain tracking)
 - Testing time-dependent behaviour across multiple blocks with real chain interaction
 
+For running bouncer tests, managing the localnet, regenerating event schemas, or any related lifecycle task, use the `bouncer` skill in `.claude/skills/bouncer/`.
+
 ### Property-Based Tests (proptests)
 
 Used primarily in `cf-elections` and `cf-trading-strategy` for testing state machines and numerical algorithms.

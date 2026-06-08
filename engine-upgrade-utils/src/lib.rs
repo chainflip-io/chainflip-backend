@@ -26,94 +26,23 @@ pub mod build_helpers;
 // rest of the places the version needs changing on build using the build scripts in each of the
 // relevant crates.
 // Should also check that the compatibility function below `args_compatible_with_old` is correct.
-pub const OLD_VERSION: &str = "2.1.9";
-pub const NEW_VERSION: &str = "2.2.0";
+pub const OLD_VERSION: &str = "2.2.2";
+pub const NEW_VERSION: &str = "2.3.0";
 
 pub const ENGINE_LIB_PREFIX: &str = "chainflip_engine_v";
 pub const ENGINE_ENTRYPOINT_PREFIX: &str = "cfe_entrypoint_v";
 
 // Sometimes we need to adapt arguments between the new and old versions while both CFEs can be run
-// by the upgrade runner.
+// by the upgrade runner. The old engine (OLD_VERSION) and the new engine (NEW_VERSION) currently
+// share the same CLI argument schema, so this is a passthrough. If a future version bump changes
+// the engine's arguments, adapt them here so the old engine still parses them during the upgrade
+// fallback path.
 pub fn args_compatible_with_old(args: Vec<String>) -> Vec<String> {
 	let mut compatible_args = args;
 
-	// Old CFE 2.1.9 still requires and validates EVM websocket endpoints in its settings model,
-	// and constructs websocket subscription clients from them. The active ETH/ARB witnessing path
-	// uses HTTP polling, though, so these synthesized websocket URLs only satisfy old config
-	// parsing during the upgrade fallback path.
-	add_ws_endpoint_from_http_endpoint(
-		&mut compatible_args,
-		"eth.rpc.http_endpoint",
-		"eth.rpc.ws_endpoint",
-	);
-	add_ws_endpoint_from_http_endpoint(
-		&mut compatible_args,
-		"eth.backup_rpc.http_endpoint",
-		"eth.backup_rpc.ws_endpoint",
-	);
-	add_ws_endpoint_from_http_endpoint(
-		&mut compatible_args,
-		"arb.rpc.http_endpoint",
-		"arb.rpc.ws_endpoint",
-	);
-	add_ws_endpoint_from_http_endpoint(
-		&mut compatible_args,
-		"arb.backup_rpc.http_endpoint",
-		"arb.backup_rpc.ws_endpoint",
-	);
-
-	copy_arg(&mut compatible_args, "hub.rpc.ws_endpoint", "dot.rpc.ws_endpoint");
-	copy_arg(&mut compatible_args, "hub.rpc.http_endpoint", "dot.rpc.http_endpoint");
-	copy_arg(&mut compatible_args, "hub.backup_rpc.ws_endpoint", "dot.backup_rpc.ws_endpoint");
-	copy_arg(&mut compatible_args, "hub.backup_rpc.http_endpoint", "dot.backup_rpc.http_endpoint");
-
-	compatible_args.retain(|arg| !arg.starts_with("--tron."));
 	compatible_args.retain(|arg| !arg.starts_with("--bsc."));
 
 	compatible_args
-}
-
-fn add_ws_endpoint_from_http_endpoint(args: &mut Vec<String>, http_key: &str, ws_key: &str) {
-	if has_arg(args, ws_key) {
-		return;
-	}
-
-	let Some(http_endpoint) = find_arg_value(args, http_key) else {
-		return;
-	};
-
-	let ws_endpoint = if let Some(endpoint) = http_endpoint.strip_prefix("https://") {
-		format!("wss://{endpoint}")
-	} else if let Some(endpoint) = http_endpoint.strip_prefix("http://") {
-		format!("ws://{endpoint}")
-	} else {
-		return;
-	};
-
-	args.push(format!("--{ws_key}={ws_endpoint}"));
-}
-
-fn copy_arg(args: &mut Vec<String>, source_key: &str, target_key: &str) {
-	if has_arg(args, target_key) {
-		return;
-	}
-
-	if let Some(value) = find_arg_value(args, source_key) {
-		args.push(format!("--{target_key}={value}"));
-	}
-}
-
-fn has_arg(args: &[String], key: &str) -> bool {
-	args.iter().any(|arg| {
-		arg.strip_prefix("--").is_some_and(|arg_without_prefix| {
-			arg_without_prefix == key || arg_without_prefix.starts_with(&format!("{key}="))
-		})
-	})
-}
-
-fn find_arg_value(args: &[String], key: &str) -> Option<String> {
-	args.iter()
-		.find_map(|arg| arg.strip_prefix(&format!("--{key}=")).map(ToString::to_string))
 }
 
 pub use std::ffi::c_char;
@@ -239,34 +168,14 @@ fn test_c_str_array_with_args() {
 }
 
 #[test]
-fn test_args_compatible_with_old_adds_removed_settings() {
+fn test_args_compatible_with_old_is_passthrough() {
+	// The old and new engines currently share the same CLI argument schema, so the
+	// arguments are passed through unchanged.
 	let args = vec![
 		"chainflip-engine".to_string(),
-		"--eth.rpc.http_endpoint=https://eth-rpc.example.com/secret".to_string(),
-		"--eth.backup_rpc.http_endpoint=http://eth-backup.example.com".to_string(),
-		"--arb.rpc.http_endpoint=http://arb-rpc.example.com".to_string(),
-		"--arb.backup_rpc.http_endpoint=https://arb-backup.example.com".to_string(),
 		"--hub.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string(),
-		"--hub.rpc.http_endpoint=https://hub-rpc.example.com/secret".to_string(),
-		"--hub.backup_rpc.ws_endpoint=ws://hub-backup.example.com".to_string(),
-		"--hub.backup_rpc.http_endpoint=http://hub-backup.example.com".to_string(),
+		"--tron.rpc.http_endpoint=http://tron.example.com".to_string(),
 	];
 
-	let compatible_args = args_compatible_with_old(args);
-
-	assert!(compatible_args
-		.contains(&"--eth.rpc.ws_endpoint=wss://eth-rpc.example.com/secret".to_string()));
-	assert!(compatible_args
-		.contains(&"--eth.backup_rpc.ws_endpoint=ws://eth-backup.example.com".to_string()));
-	assert!(compatible_args.contains(&"--arb.rpc.ws_endpoint=ws://arb-rpc.example.com".to_string()));
-	assert!(compatible_args
-		.contains(&"--arb.backup_rpc.ws_endpoint=wss://arb-backup.example.com".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.rpc.ws_endpoint=wss://hub-rpc.example.com/secret".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.rpc.http_endpoint=https://hub-rpc.example.com/secret".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.backup_rpc.ws_endpoint=ws://hub-backup.example.com".to_string()));
-	assert!(compatible_args
-		.contains(&"--dot.backup_rpc.http_endpoint=http://hub-backup.example.com".to_string()));
+	assert_eq!(args_compatible_with_old(args.clone()), args);
 }

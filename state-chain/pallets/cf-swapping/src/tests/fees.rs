@@ -551,6 +551,7 @@ fn test_calculate_input_for_desired_output_using_swap_simulation() {
 		);
 
 		// Using a combination of swap simulation (flip) and hard coded price (Eth).
+		MockSwappingApi::set_swaps_should_fail(SwapFailureMode::Assets(vec![Asset::Eth]));
 		SwapRate::set(0.000000000002_f64); // Flip will be worth $2 via swap simulation
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
@@ -574,7 +575,7 @@ fn test_calculate_input_for_desired_output_using_hard_coded_prices() {
 		NetworkFee::<Test>::set(FeeRateAndMinimum { rate: Permill::from_percent(1), minimum: 0 });
 
 		// Fallback to hard coded prices when swap simulation fails
-		MockSwappingApi::set_swaps_should_fail(true);
+		MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Flip,
@@ -681,7 +682,9 @@ fn test_calculate_input_for_desired_output_using_oracle_prices() {
 			30_000_000_000 + 120_000_000 + 304242424 - 3
 		);
 
-		// Using both a hard coded price (Sol) and an oracle price (Btc)
+		// Using both a hard coded price (Sol) and an oracle price (Btc).
+		// We make swaps fail so the hard coded price for Sol is used.
+		MockSwappingApi::set_swaps_should_fail(SwapFailureMode::Assets(vec![Asset::Sol]));
 		assert_eq!(
 			Swapping::calculate_input_for_desired_output_or_default_to_zero(
 				Asset::Sol,
@@ -1224,9 +1227,7 @@ fn test_refund_fee_calculation() {
 		assert_eq!(take_refund_fee(5, Asset::Usdc, false), (0, 5));
 		assert_eq!(take_refund_fee(u128::MAX, Asset::Usdc, false), (u128::MAX - 10, 10));
 
-		// Conversion needed, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
-		// Note: Using Flip here because it uses swap simulation for conversion instead of
-		// oracle price.
+		// Conversion needed, no oracle price set, so the refund fee is 10 / DEFAULT_SWAP_RATE = 5
 		assert_eq!(take_refund_fee(1000, Asset::Flip, false), (995, 5));
 		assert_eq!(take_refund_fee(0, Asset::Flip, false), (0, 0));
 		assert_eq!(take_refund_fee(3, Asset::Flip, false), (0, 3));

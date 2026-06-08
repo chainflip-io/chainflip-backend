@@ -183,33 +183,26 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	pub fn get_collateral_in_supply_pools(&self) -> BTreeMap<Asset, AssetAmount> {
-		GeneralLendingPools::<T>::iter()
-			.filter_map(|(asset, pool)| {
-				pool.get_supply_position_for_account(&self.borrower_id)
-					.ok()
-					.map(|amount| (asset, amount))
-			})
-			.collect()
-	}
-
 	/// Returns the account's collateral including any amounts that are in liquidation swaps.
 	pub fn get_total_collateral(&self) -> BTreeMap<Asset, AssetAmount> {
+		let mut collateral = get_collateral_in_supply_pools::<T>(&self.borrower_id);
+		self.add_collateral_in_liquidation_swaps(&mut collateral);
+		collateral
+	}
+
+	/// Adds collateral that is currently locked in liquidation swaps to `collateral`.
+	fn add_collateral_in_liquidation_swaps(&self, collateral: &mut BTreeMap<Asset, AssetAmount>) {
 		// Note that in order to keep things simple we don't guarantee that all of the
-		// all collateral is being liquidated (e.g. it is possible for the user to top
+		// collateral is being liquidated (e.g. it is possible for the user to top
 		// up collateral during liquidation in which case we currently don't update the
 		// liquidation swaps), but we *do* include collateral that is not in liquidation
 		// when determining account's collateralisation ratio.
-
-		let mut total_collateral = self.get_collateral_in_supply_pools();
-
-		// Add any collateral in liquidation swaps:
 		if let LiquidationStatus::Liquidating { liquidation_swaps, .. } = &self.liquidation_status {
 			for (swap_request_id, LiquidationSwap { from_asset, .. }) in liquidation_swaps {
 				if let Some(swap_progress) =
 					T::SwapRequestHandler::inspect_swap_request(*swap_request_id)
 				{
-					total_collateral
+					collateral
 						.entry(*from_asset)
 						.or_default()
 						.saturating_accrue(swap_progress.remaining_input_amount);
@@ -218,8 +211,6 @@ impl<T: Config> LoanAccount<T> {
 				}
 			}
 		}
-
-		total_collateral
 	}
 
 	/// Supply funds after liquidation (either from unused input amount or from
@@ -635,14 +626,14 @@ impl<T: Config> LoanAccount<T> {
 		};
 
 		// Gather available collateral positions per asset, paired with their USD value.
-		let positions_with_usd: Vec<(Asset, AssetAmount, AssetAmount)> = self
-			.get_collateral_in_supply_pools()
-			.into_iter()
-			.filter(|(_, amount)| *amount > 0)
-			.map(|(asset, amount)| {
-				price_cache.usd_value_of(asset, amount).map(|usd| (asset, amount, usd))
-			})
-			.collect::<Result<Vec<_>, Error<T>>>()?;
+		let positions_with_usd: Vec<(Asset, AssetAmount, AssetAmount)> =
+			get_collateral_in_supply_pools::<T>(&self.borrower_id)
+				.into_iter()
+				.filter(|(_, amount)| *amount > 0)
+				.map(|(asset, amount)| {
+					price_cache.usd_value_of(asset, amount).map(|usd| (asset, amount, usd))
+				})
+				.collect::<Result<Vec<_>, Error<T>>>()?;
 
 		let total_owed_usd = self.total_owed_usd_value(price_cache)?;
 
@@ -1414,7 +1405,9 @@ pub(super) fn initiate_network_fee_swap<T: Config>(asset: Asset, fee_amount: Ass
 ///
 /// Emits [`Event::OriginationFeeTaken`].
 ///
-/// Fails if the pool for `loan.asset` does not exist or has insufficient available funds.
+/// Fails with `InsufficientLiquidity` if the pool's available balance can't cover both the
+/// principal and the network portion of the origination fee, or if the pool for `loan.asset`
+/// does not exist.
 pub fn fund_loan<T: Config>(
 	loan: &mut GeneralLoan<T>,
 	principal: AssetAmount,
@@ -1423,6 +1416,14 @@ pub fn fund_loan<T: Config>(
 ) -> Result<(), DispatchError> {
 	GeneralLendingPools::<T>::try_mutate(loan.asset, |pool| {
 		let pool = pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
+
+		// The pool must hold enough liquid funds to cover both the principal *and* the
+		// network portion of the origination fee. If it can't, origination is rejected
+		// outright rather than leaving a partial obligation to the network.
+		ensure!(
+			pool.available_amount >= principal.saturating_add(origination_fee_network),
+			Error::<T>::InsufficientLiquidity,
+		);
 
 		pool.provide_funds_for_loan(principal).map_err(Error::<T>::from)?;
 
@@ -1484,7 +1485,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		);
 
 		// Creating a loan with 0 principal first, then using `expand_loan_inner` to update it
-		let loan = create_new_loan::<T>(asset, broker);
+		let loan = create_new_loan::<T>(asset, broker.clone());
 		let loan_id = loan.id;
 
 		let collateral_assets = LoanAccounts::<T>::mutate(
@@ -1498,6 +1499,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 					loan_type: LoanType::User(borrower_id.clone()),
 					asset,
 					principal_amount: amount_to_borrow,
+					broker,
 				});
 
 				account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
@@ -1961,8 +1963,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						},
 					);
 
-					let no_collateral_left =
-						is_zero_collateral(&loan_account.get_collateral_in_supply_pools());
+					let no_collateral_left = is_zero_collateral(
+						&get_collateral_in_supply_pools::<T>(&loan_account.borrower_id),
+					);
 
 					// If this swap is the last liquidation swap for the loan, we should
 					// "settle" it if it has been fully repaid:
@@ -2030,4 +2033,39 @@ impl<T: Config> Pallet<T> {
 
 pub fn is_zero_collateral(collateral: &BTreeMap<Asset, AssetAmount>) -> bool {
 	collateral.values().all(|amount| *amount == 0)
+}
+
+/// Returns the account's supply positions across all lending pools. Supply positions are
+/// treated as collateral, so they are reported for any account that has supplied funds,
+/// regardless of whether it has taken out a loan.
+pub fn get_collateral_in_supply_pools<T: Config>(
+	account_id: &T::AccountId,
+) -> BTreeMap<Asset, AssetAmount> {
+	GeneralLendingPools::<T>::iter()
+		.filter_map(|(asset, pool)| {
+			pool.get_supply_position_for_account(account_id)
+				.ok()
+				.map(|amount| (asset, amount))
+		})
+		.collect()
+}
+
+/// Returns the account's total collateral: its supply positions across all lending pools,
+/// plus any amounts currently locked in liquidation swaps. The latter only applies to
+/// accounts that have an active loan account.
+///
+/// Prefer the `LoanAccount::get_total_collateral` method when a `LoanAccount` is already in
+/// scope (especially inside `LoanAccounts` mutation closures, where the `LoanAccounts::get`
+/// below would return a stale liquidation status).
+pub fn get_total_collateral_for_account<T: Config>(
+	account_id: &T::AccountId,
+) -> BTreeMap<Asset, AssetAmount> {
+	let mut collateral = get_collateral_in_supply_pools::<T>(account_id);
+
+	// Liquidation swaps only exist for accounts that have a loan account:
+	if let Some(loan_account) = LoanAccounts::<T>::get(account_id) {
+		loan_account.add_collateral_in_liquidation_swaps(&mut collateral);
+	}
+
+	collateral
 }

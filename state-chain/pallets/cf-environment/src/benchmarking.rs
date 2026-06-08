@@ -24,41 +24,6 @@ use cf_traits::VaultKeyWitnessedHandler;
 use frame_benchmarking::v2::*;
 use frame_support::{assert_ok, traits::UnfilteredDispatchable};
 
-/// Representative benchmark types modeled after real pallet call parameters.
-/// Based on `request_loan` from cf-lending-pools which has typical complexity.
-#[allow(dead_code)]
-pub mod benchmark_types {
-	use cf_primitives::{Asset, AssetAmount};
-	use codec::{Decode, DecodeWithMemTracking, Encode};
-	use scale_info::TypeInfo;
-	use sp_std::collections::btree_map::BTreeMap;
-
-	/// Mimics a realistic pallet call similar to `request_loan`.
-	/// Parameters: asset enum, amount (u128), BTreeMap<Asset, Amount>
-	#[derive(TypeInfo, Clone, Encode, Decode, DecodeWithMemTracking, Debug, PartialEq, Eq)]
-	pub struct RealisticCallParams {
-		pub loan_asset: Asset,
-		pub loan_amount: AssetAmount,
-		pub extra_collateral: BTreeMap<Asset, AssetAmount>,
-	}
-
-	impl Default for RealisticCallParams {
-		fn default() -> Self {
-			{
-				let mut extra_collateral = BTreeMap::new();
-				extra_collateral.insert(Asset::Eth, 1_000_000_000_000_000_000u128);
-				extra_collateral.insert(Asset::Usdc, 50_000_000_000u128);
-
-				RealisticCallParams {
-					loan_asset: Asset::Usdc,
-					loan_amount: 100_000_000_000u128,
-					extra_collateral,
-				}
-			}
-		}
-	}
-}
-
 #[benchmarks(
 	where
 	T: pallet_cf_flip::Config,
@@ -414,7 +379,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_encode_realistic_call() {
-		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use crate::benchmarking_types::RealisticCallParams;
 		use ethereum_eip712::{eip712::EIP712Domain, encode_eip712_using_type_info};
 
 		// Use the benchmark_realistic_call call which embeds RealisticCallParams in RuntimeCall
@@ -440,7 +405,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_encode_realistic_call_fast() {
-		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use crate::benchmarking_types::RealisticCallParams;
 		use ethereum_eip712::{eip712::EIP712Domain, encode_eip712_using_type_info_fast};
 
 		// Use the benchmark_realistic_call call which embeds RealisticCallParams in RuntimeCall
@@ -480,7 +445,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step2_encode_decode() {
-		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use crate::benchmarking_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 		};
@@ -510,7 +475,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step3_recursive_type_construction() {
-		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use crate::benchmarking_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 			step3_recursive_type_construction,
@@ -543,7 +508,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn eip712_step4_minimized_conversion() {
-		use crate::benchmarking::benchmark_types::RealisticCallParams;
+		use crate::benchmarking_types::RealisticCallParams;
 		use ethereum_eip712::benchmark_helpers::{
 			step1_registry_and_type_registration, step2_encode_decode,
 			step3_recursive_type_construction, step4_minimized_scale_value_conversion,

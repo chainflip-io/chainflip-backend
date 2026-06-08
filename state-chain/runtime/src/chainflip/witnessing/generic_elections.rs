@@ -58,20 +58,10 @@ use pallet_cf_elections::{
 	RunnerStorageAccess,
 };
 
-//--------------- api provided to other pallets -------------
-
-pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Option<OraclePrice> {
+pub(crate) fn get_chainlink_assetpair(asset: any::Asset) -> Option<ChainlinkAssetpair> {
 	use ChainlinkAssetpair::*;
-	use PriceStatus::*;
 
-	let state = DerivedElectoralAccess::<
-			_,
-			ChainlinkOraclePriceES,
-			RunnerStorageAccess<Runtime, ()>,
-		>::unsynchronised_state()
-		.inspect_err(|_| log_or_panic!("Failed to get election state for the ChainlinkOraclePrice ES due to corrupted storage")).ok()?;
-
-	let asset = match asset {
+	match asset {
 		any::Asset::Eth => Some(EthUsd),
 		any::Asset::Flip => None,
 		any::Asset::Usdc => Some(UsdcUsd),
@@ -92,7 +82,22 @@ pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Opti
 		any::Asset::TrxUsdt => Some(UsdtUsd),
 		any::Asset::Bnb => None,
 		any::Asset::BscUsdt => Some(UsdtUsd),
-	}?;
+	}
+}
+
+//--------------- api provided to other pallets -------------
+
+pub fn decode_and_get_latest_oracle_price<T: OPTypes>(asset: any::Asset) -> Option<OraclePrice> {
+	use PriceStatus::*;
+
+	let state = DerivedElectoralAccess::<
+			_,
+			ChainlinkOraclePriceES,
+			RunnerStorageAccess<Runtime, ()>,
+		>::unsynchronised_state()
+		.inspect_err(|_| log_or_panic!("Failed to get election state for the ChainlinkOraclePrice ES due to corrupted storage")).ok()?;
+
+	let asset = get_chainlink_assetpair(asset)?;
 
 	get_latest_price_with_statechain_encoding(&state, asset).map(|(price, staleness)| OraclePrice {
 		price,

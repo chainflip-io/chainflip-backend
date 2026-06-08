@@ -1,12 +1,15 @@
 #!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
-// This command takes one argument: either a test file or a swap number.
+// This command takes one argument: a test name, a test file, or a swap number.
 //
-// To run a test file:
-//   ./commands/run_test.ts ./tests/boost.ts
+// To run a test by name:
+//   ./commands/run_test.ts BoostingForAsset
 //   This is the equivalent of running:
 //  `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "BoostingForAsset"`
+//
+// To run a test file (resolves the test name from the file's exported function):
+//   ./commands/run_test.ts ./tests/boost.ts
 //
 // To run a single swap test by number:
 //   ./commands/run_test.ts 287
@@ -19,9 +22,23 @@ import { testInfoFile } from 'shared/utils';
 
 const arg = process.argv[2];
 if (!arg) {
-  console.error('Usage: ./commands/run_test.ts ./tests/<test_file>');
+  console.error('Usage: ./commands/run_test.ts <test_name>');
+  console.error('       ./commands/run_test.ts ./tests/<test_file>');
   console.error('       ./commands/run_test.ts <swap_number>');
   process.exit(1);
+}
+
+function runByTestName(testName: string): never {
+  try {
+    execSync(
+      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${testName}"`,
+      { stdio: 'inherit' },
+    );
+  } catch (err) {
+    console.error(`Test "${testName}" failed:`, err);
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 // If a swap number is given, run just that single swap test directly.
@@ -37,6 +54,12 @@ if (/^\d+$/.test(arg)) {
     process.exit(1);
   }
   process.exit(0);
+}
+
+// If the arg doesn't look like a file path, treat it as a test name.
+const looksLikeFilePath = arg.endsWith('.ts') || arg.includes('/');
+if (!looksLikeFilePath) {
+  runByTestName(arg);
 }
 
 const testFile = arg;
@@ -77,10 +100,6 @@ try {
 }
 
 // Find a matching function in the given test file
-if (!testFile) {
-  console.error('Please provide a test file as an argument.');
-  process.exit(1);
-}
 let matchingTestName;
 try {
   const data = readFileSync(testFile, 'utf8');
@@ -96,18 +115,9 @@ try {
   process.exit(1);
 }
 
-// Run the test using vitest
 if (!matchingTestName) {
   console.error('No matching test function found');
   process.exit(1);
-} else {
-  try {
-    execSync(
-      `BOUNCER_LOG_LEVEL=debug pnpm vitest --maxConcurrency=100 --hideSkippedTests run -t "${matchingTestName}"`,
-      { stdio: 'inherit' },
-    );
-  } catch (err) {
-    console.error(`Test "${matchingTestName}" failed:`, err);
-    process.exit(1);
-  }
 }
+
+runByTestName(matchingTestName);

@@ -787,15 +787,17 @@ impl_runtime_apis! {
 
 			});
 
-			let lending_collateral_balances = pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id).map(|loan_account| {
+			let lending_collateral_balances = {
 				let mut asset_map = AssetMap::<AssetAmount>::default();
 
-				for (asset, amount) in loan_account.get_total_collateral() {
+				for (asset, amount) in
+					pallet_cf_lending_pools::get_total_collateral_for_account::<Runtime>(&account_id)
+				{
 					asset_map[asset].saturating_accrue(amount);
 				}
 
 				asset_map
-			}).unwrap_or_default();
+			};
 
 
 			free_balances
@@ -1270,11 +1272,11 @@ impl_runtime_apis! {
 							})
 					})
 					.collect(),
-				collateral_balances: pallet_cf_lending_pools::LoanAccounts::<Runtime>::get(&account_id)
-					.map(|loan_account| {
-						loan_account.get_total_collateral().iter().map(|(asset, amount)| (*asset, *amount)).collect()
-					})
-					.unwrap_or_default(),
+				collateral_balances: pallet_cf_lending_pools::get_total_collateral_for_account::<
+					Runtime,
+				>(&account_id)
+				.into_iter()
+				.collect(),
 			}
 		}
 
@@ -2189,6 +2191,10 @@ impl_runtime_apis! {
 
 		fn cf_ingress_events(chain: ForeignChain) -> Result<IngressEvents, DispatchErrorWithMessage> {
 			witnessed_events::extract_ingress_events(chain)
+		}
+
+		fn cf_supported_assets() -> Vec<Asset> {
+			Asset::all().collect()
 		}
 	}
 }

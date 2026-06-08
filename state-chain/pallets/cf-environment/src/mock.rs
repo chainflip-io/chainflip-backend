@@ -26,8 +26,8 @@ use cf_chains::{
 	sol::{
 		api::{
 			AllNonceAccounts, AltWitnessingConsensusResult, ApiEnvironment, ComputePrice,
-			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount,
-			RecoverDurableNonce, SolanaApi, SolanaEnvironment,
+			CurrentAggKey, CurrentOnChainKey, DurableNonce, DurableNonceAndAccount, SolanaApi,
+			SolanaEnvironment,
 		},
 		SolAddress, SolAddressLookupTableAccount, SolAmount, SolApiEnvironment, SolHash,
 	},
@@ -193,11 +193,6 @@ impl ChainEnvironment<DurableNonce, DurableNonceAndAccount> for MockSolEnvironme
 impl ChainEnvironment<AllNonceAccounts, Vec<DurableNonceAndAccount>> for MockSolEnvironment {
 	fn lookup(_s: AllNonceAccounts) -> Option<Vec<DurableNonceAndAccount>> {
 		Some(vec![(SolAddress([0x00; 32]), SolHash([0x00; 32]))])
-	}
-}
-impl RecoverDurableNonce for MockSolEnvironment {
-	fn recover_durable_nonce(_nonce_account: SolAddress) {
-		unimplemented!();
 	}
 }
 

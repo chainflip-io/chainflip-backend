@@ -68,6 +68,7 @@ pub use pallet::*;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 mod benchmarking;
+mod benchmarking_types;
 mod mock;
 mod tests;
 
@@ -818,7 +819,7 @@ pub mod pallet {
 		pub fn benchmark_realistic_call(
 			_origin: OriginFor<T>,
 			#[cfg(feature = "runtime-benchmarks")]
-			_params: crate::benchmarking::benchmark_types::RealisticCallParams,
+			_params: crate::benchmarking_types::RealisticCallParams,
 		) -> DispatchResult {
 			Ok(())
 		}
@@ -1240,8 +1241,11 @@ impl<T: Config> Pallet<T> {
 				&TxBaseImplication(()),
 				source,
 			)?;
-			let valid_tx =
-				submit_runtime_call::validate_metadata::<T>(transaction_metadata, &signer_account)?;
+			let valid_tx = submit_runtime_call::validate_metadata::<T>(
+				source,
+				transaction_metadata,
+				&signer_account,
+			)?;
 
 			let runtime_version = <T as frame_system::Config>::Version::get();
 

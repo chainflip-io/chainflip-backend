@@ -1040,7 +1040,7 @@ fn swaps_get_retried_after_failure() {
 		.then_execute_at_next_block(|_| {
 			// First group of swaps will be processed at the end of this block,
 			// but we force them to fail:
-			MockSwappingApi::set_swaps_should_fail(true);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		})
 		.then_execute_with(|_| {
 			assert_eq!(System::block_number(), 3);
@@ -1070,7 +1070,7 @@ fn swaps_get_retried_after_failure() {
 			assert_eq!(System::block_number(), 4);
 			// The swaps originally scheduled for block 4 should be executed now,
 			// and should succeed.
-			MockSwappingApi::set_swaps_should_fail(false);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::None);
 		})
 		.then_execute_with(|_| {
 			assert_event_sequence!(
@@ -1157,7 +1157,7 @@ fn fee_swap_is_retried_after_failure() {
 			);
 
 			// Make sure that the swap initially fails:
-			MockSwappingApi::set_swaps_should_fail(true);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::All);
 		})
 		.then_process_blocks_until_block(EXECUTE_AT_BLOCK)
 		.then_execute_with(|_| {
@@ -1173,7 +1173,7 @@ fn fee_swap_is_retried_after_failure() {
 			assert_eq!(get_scheduled_swap_block(SwapId(1)), Some(RETRY_AT_BLOCK));
 
 			// Make sure that the swap will now succeed:
-			MockSwappingApi::set_swaps_should_fail(false);
+			MockSwappingApi::set_swaps_should_fail(SwapFailureMode::None);
 		})
 		.then_process_blocks_until_block(RETRY_AT_BLOCK)
 		.then_execute_with(|_| {

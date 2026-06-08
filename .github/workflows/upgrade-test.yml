@@ -203,34 +203,19 @@ jobs:
           ./commands/upgrade_binaries.ts \
             --bins ./../upgrade-to-bins \
             --localnet_init ./../localnet/init
-          # Remove after 2.2 is release because the new rpc_tests are already part of fast-bouncer
-          ./commands/run_test.ts  ./tests/rpc_tests.ts
 
       - name: Run bouncer on upgrade-from version 🙅‍♂️
         if: inputs.run-job
         id: pre-upgrade-bouncer
         env:
           SKIP_BLS_TESTS: "true"
+          PRE_UPGRADE_BOUNCER: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
-          # Disable GovernanceDepositWitnessing test to prevent it from interfering with the post-upgrade bouncer run
-          sed -i '/testGovernanceDepositWitnessing/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
-          git reset --hard
-
-      # TODO: This is a temporary workaround to setup Tron in the upgrade test.
-      # To remove after TRON is released.
-      - name: Start Tron containers 🌞
-        if: inputs.run-job
-        run: |
-          git checkout ${{ github.sha }}
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up tron tron-peer --quiet-pull -d
-          source localnet/helper.sh
-          echo "🌞 Waiting for TRON node to start"
-          check_endpoint_health -s -X POST -H "Content-Type: application/json" http://localhost:8090/wallet/getnowblock
           git reset --hard
 
       - name: Upgrade runtime 🚀
@@ -260,9 +245,6 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
-          # TODO: This is a temporary workaround to setup Tron.
-          # To remove after TRON is released.
-          ./commands/setup_new_chain.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗

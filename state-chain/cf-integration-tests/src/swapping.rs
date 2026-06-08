@@ -50,7 +50,7 @@ use cf_primitives::{
 use cf_test_utilities::{assert_events_eq, assert_events_match, assert_has_matching_event};
 use cf_traits::{
 	AdjustedFeeEstimationApi, AssetConverter, BalanceApi, EpochInfo, PoolApi, PoolPairsMap,
-	SwapType,
+	PriceFeedApi, SwapType,
 };
 use frame_support::{
 	assert_ok,
@@ -66,7 +66,7 @@ use sp_core::{H160, U256};
 use state_chain_runtime::{
 	chainflip::{
 		address_derivation::AddressDerivation, simulate_swap::simulate_swap, ChainAddressConverter,
-		EthTransactionBuilder, EvmEnvironment,
+		ChainlinkOracle, EthTransactionBuilder, EvmEnvironment,
 	},
 	AssetBalances, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
 	EthereumInstance, LiquidityPools, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
@@ -1090,6 +1090,11 @@ mod swap_simulation {
 			// 1:1 ratio for easy calculations
 			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
 
+			// Set the oracle's to 1 so that the network fee estimation in the swap simulation uses
+			// the oracle.
+			ChainlinkOracle::set_price(STABLE_ASSET, Price::from_usd(STABLE_ASSET, 1));
+			ChainlinkOracle::set_price(INPUT_ASSET, Price::from_usd(INPUT_ASSET, 1));
+
 			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
 				rate: network_fee_rate,
 				minimum: 0,
@@ -1151,6 +1156,11 @@ mod swap_simulation {
 			// Using the same price for both assets and Limit orders so the swap will execute at a
 			// 1:1 ratio for easy calculations
 			setup_pool_and_accounts(vec![INPUT_ASSET, OUTPUT_ASSET], OrderType::LimitOrder);
+
+			// Set the oracle's to 1 so that the network fee estimation in the swap simulation uses
+			// the oracle.
+			ChainlinkOracle::set_price(STABLE_ASSET, Price::from_usd(STABLE_ASSET, 1));
+			ChainlinkOracle::set_price(INPUT_ASSET, Price::from_usd(INPUT_ASSET, 1));
 
 			pallet_cf_swapping::NetworkFee::<Runtime>::put(FeeRateAndMinimum {
 				rate: network_fee_rate,
