@@ -215,6 +215,15 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+          # TODO: Do not merge back to main.
+          # This is a temporary workaround to skip the rpc tests in the upgrade-from bouncer.
+          # The upgrade-from bouncer (2.1.x) predates Tron and has no Tron filter in its rpc_tests.
+          # Since the already-upgraded node binary serves a Tron key in the (fixed-shape) AssetMap,
+          # the old test can randomly pick Tron and call pool RPCs that trap the upgrade-from runtime
+          # (which has no Tron asset variant).
+          # Note the test is run explicitly already in the previous CI step, so this doesn't
+          # reduce test coverage.
+          sed -i '/RpcCalls/d' bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh

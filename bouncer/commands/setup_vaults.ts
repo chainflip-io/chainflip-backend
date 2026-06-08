@@ -6,7 +6,17 @@
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
 // For example: ./commands/setup_vaults.ts
 
-import { getBtcClient, getSolConnection, getWeb3, getTronWebClient } from 'shared/utils';
+import { AddressOrPair } from '@polkadot/api/types';
+import {
+  getBtcClient,
+  handleSubstrateError,
+  getWeb3,
+  getSolConnection,
+  deferredPromise,
+  runWithTimeout,
+  getTronWebClient,
+} from 'shared/utils';
+import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
   initializeArbitrumChain,
   initializeArbitrumContracts,
@@ -14,8 +24,10 @@ import {
   initializeSolanaPrograms,
   initializeTronChain,
   initializeTronContracts,
+  initializeAssethubChain,
 } from 'shared/initialize_new_chains';
-import { globalLogger, loggerChild } from 'shared/utils/logger';
+import { globalLogger, Logger, loggerChild } from 'shared/utils/logger';
+import { getAssethubApi, observeEvent, DisposableApiPromise } from 'shared/utils/substrate';
 import { brokerApiEndpoint, lpApiEndpoint } from 'shared/json_rpc';
 import { updateDefaultPriceFeeds } from 'shared/update_price_feed';
 import { newChainflipIO } from 'shared/utils/chainflip_io';
@@ -23,9 +35,95 @@ import { bitcoinVaultAwaitingGovernanceActivation } from 'generated/events/bitco
 import { arbitrumVaultAwaitingGovernanceActivation } from 'generated/events/arbitrumVault/awaitingGovernanceActivation';
 import { solanaVaultAwaitingGovernanceActivation } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { tronVaultAwaitingGovernanceActivation } from 'generated/events/tronVault/awaitingGovernanceActivation';
+import { assethubVaultAwaitingGovernanceActivation } from 'generated/events/assethubVault/awaitingGovernanceActivation';
 import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
 import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
 import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
+
+export async function createPolkadotVault(api: DisposableApiPromise) {
+  const { promise, resolve } = deferredPromise<{
+    vaultAddress: AddressOrPair;
+    vaultExtrinsicIndex: number;
+  }>();
+
+  const alice = await aliceKeyringPair();
+  const nonce = await api.rpc.system.accountNextIndex(alice.address);
+  const unsubscribe = await api.tx.proxy
+    .createPure(api.createType('ProxyType', 'Any'), 0, 0)
+    .signAndSend(alice, { nonce }, (result) => {
+      if (result.isError) {
+        handleSubstrateError(api)(result);
+      }
+      if (result.isFinalized) {
+        // TODO: figure out type inference so we don't have to coerce using `any`
+        const pureCreated = result.findRecord('proxy', 'PureCreated')!;
+        resolve({
+          vaultAddress: pureCreated.event.data[0] as AddressOrPair,
+          vaultExtrinsicIndex: result.txIndex!,
+        });
+        unsubscribe();
+      }
+    });
+
+  return promise;
+}
+
+async function rotateAndFund(api: DisposableApiPromise, vault: AddressOrPair, key: AddressOrPair) {
+  const { promise, resolve } = deferredPromise<void>();
+  const alice = await aliceKeyringPair();
+  const rotation = api.tx.proxy.proxy(
+    api.createType('MultiAddress', vault),
+    null,
+    api.tx.utility.batchAll([
+      api.tx.proxy.addProxy(
+        api.createType('MultiAddress', key),
+        api.createType('ProxyType', 'Any'),
+        0,
+      ),
+      api.tx.proxy.removeProxy(
+        api.createType('MultiAddress', alice.address),
+        api.createType('ProxyType', 'Any'),
+        0,
+      ),
+    ]),
+  );
+
+  const nonce = await api.rpc.system.accountNextIndex(alice.address);
+  const unsubscribe = await api.tx.utility
+    .batchAll([
+      // Note the vault needs to be funded before we rotate.
+      api.tx.balances.transferKeepAlive(vault, 1000000000000),
+      api.tx.balances.transferKeepAlive(key, 1000000000000),
+      rotation,
+    ])
+    .signAndSend(alice, { nonce }, (result) => {
+      if (result.isError) {
+        handleSubstrateError(api)(result);
+      }
+      if (result.isFinalized) {
+        unsubscribe();
+        resolve();
+      }
+    });
+
+  await promise;
+}
+
+async function createAssetHubVault(
+  logger: Logger,
+  assethubApi: DisposableApiPromise,
+): Promise<AddressOrPair> {
+  // Step a
+  logger.info('Requesting Assethub Vault creation');
+  const { vaultAddress: hubVaultAddress } = await runWithTimeout(
+    createPolkadotVault(assethubApi),
+    90,
+    logger,
+    'Creating Assethub vault',
+  );
+  logger.info(`AssetHub vault created, address: ${hubVaultAddress}`);
+  return hubVaultAddress;
+}
 
 async function main(): Promise<void> {
   const cf = await newChainflipIO(loggerChild(globalLogger, 'setup_vaults'), []);
@@ -33,6 +131,8 @@ async function main(): Promise<void> {
   const arbClient = getWeb3('Arbitrum');
   const solClient = getSolConnection();
   const tronClient = getTronWebClient();
+
+  await using assethub = await getAssethubApi();
 
   cf.info(`LP endpoint set to: ${lpApiEndpoint}`);
   cf.info(`Broker endpoint set to: ${brokerApiEndpoint}`);
@@ -44,6 +144,7 @@ async function main(): Promise<void> {
     initializeArbitrumChain(cf.logger),
     initializeSolanaChain(cf.logger),
     initializeTronChain(cf.logger),
+    initializeAssethubChain(cf.logger),
   ]);
 
   // Step 2
@@ -67,6 +168,7 @@ async function main(): Promise<void> {
       `Initial setup_vaults forced rotation was ABORTED. Cannot continue with the test, please check the node logs for possible reasons.`,
     );
   }
+  const assetHubVaultCreateHandle = createAssetHubVault(cf.logger, assethub);
 
   // Step 3
   cf.info('Waiting for new keys');
@@ -87,15 +189,39 @@ async function main(): Promise<void> {
       name: 'TronVault.AwaitingGovernanceActivation',
       schema: tronVaultAwaitingGovernanceActivation,
     },
+    hub: {
+      name: 'AssethubVault.AwaitingGovernanceActivation',
+      schema: assethubVaultAwaitingGovernanceActivation,
+    },
   });
 
   const btcKey = keyEvents.btc.data.newPublicKey;
   const arbKey = keyEvents.arb.data.newPublicKey;
   const solKey = keyEvents.sol.data.newPublicKey;
   const tronKey = keyEvents.tron.data.newPublicKey;
+  const hubKey = keyEvents.hub.data.newPublicKey;
 
   // Step 4
-  cf.info('Setting up external chains (Arbitrum, Solana, Tron) with new keys');
+  cf.info('Setting up external chains (Arbitrum, Solana, Assethub, Tron) with new keys');
+
+  const createAssethubProxy = async () => {
+    // Wait for the assethub vault Promise to resolve
+    const hubVaultAddress = await assetHubVaultCreateHandle;
+
+    cf.info('Rotating Proxy and Funding Accounts on Assethub');
+    const hubProxyAdded = observeEvent(cf.logger, 'proxy:ProxyAdded', {
+      chain: 'assethub',
+      timeoutSeconds: 60,
+    }).event;
+    const [, hubVaultEvent] = await Promise.all([
+      rotateAndFund(assethub, hubVaultAddress, hubKey),
+      hubProxyAdded,
+    ]);
+
+    cf.debug(`Assethub Vault Proxy rotated and funded`);
+
+    return { hubVaultAddress, hubVaultEvent };
+  };
 
   const insertArbitrumKey = async () => {
     cf.info('Inserting Arbitrum key in the contracts');
@@ -115,7 +241,12 @@ async function main(): Promise<void> {
     cf.debug('Tron key inserted');
   };
 
-  await Promise.all([insertArbitrumKey(), insertSolanaKey(), insertTronKey()]);
+  const [{ hubVaultAddress, hubVaultEvent }] = await Promise.all([
+    createAssethubProxy(),
+    insertArbitrumKey(),
+    insertSolanaKey(),
+    insertTronKey(),
+  ]);
 
   // Step 7
   cf.info('Setting up price feeds');
@@ -125,6 +256,15 @@ async function main(): Promise<void> {
   cf.info('Registering Vaults with state chain');
 
   await cf.all([
+    (subcf) =>
+      subcf.submitGovernance({
+        extrinsic: (api) =>
+          api.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
+            blockNumber: hubVaultEvent.block,
+            extrinsicIndex: hubVaultEvent.eventIndex,
+          }),
+        expectedEvent: { name: 'AssethubVault.VaultActivationCompleted' },
+      }),
     (subcf) =>
       subcf.submitGovernance({
         extrinsic: async (api) =>

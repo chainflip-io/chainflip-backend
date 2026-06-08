@@ -1,5 +1,5 @@
 use crate::{chainflip::witnessing::tron_elections::TRON_MAINNET_SAFETY_MARGIN, Runtime};
-use cf_chains::instances::{EthereumInstance, TronInstance};
+use cf_chains::instances::{BitcoinInstance, TronInstance};
 #[cfg(feature = "try-runtime")]
 use codec::Encode;
 use frame_support::{traits::OnRuntimeUpgrade, weights::Weight};
@@ -107,7 +107,7 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 		);
 
 		for id in
-			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, EthereumInstance>::iter_keys()
+			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, BitcoinInstance>::iter_keys()
 		{
 			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, TronInstance>::insert(id, ());
 		}
@@ -129,7 +129,7 @@ impl OnRuntimeUpgrade for TronIngressEgressInit {
 		);
 		frame_support::ensure!(
 			pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, TronInstance>::iter_keys()
-				.count() > 0,
+				.count() == pallet_cf_ingress_egress::WhitelistedBrokers::<Runtime, BitcoinInstance>::iter_keys().count(),
 			"Tron whitelisted brokers not migrated correctly"
 		);
 
