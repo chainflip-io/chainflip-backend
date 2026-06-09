@@ -1,4 +1,5 @@
 use super::*;
+use cf_runtime_utilities::log_or_panic;
 
 #[derive(Clone, Copy, Debug)]
 enum FetchedPrice {
@@ -67,7 +68,10 @@ impl<T: Config> OraclePriceCache<T> {
 		} else {
 			self.get_price(asset)?
 		};
-		Ok(price_in_usd.output_amount_ceil(amount).unique_saturated_into())
+		Ok(price_in_usd
+			.output_amount_ceil(amount)
+			.unwrap_or_default()
+			.unique_saturated_into())
 	}
 
 	/// Uses oracle prices to calculate the USD value of the given asset amount
@@ -127,8 +131,12 @@ impl<T: Config> OraclePriceCache<T> {
 		asset: Asset,
 		usd_value: AssetAmount,
 	) -> Result<AssetAmount, Error<T>> {
-		// The "price" of USD in terms of the asset:
-		let price = self.get_price(asset)?.invert();
-		Ok(price.output_amount_ceil(usd_value).unique_saturated_into())
+		// The "price" of USD in terms of the asset. `get_price` filters out zero prices, so
+		// `invert` should always succeed; defensively fall back to an error if it doesn't.
+		let Some(price) = self.get_price(asset)?.invert() else {
+			log_or_panic!("Oracle price unexpectedly zero for {asset:?}");
+			return Err(Error::<T>::OraclePriceUnavailable);
+		};
+		Ok(price.output_amount_ceil(usd_value).unwrap_or_default().unique_saturated_into())
 	}
 }

@@ -25,6 +25,7 @@ mod utils;
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
+	get_collateral_in_supply_pools, get_total_collateral_for_account,
 	rpc::{
 		get_all_loans, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
 		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
@@ -467,6 +468,7 @@ pub mod pallet {
 			asset: Asset,
 			loan_type: LoanType<T::AccountId>,
 			principal_amount: AssetAmount,
+			broker: Option<Beneficiary<T::AccountId>>,
 		},
 		LoanUpdated {
 			loan_id: LoanId,
@@ -591,9 +593,6 @@ pub mod pallet {
 		/// The new loan would leave the loan-asset pool unable to liquidate the configured
 		/// fraction of outstanding loans.
 		UtilisationCapExceeded,
-		/// The new loan would leave one of the borrower's collateral pools unable to
-		/// liquidate the configured fraction of outstanding loans.
-		CollateralPoolUtilisationCapExceeded,
 		/// The broker fee specified on the loan request exceeds the maximum allowed.
 		BrokerFeeTooHigh,
 		/// The broker fee (if specified) can't be zero.

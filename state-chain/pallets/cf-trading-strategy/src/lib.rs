@@ -695,23 +695,23 @@ impl PricingMode {
 
 	/// Express an amount of the base asset in the quote denomination (identity for static
 	/// strategies). Rounds up to match the threshold/balance comparison semantics.
-	fn base_to_quote(self, base_amount: AssetAmount) -> AssetAmount {
+	fn base_to_quote(self, base_amount: AssetAmount) -> Option<AssetAmount> {
 		use frame_support::sp_runtime::SaturatedConversion;
 		match self {
-			PricingMode::Equivalent => base_amount,
+			PricingMode::Equivalent => Some(base_amount),
 			PricingMode::Oracle { relative_price, .. } =>
-				relative_price.output_amount_ceil(base_amount).saturated_into(),
+				relative_price.output_amount_ceil(base_amount).map(|v| v.saturated_into()),
 		}
 	}
 
 	/// Convert an amount expressed in the quote denomination back to the base asset (identity for
 	/// static strategies). Rounds down so we never place orders exceeding the available balance.
-	fn quote_to_base(self, quote_amount: AssetAmount) -> AssetAmount {
+	fn quote_to_base(self, quote_amount: AssetAmount) -> Option<AssetAmount> {
 		use frame_support::sp_runtime::SaturatedConversion;
 		match self {
-			PricingMode::Equivalent => quote_amount,
+			PricingMode::Equivalent => Some(quote_amount),
 			PricingMode::Oracle { relative_price, .. } =>
-				relative_price.input_amount_floor(quote_amount).saturated_into(),
+				relative_price.input_amount_floor(quote_amount).map(|v| v.saturated_into()),
 		}
 	}
 }
@@ -1022,13 +1022,13 @@ impl<T: Config> Pallet<T> {
 		// Value the base asset in the quote denomination so amounts with different decimals (or,
 		// for oracle strategies, different prices) can be compared.
 		let total_quote = total_quote_asset;
-		let total_base = pricing.base_to_quote(total_base_asset);
+		let total_base = pricing.base_to_quote(total_base_asset).unwrap_or_default();
 
 		// Only worth updating the orders if the free (unallocated) balance has grown enough to
 		// clear the smaller of the two update thresholds (both valued in the quote denomination).
 		let update_due_to_balance = quote_balance_asset
-			.saturating_add(pricing.base_to_quote(base_balance_asset)) >=
-			pricing.base_to_quote(base_threshold).min(quote_threshold);
+			.saturating_add(pricing.base_to_quote(base_balance_asset).unwrap_or_default()) >=
+			pricing.base_to_quote(base_threshold).unwrap_or(u128::MAX).min(quote_threshold);
 
 		// Use the balance of assets to calculate the desired limit orders
 		let tick_offset = pricing.tick_offset();
@@ -1095,7 +1095,10 @@ impl<T: Config> Pallet<T> {
 						} else {
 							// Amounts are sized in the quote denomination, so the
 							// sell side is converted back to the base asset.
-							pricing.quote_to_base(amount).min(remaining_base_amount)
+							pricing
+								.quote_to_base(amount)
+								.unwrap_or_default()
+								.min(remaining_base_amount)
 						};
 						remaining_base_amount = remaining_base_amount.saturating_sub(base_amount);
 						base_amount

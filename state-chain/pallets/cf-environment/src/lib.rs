@@ -1167,8 +1167,11 @@ impl<T: Config> Pallet<T> {
 				&TxBaseImplication(()),
 				source,
 			)?;
-			let valid_tx =
-				submit_runtime_call::validate_metadata::<T>(transaction_metadata, &signer_account)?;
+			let valid_tx = submit_runtime_call::validate_metadata::<T>(
+				source,
+				transaction_metadata,
+				&signer_account,
+			)?;
 
 			let runtime_version = <T as frame_system::Config>::Version::get();
 

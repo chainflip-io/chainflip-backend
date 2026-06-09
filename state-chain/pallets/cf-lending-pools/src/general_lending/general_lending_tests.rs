@@ -229,6 +229,22 @@ fn create_loan_and_supply_collateral(
 }
 
 #[test]
+fn collateral_reported_for_supply_only_account() {
+	// `cf_account_info` reports collateral via `get_total_collateral_for_account`. An account
+	// that has supplied funds but never borrowed has no loan account, yet its supply positions
+	// must still be reported as collateral.
+	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
+		// LENDER supplied funds via `with_funded_pool` but never took out a loan:
+		assert!(LoanAccounts::<Test>::get(LENDER).is_none());
+
+		assert_eq!(
+			get_total_collateral_for_account::<Test>(&LENDER),
+			BTreeMap::from([(LOAN_ASSET, INIT_POOL_AMOUNT)]),
+		);
+	});
+}
+
+#[test]
 fn lender_basic_adding_and_removing_funds() {
 	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
 		// Test that it is possible to withdraw funds if you are the sole contributor
@@ -402,6 +418,7 @@ fn basic_general_lending() {
 					loan_type: LoanType::User(BORROWER),
 					asset: LOAN_ASSET,
 					principal_amount: PRINCIPAL,
+					broker: None,
 				}),
 				RuntimeEvent::LendingPools(Event::<Test>::OriginationFeeTaken {
 					loan_id: LOAN_ID,
@@ -676,6 +693,17 @@ fn broker_interest_credited_to_broker() {
 				PRINCIPAL,
 				Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
 			));
+
+			// The loan's `LoanCreated` event records the broker's account id and bps.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::LendingPools(Event::<Test>::LoanCreated {
+					loan_id: LOAN_ID,
+					loan_type: LoanType::User(BORROWER),
+					broker,
+					..
+				}) if *broker == Some(Beneficiary { account: BROKER, bps: BROKER_BPS }),
+			);
 
 			assert_eq!(MockBalance::get_balance(&BROKER, LOAN_ASSET), 0);
 		})
@@ -1315,7 +1343,7 @@ fn basic_liquidation() {
 			// Only the collateral required to repay the loan (plus the slippage buffer) is
 			// removed from the supply pool — the rest stays available to other lenders.
 			assert_eq!(
-				loan_account.get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&loan_account.borrower_id),
 				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
 			);
 
@@ -1910,123 +1938,6 @@ fn liquidation_with_outstanding_principal() {
 		});
 }
 
-#[test]
-fn liquidation_with_outstanding_principal_and_owed_network_fees() {
-	// Same as in `liquidation_with_outstanding_principal`, we test a scenario where a loan is
-	// liquidated and the recovered principal isn't enough to cover the total loan amount. Here
-	// utilisation is 100% so the pool has an outstanding network IOU at the time of write-off;
-	// the IOU should be forgiven up to the written-off amount rather than left for future
-	// lender liquidity to cover.
-
-	const PRINCIPAL: AssetAmount = INIT_POOL_AMOUNT;
-	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
-
-	const RECOVERED_PRINCIPAL: AssetAmount = 3 * PRINCIPAL / 4;
-
-	const NEW_SWAP_RATE: u128 = SWAP_RATE * 2;
-
-	const LIQUIDATION_SWAP_1: SwapRequestId = SwapRequestId(0);
-
-	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
-	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
-
-	new_test_ext().with_funded_pool(INIT_POOL_AMOUNT)
-		.execute_with(|| {
-
-			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-
-			assert_eq!(
-				create_loan_and_supply_collateral(
-					BORROWER,
-					LOAN_ASSET,
-					PRINCIPAL,
-					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
-				),
-				Ok(LOAN_ID)
-			);
-
-			// Update oracle price to trigger liquidation
-			MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, NEW_SWAP_RATE);
-		})
-		.then_execute_at_next_block(|_| {
-			assert!(MockSwapRequestHandler::<Test>::get_swap_requests()
-				.contains_key(&LIQUIDATION_SWAP_1));
-
-			System::reset_events();
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
-					available_amount: 0,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: origination_fee_network,
-				}
-			);
-
-			LendingPools::process_loan_swap_outcome(
-				LIQUIDATION_SWAP_1,
-				LendingSwapType::Liquidation { borrower_id: BORROWER, loan_id: LOAN_ID },
-				RECOVERED_PRINCIPAL,
-			);
-
-			let liquidation_fee = CONFIG.liquidation_fee(LOAN_ASSET) * RECOVERED_PRINCIPAL;
-			let (liquidation_fee_network, liquidation_fee_pool) =
-				take_network_fee(liquidation_fee);
-
-			let repaid_principal = RECOVERED_PRINCIPAL - liquidation_fee;
-			let expected_outstanding_principal = PRINCIPAL + ORIGINATION_FEE - repaid_principal;
-
-			assert_event_sequence!(
-				Test,
-				RuntimeEvent::LendingPools(Event::<Test>::LiquidationCompleted {
-					borrower_id: BORROWER,
-					reason: LiquidationCompletionReason::FullySwapped,
-				}),
-				RuntimeEvent::LendingPools(Event::<Test>::LiquidationFeeTaken {
-					loan_id: LOAN_ID,
-					pool_fee,
-					network_fee,
-					broker_fee
-				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
-				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
-					loan_id: LOAN_ID,
-					action_type: LoanRepaidActionType::Liquidation { swap_request_id: LIQUIDATION_SWAP_1 },
-					amount
-				}) if amount == RECOVERED_PRINCIPAL - liquidation_fee,
-				RuntimeEvent::LendingPools(Event::<Test>::LoanSettled {
-					loan_id: LOAN_ID,
-					outstanding_principal,
-					via_liquidation: true,
-				}) if outstanding_principal == expected_outstanding_principal
-			);
-
-			assert_eq!(MockBalance::get_balance(&BORROWER, LOAN_ASSET), PRINCIPAL);
-			assert_eq!(MockBalance::get_balance(&BORROWER, COLLATERAL_ASSET), 0);
-
-			// The pool has lost outstanding principal (but has accrued origination and liquidation fees).
-			// The defaulted loan's outstanding network fees are forgiven against the network's IOU
-			// rather than charged to lenders, so `total_amount` only absorbs the portion of the
-			// write-off that exceeds the network IOU.
-			let new_total_amount = INIT_POOL_AMOUNT + origination_fee_pool + liquidation_fee_pool -
-				(expected_outstanding_principal - origination_fee_network);
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: new_total_amount,
-					available_amount: new_total_amount,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
-				}
-			);
-
-			// The account is removed as it has no loans and no supplied collateral:
-			assert_eq!(LoanAccounts::<Test>::get(BORROWER), None);
-		});
-}
-
 mod multi_asset_collateral_liquidation {
 
 	use super::*;
@@ -2491,7 +2402,7 @@ mod multi_asset_collateral_liquidation {
 				// buffer, drawn from each collateral asset proportionally to its share of the
 				// available USD value. The remainder stays in the supply pools.
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(COLLATERAL_ASSET, collateral_leftover_at_init),
 						(COLLATERAL_ASSET_2, collateral_2_leftover_at_init),
@@ -2540,7 +2451,7 @@ mod multi_asset_collateral_liquidation {
 					(PRINCIPAL + ORIGINATION_FEE + liquidation_fee_1 + liquidation_fee_2);
 
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(LOAN_ASSET, excess_loan_asset_amount),
 						(COLLATERAL_ASSET, collateral_leftover_at_init),
@@ -2594,7 +2505,7 @@ mod multi_asset_collateral_liquidation {
 				);
 
 				assert_eq!(
-					get_loan_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([
 						(LOAN_ASSET, excess_loan_asset_amount),
 						(COLLATERAL_ASSET, REMAINING_INPUT_SWAP_2 + collateral_leftover_at_init),
@@ -2656,7 +2567,9 @@ mod multi_asset_collateral_liquidation {
 			.then_execute_at_next_block(|_| {
 				// All collateral has been pulled into liquidation swaps (take_all path):
 				let acc = get_loan_account();
-				assert!(general_lending::is_zero_collateral(&acc.get_collateral_in_supply_pools()));
+				assert!(general_lending::is_zero_collateral(
+					&get_collateral_in_supply_pools::<Test>(&acc.borrower_id)
+				));
 				match &acc.liquidation_status {
 					LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
 						assert_eq!(liquidation_swaps.len(), 2);
@@ -2899,7 +2812,7 @@ fn small_interest_amounts_accumulate() {
 		.then_execute_with(|_| {
 			let account = LoanAccounts::<Test>::get(BORROWER).unwrap();
 			assert_eq!(
-				account.get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&account.borrower_id),
 				BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
 			);
 
@@ -3219,162 +3132,40 @@ fn borrowing_disallowed_during_liquidation() {
 }
 
 #[test]
-fn network_fees_under_full_utilisation() {
-	// Here we test we correctly record how much is owed to the network
-	// so that if utilisation is 100% and it is not possible for the
-	// network to take earnings from the pool, we can still collect
-	// the full owed amount when some pool funds become available.
-
-	// The loan will request all available funds
+fn origination_rejected_when_pool_cant_cover_network_fee() {
+	// `fund_loan` refuses to originate a loan when the pool's `available_amount` can't
+	// cover both the principal and the network portion of the origination fee. Fund the
+	// pool with exactly `PRINCIPAL + origination_fee_network`: borrowing `PRINCIPAL` fits
+	// exactly, while `PRINCIPAL + 1` does not.
 	const PRINCIPAL: AssetAmount = INIT_POOL_AMOUNT;
+	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
 	const INIT_COLLATERAL: AssetAmount = (4 * PRINCIPAL / 3) * SWAP_RATE; // 75% LTV
 
-	// Additional funds that will be added to the pool later:
-	const EXTRA_POOL_AMOUNT: AssetAmount = INIT_POOL_AMOUNT / 2;
+	let (origination_fee_network, _) = take_network_fee(ORIGINATION_FEE);
+	let pool_funds = PRINCIPAL + origination_fee_network;
 
-	const ORIGINATION_FEE: AssetAmount = portion_of_amount(DEFAULT_ORIGINATION_FEE, PRINCIPAL);
+	new_test_ext().with_funded_pool(pool_funds).execute_with(|| {
+		// Supply collateral up front so loan attempts only differ in the requested principal.
+		MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
+		MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
+		LendingPools::new_lending_pool(COLLATERAL_ASSET).unwrap();
+		assert_ok!(LendingPools::add_lender_funds(
+			RuntimeOrigin::signed(BORROWER),
+			COLLATERAL_ASSET,
+			INIT_COLLATERAL,
+		));
 
-	let (origination_fee_network, origination_fee_pool) = take_network_fee(ORIGINATION_FEE);
+		// One unit beyond what the pool's headroom can fund → rejected.
+		assert_noop!(
+			LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL + 1, None),
+			Error::<Test>::InsufficientLiquidity,
+		);
 
-	let mut interest = Interest::new();
-
-	let utilisation_1 = Permill::from_rational(
-		PRINCIPAL + ORIGINATION_FEE,
-		INIT_POOL_AMOUNT + origination_fee_pool,
-	);
-
-	// Confirming that utilisation is 100% (in fact it is technically slightly higher due network
-	// fee depth, but it will be clamped at 100%):
-	assert_eq!(utilisation_1, Permill::from_percent(100));
-
-	// First interest payment:
-	interest.accrue_interest(
-		PRINCIPAL + ORIGINATION_FEE,
-		utilisation_1,
-		CONFIG.interest_payment_interval_blocks,
-	);
-
-	let (pool_interest_1, network_interest_1) = interest.collect();
-
-	let utilisation_2 = Permill::from_rational(
-		PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1,
-		INIT_POOL_AMOUNT + EXTRA_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
-	);
-
-	// Second interest payment:
-	interest.accrue_interest(
-		PRINCIPAL + ORIGINATION_FEE + pool_interest_1 + network_interest_1,
-		utilisation_2,
-		CONFIG.interest_payment_interval_blocks,
-	);
-
-	let (pool_interest_2, network_interest_2) = interest.collect();
-
-	new_test_ext()
-		.with_funded_pool(INIT_POOL_AMOUNT)
-		.execute_with(|| {
-			// Set a low collection threshold so we can more easily check the collected amount
-			assert_ok!(Pallet::<Test>::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![PalletConfigUpdate::SetInterestCollectionThresholdUsd(1)],
-			));
-
-			MockBalance::credit_account(&BORROWER, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(BORROWER, LOAN_CHAIN);
-
-			assert_eq!(
-				create_loan_and_supply_collateral(
-					BORROWER,
-					LOAN_ASSET,
-					PRINCIPAL,
-					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL)])
-				),
-				Ok(LOAN_ID)
-			);
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + origination_fee_pool,
-					available_amount: 0,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: origination_fee_network,
-				}
-			);
-		})
-		.then_process_blocks_until_block(
-			INIT_BLOCK + CONFIG.interest_payment_interval_blocks as u64,
-		)
-		.then_execute_with(|_| {
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: INIT_POOL_AMOUNT + origination_fee_pool + pool_interest_1,
-					available_amount: 0,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: origination_fee_network + network_interest_1,
-				}
-			);
-
-			// LP Adds additional funds, they will (partially) be used to repay the network
-			// upon next interest collection
-			MockBalance::credit_account(&LENDER, LOAN_ASSET, EXTRA_POOL_AMOUNT);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(LENDER),
-				LOAN_ASSET,
-				EXTRA_POOL_AMOUNT
-			));
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: INIT_POOL_AMOUNT +
-						EXTRA_POOL_AMOUNT + origination_fee_pool +
-						pool_interest_1,
-					available_amount: EXTRA_POOL_AMOUNT,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: origination_fee_network + network_interest_1,
-				}
-			);
-
-			// Note that we expose `network_interest_1` in the event despite it not technically
-			// accessible to the network yet
-			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
-				loan_id: LOAN_ID,
-				pool_interest: pool_interest_1,
-				network_interest: network_interest_1,
-				broker_interest: 0,
-				low_ltv_penalty: 0,
-			}));
-		})
-		.then_process_blocks_until_block(
-			INIT_BLOCK + 2 * CONFIG.interest_payment_interval_blocks as u64,
-		)
-		.then_execute_with(|_| {
-			// Expecting the second interest charge + fees payed to the network to be repaid in
-			// full.
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap(),
-				LendingPool {
-					total_amount: INIT_POOL_AMOUNT +
-						EXTRA_POOL_AMOUNT + origination_fee_pool +
-						pool_interest_1 + pool_interest_2,
-					available_amount: EXTRA_POOL_AMOUNT -
-						origination_fee_network -
-						network_interest_1 - network_interest_2,
-					lender_shares: BTreeMap::from([(LENDER, Perquintill::one())]),
-					owed_to_network: 0,
-				}
-			);
-
-			assert_has_event::<Test>(RuntimeEvent::LendingPools(Event::<Test>::InterestTaken {
-				loan_id: LOAN_ID,
-				pool_interest: pool_interest_2,
-				network_interest: network_interest_2,
-				broker_interest: 0,
-				low_ltv_penalty: 0,
-			}));
-		});
+		// Borrowing the full PRINCIPAL succeeds: the pool was funded with exactly the
+		// network-fee headroom for this principal. After the loan, `available` is zero.
+		assert_ok!(LendingPools::new_loan(BORROWER, LOAN_ASSET, PRINCIPAL, None));
+		assert_eq!(GeneralLendingPools::<Test>::get(LOAN_ASSET).unwrap().available_amount, 0,);
+	});
 }
 
 #[test]
@@ -3516,7 +3307,7 @@ fn adding_collateral_during_liquidation() {
 			// We don't bother restarting liquidation swaps to incorporate the extra supply,
 			// instead the supply is simply added to the pool:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(COLLATERAL_ASSET, EXTRA_COLLATERAL)])
 			);
 
@@ -3614,7 +3405,7 @@ fn adding_collateral_during_liquidation() {
 
 			// The unused remainder stays in the supply pool:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(COLLATERAL_ASSET, pool_remainder_after_init)])
 			);
 
@@ -3665,7 +3456,7 @@ fn adding_collateral_during_liquidation() {
 
 			// Collateral returned to supply pools after liquidation abort:
 			assert_eq!(
-				get_account().get_collateral_in_supply_pools(),
+				get_collateral_in_supply_pools::<Test>(&BORROWER),
 				BTreeMap::from([(
 					COLLATERAL_ASSET,
 					INIT_COLLATERAL + EXTRA_COLLATERAL + EXTRA_COLLATERAL_2 + EXTRA_COLLATERAL_3 -
@@ -4128,7 +3919,7 @@ mod voluntary_liquidation {
 				);
 				// Part of collateral was returned to supply pool:
 				assert_eq!(
-					LoanAccounts::<Test>::get(BORROWER).unwrap().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, INIT_COLLATERAL - SWAPPED_COLLATERAL)])
 				);
 
@@ -4263,7 +4054,7 @@ mod voluntary_liquidation {
 				let pool_leftover_after_soft_init =
 					INIT_COLLATERAL - SWAPPED_COLLATERAL_1 - liquidation_input_2;
 				assert_eq!(
-					get_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_soft_init)])
 				);
 
@@ -4357,7 +4148,7 @@ mod voluntary_liquidation {
 					SWAPPED_COLLATERAL_2 -
 					liquidation_input_3;
 				assert_eq!(
-					get_account().get_collateral_in_supply_pools(),
+					get_collateral_in_supply_pools::<Test>(&BORROWER),
 					BTreeMap::from([(COLLATERAL_ASSET, pool_leftover_after_voluntary_reinit)])
 				);
 
@@ -6935,107 +6726,6 @@ mod utilisation_cap {
 			assert_eq!(get_utilisation_cap(Asset::Usdc), Permill::from_parts(970_589)); // ~97%
 			assert_eq!(get_utilisation_cap(Asset::Usdt), Permill::from_parts(602942)); // ~60.3%
 
-		});
-	}
-
-	/// Verifies that a new loan is rejected when it would push the utilisation cap of one of
-	/// the borrower's collateral pools below that pool's current utilisation, even though the
-	/// loan's own pool stays within its cap.
-	///
-	/// Scenario (all assets priced at $1, origination fee zero):
-	///   1. User A supplies 100 USDC.
-	///   2. User B supplies 100 BTC.
-	///   3. User B borrows 80 USDC, supplying 100 USDT as additional collateral. USDC utilisation
-	///      jumps to 80%, USDC cap stays at 100% (B has no USDC collateral).
-	///   4. User A borrows 40 BTC against their existing 100 USDC supply. This must fail: A's new
-	///      $40 of loans drops USDC's cap to 40% (100 * 40 / 100 = 40 USDC required), which is
-	///      below USDC's current 80% utilisation.
-	#[test]
-	fn cap_checked_for_collateral_assets() {
-		const USER_A: u64 = 301;
-		const USER_B: u64 = 302;
-
-		const WHOLE: AssetAmount = 1_000_000;
-
-		const SUPPLY: AssetAmount = 100 * WHOLE;
-		const BORROW_A: AssetAmount = 40 * WHOLE;
-		const BORROW_B: AssetAmount = 80 * WHOLE;
-
-		new_test_ext().execute_with(|| {
-			disable_whitelist();
-
-			MockPriceFeedApi::set_price_usd_fine(Asset::Btc, 1);
-			MockPriceFeedApi::set_price_usd_fine(Asset::Usdt, 1);
-			MockPriceFeedApi::set_price_usd_fine(Asset::Usdc, 1);
-
-			LendingConfig::<Test>::set(CONFIG);
-
-			// Update config to simplify testing:
-			assert_ok!(Pallet::<Test>::update_pallet_config(
-				RuntimeOrigin::root(),
-				bounded_vec![
-					PalletConfigUpdate::SetMinimumAmounts {
-						minimum_loan_amount_usd: 1,
-						minimum_update_loan_amount_usd: 1,
-						minimum_update_supply_amount_usd: 1,
-						minimum_supply_amount_usd: 1,
-					},
-					PalletConfigUpdate::SetLendingPoolConfiguration {
-						asset: None,
-						config: Some(LendingPoolConfiguration {
-							origination_fee: Permill::zero(),
-							..CONFIG.default_pool_config
-						}),
-					},
-				],
-			));
-
-			assert_ok!(LendingPools::new_lending_pool(Asset::Btc));
-			assert_ok!(LendingPools::new_lending_pool(Asset::Usdt));
-			assert_ok!(LendingPools::new_lending_pool(Asset::Usdc));
-
-			for acc in &[USER_A, USER_B] {
-				assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(acc));
-				MockLpRegistration::register_refund_address(*acc, ForeignChain::Bitcoin);
-				MockLpRegistration::register_refund_address(*acc, ForeignChain::Ethereum);
-			}
-
-			// Step 1: A supplies 100 USDC.
-			MockBalance::credit_account(&USER_A, Asset::Usdc, SUPPLY);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(USER_A),
-				Asset::Usdc,
-				SUPPLY,
-			));
-
-			// Step 2: B supplies 100 BTC.
-			MockBalance::credit_account(&USER_B, Asset::Btc, SUPPLY);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(USER_B),
-				Asset::Btc,
-				SUPPLY,
-			));
-
-			// Step 3: B takes 80 USDC with 100 USDT extra collateral. Should succeed.
-			MockBalance::credit_account(&USER_B, Asset::Usdt, SUPPLY);
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(USER_B),
-				Asset::Usdt,
-				SUPPLY,
-			));
-			assert_ok!(LendingPools::new_loan(USER_B, Asset::Usdc, BORROW_B, None));
-
-			assert_eq!(
-				GeneralLendingPools::<Test>::get(Asset::Usdc).unwrap().get_utilisation(),
-				Permill::from_percent(80),
-			);
-
-			// Step 4: A borrows 40 BTC. USDC (one of A's collateral pools) cannot cover the
-			// configured liquidation fraction once A's $40 of new debt is included.
-			assert_noop!(
-				LendingPools::new_loan(USER_A, Asset::Btc, BORROW_A, None),
-				Error::<Test>::CollateralPoolUtilisationCapExceeded,
-			);
 		});
 	}
 }

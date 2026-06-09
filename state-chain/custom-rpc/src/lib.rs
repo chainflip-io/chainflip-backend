@@ -2846,8 +2846,8 @@ where
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolDetailsResponse> {
-		execute_for_all_or_one_asset(asset, |asset| {
-			self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			execute_for_all_or_one_asset(version, asset, |asset| {
 				api.cf_boost_pool_details(hash, asset).map(|details_for_each_pool| {
 					details_for_each_pool
 						.into_iter()
@@ -2863,8 +2863,8 @@ where
 		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<BoostPoolFeesResponse> {
-		execute_for_all_or_one_asset(asset, |asset| {
-			self.rpc_backend.with_runtime_api(at, |api, hash| {
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			execute_for_all_or_one_asset(version, asset, |asset| {
 				api.cf_boost_pool_details(hash, asset).map(|details_for_each_pool| {
 					details_for_each_pool
 						.into_iter()
@@ -3480,19 +3480,34 @@ where
 /// Execute f (which returns a Vec of results) for `asset`. If `asset` is `None`
 /// the closure is executed for every supported asset and the results are concatenated.
 fn execute_for_all_or_one_asset<Response, F>(
+	version: u32,
 	asset: Option<Asset>,
-	mut f: F,
-) -> RpcResult<Vec<Response>>
+	f: F,
+) -> Result<Vec<Response>, CfApiError>
 where
-	F: FnMut(Asset) -> RpcResult<Vec<Response>>,
+	F: FnMut(Asset) -> Result<Vec<Response>, ApiError>,
 {
-	if let Some(asset) = asset {
-		f(asset)
+	let assets = if let Some(asset) = asset {
+		vec![asset]
 	} else {
-		let results_for_each_asset: RpcResult<Vec<_>> = Asset::all().map(f).collect();
-
-		results_for_each_asset.map(|inner| inner.into_iter().flatten().collect())
-	}
+		Asset::all()
+			.filter(|asset| {
+				if version < 17 && ForeignChain::from(*asset) == ForeignChain::Tron {
+					// Tron support was added in version 17, so skip it for older versions.
+					false
+				} else {
+					true
+				}
+			})
+			.collect()
+	};
+	Ok(assets
+		.into_iter()
+		.map(f)
+		.collect::<Result<Vec<_>, _>>()?
+		.into_iter()
+		.flatten()
+		.collect())
 }
 
 /// Returns the preallocated channel IDs for a given account and chain on the last finalized block.

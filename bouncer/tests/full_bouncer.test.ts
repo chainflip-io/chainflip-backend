@@ -5,6 +5,7 @@ import { testRotationBarrier } from 'tests/rotation_barrier';
 import { testSolanaVaultSettingsGovernance } from 'tests/solana_vault_settings_governance';
 import { serialTest } from 'shared/utils/vitest';
 import { testSwapAfterDisconnection } from 'tests/swap_after_temp_disconnecting_chains';
+import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
 
 // Tests that are run by the ci-main-merge after the concurrent tests
 describe('SerialTests2', () => {
@@ -16,4 +17,7 @@ describe('SerialTests2', () => {
   if (process.env.LOCALNET) {
     serialTest('SwapAfterDisconnection', testSwapAfterDisconnection, 250);
   }
+
+  // Post test check: assert no witnessing task crashed during any of the tests run on this localnet.
+  serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 30);
 });

@@ -371,7 +371,10 @@ impl<T: OPTypes> AbstractApi for OraclePriceTracker<T> {
 	type Response = BTreeMap<T::AssetPair, AssetResponse<T>>;
 	type Error = ();
 
-	fn validate(_query: &Self::Query, _response: &Self::Response) -> Result<(), Self::Error> {
+	fn validate(_query: &Self::Query, response: &Self::Response) -> Result<(), Self::Error> {
+		if response.values().any(|asset| asset.price.median == Default::default()) {
+			return Err(());
+		}
 		Ok(())
 	}
 }
