@@ -11,8 +11,51 @@ pub fn describe_expected_type<T: TypeInfo + 'static>() -> String {
 	describe_type(&portable_registry, type_id)
 }
 
+pub fn expected_type_name<T: TypeInfo + 'static>() -> Option<String> {
+	let mut registry = Registry::new();
+	let type_id = registry.register_type(&MetaType::new::<T>()).id;
+	let portable_registry = PortableRegistry::from(registry);
+	get_type_name(&portable_registry, type_id)
+}
+
 pub fn describe_metadata_type(metadata: &RuntimeMetadataV15, type_id: u32) -> String {
 	describe_type(&metadata.types, type_id)
+}
+
+/// Describe multiple metadata types as if they were a tuple.
+///
+/// This is used for runtime API inputs where metadata stores each parameter as a separate
+/// type rather than as a single tuple type.
+pub fn describe_metadata_types_as_tuple(metadata: &RuntimeMetadataV15, type_ids: &[u32]) -> String {
+	let registry = &metadata.types;
+	let mut lines = Vec::new();
+	let mut path = Vec::new();
+	lines.push("<anonymous>".to_string());
+	for (index, &type_id) in type_ids.iter().enumerate() {
+		push_named_child(registry, format!("[{index}]"), type_id, 2, &mut path, &mut lines);
+	}
+	lines.join("\n")
+}
+
+pub fn metadata_type_name(metadata: &RuntimeMetadataV15, type_id: u32) -> Option<String> {
+	get_type_name(&metadata.types, type_id)
+}
+
+/// Computes a display name for a type, noting if the name changed between versions.
+///
+/// If both names exist and differ, returns "CurrentName (previously OldName)".
+/// If only one name is available, returns that. If neither, returns None.
+pub fn compute_type_name_display(
+	current_name: Option<String>,
+	metadata_name: Option<String>,
+) -> Option<String> {
+	match (current_name, metadata_name) {
+		(Some(current), Some(old)) if current != old =>
+			Some(format!("{current} (previously {old})")),
+		(Some(name), _) => Some(name),
+		(None, Some(name)) => Some(name),
+		(None, None) => None,
+	}
 }
 
 fn describe_type(registry: &PortableRegistry, type_id: u32) -> String {
@@ -22,6 +65,16 @@ fn describe_type(registry: &PortableRegistry, type_id: u32) -> String {
 	lines.push(type_path(portable_type));
 	push_type_body(registry, type_id, 2, &mut path, &mut lines);
 	lines.join("\n")
+}
+
+fn get_type_name(registry: &PortableRegistry, type_id: u32) -> Option<String> {
+	let portable_type = &registry.types[type_id as usize].ty;
+	let name = type_path(portable_type);
+	if name == "<anonymous>" {
+		None
+	} else {
+		Some(name)
+	}
 }
 
 fn push_type_body(

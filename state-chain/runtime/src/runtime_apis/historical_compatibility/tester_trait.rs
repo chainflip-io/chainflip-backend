@@ -37,6 +37,7 @@ pub enum ArgPos {
 	Output(),
 }
 
+#[derive(Clone, Copy)]
 pub enum TypeRef {
 	RuntimeCall { api_name: &'static str, method_name: &'static str },
 }
@@ -50,17 +51,66 @@ impl std::fmt::Display for TypeRef {
 	}
 }
 
-pub enum SubTypeDetails {
-	Input { pos: Option<u32> },
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub enum TypeName {
+	Named { name: Option<String> },
+	InputArgumentList,
+}
+
+impl std::fmt::Display for TypeName {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			TypeName::Named { name: Some(name) } => write!(f, "{name}"),
+			TypeName::Named { name: None } => write!(f, "<anonymous>"),
+			TypeName::InputArgumentList => write!(f, "function arguments"),
+		}
+	}
+}
+
+#[derive(Clone)]
+pub struct SubTypeDetails {
+	pub type_name: TypeName,
+	pub location: SubTypeLocation,
+}
+
+#[derive(Clone, Copy)]
+pub enum SubTypeLocation {
+	Input { pos: u32 },
 	Output,
 	None,
 }
+
+impl std::fmt::Display for SubTypeLocation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			SubTypeLocation::Input { pos } => write!(f, "arg #{pos}"),
+			SubTypeLocation::Output => write!(f, "result"),
+			SubTypeLocation::None => Ok(()),
+		}
+	}
+}
+
+// impl std::fmt::Display for SubTypeDetails {
+// 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+// 		match self {
+// 			SubTypeDetails::Input { pos, type_name } => {
+// 				if let Some(type_name) = type_name {
+// 					write!(f, ": {type_name}")?;
+// 				}
+// 				Ok(())
+// 			},
+// 			SubTypeDetails::Output => write!(f, "(result)"),
+// 			SubTypeDetails::None => Ok(()),
+// 		}
+// 	}
+// }
 
 pub struct TypeIncompatibilityInfo {
 	pub sub_type_incompat: SubTypeIncompatibility,
 	pub type_ref: TypeRef,
 	pub expected_encoding: String,
 	pub actual_encoding: String,
+	pub type_name: Option<String>,
 }
 
 impl std::fmt::Display for TypeIncompatibilityInfo {
@@ -96,6 +146,7 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 	strategy: &impl Strategy<Value = T1>,
 	encode: &impl Fn(T1) -> Vec<u8>,
 	decode: &impl Fn(&[u8]) -> Result<(), SubTypeIncompatibility>,
+	type_details: SubTypeDetails,
 ) -> Result<(), SubTypeIncompatibility> {
 	let mut runner = TestRunner::new(Config {
 		source_file: Some(file_path),
@@ -115,7 +166,7 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 						Ok(())
 					} else {
 						Err(SubTypeIncompatibility {
-							sub_type_details: SubTypeDetails::None,
+							sub_type_details: type_details.clone(),
 							error: format!(
 								"Encoding mismatch: {} trailing bytes remain after decoding",
 								cursor.len(),

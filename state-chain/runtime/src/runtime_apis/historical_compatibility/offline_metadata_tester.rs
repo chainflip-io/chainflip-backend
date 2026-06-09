@@ -17,9 +17,12 @@ use std::collections::HashMap;
 use crate::runtime_apis::historical_compatibility::{
 	tester_trait::{
 		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
-		SubTypeIncompatibility, TypeIncompatibilityInfo, TypeRef,
+		SubTypeIncompatibility, SubTypeLocation, TypeIncompatibilityInfo, TypeName, TypeRef,
 	},
-	type_describer::{describe_expected_type, describe_metadata_type},
+	type_describer::{
+		compute_type_name_display, describe_expected_type, describe_metadata_type,
+		describe_metadata_types_as_tuple, expected_type_name, metadata_type_name,
+	},
 };
 
 pub struct OfflineMetadataTester {
@@ -105,6 +108,10 @@ impl OfflineMetadataTester {
 	fn describe_metadata_type(&self, spec_version: u32, type_id: u32) -> String {
 		describe_metadata_type(self.get_loaded_metadata(spec_version), type_id)
 	}
+
+	fn metadata_type_name(&self, spec_version: u32, type_id: u32) -> Option<String> {
+		metadata_type_name(self.get_loaded_metadata(spec_version), type_id)
+	}
 }
 
 impl HistoricalCompatibilityTester for OfflineMetadataTester {
@@ -127,20 +134,20 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	) -> Vec<TypeIncompatibilityInfo> {
 		let spec_version = V::LATEST_RUNTIME_PATCH_VERSION;
 
-		// let mut runner = TestRunner::new(Config {
-		// 	source_file: Some(file_path),
-		// 	failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
-		// 		"proptest-regressions",
-		// 	))),
-		// 	cases: 200,
-		// 	..Default::default()
-		// });
-
 		// the metadata has to be loaded if it isn't already
 		self.load_metadata(spec_version);
 
 		let (input_type_ids, output_type_id) =
 			self.find_method_types(spec_version, api_name, method_name);
+
+		let input_type_names: Vec<_> = input_type_ids
+			.iter()
+			.map(|type_id| match self.metadata_type_name(spec_version, *type_id) {
+				Some(name) => name,
+				None => "<anonoymous>".into(),
+			})
+			.collect();
+		let input_type_name = format!("({})", input_type_names.join(", "));
 
 		let input_result = fuzzy_test_encode_decode_compatibility(
 			file_path,
@@ -152,17 +159,30 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 						spec_version,
 						*type_id,
 						&mut encoded,
-						SubTypeDetails::Input { pos: Some(arg_pos as u32) },
+						SubTypeDetails {
+							type_name: TypeName::Named {
+								name: self.metadata_type_name(spec_version, *type_id),
+							},
+							location: SubTypeLocation::Input { pos: arg_pos as u32 },
+						},
 					)?;
 				}
 				Ok(())
 			},
+			SubTypeDetails {
+				type_name: TypeName::Named { name: Some(input_type_name.clone()) },
+				location: SubTypeLocation::None,
+			},
 		)
-		.map_err(|err| TypeIncompatibilityInfo {
-			type_ref: TypeRef::RuntimeCall { api_name, method_name },
-			expected_encoding: describe_expected_type::<I::HistoricalType>(),
-			actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
-			sub_type_incompat: err,
+		.map_err(|err| {
+			let metadata = self.get_loaded_metadata(spec_version);
+			TypeIncompatibilityInfo {
+				type_ref: TypeRef::RuntimeCall { api_name, method_name },
+				expected_encoding: describe_expected_type::<I::HistoricalType>(),
+				actual_encoding: describe_metadata_types_as_tuple(metadata, &input_type_ids),
+				sub_type_incompat: err,
+				type_name: Some(input_type_name.clone()),
+			}
 		});
 
 		let output_result = fuzzy_test_encode_decode_compatibility(
@@ -174,9 +194,20 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 					spec_version,
 					output_type_id,
 					&mut encoded,
-					SubTypeDetails::Output,
+					SubTypeDetails {
+						type_name: TypeName::Named {
+							name: self.metadata_type_name(spec_version, output_type_id),
+						},
+						location: SubTypeLocation::Output,
+					},
 				)?;
 				Ok(())
+			},
+			SubTypeDetails {
+				type_name: TypeName::Named {
+					name: self.metadata_type_name(spec_version, output_type_id),
+				},
+				location: SubTypeLocation::Output,
 			},
 		)
 		.map_err(|err| TypeIncompatibilityInfo {
@@ -184,6 +215,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			expected_encoding: describe_expected_type::<O::HistoricalType>(),
 			actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
 			sub_type_incompat: err,
+			type_name: self.metadata_type_name(spec_version, output_type_id),
 		});
 
 		input_result.err().into_iter().chain(output_result.err().into_iter()).collect()
