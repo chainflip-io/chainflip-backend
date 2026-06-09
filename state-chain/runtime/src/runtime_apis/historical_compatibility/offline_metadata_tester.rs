@@ -15,7 +15,10 @@ use scale_json::ScaleDecodedToJson;
 use std::collections::HashMap;
 
 use crate::runtime_apis::historical_compatibility::{
-	tester_trait::HistoricalCompatibilityTester,
+	tester_trait::{
+		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
+		SubTypeIncompatibility, TypeIncompatibilityInfo, TypeRef,
+	},
 	type_describer::{describe_expected_type, describe_metadata_type},
 };
 
@@ -89,10 +92,14 @@ impl OfflineMetadataTester {
 		spec_version: u32,
 		type_id: u32,
 		cursor: &mut &[u8],
-	) -> Result<ScaleDecodedToJson, TestCaseError> {
+		sub_type_ref: SubTypeDetails,
+	) -> Result<ScaleDecodedToJson, SubTypeIncompatibility> {
 		let metadata = self.get_loaded_metadata(spec_version);
 		<ScaleDecodedToJson as DecodeAsType>::decode_as_type(cursor, type_id, &metadata.types)
-			.map_err(|e| TestCaseError::fail(format!("Decode failed for type_id {type_id}: {e}")))
+			.map_err(|e| SubTypeIncompatibility {
+				sub_type_details: sub_type_ref,
+				error: format!("{e}"),
+			})
 	}
 
 	fn describe_metadata_type(&self, spec_version: u32, type_id: u32) -> String {
@@ -104,28 +111,30 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	fn test_call<
 		V: VariantName,
 		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static>
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static>
-			+ HasGenericVariant<GenericType: Arbitrary>,
+			+ HasVersion<
+				V,
+				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
+			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
 		version: V,
 		api_name: &'static str,
 		method_name: &'static str,
 		file_path: &'static str,
-	) {
+	) -> Vec<TypeIncompatibilityInfo> {
 		let spec_version = V::LATEST_RUNTIME_PATCH_VERSION;
 
-		let mut runner = TestRunner::new(Config {
-			source_file: Some(file_path),
-			failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
-				"proptest-regressions",
-			))),
-			cases: 200,
-			..Default::default()
-		});
+		// let mut runner = TestRunner::new(Config {
+		// 	source_file: Some(file_path),
+		// 	failure_persistence: Some(Box::new(FileFailurePersistence::SourceParallel(
+		// 		"proptest-regressions",
+		// 	))),
+		// 	cases: 200,
+		// 	..Default::default()
+		// });
 
 		// the metadata has to be loaded if it isn't already
 		self.load_metadata(spec_version);
@@ -133,64 +142,115 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		let (input_type_ids, output_type_id) =
 			self.find_method_types(spec_version, api_name, method_name);
 
-		let strategy = (
-			<I as HasGenericVariant>::GenericType::arbitrary(),
-			<O as HasGenericVariant>::GenericType::arbitrary(),
-		);
-
-		let result = runner
-			.run(&strategy, |(generic_input, generic_output)| {
-				// Encode the input using the legacy type
-				let input: I = migrate_from_generic_type(generic_input);
-				let old_input = migrate_to_historical_type(version, input);
-				let encoded_input = old_input.encode();
-
-				// Verify that encoding is decodable against each input param's historical type
-				let mut cursor = &encoded_input[..];
-				for &type_id in &input_type_ids {
-					self.try_decode_as_type(spec_version, type_id, &mut cursor)?;
+		let input_result = fuzzy_test_encode_decode_compatibility(
+			file_path,
+			&I::HistoricalType::arbitrary(),
+			&|value| value.encode(),
+			&|mut encoded| {
+				for (arg_pos, type_id) in input_type_ids.iter().enumerate() {
+					self.try_decode_as_type(
+						spec_version,
+						*type_id,
+						&mut encoded,
+						SubTypeDetails::Input { pos: Some(arg_pos as u32) },
+					)?;
 				}
-				if !cursor.is_empty() {
-					return Err(TestCaseError::fail(format!(
-						"Encoding mismatch: {} trailing bytes remain after decoding inputs (type ids {input_type_ids:?})",
-						cursor.len(),
-					)));
-				}
-
-				// Encode the output using the legacy type
-				let output: O = migrate_from_generic_type(generic_output);
-				let old_output = migrate_to_historical_type(version, output);
-				let encoded_output = old_output.encode();
-				let mut cursor = &encoded_output[..];
-				let expected_output_type = describe_expected_type::<O::HistoricalType>();
-				let actual_output_type = self.describe_metadata_type(spec_version, output_type_id);
-				self.try_decode_as_type(spec_version, output_type_id, &mut cursor)
-					.map_err(|e| TestCaseError::fail(format!(
-						"Output decode failed for old_output: {:?}\n\nExpected encoded type:\n{}\n\nMetadata type:\n{}\n\nError: {e}",
-						old_output,
-						expected_output_type,
-						actual_output_type,
-					)))?;
-
-				if !cursor.is_empty() {
-					return Err(TestCaseError::fail(format!(
-						"Encoding mismatch: {} trailing bytes remain after decoding output (type_id {output_type_id})",
-						cursor.len(),
-					)));
-				}
-
 				Ok(())
-			});
-
-		match result {
-			Ok(_) => (),
-			Err(err) => match err {
-				proptest::test_runner::TestError::Abort(reason) |
-				proptest::test_runner::TestError::Fail(reason, _) => {
-					println!("Test failed with:\n\n{reason}");
-					panic!("failed!");
-				},
 			},
-		}
+		)
+		.map_err(|err| TypeIncompatibilityInfo {
+			type_ref: TypeRef::RuntimeCall { api_name, method_name },
+			expected_encoding: describe_expected_type::<I::HistoricalType>(),
+			actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
+			sub_type_incompat: err,
+		});
+
+		let output_result = fuzzy_test_encode_decode_compatibility(
+			file_path,
+			&O::HistoricalType::arbitrary(),
+			&|value| value.encode(),
+			&|mut encoded| {
+				self.try_decode_as_type(
+					spec_version,
+					output_type_id,
+					&mut encoded,
+					SubTypeDetails::Output,
+				)?;
+				Ok(())
+			},
+		)
+		.map_err(|err| TypeIncompatibilityInfo {
+			type_ref: TypeRef::RuntimeCall { api_name, method_name },
+			expected_encoding: describe_expected_type::<O::HistoricalType>(),
+			actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
+			sub_type_incompat: err,
+		});
+
+		input_result.err().into_iter().chain(output_result.err().into_iter()).collect()
+
+		// let strategy = (
+		// 	<I as HasGenericVariant>::GenericType::arbitrary(),
+		// 	<O as HasGenericVariant>::GenericType::arbitrary(),
+		// );
+
+		// let result = runner
+		// 	.run(&strategy, |(generic_input, generic_output)| {
+		// 		// Encode the input using the legacy type
+		// 		let input: I = migrate_from_generic_type(generic_input);
+		// 		let old_input = migrate_to_historical_type(version, input);
+		// 		let encoded_input = old_input.encode();
+
+		// 		// Verify that encoding is decodable against each input param's historical type
+		// 		let mut cursor = &encoded_input[..];
+		// 		for &type_id in &input_type_ids {
+		// 			self.try_decode_as_type(spec_version, type_id, &mut cursor)?;
+		// 		}
+		// 		if !cursor.is_empty() {
+		// 			return Err(TestCaseError::fail(format!(
+		// 				"Encoding mismatch: {} trailing bytes remain after decoding inputs (type ids
+		// {input_type_ids:?})", 				cursor.len(),
+		// 			)));
+		// 		}
+
+		// 		// Encode the output using the legacy type
+		// 		let output: O = migrate_from_generic_type(generic_output);
+		// 		let old_output = migrate_to_historical_type(version, output);
+		// 		let encoded_output = old_output.encode();
+		// 		let mut cursor = &encoded_output[..];
+		// 		self.try_decode_as_type(spec_version, output_type_id, &mut cursor)
+		// 			.map_err(|e| TestCaseError::fail(format!(
+		// 				"Old value could not be decoded historically",
+		// 				// "Output decode failed for old_output: {:?}\n\nExpected encoded
+		// type:\n{}\n\nMetadata type:\n{}\n\nError: {e}", 				// old_output,
+		// 				// expected_output_type,
+		// 				// actual_output_type,
+		// 			)))?;
+
+		// 		if !cursor.is_empty() {
+		// 			return Err(TestCaseError::fail(format!(
+		// 				"Encoding mismatch: {} trailing bytes remain after decoding output (type_id
+		// {output_type_id})", 				cursor.len(),
+		// 			)));
+		// 		}
+
+		// 		Ok(())
+		// 	});
+
+		// match result {
+		// 	Ok(_) => (),
+		// 	Err(err) => match err {
+		// 		proptest::test_runner::TestError::Abort(reason) |
+		// 		proptest::test_runner::TestError::Fail(reason, _) => {
+		// 			let expected_output_type = describe_expected_type::<O::HistoricalType>();
+		// 			let actual_output_type =
+		// 				self.describe_metadata_type(spec_version, output_type_id);
+
+		// 			println!("Test failed with:\n\n{reason}");
+		// 			println!("Old type:\n{actual_output_type}\n\nNew type:{expected_output_type}");
+
+		// 			panic!("failed!");
+		// 		},
+		// 	},
+		// }
 	}
 }

@@ -19,7 +19,9 @@ pub mod types;
 pub use types::RawWitnessedEvents;
 
 #[cfg(test)]
-use crate::runtime_apis::historical_compatibility::tester_trait::HistoricalCompatibilityTester;
+use crate::runtime_apis::historical_compatibility::tester_trait::{
+	HistoricalCompatibilityTester, TypeIncompatibilityInfo,
+};
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -447,18 +449,30 @@ decl_runtime_apis!(
 pub fn test_all_historical_runtime_calls(
 	tester: &mut impl HistoricalCompatibilityTester,
 	path: &'static str,
-) {
-	use cf_utilities::migrations::{v0200, v0201};
-	tester.test_call::<v0201, (), NetworkFees>(v0201, "CustomRuntimeApi", "cf_network_fees", path);
-	// tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees",
-	// path);
+) -> Vec<TypeIncompatibilityInfo> {
+	let mut incompatibilites = Vec::new();
 
-	tester.test_call::<v0201, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
+	use cf_utilities::migrations::{v0200, v0201};
+
+	incompatibilites.append(&mut tester.test_call::<v0201, (), NetworkFees>(
 		v0201,
 		"CustomRuntimeApi",
-		"cf_common_account_info",
+		"cf_network_fees",
 		path,
+	));
+
+	// tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees",
+	// path);
+	incompatibilites.append(
+		&mut tester.test_call::<v0201, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
+			v0201,
+			"CustomRuntimeApi",
+			"cf_common_account_info",
+			path,
+		),
 	);
+
+	incompatibilites
 
 	// tester.test_call::<v0200, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
 	// 	v0200,

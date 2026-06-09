@@ -10,7 +10,9 @@ use proptest::{
 use scale_info::TypeInfo;
 use std::fmt::Debug;
 
-use crate::runtime_apis::historical_compatibility::tester_trait::HistoricalCompatibilityTester;
+use crate::runtime_apis::historical_compatibility::tester_trait::{
+	HistoricalCompatibilityTester, TypeIncompatibilityInfo,
+};
 
 pub struct OnlineNodeTester {
 	pub get_blockhash_from_spec_version: Box<dyn Fn(u32) -> Option<&'static str>>,
@@ -23,22 +25,24 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
 		V: VariantName,
 		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static>
+			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static>
-			+ HasGenericVariant<GenericType: Arbitrary>,
+			+ HasVersion<
+				V,
+				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
+			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
 		version: V,
 		api_name: &'static str,
 		method_name: &'static str,
 		file_path: &'static str,
-	) {
+	) -> Vec<TypeIncompatibilityInfo> {
 		let Some(blockhash) =
 			(self.get_blockhash_from_spec_version)(V::LATEST_RUNTIME_PATCH_VERSION)
 		else {
-			return;
+			return Vec::new();
 		};
 
 		let client = reqwest::blocking::Client::new();
@@ -120,7 +124,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				Ok(())
 			});
 		match result {
-			Ok(_) => (),
+			Ok(_) => Vec::new(),
 			Err(err) => match err {
 				proptest::test_runner::TestError::Abort(reason) |
 				proptest::test_runner::TestError::Fail(reason, _) => {

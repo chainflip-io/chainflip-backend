@@ -10,7 +10,16 @@ use crate::runtime_apis::{
 #[test]
 pub fn offline_test_historical_compatibility_of_runtime_api() {
 	let mut tester = OfflineMetadataTester::new();
-	test_all_historical_runtime_calls(&mut tester, file!());
+	let incompatibilities = test_all_historical_runtime_calls(&mut tester, file!());
+
+	if incompatibilities.len() > 0 {
+		for incompatibility in incompatibilities {
+			println!("{incompatibility}");
+			println!("");
+		}
+
+		panic!("type schema incompatibilities found!")
+	}
 }
 
 #[ignore = "requires access to archive node"]

@@ -135,6 +135,8 @@ cf-primitives = { workspace = true, features = ["proptest"] }
 sp-core = { workspace = true, features = ["serde", "proptest"] }
 cf-utilities = { workspace = true, features = ["proptest"] }
 
+similar = { version = "3" }
+
 
 [features]
 default = ["std"]
