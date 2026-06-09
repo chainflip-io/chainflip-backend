@@ -180,13 +180,11 @@ impl std::fmt::Display for TypeDiffSummary {
 			Ok(())
 		}
 
-		if !self.deletions.is_empty() {
-			writeln!(f, "  removed:")?;
-			write_top_level_lines(f, &self.deletions, "-", RED, RESET)?;
-		}
 		if !self.inserts.is_empty() {
-			writeln!(f, "  added:")?;
 			write_top_level_lines(f, &self.inserts, "+", GREEN, RESET)?;
+		}
+		if !self.deletions.is_empty() {
+			write_top_level_lines(f, &self.deletions, "-", RED, RESET)?;
 		}
 		Ok(())
 	}

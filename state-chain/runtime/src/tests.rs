@@ -42,10 +42,11 @@ pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), Stri
 			println!("{ty}");
 			let summary = diff.get_summary();
 			print!("{summary}");
-			println!("found in:");
+			println!("  in: [");
 			for l in locs {
-				println!("   - {l}");
+				println!("    {l},");
 			}
+			println!("  ]");
 			println!("");
 		}
 

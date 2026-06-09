@@ -34,7 +34,9 @@ pub fn describe_metadata_types_as_tuple(metadata: &RuntimeMetadataV15, type_ids:
 	for (index, &type_id) in type_ids.iter().enumerate() {
 		push_named_child(registry, format!("[{index}]"), type_id, 2, &mut path, &mut lines);
 	}
-	lines.join("\n")
+	let mut result = lines.join("\n");
+	result.push('\n');
+	result
 }
 
 pub fn metadata_type_name(metadata: &RuntimeMetadataV15, type_id: u32) -> Option<String> {
@@ -64,7 +66,9 @@ fn describe_type(registry: &PortableRegistry, type_id: u32) -> String {
 	let portable_type = &registry.types[type_id as usize].ty;
 	lines.push(type_path(portable_type));
 	push_type_body(registry, type_id, 2, &mut path, &mut lines);
-	lines.join("\n")
+	let mut result = lines.join("\n");
+	result.push('\n');
+	result
 }
 
 fn get_type_name(registry: &PortableRegistry, type_id: u32) -> Option<String> {
