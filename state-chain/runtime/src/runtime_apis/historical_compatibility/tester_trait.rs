@@ -104,17 +104,19 @@ impl std::fmt::Display for SubTypeLocation {
 pub struct TypeIncompatibilityInfo {
 	pub sub_type_incompat: SubTypeIncompatibility,
 	pub type_ref: TypeRef,
-	pub expected_encoding: String,
-	pub actual_encoding: String,
+	pub type_diff: TypeDiff,
 	pub type_name: Option<String>,
 }
 
-impl std::fmt::Display for TypeIncompatibilityInfo {
+#[derive(Hash, PartialEq, Eq, Clone)]
+pub struct TypeDiff {
+	pub actual_encoding: String,
+	pub expected_encoding: String,
+}
+
+impl std::fmt::Display for TypeDiff {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use similar::{ChangeTag, TextDiff};
-
-		writeln!(f, "Type is incompatible")?;
-		writeln!(f, "Occurs in: {}", self.type_ref)?;
 
 		let diff =
 			TextDiff::from_lines(self.actual_encoding.clone(), self.expected_encoding.clone());

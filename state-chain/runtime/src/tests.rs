@@ -7,7 +7,7 @@ use crate::runtime_apis::{
 	historical_compatibility::{
 		offline_metadata_tester::OfflineMetadataTester,
 		online_node_tester::OnlineNodeTester,
-		tester_trait::{FullTypeLocation, SubTypeLocation, TypeName, TypeRef},
+		tester_trait::{FullTypeLocation, SubTypeLocation, TypeDiff, TypeName, TypeRef},
 	},
 };
 
@@ -17,14 +17,15 @@ pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), Stri
 	let incompatibilities = test_all_historical_runtime_calls(&mut tester, file!());
 
 	if incompatibilities.len() > 0 {
-		let mut types_and_locations: HashMap<TypeName, Vec<FullTypeLocation>> = Default::default();
+		let mut types_and_locations: HashMap<(TypeName, TypeDiff), Vec<FullTypeLocation>> =
+			Default::default();
 
 		for incompatibility in &incompatibilities {
-			println!("{incompatibility}");
-			println!("");
-
 			types_and_locations
-				.entry(incompatibility.sub_type_incompat.sub_type_details.type_name.clone())
+				.entry((
+					incompatibility.sub_type_incompat.sub_type_details.type_name.clone(),
+					incompatibility.type_diff.clone(),
+				))
 				.or_default()
 				.push(FullTypeLocation {
 					reference: incompatibility.type_ref,
@@ -33,8 +34,11 @@ pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), Stri
 		}
 
 		println!("The following type mismatches were found:");
-		for (ty, locs) in &types_and_locations {
+		for ((ty, diff), locs) in &types_and_locations {
 			println!("{ty}");
+			println!("```");
+			print!("{diff}");
+			println!("```");
 			println!("found in:");
 			for l in locs {
 				println!("   - {l}");

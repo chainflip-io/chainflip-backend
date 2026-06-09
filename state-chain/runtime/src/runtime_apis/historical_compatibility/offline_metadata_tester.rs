@@ -17,7 +17,8 @@ use std::collections::HashMap;
 use crate::runtime_apis::historical_compatibility::{
 	tester_trait::{
 		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
-		SubTypeIncompatibility, SubTypeLocation, TypeIncompatibilityInfo, TypeName, TypeRef,
+		SubTypeIncompatibility, SubTypeLocation, TypeDiff, TypeIncompatibilityInfo, TypeName,
+		TypeRef,
 	},
 	type_describer::{
 		compute_type_name_display, describe_expected_type, describe_metadata_type,
@@ -178,8 +179,10 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			let metadata = self.get_loaded_metadata(spec_version);
 			TypeIncompatibilityInfo {
 				type_ref: TypeRef::RuntimeCall { api_name, method_name },
-				expected_encoding: describe_expected_type::<I::HistoricalType>(),
-				actual_encoding: describe_metadata_types_as_tuple(metadata, &input_type_ids),
+				type_diff: TypeDiff {
+					expected_encoding: describe_expected_type::<I::HistoricalType>(),
+					actual_encoding: describe_metadata_types_as_tuple(metadata, &input_type_ids),
+				},
 				sub_type_incompat: err,
 				type_name: Some(input_type_name.clone()),
 			}
@@ -212,8 +215,10 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		)
 		.map_err(|err| TypeIncompatibilityInfo {
 			type_ref: TypeRef::RuntimeCall { api_name, method_name },
-			expected_encoding: describe_expected_type::<O::HistoricalType>(),
-			actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
+			type_diff: TypeDiff {
+				expected_encoding: describe_expected_type::<O::HistoricalType>(),
+				actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
+			},
 			sub_type_incompat: err,
 			type_name: self.metadata_type_name(spec_version, output_type_id),
 		});
