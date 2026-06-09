@@ -37,7 +37,7 @@ pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), Stri
 			println!("```");
 		}
 
-		println!("The following type mismatches were found:");
+		println!("# Summary");
 		for ((ty, diff), locs) in &types_and_locations {
 			println!("{ty}");
 			let summary = diff.get_summary();

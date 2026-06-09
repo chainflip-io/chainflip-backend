@@ -223,3 +223,34 @@ impl<A: IsHistoricalType<GetCurrentType: OrdMigrations + Ord>, B: IsHistoricalTy
 }
 
 trait IsHistoricalTypeOrd = IsHistoricalType<GetCurrentType: OrdMigrations + Ord>;
+
+// tuple (A, B)
+
+impl<A, B, V: VariantName, M1: Migration<A, V>, M2: Migration<B, V>> Migration<(A, B), V>
+	for MapMigration<(M1, M2)>
+{
+	type From = (M1::From, M2::From);
+
+	fn forwards(x: Self::From) -> (A, B) {
+		(M1::forwards(x.0), M2::forwards(x.1))
+	}
+
+	fn backwards(x: (A, B)) -> Self::From {
+		(M1::backwards(x.0), M2::backwards(x.1))
+	}
+}
+
+impl<A: Migrations, B: Migrations> Migrations for (A, B) {
+	type DefaultMigration = MapMigration<(A::DefaultMigration, B::DefaultMigration)>;
+
+	type MigrationTo0200 = MapMigration<(A::MigrationTo0200, B::MigrationTo0200)>;
+	type MigrationTo0201 = MapMigration<(A::MigrationTo0201, B::MigrationTo0201)>;
+	type MigrationTo0202 = MapMigration<(A::MigrationTo0202, B::MigrationTo0202)>;
+}
+impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for (A, B) {
+	type GenericType = (A::GenericType, B::GenericType);
+	type MigrationFromGeneric = MapMigration<(A::MigrationFromGeneric, B::MigrationFromGeneric)>;
+}
+impl<A: IsHistoricalType, B: IsHistoricalType> IsHistoricalType for (A, B) {
+	type GetCurrentType = (A::GetCurrentType, B::GetCurrentType);
+}

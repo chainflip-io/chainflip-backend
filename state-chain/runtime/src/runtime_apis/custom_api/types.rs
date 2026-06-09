@@ -31,7 +31,10 @@ pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
-	basics::{vCurrent, GlobalMigrationFromGeneric, HasVersion, Migration},
+	basics::{
+		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
+		IsHistoricalType, Migration,
+	},
 	v0201, v0202, Migrations,
 };
 use codec::{Decode, Encode};
@@ -827,8 +830,20 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq)]
+#[derive(Encode, Decode, TypeInfo, PartialEq, Debug)]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum ShouldSweep {
 	Yes,
 	No,
+}
+
+impl Migrations for ShouldSweep {
+	type DefaultMigration = IdentityMigration;
+}
+impl HasGenericVariant for ShouldSweep {
+	type GenericType = Self;
+	type MigrationFromGeneric = IdentityMigration;
+}
+impl IsHistoricalType for ShouldSweep {
+	type GetCurrentType = Self;
 }

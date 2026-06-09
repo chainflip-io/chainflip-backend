@@ -464,12 +464,13 @@ pub fn test_all_historical_runtime_calls(
 	// tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees",
 	// path);
 	incompatibilites.append(
-		&mut tester.test_call::<v0201, AccountId32, RpcAccountInfoCommonItems<FlipBalance>>(
-			v0201,
-			"CustomRuntimeApi",
-			"cf_common_account_info",
-			path,
-		),
+		&mut tester
+			.test_call::<v0201, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
+				v0201,
+				"CustomRuntimeApi",
+				"cf_common_account_info",
+				path,
+			),
 	);
 
 	incompatibilites
