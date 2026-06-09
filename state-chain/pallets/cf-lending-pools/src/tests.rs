@@ -537,7 +537,6 @@ fn basic_boosting() {
 				loan_id: LOAN_ID,
 				pool_fee: POOL_FEE,
 				network_fee: NETWORK_FEE,
-				broker_fee: 0,
 			}),
 		);
 
@@ -673,7 +672,6 @@ fn boosted_deposit_is_lost() {
 				loan_id: LOAN_ID,
 				pool_fee: POOL_FEE,
 				network_fee: NETWORK_FEE,
-				broker_fee: 0,
 			}),
 		);
 
@@ -1259,7 +1257,6 @@ mod hybrid_boosting {
 					loan_id: LOAN_ID,
 					pool_fee: LENDING_POOL_FEE,
 					network_fee: LENDING_NETWORK_FEE,
-					broker_fee: 0,
 				}),
 			);
 
@@ -1378,7 +1375,6 @@ mod hybrid_boosting {
 					loan_id: LOAN_ID,
 					pool_fee: LENDING_POOL_FEE,
 					network_fee: LENDING_NETWORK_FEE,
-					broker_fee: 0,
 				}),
 			);
 

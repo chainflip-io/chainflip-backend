@@ -1012,7 +1012,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee: 0,
 				}) if pool_fee == origination_fee_pool_2 && network_fee == origination_fee_network_2
 			);
 
@@ -1097,7 +1096,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
 					network_fee: network_fee_taken,
-					broker_fee: 0,
 				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
 			);
 
