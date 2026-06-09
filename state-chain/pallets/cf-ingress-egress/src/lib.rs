@@ -227,6 +227,7 @@ enum FullWitnessDepositOutcome {
 enum RejectionRefundDidntSucceed {
 	RetryLater,
 	RecordFailureAndAbortRefund,
+	AbortRefundBelowDustLimit,
 }
 
 mod deposit_origin {
@@ -1193,6 +1194,11 @@ pub mod pallet {
 			account_id: T::AccountId,
 			deposit_address: TargetChainAccount<T, I>,
 		},
+		TransactionRejectionRefundBelowDustLimit {
+			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+		},
 	}
 
 	#[derive(CloneNoBound, PartialEqNoBound, EqNoBound)]
@@ -1504,6 +1510,15 @@ pub mod pallet {
 							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 								tx_id: tx.deposit_details.clone(),
 							});
+						},
+						Err(RejectionRefundDidntSucceed::AbortRefundBelowDustLimit) => {
+							Self::deposit_event(
+								Event::<T, I>::TransactionRejectionRefundBelowDustLimit {
+									tx_id: tx.deposit_details,
+									asset: tx.asset,
+									amount: tx.amount,
+								},
+							);
 						},
 					}
 				}
@@ -1843,6 +1858,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let amount_to_refund =
 			Self::withhold_ingress_or_egress_fee(egress_type, tx.asset, amount_after_ingress_fees)
 				.amount_after_fees;
+
+		if amount_to_refund < EgressDustLimit::<T, I>::get(tx.asset).unique_saturated_into() {
+			return Err(AbortRefundBelowDustLimit)
+		}
 
 		// this is the function we use to broadcast, used multiple times below
 		let broadcast_and_finalise_fetch = |api_call| {

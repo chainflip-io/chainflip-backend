@@ -3437,6 +3437,74 @@ mod evm_transaction_rejection {
 	}
 
 	#[test]
+	fn refund_below_dust_limit_is_dropped() {
+		new_test_ext().execute_with(|| {
+			// Set the egress dust limit above the deposit amount so the refund (deposit minus
+			// fees) is guaranteed to be below the dust limit.
+			EgressDustLimit::<Test, Instance1>::set(ETH, DEFAULT_DEPOSIT_AMOUNT + 1);
+
+			let tx_id = EvmHash::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+			let (_, deposit_address, block, _) =
+				EthereumIngressEgress::request_liquidity_deposit_address(
+					BROKER,
+					BROKER,
+					ETH,
+					0,
+					ForeignChainAddress::Eth(Default::default()),
+					None,
+				)
+				.unwrap();
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+			let deposit_details = DepositDetails { tx_hashes: Some(vec![tx_id]) };
+
+			assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			EthereumIngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details,
+				},
+				block,
+			);
+
+			// The rejection is scheduled regardless of the egress dust limit.
+			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+
+			EthereumIngressEgress::on_finalize(2);
+
+			// The dust guard fired: the rejection was dropped (not re-queued), not recorded as
+			// a failure, and nothing was broadcast (neither a fetch nor a refund).
+			assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+			assert!(FailedRejections::<Test, Instance1>::get().is_empty());
+			assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
+
+			// A dedicated event is emitted instead of TransactionRejectedByBroker, for the
+			// rejected tx_id.
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::EthereumIngressEgress(
+					crate::Event::<Test, Instance1>::TransactionRejectionRefundBelowDustLimit {
+						tx_id: event_tx_id,
+						asset,
+						amount,
+					}
+				) if event_tx_id.deposit_ids().unwrap().contains(&tx_id) &&
+					*asset == ETH &&
+					*amount == DEFAULT_DEPOSIT_AMOUNT
+			);
+		});
+	}
+
+	#[test]
 	fn whitelisted_broker_can_mark_tx_for_rejection_for_lp() {
 		new_test_ext().execute_with(|| {
 			let tx_id = EvmHash::from_str(
