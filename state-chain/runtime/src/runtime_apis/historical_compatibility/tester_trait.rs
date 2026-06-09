@@ -170,13 +170,11 @@ impl std::fmt::Display for TypeDiffSummary {
 			reset: &str,
 		) -> std::fmt::Result {
 			for group in groups {
-				let mut prev_indent = None;
+				let top_indent = group.first().map(|l| indentation(l));
 				for line in group {
-					let indent = indentation(line);
-					if prev_indent.is_none() || indent <= prev_indent.unwrap() {
-						writeln!(f, "    {color}{prefix} {line}{reset}")?;
+					if Some(indentation(line)) == top_indent {
+						writeln!(f, "    {color}{prefix} {}{reset}", line.trim_start())?;
 					}
-					prev_indent = Some(indent);
 				}
 			}
 			Ok(())
