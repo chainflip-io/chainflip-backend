@@ -4,6 +4,7 @@ import { testVaultSwap } from 'tests/vault_swap_tests';
 import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
+import { checkNoTransferFallbacks } from 'shared/check_transfer_fallbacks';
 import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
@@ -88,6 +89,7 @@ describe('ConcurrentTests', () => {
     5 * ciTimeoutFactor,
   );
   serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 5 * ciTimeoutFactor);
+  serialTest('CheckNoTransferFallbacks', checkNoTransferFallbacks, 10 * ciTimeoutFactor);
 });
 
 // Run only the broker level screening tests
