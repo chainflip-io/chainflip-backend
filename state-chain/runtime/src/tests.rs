@@ -31,14 +31,17 @@ pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), Stri
 					reference: incompatibility.type_ref,
 					sub_location: incompatibility.sub_type_incompat.sub_type_details.location,
 				});
+
+			println!("```");
+			print!("{}", &incompatibility.type_diff);
+			println!("```");
 		}
 
 		println!("The following type mismatches were found:");
 		for ((ty, diff), locs) in &types_and_locations {
 			println!("{ty}");
-			println!("```");
-			print!("{diff}");
-			println!("```");
+			let summary = diff.get_summary();
+			print!("{summary}");
 			println!("found in:");
 			for l in locs {
 				println!("   - {l}");

@@ -11,6 +11,7 @@ use proptest::{
 	test_runner::{Config, FileFailurePersistence, TestRunner},
 };
 use scale_info::TypeInfo;
+use similar::{ChangeTag, TextDiff};
 
 pub trait HistoricalCompatibilityTester {
 	fn test_call<
@@ -114,20 +115,107 @@ pub struct TypeDiff {
 	pub expected_encoding: String,
 }
 
+impl TypeDiff {
+	pub fn get_summary(&self) -> TypeDiffSummary {
+		let diff = TextDiff::from_lines(&self.actual_encoding, &self.expected_encoding);
+
+		let mut inserts: Vec<Vec<String>> = Vec::new();
+		let mut deletions: Vec<Vec<String>> = Vec::new();
+		let mut last_tag = None;
+
+		for change in diff.iter_all_changes() {
+			let line = change.to_string_lossy().trim_end().to_string();
+			match change.tag() {
+				ChangeTag::Insert => {
+					if last_tag != Some(ChangeTag::Insert) {
+						inserts.push(Vec::new());
+					}
+					inserts.last_mut().unwrap().push(line);
+				},
+				ChangeTag::Delete => {
+					if last_tag != Some(ChangeTag::Delete) {
+						deletions.push(Vec::new());
+					}
+					deletions.last_mut().unwrap().push(line);
+				},
+				ChangeTag::Equal => {},
+			}
+			last_tag = Some(change.tag());
+		}
+
+		TypeDiffSummary { inserts, deletions }
+	}
+}
+
+pub struct TypeDiffSummary {
+	pub inserts: Vec<Vec<String>>,
+	pub deletions: Vec<Vec<String>>,
+}
+
+impl std::fmt::Display for TypeDiffSummary {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		const RED: &str = "\x1b[31m";
+		const GREEN: &str = "\x1b[32m";
+		const RESET: &str = "\x1b[0m";
+
+		fn indentation(s: &str) -> usize {
+			s.len() - s.trim_start().len()
+		}
+
+		fn write_top_level_lines(
+			f: &mut std::fmt::Formatter<'_>,
+			groups: &[Vec<String>],
+			prefix: &str,
+			color: &str,
+			reset: &str,
+		) -> std::fmt::Result {
+			for group in groups {
+				let mut prev_indent = None;
+				for line in group {
+					let indent = indentation(line);
+					if prev_indent.is_none() || indent <= prev_indent.unwrap() {
+						writeln!(f, "    {color}{prefix} {line}{reset}")?;
+					}
+					prev_indent = Some(indent);
+				}
+			}
+			Ok(())
+		}
+
+		if !self.deletions.is_empty() {
+			writeln!(f, "  removed:")?;
+			write_top_level_lines(f, &self.deletions, "-", RED, RESET)?;
+		}
+		if !self.inserts.is_empty() {
+			writeln!(f, "  added:")?;
+			write_top_level_lines(f, &self.inserts, "+", GREEN, RESET)?;
+		}
+		Ok(())
+	}
+}
+
 impl std::fmt::Display for TypeDiff {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use similar::{ChangeTag, TextDiff};
 
-		let diff =
-			TextDiff::from_lines(self.actual_encoding.clone(), self.expected_encoding.clone());
+		const RED: &str = "\x1b[31m";
+		const GREEN: &str = "\x1b[32m";
+		const CYAN: &str = "\x1b[36m";
+		const RESET: &str = "\x1b[0m";
+
+		let diff = TextDiff::from_lines(&self.actual_encoding, &self.expected_encoding);
 
 		for change in diff.iter_all_changes() {
-			let sign = match change.tag() {
-				ChangeTag::Delete => "-",
-				ChangeTag::Insert => "+",
-				ChangeTag::Equal => " ",
+			let (sign, color) = match change.tag() {
+				ChangeTag::Delete => ("-", RED),
+				ChangeTag::Insert => ("+", GREEN),
+				ChangeTag::Equal => (" ", ""),
 			};
-			write!(f, "{}{}", sign, change)?;
+			if color.is_empty() {
+				write!(f, " {change}")?;
+			} else {
+				write!(f, "{color}{sign}{change}{RESET}")?;
+			}
 		}
 
 		Ok(())
