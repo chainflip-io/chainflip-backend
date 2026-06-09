@@ -462,6 +462,7 @@ export function ingressEgressPalletForChain(chain: Chain) {
     case 'Arbitrum':
     case 'Assethub':
     case 'Solana':
+    case 'Tron':
       return `${toLowerCase(chain)}IngressEgress` as const;
     default:
       throw new Error(`Unsupported chain: ${chain}`);

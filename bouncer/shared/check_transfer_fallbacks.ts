@@ -1,6 +1,7 @@
 import prisma from 'shared/utils/prisma_client';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
+import { Chains, ingressEgressPalletForChain } from 'shared/utils';
 
 // TransferNativeFailed and TransferTokenFailed are events emitted by the EVM vault contracts
 // when a transfer fails on-chain. The engine witnesses these and the State Chain responds by
@@ -8,17 +9,14 @@ import { TestContext } from 'shared/utils/test_context';
 // TransferFallbackRequested and storing the call in FailedForeignChainCalls storage.
 // Neither should ever happen during normal bouncer tests.
 
-const TRANSFER_FALLBACK_EVENTS = [
-  'EthereumIngressEgress.TransferFallbackRequested',
-  'ArbitrumIngressEgress.TransferFallbackRequested',
-  'TronIngressEgress.TransferFallbackRequested',
-];
+// Chains that have EVM vault contracts with the TransferFallbackRequested mechanism.
+const EVM_VAULT_CHAINS = [Chains.Ethereum, Chains.Arbitrum, Chains.Tron] as const;
 
-const FALLBACK_STORAGE_PALLETS = [
-  'ethereumIngressEgress',
-  'arbitrumIngressEgress',
-  'tronIngressEgress',
-] as const;
+const TRANSFER_FALLBACK_EVENTS = EVM_VAULT_CHAINS.map(
+  (chain) => `${chain}IngressEgress.TransferFallbackRequested`,
+);
+
+const INGRESS_EGRESS_STORAGE_PALLETS = EVM_VAULT_CHAINS.map(ingressEgressPalletForChain);
 
 export async function checkNoTransferFallbacks(testContext: TestContext) {
   testContext.info('Checking that no EVM vault transfer fallbacks occurred during the tests');
@@ -41,7 +39,7 @@ export async function checkNoTransferFallbacks(testContext: TestContext) {
   }
 
   const chainflipApi = await getChainflipApi();
-  for (const pallet of FALLBACK_STORAGE_PALLETS) {
+  for (const pallet of INGRESS_EGRESS_STORAGE_PALLETS) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const entries = await (chainflipApi.query as any)[pallet].failedForeignChainCalls.entries();
     const nonEmpty = (entries as [unknown, { toJSON(): unknown[] }][]).filter(
