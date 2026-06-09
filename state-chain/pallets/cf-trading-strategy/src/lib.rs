@@ -681,7 +681,7 @@ enum PricingMode {
 
 impl PricingMode {
 	/// The tick offset applied to the configured tick ranges (zero for static strategies).
-	fn relative_tick(self) -> Tick {
+	fn tick_offset(self) -> Tick {
 		match self {
 			PricingMode::Equivalent => 0,
 			PricingMode::Oracle { relative_tick, .. } => relative_tick,
@@ -1024,18 +1024,20 @@ impl<T: Config> Pallet<T> {
 		let total_quote = total_quote_asset;
 		let total_base = pricing.base_to_quote(total_base_asset);
 
+		// Only worth updating the orders if the free (unallocated) balance has grown enough to
+		// clear the smaller of the two update thresholds (both valued in the quote denomination).
 		let update_due_to_balance = quote_balance_asset
 			.saturating_add(pricing.base_to_quote(base_balance_asset)) >=
 			pricing.base_to_quote(base_threshold).min(quote_threshold);
 
 		// Use the balance of assets to calculate the desired limit orders
-		let relative_tick = pricing.relative_tick();
+		let tick_offset = pricing.tick_offset();
 		let total = total_quote.saturating_add(total_base);
 		let new_orders: Vec<_> = inventory_based_strategy_logic(
 			total_quote,
 			total,
-			relative_tick + min_buy_tick,
-			relative_tick + max_buy_tick,
+			tick_offset + min_buy_tick,
+			tick_offset + max_buy_tick,
 			Side::Buy,
 			strategy_id.clone(),
 			base_asset,
@@ -1045,8 +1047,8 @@ impl<T: Config> Pallet<T> {
 		.chain(inventory_based_strategy_logic(
 			total_base,
 			total,
-			relative_tick + min_sell_tick,
-			relative_tick + max_sell_tick,
+			tick_offset + min_sell_tick,
+			tick_offset + max_sell_tick,
 			Side::Sell,
 			strategy_id.clone(),
 			base_asset,
