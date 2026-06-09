@@ -3251,8 +3251,8 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ScheduledTransactionsForRejection, TransactionRejectionDetails, TransactionRejectionStatus,
-		TransactionsMarkedForRejection,
+		RejectionRefundReason, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
@@ -3481,25 +3481,24 @@ mod evm_transaction_rejection {
 
 			EthereumIngressEgress::on_finalize(2);
 
-			// The dust guard fired: the rejection was dropped (not re-queued), not recorded as
-			// a failure, and nothing was broadcast (neither a fetch nor a refund).
+			// The dust guard fired: the refund was dropped (not re-queued) and nothing was
+			// broadcast (neither a fetch nor a refund), the rejection is recorded as a
+			// failed rejection with reason BelowDustLimit.
 			assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
-			assert!(FailedRejections::<Test, Instance1>::get().is_empty());
 			assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
 
-			// A dedicated event is emitted instead of TransactionRejectedByBroker, for the
-			// rejected tx_id.
+			let failed_rejections = FailedRejections::<Test, Instance1>::get();
+			assert_eq!(failed_rejections.len(), 1);
+			assert!(failed_rejections[0].deposit_details.deposit_ids().unwrap().contains(&tx_id));
+
 			assert_has_matching_event!(
 				Test,
 				RuntimeEvent::EthereumIngressEgress(
-					crate::Event::<Test, Instance1>::TransactionRejectionRefundBelowDustLimit {
+					crate::Event::<Test, Instance1>::TransactionRejectionFailed {
 						tx_id: event_tx_id,
-						asset,
-						amount,
+						reason: RejectionRefundReason::BelowDustLimit
 					}
-				) if event_tx_id.deposit_ids().unwrap().contains(&tx_id) &&
-					*asset == ETH &&
-					*amount == DEFAULT_DEPOSIT_AMOUNT
+				) if event_tx_id.deposit_ids().unwrap().contains(&tx_id)
 			);
 		});
 	}
