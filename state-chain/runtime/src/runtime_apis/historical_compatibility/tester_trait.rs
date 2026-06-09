@@ -46,7 +46,7 @@ impl std::fmt::Display for TypeRef {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			TypeRef::RuntimeCall { api_name, method_name } =>
-				write!(f, "runtime call {api_name}_{method_name}"),
+				write!(f, "`{method_name}` ({api_name})"),
 		}
 	}
 }
@@ -73,37 +73,33 @@ pub struct SubTypeDetails {
 	pub location: SubTypeLocation,
 }
 
+#[derive(Clone)]
+pub struct FullTypeLocation {
+	pub reference: TypeRef,
+	pub sub_location: SubTypeLocation,
+}
+
+impl std::fmt::Display for FullTypeLocation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{} of {}", self.sub_location, self.reference)
+	}
+}
+
 #[derive(Clone, Copy)]
 pub enum SubTypeLocation {
-	Input { pos: u32 },
+	Input { pos: Option<u32> },
 	Output,
-	None,
 }
 
 impl std::fmt::Display for SubTypeLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SubTypeLocation::Input { pos } => write!(f, "arg #{pos}"),
+			SubTypeLocation::Input { pos: Some(pos) } => write!(f, "arg#{pos}"),
+			SubTypeLocation::Input { pos: None } => write!(f, "args"),
 			SubTypeLocation::Output => write!(f, "result"),
-			SubTypeLocation::None => Ok(()),
 		}
 	}
 }
-
-// impl std::fmt::Display for SubTypeDetails {
-// 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-// 		match self {
-// 			SubTypeDetails::Input { pos, type_name } => {
-// 				if let Some(type_name) = type_name {
-// 					write!(f, ": {type_name}")?;
-// 				}
-// 				Ok(())
-// 			},
-// 			SubTypeDetails::Output => write!(f, "(result)"),
-// 			SubTypeDetails::None => Ok(()),
-// 		}
-// 	}
-// }
 
 pub struct TypeIncompatibilityInfo {
 	pub sub_type_incompat: SubTypeIncompatibility,

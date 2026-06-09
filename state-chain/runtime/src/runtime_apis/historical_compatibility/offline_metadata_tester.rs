@@ -163,7 +163,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 							type_name: TypeName::Named {
 								name: self.metadata_type_name(spec_version, *type_id),
 							},
-							location: SubTypeLocation::Input { pos: arg_pos as u32 },
+							location: SubTypeLocation::Input { pos: Some(arg_pos as u32) },
 						},
 					)?;
 				}
@@ -171,7 +171,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			},
 			SubTypeDetails {
 				type_name: TypeName::Named { name: Some(input_type_name.clone()) },
-				location: SubTypeLocation::None,
+				location: SubTypeLocation::Input { pos: None },
 			},
 		)
 		.map_err(|err| {
