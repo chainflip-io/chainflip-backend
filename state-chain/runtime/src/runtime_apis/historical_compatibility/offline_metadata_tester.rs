@@ -19,21 +19,18 @@ use crate::runtime_apis::historical_compatibility::{
 	},
 };
 
+#[derive(Default)]
 pub struct OfflineMetadataTester {
 	loaded_metadata: HashMap<u32, RuntimeMetadataV15>,
 }
 
 impl OfflineMetadataTester {
-	pub fn new() -> OfflineMetadataTester {
-		OfflineMetadataTester { loaded_metadata: Default::default() }
-	}
-
 	/// Load historical metadata for a given spec version.
 	///
 	/// Metadata files are stored in `state-chain/runtime_historical_metadata/` with the naming
 	/// convention `runtime_{spec_version}.scale`.
 	fn load_metadata(&mut self, spec_version: u32) {
-		if !self.loaded_metadata.contains_key(&spec_version) {
+		self.loaded_metadata.entry(spec_version).or_insert_with(|| {
 			let path = format!(
 				"{}/state-chain/runtime_historical_metadata/runtime_{}.scale",
 				env!("CARGO_MANIFEST_DIR").trim_end_matches("/state-chain/runtime"),
@@ -47,8 +44,8 @@ impl OfflineMetadataTester {
 				RuntimeMetadata::V15(m) => m,
 				other => panic!("Expected V15 metadata, got version {:?}", other),
 			};
-			self.loaded_metadata.insert(spec_version, metadata);
-		}
+			metadata
+		});
 	}
 
 	/// Gets the metadata if it's already loaded
@@ -144,12 +141,12 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			200,
 			&I::HistoricalType::arbitrary(),
 			&|value| Ok(value.encode()),
-			&|mut encoded| {
+			&|encoded| {
 				for (arg_pos, type_id) in input_type_ids.iter().enumerate() {
 					self.try_decode_as_type(
 						spec_version,
 						*type_id,
-						&mut encoded,
+						encoded,
 						SubTypeDetails {
 							type_name: TypeName::Named {
 								name: self.metadata_type_name(spec_version, *type_id),
@@ -185,11 +182,11 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			200,
 			&O::HistoricalType::arbitrary(),
 			&|value| Ok(value.encode()),
-			&|mut encoded| {
+			&|encoded| {
 				self.try_decode_as_type(
 					spec_version,
 					output_type_id,
-					&mut encoded,
+					encoded,
 					SubTypeDetails {
 						type_name: TypeName::Named {
 							name: self.metadata_type_name(spec_version, output_type_id),
@@ -219,6 +216,6 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			sub_type_incompat: err,
 		});
 
-		input_result.err().into_iter().chain(output_result.err().into_iter()).collect()
+		input_result.err().into_iter().chain(output_result.err()).collect()
 	}
 }

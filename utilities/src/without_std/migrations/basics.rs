@@ -67,13 +67,11 @@ pub struct NewFieldWithDefault;
 impl<T: Default, V: VariantName> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
 
-	fn forwards(x: Self::From) -> T {
+	fn forwards(_x: Self::From) -> T {
 		Default::default()
 	}
 
-	fn backwards(x: T) -> Self::From {
-		()
-	}
+	fn backwards(_x: T) -> Self::From {}
 }
 
 // ----------- lookups ------------
@@ -89,7 +87,7 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: VariantName> 
 // ----------- associated generic type --------------
 
 #[derive(Clone, Copy)]
-#[allow(nonstandard_style)]
+#[expect(nonstandard_style)]
 pub struct vCurrent;
 impl VariantName for vCurrent {
 	// TODO this should be synchronized with the one in runtime/lib.rs

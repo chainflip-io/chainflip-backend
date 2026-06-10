@@ -1,10 +1,10 @@
 // --------- primitives --------
 
-use sp_core::crypto::{self, AccountId32};
+use sp_core::crypto::AccountId32;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::migrations::{
-	basics::{GetGenericVariant, IdentityMigration, Migration, VariantName},
+	basics::{IdentityMigration, Migration, VariantName},
 	HasGenericVariant, IsHistoricalType, Migrations, OrdMigrations,
 };
 

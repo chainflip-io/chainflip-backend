@@ -1,3 +1,5 @@
+#![allow(clippy::allow_attributes)]
+
 pub mod basics;
 pub mod primitives;
 

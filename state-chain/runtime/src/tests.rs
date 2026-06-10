@@ -14,7 +14,7 @@ use crate::runtime_apis::{
 #[test]
 pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), String> {
 	check_incompatibilities(test_all_historical_runtime_calls(
-		&mut OfflineMetadataTester::new(),
+		&mut OfflineMetadataTester::default(),
 		|version| version >= 20100, /* runtimes older than that don't support the required V15
 		                             * metadata */
 	))
