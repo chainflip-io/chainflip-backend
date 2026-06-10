@@ -50,13 +50,40 @@ macro_rules! generate_module {
                 V: VariantName,
             > {
                 $(
-                    type $field: Migration<To::$field, V> = GetMigrationToHistoricalType<To::$field, V>;
+                    type $field: MaybeMigration<To::$field, V> = DefaultMigration;
                 )+
             }
+
+            // this extracts the From types (per field) from a CustomMigration
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>>(To, V, M);
+            impl<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
+                $(
+                    type $field = <
+                        <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
+                        as Migration<To::$field, V>
+                    >::From;
+                )+
+            }
+
+            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> = (
+                $(
+                    <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>,
+                )+
+            );
+
             impl <
                 To: HistoricalTypesAt<V>,
                 V: VariantName
             > CustomMigration<To, V> for () {}
+
+            impl<To: HistoricalTypesAt<V>, V: VariantName, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
+            CustomMigration<To,V>
+            for (M1, M2)
+            {
+                $(
+                    type $field = (M1::$field, M2::$field);
+                )+
+            }
 
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
@@ -80,14 +107,14 @@ macro_rules! generate_module {
 
             impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
             where
-                Struct< ($( <M::$field as Migration<To::$field, V>>::From,)+), $($T)? >: IsHistoricalType
+                Struct< source_of_custom_migration<To, V, M> , $($T)?  >: IsHistoricalType
             {
-                type From = Struct< ($( <M::$field as Migration<To::$field, V>>::From,)+), $($T)? >;
+                type From = Struct< source_of_custom_migration<To, V, M> , $($T)?  >;
 
                 fn forwards(x: Self::From) -> Struct<To, $($T)?> {
                     Struct {
                         $(
-                            $field: M::$field::forwards(x.$field),
+                            $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::forwards(x.$field),
                         )+
                         _phantom: Default::default(),
                     }
@@ -96,7 +123,7 @@ macro_rules! generate_module {
                 fn backwards(x: Struct<To, $($T)?>) -> Self::From {
                     Struct {
                         $(
-                            $field: M::$field::backwards(x.$field),
+                            $field: <ResolveCustomMigration::<To, V, M> as Types>::$field::backwards(x.$field),
                         )+
                         _phantom: Default::default(),
                     }
@@ -104,6 +131,21 @@ macro_rules! generate_module {
 
             }
 
+            // ----------------- predefined migrations ------------------ //
+            pub mod field {
+                $(
+                    pub mod $field {
+                        use super::super::{OverrideMigrationWith, VariantName, HistoricalTypesAt, CustomMigration, NewFieldWithDefault};
+
+                        pub struct Added;
+                        impl<V: VariantName, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
+                            CustomMigration<TargetFieldsTypes, V> for Added
+                        {
+                            type $field = OverrideMigrationWith<NewFieldWithDefault>;
+                        }
+                    }
+                )+
+            }
 
             // ----------------- connection with default struct ------------------ //
 

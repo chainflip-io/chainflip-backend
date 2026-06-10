@@ -1,6 +1,5 @@
 pub mod basics;
 pub mod primitives;
-pub mod registry;
 
 use self::basics::*;
 use crate::migrations::basics::VariantName;
