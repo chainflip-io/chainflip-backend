@@ -1803,6 +1803,7 @@ name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
  "cf-utilities-proc-macros",
+ "derive-where",
  "frame-support",
  "hex",
  "n-functor",
@@ -9574,6 +9575,7 @@ dependencies = [
  "cf-test-utilities",
  "cf-traits",
  "cf-utilities-proc-macros",
+ "derive-where",
  "frame-benchmarking",
  "frame-support",
  "frame-system",

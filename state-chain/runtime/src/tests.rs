@@ -61,9 +61,12 @@ fn print_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) {
 				sub_location: incompatibility.sub_type_incompat.sub_type_details.location,
 			});
 
+		println!("Full diff:");
 		println!("```");
 		print!("{}", &incompatibility.type_diff);
 		println!("```");
+		println!("original error: {}", incompatibility.sub_type_incompat.error);
+		println!("");
 	}
 
 	println!("# Summary");

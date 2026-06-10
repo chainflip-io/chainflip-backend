@@ -44,6 +44,8 @@ serde = { workspace = true, features = ["derive", "alloc"] }
 proptest = { version = "1.6", optional = true }
 proptest-derive = { version = "0.5.1", optional = true }
 
+derive-where = { workspace = true }
+
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
 pallet-cf-account-roles = { workspace = true, default-features = true }

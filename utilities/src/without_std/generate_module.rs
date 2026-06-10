@@ -38,6 +38,11 @@ macro_rules! generate_module {
                     $field: IsHistoricalTypeAt<V>,
                 )*
             >;
+            pub trait DebugTypes = Types<
+                $(
+                    $field: sp_std::fmt::Debug,
+                )+
+            >;
 
             impl< $( $field,)* > Types for ( $($field,)* ) {
                 $(
@@ -55,7 +60,8 @@ macro_rules! generate_module {
             }
 
             // this extracts the From types (per field) from a CustomMigration
-            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>>(To, V, M);
+            #[derive_where::derive_where(Debug; )]
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
             impl<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
                 $(
                     type $field = <
@@ -87,8 +93,9 @@ macro_rules! generate_module {
 
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
+            #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
             #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
+            #[scale_info(skip_type_params(Ty))]
             pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
                 $(
                     pub $field: Ty::$field,
@@ -137,6 +144,7 @@ macro_rules! generate_module {
                     pub mod $field {
                         use super::super::{OverrideMigrationWith, VariantName, HistoricalTypesAt, CustomMigration, NewFieldWithDefault};
 
+                        #[derive(Debug)]
                         pub struct Added;
                         impl<V: VariantName, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
                             CustomMigration<TargetFieldsTypes, V> for Added

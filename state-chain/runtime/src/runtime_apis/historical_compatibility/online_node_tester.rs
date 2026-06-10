@@ -20,11 +20,9 @@ pub struct OnlineNodeTester {
 impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
 		V: VariantName,
-		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
+		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
-		O: std::fmt::Debug
-			+ HasVersion<
+		O: HasVersion<
 				V,
 				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
 			> + HasGenericVariant<GenericType: Arbitrary>,
