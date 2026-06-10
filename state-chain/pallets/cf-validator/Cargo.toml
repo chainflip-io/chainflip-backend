@@ -69,6 +69,8 @@ std = [
 	"frame-system/std",
 	"log/std",
 	"nanorand/std",
+	"pallet-cf-funding/std",
+	"pallet-cf-reputation/std",
 	"pallet-session/std",
 	"pallet-grandpa/std",
 	"sp-consensus-grandpa/std",
