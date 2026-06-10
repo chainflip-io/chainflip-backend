@@ -14,7 +14,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 pub mod common_traits;
-pub mod derive_macros;
 pub mod functor;
 
 pub use cf_utilities::macros::*;
