@@ -34,22 +34,28 @@ fn check_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) -> R
 		return Ok(());
 	}
 
-	let mut types_and_locations: HashMap<(TypeName, TypeDiff), Vec<FullTypeLocation>> =
+	const BLUE: &str = "\x1b[94m";
+	const RESET: &str = "\x1b[0m";
+
+	let mut types_and_locations: HashMap<(TypeName, TypeDiff), Vec<(usize, FullTypeLocation)>> =
 		Default::default();
 
-	for incompatibility in &incompatibilities {
+	for (diff_number, incompatibility) in incompatibilities.iter().enumerate() {
 		types_and_locations
 			.entry((
 				incompatibility.sub_type_incompat.sub_type_details.type_name.clone(),
 				incompatibility.type_diff.clone(),
 			))
 			.or_default()
-			.push(FullTypeLocation {
-				reference: incompatibility.type_ref,
-				sub_location: incompatibility.sub_type_incompat.sub_type_details.location,
-			});
+			.push((
+				diff_number,
+				FullTypeLocation {
+					reference: incompatibility.type_ref,
+					sub_location: incompatibility.sub_type_incompat.sub_type_details.location,
+				},
+			));
 
-		println!("Full diff:");
+		println!("{BLUE}# Diff {diff_number}:{RESET}");
 		println!("```");
 		print!("{}", &incompatibility.type_diff);
 		println!("```");
@@ -57,14 +63,14 @@ fn check_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) -> R
 		println!("");
 	}
 
-	println!("# Summary");
+	println!("{BLUE}# Summary{RESET}");
 	for ((ty, diff), locs) in &types_and_locations {
 		println!("{ty}");
 		let summary = diff.get_summary();
 		print!("{summary}");
 		println!("  in: [");
-		for l in locs {
-			println!("    {l},");
+		for (diff_number, location) in locs {
+			println!("    {location} (see {BLUE}Diff {diff_number}{RESET}),");
 		}
 		println!("  ]");
 		println!("");
