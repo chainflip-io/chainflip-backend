@@ -16,7 +16,7 @@
 
 use cf_amm::math::Price;
 use frame_support::traits::Time;
-use pallet_cf_lending_pools::{GeneralLendingPools, WhitelistStatus};
+use pallet_cf_lending_pools::GeneralLendingPools;
 use pallet_cf_swapping::SwapRequestCompletionReason;
 use state_chain_runtime::{
 	chainflip::ChainlinkOracle, AssetBalances, LendingPools, Runtime, RuntimeEvent, RuntimeOrigin,
@@ -69,7 +69,6 @@ fn basic_lending() {
 			ChainlinkOracle::set_price(COLLATERAL_ASSET, collateral_price);
 
 			// Setup liquidity pools
-			pallet_cf_lending_pools::Whitelist::<Runtime>::set(WhitelistStatus::AllowAll);
 			new_pool(LOAN_ASSET, POOL_FEE, loan_price);
 			new_pool(COLLATERAL_ASSET, POOL_FEE, collateral_price);
 			register_refund_addresses(&LP);

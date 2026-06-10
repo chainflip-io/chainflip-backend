@@ -38,10 +38,8 @@ pub mod config;
 mod general_lending_pool;
 mod price_cache;
 pub mod rpc;
-mod whitelist;
 
 pub use price_cache::OraclePriceCache;
-pub use whitelist::{WhitelistStatus, WhitelistUpdate};
 
 pub use general_lending_pool::{LendingPool, WithdrawnAndRemainingAmounts};
 

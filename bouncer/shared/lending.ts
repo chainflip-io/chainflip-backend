@@ -37,20 +37,13 @@ export async function createLendingPools(logger: Logger, newPools: LendingPoolId
     `Creating lending pools for assets ${newPools.map(({ asset }) => asset).join(', ')} via governance: ${JSON.stringify(newPools)}`,
   );
 
-  const whitelistUpdated = observeEvent(logger, `lendingPools:WhitelistUpdated`).event;
-
   await Promise.all(
-    newPools
-      .map(({ asset }) =>
-        submitGovernanceExtrinsic((api) => api.tx.lendingPools.createLendingPool(asset)),
-      )
-      .concat([
-        submitGovernanceExtrinsic((api) => api.tx.lendingPools.updateWhitelist('SetAllowAll')),
-      ]),
+    newPools.map(({ asset }) =>
+      submitGovernanceExtrinsic((api) => api.tx.lendingPools.createLendingPool(asset)),
+    ),
   );
 
   const lendingPoolEvents = await Promise.all(observeLendingPoolEvents);
-  await whitelistUpdated;
   for (const event of lendingPoolEvents) {
     if (event.name.method !== 'LendingPoolCreated') {
       const error = decodeModuleError(event.data[0].Module, await getChainflipApi());

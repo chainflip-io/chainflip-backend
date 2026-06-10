@@ -49,7 +49,6 @@ use core::marker::PhantomData;
 /// Weight functions needed for pallet_cf_lending_pools.
 pub trait WeightInfo {
 	fn update_pallet_config(n: u32, ) -> Weight;
-	fn update_whitelist() -> Weight;
 	fn add_boost_funds() -> Weight;
 	fn process_deposit_as_lost(n: u32, ) -> Weight;
 	fn stop_boosting() -> Weight;
@@ -84,13 +83,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_parts(10_274_079, 0)
 			// Standard Error: 4_270
 			.saturating_add(Weight::from_parts(2_500_513, 0).saturating_mul(n.into()))
-	}
-	fn update_whitelist() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `32174`
-		//  Estimated: `0`
-		// Minimum execution time: 550_818_000 picoseconds.
-		Weight::from_parts(562_400_000, 0)
 	}
 	fn add_boost_funds() -> Weight {
 		// Proof Size summary in bytes:
@@ -251,13 +243,6 @@ impl WeightInfo for () {
 		Weight::from_parts(10_274_079, 0)
 			// Standard Error: 4_270
 			.saturating_add(Weight::from_parts(2_500_513, 0).saturating_mul(n.into()))
-	}
-	fn update_whitelist() -> Weight {
-		// Proof Size summary in bytes:
-		//  Measured:  `32174`
-		//  Estimated: `0`
-		// Minimum execution time: 550_818_000 picoseconds.
-		Weight::from_parts(562_400_000, 0)
 	}
 	fn add_boost_funds() -> Weight {
 		// Proof Size summary in bytes:
