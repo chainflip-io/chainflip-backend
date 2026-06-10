@@ -448,7 +448,6 @@ decl_runtime_apis!(
 #[cfg(test)]
 pub fn test_all_historical_runtime_calls(
 	tester: &mut impl HistoricalCompatibilityTester,
-	path: &'static str,
 ) -> Vec<TypeIncompatibilityInfo> {
 	let mut incompatibilites = Vec::new();
 
@@ -458,18 +457,15 @@ pub fn test_all_historical_runtime_calls(
 		v0201,
 		"CustomRuntimeApi",
 		"cf_network_fees",
-		path,
 	));
 
-	// tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees",
-	// path);
+	// tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees");
 	incompatibilites.append(
 		&mut tester
 			.test_call::<v0201, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
 				v0201,
 				"CustomRuntimeApi",
 				"cf_common_account_info",
-				path,
 			),
 	);
 
@@ -479,6 +475,5 @@ pub fn test_all_historical_runtime_calls(
 	// 	v0200,
 	// 	"CustomRuntimeApi",
 	// 	"cf_common_account_info",
-	// 	path,
 	// );
 }

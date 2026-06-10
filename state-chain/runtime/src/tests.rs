@@ -14,7 +14,7 @@ use crate::runtime_apis::{
 #[test]
 pub fn offline_test_historical_compatibility_of_runtime_api() -> Result<(), String> {
 	let mut tester = OfflineMetadataTester::new();
-	let incompatibilities = test_all_historical_runtime_calls(&mut tester, file!());
+	let incompatibilities = test_all_historical_runtime_calls(&mut tester);
 
 	if incompatibilities.len() > 0 {
 		print_incompatibilities(incompatibilities);
@@ -35,7 +35,7 @@ pub fn online_test_historical_compatibility_of_runtime_api() -> Result<(), Strin
 		}),
 		node_url: "https://mainnet-archive.chainflip.io",
 	};
-	let incompatibilities = test_all_historical_runtime_calls(&mut tester, file!());
+	let incompatibilities = test_all_historical_runtime_calls(&mut tester);
 
 	if incompatibilities.len() > 0 {
 		print_incompatibilities(incompatibilities);

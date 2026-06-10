@@ -8,7 +8,7 @@ use proptest::{
 	arbitrary::Arbitrary,
 	prelude::TestCaseError,
 	strategy::Strategy,
-	test_runner::{Config, FileFailurePersistence, TestRunner},
+	test_runner::{Config, TestRunner},
 };
 use scale_info::TypeInfo;
 use similar::{ChangeTag, TextDiff};
@@ -29,7 +29,6 @@ pub trait HistoricalCompatibilityTester {
 		version: V,
 		api_name: &'static str,
 		method_name: &'static str,
-		file_path: &'static str,
 	) -> Vec<TypeIncompatibilityInfo>;
 }
 
@@ -223,19 +222,14 @@ pub struct SubTypeIncompatibility {
 }
 
 pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
-	file_path: &'static str,
 	cases: u32,
 	strategy: &impl Strategy<Value = T1>,
 	encode: &impl Fn(T1) -> Vec<u8>,
 	decode: &impl Fn(&[u8]) -> Result<(), SubTypeIncompatibility>,
 	type_details: SubTypeDetails,
 ) -> Result<(), SubTypeIncompatibility> {
-	let mut runner = TestRunner::new(Config {
-		source_file: Some(file_path),
-		failure_persistence: None,
-		cases,
-		..Default::default()
-	});
+	let mut runner =
+		TestRunner::new(Config { failure_persistence: None, cases, ..Default::default() });
 
 	let incompatibility = RefCell::new(None);
 

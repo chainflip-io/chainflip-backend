@@ -33,7 +33,6 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		_version: V,
 		api_name: &'static str,
 		method_name: &'static str,
-		file_path: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
 		let Some(blockhash) =
 			(self.get_blockhash_from_spec_version)(V::LATEST_RUNTIME_PATCH_VERSION)
@@ -50,7 +49,6 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		};
 
 		let result = fuzzy_test_encode_decode_compatibility(
-			file_path,
 			10,
 			&I::HistoricalType::arbitrary(),
 			&|value| value.encode(),

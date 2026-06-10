@@ -7,7 +7,7 @@ use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPr
 use proptest::{
 	arbitrary::Arbitrary,
 	prelude::TestCaseError,
-	test_runner::{Config, FileFailurePersistence, TestRunner},
+	test_runner::{Config, TestRunner},
 };
 use scale_decode::DecodeAsType;
 use scale_info::TypeInfo;
@@ -131,7 +131,6 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		_version: V,
 		api_name: &'static str,
 		method_name: &'static str,
-		file_path: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
 		let spec_version = V::LATEST_RUNTIME_PATCH_VERSION;
 
@@ -151,7 +150,6 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		let input_type_name = format!("({})", input_type_names.join(", "));
 
 		let input_result = fuzzy_test_encode_decode_compatibility(
-			file_path,
 			200,
 			&I::HistoricalType::arbitrary(),
 			&|value| value.encode(),
@@ -193,7 +191,6 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		});
 
 		let output_result = fuzzy_test_encode_decode_compatibility(
-			file_path,
 			200,
 			&O::HistoricalType::arbitrary(),
 			&|value| value.encode(),
