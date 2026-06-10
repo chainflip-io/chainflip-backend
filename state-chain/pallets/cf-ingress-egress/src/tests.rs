@@ -3251,7 +3251,7 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		RejectionRefundReason, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		RefundFailureReason, ScheduledTransactionsForRejection, TransactionRejectionDetails,
 		TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
@@ -3496,7 +3496,7 @@ mod evm_transaction_rejection {
 				RuntimeEvent::EthereumIngressEgress(
 					crate::Event::<Test, Instance1>::TransactionRejectionFailed {
 						tx_id: event_tx_id,
-						reason: RejectionRefundReason::BelowDustLimit
+						reason: RefundFailureReason::BelowDustLimit
 					}
 				) if event_tx_id.deposit_ids().unwrap().contains(&tx_id)
 			);
