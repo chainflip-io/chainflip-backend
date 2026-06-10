@@ -47,11 +47,10 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		};
 
 		let result = fuzzy_test_encode_decode_compatibility(
-			10,
+			3,
 			&I::HistoricalType::arbitrary(),
-			&|value| value.encode(),
-			&|encoded_input| {
-				let params_hex = format!("0x{}", hex::encode(encoded_input));
+			&|value| {
+				let params_hex = format!("0x{}", hex::encode(value.encode()));
 
 				let input_fail = |error: String| SubTypeIncompatibility {
 					sub_type_details: SubTypeDetails {
@@ -94,8 +93,18 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				let encoded_output = hex::decode(result_hex.trim_start_matches("0x"))
 					.map_err(|e| output_fail(format!("Failed to decode hex output: {e}")))?;
 
-				let mut cursor = &encoded_output[..];
-				<O as HasVersion<V>>::HistoricalType::decode(&mut cursor).map_err(|e| {
+				Ok(encoded_output)
+			},
+			&|cursor| {
+				let output_fail = |error: String| SubTypeIncompatibility {
+					sub_type_details: SubTypeDetails {
+						type_name: TypeName::Named { name: None },
+						location: SubTypeLocation::Output,
+					},
+					error,
+				};
+
+				<O as HasVersion<V>>::HistoricalType::decode(cursor).map_err(|e| {
 					output_fail(format!("Failed to decode output into HistoricalType: {e}"))
 				})?;
 

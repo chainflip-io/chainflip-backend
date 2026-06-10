@@ -109,6 +109,28 @@ impl_identity_migrations_with_wrapper! {
 	struct WrappedH160(sp_core::H160) where |x: [u8; 20]| x.into();
 }
 
+// ----------- simple migration that introduces a new type -------------
+
+#[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
+#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+pub struct HistoricalEmptyPlaceholder<T>(sp_std::marker::PhantomData<T>);
+impl<T: HasGenericVariant + Migrations> IsHistoricalType for HistoricalEmptyPlaceholder<T> {
+	type GetCurrentType = T;
+}
+
+pub struct NewTypeWithDefault;
+impl<V: VariantName, T: Migrations + Default> Migration<T, V> for NewTypeWithDefault {
+	type From = HistoricalEmptyPlaceholder<T>;
+
+	fn forwards(_: Self::From) -> T {
+		Default::default()
+	}
+
+	fn backwards(_: T) -> Self::From {
+		HistoricalEmptyPlaceholder(Default::default())
+	}
+}
+
 // ----------- containers -------------
 
 pub struct MapMigration<X>(X);

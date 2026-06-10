@@ -33,8 +33,9 @@ pub use cf_primitives::{AssetAmount, BasisPoints};
 use cf_utilities::migrations::{
 	basics::{
 		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
-		IsHistoricalType, Migration,
+		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
+	primitives::NewTypeWithDefault,
 	v0201, v0202, Migrations,
 };
 use codec::{Decode, Encode};
@@ -833,15 +834,17 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq, Debug)]
+#[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
 #[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum ShouldSweep {
+	#[default]
 	Yes,
 	No,
 }
 
 impl Migrations for ShouldSweep {
 	type DefaultMigration = IdentityMigration;
+	type MigrationTo0202 = NewTypeWithDefault;
 }
 impl HasGenericVariant for ShouldSweep {
 	type GenericType = Self;

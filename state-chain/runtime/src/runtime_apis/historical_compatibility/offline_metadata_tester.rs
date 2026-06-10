@@ -143,7 +143,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		let input_result = fuzzy_test_encode_decode_compatibility(
 			200,
 			&I::HistoricalType::arbitrary(),
-			&|value| value.encode(),
+			&|value| Ok(value.encode()),
 			&|mut encoded| {
 				for (arg_pos, type_id) in input_type_ids.iter().enumerate() {
 					self.try_decode_as_type(
@@ -184,7 +184,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		let output_result = fuzzy_test_encode_decode_compatibility(
 			200,
 			&O::HistoricalType::arbitrary(),
-			&|value| value.encode(),
+			&|value| Ok(value.encode()),
 			&|mut encoded| {
 				self.try_decode_as_type(
 					spec_version,

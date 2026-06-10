@@ -217,7 +217,7 @@ pub struct SubTypeIncompatibility {
 pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 	cases: u32,
 	strategy: &impl Strategy<Value = T1>,
-	encode: &impl Fn(T1) -> Vec<u8>,
+	encode: &impl Fn(T1) -> Result<Vec<u8>, SubTypeIncompatibility>,
 	decode: &impl Fn(&mut &[u8]) -> Result<(), SubTypeIncompatibility>,
 	type_details: SubTypeDetails,
 ) -> Result<(), SubTypeIncompatibility> {
@@ -228,21 +228,23 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 
 	runner
 		.run(strategy, |value1| {
-			let mut decoded: &[u8] = &encode(value1);
-			let cursor = &mut decoded;
-			decode(cursor)
-				.and_then(|_| {
-					if cursor.is_empty() {
-						Ok(())
-					} else {
-						Err(SubTypeIncompatibility {
-							sub_type_details: type_details.clone(),
-							error: format!(
-								"Encoding mismatch: {} trailing bytes remain after decoding",
-								cursor.len(),
-							),
-						})
-					}
+			encode(value1)
+				.and_then(|encoded| {
+					let mut slice: &[u8] = &encoded;
+					let cursor: &mut &[u8] = &mut slice;
+					decode(cursor).and_then(|_| {
+						if cursor.is_empty() {
+							Ok(())
+						} else {
+							Err(SubTypeIncompatibility {
+								sub_type_details: type_details.clone(),
+								error: format!(
+									"Encoding mismatch: {} trailing bytes remain after decoding",
+									cursor.len(),
+								),
+							})
+						}
+					})
 				})
 				.map_err(|err| {
 					incompatibility.replace(Some(err));
