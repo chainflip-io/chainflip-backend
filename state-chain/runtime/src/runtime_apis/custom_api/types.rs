@@ -783,6 +783,9 @@ where
 	<Balance as HasVersion<v0202>>::HistoricalType: Default,
 {
 	type DefaultMigration = _RpcAccountInfoCommonItems::MigrateFields;
+	type MigrationTo0202 = _RpcAccountInfoCommonItems::MigrateFields<
+		_RpcAccountInfoCommonItems::field::account_id::Added,
+	>;
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
