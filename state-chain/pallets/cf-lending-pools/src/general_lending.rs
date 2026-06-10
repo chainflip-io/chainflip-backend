@@ -934,19 +934,6 @@ pub struct PriceCacheAndThreshold<'a, T: Config> {
 	pub price_cache: &'a OraclePriceCache<T>,
 }
 
-/// If the pool couldn't cover the full `attempted` fee, push the uncollected residual back
-/// into `pending` so it can be retried on the next collection cycle.
-fn accrue_uncollected(
-	pending: &mut ScaledAmountHP,
-	attempted: AssetAmount,
-	collected: AssetAmount,
-) {
-	let uncollected = attempted.saturating_sub(collected);
-	if uncollected > 0 {
-		pending.saturating_accrue(ScaledAmountHP::from_asset_amount(uncollected));
-	}
-}
-
 impl<T: Config> GeneralLoan<T> {
 	fn owed_principal_usd_value(
 		&self,
@@ -1120,73 +1107,84 @@ impl<T: Config> GeneralLoan<T> {
 			return Ok(());
 		}
 
-		let charge_fee_if_exceeds_threshold = |fee: &mut ScaledAmountHP| {
+		let charge_fee_if_exceeds_threshold = |pending: &mut ScaledAmountHP| {
 			let fee_taken = if let Some(PriceCacheAndThreshold { threshold_usd, price_cache }) =
 				price_cache_and_threshold
 			{
-				// If the threshold is provided, take fees only if they exceed it:
-				if price_cache.usd_value_of(loan_asset, fee.into_asset_amount())? > threshold_usd {
-					fee.take_non_fractional_part()
+				// If the threshold is provided, take fees only if they exceed it. Effectively
+				// noop if the vaule can't be determined
+				let pending_usd = price_cache
+					.usd_value_of(loan_asset, pending.into_asset_amount())
+					.unwrap_or_default();
+				if pending_usd > threshold_usd {
+					pending.take_non_fractional_part()
 				} else {
 					Default::default()
 				}
 			} else {
 				// If no threshold is provided, take the fees unconditionally:
-				fee.take_non_fractional_part()
+				pending.take_non_fractional_part()
 			};
 
-			Ok::<_, DispatchError>(fee_taken)
+			fee_taken
 		};
 
-		let network_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.network)?;
+		// Charge the fee and collect it from the pool, up to the pool's available amount. The
+		// caller is responsible for assigning the returned collected amount elsewhere.
+		let charge_and_collect_fee_from_available = |pool: &mut LendingPool<T::AccountId>,
+		                                             pending: &mut ScaledAmountHP,
+		                                             owed_principal: &mut AssetAmount|
+		 -> AssetAmount {
+			let to_collect = charge_fee_if_exceeds_threshold(pending);
 
-		let low_ltv_penalty =
-			charge_fee_if_exceeds_threshold(&mut self.pending_interest.low_ltv_penalty)?;
+			let collected = pool.collect_fee_from_available(to_collect);
 
-		let pool_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.pool)?;
+			// Any portion of the fees the pool couldn't cover stays in
+			// pending so the next collection round can retry once the pool has more
+			// liquidity.
+			let uncollected = to_collect.saturating_sub(collected);
+			if uncollected > 0 {
+				pending.saturating_accrue(ScaledAmountHP::from_asset_amount(uncollected));
+			}
 
-		let broker_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.broker)?;
+			owed_principal.saturating_accrue(collected);
 
+			collected
+		};
+
+		let pool_interest = charge_fee_if_exceeds_threshold(&mut self.pending_interest.pool);
 		self.owed_principal.saturating_accrue(pool_interest);
 
 		let (network_interest_collected, low_ltv_penalty_collected, broker_interest_collected) =
 			Pallet::<T>::mutate_existing_pool(loan_asset, |pool| {
+				let network_collected = charge_and_collect_fee_from_available(
+					pool,
+					&mut self.pending_interest.network,
+					&mut self.owed_principal,
+				);
+
+				let low_ltv_collected = charge_and_collect_fee_from_available(
+					pool,
+					&mut self.pending_interest.low_ltv_penalty,
+					&mut self.owed_principal,
+				);
+
+				let broker_collected = charge_and_collect_fee_from_available(
+					pool,
+					&mut self.pending_interest.broker,
+					&mut self.owed_principal,
+				);
+
 				pool.record_pool_fee(pool_interest);
 
-				let network_collected = pool.collect_fee_from_available(network_interest);
-				let low_ltv_collected = pool.collect_fee_from_available(low_ltv_penalty);
 				let network_total = network_collected.saturating_add(low_ltv_collected);
 				if network_total > 0 {
 					Pallet::<T>::credit_fees_to_network(loan_asset, network_total);
 				}
 
-				let broker_collected = pool.collect_fee_from_available(broker_interest);
-
 				(network_collected, low_ltv_collected, broker_collected)
 			})
 			.unwrap_or_default();
-
-		// Any portion of network/low-ltv/broker fees the pool couldn't cover stays in pending
-		// so the next collection round can retry once the pool has more liquidity.
-		accrue_uncollected(
-			&mut self.pending_interest.network,
-			network_interest,
-			network_interest_collected,
-		);
-		accrue_uncollected(
-			&mut self.pending_interest.low_ltv_penalty,
-			low_ltv_penalty,
-			low_ltv_penalty_collected,
-		);
-		accrue_uncollected(
-			&mut self.pending_interest.broker,
-			broker_interest,
-			broker_interest_collected,
-		);
-
-		self.owed_principal.saturating_accrue(network_interest_collected);
-		self.owed_principal.saturating_accrue(low_ltv_penalty_collected);
-		self.owed_principal.saturating_accrue(broker_interest_collected);
 
 		if broker_interest_collected > 0 {
 			match &self.broker {
