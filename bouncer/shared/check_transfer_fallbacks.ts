@@ -1,7 +1,7 @@
-import prisma from 'shared/utils/prisma_client';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Chains, ingressEgressPalletForChain } from 'shared/utils';
+import { findAllEventsByName } from 'shared/utils/indexer';
 
 // TransferNativeFailed and TransferTokenFailed are events emitted by the EVM vault contracts
 // when a transfer fails on-chain. The engine witnesses these and the State Chain responds by
@@ -21,11 +21,9 @@ const INGRESS_EGRESS_STORAGE_PALLETS = EVM_VAULT_CHAINS.map(ingressEgressPalletF
 export async function checkNoTransferFallbacks(testContext: TestContext) {
   testContext.info('Checking that no EVM vault transfer fallbacks occurred during the tests');
 
-  const fallbackEvents = await prisma.event.findMany({
-    where: { name: { in: TRANSFER_FALLBACK_EVENTS } },
-    include: { block: true },
-    orderBy: { block: { height: 'asc' } },
-  });
+  const fallbackEvents = (
+    await Promise.all(TRANSFER_FALLBACK_EVENTS.map(findAllEventsByName))
+  ).flat();
 
   if (fallbackEvents.length > 0) {
     const occurrences = fallbackEvents
