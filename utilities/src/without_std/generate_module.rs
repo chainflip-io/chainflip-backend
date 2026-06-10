@@ -51,7 +51,17 @@ macro_rules! generate_module {
             > {
                 $(
                     type $field: MaybeMigration<To::$field, V> = DefaultMigration;
-                    // type $field: MaybeMigration<To::$field, V> = GetMigrationToHistoricalType<To::$field, V>;
+                )+
+            }
+
+            // this extracts the From types (per field) from a CustomMigration
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>>(To, V, M);
+            impl<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
+                $(
+                    type $field = <
+                        <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
+                        as Migration<To::$field, V>
+                    >::From;
                 )+
             }
 
@@ -97,33 +107,9 @@ macro_rules! generate_module {
 
             impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
             where
-                Struct<
-                    // ResolveCustomMigration<To, V, M>
-                    // $(
-                    //     <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>,
-                    // )+
-                    (
-                    $(
-                        <
-                            <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
-                            as Migration<To::$field, V>
-                        >::From,
-                    )+
-                    )
-                , $($T)?
-                >: IsHistoricalType
+                Struct< source_of_custom_migration<To, V, M> , $($T)?  >: IsHistoricalType
             {
-                type From = Struct< (
-                    $(
-                        <
-                            <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
-                            as Migration<To::$field, V>
-                        >::From,
-                    )+
-                ), $($T)?
-                >;
-
-                // Struct< ($( <M::$field as Migration<To::$field, V>>::From,)+), $($T)? >;
+                type From = Struct< source_of_custom_migration<To, V, M> , $($T)?  >;
 
                 fn forwards(x: Self::From) -> Struct<To, $($T)?> {
                     Struct {
