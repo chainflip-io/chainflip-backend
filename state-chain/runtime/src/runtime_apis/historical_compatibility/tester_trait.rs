@@ -150,12 +150,12 @@ pub struct TypeDiffSummary {
 	pub deletions: Vec<Vec<String>>,
 }
 
+const RED: &str = "\x1b[31m";
+const GREEN: &str = "\x1b[32m";
+const RESET: &str = "\x1b[0m";
+
 impl std::fmt::Display for TypeDiffSummary {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		const RED: &str = "\x1b[31m";
-		const GREEN: &str = "\x1b[32m";
-		const RESET: &str = "\x1b[0m";
-
 		fn indentation(s: &str) -> usize {
 			s.len() - s.trim_start().len()
 		}
@@ -191,11 +191,6 @@ impl std::fmt::Display for TypeDiffSummary {
 impl std::fmt::Display for TypeDiff {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use similar::{ChangeTag, TextDiff};
-
-		const RED: &str = "\x1b[31m";
-		const GREEN: &str = "\x1b[32m";
-		const CYAN: &str = "\x1b[36m";
-		const RESET: &str = "\x1b[0m";
 
 		let diff = TextDiff::from_lines(&self.actual_encoding, &self.expected_encoding);
 
