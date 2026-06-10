@@ -224,6 +224,7 @@ pub struct SubTypeIncompatibility {
 
 pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 	file_path: &'static str,
+	cases: u32,
 	strategy: &impl Strategy<Value = T1>,
 	encode: &impl Fn(T1) -> Vec<u8>,
 	decode: &impl Fn(&[u8]) -> Result<(), SubTypeIncompatibility>,
@@ -232,7 +233,7 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 	let mut runner = TestRunner::new(Config {
 		source_file: Some(file_path),
 		failure_persistence: None,
-		cases: 200,
+		cases,
 		..Default::default()
 	});
 

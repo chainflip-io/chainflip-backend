@@ -152,6 +152,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 
 		let input_result = fuzzy_test_encode_decode_compatibility(
 			file_path,
+			200,
 			&I::HistoricalType::arbitrary(),
 			&|value| value.encode(),
 			&|mut encoded| {
@@ -193,6 +194,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 
 		let output_result = fuzzy_test_encode_decode_compatibility(
 			file_path,
+			200,
 			&O::HistoricalType::arbitrary(),
 			&|value| value.encode(),
 			&|mut encoded| {
