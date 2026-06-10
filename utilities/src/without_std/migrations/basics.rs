@@ -113,3 +113,26 @@ pub fn migrate_from_generic_type<X: HasGenericVariant>(x: X::GenericType) -> X {
 pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
 	X::MigrationFromGeneric::backwards(x)
 }
+
+// ----------- maybe migrations (for horizontal composition) ---------
+
+pub trait MaybeMigration<To, V: VariantName> {
+	type GetWithDefault<Default: Migration<To, V>>: Migration<To, V>;
+}
+
+pub struct DefaultMigration;
+impl<To, V: VariantName> MaybeMigration<To, V> for DefaultMigration {
+	type GetWithDefault<Default: Migration<To, V>> = Default;
+}
+
+pub struct OverrideMigrationWith<M>(M);
+impl<To, V: VariantName, M: Migration<To, V>> MaybeMigration<To, V> for OverrideMigrationWith<M> {
+	type GetWithDefault<Default: Migration<To, V>> = M;
+}
+
+impl<To, V: VariantName, M1: MaybeMigration<To, V>, M2: MaybeMigration<To, V>> MaybeMigration<To, V>
+	for (M1, M2)
+{
+	type GetWithDefault<Default: Migration<To, V>> =
+		M2::GetWithDefault<M1::GetWithDefault<Default>>;
+}
