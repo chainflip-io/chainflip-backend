@@ -36,6 +36,7 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
+use sp_consensus_grandpa::AuthoritySignature;
 use sp_std::vec;
 
 use delegation::{DelegationAcceptance, OperatorSettings};
@@ -128,6 +129,25 @@ pub fn try_start_keygen<T: RuntimeConfig>(
 	.unwrap();
 
 	assert_matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..));
+}
+
+/// Registers a set of session keys for `account` and returns the GRANDPA key that is now
+/// owned by it. This is required to satisfy the `key_owner` ownership check in the GRANDPA
+/// vote delegation extrinsics.
+fn register_grandpa_key<T: RuntimeConfig>(account: &T::AccountId) -> GrandpaAuthorityId {
+	use frame_support::sp_runtime::traits::OpaqueKeys;
+
+	let session_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
+	// Session keys are 128 bytes (four 32-byte keys); reuse the same key for all of them.
+	let keys = T::Keys::decode(&mut &session_key.to_raw_vec().repeat(4)[..]).unwrap();
+	assert_ok!(pallet_session::Pallet::<T>::set_keys(
+		RawOrigin::Signed(account.clone()).into(),
+		keys.clone(),
+		vec![],
+	));
+
+	GrandpaAuthorityId::decode(&mut keys.get_raw(sp_consensus_grandpa::KEY_TYPE))
+		.expect("GRANDPA key was just registered.")
 }
 
 const OPERATOR_SETTINGS: OperatorSettings =
@@ -603,5 +623,55 @@ mod benchmarks {
 			RawOrigin::Signed(caller),
 			cf_primitives::WitnessingTaskName::Ethereum,
 		);
+	}
+
+	#[benchmark]
+	fn delegate_grandpa_vote() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		let caller_grandpa_key = register_grandpa_key::<T>(&caller);
+
+		// Generate a delegate key and a valid signature over the expected payload so the
+		// benchmark exercises the (expensive) ed25519 verification path.
+		let session_index = pallet_session::Pallet::<T>::current_index();
+		let payload = (caller.clone(), session_index).encode();
+		let delegate_key: GrandpaAuthorityId = RuntimeAppPublic::generate_pair(None);
+		let proof: AuthoritySignature =
+			delegate_key.sign(&payload).expect("Should be able to sign with generated key.");
+
+		#[extrinsic_call]
+		delegate_grandpa_vote(
+			RawOrigin::Signed(caller),
+			caller_grandpa_key.clone(),
+			delegate_key,
+			proof,
+		);
+
+		assert!(T::GrandpaDelegation::get_delegate(&caller_grandpa_key).is_some());
+	}
+
+	#[benchmark]
+	fn revoke_grandpa_delegation() {
+		let caller = <T as Chainflip>::AccountRoleRegistry::whitelisted_caller_with_role(
+			AccountRole::Validator,
+		)
+		.unwrap();
+
+		let caller_grandpa_key = register_grandpa_key::<T>(&caller);
+
+		// Seed an existing delegation so the extrinsic exercises the removal path.
+		let delegate_key: GrandpaAuthorityId = RuntimeAppPublic::generate_pair(None);
+		assert_ok!(T::GrandpaDelegation::add_vote_delegation(
+			caller_grandpa_key.clone(),
+			delegate_key,
+		));
+
+		#[extrinsic_call]
+		revoke_grandpa_delegation(RawOrigin::Signed(caller), caller_grandpa_key.clone());
+
+		assert!(T::GrandpaDelegation::get_delegate(&caller_grandpa_key).is_none());
 	}
 }
