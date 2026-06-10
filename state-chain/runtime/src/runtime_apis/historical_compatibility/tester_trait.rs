@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{cell::RefCell, path::Display};
+use std::cell::RefCell;
 
 use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
 use codec::{Decode, Encode};

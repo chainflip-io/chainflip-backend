@@ -1,14 +1,7 @@
-use cf_utilities::migrations::basics::{
-	migrate_from_generic_type, migrate_to_historical_type, HasGenericVariant, HasVersion,
-	VariantName,
-};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
-use proptest::{
-	arbitrary::Arbitrary,
-	prelude::TestCaseError,
-	test_runner::{Config, TestRunner},
-};
+use proptest::arbitrary::Arbitrary;
 use scale_decode::DecodeAsType;
 use scale_info::TypeInfo;
 use scale_json::ScaleDecodedToJson;
@@ -21,8 +14,8 @@ use crate::runtime_apis::historical_compatibility::{
 		TypeRef,
 	},
 	type_describer::{
-		compute_type_name_display, describe_expected_type, describe_metadata_type,
-		describe_metadata_types_as_tuple, expected_type_name, metadata_type_name,
+		describe_expected_type, describe_metadata_type, describe_metadata_types_as_tuple,
+		metadata_type_name,
 	},
 };
 
