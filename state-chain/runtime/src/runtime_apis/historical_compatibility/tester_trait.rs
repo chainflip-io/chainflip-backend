@@ -16,11 +16,9 @@ use similar::{ChangeTag, TextDiff};
 pub trait HistoricalCompatibilityTester {
 	fn test_call<
 		V: VariantName,
-		I: std::fmt::Debug
-			+ HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
+		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
-		O: std::fmt::Debug
-			+ HasVersion<
+		O: HasVersion<
 				V,
 				HistoricalType: Encode + Decode + TypeInfo + 'static + std::fmt::Debug + Arbitrary,
 			> + HasGenericVariant<GenericType: Arbitrary>,
@@ -220,7 +218,7 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 	cases: u32,
 	strategy: &impl Strategy<Value = T1>,
 	encode: &impl Fn(T1) -> Vec<u8>,
-	decode: &impl Fn(&[u8]) -> Result<(), SubTypeIncompatibility>,
+	decode: &impl Fn(&mut &[u8]) -> Result<(), SubTypeIncompatibility>,
 	type_details: SubTypeDetails,
 ) -> Result<(), SubTypeIncompatibility> {
 	let mut runner =
@@ -230,8 +228,9 @@ pub fn fuzzy_test_encode_decode_compatibility<T1: Encode>(
 
 	runner
 		.run(strategy, |value1| {
-			let mut cursor = &encode(value1);
-			decode(&mut cursor)
+			let mut decoded: &[u8] = &encode(value1);
+			let cursor = &mut decoded;
+			decode(cursor)
 				.and_then(|_| {
 					if cursor.is_empty() {
 						Ok(())
