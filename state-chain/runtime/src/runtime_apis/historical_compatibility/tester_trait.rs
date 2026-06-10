@@ -40,14 +40,14 @@ pub enum ArgPos {
 
 #[derive(Clone, Copy)]
 pub enum TypeRef {
-	RuntimeCall { api_name: &'static str, method_name: &'static str },
+	RuntimeCall { api_name: &'static str, method_name: &'static str, version: u32 },
 }
 
 impl std::fmt::Display for TypeRef {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			TypeRef::RuntimeCall { api_name, method_name } =>
-				write!(f, "`{method_name}` ({api_name})"),
+			TypeRef::RuntimeCall { api_name, method_name, version } =>
+				write!(f, "`{method_name}` @ v{version} ({api_name})"),
 		}
 	}
 }
@@ -106,7 +106,6 @@ pub struct TypeIncompatibilityInfo {
 	pub sub_type_incompat: SubTypeIncompatibility,
 	pub type_ref: TypeRef,
 	pub type_diff: TypeDiff,
-	pub type_name: Option<String>,
 }
 
 #[derive(Hash, PartialEq, Eq, Clone)]

@@ -7,7 +7,7 @@ use crate::runtime_apis::{
 	historical_compatibility::{
 		offline_metadata_tester::OfflineMetadataTester,
 		online_node_tester::OnlineNodeTester,
-		tester_trait::{FullTypeLocation, SubTypeLocation, TypeDiff, TypeName, TypeRef},
+		tester_trait::{FullTypeLocation, TypeDiff, TypeName},
 	},
 };
 

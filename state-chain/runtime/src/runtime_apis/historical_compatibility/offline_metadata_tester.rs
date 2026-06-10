@@ -128,7 +128,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
-		version: V,
+		_version: V,
 		api_name: &'static str,
 		method_name: &'static str,
 		file_path: &'static str,
@@ -178,13 +178,16 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		.map_err(|err| {
 			let metadata = self.get_loaded_metadata(spec_version);
 			TypeIncompatibilityInfo {
-				type_ref: TypeRef::RuntimeCall { api_name, method_name },
+				type_ref: TypeRef::RuntimeCall {
+					api_name,
+					method_name,
+					version: V::LATEST_RUNTIME_PATCH_VERSION,
+				},
 				type_diff: TypeDiff {
 					expected_encoding: describe_expected_type::<I::HistoricalType>(),
 					actual_encoding: describe_metadata_types_as_tuple(metadata, &input_type_ids),
 				},
 				sub_type_incompat: err,
-				type_name: Some(input_type_name.clone()),
 			}
 		});
 
@@ -214,80 +217,18 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			},
 		)
 		.map_err(|err| TypeIncompatibilityInfo {
-			type_ref: TypeRef::RuntimeCall { api_name, method_name },
+			type_ref: TypeRef::RuntimeCall {
+				api_name,
+				method_name,
+				version: V::LATEST_RUNTIME_PATCH_VERSION,
+			},
 			type_diff: TypeDiff {
 				expected_encoding: describe_expected_type::<O::HistoricalType>(),
 				actual_encoding: self.describe_metadata_type(spec_version, output_type_id),
 			},
 			sub_type_incompat: err,
-			type_name: self.metadata_type_name(spec_version, output_type_id),
 		});
 
 		input_result.err().into_iter().chain(output_result.err().into_iter()).collect()
-
-		// let strategy = (
-		// 	<I as HasGenericVariant>::GenericType::arbitrary(),
-		// 	<O as HasGenericVariant>::GenericType::arbitrary(),
-		// );
-
-		// let result = runner
-		// 	.run(&strategy, |(generic_input, generic_output)| {
-		// 		// Encode the input using the legacy type
-		// 		let input: I = migrate_from_generic_type(generic_input);
-		// 		let old_input = migrate_to_historical_type(version, input);
-		// 		let encoded_input = old_input.encode();
-
-		// 		// Verify that encoding is decodable against each input param's historical type
-		// 		let mut cursor = &encoded_input[..];
-		// 		for &type_id in &input_type_ids {
-		// 			self.try_decode_as_type(spec_version, type_id, &mut cursor)?;
-		// 		}
-		// 		if !cursor.is_empty() {
-		// 			return Err(TestCaseError::fail(format!(
-		// 				"Encoding mismatch: {} trailing bytes remain after decoding inputs (type ids
-		// {input_type_ids:?})", 				cursor.len(),
-		// 			)));
-		// 		}
-
-		// 		// Encode the output using the legacy type
-		// 		let output: O = migrate_from_generic_type(generic_output);
-		// 		let old_output = migrate_to_historical_type(version, output);
-		// 		let encoded_output = old_output.encode();
-		// 		let mut cursor = &encoded_output[..];
-		// 		self.try_decode_as_type(spec_version, output_type_id, &mut cursor)
-		// 			.map_err(|e| TestCaseError::fail(format!(
-		// 				"Old value could not be decoded historically",
-		// 				// "Output decode failed for old_output: {:?}\n\nExpected encoded
-		// type:\n{}\n\nMetadata type:\n{}\n\nError: {e}", 				// old_output,
-		// 				// expected_output_type,
-		// 				// actual_output_type,
-		// 			)))?;
-
-		// 		if !cursor.is_empty() {
-		// 			return Err(TestCaseError::fail(format!(
-		// 				"Encoding mismatch: {} trailing bytes remain after decoding output (type_id
-		// {output_type_id})", 				cursor.len(),
-		// 			)));
-		// 		}
-
-		// 		Ok(())
-		// 	});
-
-		// match result {
-		// 	Ok(_) => (),
-		// 	Err(err) => match err {
-		// 		proptest::test_runner::TestError::Abort(reason) |
-		// 		proptest::test_runner::TestError::Fail(reason, _) => {
-		// 			let expected_output_type = describe_expected_type::<O::HistoricalType>();
-		// 			let actual_output_type =
-		// 				self.describe_metadata_type(spec_version, output_type_id);
-
-		// 			println!("Test failed with:\n\n{reason}");
-		// 			println!("Old type:\n{actual_output_type}\n\nNew type:{expected_output_type}");
-
-		// 			panic!("failed!");
-		// 		},
-		// 	},
-		// }
 	}
 }
