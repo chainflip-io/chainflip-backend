@@ -18,6 +18,21 @@ const TRANSFER_FALLBACK_EVENTS = EVM_VAULT_CHAINS.map(
 
 const INGRESS_EGRESS_STORAGE_PALLETS = EVM_VAULT_CHAINS.map(ingressEgressPalletForChain);
 
+// FailedForeignChainCalls is shared between transfer fallbacks and failed CCM broadcasts.
+// BroadcastActions is set to { ccmBroadcast: null } for CCM broadcasts and absent for
+// transfer fallbacks, so we use it to distinguish the two.
+async function isCcmBroadcast(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  palletQuery: any,
+  broadcastId: number,
+): Promise<boolean> {
+  const action = (await palletQuery.broadcastActions(broadcastId)).toJSON() as Record<
+    string,
+    unknown
+  > | null;
+  return action?.ccmBroadcast !== undefined;
+}
+
 export async function checkNoTransferFallbacks(testContext: TestContext) {
   testContext.info('Checking that no EVM vault transfer fallbacks occurred during the tests');
 
@@ -39,14 +54,25 @@ export async function checkNoTransferFallbacks(testContext: TestContext) {
   const chainflipApi = await getChainflipApi();
   for (const pallet of INGRESS_EGRESS_STORAGE_PALLETS) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entries = await (chainflipApi.query as any)[pallet].failedForeignChainCalls.entries();
-    const nonEmpty = (entries as [unknown, { toJSON(): unknown[] }][]).filter(
-      ([, calls]) => calls.toJSON().length > 0,
+    const palletQuery = (chainflipApi.query as any)[pallet];
+    const entries = await palletQuery.failedForeignChainCalls.entries();
+    const allCalls = (entries as [unknown, { toJSON(): { broadcastId: number }[] }][]).flatMap(
+      ([, calls]) => calls.toJSON(),
     );
-    if (nonEmpty.length > 0) {
+
+    const transferFallbackCalls = (
+      await Promise.all(
+        allCalls.map(async (call) =>
+          (await isCcmBroadcast(palletQuery, call.broadcastId)) ? null : call,
+        ),
+      )
+    ).filter((call) => call !== null);
+
+    if (transferFallbackCalls.length > 0) {
       throw new Error(
-        `Pallet ${pallet} has ${nonEmpty.length} non-empty FailedForeignChainCalls ` +
-          `entries at end of test run. This indicates pending unresolved transfer fallback(s).`,
+        `Pallet ${pallet} has ${transferFallbackCalls.length} non-CCM FailedForeignChainCalls ` +
+          `entries at end of test run. This indicates pending unresolved transfer fallback(s): ` +
+          `${JSON.stringify(transferFallbackCalls)}`,
       );
     }
   }
