@@ -25,9 +25,12 @@ codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
 
 cf-utilities = { workspace = true }
+cf-utilities-proc-macros = { workspace = true }
 
 proptest-derive = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
+
+derive-where = { workspace = true }
 
 [dev-dependencies]
 sp-runtime = { workspace = true, default-features = true }

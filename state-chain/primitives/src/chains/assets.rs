@@ -363,18 +363,17 @@ macro_rules! assets {
 				use super::$chain_member_and_module as $chain_member_and_module;
 			)*
 
-			cf_utilities::generate_module! {
-				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
-				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
-				pub struct AssetMap<T> {
-					$(
-						#[serde(rename = $chain_json)]
-						#[serde(default)]
-						pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
-					)*
-				}
-				mod _AssetMap { #![migrations] }
+			#[cf_utilities_proc_macros::generate_module]
+			#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+			#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+			pub struct AssetMap<T> {
+				$(
+					#[serde(rename = $chain_json)]
+					#[serde(default)]
+					pub $chain_member_and_module: super::$chain_member_and_module::AssetMap::<T>,
+				)*
 			}
+
 			impl<T> AssetMap<T> {
 				pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 					Self {
@@ -578,19 +577,17 @@ macro_rules! assets {
 					Unsupported,
 				}
 
-
-				cf_utilities::generate_module! {
-					#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
-					#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
-					pub struct AssetMap<T> {
-						$(
-							#[serde(rename = $asset_json)]
-							#[serde(default)]
-							pub $asset_member: T,
-						)+
-					}
-					mod _AssetMap { #![migrations] }
+				#[cf_utilities_proc_macros::generate_module]
+				#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encode, Decode, DecodeWithMemTracking, TypeInfo, MaxEncodedLen, Default)]
+				#[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+				pub struct AssetMap<T> {
+					$(
+						#[serde(rename = $asset_json)]
+						#[serde(default)]
+						pub $asset_member: T,
+					)+
 				}
+
 				impl<T> AssetMap<T> {
 					pub fn from_fn<F: FnMut(Asset) -> T>(mut f: F) -> Self {
 						Self {

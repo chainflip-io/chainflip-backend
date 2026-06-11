@@ -2212,10 +2212,16 @@ where
 
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_16(hash, &account_id)?.into()
+					migrate_from_historical_type(
+						v0200,
+						api.cf_common_account_info_before_version_16(hash, &account_id)?,
+					)
 				} else if api_version < 17 {
 					#[expect(deprecated)]
-					api.cf_common_account_info_before_version_17(hash, &account_id)?.into()
+					migrate_from_historical_type(
+						v0201,
+						api.cf_common_account_info_before_version_17(hash, &account_id)?,
+					)
 				} else {
 					api.cf_common_account_info(hash, &account_id, ShouldSweep::Yes)?
 				}

@@ -1,6 +1,7 @@
+#![allow(clippy::allow_attributes)]
+
 pub mod basics;
 pub mod primitives;
-pub mod registry;
 
 use self::basics::*;
 use crate::migrations::basics::VariantName;
@@ -32,6 +33,18 @@ macro_rules! all_runtime_versions {
 				type $Migration: Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> = Self::DefaultMigration;
 			)*
 		}
+
+		pub trait OrdMigrations = Migrations<
+			MigrationFromGeneric: Migration<Self, vCurrent, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
+
+			DefaultMigration: $(
+				Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>> +
+			)*,
+
+			$(
+				$Migration: Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
+			)*
+		>;
 
 		// helper trait implementations to get access to the type at an arbitrary version
 		$(

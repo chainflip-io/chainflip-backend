@@ -30,12 +30,13 @@ use cf_chains::{
 pub use cf_chains::{dot::PolkadotAccountId, sol::SolAddress, ChainEnvironment};
 use cf_primitives::{Asset, BroadcastId, EpochIndex, FlipBalance, ForeignChain};
 pub use cf_primitives::{AssetAmount, BasisPoints};
-use cf_utilities::{
-	generate_module,
-	migrations::{
-		basics::{vCurrent, GlobalMigrationFromGeneric, HasVersion, Migration},
-		v0201, v0202, Migrations,
+use cf_utilities::migrations::{
+	basics::{
+		vCurrent, GlobalMigrationFromGeneric, HasGenericVariant, HasVersion, IdentityMigration,
+		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
+	primitives::NewTypeWithDefault,
+	v0201, v0202, Migrations,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -263,10 +264,15 @@ pub struct OperatorInfo<Amount> {
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
 }
 
+#[cf_utilities_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct DelegationInfo<Amount> {
 	pub operator: AccountId32,
 	pub bid: Amount,
+}
+
+impl<Amount: Migrations> Migrations for DelegationInfo<Amount> {
+	type DefaultMigration = _DelegationInfo::MigrateFields;
 }
 
 impl<Amount> DelegationInfo<Amount> {
@@ -610,25 +616,21 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-generate_module! {
-	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
-	pub struct NetworkFeeDetails {
-		pub standard_rate_and_minimum: FeeRateAndMinimum,
-		pub rates: AssetMap<Permill>,
-	}
-	mod _NetworkFeeDetails { #![migrations] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkFeeDetails {
+	pub standard_rate_and_minimum: FeeRateAndMinimum,
+	pub rates: AssetMap<Permill>,
 }
 impl Migrations for NetworkFeeDetails {
 	type DefaultMigration = _NetworkFeeDetails::MigrateFields;
 }
 
-generate_module! {
-	#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
-	pub struct NetworkFees {
-		pub regular_network_fee: NetworkFeeDetails,
-		pub internal_swap_network_fee: NetworkFeeDetails,
-	}
-	mod _NetworkFees { #![ migrations ] }
+#[cf_utilities_proc_macros::generate_module]
+#[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
+pub struct NetworkFees {
+	pub regular_network_fee: NetworkFeeDetails,
+	pub internal_swap_network_fee: NetworkFeeDetails,
 }
 impl Migrations for NetworkFees {
 	type DefaultMigration = _NetworkFees::MigrateFields;
@@ -752,6 +754,7 @@ pub struct RpcLendingConfig {
 	pub minimum_update_supply_amount_usd: U256,
 }
 
+#[cf_utilities_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
@@ -772,6 +775,18 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub current_delegation_status: Option<DelegationInfo<Balance>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
+}
+
+impl<Balance: Migrations> Migrations for RpcAccountInfoCommonItems<Balance>
+where
+	Balance: Default,
+	<Balance as HasVersion<v0201>>::HistoricalType: Default,
+	<Balance as HasVersion<v0202>>::HistoricalType: Default,
+{
+	type DefaultMigration = _RpcAccountInfoCommonItems::MigrateFields;
+	type MigrationTo0202 = _RpcAccountInfoCommonItems::MigrateFields<
+		_RpcAccountInfoCommonItems::field::account_id::Added,
+	>;
 }
 
 impl<A> RpcAccountInfoCommonItems<A> {
@@ -819,8 +834,22 @@ pub enum RuntimeApiAccountInfo {
 	Operator(Box<OperatorInfo<FlipBalance>>),
 }
 
-#[derive(Encode, Decode, TypeInfo, PartialEq)]
+#[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
+#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
 pub enum ShouldSweep {
+	#[default]
 	Yes,
 	No,
+}
+
+impl Migrations for ShouldSweep {
+	type DefaultMigration = IdentityMigration;
+	type MigrationTo0202 = NewTypeWithDefault;
+}
+impl HasGenericVariant for ShouldSweep {
+	type GenericType = Self;
+	type MigrationFromGeneric = IdentityMigration;
+}
+impl IsHistoricalType for ShouldSweep {
+	type GetCurrentType = Self;
 }
