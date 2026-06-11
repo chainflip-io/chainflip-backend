@@ -1108,7 +1108,7 @@ impl<T: Config> GeneralLoan<T> {
 		}
 
 		let charge_fee_if_exceeds_threshold = |pending: &mut ScaledAmountHP| {
-			let fee_taken = if let Some(PriceCacheAndThreshold { threshold_usd, price_cache }) =
+			if let Some(PriceCacheAndThreshold { threshold_usd, price_cache }) =
 				price_cache_and_threshold
 			{
 				// If the threshold is provided, take fees only if they exceed it. Effectively
@@ -1124,9 +1124,7 @@ impl<T: Config> GeneralLoan<T> {
 			} else {
 				// If no threshold is provided, take the fees unconditionally:
 				pending.take_non_fractional_part()
-			};
-
-			fee_taken
+			}
 		};
 
 		// Charge the fee and collect it from the pool, up to the pool's available amount. The
