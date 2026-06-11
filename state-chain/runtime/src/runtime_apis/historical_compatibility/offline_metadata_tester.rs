@@ -132,7 +132,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			.iter()
 			.map(|type_id| match self.metadata_type_name(spec_version, *type_id) {
 				Some(name) => name,
-				None => "<anonoymous>".into(),
+				None => "<anonymous>".into(),
 			})
 			.collect();
 		let input_type_name = format!("({})", input_type_names.join(", "));
