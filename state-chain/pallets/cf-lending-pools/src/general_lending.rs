@@ -1112,7 +1112,7 @@ impl<T: Config> GeneralLoan<T> {
 				price_cache_and_threshold
 			{
 				// If the threshold is provided, take fees only if they exceed it. Effectively
-				// noop if the vaule can't be determined
+				// noop if the value can't be determined
 				let pending_usd = price_cache
 					.usd_value_of(loan_asset, pending.into_asset_amount())
 					.unwrap_or_default();

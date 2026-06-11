@@ -17,7 +17,7 @@
 use super::*;
 use pallet_cf_lending_pools::LendingPoolConfiguration;
 
-/// The v17 wire shape of `RpcLendingPool`. The `owed_to_network` field was dropped at v18
+/// The v17-v18 wire shape of `RpcLendingPool`. The `owed_to_network` field was dropped at v19
 /// when the IOU mechanism was replaced by accruing uncollected network fees back to
 /// `pending_interest` (see PRO-2850).
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]

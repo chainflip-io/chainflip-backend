@@ -1852,13 +1852,13 @@ where
 				api.cf_lending_pools_before_version_17(hash, asset).map(|lending_pools| {
 					lending_pools
 						.into_iter()
-						.map(state_chain_runtime::runtime_apis::custom_api::types::before_version_18::RpcLendingPool::from)
+						.map(state_chain_runtime::runtime_apis::custom_api::types::before_version_19::RpcLendingPool::from)
 						.map(Into::into)
 						.collect()
 				})
-			} else if version < 18 {
+			} else if version < 19 {
 				#[expect(deprecated)]
-				api.cf_lending_pools_before_version_18(hash, asset)
+				api.cf_lending_pools_before_version_19(hash, asset)
 					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
 			} else {
 				api.cf_lending_pools(hash, asset)
