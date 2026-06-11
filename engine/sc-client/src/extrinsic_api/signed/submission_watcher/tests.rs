@@ -520,6 +520,110 @@ async fn should_cleanup_duplicate_submissions_for_same_extrinsic_and_nonce_after
 	.unwrap();
 }
 
+/// Regression test for the nonce-gap bug: when a `StrictlyOneSubmission`
+/// request (the `submit_signed_extrinsic` path, e.g. election votes) is dropped from
+/// the pool it is abandoned rather than resubmitted. If the optimistic `best_nonce`2
+/// cache were left untouched, the *next* submission would take `best_nonce + 1` and
+/// skip the now-vacant nonce, leaving a gap that strands every later submission behind
+/// it in the future queue. Dropping a submission must invalidate `best_nonce` so the
+/// next submission refreshes from the pool and refills the hole.
+#[tokio::test]
+async fn dropped_submission_invalidates_nonce_so_next_submission_refills_gap() {
+	const GAP_NONCE: state_chain_runtime::Nonce = 10;
+
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
+
+			// The pool reports `GAP_NONCE` as the next account nonce on both refreshes:
+			// once for the initial submission, and again on the post-drop refresh — which
+			// only happens if the drop invalidated `best_nonce`. `.times(2)` therefore also
+			// asserts that the second submission actually refreshed instead of doing `+1`.
+			mock_rpc_api
+				.expect_next_account_nonce()
+				.times(2)
+				.returning(move |_| Ok(GAP_NONCE));
+
+			// First submission is dropped by the pool; the second sits in the pool.
+			let submit_calls = Arc::new(AtomicU8::new(0));
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(2).returning(move |_| {
+				match submit_calls.fetch_add(1, Ordering::Relaxed) {
+					0 => Ok(Box::pin(stream::iter(vec![Ok(TransactionStatus::Dropped)]))
+						as WatchExtrinsicStream),
+					_ => Ok(Box::pin(stream::empty()) as WatchExtrinsicStream),
+				}
+			});
+
+			let (mut watcher, mut requests) = SubmissionWatcher::new(
+				scope,
+				signer::PairSigner::new(sp_core::Pair::generate().0),
+				GAP_NONCE,
+				H256::default(),
+				0,
+				Default::default(),
+				H256::default(),
+				SIGNED_EXTRINSIC_LIFETIME,
+				Arc::new(mock_rpc_api),
+			);
+
+			// First strictly-one submission lands on the gap nonce.
+			watcher
+				.new_request(
+					&mut requests,
+					test_call(),
+					oneshot::channel().0,
+					oneshot::channel().0,
+					RequestStrategy::StrictlyOneSubmission(oneshot::channel().0),
+				)
+				.await?;
+			assert_eq!(watcher.best_nonce, Some(GAP_NONCE));
+			assert!(watcher.submissions_by_nonce.contains_key(&GAP_NONCE));
+
+			// The pool drops it.
+			let submission_details = watcher.watch_for_submission_in_block().await;
+			watcher.on_submission_in_block(&mut requests, submission_details).await?;
+
+			// The drop must have vacated the nonce *and* invalidated the optimistic cache.
+			assert!(watcher.submissions_by_nonce.is_empty());
+			assert_eq!(
+				watcher.best_nonce, None,
+				"a dropped submission must invalidate the optimistic nonce cache"
+			);
+
+			// The next submission must refill the vacated nonce (refresh -> GAP_NONCE),
+			// not skip to GAP_NONCE + 1.
+			watcher
+				.new_request(
+					&mut requests,
+					test_call(),
+					oneshot::channel().0,
+					oneshot::channel().0,
+					RequestStrategy::StrictlyOneSubmission(oneshot::channel().0),
+				)
+				.await?;
+
+			assert_eq!(
+				watcher.best_nonce,
+				Some(GAP_NONCE),
+				"next submission must reuse the vacated nonce, not skip past it"
+			);
+			assert!(
+				watcher.submissions_by_nonce.contains_key(&GAP_NONCE),
+				"the gap must be refilled"
+			);
+			assert!(
+				!watcher.submissions_by_nonce.contains_key(&(GAP_NONCE + 1)),
+				"next submission must not skip the gap"
+			);
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
+
 /// Create a new watcher and submit a dummy extrinsic.
 async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 	scope: &'a Scope<'env, anyhow::Error>,

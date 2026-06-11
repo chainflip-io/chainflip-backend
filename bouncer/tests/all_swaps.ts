@@ -11,6 +11,7 @@ import {
 } from 'shared/utils';
 import { TestContext } from 'shared/utils/test_context';
 import { manuallyAddTestToList, concurrentTest } from 'shared/utils/vitest';
+import { SwapContext } from 'shared/utils/swap_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function initiateSwap(
@@ -73,6 +74,10 @@ export function testAllSwaps(timeoutPerSwap: number) {
     });
   }
 
+  function randomElement<Value>(items: Value[]): Value {
+    return items[Math.floor(Math.random() * items.length)];
+  }
+
   // If we include Assethub swaps (HubDot, HubUsdc, HubUsdt) in the all-to-all swaps,
   // the test starts to randomly fail because the assethub node is overloaded.
   // BscUsdc and BscWbtc exist in the SDK but are not yet supported in the runtime.
@@ -108,7 +113,25 @@ export function testAllSwaps(timeoutPerSwap: number) {
       });
   });
 
+  // Swaps from assethub paired with random chains.
+  // NOTE: we don't test swaps *to* assethub here, those tests are run sequentially in
+  // `testSwapsToAssethub`.
+  const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
+  assethubAssets.sort().forEach((hubAsset) => {
+    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+  });
+
   for (const swap of allSwaps) {
     concurrentTest(`AllSwaps > ${swap.name}`, swap.test, timeoutPerSwap, 0, true);
+  }
+}
+
+export async function testSwapsToAssethub(testContext: TestContext) {
+  // we run three swaps to assethub in sequence. Otherwise, there can be nonce issues,
+  // which caused bouncer flakiness in the past.
+  for (const destinationAsset of ['HubDot', 'HubUsdc', 'HubUsdt'] as Asset[]) {
+    const logger = testContext.logger.child({ tag: `ArbEth to ${destinationAsset}` });
+    const cf = await newChainflipIO(logger, [] as []);
+    await testSwap(cf, 'ArbEth', destinationAsset, undefined, undefined, new SwapContext());
   }
 }

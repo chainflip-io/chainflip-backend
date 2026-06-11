@@ -64,7 +64,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
 	tron_key_manager_address: hex_literal::hex!("fa989a8351b3ada8f871d12a75635d1589cf74a0"), /* TYpEk6eqy6Y7FXydzqMb5nvWfDy8Bs8qiT */
-	tron_vault_address: hex_literal::hex!("95b740ec67963cc17ef1931978639e320c0b4be5"), /* TPcqDKqWiDyQh4vGbFiJaxpPXtKfk8RZML */
+	tron_vault_address: hex_literal::hex!("d7ce126fafc5c3463124e275d5e18865081e9d61"), /* TVeH9SKF3GHSo663iuNVmWXqFHBYUcSSXy */
 	trx_usdt_token_address: hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
 	// TODO: fill in real BSC sisyphos contract addresses
 	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),

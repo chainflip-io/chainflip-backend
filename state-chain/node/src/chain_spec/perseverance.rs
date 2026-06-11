@@ -63,7 +63,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	arb_usdt_token_address: hex_literal::hex!("3dd1A7A99CFa2554Da8b3483e6eD739120Fc35cB"),
 	arb_address_checker_address: hex_literal::hex!("564e411634189E68ecD570400eBCF783b4aF8688"),
 	tron_key_manager_address: hex_literal::hex!("391362ed6f5f649868eede354d3e833d6165dd9a"), /* TFAzjzAnaFWRmXNvpNngTbBBDuo4WjRQyy */
-	tron_vault_address: hex_literal::hex!("2523ae929fecd9d665f472f59b99a8ce6b179510"), /* TDMakP1fbWc7XXoSWZpujpjRAuePPEn4oi */
+	tron_vault_address: hex_literal::hex!("f74ebef6c12fc608826393e1ac4665664229be53"), /* TYWrEoh3h6Pyi98r1xVpi8v9A9jPUZ7Bs1 */
 	trx_usdt_token_address: hex_literal::hex!("eca9bc828a3005b9a3b909f2cc5c2a54794de05f"), /* TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf */
 	// TODO: fill in real BSC perseverance contract addresses
 	bsc_key_manager_address: hex_literal::hex!("0000000000000000000000000000000000000000"),
