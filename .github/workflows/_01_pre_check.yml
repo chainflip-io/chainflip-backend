@@ -99,7 +99,7 @@ jobs:
 
       - name: Check licence headers 📜
         run: |
-          missing=$(grep -rL "SPDX-License-Identifier: Apache-2.0" --include="*.rs" . | grep -v "^./target/")
+          missing=$(grep -rL "SPDX-License-Identifier: Apache-2.0" --include="*.rs" . | grep -v "^./target/" || true)
           if [ -n "$missing" ]; then
             echo "The following Rust files are missing the Apache-2.0 SPDX licence header:"
             echo "$missing"
