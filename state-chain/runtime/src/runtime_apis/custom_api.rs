@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(18)]
+	#[api_version(19)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -201,6 +201,11 @@ decl_runtime_apis!(
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 		) -> before_version_17::LiquidityProviderInfo;
+		#[changed_in(19)]
+		fn cf_liquidity_provider_info(
+			account_id: AccountId32,
+			should_sweep: ShouldSweep,
+		) -> before_version_19::LiquidityProviderInfo;
 		fn cf_liquidity_provider_info(
 			account_id: AccountId32,
 			should_sweep: ShouldSweep,
@@ -219,6 +224,8 @@ decl_runtime_apis!(
 		fn cf_free_balances(account_id: AccountId32) -> before_version_16::AssetMap<AssetAmount>;
 		#[changed_in(17)]
 		fn cf_free_balances(account_id: AccountId32) -> before_version_17::AssetMap<AssetAmount>;
+		#[changed_in(19)]
+		fn cf_free_balances(account_id: AccountId32) -> before_version_19::AssetMap<AssetAmount>;
 		fn cf_free_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		#[changed_in(16)]
 		fn cf_lp_total_balances(
@@ -228,6 +235,10 @@ decl_runtime_apis!(
 		fn cf_lp_total_balances(
 			account_id: AccountId32,
 		) -> before_version_17::AssetMap<AssetAmount>;
+		#[changed_in(19)]
+		fn cf_lp_total_balances(
+			account_id: AccountId32,
+		) -> before_version_19::AssetMap<AssetAmount>;
 		fn cf_lp_total_balances(account_id: AccountId32) -> AssetMap<AssetAmount>;
 		fn cf_redemption_tax() -> AssetAmount;
 		fn cf_network_environment() -> NetworkEnvironment;
@@ -254,6 +265,8 @@ decl_runtime_apis!(
 		fn cf_boost_pool_details(asset: Asset) -> BTreeMap<u16, BoostPoolDetails<AccountId32>>;
 		#[changed_in(17)]
 		fn cf_safe_mode_statuses() -> types::before_version_17::RuntimeSafeMode;
+		#[changed_in(19)]
+		fn cf_safe_mode_statuses() -> types::before_version_19::RuntimeSafeMode;
 		fn cf_safe_mode_statuses() -> RuntimeSafeMode;
 		fn cf_pools() -> Vec<PoolPairsMap<Asset>>;
 		fn cf_swap_retry_delay_blocks() -> u32;
@@ -318,6 +331,8 @@ decl_runtime_apis!(
 		) -> Vec<ChannelId>;
 		#[changed_in(17)]
 		fn cf_transaction_screening_events() -> before_version_17::TransactionScreeningEvents;
+		#[changed_in(19)]
+		fn cf_transaction_screening_events() -> before_version_19::TransactionScreeningEvents;
 		fn cf_transaction_screening_events() -> TransactionScreeningEvents;
 		fn cf_affiliate_details(
 			broker: AccountId32,
@@ -327,6 +342,8 @@ decl_runtime_apis!(
 		fn cf_vault_addresses() -> before_version_16::VaultAddresses;
 		#[changed_in(17)]
 		fn cf_vault_addresses() -> before_version_17::VaultAddresses;
+		#[changed_in(19)]
+		fn cf_vault_addresses() -> before_version_19::VaultAddresses;
 		fn cf_vault_addresses() -> VaultAddresses;
 		fn cf_all_open_deposit_channels() -> Vec<OpenedDepositChannels>;
 		fn cf_get_trading_strategies(
@@ -336,11 +353,15 @@ decl_runtime_apis!(
 		fn cf_trading_strategy_limits() -> before_version_16::TradingStrategyLimits;
 		#[changed_in(17)]
 		fn cf_trading_strategy_limits() -> before_version_17::TradingStrategyLimits;
+		#[changed_in(19)]
+		fn cf_trading_strategy_limits() -> before_version_19::TradingStrategyLimits;
 		fn cf_trading_strategy_limits() -> TradingStrategyLimits;
 		#[changed_in(16)]
 		fn cf_network_fees() -> before_version_16::NetworkFees;
 		#[changed_in(17)]
 		fn cf_network_fees() -> before_version_17::NetworkFees;
+		#[changed_in(19)]
+		fn cf_network_fees() -> before_version_19::NetworkFees;
 		fn cf_network_fees() -> NetworkFees;
 		#[changed_in(17)]
 		fn cf_lending_pools(
@@ -386,12 +407,21 @@ decl_runtime_apis!(
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 		) -> before_version_17::RpcAccountInfoCommonItems<FlipBalance>;
+		#[changed_in(19)]
+		fn cf_common_account_info(
+			account_id: &AccountId32,
+			should_sweep: ShouldSweep,
+		) -> before_version_19::RpcAccountInfoCommonItems<FlipBalance>;
 		fn cf_common_account_info(
 			account_id: &AccountId32,
 			should_sweep: ShouldSweep,
 		) -> RpcAccountInfoCommonItems<FlipBalance>;
 		#[changed_in(17)]
 		fn cf_all_account_infos();
+		#[changed_in(19)]
+		fn cf_all_account_infos(
+			roles: Option<Vec<AccountRole>>,
+		) -> Vec<before_version_19::RuntimeApiAccountInfoWrapper>;
 		fn cf_all_account_infos(
 			roles: Option<Vec<AccountRole>>,
 		) -> Vec<RuntimeApiAccountInfoWrapper>;
@@ -423,6 +453,8 @@ decl_runtime_apis!(
 		fn cf_default_oracle_price_protection();
 		#[changed_in(17)]
 		fn cf_default_oracle_price_protection() -> before_version_17::AssetMap<Option<BasisPoints>>;
+		#[changed_in(19)]
+		fn cf_default_oracle_price_protection() -> before_version_19::AssetMap<Option<BasisPoints>>;
 		fn cf_default_oracle_price_protection() -> AssetMap<Option<BasisPoints>>;
 		/// Returns the witnessed events (deposits, vault deposits, broadcasts) for a given chain
 		/// from the block witnesser election's unsynchronized state.
@@ -435,6 +467,10 @@ decl_runtime_apis!(
 		/// from the block witnesser election's unsynchronized state.
 		#[changed_in(17)]
 		fn cf_ingress_events();
+		#[changed_in(19)]
+		fn cf_ingress_events(
+			chain: ForeignChain,
+		) -> Result<before_version_19::IngressEvents, DispatchErrorWithMessage>;
 		fn cf_ingress_events(
 			chain: ForeignChain,
 		) -> Result<IngressEvents, DispatchErrorWithMessage>;

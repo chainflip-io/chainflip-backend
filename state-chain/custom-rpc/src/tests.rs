@@ -509,6 +509,7 @@ fn test_vault_addresses_custom_rpc() {
 		usdt_token_mint_pubkey: EncodedAddress::Sol([10; 32]),
 		solana_usdt_token_vault_ata: EncodedAddress::Sol([11; 32]),
 		tron: EncodedAddress::Tron([12; 20]),
+		bsc: EncodedAddress::Bsc([13; 20]),
 	};
 	insta::assert_json_snapshot!(val);
 }
@@ -1208,6 +1209,22 @@ fn transaction_screening_events_serialization() {
 				tx_id: H256([0xe1; 32]),
 			},
 			BrokerRejectionEventFor::<Tron>::TransactionRejectedByBroker {
+				refund_broadcast_id: 3u32,
+				deposit_details: cf_chains::evm::DepositDetails {
+					tx_hashes: Some(vec![H256([0xe2; 32])]),
+				},
+			},
+		],
+		bsc_events: vec![
+			BrokerRejectionEventFor::<cf_chains::Bsc>::TransactionRejectionRequestReceived {
+				account_id: ID_1,
+				tx_id: H256([0xe0; 32]),
+			},
+			BrokerRejectionEventFor::<cf_chains::Bsc>::TransactionRejectionRequestExpired {
+				account_id: ID_2,
+				tx_id: H256([0xe1; 32]),
+			},
+			BrokerRejectionEventFor::<cf_chains::Bsc>::TransactionRejectedByBroker {
 				refund_broadcast_id: 3u32,
 				deposit_details: cf_chains::evm::DepositDetails {
 					tx_hashes: Some(vec![H256([0xe2; 32])]),

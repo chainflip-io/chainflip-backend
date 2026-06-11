@@ -47,13 +47,15 @@ use sc_client_api::{
 };
 use sc_transaction_pool::TransactionPoolWrapper;
 use sc_transaction_pool_api::{TransactionStatus, TxIndex};
-use sp_api::CallApiAt;
+use sp_api::{ApiExt, CallApiAt};
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::Block as BlockT;
 use state_chain_runtime::{
 	runtime_apis::{
 		custom_api::CustomRuntimeApi,
-		types::{ChainAccounts, OpenedDepositChannels, VaultAddresses, VaultSwapDetails},
+		types::{
+			ChainAccounts, IngressEvents, OpenedDepositChannels, VaultAddresses, VaultSwapDetails,
+		},
 	},
 	AccountId, Hash, Nonce, RuntimeCall,
 };
@@ -526,9 +528,24 @@ where
 				true,
 				pending_sink,
 				move |client, hash| {
-					Ok((*client.runtime_api())
-						.cf_transaction_screening_events(hash)
-						.map_err(CfApiError::from)?)
+					let api = client.runtime_api();
+					let api_version = api
+						.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
+						.map_err(CfApiError::from)?
+						.unwrap_or_default();
+					Ok(if api_version < 17 {
+						#[expect(deprecated)]
+						api.cf_transaction_screening_events_before_version_17(hash)
+							.map_err(CfApiError::from)?
+							.into()
+					} else if api_version < 19 {
+						#[expect(deprecated)]
+						api.cf_transaction_screening_events_before_version_19(hash)
+							.map_err(CfApiError::from)?
+							.into()
+					} else {
+						api.cf_transaction_screening_events(hash).map_err(CfApiError::from)?
+					})
 				},
 			)
 			.await;
@@ -546,10 +563,25 @@ where
 				true,
 				pending_sink,
 				move |client, hash| {
-					Ok((*client.runtime_api())
-						.cf_ingress_events(hash, chain)
+					let api = client.runtime_api();
+					let api_version = api
+						.api_version::<dyn CustomRuntimeApi<state_chain_runtime::Block>>(hash)
 						.map_err(CfApiError::from)?
-						.map_err(CfApiError::from)?)
+						.unwrap_or_default();
+					Ok(if api_version < 17 {
+						// Ingress events were not exposed before version 17.
+						IngressEvents { deposits: vec![], vault_deposits: vec![] }
+					} else if api_version < 19 {
+						#[expect(deprecated)]
+						api.cf_ingress_events_before_version_19(hash, chain)
+							.map_err(CfApiError::from)?
+							.map_err(CfApiError::from)?
+							.into()
+					} else {
+						api.cf_ingress_events(hash, chain)
+							.map_err(CfApiError::from)?
+							.map_err(CfApiError::from)?
+					})
 				},
 			)
 			.await;
@@ -693,12 +725,21 @@ where
 	}
 
 	async fn vault_addresses(&self) -> RpcResult<VaultAddresses> {
-		Ok(self
-			.rpc_backend
-			.client
-			.runtime_api()
-			.cf_vault_addresses(self.rpc_backend.client.info().best_hash)
-			.map_err(CfApiError::from)?)
+		let at = Some(self.rpc_backend.client.info().best_hash);
+		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
+			if version < 16 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_16(hash).map(Into::into)
+			} else if version < 17 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_17(hash).map(Into::into)
+			} else if version < 19 {
+				#[expect(deprecated)]
+				api.cf_vault_addresses_before_version_19(hash).map(Into::into)
+			} else {
+				api.cf_vault_addresses(hash)
+			}
+		})
 	}
 
 	async fn set_vault_swap_minimum_broker_fee(

@@ -548,6 +548,9 @@ where
 			} else if version < 17 {
 				#[expect(deprecated)]
 				api.cf_free_balances_before_version_17(hash, account_id).map(Into::into)
+			} else if version < 19 {
+				#[expect(deprecated)]
+				api.cf_free_balances_before_version_19(hash, account_id).map(Into::into)
 			} else {
 				api.cf_free_balances(hash, account_id)
 			}

@@ -1093,6 +1093,8 @@ pub trait FeeRefundCalculator<C: Chain> {
 
 pub type TransactionInIdFor<C> = <<C as Chain>::ChainCrypto as ChainCrypto>::TransactionInId;
 
+// NOTE: New chain variants MUST be appended at the end to preserve SCALE discriminants for
+// backward compatibility with already-encoded storage and cross-version runtime API calls.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum TransactionInId {
@@ -1100,12 +1102,12 @@ pub enum TransactionInId {
 	Ethereum(TransactionInIdFor<crate::Ethereum>),
 	Arbitrum(TransactionInIdFor<crate::Arbitrum>),
 	Tron(TransactionInIdFor<crate::Tron>),
-	Bsc(TransactionInIdFor<crate::Bsc>),
 
 	// Deposit channels are marked differently than vault swaps
 	Solana(TransactionInIdFor<crate::Solana>),
 	SolanaDepositChannel(SolAddress),
-	// other variants reserved for other chains.
+
+	Bsc(TransactionInIdFor<crate::Bsc>),
 }
 
 #[derive(Debug, Clone, TypeInfo, Encode, Decode, DecodeWithMemTracking, PartialEq, Eq)]
@@ -1550,7 +1552,6 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 	},
 	Ethereum(EvmVaultSwapExtraParameters<Address, Amount>),
 	Arbitrum(EvmVaultSwapExtraParameters<Address, Amount>),
-	Bsc(EvmVaultSwapExtraParameters<Address, Amount>),
 	Solana {
 		from: Address,
 		#[cfg_attr(feature = "std", serde(with = "bounded_hex"))]
@@ -1560,6 +1561,7 @@ pub enum VaultSwapExtraParameters<Address, Amount> {
 		from_token_account: Option<Address>,
 	},
 	Tron(EvmVaultSwapExtraParameters<Address, Amount>),
+	Bsc(EvmVaultSwapExtraParameters<Address, Amount>),
 }
 
 impl<Address: Clone, Amount> VaultSwapExtraParameters<Address, Amount> {
