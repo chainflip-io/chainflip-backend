@@ -44,7 +44,6 @@ const INIT_BOOSTER_FLIP_BALANCE: AssetAmount = 1_000_000_000;
 
 fn setup_lending_pool_for_boost() {
 	assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), BOOST_ASSET));
-	assert_ok!(LendingPools::update_whitelist(RuntimeOrigin::root(), WhitelistUpdate::SetAllowAll));
 	MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, 1_000_000);
 
 	BoostConfig::<Test>::set(BoostConfiguration {
@@ -1164,10 +1163,6 @@ mod hybrid_boosting {
 			minimum_add_funds_amount: BTreeMap::default(),
 			min_lending_pool_share: Percent::from_percent(30),
 		});
-		assert_ok!(LendingPools::update_whitelist(
-			RuntimeOrigin::root(),
-			WhitelistUpdate::SetAllowAll
-		));
 
 		assert_ok!(LendingPools::create_lending_pool(RuntimeOrigin::root(), BOOST_ASSET));
 
@@ -1633,10 +1628,6 @@ fn get_all_loans_returns_boost_and_user_loans() {
 
 		const BROKER: Beneficiary<AccountId> = Beneficiary { account: 987, bps: 100 };
 
-		assert_ok!(LendingPools::update_whitelist(
-			RuntimeOrigin::root(),
-			WhitelistUpdate::SetAllowAll
-		));
 		BoostConfig::<Test>::set(BoostConfiguration {
 			network_fee_deduction_from_boost_percent: Percent::from_percent(0),
 			minimum_add_funds_amount: BTreeMap::default(),
@@ -1747,12 +1738,6 @@ fn deregistration_check() {
 		const LENDER_FUNDS: AssetAmount = 1_000_000_000;
 
 		setup_lending_pool_for_boost();
-
-		// Disable whitelist for lending
-		assert_ok!(LendingPools::update_whitelist(
-			RuntimeOrigin::root(),
-			WhitelistUpdate::SetAllowAll
-		));
 
 		// Set oracle prices for the assets
 		MockPriceFeedApi::set_price_usd_fine(BOOST_ASSET, 1_000_000);
