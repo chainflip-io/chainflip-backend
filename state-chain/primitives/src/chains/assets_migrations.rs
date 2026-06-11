@@ -1,8 +1,4 @@
-use cf_utilities::migrations::{
-	basics::{HasVersion, NewFieldWithDefault},
-	registry::{FeatureNewAssetsIn0201, FeatureTronIn0202},
-	v0201, v0202, Migrations,
-};
+use cf_utilities::migrations::{basics::HasVersion, v0201, v0202, Migrations};
 
 use super::assets::*;
 
@@ -17,7 +13,7 @@ where
 	<T as HasVersion<v0201>>::HistoricalType: Default,
 {
 	type DefaultMigration = sol::_AssetMap::MigrateFields;
-	type MigrationTo0201 = sol::_AssetMap::MigrateFields<FeatureNewAssetsIn0201>;
+	type MigrationTo0201 = sol::_AssetMap::MigrateFields<sol::_AssetMap::field::usdt::Added>;
 }
 
 impl<T: Migrations> Migrations for arb::AssetMap<T>
@@ -25,7 +21,7 @@ where
 	<T as HasVersion<v0201>>::HistoricalType: Default,
 {
 	type DefaultMigration = arb::_AssetMap::MigrateFields;
-	type MigrationTo0201 = arb::_AssetMap::MigrateFields<FeatureNewAssetsIn0201>;
+	type MigrationTo0201 = arb::_AssetMap::MigrateFields<arb::_AssetMap::field::usdt::Added>;
 }
 
 impl<T: Migrations> Migrations for btc::AssetMap<T> {
@@ -45,7 +41,7 @@ where
 	<T as HasVersion<v0201>>::HistoricalType: Default,
 {
 	type DefaultMigration = eth::_AssetMap::MigrateFields;
-	type MigrationTo0201 = eth::_AssetMap::MigrateFields<FeatureNewAssetsIn0201>;
+	type MigrationTo0201 = eth::_AssetMap::MigrateFields<eth::_AssetMap::field::wbtc::Added>;
 }
 
 impl<T: Migrations + Default> Migrations for any::AssetMap<T>
@@ -54,35 +50,5 @@ where
 	<T as HasVersion<v0202>>::HistoricalType: Default,
 {
 	type DefaultMigration = any::_AssetMap::MigrateFields;
-	type MigrationTo0202 = any::_AssetMap::MigrateFields<FeatureTronIn0202>;
-}
-
-// -------------- custom migration details ---------------- //
-
-// to 0201
-
-impl<TargetFieldsTypes: arb::_AssetMap::HistoricalTypesAt<v0201, usdt: Default>>
-	arb::_AssetMap::CustomMigration<TargetFieldsTypes, v0201> for FeatureNewAssetsIn0201
-{
-	type usdt = NewFieldWithDefault;
-}
-
-impl<TargetFieldTypes: eth::_AssetMap::HistoricalTypesAt<v0201, wbtc: Default>>
-	eth::_AssetMap::CustomMigration<TargetFieldTypes, v0201> for FeatureNewAssetsIn0201
-{
-	type wbtc = NewFieldWithDefault;
-}
-
-impl<TargetFieldsTypes: sol::_AssetMap::HistoricalTypesAt<v0201, usdt: Default>>
-	sol::_AssetMap::CustomMigration<TargetFieldsTypes, v0201> for FeatureNewAssetsIn0201
-{
-	type usdt = NewFieldWithDefault;
-}
-
-// to 0202
-
-impl<TargetFieldsTypes: any::_AssetMap::HistoricalTypesAt<v0202, tron: Default>>
-	any::_AssetMap::CustomMigration<TargetFieldsTypes, v0202> for FeatureTronIn0202
-{
-	type tron = NewFieldWithDefault;
+	type MigrationTo0202 = any::_AssetMap::MigrateFields<any::_AssetMap::field::tron::Added>;
 }

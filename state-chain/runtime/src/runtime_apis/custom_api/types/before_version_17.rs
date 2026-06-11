@@ -255,35 +255,8 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, Default, Debug)]
-pub struct RpcAccountInfoCommonItems<Balance> {
-	pub vanity_name: VanityName,
-	pub flip_balance: Balance,
-	pub asset_balances: AssetMap<Balance>,
-	pub bond: Balance,
-	pub estimated_redeemable_balance: Balance,
-	pub bound_redeem_address: Option<EvmAddress>,
-	pub restricted_balances: BTreeMap<EvmAddress, Balance>,
-	pub current_delegation_status: Option<DelegationInfo<Balance>>,
-	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
-}
-
-impl<B: Default> From<RpcAccountInfoCommonItems<B>> for super::RpcAccountInfoCommonItems<B> {
-	fn from(value: RpcAccountInfoCommonItems<B>) -> Self {
-		Self {
-			account_id: None,
-			vanity_name: value.vanity_name,
-			flip_balance: value.flip_balance,
-			asset_balances: value.asset_balances.into(),
-			bond: value.bond,
-			estimated_redeemable_balance: value.estimated_redeemable_balance,
-			bound_redeem_address: value.bound_redeem_address,
-			restricted_balances: value.restricted_balances,
-			current_delegation_status: value.current_delegation_status,
-			upcoming_delegation_status: value.upcoming_delegation_status,
-		}
-	}
-}
+pub type RpcAccountInfoCommonItems<Balance> =
+	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v0201>>::HistoricalType;
 
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.

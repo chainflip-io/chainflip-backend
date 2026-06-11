@@ -23,6 +23,7 @@
 #![feature(associated_type_defaults)]
 #![feature(trait_alias)]
 #![feature(lazy_type_alias)]
+#![feature(impl_trait_in_assoc_type)]
 #![allow(incomplete_features)]
 
 #[cfg(feature = "std")]

@@ -16,10 +16,14 @@
 
 pub mod types;
 
+#[cfg(test)]
+use cf_utilities::migrations::basics::VariantName;
 pub use types::RawWitnessedEvents;
 
 #[cfg(test)]
-use crate::runtime_apis::historical_compatibility::tester_trait::HistoricalCompatibilityTester;
+use crate::runtime_apis::historical_compatibility::tester_trait::{
+	HistoricalCompatibilityTester, TypeIncompatibilityInfo,
+};
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -453,9 +457,34 @@ decl_runtime_apis!(
 #[cfg(test)]
 pub fn test_all_historical_runtime_calls(
 	tester: &mut impl HistoricalCompatibilityTester,
-	path: &'static str,
-) {
+	should_check_version: impl Fn(u32) -> bool,
+) -> Vec<TypeIncompatibilityInfo> {
 	use cf_utilities::migrations::{v0200, v0201};
-	tester.test_call::<v0201, (), NetworkFees>(v0201, "CustomRuntimeApi", "cf_network_fees", path);
-	tester.test_call::<v0200, (), NetworkFees>(v0200, "CustomRuntimeApi", "cf_network_fees", path);
+	let mut all_incompatibilities = Vec::new();
+
+	macro_rules! for_each_runtime_version {
+		($($version:ident),*) => {
+			$(
+				if should_check_version($version::LATEST_RUNTIME_PATCH_VERSION) {
+					let mut incompatibilities = [
+						tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
+						tester
+							.test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
+								$version,
+								"CustomRuntimeApi",
+								"cf_common_account_info",
+							),
+					]
+					.into_iter()
+					.flatten()
+					.collect::<Vec<_>>();
+					all_incompatibilities.append(&mut incompatibilities);
+				}
+			)*
+		};
+	}
+
+	for_each_runtime_version!(v0200, v0201);
+
+	all_incompatibilities
 }
