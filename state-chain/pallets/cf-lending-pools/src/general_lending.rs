@@ -1068,8 +1068,6 @@ impl<T: Config> GeneralLoan<T> {
 					loan_id: self.id,
 					pool_fee: liquidation_fee_pool,
 					network_fee: liquidation_fee_network,
-					// TODO: add support for broker fees (see https://linear.app/chainflip/issue/PRO-2851/decide-whether-to-support-broker-fees-from-origination-and-liquidation)
-					broker_fee: 0,
 				});
 			}
 
@@ -1457,8 +1455,6 @@ pub fn fund_loan<T: Config>(
 		loan_id: loan.id,
 		pool_fee: origination_fee_pool,
 		network_fee: origination_fee_network,
-		// TODO: add support for broker fees (see https://linear.app/chainflip/issue/PRO-2851/decide-whether-to-support-broker-fees-from-origination-and-liquidation)
-		broker_fee: 0,
 	});
 
 	Ok(())

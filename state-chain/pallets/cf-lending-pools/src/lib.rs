@@ -478,7 +478,6 @@ pub mod pallet {
 			loan_id: LoanId,
 			pool_fee: AssetAmount,
 			network_fee: AssetAmount,
-			broker_fee: AssetAmount,
 		},
 		InterestTaken {
 			loan_id: LoanId,
@@ -502,7 +501,6 @@ pub mod pallet {
 			loan_id: LoanId,
 			pool_fee: AssetAmount,
 			network_fee: AssetAmount,
-			broker_fee: AssetAmount,
 		},
 		LoanRepaid {
 			loan_id: LoanId,

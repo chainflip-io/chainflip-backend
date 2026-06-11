@@ -445,7 +445,6 @@ fn basic_general_lending() {
 					loan_id: LOAN_ID,
 					pool_fee: origination_fee_pool,
 					network_fee: origination_fee_network,
-					broker_fee: 0,
 				},
 			));
 
@@ -1027,7 +1026,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee: 0,
 				}) if pool_fee == origination_fee_pool_2 && network_fee == origination_fee_network_2
 			);
 
@@ -1112,7 +1110,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
 					network_fee: network_fee_taken,
-					broker_fee: 0,
 				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
 			);
 
@@ -1439,10 +1436,8 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
 				}) if pool_fee == liquidation_fee_pool_1 &&
-					network_fee == liquidation_fee_network_1 &&
-					broker_fee == 0,
+					network_fee == liquidation_fee_network_1,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
@@ -1532,10 +1527,8 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
 				}) if pool_fee == liquidation_fee_pool_2 &&
-					network_fee == liquidation_fee_network_2 &&
-					broker_fee == 0,
+					network_fee == liquidation_fee_network_2,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					action_type: LoanRepaidActionType::Liquidation {
@@ -1916,8 +1909,7 @@ fn liquidation_with_outstanding_principal() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
-				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
+				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
