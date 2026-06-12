@@ -4,14 +4,16 @@
 // Downloads substrate metadata (version 15) from a Chainflip node.
 //
 // Arguments:
-//   --rpc-url <url>       RPC endpoint (default: https://mainnet-archive.chainflip.io)
+//   --network <network>   Network to download from: mainnet, perseverance, sisyphos, custom (default: mainnet)
+//   --custom-rpc-url <url> RPC endpoint to use with --network custom
 //   --runtime-version <n> Target runtime spec_version (default: current version)
-//   --output <path>       Output file path (default: ../state-chain/runtime_historical_metadata/runtime_{VERSION}_{BLOCKHASH}.scale)
+//   --output <path>       Output file path (default: ../state-chain/cf-integration-tests/historical_metadata/runtime_{VERSION}.scale)
 //
 // Examples:
 //   ./commands/download_metadata.ts
 //   ./commands/download_metadata.ts --runtime-version 20100
-//   ./commands/download_metadata.ts --rpc-url http://localhost:9944 --runtime-version 20000
+//   ./commands/download_metadata.ts --network perseverance --runtime-version 20100
+//   ./commands/download_metadata.ts --network custom --custom-rpc-url http://localhost:9944 --runtime-version 20000
 
 import fs from 'fs';
 import path from 'path';
@@ -21,15 +23,46 @@ import { Option, Bytes } from 'scale-ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const RPC_URLS = {
+  mainnet: 'https://mainnet-archive.chainflip.io',
+  perseverance: 'https://archive.perseverance.chainflip.io',
+  sisyphos: 'https://archive.sisyphos.chainflip.io',
+} as const;
+
+type Network = keyof typeof RPC_URLS | 'custom';
+
+function isNetwork(value: string): value is Network {
+  return value in RPC_URLS || value === 'custom';
+}
+
+function getRpcUrl(network: Network, customRpcUrl?: string): string {
+  if (network === 'custom') {
+    if (!customRpcUrl) {
+      console.error('Error: --custom-rpc-url is required when --network custom is used');
+      process.exit(1);
+    }
+    return customRpcUrl;
+  }
+
+  return RPC_URLS[network];
+}
+
 const { values } = parseArgs({
   options: {
-    'rpc-url': { type: 'string', default: 'https://mainnet-archive.chainflip.io' },
+    network: { type: 'string', default: 'mainnet' },
+    'custom-rpc-url': { type: 'string' },
     'runtime-version': { type: 'string' },
     output: { type: 'string' },
   },
 });
 
-const rpcUrl = values['rpc-url']!;
+const network = values.network!;
+if (!isNetwork(network)) {
+  console.error('Error: --network must be one of mainnet, perseverance, sisyphos, custom');
+  process.exit(1);
+}
+
+const rpcUrl = getRpcUrl(network, values['custom-rpc-url']);
 
 let rpcId = 0;
 
@@ -183,7 +216,8 @@ async function main() {
       '..',
       '..',
       'state-chain',
-      'runtime_historical_metadata',
+      'cf-integration-tests',
+      'historical_metadata',
       `runtime_${targetVersion}.scale`,
     );
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
