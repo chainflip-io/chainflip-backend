@@ -1,4 +1,4 @@
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
 use codec::{Decode, Encode};
 use proptest::arbitrary::Arbitrary;
 use scale_info::TypeInfo;
@@ -19,7 +19,7 @@ pub struct OnlineNodeTester {
 
 impl HistoricalCompatibilityTester for OnlineNodeTester {
 	fn test_call<
-		V: VariantName,
+		V: Version,
 		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<

@@ -4,18 +4,18 @@ pub mod basics;
 pub mod primitives;
 
 use self::basics::*;
-use crate::migrations::basics::VariantName;
+use crate::migrations::basics::Version;
 
 macro_rules! all_runtime_versions {
 	($(
 		$version:ident ($latest_patch:literal) => $Migration:ident,
 	)*) => {
-		// every version is a struct that implements `VariantName`
+		// every version is a struct that implements `Version`
 		$(
 			#[derive(Clone, Copy)]
 			#[allow(nonstandard_style)]
 			pub struct $version;
-			impl VariantName for $version {
+			impl Version for $version {
 				const LATEST_RUNTIME_PATCH_VERSION: u32 = $latest_patch;
 			}
 		)*

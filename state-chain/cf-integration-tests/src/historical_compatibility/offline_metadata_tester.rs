@@ -1,4 +1,4 @@
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::arbitrary::Arbitrary;
@@ -105,7 +105,7 @@ impl OfflineMetadataTester {
 
 impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	fn test_call<
-		V: VariantName,
+		V: Version,
 		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<

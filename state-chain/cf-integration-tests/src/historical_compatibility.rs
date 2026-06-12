@@ -6,7 +6,7 @@ pub mod type_describer;
 use std::collections::HashMap;
 
 use cf_primitives::FlipBalance;
-use cf_utilities::migrations::{basics::VariantName, v0200, v0201};
+use cf_utilities::migrations::{basics::Version, v0200, v0201};
 use frame_support::sp_runtime::AccountId32;
 use state_chain_runtime::runtime_apis::custom_api::types::{
 	NetworkFees, RpcAccountInfoCommonItems, ShouldSweep,

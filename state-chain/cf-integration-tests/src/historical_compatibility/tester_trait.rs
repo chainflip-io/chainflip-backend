@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
 use codec::{Decode, Encode};
 use proptest::{
 	arbitrary::Arbitrary,
@@ -13,7 +13,7 @@ use similar::{ChangeTag, TextDiff};
 
 pub trait HistoricalCompatibilityTester {
 	fn test_call<
-		V: VariantName,
+		V: Version,
 		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<

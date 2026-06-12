@@ -4,7 +4,7 @@ use sp_core::crypto::AccountId32;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::migrations::{
-	basics::{IdentityMigration, Migration, VariantName},
+	basics::{IdentityMigration, Migration, Version},
 	HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
 };
 
@@ -118,7 +118,7 @@ impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPl
 }
 
 pub struct NewTypeWithDefault;
-impl<V: VariantName, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
+impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
 
 	fn forwards(_: Self::From) -> T {
@@ -133,7 +133,7 @@ impl<V: VariantName, T: HasChangelog + Default> Migration<T, V> for NewTypeWithD
 // ----------- containers -------------
 
 pub struct MapMigration<X>(X);
-impl<A, V: VariantName, M: Migration<A, V>> Migration<Option<A>, V> for MapMigration<M> {
+impl<A, V: Version, M: Migration<A, V>> Migration<Option<A>, V> for MapMigration<M> {
 	type From = Option<M::From>;
 
 	fn forwards(x: Self::From) -> Option<A> {
@@ -165,7 +165,7 @@ impl<X: IsHistoricalType> IsHistoricalType for Option<X> {
 	type GetCurrentType = Option<X::GetCurrentType>;
 }
 
-impl<A, V: VariantName, M: Migration<A, V>> Migration<Vec<A>, V> for MapMigration<M> {
+impl<A, V: Version, M: Migration<A, V>> Migration<Vec<A>, V> for MapMigration<M> {
 	type From = Vec<M::From>;
 
 	fn forwards(x: Self::From) -> Vec<A> {
@@ -202,7 +202,7 @@ impl<X: IsHistoricalType> IsHistoricalType for Vec<X> {
 impl<
 		A: Ord,
 		B,
-		V: VariantName,
+		V: Version,
 		M1: Migration<A, V, From: IsHistoricalType<GetCurrentType: OrdMigrations + Ord> + Ord>,
 		M2: Migration<B, V>,
 	> Migration<BTreeMap<A, B>, V> for MapMigration<(M1, M2)>
@@ -247,7 +247,7 @@ trait IsHistoricalTypeOrd = IsHistoricalType<GetCurrentType: OrdMigrations + Ord
 
 // tuple (A, B)
 
-impl<A, B, V: VariantName, M1: Migration<A, V>, M2: Migration<B, V>> Migration<(A, B), V>
+impl<A, B, V: Version, M1: Migration<A, V>, M2: Migration<B, V>> Migration<(A, B), V>
 	for MapMigration<(M1, M2)>
 {
 	type From = (M1::From, M2::From);
