@@ -27,14 +27,12 @@ pub struct OfflineMetadataTester {
 impl OfflineMetadataTester {
 	/// Load historical metadata for a given spec version.
 	///
-	/// Metadata files are stored in `state-chain/runtime_historical_metadata/` with the naming
-	/// convention `runtime_{spec_version}.scale`.
+	/// Metadata files are stored in `state-chain/cf-integration-tests/historical_metadata/` with
+	/// the naming convention `runtime_{spec_version}.scale`.
 	fn load_metadata(&mut self, spec_version: u32) {
 		self.loaded_metadata.entry(spec_version).or_insert_with(|| {
 			let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-				.parent()
-				.expect("cf-integration-tests lives under state-chain")
-				.join("runtime_historical_metadata")
+				.join("historical_metadata")
 				.join(format!("runtime_{spec_version}.scale"));
 			let bytes = std::fs::read(&path)
 				.unwrap_or_else(|e| panic!("Failed to read metadata file {}: {e}", path.display()));
