@@ -118,7 +118,7 @@ export function testAllSwaps(timeoutPerSwap: number) {
   // `testSwapsToAssethub`.
   const assethubAssets = ['HubDot' as Asset, 'HubUsdc' as Asset, 'HubUsdt' as Asset];
   assethubAssets.sort().forEach((hubAsset) => {
-    appendSwap(hubAsset, randomElement(AssetsWithoutAssethub), testSwap);
+    appendSwap(hubAsset, randomElement(AssetsForTesting), testSwap);
   });
 
   for (const swap of allSwaps) {

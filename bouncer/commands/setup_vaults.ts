@@ -36,6 +36,7 @@ import { arbitrumVaultAwaitingGovernanceActivationEvent } from 'generated/events
 import { solanaVaultAwaitingGovernanceActivationEvent } from 'generated/events/solanaVault/awaitingGovernanceActivation';
 import { tronVaultAwaitingGovernanceActivationEvent } from 'generated/events/tronVault/awaitingGovernanceActivation';
 import { assethubVaultAwaitingGovernanceActivationEvent } from 'generated/events/assethubVault/awaitingGovernanceActivation';
+import { assethubVaultVaultActivationCompletedEvent } from 'generated/events/assethubVault/vaultActivationCompleted';
 import { validatorNewEpochEvent } from 'generated/events/validator/newEpoch';
 import { validatorRotationPhaseUpdatedEvent } from 'generated/events/validator/rotationPhaseUpdated';
 import { validatorRotationAbortedEvent } from 'generated/events/validator/rotationAborted';
@@ -244,7 +245,7 @@ async function main(): Promise<void> {
             blockNumber: hubVaultEvent.block,
             extrinsicIndex: hubVaultEvent.eventIndex,
           }),
-        expectedEvent: { name: 'AssethubVault.VaultActivationCompleted' },
+        expectedEvent: assethubVaultVaultActivationCompletedEvent,
       }),
     (subcf) =>
       subcf.submitGovernance({
