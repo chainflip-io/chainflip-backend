@@ -104,15 +104,16 @@ macro_rules! generate_module {
             }
 
             impl<$( $T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
-            where $struct$(<$T>)?: Migrations
+            where $struct$(<$T>)?: HasChangelog
             {
                 type GetCurrentType = $struct$(<$T>)?;
             }
 
 
-            pub struct MigrateFields<M = ()>(M);
+            pub type see_field_changelogs = see_field_changelogs_and_also<()>;
+            pub struct see_field_changelogs_and_also<M>(M);
 
-            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
+            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for see_field_changelogs_and_also<M>
             where
                 Struct< source_of_custom_migration<To, V, M> , $($T)?  >: IsHistoricalType
             {

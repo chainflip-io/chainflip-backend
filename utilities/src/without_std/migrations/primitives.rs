@@ -5,7 +5,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::migrations::{
 	basics::{IdentityMigration, Migration, VariantName},
-	HasGenericVariant, IsHistoricalType, Migrations, OrdMigrations,
+	HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
 };
 
 // ----------- identity migrations -------------
@@ -23,10 +23,9 @@ macro_rules! impl_identity_migrations {
             type MigrationFromGeneric = IdentityMigration;
         }
         #[duplicate::duplicate_item(Type; $( [ $ty ] );* )]
-        impl Migrations for Type {
-            type DefaultMigration = IdentityMigration;
+        impl HasChangelog for Type {
+            type if_unspecified = IdentityMigration;
         }
-
     };
 }
 
@@ -79,8 +78,8 @@ macro_rules! impl_identity_migrations_with_wrapper {
             type GenericType = $Wrapper;
 			type MigrationFromGeneric = WrapMigration;
 		}
-		impl Migrations for $Ty {
-			type DefaultMigration = IdentityMigration;
+		impl HasChangelog for $Ty {
+			type if_unspecified = IdentityMigration;
 		}
 
         $(
@@ -114,12 +113,12 @@ impl_identity_migrations_with_wrapper! {
 #[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
 #[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
 pub struct HistoricalEmptyPlaceholder<T>(sp_std::marker::PhantomData<T>);
-impl<T: HasGenericVariant + Migrations> IsHistoricalType for HistoricalEmptyPlaceholder<T> {
+impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPlaceholder<T> {
 	type GetCurrentType = T;
 }
 
 pub struct NewTypeWithDefault;
-impl<V: VariantName, T: Migrations + Default> Migration<T, V> for NewTypeWithDefault {
+impl<V: VariantName, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefault {
 	type From = HistoricalEmptyPlaceholder<T>;
 
 	fn forwards(_: Self::From) -> T {
@@ -146,17 +145,17 @@ impl<A, V: VariantName, M: Migration<A, V>> Migration<Option<A>, V> for MapMigra
 	}
 }
 
-impl<X: Migrations> Migrations for Option<X> {
-	type DefaultMigration = MapMigration<X::DefaultMigration>;
+impl<X: HasChangelog> HasChangelog for Option<X> {
+	type if_unspecified = MapMigration<X::if_unspecified>;
 
 	// these have to be specified as otherwise the above
 	// default migration doesn't go through. Because rust
 	// is forced to work with arbitrary implementations for these,
 	// and so can't prove that the historical types are actually
 	// all of the shape `Option<...>`.
-	type MigrationTo0200 = MapMigration<X::MigrationTo0200>;
-	type MigrationTo0201 = MapMigration<X::MigrationTo0201>;
-	type MigrationTo0202 = MapMigration<X::MigrationTo0202>;
+	type in_20000 = MapMigration<X::in_20000>;
+	type in_20100 = MapMigration<X::in_20100>;
+	type in_20200 = MapMigration<X::in_20200>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Option<X> {
 	type GenericType = Option<X::GenericType>;
@@ -178,17 +177,17 @@ impl<A, V: VariantName, M: Migration<A, V>> Migration<Vec<A>, V> for MapMigratio
 	}
 }
 
-impl<X: Migrations> Migrations for Vec<X> {
-	type DefaultMigration = MapMigration<X::DefaultMigration>;
+impl<X: HasChangelog> HasChangelog for Vec<X> {
+	type if_unspecified = MapMigration<X::if_unspecified>;
 
 	// these have to be specified as otherwise the above
 	// default migration doesn't go through. Because rust
 	// is forced to work with arbitrary implementations for these,
 	// and so can't prove that the historical types are actually
 	// all of the shape `Option<...>`.
-	type MigrationTo0200 = MapMigration<X::MigrationTo0200>;
-	type MigrationTo0201 = MapMigration<X::MigrationTo0201>;
-	type MigrationTo0202 = MapMigration<X::MigrationTo0202>;
+	type in_20000 = MapMigration<X::in_20000>;
+	type in_20100 = MapMigration<X::in_20100>;
+	type in_20200 = MapMigration<X::in_20200>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Vec<X> {
 	type GenericType = Vec<X::GenericType>;
@@ -219,17 +218,17 @@ impl<
 	}
 }
 
-impl<A: OrdMigrations + Ord, B: Migrations> Migrations for BTreeMap<A, B> {
-	type DefaultMigration = MapMigration<(A::DefaultMigration, B::DefaultMigration)>;
+impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
+	type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
 
 	// these have to be specified as otherwise the above
 	// default migration doesn't go through. Because rust
 	// is forced to work with arbitrary implementations for these,
 	// and so can't prove that the historical types are actually
 	// all of the shape `Option<...>`.
-	type MigrationTo0200 = MapMigration<(A::MigrationTo0200, B::MigrationTo0200)>;
-	type MigrationTo0201 = MapMigration<(A::MigrationTo0201, B::MigrationTo0201)>;
-	type MigrationTo0202 = MapMigration<(A::MigrationTo0202, B::MigrationTo0202)>;
+	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
+	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
+	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
 }
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
@@ -262,12 +261,12 @@ impl<A, B, V: VariantName, M1: Migration<A, V>, M2: Migration<B, V>> Migration<(
 	}
 }
 
-impl<A: Migrations, B: Migrations> Migrations for (A, B) {
-	type DefaultMigration = MapMigration<(A::DefaultMigration, B::DefaultMigration)>;
+impl<A: HasChangelog, B: HasChangelog> HasChangelog for (A, B) {
+	type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
 
-	type MigrationTo0200 = MapMigration<(A::MigrationTo0200, B::MigrationTo0200)>;
-	type MigrationTo0201 = MapMigration<(A::MigrationTo0201, B::MigrationTo0201)>;
-	type MigrationTo0202 = MapMigration<(A::MigrationTo0202, B::MigrationTo0202)>;
+	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
+	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
+	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
 }
 impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for (A, B) {
 	type GenericType = (A::GenericType, B::GenericType);

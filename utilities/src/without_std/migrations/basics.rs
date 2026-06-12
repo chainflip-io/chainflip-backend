@@ -1,6 +1,6 @@
 // ---------- definition of migrations ------------
 
-use crate::migrations::Migrations;
+use crate::migrations::HasChangelog;
 
 pub trait VariantName: Copy {
 	const LATEST_RUNTIME_PATCH_VERSION: u32;
@@ -77,7 +77,7 @@ impl<T: Default, V: VariantName> Migration<T, V> for NewFieldWithDefault {
 // ----------- lookups ------------
 
 pub trait IsHistoricalType {
-	type GetCurrentType: Migrations;
+	type GetCurrentType: HasChangelog;
 }
 pub trait IsHistoricalTypeAt<V: VariantName> =
 	IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = Self>>;
