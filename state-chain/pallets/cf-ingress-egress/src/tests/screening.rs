@@ -407,6 +407,24 @@ fn repeated_reports_do_not_multiply_expiry_entries() {
 }
 
 #[test]
+fn mark_transaction_for_rejection_charges_for_deferred_cleanup() {
+	use frame_support::{dispatch::GetDispatchInfo, weights::constants::ParityDbWeight};
+	// Marking a transaction schedules one expiry-cleanup entry that runs later in `on_idle`.
+	// The extrinsic's declared weight must include that deferred per-entry cleanup cost so the
+	// reporting broker pays for the work they queue rather than offloading it onto the network.
+	let declared = crate::Call::<Test, Instance2>::mark_transaction_for_rejection {
+		tx_id: Hash::random(),
+	}
+	.get_dispatch_info()
+	.call_weight;
+	assert_eq!(
+		declared,
+		<() as crate::WeightInfo>::mark_transaction_for_rejection()
+			.saturating_add(ParityDbWeight::get().reads_writes(2, 2)),
+	);
+}
+
+#[test]
 fn can_not_report_transaction_after_witnessing() {
 	new_test_ext().execute_with(|| {
 		let unreported = Hash::random();

@@ -1309,9 +1309,9 @@ pub mod pallet {
 				// cleanup work onto a single future block.
 				//
 				// Per-entry worst case: read the status, plus a possible reschedule append for a
-				// report whose expiry was extended after this index entry was queued.
-				let cleanup_weight_per_entry =
-					frame_support::weights::constants::ParityDbWeight::get().reads_writes(2, 2);
+				// report whose expiry was extended after this index entry was queued. This is the
+				// same cost charged up-front when the report is marked.
+				let cleanup_weight_per_entry = Self::report_cleanup_weight();
 				let bookkeeping_weight =
 					frame_support::weights::constants::ParityDbWeight::get().reads_writes(1, 1);
 
@@ -1701,7 +1701,12 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
-		#[pallet::weight(T::WeightInfo::mark_transaction_for_rejection())]
+		// The base benchmark covers the on-chain mark; the surcharge pre-pays the deferred
+		// `on_idle` cleanup that this report schedules (see `Pallet::report_cleanup_weight`).
+		#[pallet::weight(
+			T::WeightInfo::mark_transaction_for_rejection()
+				.saturating_add(Pallet::<T, I>::report_cleanup_weight())
+		)]
 		pub fn mark_transaction_for_rejection(
 			origin: OriginFor<T>,
 			tx_id: TransactionInIdFor<T, I>,
@@ -1770,6 +1775,11 @@ impl<T: Config<I>, I: 'static> IngressSink for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Weight to clean up a single expired transaction-rejection report in `on_idle`.
+	fn report_cleanup_weight() -> Weight {
+		frame_support::weights::constants::ParityDbWeight::get().reads_writes(2, 2)
+	}
+
 	fn mark_transaction_for_rejection_inner(
 		account_id: T::AccountId,
 		tx_id: TransactionInIdFor<T, I>,
