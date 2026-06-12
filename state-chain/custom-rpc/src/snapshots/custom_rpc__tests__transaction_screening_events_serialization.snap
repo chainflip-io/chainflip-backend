@@ -276,5 +276,29 @@ expression: val
         }
       }
     }
+  ],
+  "bsc_events": [
+    {
+      "TransactionRejectionRequestReceived": {
+        "account_id": "5C62Ck4UrFPiBtoCmeSrgF7x9yv9mn38446dhCpsi2mLHiFT",
+        "tx_id": "0xe0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0"
+      }
+    },
+    {
+      "TransactionRejectionRequestExpired": {
+        "account_id": "5C7LYpP2ZH3tpKbvVvwiVe54AapxErdPBbvkYhe6y9ZBkqWt",
+        "tx_id": "0xe1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1"
+      }
+    },
+    {
+      "TransactionRejectedByBroker": {
+        "refund_broadcast_id": 3,
+        "deposit_details": {
+          "tx_hashes": [
+            "0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+          ]
+        }
+      }
+    }
   ]
 }
