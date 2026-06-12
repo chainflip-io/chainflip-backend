@@ -1862,35 +1862,33 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						return;
 					};
 
-					// See if the liquidation is voluntary to determine whether
-					// liquidation fee should be paid:
-					let is_voluntary = match &loan_account.liquidation_status {
-						LiquidationStatus::Liquidating { liquidation_type, .. } =>
-							*liquidation_type == LiquidationType::SoftVoluntary,
-						LiquidationStatus::NoLiquidation => {
-							log_or_panic!("Liquidation swap completed in no-liquidation state");
-							false
-						},
-					};
+					// Extract the swap, and determine whether the liquidation is voluntary
+					// (in which case no liquidation fee is paid) and whether this is the
+					// loan's last liquidation swap:
+					let (liquidation_swap, is_voluntary, is_last_liquidation_swap_for_loan) =
+						match &mut loan_account.liquidation_status {
+							LiquidationStatus::NoLiquidation => {
+								log_or_panic!(
+									"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
+								);
+								return;
+							},
+							LiquidationStatus::Liquidating {
+								liquidation_swaps,
+								liquidation_type,
+							} => {
+								let is_voluntary =
+									*liquidation_type == LiquidationType::SoftVoluntary;
 
-					let mut is_last_liquidation_swap_for_loan = false;
+								let Some(swap) = liquidation_swaps.remove(&swap_request_id) else {
+									log_or_panic!(
+										"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
+									);
+									return;
+								};
 
-					let liquidation_swap = match &mut loan_account.liquidation_status {
-						LiquidationStatus::NoLiquidation => {
-							log_or_panic!(
-								"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
-							);
-							return;
-						},
-						LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-							if let Some(swap) = liquidation_swaps.remove(&swap_request_id) {
-								if liquidation_swaps
-									.values()
-									.filter(|swap| swap.loan_id == loan_id)
-									.count() == 0
-								{
-									is_last_liquidation_swap_for_loan = true;
-								}
+								let is_last_swap_for_loan =
+									!liquidation_swaps.values().any(|swap| swap.loan_id == loan_id);
 
 								if liquidation_swaps.is_empty() {
 									loan_account.liquidation_status =
@@ -1902,15 +1900,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 									});
 								}
 
-								swap
-							} else {
-								log_or_panic!(
-									"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
-								);
-								return;
-							}
-						},
-					};
+								(swap, is_voluntary, is_last_swap_for_loan)
+							},
+						};
 
 					let excess_amount = match loan_account
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
