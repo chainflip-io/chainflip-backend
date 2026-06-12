@@ -7,7 +7,7 @@ use scale_info::TypeInfo;
 use scale_json::ScaleDecodedToJson;
 use std::collections::HashMap;
 
-use crate::runtime_apis::historical_compatibility::{
+use crate::historical_compatibility::{
 	tester_trait::{
 		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
 		SubTypeIncompatibility, SubTypeLocation, TypeDiff, TypeIncompatibilityInfo, TypeName,
@@ -31,13 +31,13 @@ impl OfflineMetadataTester {
 	/// convention `runtime_{spec_version}.scale`.
 	fn load_metadata(&mut self, spec_version: u32) {
 		self.loaded_metadata.entry(spec_version).or_insert_with(|| {
-			let path = format!(
-				"{}/state-chain/runtime_historical_metadata/runtime_{}.scale",
-				env!("CARGO_MANIFEST_DIR").trim_end_matches("/state-chain/runtime"),
-				spec_version,
-			);
+			let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+				.parent()
+				.expect("cf-integration-tests lives under state-chain")
+				.join("runtime_historical_metadata")
+				.join(format!("runtime_{spec_version}.scale"));
 			let bytes = std::fs::read(&path)
-				.unwrap_or_else(|e| panic!("Failed to read metadata file {path}: {e}"));
+				.unwrap_or_else(|e| panic!("Failed to read metadata file {}: {e}", path.display()));
 			let prefixed = RuntimeMetadataPrefixed::decode(&mut &bytes[..])
 				.expect("Failed to decode RuntimeMetadataPrefixed");
 			let metadata = match prefixed.1 {

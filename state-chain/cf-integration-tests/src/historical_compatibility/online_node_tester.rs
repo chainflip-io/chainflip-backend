@@ -3,7 +3,7 @@ use codec::{Decode, Encode};
 use proptest::arbitrary::Arbitrary;
 use scale_info::TypeInfo;
 
-use crate::runtime_apis::historical_compatibility::{
+use crate::historical_compatibility::{
 	tester_trait::{
 		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
 		SubTypeIncompatibility, SubTypeLocation, TypeDiff, TypeIncompatibilityInfo, TypeName,

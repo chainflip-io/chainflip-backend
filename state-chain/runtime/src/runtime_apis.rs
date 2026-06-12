@@ -20,8 +20,6 @@ pub mod monitoring_api;
 
 pub mod impl_api;
 
-pub mod historical_compatibility;
-
 pub mod types {
 	pub use super::{custom_api::types::*, monitoring_api::types::*};
 }

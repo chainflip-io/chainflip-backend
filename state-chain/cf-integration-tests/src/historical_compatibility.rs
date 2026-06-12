@@ -1,13 +1,23 @@
-#![cfg(test)]
+pub mod offline_metadata_tester;
+pub mod online_node_tester;
+pub mod tester_trait;
+pub mod type_describer;
 
 use std::collections::HashMap;
 
-use crate::runtime_apis::{
-	custom_api::test_all_historical_runtime_calls,
-	historical_compatibility::{
-		offline_metadata_tester::OfflineMetadataTester,
-		online_node_tester::OnlineNodeTester,
-		tester_trait::{FullTypeLocation, TypeDiff, TypeIncompatibilityInfo, TypeName},
+use cf_primitives::FlipBalance;
+use cf_utilities::migrations::{basics::VariantName, v0200, v0201};
+use frame_support::sp_runtime::AccountId32;
+use state_chain_runtime::runtime_apis::custom_api::types::{
+	NetworkFees, RpcAccountInfoCommonItems, ShouldSweep,
+};
+
+use crate::historical_compatibility::{
+	offline_metadata_tester::OfflineMetadataTester,
+	online_node_tester::OnlineNodeTester,
+	tester_trait::{
+		FullTypeLocation, HistoricalCompatibilityTester, TypeDiff, TypeIncompatibilityInfo,
+		TypeName,
 	},
 };
 
@@ -84,4 +94,37 @@ fn check_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) -> R
 	}
 
 	Err(format!("{} type schema incompatibilities found!", incompatibilities.len()))
+}
+
+fn test_all_historical_runtime_calls(
+	tester: &mut impl HistoricalCompatibilityTester,
+	should_check_version: impl Fn(u32) -> bool,
+) -> Vec<TypeIncompatibilityInfo> {
+	let mut all_incompatibilities = Vec::new();
+
+	macro_rules! for_each_runtime_version {
+		($($version:ident),*) => {
+			$(
+				if should_check_version($version::LATEST_RUNTIME_PATCH_VERSION) {
+					let mut incompatibilities = [
+						tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
+						tester
+							.test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
+								$version,
+								"CustomRuntimeApi",
+								"cf_common_account_info",
+							),
+					]
+					.into_iter()
+					.flatten()
+					.collect::<Vec<_>>();
+					all_incompatibilities.append(&mut incompatibilities);
+				}
+			)*
+		};
+	}
+
+	for_each_runtime_version!(v0200, v0201);
+
+	all_incompatibilities
 }

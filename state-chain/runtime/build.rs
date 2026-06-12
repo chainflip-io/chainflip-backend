@@ -15,7 +15,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn main() {
-	#[cfg(all(feature = "std", not(feature = "metadata-hash")))]
+	#[cfg(all(feature = "std", any(feature = "proptest", feature = "runtime-integration-tests")))]
+	{
+		std::fs::write(
+			std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR is set by cargo"))
+				.join("wasm_binary.rs"),
+			"pub const WASM_BINARY_PATH: Option<&str> = None;\
+			 pub const WASM_BINARY: Option<&[u8]> = None;\
+			 pub const WASM_BINARY_BLOATY: Option<&[u8]> = None;",
+		)
+		.expect("can write dummy wasm_binary.rs");
+	}
+
+	#[cfg(all(
+		feature = "std",
+		not(feature = "metadata-hash"),
+		not(feature = "proptest"),
+		not(feature = "runtime-integration-tests")
+	))]
 	{
 		substrate_wasm_builder::WasmBuilder::new()
 			.with_current_project()
@@ -24,7 +41,12 @@ fn main() {
 			.build();
 	}
 
-	#[cfg(all(feature = "std", feature = "metadata-hash"))]
+	#[cfg(all(
+		feature = "std",
+		feature = "metadata-hash",
+		not(feature = "proptest"),
+		not(feature = "runtime-integration-tests")
+	))]
 	{
 		substrate_wasm_builder::WasmBuilder::new()
 			.with_current_project()
