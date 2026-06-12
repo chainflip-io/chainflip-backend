@@ -6,7 +6,10 @@ pub mod type_describer;
 use std::collections::HashMap;
 
 use cf_primitives::FlipBalance;
-use cf_utilities::migrations::{basics::Version, v20000, v20100, v20200};
+use cf_utilities::{
+	for_each_released_runtime_version,
+	migrations::{basics::Version, v20000, v20100, v20200},
+};
 use frame_support::sp_runtime::AccountId32;
 use state_chain_runtime::runtime_apis::custom_api::types::{
 	NetworkFees, RpcAccountInfoCommonItems, ShouldSweep,
@@ -102,29 +105,27 @@ fn test_all_historical_runtime_calls(
 ) -> Vec<TypeIncompatibilityInfo> {
 	let mut all_incompatibilities = Vec::new();
 
-	macro_rules! for_each_runtime_version {
-		($($version:ident),*) => {
-			$(
-				if should_check_version($version::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST) {
-					let mut incompatibilities = [
-						tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
-						tester
-							.test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
-								$version,
-								"CustomRuntimeApi",
-								"cf_common_account_info",
-							),
-					]
-					.into_iter()
-					.flatten()
-					.collect::<Vec<_>>();
-					all_incompatibilities.append(&mut incompatibilities);
-				}
-			)*
+	macro_rules! try_test_all_runtime_calls_at_version {
+		($version:ident) => {
+            if should_check_version($version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST) {
+                let mut incompatibilities = [
+                    tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
+                    tester
+                        .test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
+                            $version,
+                            "CustomRuntimeApi",
+                            "cf_common_account_info",
+                        ),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>();
+                all_incompatibilities.append(&mut incompatibilities);
+            }
 		};
 	}
 
-	for_each_runtime_version!(v20000, v20100, v20200);
+	for_each_released_runtime_version!(try_test_all_runtime_calls_at_version);
 
 	all_incompatibilities
 }

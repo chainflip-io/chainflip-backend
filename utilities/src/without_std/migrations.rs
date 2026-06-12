@@ -6,9 +6,13 @@ pub mod primitives;
 use self::basics::*;
 use crate::migrations::basics::Version;
 
-macro_rules! all_runtime_versions {
+macro_rules! define_all_released_runtime_versions {
 	($(
-		$version:ident ($latest_patch:literal) => $Migration:ident,
+		{
+			release: $version:ident,
+			canonical_patch: $latest_patch:literal,
+			changelog_entry: $Migration:ident,
+		},
 	)*) => {
 		// every version is a struct that implements `Version`
 		$(
@@ -16,7 +20,7 @@ macro_rules! all_runtime_versions {
 			#[allow(nonstandard_style)]
 			pub struct $version;
 			impl Version for $version {
-				const AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST: u32 = $latest_patch;
+				const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: u32 = $latest_patch;
 			}
 		)*
 
@@ -61,6 +65,16 @@ macro_rules! all_runtime_versions {
 			use super::{HasChangelog, Migration, vCurrent};
 			generate_migration_helpers! { $( $version => $Migration, )*}
 		}
+
+		#[macro_export]
+		macro_rules! for_each_released_runtime_version {
+			($$macro_name:ident) => {
+				$(
+					$$macro_name!{ $version }
+				)*
+			}
+		}
+		pub use for_each_released_runtime_version;
 	};
 }
 
@@ -87,8 +101,29 @@ macro_rules! generate_migration_helpers {
 	}
 }
 
-all_runtime_versions! {
-	v20000 (20012) => in_20000,
-	v20100 (20119) => in_20100,
-	v20200 (20201) => in_20200,
+// All major runtime versions that have been released to at least one testnet.
+// The table uses the following format:
+// 1. `release: vMajorMinor00`: this describes the chainflip release version. E.g. chainflip release
+//    2.1 is represented by v20100.
+// 2. `canonical_patch: MajorMinorPatch`: this is the exact patch of that chainflip release which
+//    should be used as canonical runtime providing the metadata which is tested against for
+//    historical type compatibility tests.
+// 3. `changelog_entry: in_MajorMinor00`: this should match up with the first entry, and is the name
+//    of the changelog entry (in the `HasChangelog` type) for this release.
+define_all_released_runtime_versions! {
+	{
+		release: v20000,
+		canonical_patch: 20012,
+		changelog_entry: in_20000,
+	},
+	{
+		release: v20100,
+		canonical_patch: 20119,
+		changelog_entry: in_20100,
+	},
+	{
+		release: v20200,
+		canonical_patch: 20203,
+		changelog_entry: in_20200,
+	},
 }
