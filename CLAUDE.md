@@ -37,7 +37,7 @@ Ethereum (ETH, FLIP, USDC, USDT, WBTC), Bitcoin (BTC), Arbitrum (ETH, USDC, USDT
 - Build: `cargo build --release` or `cargo build -p <package>`
 - Lint: `cargo check` or `cargo cf-clippy`
 - Lint package: `cargo check -p <package>`
-- Format: `cargo fmt -- <filename>` or `cargo fmt --all`
+- Format: `cargo fmt --all` (never `cargo fmt -- <filename>`: the per-file form ignores the crate's edition and applies the wrong import-ordering style)
 - Run all tests: `cargo nextest run`
 - Run package tests: `cargo nextest run -p <package>`
 - Run single test: `cargo nextest run <test_name>` or `cargo nextest run <module>::<test_name>`
