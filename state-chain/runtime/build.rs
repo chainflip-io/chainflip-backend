@@ -15,11 +15,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn main() {
-	#[cfg(all(feature = "std", any(feature = "proptest", feature = "runtime-integration-tests")))]
-	{
-		std::env::set_var("SKIP_STATE_CHAIN_RUNTIME_WASM_BUILD", "1");
-	}
-
 	#[cfg(feature = "std")]
 	{
 		let builder = substrate_wasm_builder::WasmBuilder::new()
