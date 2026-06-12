@@ -1417,7 +1417,7 @@ pub mod pallet {
 
 		/// Delegate this validator's GRANDPA vote to a delegate key.
 		#[pallet::call_index(21)]
-		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		#[pallet::weight(T::ValidatorWeightInfo::delegate_grandpa_vote())]
 		pub fn delegate_grandpa_vote(
 			origin: OriginFor<T>,
 			caller_grandpa_key: GrandpaAuthorityId,
@@ -1457,7 +1457,7 @@ pub mod pallet {
 
 		/// Revoke this validator's GRANDPA vote delegation.
 		#[pallet::call_index(22)]
-		#[pallet::weight(Weight::from_parts(10_000, 0))] // TODO: benchmark
+		#[pallet::weight(T::ValidatorWeightInfo::revoke_grandpa_delegation())]
 		pub fn revoke_grandpa_delegation(
 			origin: OriginFor<T>,
 			caller_grandpa_key: GrandpaAuthorityId,

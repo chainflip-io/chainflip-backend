@@ -19,12 +19,20 @@ use frame_support::migrations::VersionedMigration;
 
 use crate::{Pallet, STORAGE_VERSION_U16};
 
-pub mod drop_owed_to_network;
+mod drop_owed_to_network;
+mod remove_whitelist;
 
 pub type PalletMigration<T> = (
 	VersionedMigration<
 		6,
 		7,
+		remove_whitelist::Migration<T>,
+		Pallet<T>,
+		<T as frame_system::Config>::DbWeight,
+	>,
+	VersionedMigration<
+		7,
+		8,
 		drop_owed_to_network::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,

@@ -16,8 +16,11 @@
 
 use std::sync::{Arc, OnceLock};
 
-use cf_chains::dot::RuntimeVersion;
-use cf_primitives::PolkadotBlockNumber;
+use cf_chains::dot::{PolkadotAccountId, RuntimeVersion};
+use cf_primitives::{
+	chains::assets::hub::Asset as HubAsset, PolkadotBlockNumber, ASSETHUB_USDC_ASSET_ID,
+	ASSETHUB_USDT_ASSET_ID,
+};
 use http::uri::Uri;
 use jsonrpsee::{
 	core::{client::ClientT, traits::ToRpcParams},
@@ -43,7 +46,10 @@ use cf_utilities::{make_periodic_tick, redact_endpoint_secret::SecretUrl};
 use codec::Decode;
 use tracing::{error, warn};
 
-use crate::constants::RPC_RETRY_CONNECTION_INTERVAL;
+use crate::{
+	constants::RPC_RETRY_CONNECTION_INTERVAL,
+	witness::hub::assethub::{self, runtime_types::pallet_assets::types::AccountStatus},
+};
 
 use super::rpc::DotRpcApi;
 
@@ -339,6 +345,54 @@ impl DotRpcApi for DotRpcClient {
 		.await?;
 
 		Ok(success.extrinsic_hash())
+	}
+
+	async fn liquid_account_balance(
+		&self,
+		account_id: PolkadotAccountId,
+		asset: HubAsset,
+		block_hash: PolkadotHash,
+	) -> Result<u128> {
+		let account_id = account_id.0.into();
+		Ok(match asset {
+			HubAsset::HubDot => {
+				let query = assethub::storage().system().account(&account_id);
+				self.online_client
+					.storage()
+					.at(block_hash)
+					.fetch(&query)
+					.await?
+					.map(|account_info| {
+						account_info.data.free.saturating_sub(account_info.data.frozen)
+					})
+					// No account => no balance
+					.unwrap_or_default()
+			},
+			other => {
+				let id = match other {
+					HubAsset::HubUsdc => ASSETHUB_USDC_ASSET_ID,
+					HubAsset::HubUsdt => ASSETHUB_USDT_ASSET_ID,
+					HubAsset::HubDot => unreachable!(),
+				};
+				let query = assethub::storage().assets().account(id, &account_id);
+				self.online_client
+					.storage()
+					.at(block_hash)
+					.fetch(&query)
+					.await?
+					.map(|asset_account| {
+						// `AccountStatus` is a subxt-generated enum that does not derive
+						// `PartialEq`, so use `matches!` rather than `==`.
+						if matches!(asset_account.status, AccountStatus::Liquid) {
+							asset_account.balance
+						} else {
+							0
+						}
+					})
+					// No account => no balance
+					.unwrap_or_default()
+			},
+		})
 	}
 }
 

@@ -73,6 +73,8 @@ pub trait WeightInfo {
 	fn delegate() -> Weight;
 	fn undelegate() -> Weight;
 	fn report_witnessing_task_restart() -> Weight;
+	fn delegate_grandpa_vote() -> Weight;
+	fn revoke_grandpa_delegation() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -268,6 +270,20 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		// Minimum execution time: 15_178_000 picoseconds.
 		Weight::from_parts(15_624_000, 0)
 	}
+	fn delegate_grandpa_vote() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1562`
+		//  Estimated: `0`
+		// Minimum execution time: 50_000_000 picoseconds.
+		Weight::from_parts(51_000_000, 0)
+	}
+	fn revoke_grandpa_delegation() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1736`
+		//  Estimated: `0`
+		// Minimum execution time: 27_000_000 picoseconds.
+		Weight::from_parts(28_000_000, 0)
+	}
 }
 
 // For backwards compatibility and tests
@@ -461,5 +477,19 @@ impl WeightInfo for () {
 		//  Estimated: `0`
 		// Minimum execution time: 15_178_000 picoseconds.
 		Weight::from_parts(15_624_000, 0)
+	}
+	fn delegate_grandpa_vote() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1562`
+		//  Estimated: `0`
+		// Minimum execution time: 50_000_000 picoseconds.
+		Weight::from_parts(51_000_000, 0)
+	}
+	fn revoke_grandpa_delegation() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `1736`
+		//  Estimated: `0`
+		// Minimum execution time: 27_000_000 picoseconds.
+		Weight::from_parts(28_000_000, 0)
 	}
 }

@@ -266,6 +266,7 @@ export async function depositChannelCreation(testContext: TestContext) {
     Arbitrum: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
     Solana: ['3yKDHJgzS2GbZB9qruoadRYtq8597HZifnRju7fHpdRC'],
     Tron: ['0xa56A6be23b6Cf39D9448FF6e897C29c41c8fbDFF'],
+    Assethub: ['1yMmfLti1k3huRQM2c47WugwonQMqTvQ2GUFxnU7Pcs7xPo'],
   } as const;
 
   const entries = Object.entries as <T>(o: T) => [keyof T, T[keyof T]][];
