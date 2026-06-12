@@ -94,7 +94,7 @@ macro_rules! generate_module {
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
             #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
-            #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
+            #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
             pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
                 $(

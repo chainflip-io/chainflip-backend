@@ -41,10 +41,9 @@ sp-std = { workspace = true }
 sp-runtime = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
-proptest = { version = "1.6", optional = true }
-proptest-derive = { version = "0.5.1", optional = true }
-
 derive-where = { workspace = true }
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
 
 [dev-dependencies]
 cf-test-utilities = { workspace = true, default-features = true }
@@ -93,4 +92,4 @@ try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",
 ]
-proptest = ["dep:proptest", "dep:proptest-derive", "sp-arithmetic/proptest"]
+proptest = ["dep:proptest", "dep:proptest-derive"]

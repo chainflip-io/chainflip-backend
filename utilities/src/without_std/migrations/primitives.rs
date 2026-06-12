@@ -1,6 +1,5 @@
 // --------- primitives --------
 
-use sp_core::crypto::AccountId32;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::migrations::{
@@ -82,25 +81,24 @@ macro_rules! impl_identity_migrations_with_wrapper {
 			type if_unspecified = IdentityMigration;
 		}
 
-        $(
-            #[cfg(feature = "proptest")]
-            impl proptest::arbitrary::Arbitrary for $Wrapper {
-                type Parameters = <$Inner as proptest::prelude::Arbitrary>::Parameters;
+		$(
+			#[cfg(all(feature = "proptest", feature = "std"))]
+			impl proptest::arbitrary::Arbitrary for $Wrapper {
+				type Parameters = <$Inner as proptest::prelude::Arbitrary>::Parameters;
 
-                fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
-                    use proptest::prelude::*;
-                    <$Inner as Arbitrary>::arbitrary_with(args)
-                        .prop_map(|$var| $Wrapper($ctr))
-                }
+				fn arbitrary_with(args: Self::Parameters) -> Self::Strategy {
+					use proptest::prelude::*;
+					<$Inner as Arbitrary>::arbitrary_with(args).prop_map(|$var| $Wrapper($ctr))
+				}
 
-                type Strategy = impl proptest::strategy::Strategy<Value = Self>;
-            }
-        )?
+				type Strategy = impl proptest::strategy::Strategy<Value = Self>;
+			}
+		)?
 	};
 }
 
 impl_identity_migrations_with_wrapper! {
-	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| AccountId32::new(x);
+	struct WrappedAccountId32(sp_core::crypto::AccountId32) where |x: [u8; 32]| sp_core::crypto::AccountId32::new(x);
 }
 
 impl_identity_migrations_with_wrapper! {
@@ -111,7 +109,7 @@ impl_identity_migrations_with_wrapper! {
 // ----------- simple migration that introduces a new type -------------
 
 #[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
-#[cfg_attr(feature = "proptest", derive(proptest_derive::Arbitrary))]
+#[cfg_attr(all(feature = "proptest", feature = "std"), derive(proptest_derive::Arbitrary))]
 pub struct HistoricalEmptyPlaceholder<T>(sp_std::marker::PhantomData<T>);
 impl<T: HasGenericVariant + HasChangelog> IsHistoricalType for HistoricalEmptyPlaceholder<T> {
 	type GetCurrentType = T;

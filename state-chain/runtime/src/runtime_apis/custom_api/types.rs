@@ -835,7 +835,10 @@ pub enum RuntimeApiAccountInfo {
 }
 
 #[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
-#[cfg_attr(any(test, feature = "proptest"), derive(proptest_derive::Arbitrary))]
+#[cfg_attr(
+	any(test, all(feature = "proptest", feature = "std")),
+	derive(proptest_derive::Arbitrary)
+)]
 pub enum ShouldSweep {
 	#[default]
 	Yes,

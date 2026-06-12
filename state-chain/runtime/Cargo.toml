@@ -285,7 +285,6 @@ proptest = [
 	"dep:proptest-derive",
 	"pallet-cf-swapping/proptest",
 	"cf-primitives/proptest",
-	"sp-core/proptest",
 	"cf-utilities/proptest",
 ]
 
