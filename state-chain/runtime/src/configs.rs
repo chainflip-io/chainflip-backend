@@ -79,7 +79,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use frame_system::Call as SystemCall;
-use pallet_cf_flip::{Bonder, FlipIssuance, FlipSlasher};
+use pallet_cf_flip::{Bonder, FlipSlasher};
 use pallet_cf_reputation::{ExclusionList, HeartbeatQualification, ReputationPointsQualification};
 pub use pallet_cf_validator::SetSizeParameters;
 use pallet_cf_validator::{DelegatedRewardsDistribution, DelegationSlasher};
@@ -700,6 +700,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type BlocksPerDay = ConstU32<DAYS>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
 	type CallIndexer = chainflip::LpOrderCallIndexer;
 	// Required to satisfy trait bounds on InspectHold implementation, required by
 	// pallet_session::Config::Currency.
@@ -759,7 +760,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type ApiCall = eth::api::EthereumApi<EvmEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
-	type RewardsDistribution = DelegatedRewardsDistribution<Runtime, FlipIssuance<Runtime>>;
+	type RewardsDistribution = DelegatedRewardsDistribution<Runtime>;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
 	type EthEnvironment = EvmEnvironment;
 	type FlipToBurnOrMove = Swapping;

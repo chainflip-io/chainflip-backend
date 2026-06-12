@@ -29,8 +29,9 @@ use cf_chains::{
 use cf_primitives::{
 	basis_points::SignedBasisPoints, AffiliateShortId, Affiliates, Asset, AssetAmount, BasisPoints,
 	Beneficiaries, Beneficiary, BlockNumber, ChannelId, DcaParameters, ForeignChain, SwapId,
-	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP, ONE_AS_BASIS_POINTS,
-	SECONDS_PER_BLOCK, STABLE_ASSET, SWAP_DELAY_BLOCKS,
+	SwapLeg, SwapRequestId, BASIS_POINTS_PER_MILLION, FLIPPERINOS_PER_FLIP,
+	FLIP_TO_GATEWAY_MULTIPLE, ONE_AS_BASIS_POINTS, SECONDS_PER_BLOCK, STABLE_ASSET,
+	SWAP_DELAY_BLOCKS,
 };
 use cf_runtime_utilities::log_or_panic;
 use cf_traits::{
@@ -46,7 +47,7 @@ use frame_support::{
 		traits::{ConstU16, Get, Saturating},
 		DispatchError, Permill, TransactionOutcome,
 	},
-	storage::with_transaction_unchecked,
+	storage::{with_storage_layer, with_transaction_unchecked},
 	traits::HandleLifetime,
 	transactional, CloneNoBound, Hashable,
 };
@@ -983,6 +984,15 @@ pub mod pallet {
 			broker_id: T::AccountId,
 			short_id: AffiliateShortId,
 			affiliate_account_id: T::AccountId,
+		},
+		/// FLIP was successfully scheduled for egress to the State Chain Gateway.
+		SentFlipToGateway {
+			amount: AssetAmount,
+			egress_id: EgressId,
+		},
+		/// FLIP egress to the State Chain Gateway was skipped.
+		FlipTransferToGatewaySkipped {
+			reason: DispatchError,
 		},
 	}
 	#[pallet::error]
@@ -3092,6 +3102,44 @@ pub mod pallet {
 						Some(input_lpp.saturating_add(output_lpp)),
 					(Some(lpp), None) | (None, Some(lpp)) => Some(lpp),
 					(None, None) => None,
+				},
+			}
+		}
+
+		pub fn maybe_trigger_flip_to_gateway_egress(
+			state_chain_gateway_address: EthereumAddress,
+			amount: AssetAmount,
+		) {
+			// Add flip that was just distributed to validators, to be sent to the gateway
+			FlipToBeSentToGateway::<T>::mutate(|total| {
+				total.saturating_accrue(amount);
+			});
+			match with_storage_layer(|| {
+				T::EgressHandler::schedule_egress(
+					cf_chains::assets::any::Asset::Flip,
+					FlipToBeSentToGateway::<T>::take(),
+					ForeignChainAddress::Eth(state_chain_gateway_address),
+					None,
+				)
+				.map_err(Into::into)
+				.and_then(
+					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
+						if egress_amount < FLIP_TO_GATEWAY_MULTIPLE * fee_withheld {
+							Err(DispatchError::Other("flip to gateway multiple below threshold"))
+						} else {
+							Ok(result)
+						}
+					},
+				)
+			}) {
+				Ok(ScheduledEgressDetails { egress_id, egress_amount, fee_withheld, .. }) => {
+					Self::deposit_event(Event::SentFlipToGateway {
+						amount: (egress_amount.saturating_add(fee_withheld)),
+						egress_id,
+					});
+				},
+				Err(e) => {
+					Self::deposit_event(Event::FlipTransferToGatewaySkipped { reason: e });
 				},
 			}
 		}

@@ -3380,25 +3380,10 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 				frame_support::storage::unhashed::get(b"test_minted").unwrap_or_default()
 			}
 
-			fn add_minted(account: u64, amount: u128) {
+			fn add_minted(account: &u64, amount: u128) {
 				let mut minted = Self::get_minted();
-				*minted.entry(account).or_insert(0) += amount;
+				*minted.entry(*account).or_insert(0) += amount;
 				frame_support::storage::unhashed::put(b"test_minted", &minted);
-			}
-		}
-
-		struct MockIssuance;
-		impl cf_traits::Issuance for MockIssuance {
-			type AccountId = u64;
-			type Balance = u128;
-
-			fn mint(account: &Self::AccountId, amount: Self::Balance) {
-				TestMintTracker::add_minted(*account, amount);
-			}
-
-			fn burn_offchain(_amount: Self::Balance) {}
-			fn total_issuance() -> Self::Balance {
-				0
 			}
 		}
 
@@ -3423,7 +3408,11 @@ fn test_delegated_rewards_distribution_correctly_distributes_to_snapshot() {
 		.register_for_epoch::<Test>(EPOCH);
 
 		// Distribute rewards to the validator.
-		DelegatedRewardsDistribution::<Test, MockIssuance>::distribute(REWARD_AMOUNT, &VALIDATOR);
+		DelegatedRewardsDistribution::<Test>::distribute(
+			REWARD_AMOUNT,
+			&VALIDATOR,
+			TestMintTracker::add_minted,
+		);
 
 		// Check minted amounts
 		let minted = TestMintTracker::get_minted();
