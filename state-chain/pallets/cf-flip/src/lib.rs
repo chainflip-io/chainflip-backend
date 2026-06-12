@@ -103,8 +103,8 @@ pub mod pallet {
 	/// A 4-byte identifier for different reserves.
 	pub type ReserveId = [u8; 4];
 
-	/// Reserve ID derived from blake2_256("OnchainFlipToDistribute")[..4].
-	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = [0xa7, 0x3c, 0x2f, 0x67];
+	/// Reserve ID derived from blake2_256("OnchainFees")[..4].
+	pub const ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID: ReserveId = [0xc3, 0xee, 0x10, 0x5a];
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -547,7 +547,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn trigger_flip_reward_distribution(authorities: Vec<T::AccountId>) -> T::Balance {
-		let onchain_flip_to_distribute = Reserve::<T>::take(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID);
+		let onchain_flip_to_distribute = Reserve::<T>::get(ONCHAIN_FLIP_TO_DISTRIBUTE_RESERVE_ID);
 
 		let count = authorities.len();
 		let count_u128 = count as u128;
@@ -581,7 +581,7 @@ impl<T: Config> Pallet<T> {
 			None
 		};
 
-		let mut flip_distrbuted_map = sp_std::collections::btree_map::BTreeMap::new();
+		let mut flip_distributed_map = sp_std::collections::btree_map::BTreeMap::new();
 		for authority in &authorities {
 			T::RewardsDistribution::distribute(
 				if winner_authority.is_some_and(|wa| authority == wa) {
@@ -592,7 +592,7 @@ impl<T: Config> Pallet<T> {
 				authority,
 				|account, amount| {
 					Pallet::<T>::settle(account, Pallet::<T>::bridge_in(amount).into());
-					flip_distrbuted_map
+					flip_distributed_map
 						.entry(account.clone())
 						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
 						.or_insert(amount);
@@ -615,7 +615,7 @@ impl<T: Config> Pallet<T> {
 						)
 						.into(),
 					);
-					flip_distrbuted_map
+					flip_distributed_map
 						.entry(account.clone())
 						.and_modify(|e: &mut T::Balance| *e = e.saturating_add(amount))
 						.or_insert(amount);
@@ -624,7 +624,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		Self::deposit_event(Event::FlipDistributed {
-			amount: flip_distrbuted_map.into_iter().collect(),
+			amount: flip_distributed_map.into_iter().collect(),
 		});
 		offchain_flip_to_distribute.into()
 	}
