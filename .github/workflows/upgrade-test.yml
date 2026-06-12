@@ -180,7 +180,11 @@ jobs:
           # simply ignore if they don't use them. Starting with the new file means services needed
           # after the upgrade (e.g. nodes for newly added chains) are already running.
           git checkout ${{ github.sha }} -- localnet/docker-compose.yml
-
+          
+          # Remove after 2.3 release
+          # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
+          git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
+          
           ./localnet/manage.sh
           git reset --hard
 

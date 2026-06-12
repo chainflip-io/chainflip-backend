@@ -167,10 +167,6 @@ const fn portion_of_amount(fee: Permill, principal: AssetAmount) -> AssetAmount 
 	principal.checked_mul(fee.deconstruct() as u128).unwrap() / Permill::ACCURACY as u128
 }
 
-fn disable_whitelist() {
-	assert_ok!(LendingPools::update_whitelist(RuntimeOrigin::root(), WhitelistUpdate::SetAllowAll));
-}
-
 fn register_as_broker(account: &AccountId) {
 	assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(account));
 }
@@ -200,8 +196,6 @@ fn get_collateral() -> AssetAmount {
 
 fn setup_pool_with_funds(loan_asset: Asset, init_amount: AssetAmount) {
 	LendingConfig::<Test>::set(CONFIG);
-
-	disable_whitelist();
 
 	assert_ok!(LendingPools::new_lending_pool(loan_asset));
 
@@ -445,7 +439,6 @@ fn basic_general_lending() {
 					loan_id: LOAN_ID,
 					pool_fee: origination_fee_pool,
 					network_fee: origination_fee_network,
-					broker_fee: 0,
 				},
 			));
 
@@ -1027,7 +1020,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee: 0,
 				}) if pool_fee == origination_fee_pool_2 && network_fee == origination_fee_network_2
 			);
 
@@ -1112,7 +1104,6 @@ fn basic_loan_aggregation() {
 					loan_id: LOAN_ID,
 					pool_fee: pool_fee_taken,
 					network_fee: network_fee_taken,
-					broker_fee: 0,
 				}) if pool_fee_taken == pool_fee && network_fee_taken == network_fee
 			);
 
@@ -1439,10 +1430,8 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
 				}) if pool_fee == liquidation_fee_pool_1 &&
-					network_fee == liquidation_fee_network_1 &&
-					broker_fee == 0,
+					network_fee == liquidation_fee_network_1,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
@@ -1532,10 +1521,8 @@ fn basic_liquidation() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
 				}) if pool_fee == liquidation_fee_pool_2 &&
-					network_fee == liquidation_fee_network_2 &&
-					broker_fee == 0,
+					network_fee == liquidation_fee_network_2,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					action_type: LoanRepaidActionType::Liquidation {
@@ -1916,8 +1903,7 @@ fn liquidation_with_outstanding_principal() {
 					loan_id: LOAN_ID,
 					pool_fee,
 					network_fee,
-					broker_fee
-				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network && broker_fee == 0,
+				}) if pool_fee == liquidation_fee_pool && network_fee == liquidation_fee_network,
 				RuntimeEvent::LendingPools(Event::<Test>::LoanRepaid {
 					loan_id: LOAN_ID,
 					amount,
@@ -4741,83 +4727,6 @@ mod liquidation_math_tests {
 	}
 }
 
-mod whitelisting {
-
-	use super::*;
-
-	const WHITELISTED_USER: u64 = LP;
-	const NON_WHITELISTED_USER: u64 = OTHER_LP;
-
-	fn setup_accounts() {
-		for account in [WHITELISTED_USER, NON_WHITELISTED_USER] {
-			MockBalance::credit_account(&account, LOAN_ASSET, INIT_POOL_AMOUNT);
-			MockBalance::credit_account(&account, COLLATERAL_ASSET, INIT_COLLATERAL);
-			MockLpRegistration::register_refund_address(account, LOAN_CHAIN);
-		}
-
-		assert_ok!(LendingPools::update_whitelist(
-			RuntimeOrigin::root(),
-			WhitelistUpdate::SetAllowedAccounts(BTreeSet::from([WHITELISTED_USER]))
-		));
-	}
-
-	#[test]
-	fn adding_lender_funds() {
-		new_test_ext().with_funded_pool(INIT_POOL_AMOUNT).execute_with(|| {
-			setup_accounts();
-
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(WHITELISTED_USER),
-				LOAN_ASSET,
-				INIT_POOL_AMOUNT
-			));
-
-			assert_noop!(
-				LendingPools::add_lender_funds(
-					RuntimeOrigin::signed(NON_WHITELISTED_USER),
-					LOAN_ASSET,
-					INIT_POOL_AMOUNT
-				),
-				Error::<Test>::AccountNotWhitelisted
-			);
-		});
-	}
-
-	#[test]
-	fn request_loan() {
-		new_test_ext().with_funded_pool(2 * INIT_POOL_AMOUNT).execute_with(|| {
-			setup_accounts();
-
-			// Supply collateral for both users:
-			if GeneralLendingPools::<Test>::get(COLLATERAL_ASSET).is_none() {
-				assert_ok!(LendingPools::new_lending_pool(COLLATERAL_ASSET));
-			}
-			assert_ok!(LendingPools::add_lender_funds(
-				RuntimeOrigin::signed(WHITELISTED_USER),
-				COLLATERAL_ASSET,
-				INIT_COLLATERAL,
-			));
-
-			assert_ok!(LendingPools::request_loan(
-				RuntimeOrigin::signed(WHITELISTED_USER),
-				LOAN_ASSET,
-				PRINCIPAL,
-				None,
-			));
-
-			assert_noop!(
-				LendingPools::request_loan(
-					RuntimeOrigin::signed(NON_WHITELISTED_USER),
-					LOAN_ASSET,
-					PRINCIPAL,
-					None,
-				),
-				Error::<Test>::AccountNotWhitelisted
-			);
-		});
-	}
-}
-
 #[test]
 fn network_fee_inflates_liquidation_buffer() {
 	// Single-asset collateral + single loan + voluntary liquidation isolates the
@@ -5541,8 +5450,6 @@ mod supply_minimum_is_enforced {
 		});
 
 		MockPriceFeedApi::set_price_usd_fine(LOAN_ASSET, SWAP_RATE);
-
-		disable_whitelist();
 
 		assert_ok!(LendingPools::new_lending_pool(LOAN_ASSET));
 
@@ -6599,8 +6506,6 @@ mod utilisation_cap {
 		new_test_ext().execute_with(|| {
 
 			// ---- Setting up the lending pools and adding supply liquidity ----
-
-			disable_whitelist();
 
 			MockPriceFeedApi::set_price_usd_fine(Asset::Btc, BTC_PRICE);
 			MockPriceFeedApi::set_price_usd_fine(Asset::Usdt, USD_PRICE);

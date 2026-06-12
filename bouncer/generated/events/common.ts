@@ -1067,6 +1067,24 @@ export const cfChainsAllBatchError = z.discriminatedUnion('__kind', [
 
 export const cfTraitsLendingBoostSource = simpleEnum(['LendingPool', 'BoostPool']);
 
+export const cfChainsRejectError = simpleEnum([
+  'NotSupportedForAsset',
+  'NotRequired',
+  'Other',
+  'FailedToBuildRejection',
+]);
+
+export const palletCfEthereumIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
+
 export const palletCfEthereumIngressEgressPalletConfigUpdateEthereum = z.discriminatedUnion(
   '__kind',
   [
@@ -1184,6 +1202,17 @@ export const cfTraitsScheduledEgressDetailsPolkadot = z.object({
   feeWithheld: numberOrHex,
 });
 
+export const palletCfPolkadotIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
+
 export const palletCfPolkadotIngressEgressPalletConfigUpdatePolkadot = z.discriminatedUnion(
   '__kind',
   [
@@ -1300,6 +1329,17 @@ export const cfTraitsScheduledEgressDetailsBitcoin = z.object({
   egressAmount: numberOrHex,
   feeWithheld: numberOrHex,
 });
+
+export const palletCfBitcoinIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
 
 export const palletCfBitcoinIngressEgressPalletConfigUpdateBitcoin = z.discriminatedUnion(
   '__kind',
@@ -1469,6 +1509,17 @@ export const cfTraitsScheduledEgressDetailsArbitrum = z.object({
   feeWithheld: numberOrHex,
 });
 
+export const palletCfArbitrumIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
+
 export const palletCfArbitrumIngressEgressPalletConfigUpdateArbitrum = z.discriminatedUnion(
   '__kind',
   [
@@ -1634,6 +1685,17 @@ export const cfTraitsScheduledEgressDetailsSolana = z.object({
   feeWithheld: numberOrHex,
 });
 
+export const palletCfSolanaIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
+
 export const palletCfSolanaIngressEgressPalletConfigUpdateSolana = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('ChannelOpeningFeeSolana'), fee: numberOrHex }),
   z.object({
@@ -1775,6 +1837,17 @@ export const cfTraitsScheduledEgressDetailsAssethub = z.object({
   egressAmount: numberOrHex,
   feeWithheld: numberOrHex,
 });
+
+export const palletCfAssethubIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
 
 export const palletCfAssethubIngressEgressPalletConfigUpdateAssethub = z.discriminatedUnion(
   '__kind',
@@ -1968,16 +2041,6 @@ export const palletCfLendingPoolsLoanRepaidActionType = z.discriminatedUnion('__
   z.object({ __kind: z.literal('BoostFinalisation') }),
 ]);
 
-export const palletCfLendingPoolsGeneralLendingWhitelistWhitelistUpdate = z.discriminatedUnion(
-  '__kind',
-  [
-    z.object({ __kind: z.literal('SetAllowAll') }),
-    z.object({ __kind: z.literal('SetAllowedAccounts'), value: z.array(accountId) }),
-    z.object({ __kind: z.literal('AddAllowedAccounts'), value: z.array(accountId) }),
-    z.object({ __kind: z.literal('RemoveAllowedAccounts'), value: z.array(accountId) }),
-  ],
-);
-
 export const palletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionIdentifierExtra =
   simpleEnum(['A', 'B', 'C', 'D', 'EE', 'FF']);
 
@@ -2133,6 +2196,17 @@ export const cfTraitsScheduledEgressDetailsTron = z.object({
   egressAmount: numberOrHex,
   feeWithheld: numberOrHex,
 });
+
+export const palletCfTronIngressEgressRefundFailureReason = z.discriminatedUnion('__kind', [
+  z.object({ __kind: z.literal('BelowDustLimit') }),
+  z.object({ __kind: z.literal('InvalidRefundAddress') }),
+  z.object({ __kind: z.literal('FailedToBuildRejectCall'), value: cfChainsRejectError }),
+  z.object({
+    __kind: z.literal('FailedToBuildExecutexSwapAndCall'),
+    value: cfChainsExecutexSwapAndCallError,
+  }),
+  z.object({ __kind: z.literal('SolanaCcmWithAltsNotSupported') }),
+]);
 
 export const palletCfTronIngressEgressPalletConfigUpdateTron = z.discriminatedUnion('__kind', [
   z.object({ __kind: z.literal('ChannelOpeningFeeTron'), fee: numberOrHex }),

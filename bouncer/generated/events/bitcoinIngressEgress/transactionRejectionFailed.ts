@@ -1,4 +1,7 @@
 import { z } from 'zod';
-import { cfChainsBtcUtxo } from '../common';
+import { cfChainsBtcUtxo, palletCfBitcoinIngressEgressRefundFailureReason } from '../common';
 
-export const bitcoinIngressEgressTransactionRejectionFailed = z.object({ txId: cfChainsBtcUtxo });
+export const bitcoinIngressEgressTransactionRejectionFailed = z.object({
+  txId: cfChainsBtcUtxo,
+  reason: palletCfBitcoinIngressEgressRefundFailureReason,
+});

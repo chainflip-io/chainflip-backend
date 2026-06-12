@@ -91,6 +91,21 @@ jobs:
         working-directory: bouncer
         run: pnpm tsc --noEmit
 
+  check-license-headers:
+    runs-on: namespace-profile-default-light
+    steps:
+      - name: Checkout 🛒
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Check licence headers 📜
+        run: |
+          missing=$(grep -rL "SPDX-License-Identifier: Apache-2.0" --include="*.rs" . | grep -v "^./target/" || true)
+          if [ -n "$missing" ]; then
+            echo "The following Rust files are missing the Apache-2.0 SPDX licence header:"
+            echo "$missing"
+            exit 1
+          fi
+
   lint-ci-workflows:
     runs-on: namespace-profile-default-light
     steps:
