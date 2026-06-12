@@ -6,7 +6,7 @@ pub mod type_describer;
 use std::collections::HashMap;
 
 use cf_primitives::FlipBalance;
-use cf_utilities::migrations::{basics::Version, v20000, v20100};
+use cf_utilities::migrations::{basics::Version, v20000, v20100, v20200};
 use frame_support::sp_runtime::AccountId32;
 use state_chain_runtime::runtime_apis::custom_api::types::{
 	NetworkFees, RpcAccountInfoCommonItems, ShouldSweep,
@@ -124,7 +124,7 @@ fn test_all_historical_runtime_calls(
 		};
 	}
 
-	for_each_runtime_version!(v20000, v20100);
+	for_each_runtime_version!(v20000, v20100, v20200);
 
 	all_incompatibilities
 }
