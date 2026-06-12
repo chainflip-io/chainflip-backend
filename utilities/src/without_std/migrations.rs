@@ -88,7 +88,7 @@ macro_rules! generate_migration_helpers {
 }
 
 all_runtime_versions! {
-	v0200 (20012) => in_20000,
-	v0201 (20119) => in_20100,
-	v0202 (20201) => in_20200,
+	v20000 (20012) => in_20000,
+	v20100 (20119) => in_20100,
+	v20200 (20201) => in_20200,
 }

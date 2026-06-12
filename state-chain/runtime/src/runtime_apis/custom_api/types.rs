@@ -36,7 +36,7 @@ use cf_utilities::migrations::{
 		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
 	primitives::NewTypeWithDefault,
-	v0201, v0202, HasChangelog,
+	v20100, v20200, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -780,8 +780,8 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
 where
 	Balance: Default,
-	<Balance as HasVersion<v0201>>::HistoricalType: Default,
-	<Balance as HasVersion<v0202>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
 {
 	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<

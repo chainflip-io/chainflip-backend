@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use cf_utilities::migrations::v0200;
+use cf_utilities::migrations::v20000;
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
@@ -58,7 +58,7 @@ impl From<VaultAddresses> for super::VaultAddresses {
 }
 
 pub type RpcAccountInfoCommonItems<Balance> =
-	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v0200>>::HistoricalType;
+	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20000>>::HistoricalType;
 
 #[derive(
 	Copy,
@@ -215,4 +215,4 @@ impl From<TradingStrategyLimits> for super::TradingStrategyLimits {
 	}
 }
 
-pub type NetworkFees = <super::NetworkFees as HasVersion<v0200>>::HistoricalType;
+pub type NetworkFees = <super::NetworkFees as HasVersion<v20000>>::HistoricalType;
