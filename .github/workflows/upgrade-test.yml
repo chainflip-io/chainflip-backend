@@ -174,11 +174,14 @@ jobs:
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
+          
+          # Use the docker-compose file from the upgrade-to version: it only defines auxiliary
+          # services (external chain nodes, indexer, deposit monitor, ...), which the old binaries
+          # simply ignore if they don't use them. Starting with the new file means services needed
+          # after the upgrade (e.g. nodes for newly added chains) are already running.
+          git checkout ${{ github.sha }} -- localnet/docker-compose.yml
+
           ./localnet/manage.sh
-          # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
-          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
-          git show ${{ github.sha }}:localnet/docker-compose.yml > /tmp/docker-compose.new.yml
-          docker compose -f /tmp/docker-compose.new.yml -p "chainflip-localnet" up indexer --quiet-pull -d
           git reset --hard
 
       - name: Setup bouncer tests initial state 📦
@@ -213,6 +216,10 @@ jobs:
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
+          # Remove after 2.3 release.
+          # The old bouncer's rpc_tests filter out Tron (unreleased at the time); Bsc is the
+          # unreleased chain now, so retarget the filter to exclude Bsc assets instead.
+          sed -i "s/a.chain !== 'Tron'/a.chain !== 'Bsc'/" bouncer/tests/rpc_tests.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
@@ -245,6 +252,9 @@ jobs:
           cd bouncer
           ./commands/generate_event_schemas.ts
           pnpm install --frozen-lockfile
+          # TODO: This is a temporary workaround to setup BSC.
+          # To remove after BSC is released.
+          ./commands/setup_new_bsc_chain.ts
           ./test_commands/all_cuncurrent_tests.sh
 
       - name: Print chainflip-engine logs 🚗
