@@ -877,6 +877,13 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
+	/// Whether the account can be removed: all loans are settled and there are
+	/// no ongoing liquidation swaps (an account with active swaps is only removed once they
+	/// have been aborted or completed).
+	fn is_settled(&self) -> bool {
+		self.loans.is_empty() && self.liquidation_status == LiquidationStatus::NoLiquidation
+	}
+
 	fn expand_loan_inner(
 		&mut self,
 		mut loan: GeneralLoan<T>,
@@ -1297,6 +1304,13 @@ fn compute_per_asset_liquidation_estimates(
 		.collect()
 }
 
+/// Removes the loan account from storage once it is settled (see [LoanAccount::is_settled]).
+fn remove_loan_account_if_settled<T: Config>(maybe_account: &mut Option<LoanAccount<T>>) {
+	if maybe_account.as_ref().is_some_and(|account| account.is_settled()) {
+		*maybe_account = None;
+	}
+}
+
 /// Run a single upkeep tick for one borrower. Wrapped in `#[transactional]` so any
 /// error rolls back the full set of storage writes for this account (interest
 /// collection touches pool and `PendingNetworkFees` storage outside of
@@ -1333,11 +1347,7 @@ fn upkeep_for_borrower<T: Config>(
 
 		// If all loans are repaid manually while in liquidation, liquidation swaps will be
 		// aborted above and we need to delete the account:
-		if loan_account.loans.is_empty() &&
-			loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-		{
-			*maybe_account = None;
-		}
+		remove_loan_account_if_settled(maybe_account);
 
 		Ok::<_, DispatchError>(())
 	})
@@ -1618,13 +1628,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 				);
 			}
 
-			// Only remove account if it has no ongoing liquidation swaps (it will be removed
-			// after the liquidation swaps have been aborted as a result of having no debt).
-			if loan_account.loans.is_empty() &&
-				loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-			{
-				*maybe_account = None;
-			}
+			// The account is only removed here if it has no ongoing liquidation swaps
+			// (otherwise it will be removed after the liquidation swaps have been aborted
+			// as a result of having no debt).
+			remove_loan_account_if_settled(maybe_account);
 
 			Ok::<_, DispatchError>(())
 		})
@@ -1957,11 +1964,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							}
 						}
 
-						if loan_account.loans.is_empty() &&
-							loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-						{
-							*maybe_account = None;
-						}
+						remove_loan_account_if_settled(maybe_account);
 					}
 				});
 			},
