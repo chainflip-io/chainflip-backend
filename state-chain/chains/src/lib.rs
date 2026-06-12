@@ -913,7 +913,7 @@ pub enum ConsolidationError {
 	Other,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Encode, Decode, TypeInfo, DecodeWithMemTracking)]
 pub enum RejectError {
 	NotSupportedForAsset,
 	NotRequired,

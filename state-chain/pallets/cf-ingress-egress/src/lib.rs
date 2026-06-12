@@ -226,7 +226,15 @@ enum FullWitnessDepositOutcome {
 
 enum RejectionRefundDidntSucceed {
 	RetryLater,
-	RecordFailureAndAbortRefund,
+	RecordFailureAndAbortRefund(RefundFailureReason),
+}
+#[derive(Clone, Debug, PartialEq, Encode, Decode, TypeInfo, DecodeWithMemTracking)]
+pub enum RefundFailureReason {
+	BelowDustLimit,
+	InvalidRefundAddress,
+	FailedToBuildRejectCall(RejectError),
+	FailedToBuildExecutexSwapAndCall(ExecutexSwapAndCallError),
+	SolanaCcmWithAltsNotSupported,
 }
 
 mod deposit_origin {
@@ -1173,6 +1181,7 @@ pub mod pallet {
 		},
 		TransactionRejectionFailed {
 			tx_id: <T::TargetChain as Chain>::DepositDetails,
+			reason: RefundFailureReason,
 		},
 		UnknownBroker {
 			broker_id: T::AccountId,
@@ -1444,7 +1453,9 @@ pub mod pallet {
 					if let Ok(refund_address) = tx.refund_address.clone().try_into() {
 						Ok(refund_address)
 					} else {
-						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund)
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund(
+							RefundFailureReason::InvalidRefundAddress,
+						))
 					}
 				};
 
@@ -1499,10 +1510,11 @@ pub mod pallet {
 						Err(RejectionRefundDidntSucceed::RetryLater) => {
 							deferred_rejections.push(tx);
 						},
-						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund) => {
+						Err(RejectionRefundDidntSucceed::RecordFailureAndAbortRefund(reason)) => {
 							FailedRejections::<T, I>::append(tx.clone());
 							Self::deposit_event(Event::<T, I>::TransactionRejectionFailed {
 								tx_id: tx.deposit_details.clone(),
+								reason,
 							});
 						},
 					}
@@ -1844,6 +1856,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::withhold_ingress_or_egress_fee(egress_type, tx.asset, amount_after_ingress_fees)
 				.amount_after_fees;
 
+		if amount_to_refund < EgressDustLimit::<T, I>::get(tx.asset).unique_saturated_into() {
+			return Err(RecordFailureAndAbortRefund(RefundFailureReason::BelowDustLimit))
+		}
+
 		// this is the function we use to broadcast, used multiple times below
 		let broadcast_and_finalise_fetch = |api_call| {
 			let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
@@ -1874,7 +1890,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						amount: amount_to_refund,
 					},
 				)
-				.map_err(|_| RecordFailureAndAbortRefund)
+				.map_err(|err| RecordFailureAndAbortRefund(RefundFailureReason::FailedToBuildRejectCall(err)))
 				.map(broadcast_and_finalise_fetch)
 			},
 			// Case 2: ccm refund
@@ -1893,7 +1909,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.map(broadcast_and_finalise_fetch) {
 						Ok(_fetch_broadcast_id) => (),
 						Err(RejectError::NotRequired) => (),
-						Err(_) => return Err(RecordFailureAndAbortRefund)
+						Err(err) => return Err(RecordFailureAndAbortRefund(RefundFailureReason::FailedToBuildRejectCall(err)))
 				}
 
 				// Solana CCM refunds with ALT is not supported, since we don't want to witness ALTs
@@ -1906,7 +1922,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.unwrap_or(false)
 				{
 					debug_assert!(false, "Solana refund CCM with ALTs is not supported");
-					return Err(RecordFailureAndAbortRefund);
+					return Err(RecordFailureAndAbortRefund(RefundFailureReason::SolanaCcmWithAltsNotSupported));
 				}
 
 				// We try to construct the call and broadcast it. If the call can't be constructed,
@@ -1923,7 +1939,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ccm_refund_metadata.channel_metadata.message.to_vec(),
 					ccm_refund_metadata.channel_metadata.ccm_additional_data.clone(),
 				)
-				.map_err(|_| RecordFailureAndAbortRefund)
+				.map_err(|err| RecordFailureAndAbortRefund(RefundFailureReason::FailedToBuildExecutexSwapAndCall(err)))
 				.map(broadcast_and_finalise_fetch)
 			},
 		}
