@@ -397,6 +397,11 @@ pub fn validate_commitments<C: CryptoScheme>(
 	resharing_context: Option<&ResharingContext<C>>,
 	context: &HashContext,
 	validator_mapping: Arc<PartyIdxMapping>,
+	// The exact number of coefficient commitments every honest party must send
+	// for this ceremony (the sharing polynomial degree + 1, i.e. `threshold +
+	// 1` for the key being generated). Derived from the current ceremony's
+	// parameters, NOT the global `MAX_AUTHORITIES` byte cap.
+	expected_coeff_count: usize,
 ) -> Result<
 	BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
@@ -404,6 +409,25 @@ pub fn validate_commitments<C: CryptoScheme>(
 	let invalid_idxs: BTreeSet<_> = public_coefficients
 		.iter()
 		.filter_map(|(idx, c)| {
+			// Per-ceremony length check. An honest party always commits to
+			// exactly `threshold + 1` coefficients. A malicious party that
+			// commits to a different-length vector (with an otherwise valid
+			// ZKP-on-c0 and a matching hash commitment) would otherwise:
+			// over-long -> raise the polynomial degree, finalising an
+			// internally-inconsistent aggregate key; too-short/empty -> cause
+			// an out-of-bounds index panic on honest nodes. This must run
+			// before any `c.commitments.0[0]` access below. (Re-imposes the
+			// per-ceremony bound dropped by PR #3248; see frost-security-review.md.)
+			if c.commitments.0.len() != expected_coeff_count {
+				warn!(
+					from_id = validator_mapping.get_id(*idx).to_string(),
+					expected = expected_coeff_count,
+					actual = c.commitments.0.len(),
+					"Invalid commitment vector length"
+				);
+				return Some(*idx)
+			}
+
 			if let Some(context) = resharing_context {
 				let expected_public_keys = match &context.party_status {
 					ParticipantStatus::Sharing { public_key_shares, .. } => public_key_shares,
@@ -561,6 +585,23 @@ impl<P: ECPoint> DKGUnverifiedCommitment<P> {
 	pub fn corrupt_secondary_coefficient(&mut self, rng: &mut Rng) {
 		self.commitments.0[1] = P::from_scalar(&P::Scalar::random(rng));
 	}
+
+	/// Force the coefficient commitment vector to have exactly `count` elements,
+	/// simulating a malicious participant who commits to a polynomial of the
+	/// wrong degree. The lowest-degree coefficient (`[0]`) is preserved when
+	/// `count >= 1`, so the accompanying ZKP (which only binds `[0]`) stays
+	/// valid; the only thing wrong with the commitment is its length.
+	pub fn set_commitment_count(&mut self, count: usize, rng: &mut Rng) {
+		let current = self.commitments.0.len();
+		if count < current {
+			self.commitments.0.truncate(count);
+		} else {
+			for _ in current..count {
+				self.commitments.0.push(P::from_scalar(&P::Scalar::random(rng)));
+			}
+		}
+		assert_eq!(self.commitments.0.len(), count);
+	}
 }
 
 #[cfg(test)]
@@ -627,6 +668,7 @@ mod tests {
 			Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
 				(1..=params.share_count as u8).map(|i| AccountId::new([i; 32]))
 			))),
+			params.threshold as usize + 1,
 		));
 
 		// Now it is okay to distribute the shares

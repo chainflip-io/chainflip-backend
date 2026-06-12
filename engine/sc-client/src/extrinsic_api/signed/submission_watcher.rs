@@ -309,13 +309,17 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
+		// The era block hash and number used as anchor when signing the extrinsic. Stored as
+		// local copies so we can overwrite them on AncientBirthBlock failure.
+		let mut era_block_hash = self.finalized_block_hash;
+		let mut era_block_number = self.finalized_block_number;
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
-				self.finalized_block_hash,
-				self.finalized_block_number,
+				era_block_hash,
+				era_block_number,
 				self.extrinsic_lifetime,
 				nonce,
 			);
@@ -390,6 +394,19 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 							}
 
 							self.runtime_version = new_runtime_version;
+						},
+						// AncientBirthBlock can fire transiently during tx pool re-validation.
+						// Handle gracefully by resubmitting with the updated era anchor.
+						// We deliberately leave `self.finalized_block_*` untouched, since
+						// `on_block_finalized` asserts strictly-increasing finalized block numbers.
+						ClientError::Call(obj)
+							if obj == invalid_err_obj(InvalidTransaction::AncientBirthBlock) =>
+						{
+							warn!(target: "state_chain_client", request_id = request.id, "Submission failed with AncientBirthBlock: {obj:?}. Refreshing era anchor.");
+							era_block_hash =
+								self.base_rpc_client.latest_finalized_block_hash().await?;
+							era_block_number =
+								self.base_rpc_client.block_header(era_block_hash).await?.number;
 						},
 						ClientError::Call(obj)
 							if obj.code() == 1002 &&
@@ -614,6 +631,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		if remove_nonce_entry {
 			self.submissions_by_nonce.remove(&nonce);
 		}
+
+		// This submission left the pool without being included, which vacates its nonce.
+		self.invalidate_best_nonce();
 	}
 
 	pub async fn on_submission_in_block(
@@ -628,7 +648,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					target: "state_chain_client",
 					request_id,
 					submission_id,
-					"Submission for tx_hash {tx_hash:?} ended before inclusion ({reason}). Marking it as retriable."
+					"Submission for tx_hash {tx_hash:?} ended before inclusion ({reason}). Marking it as retriable/terminated"
 				);
 				self.remove_submission_from_tracking(requests, request_id, submission_id);
 				return Ok(())
@@ -835,6 +855,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			}
 
 			// Remove any submissions that have expired
+			let mut any_submission_expired = false;
 			self.submissions_by_nonce.retain(|nonce, submissions| {
 				assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
 
@@ -842,6 +863,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 					let alive = submission.lifetime.contains(&(block.header.number + 1));
 
 					if !alive {
+						any_submission_expired = true;
 						info!(target: "state_chain_client", request_id = submission.request_id, submission_id = submission.id, "Submission has timed out.");
 						if let Some(request) = requests.get_mut(&submission.request_id) {
 							request.pending_submissions.remove(&submission.id).unwrap();
@@ -854,6 +876,10 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 				!submissions.is_empty()
 			});
+			if any_submission_expired {
+				// This submission left the pool without being included, which vacates its nonce.
+				self.invalidate_best_nonce();
+			}
 
 			// Remove any requests that have all their submission have expired and whose
 			// resubmission window has past.

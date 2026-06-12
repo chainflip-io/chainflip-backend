@@ -209,6 +209,14 @@ export const findOneEventOfMany = async <Descriptions extends EventDescriptions>
   return foundEventsKeyAndData[0];
 };
 
+export async function findAllEventsByName(name: string) {
+  return prisma.event.findMany({
+    where: { name },
+    include: { block: true },
+    orderBy: { block: { height: 'asc' } },
+  });
+}
+
 // ------------ General fix  ---------------
 // the following fixes the "TypeError: Do not know how to serialize a BigInt" error.
 // Whenever the indexer is used to find events it should be included, thus it's here in this file.

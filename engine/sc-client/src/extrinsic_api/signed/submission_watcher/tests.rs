@@ -274,6 +274,115 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 	.expect("runtime version refresh path should not hang");
 }
 
+/// AncientBirthBlock should be recoverable:
+///  - the retry is signed with the *refreshed* era anchor (not the stale one),
+///  - the watcher's tracked finalized block (`self.finalized_block_*`) is NOT mutated — that cursor
+///    must only advance through `on_block_finalized`, otherwise its strictly-increasing invariant
+///    breaks.
+#[tokio::test]
+async fn should_recover_from_ancient_birth_block() {
+	use sp_runtime::generic::Era;
+
+	const INITIAL_FINALIZED_BLOCK_NUMBER: state_chain_runtime::BlockNumber = 5;
+	const REFRESHED_FINALIZED_BLOCK_NUMBER: state_chain_runtime::BlockNumber = 42;
+	const NONCE: state_chain_runtime::Nonce = 1;
+
+	tokio::time::timeout(
+		Duration::from_secs(5),
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(NONCE));
+				mock_rpc_api.expect_submit_and_watch_extrinsic().times(1).returning(move |_| {
+					Err(ErrorObject::owned(
+						1010,
+						"Invalid Transaction",
+						Some(<&'static str>::from(InvalidTransaction::AncientBirthBlock)),
+					)
+					.into())
+				});
+
+				let refreshed_finalized_hash = H256::from_low_u64_be(0xABCDEF);
+				mock_rpc_api
+					.expect_latest_finalized_block_hash()
+					.times(1)
+					.return_once(move || Ok(refreshed_finalized_hash));
+				mock_rpc_api
+					.expect_block_header()
+					.withf(move |hash| *hash == refreshed_finalized_hash)
+					.times(1)
+					.return_once(move |_| {
+						Ok(state_chain_runtime::Header {
+							parent_hash: H256::default(),
+							number: REFRESHED_FINALIZED_BLOCK_NUMBER,
+							state_root: H256::default(),
+							extrinsics_root: H256::default(),
+							digest: Default::default(),
+						})
+					});
+
+				// On the retry, return a success.
+				mock_rpc_api
+					.expect_submit_and_watch_extrinsic()
+					.return_once(move |_| Ok(Box::pin(stream::empty()) as WatchExtrinsicStream));
+
+				let mut watcher = new_watcher_with_mock_rpc_api(
+					scope,
+					mock_rpc_api,
+					INITIAL_NONCE,
+					INITIAL_FINALIZED_BLOCK_NUMBER,
+				)
+				.await;
+				let mut request = new_test_request(0, false);
+				watcher.submit_extrinsic(&mut request).await.unwrap();
+
+				// The watcher's tracked finalized block must NOT have changed — only
+				// `on_block_finalized` is allowed to advance it.
+				assert_eq!(watcher.finalized_block_hash, H256::default());
+				assert_eq!(watcher.finalized_block_number, INITIAL_FINALIZED_BLOCK_NUMBER);
+
+				// The successful retry must have been signed with the REFRESHED era
+				// anchor. The stored submission lifetime is `..era.death(anchor)`,
+				// so we compare against what Era::mortal would produce for the
+				// refreshed anchor.
+				let tracked_submission = watcher
+					.submissions_by_nonce
+					.get(&NONCE)
+					.and_then(|v| v.first())
+					.expect("submission should be tracked on successful retry");
+				let expected_death = Era::mortal(
+					SIGNED_EXTRINSIC_LIFETIME as u64,
+					REFRESHED_FINALIZED_BLOCK_NUMBER as u64,
+				)
+				.death(REFRESHED_FINALIZED_BLOCK_NUMBER as u64)
+					as state_chain_runtime::BlockNumber;
+				assert_eq!(
+					tracked_submission.lifetime,
+					..expected_death,
+					"retry must be signed with refreshed era anchor"
+				);
+
+				// Sanity: the stale-era lifetime would have been a *different* value;
+				// otherwise the assertion above is vacuous.
+				let stale_death = Era::mortal(
+					SIGNED_EXTRINSIC_LIFETIME as u64,
+					INITIAL_FINALIZED_BLOCK_NUMBER as u64,
+				)
+				.death(INITIAL_FINALIZED_BLOCK_NUMBER as u64)
+					as state_chain_runtime::BlockNumber;
+				assert_ne!(expected_death, stale_death);
+
+				Ok(())
+			}
+			.boxed()
+		}),
+	)
+	.await
+	.expect("ancient birth block recovery path should not hang")
+	.unwrap();
+}
+
 fn test_call() -> state_chain_runtime::RuntimeCall {
 	state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
 		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
@@ -402,6 +511,110 @@ async fn should_cleanup_duplicate_submissions_for_same_extrinsic_and_nonce_after
 			assert!(requests.is_empty());
 			assert!(!watcher.submissions_by_nonce.contains_key(&NONCE));
 			assert!(watcher.submission_status_futures.is_empty());
+
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
+
+/// Regression test for the nonce-gap bug: when a `StrictlyOneSubmission`
+/// request (the `submit_signed_extrinsic` path, e.g. election votes) is dropped from
+/// the pool it is abandoned rather than resubmitted. If the optimistic `best_nonce`2
+/// cache were left untouched, the *next* submission would take `best_nonce + 1` and
+/// skip the now-vacant nonce, leaving a gap that strands every later submission behind
+/// it in the future queue. Dropping a submission must invalidate `best_nonce` so the
+/// next submission refreshes from the pool and refills the hole.
+#[tokio::test]
+async fn dropped_submission_invalidates_nonce_so_next_submission_refills_gap() {
+	const GAP_NONCE: state_chain_runtime::Nonce = 10;
+
+	task_scope(|scope| {
+		async {
+			let mut mock_rpc_api = MockBaseRpcApi::new();
+
+			// The pool reports `GAP_NONCE` as the next account nonce on both refreshes:
+			// once for the initial submission, and again on the post-drop refresh — which
+			// only happens if the drop invalidated `best_nonce`. `.times(2)` therefore also
+			// asserts that the second submission actually refreshed instead of doing `+1`.
+			mock_rpc_api
+				.expect_next_account_nonce()
+				.times(2)
+				.returning(move |_| Ok(GAP_NONCE));
+
+			// First submission is dropped by the pool; the second sits in the pool.
+			let submit_calls = Arc::new(AtomicU8::new(0));
+			mock_rpc_api.expect_submit_and_watch_extrinsic().times(2).returning(move |_| {
+				match submit_calls.fetch_add(1, Ordering::Relaxed) {
+					0 => Ok(Box::pin(stream::iter(vec![Ok(TransactionStatus::Dropped)]))
+						as WatchExtrinsicStream),
+					_ => Ok(Box::pin(stream::empty()) as WatchExtrinsicStream),
+				}
+			});
+
+			let (mut watcher, mut requests) = SubmissionWatcher::new(
+				scope,
+				signer::PairSigner::new(sp_core::Pair::generate().0),
+				GAP_NONCE,
+				H256::default(),
+				0,
+				Default::default(),
+				H256::default(),
+				SIGNED_EXTRINSIC_LIFETIME,
+				Arc::new(mock_rpc_api),
+			);
+
+			// First strictly-one submission lands on the gap nonce.
+			watcher
+				.new_request(
+					&mut requests,
+					test_call(),
+					oneshot::channel().0,
+					oneshot::channel().0,
+					RequestStrategy::StrictlyOneSubmission(oneshot::channel().0),
+				)
+				.await?;
+			assert_eq!(watcher.best_nonce, Some(GAP_NONCE));
+			assert!(watcher.submissions_by_nonce.contains_key(&GAP_NONCE));
+
+			// The pool drops it.
+			let submission_details = watcher.watch_for_submission_in_block().await;
+			watcher.on_submission_in_block(&mut requests, submission_details).await?;
+
+			// The drop must have vacated the nonce *and* invalidated the optimistic cache.
+			assert!(watcher.submissions_by_nonce.is_empty());
+			assert_eq!(
+				watcher.best_nonce, None,
+				"a dropped submission must invalidate the optimistic nonce cache"
+			);
+
+			// The next submission must refill the vacated nonce (refresh -> GAP_NONCE),
+			// not skip to GAP_NONCE + 1.
+			watcher
+				.new_request(
+					&mut requests,
+					test_call(),
+					oneshot::channel().0,
+					oneshot::channel().0,
+					RequestStrategy::StrictlyOneSubmission(oneshot::channel().0),
+				)
+				.await?;
+
+			assert_eq!(
+				watcher.best_nonce,
+				Some(GAP_NONCE),
+				"next submission must reuse the vacated nonce, not skip past it"
+			);
+			assert!(
+				watcher.submissions_by_nonce.contains_key(&GAP_NONCE),
+				"the gap must be refilled"
+			);
+			assert!(
+				!watcher.submissions_by_nonce.contains_key(&(GAP_NONCE + 1)),
+				"next submission must not skip the gap"
+			);
 
 			Ok(())
 		}

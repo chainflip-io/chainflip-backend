@@ -6,7 +6,6 @@ export const lendingPoolsLiquidationFeeTaken = z.object({
   loanId: numberOrHex,
   poolFee: numberOrHex,
   networkFee: numberOrHex,
-  brokerFee: numberOrHex,
 });
 
 export const lendingPoolsLiquidationFeeTakenEvent = defineEvent(

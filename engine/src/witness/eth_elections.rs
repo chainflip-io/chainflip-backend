@@ -330,15 +330,25 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 
 		let mut result: Vec<ScUtilsCall> = Vec::new();
 		for event in events {
+			// Events's signer, when emitted via CCM will have the `signer` field set to the
+			// zero address. That functionality was added for potential future use cases such
+			// as onboarding via any asset. That has now been implemented with special
+			// deposit channels and that is therefore not used. If this is ever to be used, the
+			// `sender` would always be the Vault and we'd therefore need the sc_call to contain
+			// additional data to be able to attribute the call to the correct SC account.
 			match event.event_parameters {
 				ScUtilsEvents::DepositToScGatewayAndScCallFilter(
 					DepositToScGatewayAndScCallFilter {
-						sender,    // eth_address to attribute the FLIP to
-						signer: _, // `tx.origin``. Not to be used for now
-						amount,    // FLIP amount deposited
+						sender, // eth_address to attribute the FLIP to
+						signer, // `tx.origin` or zero address
+						amount, // FLIP amount deposited
 						sc_call,
 					},
-				) => result.push(ScUtilsCall {
+				) => {
+					if signer.is_zero() {
+						continue;
+					}
+					result.push(ScUtilsCall {
 					deposit_and_call: EthereumDepositAndSCCall {
 						deposit: EthereumDeposit::FlipToSCGateway {
 							amount: amount.try_into().expect("the amount should fit into u128 since all eth assets we support have max amounts smaller than u128::MAX"),
@@ -350,16 +360,18 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					// are associated with on SC
 					caller_account_id: sender.into_account_id_32(),
 					eth_tx_hash: event.tx_hash.to_fixed_bytes(),
-				}),
-				ScUtilsEvents::DepositToVaultAndScCallFilter(
-					DepositToVaultAndScCallFilter {
-						sender,
-						signer: _,
-						amount,
-						token,
-						sc_call,
-					},
-				) => {
+					});
+				},
+				ScUtilsEvents::DepositToVaultAndScCallFilter(DepositToVaultAndScCallFilter {
+					sender,
+					signer,
+					amount,
+					token,
+					sc_call,
+				}) => {
+					if signer.is_zero() {
+						continue;
+					}
 					if let Some(asset) = config.supported_assets.get(&token) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
@@ -382,12 +394,15 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 
 				ScUtilsEvents::DepositAndScCallFilter(DepositAndScCallFilter {
 					sender,
-					signer: _,
+					signer,
 					amount,
 					token,
 					to,
 					sc_call,
 				}) => {
+					if signer.is_zero() {
+						continue;
+					}
 					if let Some(asset) = config.supported_assets.get(&token) {
 						result.push(ScUtilsCall {
 							deposit_and_call: EthereumDepositAndSCCall {
@@ -409,21 +424,18 @@ impl WitnessClientForBlockData<EthereumChain, Vec<ScUtilsCall>>
 					}
 				},
 
-				ScUtilsEvents::CallScFilter(CallScFilter {
-					sender,
-					signer: _,
-					sc_call,
-				}) => result.push(ScUtilsCall {
-					deposit_and_call: EthereumDepositAndSCCall {
-						deposit: EthereumDeposit::NoDeposit,
-						call: sc_call.to_vec(),
-					},
-					caller: sender,
-					// use 0 padded ethereum address as account_id which the
-					// flip funds are associated with on SC
-					caller_account_id: sender.into_account_id_32(),
-					eth_tx_hash: event.tx_hash.to_fixed_bytes(),
-				}),
+				ScUtilsEvents::CallScFilter(CallScFilter { sender, signer: _, sc_call }) => result
+					.push(ScUtilsCall {
+						deposit_and_call: EthereumDepositAndSCCall {
+							deposit: EthereumDeposit::NoDeposit,
+							call: sc_call.to_vec(),
+						},
+						caller: sender,
+						// use 0 padded ethereum address as account_id which the
+						// flip funds are associated with on SC
+						caller_account_id: sender.into_account_id_32(),
+						eth_tx_hash: event.tx_hash.to_fixed_bytes(),
+					}),
 			}
 		}
 

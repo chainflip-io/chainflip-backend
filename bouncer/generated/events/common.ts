@@ -1949,16 +1949,6 @@ export const palletCfLendingPoolsLoanRepaidActionType = z.discriminatedUnion('__
   z.object({ __kind: z.literal('BoostFinalisation') }),
 ]);
 
-export const palletCfLendingPoolsGeneralLendingWhitelistWhitelistUpdate = z.discriminatedUnion(
-  '__kind',
-  [
-    z.object({ __kind: z.literal('SetAllowAll') }),
-    z.object({ __kind: z.literal('SetAllowedAccounts'), value: z.array(accountId) }),
-    z.object({ __kind: z.literal('AddAllowedAccounts'), value: z.array(accountId) }),
-    z.object({ __kind: z.literal('RemoveAllowedAccounts'), value: z.array(accountId) }),
-  ],
-);
-
 export const palletCfElectionsElectoralSystemsCompositeTuple6ImplsCompositeElectionIdentifierExtra =
   simpleEnum(['A', 'B', 'C', 'D', 'EE', 'FF']);
 

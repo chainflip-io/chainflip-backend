@@ -23,8 +23,8 @@ mod tests;
 
 #[cfg(feature = "test")]
 pub use keygen_detail::{
-	generate_shares_and_commitment, get_key_data_for_test, DKGUnverifiedCommitment, OutgoingShares,
-	SharingParameters,
+	generate_hash_commitment, generate_shares_and_commitment, get_key_data_for_test,
+	DKGUnverifiedCommitment, OutgoingShares, SharingParameters,
 };
 
 #[cfg(test)]

@@ -4,7 +4,8 @@ import { testVaultSwap } from 'tests/vault_swap_tests';
 import { checkSolEventAccountsClosure } from 'shared/vault_swap/sol_vault_swap';
 import { checkAvailabilityAllSolanaNonces } from 'shared/utils';
 import { checkNoWitnessingTaskRestarts } from 'shared/check_witnessing_task_restarts';
-import { testAllSwaps } from 'tests/all_swaps';
+import { checkNoTransferFallbacks } from 'shared/check_transfer_fallbacks';
+import { testAllSwaps, testSwapsToAssethub } from 'tests/all_swaps';
 import { testEvmDeposits } from 'tests/evm_deposits';
 import { testMultipleMembersGovernance } from 'tests/multiple_members_governance';
 import { testLpApi } from 'tests/lp_api_test';
@@ -39,6 +40,7 @@ describe('ConcurrentTests', () => {
   // test to reduce contention, for example, the BrokerLevelScreeningTest is delayed to not end up
   // in situations where the deposit monitor is slow in flagging transactions.
   testAllSwaps(singleSwapTimeout * ciTimeoutFactor);
+  concurrentTest('SwapsToAssethub', testSwapsToAssethub, 330 * ciTimeoutFactor);
   concurrentTest('EvmDeposits', testEvmDeposits, 280 * ciTimeoutFactor);
   concurrentTest('FundRedeem', testFundRedeem, 350 * ciTimeoutFactor);
   concurrentTest('LpApi', testLpApi, 280 * ciTimeoutFactor);
@@ -62,12 +64,19 @@ describe('ConcurrentTests', () => {
   concurrentTest('SwapAndFundAccountViaCCM', testCcmSwapFundAccount, 240 * ciTimeoutFactor);
   concurrentTest('SignedRuntimeCall', testSignedRuntimeCall, 280 * ciTimeoutFactor);
   concurrentTest('Lending', lendingTest, 360 * ciTimeoutFactor);
-  concurrentTest(
-    'GovernanceDepositWitnessing',
-    testGovernanceDepositWitnessing,
-    265 * ciTimeoutFactor,
-  );
+  if (!process.env.PRE_UPGRADE_BOUNCER) {
+    // This test is disabled in the pre-upgrade bouncer run to prevent it from interfering with the post-upgrade run.
+    concurrentTest(
+      'GovernanceDepositWitnessing',
+      testGovernanceDepositWitnessing,
+      265 * ciTimeoutFactor,
+    );
+  }
   concurrentTest('RpcCalls', testRpcCalls, 160 * ciTimeoutFactor);
+
+  // Test this separately because it has a swap to HubDot which causes flakiness when run in
+  // parallel with the Assethub tests in `SwapsToAssethub`.
+  // serialTest('SwapLessThanED', swapLessThanED, 350 * ciTimeoutFactor);
 
   // Test this separately since some other tests rely on single member governance.
   serialTest('MultipleMembersGovernance', testMultipleMembersGovernance, 60 * ciTimeoutFactor);
@@ -80,6 +89,7 @@ describe('ConcurrentTests', () => {
     5 * ciTimeoutFactor,
   );
   serialTest('CheckNoWitnessingTaskRestarts', checkNoWitnessingTaskRestarts, 5 * ciTimeoutFactor);
+  serialTest('CheckNoTransferFallbacks', checkNoTransferFallbacks, 10 * ciTimeoutFactor);
 });
 
 // Run only the broker level screening tests

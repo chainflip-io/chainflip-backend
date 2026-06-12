@@ -25,13 +25,15 @@ use crate::{
 			ResharingContext,
 		},
 		helpers::{
-			gen_dummy_keygen_comm3, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
-			standard_signing, test_all_crypto_chains_async, KeygenCeremonyRunner,
+			gen_dummy_keygen_comm3, gen_key_handover_contribution_with_coeff_count,
+			gen_keygen_contribution_with_coeff_count, get_dummy_hash_comm, new_nodes, run_keygen,
+			run_stages, standard_signing, test_all_crypto_chains_async, KeygenCeremonyRunner,
 			PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
 			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
+		ThresholdParameters,
 	},
 	crypto::{ECPoint, Rng},
 	eth::{EthSigning, EvmCryptoScheme},
@@ -484,6 +486,92 @@ async fn should_report_on_invalid_zkp_in_coeff_comm() {
 	ceremony.distribute_messages(messages).await;
 
 	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
+}
+
+// Regression tests for the per-ceremony coefficient-commitment length check.
+//
+// A malicious participant commits to a polynomial of the wrong degree (a
+// coefficient-commitment vector that is not exactly `threshold + 1` long) but
+// keeps the contribution otherwise internally consistent: the ZKP on the
+// lowest-degree coefficient is valid and the stage-1 hash commitment matches
+// the (wrong-length) vector. Neither the ZKP check nor the hash-commitment
+// check is a length defense, so the ceremony must abort during
+// `validate_commitments` with the malicious party attributed - it must NOT
+// finalise an internally-inconsistent key (over-long) or panic on an
+// out-of-bounds index (too-short / empty).
+//
+// See `frost-security-review.md` finding #1: the per-ceremony element-count
+// check removed by PR #3248 was replaced only by a global byte-size cap.
+async fn keygen_with_wrong_commitment_length_is_attributed(coeff_count: usize) {
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+	let participants: BTreeSet<AccountId> = ceremony.nodes.keys().cloned().collect();
+	let [bad_account_id] = ceremony.select_account_ids();
+	let bad_party_idx = PartyIdxMapping::from_participants(participants.clone())
+		.get_idx(&bad_account_id)
+		.unwrap();
+
+	// Craft a consistent malicious contribution: valid ZKP on c0 + a hash
+	// commitment matching the wrong-length vector, so only a length check can
+	// reject it.
+	let (bad_hash_comm, bad_commitment) = gen_keygen_contribution_with_coeff_count::<Point>(
+		&mut ceremony.rng,
+		DEFAULT_KEYGEN_CEREMONY_ID,
+		&participants,
+		bad_party_idx,
+		coeff_count,
+	);
+
+	// Inject the malicious hash commitment at stage 1, identically to every
+	// recipient (so broadcast verification agrees and we reach
+	// `validate_commitments` rather than failing on inconsistency).
+	let mut messages = ceremony.request().await;
+	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+		*message = bad_hash_comm.clone();
+	}
+
+	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+
+	// Inject the matching wrong-length commitment at stage 3, identically to
+	// every recipient.
+	let bad_comm3 = DelayDeserialization::new(&bad_commitment);
+	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+		*message = bad_comm3.clone();
+	}
+
+	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
+	ceremony.distribute_messages(messages).await;
+
+	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
+}
+
+/// Over-long vector (degree raised): without the length check the honest
+/// `verify_share` passes and keygen finalises, but pubkey derivation truncates
+/// the polynomial, producing an internally-inconsistent aggregate key.
+#[tokio::test]
+async fn should_report_on_over_long_coeff_comm() {
+	// honest length is `threshold + 1`; send two extra coefficients.
+	let honest_len = ThresholdParameters::from_share_count(ACCOUNT_IDS.len() as AuthorityCount)
+		.threshold as usize +
+		1;
+	keygen_with_wrong_commitment_length_is_attributed(honest_len + 1).await;
+}
+
+/// Too-short (non-empty) vector: without the length check pubkey derivation
+/// indexes past the end of the vector and panics on honest nodes.
+#[tokio::test]
+async fn should_report_on_too_short_coeff_comm() {
+	let honest_len = ThresholdParameters::from_share_count(ACCOUNT_IDS.len() as AuthorityCount)
+		.threshold as usize +
+		1;
+	keygen_with_wrong_commitment_length_is_attributed(honest_len - 1).await;
+}
+
+/// Empty vector: without the length check `validate_commitments` itself
+/// indexes `commitments.0[0]` and panics on honest nodes.
+#[tokio::test]
+async fn should_report_on_empty_coeff_comm() {
+	keygen_with_wrong_commitment_length_is_attributed(0).await;
 }
 
 #[tokio::test]
@@ -1025,14 +1113,27 @@ mod key_handover {
 	#[derive(Default)]
 	struct HandoverTestOptions {
 		nodes_sharing_invalid_secret: BTreeSet<AccountId>,
+		/// `(bad sharing node, malicious coefficient-commitment vector length)`.
+		/// The node sends a consistent (valid ZKP on c0, matching hash
+		/// commitment) contribution whose only fault is its length.
+		bad_commitment_length: Option<(AccountId, usize)>,
 	}
+
+	/// A consistent malicious `(HashComm1, CoeffComm3)` pair for the bad node,
+	/// to be injected on the wire by the caller.
+	type MaliciousContribution =
+		(AccountId, keygen::HashComm1, keygen::DKGUnverifiedCommitment<Point>);
 
 	async fn prepare_handover_test(
 		original_set: BTreeSet<AccountId>,
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 		options: HandoverTestOptions,
-	) -> (KeygenCeremonyRunner<Chain>, <Scheme as CryptoScheme>::PublicKey) {
+	) -> (
+		KeygenCeremonyRunner<Chain>,
+		<Scheme as CryptoScheme>::PublicKey,
+		Option<MaliciousContribution>,
+	) {
 		use crate::client::common::ParticipantStatus;
 
 		assert!(sharing_subset.is_subset(&original_set));
@@ -1051,13 +1152,21 @@ mod key_handover {
 
 		let all_participants: BTreeSet<_> = sharing_subset.union(&receiving_set).cloned().collect();
 
+		// The new key's parameters depend on the receiving set, NOT the sharing
+		// set - so the honest commitment length is this threshold + 1.
+		let new_key_params =
+			ThresholdParameters::from_share_count(receiving_set.len() as AuthorityCount);
+		let current_mapping = PartyIdxMapping::from_participants(all_participants.clone());
+
 		let mut ceremony = KeygenCeremonyRunner::<Chain>::new(
-			new_nodes(all_participants),
+			new_nodes(all_participants.clone()),
 			DEFAULT_KEYGEN_CEREMONY_ID,
 			Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		);
 
 		let ceremony_details = ceremony.keygen_ceremony_details();
+
+		let mut malicious_contribution: Option<MaliciousContribution> = None;
 
 		for (id, node) in &mut ceremony.nodes {
 			// Give the right context type depending on whether they have keys
@@ -1079,10 +1188,29 @@ mod key_handover {
 				}
 			}
 
+			// Build the consistent wrong-length contribution for the bad node
+			// from its real (sharing) context, before the context is consumed.
+			if let Some((bad_id, coeff_count)) = &options.bad_commitment_length {
+				if id == bad_id {
+					let bad_idx = current_mapping.get_idx(id).unwrap();
+					let (hash_comm, commitment) =
+						gen_key_handover_contribution_with_coeff_count::<Scheme>(
+							&mut Rng::from_seed([7; 32]),
+							DEFAULT_KEYGEN_CEREMONY_ID,
+							&all_participants,
+							bad_idx,
+							&context,
+							new_key_params,
+							*coeff_count,
+						);
+					malicious_contribution = Some((id.clone(), hash_comm, commitment));
+				}
+			}
+
 			node.request_key_handover(ceremony_details.clone(), context).await;
 		}
 
-		(ceremony, initial_key)
+		(ceremony, initial_key, malicious_contribution)
 	}
 
 	/// Run key handover (preceded by a keygen) with the provided parameters
@@ -1097,7 +1225,7 @@ mod key_handover {
 		// The resulting aggregate keys should match, and the new nodes should
 		// be able to sign with their newly generated shares.
 
-		let (mut ceremony, initial_key) = prepare_handover_test(
+		let (mut ceremony, initial_key, _) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
@@ -1230,7 +1358,7 @@ mod key_handover {
 		// This account id will fail to broadcast initial public keys
 		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
 
-		let (mut ceremony, initial_key) = prepare_handover_test(
+		let (mut ceremony, initial_key, _) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
@@ -1287,12 +1415,13 @@ mod key_handover {
 		// This account id will commit to an unexpected secret
 		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
 
-		let (mut ceremony, _initial_key) = prepare_handover_test(
+		let (mut ceremony, _initial_key, _) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
 			HandoverTestOptions {
 				nodes_sharing_invalid_secret: BTreeSet::from([bad_account_id.clone()]),
+				..Default::default()
 			},
 		)
 		.await;
@@ -1311,5 +1440,71 @@ mod key_handover {
 		ceremony.distribute_messages(messages).await;
 
 		ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
+	}
+
+	// Regression test for the per-ceremony length check on the key-handover
+	// path. A malicious *sharing* participant keeps the correct first
+	// coefficient commitment (so the resharing first-commitment check passes)
+	// and a valid ZKP + matching hash commitment, but commits to a vector of
+	// the wrong length. The honest length here is the *new* key's
+	// `threshold + 1` (derived from the receiving set), so this also guards
+	// against deriving the expected length from the wrong parameters.
+	async fn key_handover_with_wrong_commitment_length_is_attributed(coeff_count: usize) {
+		let original_set = to_account_id_set([1, 2, 3]);
+		let sharing_subset = to_account_id_set([2, 3]);
+		let receiving_set = to_account_id_set([3, 4, 5]);
+
+		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
+
+		let (mut ceremony, _initial_key, malicious) = prepare_handover_test(
+			original_set,
+			sharing_subset,
+			receiving_set.clone(),
+			HandoverTestOptions {
+				bad_commitment_length: Some((bad_account_id.clone(), coeff_count)),
+				..Default::default()
+			},
+		)
+		.await;
+
+		let (_, bad_hash_comm, bad_commitment) =
+			malicious.expect("malicious contribution should have been built");
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+
+		// PubkeyShares0 -> HashComm1; inject the matching malicious hash
+		// commitment, identically to every recipient.
+		let mut messages = ceremony.run_stage::<keygen::HashComm1, _, _>(messages).await;
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = bad_hash_comm.clone();
+		}
+
+		// HashComm1 -> VerifyHashComm2 -> CoeffComm3; inject the wrong-length
+		// commitment, identically to every recipient.
+		let mut messages = run_stages!(ceremony, messages, keygen::VerifyHashComm2, CoeffComm3);
+		let bad_comm3 = DelayDeserialization::new(&bad_commitment);
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = bad_comm3.clone();
+		}
+
+		let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
+		ceremony.distribute_messages(messages).await;
+
+		ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
+	}
+
+	/// Over-long vector on the key-handover path.
+	#[tokio::test]
+	async fn handover_should_report_on_over_long_coeff_comm() {
+		// receiving set is 3 parties -> new key threshold + 1 is the honest length.
+		let new_honest_len = ThresholdParameters::from_share_count(3).threshold as usize + 1;
+		key_handover_with_wrong_commitment_length_is_attributed(new_honest_len + 1).await;
+	}
+
+	/// Empty vector on the key-handover path (the resharing first-commitment
+	/// check would otherwise index `commitments.0[0]` and panic).
+	#[tokio::test]
+	async fn handover_should_report_on_empty_coeff_comm() {
+		key_handover_with_wrong_commitment_length_is_attributed(0).await;
 	}
 }

@@ -25,13 +25,14 @@ mod utils;
 use cf_chains::SwapOrigin;
 use general_lending::LoanAccount;
 pub use general_lending::{
+	get_collateral_in_supply_pools, get_total_collateral_for_account,
 	rpc::{
 		get_all_loans, get_lending_pools, get_loan_accounts, LendingPoolAndSupplyPositions,
 		LendingSupplyPosition, RpcLendingPool, RpcLiquidationStatus, RpcLiquidationSwap, RpcLoan,
 		RpcLoanAccount,
 	},
 	LendingPool, LiquidationCompletionReason, LiquidationType, LoanType, OraclePriceCache,
-	WhitelistStatus, WhitelistUpdate, WithdrawnAndRemainingAmounts,
+	WithdrawnAndRemainingAmounts,
 };
 
 pub use general_lending::config::{
@@ -86,7 +87,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const STORAGE_VERSION_U16: u16 = 6;
+pub const STORAGE_VERSION_U16: u16 = 7;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 use serde::{Deserialize, Serialize};
@@ -414,10 +415,6 @@ pub mod pallet {
 	pub type PendingNetworkFees<T: Config> =
 		StorageMap<_, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
-	/// Determines which accounts are allowed to use lending extrinsics.
-	#[pallet::storage]
-	pub type Whitelist<T: Config> = StorageValue<_, WhitelistStatus<T::AccountId>, ValueQuery>;
-
 	/// Stores boost-related configuration (updatable by governance).
 	#[pallet::storage]
 	pub type BoostConfig<T: Config> =
@@ -467,6 +464,7 @@ pub mod pallet {
 			asset: Asset,
 			loan_type: LoanType<T::AccountId>,
 			principal_amount: AssetAmount,
+			broker: Option<Beneficiary<T::AccountId>>,
 		},
 		LoanUpdated {
 			loan_id: LoanId,
@@ -476,7 +474,6 @@ pub mod pallet {
 			loan_id: LoanId,
 			pool_fee: AssetAmount,
 			network_fee: AssetAmount,
-			broker_fee: AssetAmount,
 		},
 		InterestTaken {
 			loan_id: LoanId,
@@ -500,7 +497,6 @@ pub mod pallet {
 			loan_id: LoanId,
 			pool_fee: AssetAmount,
 			network_fee: AssetAmount,
-			broker_fee: AssetAmount,
 		},
 		LoanRepaid {
 			loan_id: LoanId,
@@ -518,9 +514,6 @@ pub mod pallet {
 		},
 		LendingNetworkFeeSwapInitiated {
 			swap_request_id: SwapRequestId,
-		},
-		WhitelistUpdated {
-			update: WhitelistUpdate<T::AccountId>,
 		},
 	}
 
@@ -578,8 +571,6 @@ pub mod pallet {
 		AmountBelowMinimum,
 		/// No refund address has been set for the loan asset.
 		NoRefundAddressSet,
-		/// Access denied as account is not in the whitelist.
-		AccountNotWhitelisted,
 		/// Liquidations are currently disabled due to safe mode.
 		LiquidationsDisabled,
 		/// LP still has funds present in the lending pool
@@ -591,9 +582,6 @@ pub mod pallet {
 		/// The new loan would leave the loan-asset pool unable to liquidate the configured
 		/// fraction of outstanding loans.
 		UtilisationCapExceeded,
-		/// The new loan would leave one of the borrower's collateral pools unable to
-		/// liquidate the configured fraction of outstanding loans.
-		CollateralPoolUtilisationCapExceeded,
 		/// The broker fee specified on the loan request exceeds the maximum allowed.
 		BrokerFeeTooHigh,
 		/// The broker fee (if specified) can't be zero.
@@ -854,11 +842,6 @@ pub mod pallet {
 
 			let lender_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			ensure!(
-				Whitelist::<T>::get().is_allowed(&lender_id),
-				Error::<T>::AccountNotWhitelisted
-			);
-
 			let config = LendingConfig::<T>::get();
 			let price_cache = OraclePriceCache::<T>::default();
 
@@ -920,11 +903,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-			ensure!(
-				Whitelist::<T>::get().is_allowed(&borrower_id),
-				Error::<T>::AccountNotWhitelisted
-			);
-
 			Self::new_loan(borrower_id, loan_asset, loan_amount, broker)?;
 
 			Ok(())
@@ -969,22 +947,6 @@ pub mod pallet {
 			let borrower_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			<Self as LendingApi>::set_voluntary_liquidation_flag(borrower_id, false)
-		}
-
-		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::update_whitelist())]
-		pub fn update_whitelist(
-			origin: OriginFor<T>,
-			update: WhitelistUpdate<T::AccountId>,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			Whitelist::<T>::mutate(|whitelist| whitelist.apply_update(update.clone()))
-				.map_err(|_| Error::<T>::InvalidConfigurationParameters)?;
-
-			Self::deposit_event(Event::WhitelistUpdated { update });
-
-			Ok(())
 		}
 	}
 }

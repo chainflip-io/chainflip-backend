@@ -174,6 +174,8 @@ jobs:
           sudo cp ./upgrade-to-bins/libchainflip_engine_v*.so /usr/lib/
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
+          # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
+          git show ${{ github.sha }}:localnet/init/scripts/start-solana.sh > localnet/init/scripts/start-solana.sh
           ./localnet/manage.sh
           # Replace the old indexer with the new one (new image + args like --finalized-blocks false).
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" stop indexer
@@ -209,13 +211,10 @@ jobs:
         id: pre-upgrade-bouncer
         env:
           SKIP_BLS_TESTS: "true"
+          PRE_UPGRADE_BOUNCER: "true"
         run: |
           git checkout ${{ env.OLD_BIN_COMMIT_HASH }}
           git rev-parse HEAD
-          # Disable GovernanceDepositWitnessing test to prevent it from interfering with the post-upgrade bouncer run.
-          # Remove the import line and the whole (possibly multi-line) concurrentTest registration.
-          sed -i "/import { testGovernanceDepositWitnessing }/d" bouncer/tests/fast_bouncer.test.ts
-          perl -0pi -e "s/\s*concurrentTest\(\s*'GovernanceDepositWitnessing'.*?\);//s" bouncer/tests/fast_bouncer.test.ts
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
@@ -405,14 +404,3 @@ jobs:
           ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --volumes --remove-orphans
-
-      - name: Notify on failed upgrade test 🚨
-        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
-        env:
-          DISCORD_USERNAME: "Upgrade Test"
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
-        with:
-          args: |
-            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, The Upgrade Test has not passed ❗️❗️❗️❗️
-            👾 Link to job: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>
