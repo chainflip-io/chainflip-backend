@@ -105,7 +105,7 @@ fn test_all_historical_runtime_calls(
 	macro_rules! for_each_runtime_version {
 		($($version:ident),*) => {
 			$(
-				if should_check_version($version::LATEST_RUNTIME_PATCH_VERSION) {
+				if should_check_version($version::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST) {
 					let mut incompatibilities = [
 						tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
 						tester

@@ -32,9 +32,9 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
-		let Some(blockhash) =
-			(self.get_blockhash_from_spec_version)(V::LATEST_RUNTIME_PATCH_VERSION)
-		else {
+		let Some(blockhash) = (self.get_blockhash_from_spec_version)(
+			V::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST,
+		) else {
 			return Vec::new();
 		};
 
@@ -127,7 +127,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				type_ref: TypeRef::RuntimeCall {
 					api_name,
 					method_name,
-					version: V::LATEST_RUNTIME_PATCH_VERSION,
+					version: V::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST,
 				},
 				type_diff: TypeDiff {
 					expected_encoding: match err.sub_type_details.location {

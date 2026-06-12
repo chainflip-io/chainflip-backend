@@ -3,7 +3,7 @@
 use crate::migrations::HasChangelog;
 
 pub trait Version: Copy {
-	const LATEST_RUNTIME_PATCH_VERSION: u32;
+	const AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST: u32;
 }
 
 pub trait Migration<To: ?Sized, V: Version> {
@@ -88,7 +88,7 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: Version> =
 pub struct vCurrent;
 impl Version for vCurrent {
 	// TODO this should be synchronized with the one in runtime/lib.rs
-	const LATEST_RUNTIME_PATCH_VERSION: u32 = 20201;
+	const AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST: u32 = 20201;
 }
 
 pub trait HasGenericVariant: Sized {

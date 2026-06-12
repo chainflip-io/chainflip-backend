@@ -118,7 +118,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
-		let spec_version = V::LATEST_RUNTIME_PATCH_VERSION;
+		let spec_version = V::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST;
 
 		// the metadata has to be loaded if it isn't already
 		self.load_metadata(spec_version);
@@ -166,7 +166,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 				type_ref: TypeRef::RuntimeCall {
 					api_name,
 					method_name,
-					version: V::LATEST_RUNTIME_PATCH_VERSION,
+					version: V::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST,
 				},
 				type_diff: TypeDiff {
 					expected_encoding: describe_expected_type::<I::HistoricalType>(),
@@ -205,7 +205,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			type_ref: TypeRef::RuntimeCall {
 				api_name,
 				method_name,
-				version: V::LATEST_RUNTIME_PATCH_VERSION,
+				version: V::AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST,
 			},
 			type_diff: TypeDiff {
 				expected_encoding: describe_expected_type::<O::HistoricalType>(),

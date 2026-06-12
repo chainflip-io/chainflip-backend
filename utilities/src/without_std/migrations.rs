@@ -16,7 +16,7 @@ macro_rules! all_runtime_versions {
 			#[allow(nonstandard_style)]
 			pub struct $version;
 			impl Version for $version {
-				const LATEST_RUNTIME_PATCH_VERSION: u32 = $latest_patch;
+				const AUTHORITATIVE_RUNTIME_VERSION_FOR_COMPATIBILITY_TEST: u32 = $latest_patch;
 			}
 		)*
 
