@@ -100,7 +100,8 @@ async function findBlockWithVersion(targetVersion: number): Promise<string | nul
     if (midVersion === targetVersion) {
       console.log(`Found target version ${targetVersion} at block #${mid}`);
       return midHash;
-    } else if (midVersion < targetVersion) {
+    }
+    if (midVersion < targetVersion) {
       low = mid + 1;
     } else {
       high = mid - 1;
@@ -117,7 +118,7 @@ async function main() {
   let targetVersion: number;
   if (values['runtime-version']) {
     targetVersion = parseInt(values['runtime-version'], 10);
-    if (isNaN(targetVersion)) {
+    if (Number.isNaN(targetVersion)) {
       console.error('Error: --runtime-version must be a number');
       process.exit(1);
     }
@@ -176,7 +177,7 @@ async function main() {
 
   const metadata = Buffer.from(opaqueMetadata);
   const outputPath =
-    values['output'] ??
+    values.output ??
     path.join(
       __dirname,
       '..',
