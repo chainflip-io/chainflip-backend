@@ -286,7 +286,7 @@ export function shortChainFromChain(chain: Chain) {
 }
 
 export function shortChainFromAsset(asset: Asset) {
-  shortChainFromChain(chainFromAsset(asset));
+  return shortChainFromChain(chainFromAsset(asset));
 }
 
 export function amountToFineAmount(amount: string, decimals: number | string): string {
