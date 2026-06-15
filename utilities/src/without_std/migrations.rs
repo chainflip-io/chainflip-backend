@@ -107,7 +107,10 @@ macro_rules! generate_migration_helpers {
 //    2.1 is represented by v20100.
 // 2. `canonical_patch: MajorMinorPatch`: this is the exact patch of that chainflip release which
 //    should be used as canonical runtime providing the metadata which is tested against for
-//    historical type compatibility tests.
+//    historical type compatibility tests. For every canonical patch version >= 20100 that's listed
+//    here, there should be a metadata file called `runtime_{canonical_patch}.scale` located in
+//    `state-chain/cf-historical-compatibility/historical_metadata`. It can be downloaded using the
+//    script in `bouncer/commands/download_metadata.ts`.
 // 3. `changelog_entry: in_MajorMinor00`: this should match up with the first entry, and is the name
 //    of the changelog entry (in the `HasChangelog` type) for this release.
 define_all_released_runtime_versions! {
