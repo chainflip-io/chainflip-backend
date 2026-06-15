@@ -264,7 +264,7 @@ pub struct OperatorInfo<Amount> {
 	pub active_delegation: Option<DelegationSnapshot<AccountId32, Amount>>,
 }
 
-#[cf_utilities_proc_macros::generate_module]
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Clone, Debug, Serialize, Deserialize)]
 pub struct DelegationInfo<Amount> {
 	pub operator: AccountId32,
@@ -617,7 +617,7 @@ pub struct TradingStrategyLimits {
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
 }
 
-#[cf_utilities_proc_macros::generate_module]
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
@@ -627,7 +627,7 @@ impl HasChangelog for NetworkFeeDetails {
 	type if_unspecified = _NetworkFeeDetails::see_field_changelogs;
 }
 
-#[cf_utilities_proc_macros::generate_module]
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Debug)]
 pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
@@ -755,7 +755,7 @@ pub struct RpcLendingConfig {
 	pub minimum_update_supply_amount_usd: U256,
 }
 
-#[cf_utilities_proc_macros::generate_module]
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, Default, Debug)]
 #[serde(bound(deserialize = "Balance: Deserialize<'de> + Default"))]
 pub struct RpcAccountInfoCommonItems<Balance> {
