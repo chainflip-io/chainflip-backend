@@ -18,10 +18,13 @@
 //!
 //! For any pool that still has `owed_to_network > 0` at upgrade time, we credit as much of
 //! it as `available_amount` can cover to `PendingNetworkFees` (and deduct it from
-//! `available_amount`). Any residue that exceeds `available_amount` is forgiven to the
-//! network and stays with the pool: the borrower's `owed_principal` already includes the
-//! corresponding fee, so when they repay, that cash flows into `available_amount` and —
-//! with no IOU left to drain — accrues to lenders rather than the network.
+//! `available_amount`). Any residue that exceeds `available_amount` can no longer be drained
+//! to the network, so it is redistributed to lenders by adding it to
+//! `total_amount`: the borrower's `owed_principal` already includes the corresponding amount, so
+//! when they repay, that cash flows into `available_amount` and — with `total_amount` already
+//! grown to match — becomes claimable by lenders pro-rata to their shares. This keeps the
+//! pool's `available + owed_principal = total_amount` invariant intact after the field is
+//! removed.
 
 use crate::{Config, GeneralLendingPools, LendingPool, PendingNetworkFees};
 use cf_primitives::AssetAmount;
@@ -72,13 +75,16 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		GeneralLendingPools::<T>::translate::<old::LendingPool<T::AccountId>, _>(|asset, old| {
 			let collected = core::cmp::min(old.available_amount, old.owed_to_network);
+			// The residue the network can't be paid is redistributed to lenders pro-rata by
+			// growing `total_amount` (it is already part of the borrower's `owed_principal`).
+			let residue = old.owed_to_network.saturating_sub(old.available_amount);
 			if collected > 0 {
 				PendingNetworkFees::<T>::mutate(asset, |fees| {
 					fees.saturating_accrue(collected);
 				});
 			}
 			Some(LendingPool {
-				total_amount: old.total_amount,
+				total_amount: old.total_amount.saturating_add(residue),
 				available_amount: old.available_amount.saturating_sub(collected),
 				lender_shares: old.lender_shares,
 			})
@@ -115,8 +121,12 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 			let pool =
 				GeneralLendingPools::<T>::get(asset).ok_or("pool disappeared during migration")?;
 			let collected = core::cmp::min(old_available, owed);
+			let residue = owed.saturating_sub(old_available);
 
-			frame_support::ensure!(pool.total_amount == total, "total_amount should be unchanged");
+			frame_support::ensure!(
+				pool.total_amount == total.saturating_add(residue),
+				"total_amount should grow by the IOU residue"
+			);
 			frame_support::ensure!(
 				pool.available_amount == old_available.saturating_sub(collected),
 				"available_amount should drop by the collected IOU"
