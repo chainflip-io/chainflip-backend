@@ -85,9 +85,12 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: Version> =
 
 #[derive(Clone, Copy)]
 #[expect(nonstandard_style)]
+
+/// Version name for the current version of a type. Only used as the version specifier for
+/// migrations between the actual type and its "generic" version.
 pub struct vCurrent;
 impl Version for vCurrent {
-	// TODO this should be synchronized with the one in runtime/lib.rs
+	// There's no released runtime version associated.
 	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<u32> = None;
 }
 
