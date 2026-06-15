@@ -140,3 +140,66 @@ impl<T: Config> UncheckedOnRuntimeUpgrade for Migration<T> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::mocks::{new_test_ext, Test, LP, OTHER_LP};
+	use cf_primitives::Asset;
+	use frame_support::sp_runtime::Perquintill;
+
+	#[test]
+	fn residue_is_credited_to_lenders() {
+		new_test_ext().execute_with(|| {
+			const ASSET: Asset = Asset::Eth;
+
+			let lender_shares = BTreeMap::from([
+				(LP, Perquintill::from_percent(60)),
+				(OTHER_LP, Perquintill::from_percent(40)),
+			]);
+
+			// A high-utilisation pool: the network is owed more (50) than the pool has
+			// available (10), so only part of the IOU can be collected and the rest is residue.
+			old::GeneralLendingPools::<Test>::insert(
+				ASSET,
+				old::LendingPool {
+					total_amount: 1000,
+					available_amount: 10,
+					lender_shares: lender_shares.clone(),
+					owed_to_network: 50,
+				},
+			);
+
+			// Some network fees may already be pending for this asset.
+			PendingNetworkFees::<Test>::insert(ASSET, 7);
+
+			Migration::<Test>::on_runtime_upgrade();
+
+			// Expected outcomes for this scenario, kept as independent literals so that a bug in
+			// the migration's arithmetic can't be mirrored into the expectations.
+			const COLLECTED: AssetAmount = 10; // min(available_amount, owed_to_network)
+			const RESIDUE: AssetAmount = 40; // owed_to_network - available_amount
+
+			// The borrower's outstanding debt (990 borrowed + 50 network fee, which includes the
+			// residue). Unaffected by the migration.
+			const OWED_PRINCIPAL: AssetAmount = 1040;
+
+			let mut pool = GeneralLendingPools::<Test>::get(ASSET).expect("pool should exist");
+
+			// `total_amount` grows by the residue (redistributed to lenders)...
+			assert_eq!(pool.total_amount, 1000 + RESIDUE);
+			// ...`available_amount` drops by the collected portion...
+			assert_eq!(pool.available_amount, 0);
+			// ...and lender shares are carried over unchanged.
+			assert_eq!(pool.lender_shares, lender_shares);
+
+			// The collected portion is credited to the network on top of what was pending.
+			assert_eq!(PendingNetworkFees::<Test>::get(ASSET), 7 + COLLECTED);
+
+			// Once the borrower repays in full, available rises to exactly total: the residue is
+			// claimable by lenders and no orphan dust (available > total) is left behind.
+			pool.receive_repayment(OWED_PRINCIPAL);
+			assert_eq!(pool.available_amount, pool.total_amount);
+		});
+	}
+}
