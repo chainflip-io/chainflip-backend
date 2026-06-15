@@ -25,6 +25,10 @@ macro_rules! define_all_released_runtime_versions {
 		)*
 
 		/// List of all historical changes (migrations) for this type.
+        ///
+        /// This trait is the foundation of auto-generated migrations. It provides all the information
+        /// required to refer to historical versions of a type, as well as migrating data forwards and backwards in time.
+        ///
 		pub trait HasChangelog:
 			HasGenericVariant<
 			MigrationFromGeneric: Migration<Self, vCurrent, From: IsHistoricalType<GetCurrentType = Self>>,
