@@ -3251,8 +3251,8 @@ fn additional_action_correctly_prefund_and_create_account() {
 mod evm_transaction_rejection {
 	use super::*;
 	use crate::{
-		ScheduledTransactionsForRejection, TransactionRejectionDetails, TransactionRejectionStatus,
-		TransactionsMarkedForRejection,
+		RefundFailureReason, ScheduledTransactionsForRejection, TransactionRejectionDetails,
+		TransactionRejectionStatus, TransactionsMarkedForRejection,
 	};
 	use cf_chains::{
 		assets::eth::Asset as EthAsset, evm::Hash as EvmHash, ChannelLifecycleHooks,
@@ -3433,6 +3433,73 @@ mod evm_transaction_rejection {
 				},
 				_ => panic!("Expected a RejectCall"),
 			}
+		});
+	}
+
+	#[test]
+	fn refund_below_dust_limit_is_dropped() {
+		new_test_ext().execute_with(|| {
+			// Set the egress dust limit above the deposit amount so the refund (deposit minus
+			// fees) is guaranteed to be below the dust limit.
+			EgressDustLimit::<Test, Instance1>::set(ETH, DEFAULT_DEPOSIT_AMOUNT + 1);
+
+			let tx_id = EvmHash::from_str(
+				"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+			)
+			.unwrap();
+			let (_, deposit_address, block, _) =
+				EthereumIngressEgress::request_liquidity_deposit_address(
+					BROKER,
+					BROKER,
+					ETH,
+					0,
+					ForeignChainAddress::Eth(Default::default()),
+					None,
+				)
+				.unwrap();
+			let deposit_address: <Ethereum as Chain>::ChainAccount =
+				deposit_address.try_into().unwrap();
+			let deposit_details = DepositDetails { tx_hashes: Some(vec![tx_id]) };
+
+			assert_ok!(EthereumIngressEgress::mark_transaction_for_rejection(
+				OriginTrait::signed(BROKER),
+				tx_id,
+			));
+
+			EthereumIngressEgress::process_channel_deposit_full_witness(
+				DepositWitness {
+					deposit_address,
+					asset: ETH,
+					amount: DEFAULT_DEPOSIT_AMOUNT,
+					deposit_details,
+				},
+				block,
+			);
+
+			// The rejection is scheduled regardless of the egress dust limit.
+			assert_eq!(ScheduledTransactionsForRejection::<Test, Instance1>::get().len(), 1);
+
+			EthereumIngressEgress::on_finalize(2);
+
+			// The dust guard fired: the refund was dropped (not re-queued) and nothing was
+			// broadcast (neither a fetch nor a refund), the rejection is recorded as a
+			// failed rejection with reason BelowDustLimit.
+			assert!(ScheduledTransactionsForRejection::<Test, Instance1>::get().is_empty());
+			assert!(MockEgressBroadcasterEth::get_pending_api_calls().is_empty());
+
+			let failed_rejections = FailedRejections::<Test, Instance1>::get();
+			assert_eq!(failed_rejections.len(), 1);
+			assert!(failed_rejections[0].deposit_details.deposit_ids().unwrap().contains(&tx_id));
+
+			assert_has_matching_event!(
+				Test,
+				RuntimeEvent::EthereumIngressEgress(
+					crate::Event::<Test, Instance1>::TransactionRejectionFailed {
+						tx_id: event_tx_id,
+						reason: RefundFailureReason::BelowDustLimit
+					}
+				) if event_tx_id.deposit_ids().unwrap().contains(&tx_id)
+			);
 		});
 	}
 

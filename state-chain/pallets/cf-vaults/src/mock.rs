@@ -31,7 +31,9 @@ use cf_traits::{
 		cfe_interface_mock::MockCfeInterface,
 	},
 };
-use frame_support::{construct_runtime, derive_impl, parameter_types};
+use frame_support::{
+	construct_runtime, derive_impl, parameter_types, weights::constants::RocksDbWeight,
+};
 
 thread_local! {
 	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = const { RefCell::new(true) };
@@ -49,6 +51,8 @@ construct_runtime!(
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type Block = Block;
+	// A non-zero DbWeight so that weight-gated logic (e.g. `on_idle` cleanup) is exercised.
+	type DbWeight = RocksDbWeight;
 }
 
 impl_mock_chainflip!(Test);
