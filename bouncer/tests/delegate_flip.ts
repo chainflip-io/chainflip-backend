@@ -9,7 +9,7 @@ import {
   getContractAddress,
   getWeb3,
   hexPubkeyToFlipAddress,
-  newAddress,
+  newAssetAddress,
   observeSwapRequested,
   SwapRequestType,
   TransactionOrigin,
@@ -181,7 +181,7 @@ export async function testDelegate(testContext: TestContext) {
   if (pendingRedemption.toString().length === 0) {
     cf.info('Redeeming funds');
 
-    const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));
+    const redeemAddress = await newAssetAddress('Flip', randomBytes(32).toString('hex'));
     const redeemAmount = amount / 2n; // Leave enough to pay fees
 
     const redeemTxHash = await encodeAndSendDelegationApiCall(cf.logger, wallet, {
