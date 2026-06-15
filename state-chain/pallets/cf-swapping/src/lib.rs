@@ -44,7 +44,7 @@ use cf_traits::{
 };
 use cf_utilities::migrations::{
 	basics::{HasGenericVariant, IsHistoricalType},
-	Migrations,
+	HasChangelog,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -251,8 +251,8 @@ pub struct FeeRateAndMinimum {
 	pub rate: sp_runtime::Permill,
 	pub minimum: AssetAmount,
 }
-impl Migrations for FeeRateAndMinimum {
-	type DefaultMigration = _FeeRateAndMinimum::MigrateFields;
+impl HasChangelog for FeeRateAndMinimum {
+	type if_unspecified = _FeeRateAndMinimum::see_field_changelogs;
 }
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]

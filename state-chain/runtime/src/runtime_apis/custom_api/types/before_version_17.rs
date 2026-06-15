@@ -19,7 +19,7 @@ use cf_chains::instances::{
 	EvmInstance, PolkadotCryptoInstance, PolkadotInstance, SolanaCryptoInstance, SolanaInstance,
 };
 use cf_traits::{lending::LoanId, SafeModeSet};
-use cf_utilities::migrations::{basics::HasVersion, v0201};
+use cf_utilities::migrations::{basics::HasVersion, v20100};
 use codec::{DecodeWithMemTracking, MaxEncodedLen};
 use frame_support::sp_runtime::Percent;
 use pallet_cf_lending_pools::{LendingPoolConfiguration, NetworkFeeContributions};
@@ -215,7 +215,7 @@ impl<T: Default> From<AssetMap<T>> for cf_primitives::chains::assets::any::Asset
 	}
 }
 
-pub type NetworkFees = <super::NetworkFees as HasVersion<v0201>>::HistoricalType;
+pub type NetworkFees = <super::NetworkFees as HasVersion<v20100>>::HistoricalType;
 
 #[derive(Encode, Decode, TypeInfo, Clone)]
 pub struct TradingStrategyLimits {
@@ -256,7 +256,7 @@ impl From<LiquidityProviderInfo> for super::LiquidityProviderInfo {
 }
 
 pub type RpcAccountInfoCommonItems<Balance> =
-	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v0201>>::HistoricalType;
+	<super::RpcAccountInfoCommonItems<Balance> as HasVersion<v20100>>::HistoricalType;
 
 // VaultAddresses as returned by api_version 16 runtimes: has usdt fields added in v16
 // but lacks the tron field added in v17.

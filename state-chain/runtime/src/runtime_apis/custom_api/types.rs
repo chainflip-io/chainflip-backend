@@ -36,7 +36,7 @@ use cf_utilities::migrations::{
 		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
 	primitives::NewTypeWithDefault,
-	v0201, v0202, Migrations,
+	v20100, v20200, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -271,8 +271,8 @@ pub struct DelegationInfo<Amount> {
 	pub bid: Amount,
 }
 
-impl<Amount: Migrations> Migrations for DelegationInfo<Amount> {
-	type DefaultMigration = _DelegationInfo::MigrateFields;
+impl<Amount: HasChangelog> HasChangelog for DelegationInfo<Amount> {
+	type if_unspecified = _DelegationInfo::see_field_changelogs;
 }
 
 impl<Amount> DelegationInfo<Amount> {
@@ -623,8 +623,8 @@ pub struct NetworkFeeDetails {
 	pub standard_rate_and_minimum: FeeRateAndMinimum,
 	pub rates: AssetMap<Permill>,
 }
-impl Migrations for NetworkFeeDetails {
-	type DefaultMigration = _NetworkFeeDetails::MigrateFields;
+impl HasChangelog for NetworkFeeDetails {
+	type if_unspecified = _NetworkFeeDetails::see_field_changelogs;
 }
 
 #[cf_utilities_proc_macros::generate_module]
@@ -633,8 +633,8 @@ pub struct NetworkFees {
 	pub regular_network_fee: NetworkFeeDetails,
 	pub internal_swap_network_fee: NetworkFeeDetails,
 }
-impl Migrations for NetworkFees {
-	type DefaultMigration = _NetworkFees::MigrateFields;
+impl HasChangelog for NetworkFees {
+	type if_unspecified = _NetworkFees::see_field_changelogs;
 }
 
 mod serialize_vanity_name {
@@ -778,14 +778,14 @@ pub struct RpcAccountInfoCommonItems<Balance> {
 	pub upcoming_delegation_status: Option<DelegationInfo<Balance>>,
 }
 
-impl<Balance: Migrations> Migrations for RpcAccountInfoCommonItems<Balance>
+impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
 where
 	Balance: Default,
-	<Balance as HasVersion<v0201>>::HistoricalType: Default,
-	<Balance as HasVersion<v0202>>::HistoricalType: Default,
+	<Balance as HasVersion<v20100>>::HistoricalType: Default,
+	<Balance as HasVersion<v20200>>::HistoricalType: Default,
 {
-	type DefaultMigration = _RpcAccountInfoCommonItems::MigrateFields;
-	type MigrationTo0202 = _RpcAccountInfoCommonItems::MigrateFields<
+	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
+	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
 		_RpcAccountInfoCommonItems::field::account_id::Added,
 	>;
 }
@@ -836,16 +836,19 @@ pub enum RuntimeApiAccountInfo {
 }
 
 #[derive(Encode, Decode, TypeInfo, PartialEq, Debug, Default)]
-#[cfg_attr(test, derive(proptest_derive::Arbitrary))]
+#[cfg_attr(
+	any(test, all(feature = "proptest", feature = "std")),
+	derive(proptest_derive::Arbitrary)
+)]
 pub enum ShouldSweep {
 	#[default]
 	Yes,
 	No,
 }
 
-impl Migrations for ShouldSweep {
-	type DefaultMigration = IdentityMigration;
-	type MigrationTo0202 = NewTypeWithDefault;
+impl HasChangelog for ShouldSweep {
+	type if_unspecified = IdentityMigration;
+	type in_20200 = NewTypeWithDefault;
 }
 impl HasGenericVariant for ShouldSweep {
 	type GenericType = Self;

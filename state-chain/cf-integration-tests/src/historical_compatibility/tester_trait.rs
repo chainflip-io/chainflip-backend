@@ -1,8 +1,6 @@
-#![cfg(test)]
-
 use std::cell::RefCell;
 
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
 use codec::{Decode, Encode};
 use proptest::{
 	arbitrary::Arbitrary,
@@ -15,12 +13,12 @@ use similar::{ChangeTag, TextDiff};
 
 pub trait HistoricalCompatibilityTester {
 	fn test_call<
-		V: VariantName,
+		V: Version,
 		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<
 				V,
-				HistoricalType: Encode + Decode + TypeInfo + 'static + std::fmt::Debug + Arbitrary,
+				HistoricalType: Encode + Decode + TypeInfo + std::fmt::Debug + 'static + Arbitrary,
 			> + HasGenericVariant<GenericType: Arbitrary>,
 	>(
 		&mut self,
@@ -28,11 +26,6 @@ pub trait HistoricalCompatibilityTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo>;
-}
-
-pub enum ArgPos {
-	Input(u32),
-	Output(),
 }
 
 #[derive(Clone, Copy)]
@@ -188,8 +181,6 @@ impl std::fmt::Display for TypeDiffSummary {
 
 impl std::fmt::Display for TypeDiff {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		use similar::{ChangeTag, TextDiff};
-
 		let diff = TextDiff::from_lines(&self.actual_encoding, &self.expected_encoding);
 
 		for change in diff.iter_all_changes() {

@@ -50,11 +50,8 @@ url = { workspace = true, optional = true }
 warp = { workspace = true, optional = true }
 # local dependencies
 scale-json = { workspace = true, optional = true }
-
-# proptesting
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
-
 
 [dev-dependencies]
 serde_json = { workspace = true, default-features = true }

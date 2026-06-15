@@ -15,22 +15,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn main() {
-	#[cfg(all(feature = "std", not(feature = "metadata-hash")))]
+	#[cfg(feature = "std")]
 	{
-		substrate_wasm_builder::WasmBuilder::new()
+		let builder = substrate_wasm_builder::WasmBuilder::new()
 			.with_current_project()
 			.export_heap_base()
-			.import_memory()
-			.build();
-	}
+			.import_memory();
 
-	#[cfg(all(feature = "std", feature = "metadata-hash"))]
-	{
-		substrate_wasm_builder::WasmBuilder::new()
-			.with_current_project()
-			.export_heap_base()
-			.import_memory()
-			.enable_metadata_hash("FLIP", 18)
-			.build();
+		#[cfg(not(feature = "metadata-hash"))]
+		builder.build();
+
+		#[cfg(feature = "metadata-hash")]
+		builder.enable_metadata_hash("FLIP", 18).build();
 	}
 }

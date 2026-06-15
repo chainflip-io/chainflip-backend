@@ -1,4 +1,4 @@
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, VariantName};
+use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::arbitrary::Arbitrary;
@@ -7,7 +7,7 @@ use scale_info::TypeInfo;
 use scale_json::ScaleDecodedToJson;
 use std::collections::HashMap;
 
-use crate::runtime_apis::historical_compatibility::{
+use crate::historical_compatibility::{
 	tester_trait::{
 		fuzzy_test_encode_decode_compatibility, HistoricalCompatibilityTester, SubTypeDetails,
 		SubTypeIncompatibility, SubTypeLocation, TypeDiff, TypeIncompatibilityInfo, TypeName,
@@ -27,17 +27,15 @@ pub struct OfflineMetadataTester {
 impl OfflineMetadataTester {
 	/// Load historical metadata for a given spec version.
 	///
-	/// Metadata files are stored in `state-chain/runtime_historical_metadata/` with the naming
-	/// convention `runtime_{spec_version}.scale`.
+	/// Metadata files are stored in `state-chain/cf-integration-tests/historical_metadata/` with
+	/// the naming convention `runtime_{spec_version}.scale`.
 	fn load_metadata(&mut self, spec_version: u32) {
 		self.loaded_metadata.entry(spec_version).or_insert_with(|| {
-			let path = format!(
-				"{}/state-chain/runtime_historical_metadata/runtime_{}.scale",
-				env!("CARGO_MANIFEST_DIR").trim_end_matches("/state-chain/runtime"),
-				spec_version,
-			);
+			let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+				.join("historical_metadata")
+				.join(format!("runtime_{spec_version}.scale"));
 			let bytes = std::fs::read(&path)
-				.unwrap_or_else(|e| panic!("Failed to read metadata file {path}: {e}"));
+				.unwrap_or_else(|e| panic!("Failed to read metadata file {}: {e}", path.display()));
 			let prefixed = RuntimeMetadataPrefixed::decode(&mut &bytes[..])
 				.expect("Failed to decode RuntimeMetadataPrefixed");
 			let metadata = match prefixed.1 {
@@ -107,7 +105,7 @@ impl OfflineMetadataTester {
 
 impl HistoricalCompatibilityTester for OfflineMetadataTester {
 	fn test_call<
-		V: VariantName,
+		V: Version,
 		I: HasVersion<V, HistoricalType: Encode + std::fmt::Debug + TypeInfo + 'static + Arbitrary>
 			+ HasGenericVariant<GenericType: Arbitrary>,
 		O: HasVersion<

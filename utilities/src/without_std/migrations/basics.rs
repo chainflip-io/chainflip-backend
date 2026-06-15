@@ -1,40 +1,37 @@
 // ---------- definition of migrations ------------
 
-use crate::migrations::Migrations;
+use crate::migrations::HasChangelog;
 
-pub trait VariantName: Copy {
+pub trait Version: Copy {
 	const LATEST_RUNTIME_PATCH_VERSION: u32;
 }
 
-pub trait Migration<To: ?Sized, V: VariantName> {
+pub trait Migration<To: ?Sized, V: Version> {
 	type From: IsHistoricalType;
 	fn forwards(x: Self::From) -> To;
 	fn backwards(x: To) -> Self::From;
 }
 
-pub trait HasVersion<V: VariantName> {
+pub trait HasVersion<V: Version> {
 	type HistoricalType;
 	type HistoricalMigration: Migration<Self::HistoricalType, V>;
 	type MigrationToCurrent: Migration<Self, vCurrent, From = Self::HistoricalType>;
 }
 
-pub fn migrate_from_historical_type<V: VariantName, X: HasVersion<V>>(
+pub fn migrate_from_historical_type<V: Version, X: HasVersion<V>>(
 	_v: V,
 	x: X::HistoricalType,
 ) -> X {
 	X::MigrationToCurrent::forwards(x)
 }
 
-pub fn migrate_to_historical_type<V: VariantName, X: HasVersion<V>>(
-	_v: V,
-	x: X,
-) -> X::HistoricalType {
+pub fn migrate_to_historical_type<V: Version, X: HasVersion<V>>(_v: V, x: X) -> X::HistoricalType {
 	X::MigrationToCurrent::backwards(x)
 }
 // -------- identity migration --------
 pub struct IdentityMigration;
 
-impl<X: IsHistoricalType, V: VariantName> Migration<X, V> for IdentityMigration {
+impl<X: IsHistoricalType, V: Version> Migration<X, V> for IdentityMigration {
 	type From = X;
 
 	fn forwards(x: Self::From) -> X {
@@ -47,8 +44,8 @@ impl<X: IsHistoricalType, V: VariantName> Migration<X, V> for IdentityMigration 
 }
 
 // -------- composition of migrations --------
-impl<V: VariantName, W: VariantName, X, A: Migration<B::From, W>, B: Migration<X, V>>
-	Migration<X, V> for (A, W, B)
+impl<V: Version, W: Version, X, A: Migration<B::From, W>, B: Migration<X, V>> Migration<X, V>
+	for (A, W, B)
 {
 	type From = A::From;
 
@@ -64,7 +61,7 @@ impl<V: VariantName, W: VariantName, X, A: Migration<B::From, W>, B: Migration<X
 // ------- migration for new field with default value --------
 
 pub struct NewFieldWithDefault;
-impl<T: Default, V: VariantName> Migration<T, V> for NewFieldWithDefault {
+impl<T: Default, V: Version> Migration<T, V> for NewFieldWithDefault {
 	type From = ();
 
 	fn forwards(_x: Self::From) -> T {
@@ -77,11 +74,11 @@ impl<T: Default, V: VariantName> Migration<T, V> for NewFieldWithDefault {
 // ----------- lookups ------------
 
 pub trait IsHistoricalType {
-	type GetCurrentType: Migrations;
+	type GetCurrentType: HasChangelog;
 }
-pub trait IsHistoricalTypeAt<V: VariantName> =
+pub trait IsHistoricalTypeAt<V: Version> =
 	IsHistoricalType<GetCurrentType: HasVersion<V, HistoricalType = Self>>;
-pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: VariantName> =
+pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: Version> =
 	<X::GetCurrentType as HasVersion<V>>::HistoricalMigration;
 
 // ----------- associated generic type --------------
@@ -89,7 +86,7 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: VariantName> 
 #[derive(Clone, Copy)]
 #[expect(nonstandard_style)]
 pub struct vCurrent;
-impl VariantName for vCurrent {
+impl Version for vCurrent {
 	// TODO this should be synchronized with the one in runtime/lib.rs
 	const LATEST_RUNTIME_PATCH_VERSION: u32 = 20201;
 }
@@ -114,21 +111,21 @@ pub fn migrate_to_generic_type<X: HasGenericVariant>(x: X) -> X::GenericType {
 
 // ----------- maybe migrations (for horizontal composition) ---------
 
-pub trait MaybeMigration<To, V: VariantName> {
+pub trait MaybeMigration<To, V: Version> {
 	type GetWithDefault<Default: Migration<To, V>>: Migration<To, V>;
 }
 
 pub struct DefaultMigration;
-impl<To, V: VariantName> MaybeMigration<To, V> for DefaultMigration {
+impl<To, V: Version> MaybeMigration<To, V> for DefaultMigration {
 	type GetWithDefault<Default: Migration<To, V>> = Default;
 }
 
 pub struct OverrideMigrationWith<M>(M);
-impl<To, V: VariantName, M: Migration<To, V>> MaybeMigration<To, V> for OverrideMigrationWith<M> {
+impl<To, V: Version, M: Migration<To, V>> MaybeMigration<To, V> for OverrideMigrationWith<M> {
 	type GetWithDefault<Default: Migration<To, V>> = M;
 }
 
-impl<To, V: VariantName, M1: MaybeMigration<To, V>, M2: MaybeMigration<To, V>> MaybeMigration<To, V>
+impl<To, V: Version, M1: MaybeMigration<To, V>, M2: MaybeMigration<To, V>> MaybeMigration<To, V>
 	for (M1, M2)
 {
 	type GetWithDefault<Default: Migration<To, V>> =

@@ -4,40 +4,42 @@ pub mod basics;
 pub mod primitives;
 
 use self::basics::*;
-use crate::migrations::basics::VariantName;
+use crate::migrations::basics::Version;
 
 macro_rules! all_runtime_versions {
 	($(
 		$version:ident ($latest_patch:literal) => $Migration:ident,
 	)*) => {
-		// every version is a struct that implements `VariantName`
+		// every version is a struct that implements `Version`
 		$(
 			#[derive(Clone, Copy)]
 			#[allow(nonstandard_style)]
 			pub struct $version;
-			impl VariantName for $version {
+			impl Version for $version {
 				const LATEST_RUNTIME_PATCH_VERSION: u32 = $latest_patch;
 			}
 		)*
 
-		/// List of all migrations for this type.
-		pub trait Migrations:
+		/// List of all historical changes (migrations) for this type.
+		pub trait HasChangelog:
 			HasGenericVariant<
 			MigrationFromGeneric: Migration<Self, vCurrent, From: IsHistoricalType<GetCurrentType = Self>>,
 		> {
-			type DefaultMigration: $(
+			#[allow(nonstandard_style)]
+			type if_unspecified: $(
 				Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> +
 			)*;
 
 			$(
-				type $Migration: Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> = Self::DefaultMigration;
+				#[allow(nonstandard_style)]
+				type $Migration: Migration<migration_helpers::$version<Self>, $version, From: IsHistoricalType<GetCurrentType = Self>> = Self::if_unspecified;
 			)*
 		}
 
-		pub trait OrdMigrations = Migrations<
+		pub trait OrdMigrations = HasChangelog<
 			MigrationFromGeneric: Migration<Self, vCurrent, From: Ord + IsHistoricalType<GetCurrentType = Self>>,
 
-			DefaultMigration: $(
+			if_unspecified: $(
 				Migration<migration_helpers::$version<Self>, $version, From: Ord + IsHistoricalType<GetCurrentType = Self>> +
 			)*,
 
@@ -48,7 +50,7 @@ macro_rules! all_runtime_versions {
 
 		// helper trait implementations to get access to the type at an arbitrary version
 		$(
-			impl<X: Migrations> HasVersion<$version> for X {
+			impl<X: HasChangelog> HasVersion<$version> for X {
 				type HistoricalType = migration_helpers::$version<X>;
 				type HistoricalMigration = X::$Migration;
 				type MigrationToCurrent = migration_helpers::$Migration<X>;
@@ -56,7 +58,7 @@ macro_rules! all_runtime_versions {
 		)*
 
 		pub mod migration_helpers {
-			use super::{Migrations, Migration, vCurrent};
+			use super::{HasChangelog, Migration, vCurrent};
 			generate_migration_helpers! { $( $version => $Migration, )*}
 		}
 	};
@@ -67,9 +69,10 @@ macro_rules! generate_migration_helpers {
 		$old:ident => $OldMigration:ident, $new:ident => $NewMigration:ident, $($rest:tt)*
 	) => {
 		#[allow(nonstandard_style)]
-		pub type $old<M: Migrations> = <M::$NewMigration as Migration<$new<M>, super::$new>>::From;
+		pub type $old<M: HasChangelog> = <M::$NewMigration as Migration<$new<M>, super::$new>>::From;
 
-		pub type $OldMigration<M: Migrations> = (M::$NewMigration, super::$new, $NewMigration<M>);
+		#[allow(nonstandard_style)]
+		pub type $OldMigration<M: HasChangelog> = (M::$NewMigration, super::$new, $NewMigration<M>);
 
 		generate_migration_helpers!{ $new => $NewMigration, $($rest)*}
 	};
@@ -77,14 +80,15 @@ macro_rules! generate_migration_helpers {
 		$new:ident => $NewMigration:ident,
 	) => {
 		#[allow(nonstandard_style)]
-		pub type $new<M: Migrations> = <M::MigrationFromGeneric as Migration<M, vCurrent>>::From;
+		pub type $new<M: HasChangelog> = <M::MigrationFromGeneric as Migration<M, vCurrent>>::From;
 
-		pub type $NewMigration<M: Migrations> = M::MigrationFromGeneric;
+		#[allow(nonstandard_style)]
+		pub type $NewMigration<M: HasChangelog> = M::MigrationFromGeneric;
 	}
 }
 
 all_runtime_versions! {
-	v0200 (20012) => MigrationTo0200,
-	v0201 (20119) => MigrationTo0201,
-	v0202 (20201) => MigrationTo0202,
+	v20000 (20012) => in_20000,
+	v20100 (20119) => in_20100,
+	v20200 (20201) => in_20200,
 }

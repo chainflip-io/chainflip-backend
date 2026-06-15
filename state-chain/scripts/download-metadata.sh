@@ -4,7 +4,7 @@
 # Usage: state-chain/scripts/download-metadata.sh [output_file] [--url <ws_url>]
 #
 # Defaults:
-#   output: state-chain/runtime/metadata/mainnet_v<spec_version>.scale
+#   output: state-chain/cf-integration-tests/historical_metadata/runtime_<spec_version>.scale
 #   url:    wss://mainnet-rpc.chainflip.io:443
 
 set -e
@@ -36,9 +36,9 @@ if [ -z "$OUTPUT" ]; then
 		echo "Error: could not determine spec_version from chain" >&2
 		exit 1
 	fi
-	OUTPUT_DIR="state-chain/runtime_historical_metadata"
+	OUTPUT_DIR="state-chain/cf-integration-tests/historical_metadata"
 	mkdir -p "$OUTPUT_DIR"
-	OUTPUT="${OUTPUT_DIR}/mainnet_v${SPEC_VERSION}.scale"
+	OUTPUT="${OUTPUT_DIR}/runtime_${SPEC_VERSION}.scale"
 fi
 
 echo "Downloading metadata from $URL ..."

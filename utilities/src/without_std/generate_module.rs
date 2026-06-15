@@ -33,7 +33,7 @@ macro_rules! generate_module {
                     type $field;
                 )*
             }
-            pub trait HistoricalTypesAt<V: VariantName> = Types<
+            pub trait HistoricalTypesAt<V: Version> = Types<
                 $(
                     $field: IsHistoricalTypeAt<V>,
                 )*
@@ -52,7 +52,7 @@ macro_rules! generate_module {
 
             pub trait CustomMigration<
                 To: HistoricalTypesAt<V>,
-                V: VariantName,
+                V: Version,
             > {
                 $(
                     type $field: MaybeMigration<To::$field, V> = DefaultMigration;
@@ -61,8 +61,8 @@ macro_rules! generate_module {
 
             // this extracts the From types (per field) from a CustomMigration
             #[derive_where::derive_where(Debug; )]
-            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
-            impl<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
+            impl<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
                 $(
                     type $field = <
                         <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>
@@ -71,7 +71,7 @@ macro_rules! generate_module {
                 )+
             }
 
-            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: VariantName, M: CustomMigration<To, V>> = (
+            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> = (
                 $(
                     <M::$field as MaybeMigration<To::$field, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$field, V>>,
                 )+
@@ -79,10 +79,10 @@ macro_rules! generate_module {
 
             impl <
                 To: HistoricalTypesAt<V>,
-                V: VariantName
+                V: Version
             > CustomMigration<To, V> for () {}
 
-            impl<To: HistoricalTypesAt<V>, V: VariantName, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
+            impl<To: HistoricalTypesAt<V>, V: Version, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
             CustomMigration<To,V>
             for (M1, M2)
             {
@@ -94,7 +94,7 @@ macro_rules! generate_module {
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
             #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
-            #[cfg_attr(any(feature = "proptest", test), derive(proptest_derive::Arbitrary))]
+            #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
             pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
                 $(
@@ -104,15 +104,16 @@ macro_rules! generate_module {
             }
 
             impl<$( $T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
-            where $struct$(<$T>)?: Migrations
+            where $struct$(<$T>)?: HasChangelog
             {
                 type GetCurrentType = $struct$(<$T>)?;
             }
 
 
-            pub struct MigrateFields<M = ()>(M);
+            pub type see_field_changelogs = see_field_changelogs_and_also<()>;
+            pub struct see_field_changelogs_and_also<M>(M);
 
-            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: VariantName> Migration<Struct<To, $($T)?>, V> for MigrateFields<M>
+            impl<M: CustomMigration<To, V>, $( $T $(: $TBound)?, )? To: HistoricalTypesAt<V>, V: Version> Migration<Struct<To, $($T)?>, V> for see_field_changelogs_and_also<M>
             where
                 Struct< source_of_custom_migration<To, V, M> , $($T)?  >: IsHistoricalType
             {
@@ -142,11 +143,11 @@ macro_rules! generate_module {
             pub mod field {
                 $(
                     pub mod $field {
-                        use super::super::{OverrideMigrationWith, VariantName, HistoricalTypesAt, CustomMigration, NewFieldWithDefault};
+                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, CustomMigration, NewFieldWithDefault};
 
                         #[derive(Debug)]
                         pub struct Added;
-                        impl<V: VariantName, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V, $field: Default>>
                             CustomMigration<TargetFieldsTypes, V> for Added
                         {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
