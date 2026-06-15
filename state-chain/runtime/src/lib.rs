@@ -531,7 +531,12 @@ macro_rules! instanced_migrations {
 }
 
 // Add version-specific migrations here.
-type MigrationsForV2_3 = ();
+type MigrationsForV2_3 = (
+	migrations::safe_mode::SafeModeMigration,
+	migrations::bsc_integration::BscElectionsInit,
+	migrations::bsc_integration::BscIngressEgressInit,
+	migrations::bsc_integration::BscChainstate,
+);
 
 #[cfg(test)]
 mod test {

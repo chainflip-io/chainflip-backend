@@ -77,7 +77,7 @@ pub use weights::WeightInfo;
 pub mod migrations;
 pub mod submit_runtime_call;
 
-pub const STORAGE_VERSION_U16: u16 = 23;
+pub const STORAGE_VERSION_U16: u16 = 24;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 const INITIAL_CONSOLIDATION_PARAMETERS: utxo_selection::ConsolidationParameters =
