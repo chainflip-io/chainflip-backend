@@ -37,7 +37,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
         );
 		let blockhash =
 			(self.get_blockhash_from_spec_version)(canonical_runtime_patch_version)
-            .expect(&format!("No blockhash was specified for runtime version {canonical_runtime_patch_version} when trying to run compatibility test against online archive node."));
+            .unwrap_or_else(|| panic!("No blockhash was specified for runtime version {canonical_runtime_patch_version} when trying to run compatibility test against online archive node."));
 
 		let client = reqwest::blocking::Client::new();
 		let call_method = format!("{}_{}", api_name, method_name);
