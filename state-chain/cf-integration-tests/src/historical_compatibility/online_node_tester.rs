@@ -128,7 +128,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				type_ref: TypeRef::RuntimeCall {
 					api_name,
 					method_name,
-					version: V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST,
+					version: canonical_runtime_patch_version,
 				},
 				type_diff: TypeDiff {
 					expected_encoding: match err.sub_type_details.location {

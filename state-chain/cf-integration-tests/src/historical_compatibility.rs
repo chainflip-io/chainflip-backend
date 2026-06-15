@@ -107,7 +107,10 @@ fn test_all_historical_runtime_calls(
 
 	macro_rules! try_test_all_runtime_calls_at_version {
 		($version:ident) => {
-            if should_check_version($version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST) {
+            if should_check_version(
+				$version::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST
+					.expect("Encountered `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` when trying to run compatibility tests for historical runtime.")
+			) {
                 let mut incompatibilities = [
                     tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
                     tester
