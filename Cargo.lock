@@ -1810,7 +1810,7 @@ dependencies = [
 name = "cf-primitives"
 version = "0.1.0"
 dependencies = [
- "cf-utilities-proc-macros",
+ "cf-proc-macros",
  "derive-where",
  "frame-support",
  "hex",
@@ -1828,6 +1828,15 @@ dependencies = [
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "utilities",
+]
+
+[[package]]
+name = "cf-proc-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -1944,15 +1953,6 @@ dependencies = [
  "sp-std 14.0.0 (git+https://github.com/chainflip-io/polkadot-sdk.git?rev=853902bd7ffc541a4c44d331efa5348041fad19e)",
  "strum 0.26.3",
  "utilities",
-]
-
-[[package]]
-name = "cf-utilities-proc-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
 ]
 
 [[package]]
@@ -9579,10 +9579,10 @@ dependencies = [
  "cf-amm-math",
  "cf-chains",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-test-utilities",
  "cf-traits",
- "cf-utilities-proc-macros",
  "derive-where",
  "frame-benchmarking",
  "frame-support",
@@ -15630,11 +15630,11 @@ dependencies = [
  "cf-amm",
  "cf-chains",
  "cf-primitives",
+ "cf-proc-macros",
  "cf-runtime-utilities",
  "cf-session-benchmarking",
  "cf-test-utilities",
  "cf-traits",
- "cf-utilities-proc-macros",
  "derive-where",
  "ethereum-eip712",
  "frame-benchmarking",

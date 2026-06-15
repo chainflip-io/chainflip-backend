@@ -233,7 +233,7 @@ pub enum FeeType<T: Config> {
 	BrokerFee(Beneficiaries<T::AccountId>),
 }
 
-#[cf_utilities_proc_macros::generate_module]
+#[cf_proc_macros::generate_module]
 #[derive(
 	Clone,
 	Debug,
