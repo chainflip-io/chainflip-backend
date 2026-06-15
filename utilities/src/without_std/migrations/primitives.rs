@@ -182,7 +182,7 @@ impl<X: HasChangelog> HasChangelog for Vec<X> {
 	// default migration doesn't go through. Because rust
 	// is forced to work with arbitrary implementations for these,
 	// and so can't prove that the historical types are actually
-	// all of the shape `Option<...>`.
+	// all of the shape `Vec<...>`.
 	type in_20000 = MapMigration<X::in_20000>;
 	type in_20100 = MapMigration<X::in_20100>;
 	type in_20200 = MapMigration<X::in_20200>;
@@ -223,7 +223,7 @@ impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
 	// default migration doesn't go through. Because rust
 	// is forced to work with arbitrary implementations for these,
 	// and so can't prove that the historical types are actually
-	// all of the shape `Option<...>`.
+	// all of the shape `BTreeMap<...>`.
 	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
 	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
 	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;

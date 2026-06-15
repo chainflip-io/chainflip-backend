@@ -20,7 +20,7 @@ macro_rules! all_runtime_versions {
 			}
 		)*
 
-		/// List of all HasChangelog for this type.
+		/// List of all historical changes (migrations) for this type.
 		pub trait HasChangelog:
 			HasGenericVariant<
 			MigrationFromGeneric: Migration<Self, vCurrent, From: IsHistoricalType<GetCurrentType = Self>>,

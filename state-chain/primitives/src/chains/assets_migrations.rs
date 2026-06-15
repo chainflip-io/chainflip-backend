@@ -13,10 +13,8 @@ where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
 {
 	type if_unspecified = sol::_AssetMap::see_field_changelogs;
-	type in_20100 = sol::_AssetMap::see_field_changelogs_and_also<(
-		sol::_AssetMap::field::usdt::Added,
-		sol::_AssetMap::field::usdt::Added,
-	)>;
+	type in_20100 =
+		sol::_AssetMap::see_field_changelogs_and_also<sol::_AssetMap::field::usdt::Added>;
 }
 
 impl<T: HasChangelog> HasChangelog for arb::AssetMap<T>
