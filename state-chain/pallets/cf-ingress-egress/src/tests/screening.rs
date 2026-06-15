@@ -412,11 +412,10 @@ fn mark_transaction_for_rejection_charges_for_deferred_cleanup() {
 	// Marking a transaction schedules one expiry-cleanup entry that runs later in `on_idle`.
 	// The extrinsic's declared weight must include that deferred per-entry cleanup cost so the
 	// reporting broker pays for the work they queue rather than offloading it onto the network.
-	let declared = crate::Call::<Test, Instance2>::mark_transaction_for_rejection {
-		tx_id: Hash::random(),
-	}
-	.get_dispatch_info()
-	.call_weight;
+	let declared =
+		crate::Call::<Test, Instance2>::mark_transaction_for_rejection { tx_id: Hash::random() }
+			.get_dispatch_info()
+			.call_weight;
 	assert_eq!(
 		declared,
 		<() as crate::WeightInfo>::mark_transaction_for_rejection()
