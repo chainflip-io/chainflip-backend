@@ -175,11 +175,9 @@ jobs:
           echo "/usr/lib after copy of .so files"
           ls -l /usr/lib
           
-          # Use the docker-compose file from the upgrade-to version: it only defines auxiliary
-          # services (external chain nodes, indexer, deposit monitor, ...), which the old binaries
-          # simply ignore if they don't use them. Starting with the new file means services needed
-          # after the upgrade (e.g. nodes for newly added chains) are already running.
-          git checkout ${{ github.sha }} -- localnet/docker-compose.yml
+          # Remove after 2.3 release
+          # This makes the deposit monitor uses the broker rpc 2.0 not the broker binary
+          sed -i 's/CFDM_BROKER_API_URL=${CFDM_BROKER_API_URL}/CFDM_BROKER_API_URL=${CFDM_CHAINFLIP_RPC_URL}/' localnet/docker-compose.yml
           
           # Remove after 2.3 release
           # Use the new solana start script (with current ledger size limit) for the pre-upgrade localnet.
@@ -227,6 +225,18 @@ jobs:
           cd bouncer
           pnpm install --frozen-lockfile
           ./test_commands/all_cuncurrent_tests.sh
+          git reset --hard
+
+      # TODO: This is a temporary workaround to setup Bsc in the upgrade test.
+      # To remove after BSC is released.
+      - name: Start Bsc containers 🌞
+        if: inputs.run-job
+        run: |
+          git checkout ${{ github.sha }}
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up bsc --quiet-pull -d
+          source localnet/helper.sh
+          echo "🌞 Waiting for BSC node to start"
+          check_endpoint_health -s -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8645
           git reset --hard
 
       - name: Upgrade runtime 🚀
