@@ -28,7 +28,7 @@ macro_rules! impl_identity_migrations {
     };
 }
 
-impl_identity_migrations! {(), u8, u128, sp_arithmetic::Permill, }
+impl_identity_migrations! {(), u8, u128, }
 
 // ----------- wrapped types -------------
 
@@ -104,6 +104,11 @@ impl_identity_migrations_with_wrapper! {
 impl_identity_migrations_with_wrapper! {
 	#[derive(PartialOrd, PartialEq, Eq, Ord)]
 	struct WrappedH160(sp_core::H160) where |x: [u8; 20]| x.into();
+}
+
+impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
+	struct WrappedPermill(sp_arithmetic::Permill) where |x: u32| sp_arithmetic::Permill::from_parts(x);
 }
 
 // ----------- simple migration that introduces a new type -------------
