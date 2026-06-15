@@ -57,6 +57,13 @@ fn get_type_name(registry: &PortableRegistry, type_id: u32) -> Option<String> {
 	}
 }
 
+fn is_unit_type(registry: &PortableRegistry, type_id: u32) -> bool {
+	matches!(
+		&registry.types[type_id as usize].ty.type_def,
+		TypeDef::Tuple(tuple) if tuple.fields.is_empty()
+	)
+}
+
 fn push_type_body(
 	registry: &PortableRegistry,
 	type_id: u32,
@@ -76,6 +83,9 @@ fn push_type_body(
 	match &portable_type.type_def {
 		TypeDef::Composite(composite) =>
 			for field in &composite.fields {
+				if is_unit_type(registry, field.ty.id) {
+					continue;
+				}
 				let field_name = field.name.as_deref().unwrap_or("<unnamed>");
 				push_named_child(
 					registry,
