@@ -118,7 +118,8 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
-		let spec_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST;
+		let spec_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST
+            .expect("encountered a runtime version with `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` in a compatibility test.");
 
 		// the metadata has to be loaded if it isn't already
 		self.load_metadata(spec_version);
@@ -163,11 +164,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		.map_err(|err| {
 			let metadata = self.get_loaded_metadata(spec_version);
 			TypeIncompatibilityInfo {
-				type_ref: TypeRef::RuntimeCall {
-					api_name,
-					method_name,
-					version: V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST,
-				},
+				type_ref: TypeRef::RuntimeCall { api_name, method_name, version: spec_version },
 				type_diff: TypeDiff {
 					expected_encoding: describe_expected_type::<I::HistoricalType>(),
 					actual_encoding: describe_metadata_types_as_tuple(metadata, &input_type_ids),
@@ -202,11 +199,7 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 			},
 		)
 		.map_err(|err| TypeIncompatibilityInfo {
-			type_ref: TypeRef::RuntimeCall {
-				api_name,
-				method_name,
-				version: V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST,
-			},
+			type_ref: TypeRef::RuntimeCall { api_name, method_name, version: spec_version },
 			type_diff: TypeDiff {
 				expected_encoding: describe_expected_type::<O::HistoricalType>(),
 				actual_encoding: self.describe_metadata_type(spec_version, output_type_id),

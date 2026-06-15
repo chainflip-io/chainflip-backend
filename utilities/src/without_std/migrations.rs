@@ -20,7 +20,7 @@ macro_rules! define_all_released_runtime_versions {
 			#[allow(nonstandard_style)]
 			pub struct $version;
 			impl Version for $version {
-				const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: u32 = $latest_patch;
+				const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<u32> = Some($latest_patch);
 			}
 		)*
 
