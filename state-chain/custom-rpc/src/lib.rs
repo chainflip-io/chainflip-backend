@@ -48,7 +48,7 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
-	migrations::{basics::migrate_from_historical_type, v0200, v0201},
+	migrations::{basics::migrate_from_historical_type, v20000, v20100},
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
@@ -2213,13 +2213,13 @@ where
 				let common_items = if api_version < 16 {
 					#[expect(deprecated)]
 					migrate_from_historical_type(
-						v0200,
+						v20000,
 						api.cf_common_account_info_before_version_16(hash, &account_id)?,
 					)
 				} else if api_version < 17 {
 					#[expect(deprecated)]
 					migrate_from_historical_type(
-						v0201,
+						v20100,
 						api.cf_common_account_info_before_version_17(hash, &account_id)?,
 					)
 				} else {
@@ -2590,10 +2590,10 @@ where
 			let swap_limits = api.cf_swap_limits(hash)?;
 			let network_fees = if version < 16 {
 				#[expect(deprecated)]
-				migrate_from_historical_type(v0200, api.cf_network_fees_before_version_16(hash)?)
+				migrate_from_historical_type(v20000, api.cf_network_fees_before_version_16(hash)?)
 			} else if version < 17 {
 				#[expect(deprecated)]
-				migrate_from_historical_type(v0201, api.cf_network_fees_before_version_17(hash)?)
+				migrate_from_historical_type(v20100, api.cf_network_fees_before_version_17(hash)?)
 			} else {
 				api.cf_network_fees(hash)?
 			};

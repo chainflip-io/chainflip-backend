@@ -16,14 +16,8 @@
 
 pub mod types;
 
-#[cfg(test)]
-use cf_utilities::migrations::basics::VariantName;
 pub use types::RawWitnessedEvents;
 
-#[cfg(test)]
-use crate::runtime_apis::historical_compatibility::tester_trait::{
-	HistoricalCompatibilityTester, TypeIncompatibilityInfo,
-};
 use crate::runtime_apis::types::*;
 
 use crate::{chainflip::Offence, safe_mode::RuntimeSafeMode, Runtime};
@@ -449,38 +443,3 @@ decl_runtime_apis!(
 		fn cf_supported_assets() -> Vec<Asset>;
 	}
 );
-
-#[cfg(test)]
-pub fn test_all_historical_runtime_calls(
-	tester: &mut impl HistoricalCompatibilityTester,
-	should_check_version: impl Fn(u32) -> bool,
-) -> Vec<TypeIncompatibilityInfo> {
-	use cf_utilities::migrations::{v0200, v0201};
-	let mut all_incompatibilities = Vec::new();
-
-	macro_rules! for_each_runtime_version {
-		($($version:ident),*) => {
-			$(
-				if should_check_version($version::LATEST_RUNTIME_PATCH_VERSION) {
-					let mut incompatibilities = [
-						tester.test_call::<$version, (), NetworkFees>($version, "CustomRuntimeApi", "cf_network_fees"),
-						tester
-							.test_call::<$version, (AccountId32, ShouldSweep), RpcAccountInfoCommonItems<FlipBalance>>(
-								$version,
-								"CustomRuntimeApi",
-								"cf_common_account_info",
-							),
-					]
-					.into_iter()
-					.flatten()
-					.collect::<Vec<_>>();
-					all_incompatibilities.append(&mut incompatibilities);
-				}
-			)*
-		};
-	}
-
-	for_each_runtime_version!(v0200, v0201);
-
-	all_incompatibilities
-}

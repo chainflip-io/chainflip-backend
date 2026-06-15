@@ -11,13 +11,6 @@ pub fn describe_expected_type<T: TypeInfo + 'static>() -> String {
 	describe_type(&portable_registry, type_id)
 }
 
-pub fn expected_type_name<T: TypeInfo + 'static>() -> Option<String> {
-	let mut registry = Registry::new();
-	let type_id = registry.register_type(&MetaType::new::<T>()).id;
-	let portable_registry = PortableRegistry::from(registry);
-	get_type_name(&portable_registry, type_id)
-}
-
 pub fn describe_metadata_type(metadata: &RuntimeMetadataV15, type_id: u32) -> String {
 	describe_type(&metadata.types, type_id)
 }
@@ -41,23 +34,6 @@ pub fn describe_metadata_types_as_tuple(metadata: &RuntimeMetadataV15, type_ids:
 
 pub fn metadata_type_name(metadata: &RuntimeMetadataV15, type_id: u32) -> Option<String> {
 	get_type_name(&metadata.types, type_id)
-}
-
-/// Computes a display name for a type, noting if the name changed between versions.
-///
-/// If both names exist and differ, returns "CurrentName (previously OldName)".
-/// If only one name is available, returns that. If neither, returns None.
-pub fn compute_type_name_display(
-	current_name: Option<String>,
-	metadata_name: Option<String>,
-) -> Option<String> {
-	match (current_name, metadata_name) {
-		(Some(current), Some(old)) if current != old =>
-			Some(format!("{current} (previously {old})")),
-		(Some(name), _) => Some(name),
-		(None, Some(name)) => Some(name),
-		(None, None) => None,
-	}
 }
 
 fn describe_type(registry: &PortableRegistry, type_id: u32) -> String {
