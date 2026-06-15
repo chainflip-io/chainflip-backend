@@ -263,10 +263,9 @@ impl<T: Config> LoanAccount<T> {
 		borrower_id: &T::AccountId,
 		ltv: FixedU64,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 		weight_used: &mut Weight,
 	) -> DispatchResult {
-		let config = LendingConfig::<T>::get();
-
 		// This will saturate at 100%, but that's good enough (none of our thresholds exceed 100%):
 		let ltv: Permill = ltv.into_clamped_perthing();
 
@@ -387,29 +386,31 @@ impl<T: Config> LoanAccount<T> {
 			LiquidationStatusChange::HealthyToLiquidation { liquidation_type } => {
 				ensure!(T::SafeMode::get().liquidations_enabled, Error::<T>::LiquidationsDisabled);
 				let collateral =
-					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
+					self.prepare_collateral_for_liquidation(price_cache, config, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
 					liquidation_type,
 					price_cache,
+					config,
 				)?;
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 			},
 			LiquidationStatusChange::AbortLiquidation { reason } => {
-				self.abort_liquidation_swaps(reason);
+				self.abort_liquidation_swaps(reason, config);
 				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
 			},
 			LiquidationStatusChange::ChangeLiquidationType { liquidation_type } => {
 				// Going from one liquidation type to another is always due to LTV change
-				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange);
+				self.abort_liquidation_swaps(LiquidationCompletionReason::LtvChange, config);
 				let collateral =
-					self.prepare_collateral_for_liquidation(price_cache, liquidation_type)?;
+					self.prepare_collateral_for_liquidation(price_cache, config, liquidation_type)?;
 				self.init_liquidation_swaps(
 					borrower_id,
 					collateral,
 					liquidation_type,
 					price_cache,
+					config,
 				)?;
 				weight_used.saturating_accrue(T::WeightInfo::start_liquidation_swaps());
 				weight_used.saturating_accrue(T::WeightInfo::abort_liquidation_swaps());
@@ -422,7 +423,11 @@ impl<T: Config> LoanAccount<T> {
 
 	/// Aborts all current liquidation swaps, repays any already swapped principal assets and
 	/// returns remaining collateral assets alongside the corresponding loan information.
-	pub(super) fn abort_liquidation_swaps(&mut self, reason: LiquidationCompletionReason) {
+	pub(super) fn abort_liquidation_swaps(
+		&mut self,
+		reason: LiquidationCompletionReason,
+		config: &LendingConfiguration,
+	) {
 		let (is_voluntary, liquidation_swaps) = match &mut self.liquidation_status {
 			LiquidationStatus::NoLiquidation => {
 				log_or_panic!("Attempting to abort liquidation swaps in no-liquidation state");
@@ -458,6 +463,7 @@ impl<T: Config> LoanAccount<T> {
 							swap_progress.accumulated_output_amount,
 							swap_request_id,
 							is_voluntary,
+							config,
 						);
 
 						if loan.owed_principal == 0 {
@@ -582,16 +588,18 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
-	pub fn derive_and_charge_interest(&mut self, weight_used: &mut Weight) {
-		let config = LendingConfig::<T>::get();
-
+	pub fn derive_and_charge_interest(
+		&mut self,
+		config: &LendingConfiguration,
+		weight_used: &mut Weight,
+	) {
 		let current_block = frame_system::Pallet::<T>::block_number();
 		weight_used.saturating_accrue(T::DbWeight::get().reads(1));
 
 		for loan in self.loans.values_mut() {
-			if loan.should_charge_interest(current_block, &config) {
+			if loan.should_charge_interest(current_block, config) {
 				weight_used.saturating_accrue(T::WeightInfo::loan_charge_interest());
-				loan.charge_interest(&config);
+				loan.charge_interest(config);
 			}
 		}
 	}
@@ -627,9 +635,9 @@ impl<T: Config> LoanAccount<T> {
 	pub(super) fn prepare_collateral_for_liquidation(
 		&mut self,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 		liquidation_type: LiquidationType,
 	) -> Result<Vec<AssetCollateralForLoan>, Error<T>> {
-		let config = LendingConfig::<T>::get();
 		let max_oracle_price_slippage_bps = match liquidation_type {
 			LiquidationType::Hard => config.hard_liquidation_max_oracle_slippage,
 			LiquidationType::Soft | LiquidationType::SoftVoluntary =>
@@ -754,6 +762,7 @@ impl<T: Config> LoanAccount<T> {
 		collateral: Vec<AssetCollateralForLoan>,
 		liquidation_type: LiquidationType,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 	) -> Result<(), Error<T>> {
 		if self.liquidation_status != LiquidationStatus::NoLiquidation {
 			log_or_panic!("Account {:?} is already in a liquidation state", borrower_id);
@@ -766,8 +775,6 @@ impl<T: Config> LoanAccount<T> {
 			// yet (we will try again later).
 			return Ok(());
 		}
-
-		let config = LendingConfig::<T>::get();
 
 		let mut liquidation_swaps = BTreeMap::new();
 
@@ -877,13 +884,20 @@ impl<T: Config> LoanAccount<T> {
 		}
 	}
 
+	/// Whether the account can be removed: all loans are settled and there are
+	/// no ongoing liquidation swaps (an account with active swaps is only removed once they
+	/// have been aborted or completed).
+	fn is_settled(&self) -> bool {
+		self.loans.is_empty() && self.liquidation_status == LiquidationStatus::NoLiquidation
+	}
+
 	fn expand_loan_inner(
 		&mut self,
 		mut loan: GeneralLoan<T>,
 		extra_principal: AssetAmount,
 		price_cache: &OraclePriceCache<T>,
+		config: &LendingConfiguration,
 	) -> Result<(), DispatchError> {
-		let config = LendingConfig::<T>::get();
 		let loan_asset = loan.asset;
 
 		ensure!(
@@ -1042,9 +1056,8 @@ impl<T: Config> GeneralLoan<T> {
 		provided_amount: AssetAmount,
 		swap_request_id: SwapRequestId,
 		is_voluntary: bool,
+		config: &LendingConfiguration,
 	) -> AssetAmount {
-		let config = LendingConfig::<T>::get();
-
 		self.collect_pending_interest();
 
 		// Only charge liquidation fee if liquidation was not voluntary
@@ -1297,6 +1310,13 @@ fn compute_per_asset_liquidation_estimates(
 		.collect()
 }
 
+/// Removes the loan account from storage once it is settled (see [LoanAccount::is_settled]).
+fn remove_loan_account_if_settled<T: Config>(maybe_account: &mut Option<LoanAccount<T>>) {
+	if maybe_account.as_ref().is_some_and(|account| account.is_settled()) {
+		*maybe_account = None;
+	}
+}
+
 /// Run a single upkeep tick for one borrower. Wrapped in `#[transactional]` so any
 /// error rolls back the full set of storage writes for this account (interest
 /// collection touches pool and `PendingNetworkFees` storage outside of
@@ -1314,7 +1334,7 @@ fn upkeep_for_borrower<T: Config>(
 			return Ok(());
 		};
 
-		loan_account.derive_and_charge_interest(weight_used);
+		loan_account.derive_and_charge_interest(config, weight_used);
 
 		// Some of these may fail due to oracle prices being unavailable, but that's
 		// OK and doesn't need any specific error handling (they will simply be re-tried
@@ -1329,15 +1349,17 @@ fn upkeep_for_borrower<T: Config>(
 			weight_used,
 		);
 
-		loan_account.update_liquidation_status(borrower_id, ltv, price_cache, weight_used)?;
+		loan_account.update_liquidation_status(
+			borrower_id,
+			ltv,
+			price_cache,
+			config,
+			weight_used,
+		)?;
 
 		// If all loans are repaid manually while in liquidation, liquidation swaps will be
 		// aborted above and we need to delete the account:
-		if loan_account.loans.is_empty() &&
-			loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-		{
-			*maybe_account = None;
-		}
+		remove_loan_account_if_settled(maybe_account);
 
 		Ok::<_, DispatchError>(())
 	})
@@ -1507,12 +1529,12 @@ impl<T: Config> LendingApi for Pallet<T> {
 				broker,
 			});
 
-			account.expand_loan_inner(loan, amount_to_borrow, &price_cache)?;
+			account.expand_loan_inner(loan, amount_to_borrow, &price_cache, &config)?;
 
 			Ok(())
 		})?;
 
-		check_pool_caps_after_borrow::<T>(asset, &price_cache)?;
+		check_pool_caps_after_borrow::<T>(asset, &price_cache, &config)?;
 
 		Ok(loan_id)
 	}
@@ -1527,6 +1549,7 @@ impl<T: Config> LendingApi for Pallet<T> {
 		extra_amount_to_borrow: AssetAmount,
 	) -> Result<(), DispatchError> {
 		let price_cache = OraclePriceCache::<T>::default();
+		let config = LendingConfig::<T>::get();
 
 		let loan_asset = LoanAccounts::<T>::mutate(
 			&borrower_id,
@@ -1541,7 +1564,6 @@ impl<T: Config> LendingApi for Pallet<T> {
 					extra_principal_amount: extra_amount_to_borrow,
 				});
 
-				let config = LendingConfig::<T>::get();
 				ensure!(
 					extra_amount_to_borrow >=
 						price_cache.amount_from_usd_value(
@@ -1551,13 +1573,18 @@ impl<T: Config> LendingApi for Pallet<T> {
 					Error::<T>::AmountBelowMinimum
 				);
 
-				loan_account.expand_loan_inner(loan, extra_amount_to_borrow, &price_cache)?;
+				loan_account.expand_loan_inner(
+					loan,
+					extra_amount_to_borrow,
+					&price_cache,
+					&config,
+				)?;
 
 				Ok(loan_asset)
 			},
 		)?;
 
-		check_pool_caps_after_borrow::<T>(loan_asset, &price_cache)?;
+		check_pool_caps_after_borrow::<T>(loan_asset, &price_cache, &config)?;
 
 		Ok(())
 	}
@@ -1618,13 +1645,10 @@ impl<T: Config> LendingApi for Pallet<T> {
 				);
 			}
 
-			// Only remove account if it has no ongoing liquidation swaps (it will be removed
-			// after the liquidation swaps have been aborted as a result of having no debt).
-			if loan_account.loans.is_empty() &&
-				loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-			{
-				*maybe_account = None;
-			}
+			// The account is only removed here if it has no ongoing liquidation swaps
+			// (otherwise it will be removed after the liquidation swaps have been aborted
+			// as a result of having no debt).
+			remove_loan_account_if_settled(maybe_account);
 
 			Ok::<_, DispatchError>(())
 		})
@@ -1806,8 +1830,9 @@ pub fn compute_utilisation_cap<T: Config>(
 pub fn check_pool_caps_after_borrow<T: Config>(
 	loan_asset: Asset,
 	price_cache: &OraclePriceCache<T>,
+	config: &LendingConfiguration,
 ) -> DispatchResult {
-	let coverage_factor = LendingConfig::<T>::get().liquidation_coverage_factor;
+	let coverage_factor = config.liquidation_coverage_factor;
 
 	let required = required_liquidation_amount::<T>(loan_asset, coverage_factor, price_cache)?;
 
@@ -1849,41 +1874,40 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 	) {
 		match swap_type {
 			LendingSwapType::Liquidation { borrower_id, loan_id } => {
+				let config = LendingConfig::<T>::get();
 				LoanAccounts::<T>::mutate_exists(&borrower_id, |maybe_account| {
 					let Some(loan_account) = maybe_account else {
 						log_or_panic!("Loan account does not exist for {borrower_id:?}");
 						return;
 					};
 
-					// See if the liquidation is voluntary to determine whether
-					// liquidation fee should be paid:
-					let is_voluntary = match &loan_account.liquidation_status {
-						LiquidationStatus::Liquidating { liquidation_type, .. } =>
-							*liquidation_type == LiquidationType::SoftVoluntary,
-						LiquidationStatus::NoLiquidation => {
-							log_or_panic!("Liquidation swap completed in no-liquidation state");
-							false
-						},
-					};
+					// Extract the swap, and determine whether the liquidation is voluntary
+					// (in which case no liquidation fee is paid) and whether this is the
+					// loan's last liquidation swap:
+					let (liquidation_swap, is_voluntary, is_last_liquidation_swap_for_loan) =
+						match &mut loan_account.liquidation_status {
+							LiquidationStatus::NoLiquidation => {
+								log_or_panic!(
+									"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
+								);
+								return;
+							},
+							LiquidationStatus::Liquidating {
+								liquidation_swaps,
+								liquidation_type,
+							} => {
+								let is_voluntary =
+									*liquidation_type == LiquidationType::SoftVoluntary;
 
-					let mut is_last_liquidation_swap_for_loan = false;
+								let Some(swap) = liquidation_swaps.remove(&swap_request_id) else {
+									log_or_panic!(
+										"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
+									);
+									return;
+								};
 
-					let liquidation_swap = match &mut loan_account.liquidation_status {
-						LiquidationStatus::NoLiquidation => {
-							log_or_panic!(
-								"Unexpected liquidation (swap request id: {swap_request_id}, loan_id: {loan_id})"
-							);
-							return;
-						},
-						LiquidationStatus::Liquidating { liquidation_swaps, .. } => {
-							if let Some(swap) = liquidation_swaps.remove(&swap_request_id) {
-								if liquidation_swaps
-									.values()
-									.filter(|swap| swap.loan_id == loan_id)
-									.count() == 0
-								{
-									is_last_liquidation_swap_for_loan = true;
-								}
+								let is_last_swap_for_loan =
+									!liquidation_swaps.values().any(|swap| swap.loan_id == loan_id);
 
 								if liquidation_swaps.is_empty() {
 									loan_account.liquidation_status =
@@ -1895,15 +1919,9 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 									});
 								}
 
-								swap
-							} else {
-								log_or_panic!(
-									"Unable to find liquidation swap (swap request id: {swap_request_id}) for loan_id: {loan_id})"
-								);
-								return;
-							}
-						},
-					};
+								(swap, is_voluntary, is_last_swap_for_loan)
+							},
+						};
 
 					let excess_amount = match loan_account
 						.get_loan_and_check_asset(loan_id, liquidation_swap.to_asset)
@@ -1911,8 +1929,12 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 						// NOTE: this might fully repaid the loan, but we don't want to settle
 						// the loan just yet as there may be more liquidation swaps to process for
 						// the loan.
-						Some(loan) =>
-							loan.repay_via_liquidation(output_amount, swap_request_id, is_voluntary),
+						Some(loan) => loan.repay_via_liquidation(
+							output_amount,
+							swap_request_id,
+							is_voluntary,
+							&config,
+						),
 						None => {
 							// In some cases it may be possible for the loan to no longer exist if
 							// e.g. the principal was fully covered by a prior liquidation swap or
@@ -1957,11 +1979,7 @@ impl<T: Config> cf_traits::lending::LendingSystemApi for Pallet<T> {
 							}
 						}
 
-						if loan_account.loans.is_empty() &&
-							loan_account.liquidation_status == LiquidationStatus::NoLiquidation
-						{
-							*maybe_account = None;
-						}
+						remove_loan_account_if_settled(maybe_account);
 					}
 				});
 			},

@@ -657,17 +657,19 @@ mod benchmarks {
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
 		let price_cache = get_prefilled_price_cache();
+		let config = LendingConfig::<T>::get();
 
 		#[block]
 		{
 			let collateral = loan_account
-				.prepare_collateral_for_liquidation(&price_cache, LiquidationType::Hard)
+				.prepare_collateral_for_liquidation(&price_cache, &config, LiquidationType::Hard)
 				.unwrap();
 			assert_ok!(loan_account.init_liquidation_swaps(
 				&borrower,
 				collateral,
 				LiquidationType::Hard,
 				&price_cache,
+				&config,
 			));
 		}
 
@@ -682,22 +684,25 @@ mod benchmarks {
 		let mut loan_account = LoanAccounts::<T>::get(&borrower).unwrap();
 
 		let price_cache = get_prefilled_price_cache();
+		let config = LendingConfig::<T>::get();
 
 		// Start the liquidation swaps
 		let collateral = loan_account
-			.prepare_collateral_for_liquidation(&price_cache, LiquidationType::Hard)
+			.prepare_collateral_for_liquidation(&price_cache, &config, LiquidationType::Hard)
 			.unwrap();
 		assert_ok!(loan_account.init_liquidation_swaps(
 			&borrower,
 			collateral,
 			LiquidationType::Hard,
 			&price_cache,
+			&config,
 		));
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::Liquidating { .. }));
 
 		#[block]
 		{
-			loan_account.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped);
+			loan_account
+				.abort_liquidation_swaps(LiquidationCompletionReason::FullySwapped, &config);
 		}
 		assert!(matches!(loan_account.liquidation_status, LiquidationStatus::NoLiquidation));
 	}

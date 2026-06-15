@@ -245,7 +245,11 @@ impl<T: Config> BoostApi for Pallet<T> {
 			BoostLoans::<T>::insert(loan_id, loan);
 
 			// Boost loans are not collateralised, so only the loan-asset pool is affected.
-			check_pool_caps_after_borrow::<T>(asset, &OraclePriceCache::<T>::default())?;
+			check_pool_caps_after_borrow::<T>(
+				asset,
+				&OraclePriceCache::<T>::default(),
+				&LendingConfig::<T>::get(),
+			)?;
 
 			Some(loan_id)
 		} else {
@@ -401,7 +405,7 @@ impl<T: Config> Pallet<T> {
 	pub fn boost_pool_account_balance(who: &T::AccountId, asset: Asset) -> AssetAmount {
 		let available = BoostPools::<T>::iter_prefix(asset).fold(0, |acc, (_tier, pool)| {
 			let Some(core_pool) = CorePools::<T>::get(asset, pool.core_pool_id) else {
-				return 0;
+				return acc;
 			};
 
 			acc + core_pool.get_available_amount_for_account(who).unwrap_or(0)

@@ -4775,6 +4775,7 @@ fn network_fee_inflates_liquidation_buffer() {
 		let collateral = loan_account
 			.prepare_collateral_for_liquidation(
 				&OraclePriceCache::default(),
+				&LendingConfig::<Test>::get(),
 				LiquidationType::SoftVoluntary,
 			)
 			.unwrap();
@@ -4857,13 +4858,18 @@ fn init_liquidation_swaps_test() {
 		));
 
 		let collateral = loan_account
-			.prepare_collateral_for_liquidation(&OraclePriceCache::default(), LiquidationType::Soft)
+			.prepare_collateral_for_liquidation(
+				&OraclePriceCache::default(),
+				&LendingConfig::<Test>::get(),
+				LiquidationType::Soft,
+			)
 			.unwrap();
 		assert_ok!(loan_account.init_liquidation_swaps(
 			&BORROWER,
 			collateral,
 			LiquidationType::Soft,
 			&OraclePriceCache::default(),
+			&LendingConfig::<Test>::get(),
 		));
 
 		let expected_swaps = [
