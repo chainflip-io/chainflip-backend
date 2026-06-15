@@ -26,8 +26,65 @@ macro_rules! define_all_released_runtime_versions {
 
 		/// List of all historical changes (migrations) for this type.
         ///
+        /// ## Associated types:
+        ///
         /// This trait is the foundation of auto-generated migrations. It provides all the information
         /// required to refer to historical versions of a type, as well as migrating data forwards and backwards in time.
+        ///
+        /// It has an associated for every release which describes the changes that happened in this release
+        ///  - `type in_20100`: the migration that transformed this type in release 2.1
+        ///  - `type in_20000`: the migration that transformed this type in release 2.0
+        ///  - ... and so on
+        ///
+        /// Each of these entries has to implement `Migration<v{VERSION}`, {Type at this version}>`. This means
+        /// that the migration has to target the correct historical version of this type at that point in time.
+        ///
+        /// It also has the following associated type:
+        ///  - `type if_unspecified`: this is the default migration that should be used if nothing is specified for
+        /// a release version.
+        ///
+        /// ## Accessing historical types
+        ///
+        /// If a type X implements `HasChangelog`, all of its historical versions can be easily referenced:
+        ///  - Use `<X as HasVersion<{VERSION}>>::HistoricalType` to access the historical version of X.
+        ///    (Versions look like `v20000`, `v20100`, etc.)
+        ///  - Use `migrate_from_historical_type` to convert a type from historical to the current version.
+        ///  - Use `migrate_to_historical_type` to convert a current type to a historical version.
+        ///
+        /// ## Macros
+        ///
+        /// There's the macro `#[cf_utilities_proc_macros::generate_module]` that can be used to generate most of the
+        /// pre-reqs of `HasChangelog`. For example, using that, the implementation for RpcAccountInfoCommonItems looks
+        /// mostly like this:
+        ///
+        /// ```ignore
+        /// #[cf_utilities_proc_macros::generate_module]
+        /// pub struct RpcAccountInfoCommonItems<Balance> {
+        ///     ...
+        /// }
+        /// impl<Balance: HasChangelog> HasChangelog for RpcAccountInfoCommonItems<Balance>
+        /// {
+        /// 	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
+        /// 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
+        /// 		_RpcAccountInfoCommonItems::field::account_id::Added,
+        /// 	>;
+        /// }
+        /// ```
+        ///
+        /// ## Migration sequence
+        ///
+        /// The migrations specified in the changelog form a sequence. Every migration targets the `Migration::From` type
+        /// of the chronologically next migration.
+        ///
+        /// Note that the target of the latest migration is *not* `Self`. There is another trait called `HasGenericVariant`
+        /// which is an "intermediate" between the latest migration and the real `Self`. The migration sequence looks like this:
+        ///
+        ///  --[migration: Self::in_20000]-> `<Self as HasVersion<v20000>>::HistoricalType`
+        ///  --[migration: Self::in_20100]-> `<Self as HasVersion<v20100>>::HistoricalType`
+        ///  --[migration: Self::in_20200]-> `<Self as HasVersion<v20200>>::HistoricalType` (equal to `Self::GenericType`)
+        ///  --[migration: Self::GenericMigration]-> `Self`
+        ///
+        /// In order to implement `HasChangelog` a type also has to implement `HasGenericVariant`.
         ///
 		pub trait HasChangelog:
 			HasGenericVariant<
