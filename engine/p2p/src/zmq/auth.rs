@@ -28,7 +28,7 @@ use tracing::{info, info_span, trace, warn};
 
 use crate::message::AccountId;
 
-use super::{socket::DO_NOT_LINGER, PeerInfo};
+use super::{socket::DO_NOT_LINGER, ZmqPeerInfo};
 
 use super::{pk_to_string, XPublicKey};
 
@@ -80,7 +80,7 @@ impl Authenticator {
 		Authenticator { allowed_pubkeys: RwLock::new(AllowedPubkeysWrapper::new()) }
 	}
 
-	pub fn add_peer(&self, peer: &PeerInfo) {
+	pub fn add_peer(&self, peer: &ZmqPeerInfo) {
 		trace!(
 			"Adding to the list of allowed peers: {} (public key: {})",
 			peer.account_id,

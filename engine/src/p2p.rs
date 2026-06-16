@@ -33,8 +33,7 @@ use engine_sc_client::{
 	stream_api::{StreamApi, FINALIZED},
 };
 
-// Re-export from the active transport (ZMQ is the default)
-pub use engine_p2p::quic::{PeerInfo, PeerUpdate};
+pub use engine_p2p::{PeerInfo, PeerUpdate};
 
 pub use multisig_adapter::{MultisigChannels, MultisigMessageReceiver, MultisigMessageSender};
 
@@ -116,7 +115,10 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
+					let transport = select_transport();
+					tracing::info!("Starting P2P transport: {transport:?}");
 					start_transport(
+						transport,
 						node_key,
 						settings.port,
 						current_peers,
@@ -154,8 +156,22 @@ where
 	Ok((multisig_channels, p2p_ready_receiver, fut))
 }
 
-/// Start the P2P transport layer (currently uses QUIC).
+/// Selects which P2P transport to run.
+///
+/// TODO (Phase 2): source this from the on-chain `P2pTransport` governance flag so the
+/// choice is coordinated network-wide. For now it is an env override defaulting to ZMQ,
+/// which keeps the proven transport as the default while QUIC ships dormant.
+fn select_transport() -> engine_p2p::Transport {
+	match std::env::var("CF_P2P_TRANSPORT").as_deref().map(str::to_ascii_lowercase).as_deref() {
+		Ok("quic") => engine_p2p::Transport::Quic,
+		_ => engine_p2p::Transport::Zmq,
+	}
+}
+
+/// Start the P2P transport layer using the selected transport.
+#[allow(clippy::too_many_arguments)]
 async fn start_transport(
+	transport: engine_p2p::Transport,
 	node_key: engine_p2p::P2PKey,
 	port: cf_utilities::Port,
 	current_peers: Vec<PeerInfo>,
@@ -167,7 +183,8 @@ async fn start_transport(
 	outgoing_message_receiver: tokio::sync::mpsc::UnboundedReceiver<engine_p2p::OutgoingMessage>,
 	peer_update_receiver: tokio::sync::mpsc::UnboundedReceiver<PeerUpdate>,
 ) -> anyhow::Result<()> {
-	engine_p2p::quic::start(
+	engine_p2p::start_transport(
+		transport,
 		node_key,
 		port,
 		current_peers,

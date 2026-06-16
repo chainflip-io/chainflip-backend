@@ -25,7 +25,7 @@ mod connection;
 #[cfg(test)]
 mod tests;
 
-use std::{cell::Cell, net::Ipv6Addr, sync::Arc};
+use std::{cell::Cell, sync::Arc};
 
 use anyhow::Context;
 use cf_utilities::{make_periodic_tick, metrics::P2P_MSG_SENT, Port};
@@ -35,7 +35,6 @@ use connection::{
 	MAX_INACTIVITY_THRESHOLD,
 };
 use quinn::Endpoint;
-use sp_core::ed25519::Public as EdPublicKey;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info, info_span, trace, warn, Instrument};
 
@@ -50,49 +49,8 @@ use crate::{
 /// How often to check for stale connections
 const ACTIVITY_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Peer information for QUIC connections.
-#[derive(Debug, Clone)]
-pub struct PeerInfo {
-	pub account_id: AccountId,
-	/// The Ed25519 public key (used directly for TLS certificate verification)
-	pub ed_pubkey: [u8; 32],
-	pub ip: Ipv6Addr,
-	pub port: Port,
-}
-
-impl PeerInfo {
-	pub fn new(
-		account_id: AccountId,
-		ed_public_key: EdPublicKey,
-		ip: Ipv6Addr,
-		port: Port,
-	) -> Self {
-		// The key is stored verbatim and only validated when it is used to verify a TLS
-		// handshake, so an invalid key from on-chain registration simply fails to connect
-		// rather than panicking here.
-		PeerInfo { account_id, ed_pubkey: ed_public_key.0, ip, port }
-	}
-}
-
-impl std::fmt::Display for PeerInfo {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(
-			f,
-			"PeerInfo {{ account_id: {}, ed_pubkey: {}, ip: {}, port: {} }}",
-			self.account_id,
-			hex::encode(self.ed_pubkey),
-			self.ip,
-			self.port,
-		)
-	}
-}
-
-/// Peer update events from the state chain.
-#[derive(Debug)]
-pub enum PeerUpdate {
-	Registered(PeerInfo),
-	Deregistered(AccountId, EdPublicKey),
-}
+// Peer-identity types are shared across transports.
+pub use crate::peer::{PeerInfo, PeerUpdate};
 
 /// QUIC transport context holding all state.
 struct QuicContext {
