@@ -257,10 +257,10 @@ fn verify_ed25519_signature(
 		.map_err(|_| TlsError::General("Invalid Ed25519 signature length".into()))?;
 	let signature = ed25519_dalek::Signature::from_bytes(&signature_bytes);
 
-	// Verify the signature
-	use ed25519_dalek::Verifier;
+	// Verify the signature. `verify_strict` rejects non-canonical signatures and
+	// small-order keys, which is the recommended choice for an authentication boundary.
 	verifying_key
-		.verify(message, &signature)
+		.verify_strict(message, &signature)
 		.map_err(|e| TlsError::General(format!("Signature verification failed: {e}")))?;
 
 	Ok(HandshakeSignatureValid::assertion())
