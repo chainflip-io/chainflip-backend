@@ -83,11 +83,10 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: Version> =
 
 // ----------- associated generic type --------------
 
-#[derive(Clone, Copy)]
-#[expect(nonstandard_style)]
-
 /// Version name for the current version of a type. Only used as the version specifier for
 /// migrations between the actual type and its "generic" version.
+#[derive(Clone, Copy)]
+#[expect(nonstandard_style)]
 pub struct vCurrent;
 impl Version for vCurrent {
 	// There's no released runtime version associated.
