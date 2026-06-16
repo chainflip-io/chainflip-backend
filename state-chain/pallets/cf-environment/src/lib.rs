@@ -46,7 +46,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset, tron::Asset as TrxAsset},
-	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, SemVer,
+	BlockNumber, BroadcastId, ChainflipNetwork, NetworkEnvironment, P2pTransport, SemVer,
 };
 use cf_traits::{
 	Broadcaster, ChainflipNetworkInfo, CompatibleCfeVersions, GetBitcoinFeeInfo, KeyProvider,
@@ -393,6 +393,13 @@ pub mod pallet {
 	/// Current Chainflip's network name
 	pub type ChainflipNetworkName<T> = StorageValue<_, ChainflipNetwork, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn p2p_transport)]
+	/// The P2P transport the validator engines should use. Coordinated network-wide via
+	/// governance; defaults to ZMQ. The two transports are not wire-compatible, so this must
+	/// be the same across the whole set, and changing it requires engines to restart.
+	pub type P2pTransportValue<T> = StorageValue<_, P2pTransport, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -415,6 +422,11 @@ pub mod pallet {
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated {
 			safe_mode: SafeModeUpdate<T>,
+		},
+		/// The network-wide P2P transport selection has been updated. Engines must restart
+		/// to apply the change.
+		P2pTransportUpdated {
+			transport: P2pTransport,
 		},
 		/// Utxo consolidation parameters has been updated
 		UtxoConsolidationParametersUpdated {
@@ -806,6 +818,27 @@ pub mod pallet {
 			T::TronVaultKeyWitnessedHandler::on_first_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::TronInitialized);
+
+			Ok(())
+		}
+
+		/// Set the network-wide P2P transport. Engines read this at startup and restart when
+		/// it changes, so the whole validator set converges on the chosen transport. The two
+		/// transports are not wire-compatible, so changing it is a coordinated cutover.
+		///
+		/// Can only be dispatched from the governance origin.
+		#[pallet::call_index(13)]
+		// Governance call, so the exact weight is irrelevant; reuse an existing benchmark.
+		#[pallet::weight(T::WeightInfo::update_safe_mode())]
+		pub fn update_p2p_transport(
+			origin: OriginFor<T>,
+			transport: P2pTransport,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			P2pTransportValue::<T>::put(transport);
+
+			Self::deposit_event(Event::<T>::P2pTransportUpdated { transport });
 
 			Ok(())
 		}

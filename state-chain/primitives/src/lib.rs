@@ -440,6 +440,42 @@ impl core::fmt::Display for NetworkEnvironment {
 	}
 }
 
+/// Which P2P transport the validator network uses to exchange ceremony messages.
+///
+/// The two transports are not interoperable on the wire, so this is a network-wide
+/// setting controlled by governance rather than a per-node option.
+#[derive(
+	PartialEq,
+	Eq,
+	Copy,
+	Clone,
+	Debug,
+	Encode,
+	Decode,
+	DecodeWithMemTracking,
+	TypeInfo,
+	Default,
+	Serialize,
+	Deserialize,
+)]
+pub enum P2pTransport {
+	/// ZeroMQ with CURVE encryption (the long-standing default).
+	#[default]
+	Zmq,
+	/// QUIC with TLS 1.3 and Ed25519 certificates.
+	Quic,
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for P2pTransport {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			P2pTransport::Zmq => write!(f, "Zmq"),
+			P2pTransport::Quic => write!(f, "Quic"),
+		}
+	}
+}
+
 /// Determines the Chainflip network.
 #[derive(
 	PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default, Serialize, Deserialize,

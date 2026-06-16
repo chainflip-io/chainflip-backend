@@ -21,10 +21,11 @@ use crate::{
 	submit_runtime_call::{
 		is_valid_signature, ChainflipExtrinsic, EthEncodingType, SolEncodingType,
 	},
-	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, RuntimeSafeMode,
-	SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
+	BitcoinAvailableUtxos, ConsolidationParameters, Event, EvmAddress, P2pTransportValue,
+	RuntimeSafeMode, SafeModeUpdate, SignatureData, SolSignature, SolanaAvailableNonceAccounts,
 	SolanaUnavailableNonceAccounts, TransactionMetadata,
 };
+use cf_primitives::P2pTransport;
 use cf_chains::{
 	btc::{
 		api::UtxoSelectionType, deposit_address::DepositAddress, utxo_selection, AggKey,
@@ -176,6 +177,27 @@ fn update_safe_mode() {
 		assert_eq!(RuntimeSafeMode::<Test>::get(), mock_code_amber);
 		System::assert_last_event(RuntimeEvent::Environment(Event::RuntimeSafeModeUpdated {
 			safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
+		}));
+	});
+}
+
+#[test]
+fn update_p2p_transport() {
+	new_test_ext().execute_with(|| {
+		// Defaults to ZMQ.
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Zmq);
+
+		assert_ok!(Environment::update_p2p_transport(OriginTrait::root(), P2pTransport::Quic));
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Quic);
+		System::assert_last_event(RuntimeEvent::Environment(Event::P2pTransportUpdated {
+			transport: P2pTransport::Quic,
+		}));
+
+		// Can be reverted.
+		assert_ok!(Environment::update_p2p_transport(OriginTrait::root(), P2pTransport::Zmq));
+		assert_eq!(P2pTransportValue::<Test>::get(), P2pTransport::Zmq);
+		System::assert_last_event(RuntimeEvent::Environment(Event::P2pTransportUpdated {
+			transport: P2pTransport::Zmq,
 		}));
 	});
 }
