@@ -414,3 +414,51 @@ async fn reconnect_respects_backoff_delay() {
 	// Silence unused variable warning
 	let _ = early_result;
 }
+
+/// An outgoing connection must only be accepted if the peer presents the exact key we
+/// expect for that account, not merely *some* allowlisted key. Otherwise a connection
+/// intended for one validator could be satisfied by a different (but allowlisted)
+/// validator listening at the same address, leaking that account's private messages.
+#[tokio::test]
+async fn connecting_to_wrong_allowlisted_peer_is_rejected() {
+	let node_key1 = create_keypair();
+	let node_key_b = create_keypair(); // the key node1 *expects* for account [2]
+	let node_key_c = create_keypair(); // the key actually listening at that address
+
+	let port_c: Port = 9106;
+	let port_1: Port = 9107;
+
+	let ip = "127.0.0.1".parse::<std::net::Ipv4Addr>().unwrap().to_ipv6_mapped();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, port_1);
+	// The node actually listening at port_c uses key C and is account [3].
+	let pi_c = create_node_info(AccountId::new([3; 32]), &node_key_c, port_c);
+	// node1 believes account [2] (key B) lives at port_c — a mismatch.
+	let pi2_wrong = PeerInfo::new(
+		AccountId::new([2; 32]),
+		Public::from(node_key_b.verifying_key().to_bytes()),
+		ip,
+		port_c,
+	);
+
+	// node1 allowlists key B (acct 2) and key C (acct 3) so the TLS handshake with the
+	// key-C node passes the allowlist; only the identity pin should reject it.
+	let node1 =
+		spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2_wrong.clone(), pi_c.clone()]);
+	// The key-C node accepts node1.
+	let mut node_c = spawn_node(&node_key_c, 2, pi_c.clone(), &[pi1.clone(), pi_c.clone()]);
+
+	tokio::time::sleep(Duration::from_secs(1)).await;
+
+	// node1 tries to message account [2] — which resolves to the key-C node's address.
+	node1
+		.msg_sender
+		.send(OutgoingMessage::Private {
+			messages: vec![(AccountId::new([2; 32]), b"should not arrive".to_vec())],
+		})
+		.unwrap();
+
+	// The key-C node must not receive a message intended for account [2].
+	let result = recv_with_custom_timeout(&mut node_c.msg_receiver, Duration::from_secs(1)).await;
+	assert!(result.is_none(), "message must not be delivered to the wrong (mismatched-key) peer");
+}
