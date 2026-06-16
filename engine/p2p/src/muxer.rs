@@ -201,7 +201,7 @@ impl TopicMuxer {
 	pub async fn run(mut self) {
 		/// Poll all topic receivers and return the first available message
 		async fn poll_topic_receivers(
-			receivers: &mut Vec<(TopicId, UnboundedReceiver<OutgoingMessage>)>,
+			receivers: &mut [(TopicId, UnboundedReceiver<OutgoingMessage>)],
 		) -> Option<(TopicId, OutgoingMessage)> {
 			use futures::future::poll_fn;
 			use std::task::Poll;
@@ -210,7 +210,10 @@ impl TopicMuxer {
 				for (topic, receiver) in receivers.iter_mut() {
 					match receiver.poll_recv(cx) {
 						Poll::Ready(Some(msg)) => return Poll::Ready(Some((*topic, msg))),
-						Poll::Ready(None) => return Poll::Ready(None),
+						// A closed channel means that topic's protocol has shut down. Skip it
+						// rather than returning `None`, which would disable the whole
+						// `select!` arm and stop outgoing routing for every other topic too.
+						Poll::Ready(None) => continue,
 						Poll::Pending => continue,
 					}
 				}
@@ -499,5 +502,38 @@ mod tests {
 			(first == expected_eth && second == expected_dot) ||
 				(first == expected_dot && second == expected_eth)
 		);
+	}
+
+	/// A protocol shutting down closes its topic's outgoing channel. This must
+	/// not stop the muxer from routing outgoing messages for other topics.
+	#[tokio::test]
+	async fn closing_one_topic_does_not_stop_other_topics() {
+		let (p2p_outgoing_sender, mut p2p_outgoing_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+		let (_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+		let (muxer_future, mut handles) =
+			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC, DOT_TOPIC]);
+		tokio::task::spawn(muxer_future);
+
+		let eth_handle = handles.remove(&ETH_TOPIC).unwrap();
+		let dot_handle = handles.remove(&DOT_TOPIC).unwrap();
+
+		// Simulate the ETH protocol shutting down: dropping its handle closes the
+		// ETH topic's outgoing channel.
+		drop(eth_handle);
+
+		// The DOT topic must still be able to send.
+		dot_handle
+			.outgoing_sender
+			.send(OutgoingMessage::Broadcast { recipients: vec![ACC_2], payload: DATA_2.to_vec() })
+			.unwrap();
+
+		let received = expect_recv_with_timeout(&mut p2p_outgoing_receiver).await;
+		let expected = OutgoingMessage::Broadcast {
+			recipients: vec![ACC_2],
+			payload: [VERSION_PREFIX, &topic_prefix(TOPIC_DOT), DATA_2].concat(),
+		};
+		assert_eq!(received, expected);
 	}
 }
