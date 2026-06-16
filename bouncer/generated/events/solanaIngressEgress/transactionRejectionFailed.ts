@@ -1,6 +1,10 @@
 import { z } from 'zod';
-import { cfChainsSolVaultSwapOrDepositChannelId } from '../common';
+import {
+  cfChainsSolVaultSwapOrDepositChannelId,
+  palletCfSolanaIngressEgressRefundFailureReason,
+} from '../common';
 
 export const solanaIngressEgressTransactionRejectionFailed = z.object({
   txId: cfChainsSolVaultSwapOrDepositChannelId,
+  reason: palletCfSolanaIngressEgressRefundFailureReason,
 });
