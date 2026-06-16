@@ -149,6 +149,22 @@ When writing a migration:
 
 Always keep a `PlaceholderMigration<VERSION, Pallet<T>>` pointing at the current version to keep the boilerplate consistent and to surface inconsistencies in the pallet storage versions.
 
+## Runtime API Versioning
+
+Parallel concern to [Migrations](#migrations): pallet storage versioning covers on-chain state shape; runtime-API versioning covers the wire shape so the *current* node/RPC code can query historical blocks (or sync from genesis) whose runtime was on an older version.
+
+The rule fires on any change that alters the SCALE-encoded wire shape of a `CustomRuntimeApi` method, including:
+
+- Adding, renaming, or removing a method on the trait.
+- Changing a parameter or return type of an existing method.
+- **Changing the fields of a type that's reachable from a method signature**, even if that type lives in a pallet (e.g. `pallet_cf_lending_pools::RpcLendingPool`). Adding/removing/reordering/retyping a field counts. The compiler won't flag this as an API change — the type is just a struct — but the wire encoding still moves.
+
+When in doubt, ask: "would a SCALE-encoded value of this type round-trip through an older node?". If no, version it.
+
+Follow the procedure in the header comment of `state-chain/runtime/src/runtime_apis/custom_api.rs` — that comment is the source of truth. Read it before editing the trait, the `custom_api/types/before_version_*.rs` modules, the runtime impls, or `state-chain/custom-rpc/src/lib.rs` (where the version dispatch lives).
+
+Pure docs/internal refactors that don't change the wire shape don't need this.
+
 ## Key Crates and Utilities
 
 ### `cf-runtime-utilities` (`state-chain/runtime-utilities/`)

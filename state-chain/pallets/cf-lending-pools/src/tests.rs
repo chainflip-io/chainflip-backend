@@ -1256,10 +1256,9 @@ mod hybrid_boosting {
 			);
 
 			// Lending pool: principal (99_950_000) + network fee (10_000) consumed the full
-			// LENDING_FUNDS (99_960_000), so available is now zero and `owed_to_network` is
-			// zero (the network fee was collected up-front rather than left as an IOU).
+			// LENDING_FUNDS (99_960_000), so available is now zero and the network fee was
+			// credited to PendingNetworkFees up-front.
 			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().available_amount, 0);
-			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network, 0);
 			assert_eq!(PendingNetworkFees::<Test>::get(BOOST_ASSET), LENDING_NETWORK_FEE);
 
 			assert_eq!(
@@ -1598,8 +1597,10 @@ mod hybrid_boosting {
 			// Lending pool lost all its funds:
 			assert_eq!(get_supply_position(BOOST_ASSET, BOOSTER_1), Some(0));
 
-			// Network loses the uncollected fees:
-			assert_eq!(GeneralLendingPools::<Test>::get(BOOST_ASSET).unwrap().owed_to_network, 0);
+			// Network keeps the origination network fee that was already collected at borrow
+			// time (the lending pool was funded with `LENDING_NETWORK_FEE` of headroom for
+			// exactly this purpose).
+			assert_eq!(PendingNetworkFees::<Test>::get(BOOST_ASSET), LENDING_NETWORK_FEE);
 
 			// Boost pool booster lost the funds it provided for boosting (no network fee
 			// had been taken):

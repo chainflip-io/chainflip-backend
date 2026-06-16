@@ -79,7 +79,7 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(18)]
+	#[api_version(19)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -346,6 +346,10 @@ decl_runtime_apis!(
 		fn cf_lending_pools(
 			asset: Option<Asset>,
 		) -> Vec<before_version_17::RpcLendingPool<AssetAmount>>;
+		#[changed_in(19)]
+		fn cf_lending_pools(
+			asset: Option<Asset>,
+		) -> Vec<before_version_19::RpcLendingPool<AssetAmount>>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		#[changed_in(17)]
 		fn cf_loan_accounts(
