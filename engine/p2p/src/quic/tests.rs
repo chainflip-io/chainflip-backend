@@ -462,3 +462,36 @@ async fn connecting_to_wrong_allowlisted_peer_is_rejected() {
 	let result = recv_with_custom_timeout(&mut node_c.msg_receiver, Duration::from_secs(1)).await;
 	assert!(result.is_none(), "message must not be delivered to the wrong (mismatched-key) peer");
 }
+
+/// A message addressed to a peer that is not yet reachable must not be silently dropped:
+/// the lazy connect blocks until the peer appears and the message is then delivered.
+#[tokio::test]
+async fn message_to_initially_unreachable_peer_is_delivered_once_it_starts() {
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 9108);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 9109);
+
+	// node1 knows node2, but node2 is not running yet.
+	let node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// Let node1 start.
+	tokio::time::sleep(Duration::from_millis(500)).await;
+
+	// Send while node2 is down: this must not be dropped.
+	node1
+		.msg_sender
+		.send(OutgoingMessage::Private {
+			messages: vec![(pi2.account_id.clone(), b"sent while down".to_vec())],
+		})
+		.unwrap();
+
+	// Bring node2 up shortly after; the in-flight lazy connect should complete to it.
+	tokio::time::sleep(Duration::from_millis(300)).await;
+	let mut node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// The message should be delivered once the connection is established.
+	let received = recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_secs(5)).await;
+	assert_eq!(received, Some((node1.account_id.clone(), b"sent while down".to_vec())));
+}
