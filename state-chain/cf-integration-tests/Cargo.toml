@@ -32,7 +32,7 @@ arrayref = { workspace = true }
 reqwest = { workspace = true, features = ["blocking", "json"] }
 serde_json = { workspace = true, default-features = true }
 proptest = { workspace = true }
-sp-arithmetic = { workspace = true, features = ["proptest"] }
+sp-arithmetic = { workspace = true }
 frame-metadata = { workspace = true, default-features = true, features = [
 	"current",
 	"decode",
@@ -99,7 +99,7 @@ pallet-transaction-payment = { workspace = true, default-features = true }
 sp-block-builder = { workspace = true, default-features = true }
 sp-consensus-aura = { workspace = true, default-features = true }
 
-sp-core = { workspace = true, default-features = true, features = ["proptest"] }
+sp-core = { workspace = true, default-features = true }
 sp-inherents = { workspace = true, default-features = true }
 sp-offchain = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }

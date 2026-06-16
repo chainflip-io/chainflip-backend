@@ -37,7 +37,7 @@ scopeguard = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 sp-core = { workspace = true }
 sp-std = { workspace = true }
-sp-arithmetic = { workspace = true }
+sp-arithmetic = { workspace = true, features = ["serde"]}
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }

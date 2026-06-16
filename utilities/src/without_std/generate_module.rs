@@ -91,16 +91,23 @@ macro_rules! generate_module {
                 )+
             }
 
+            // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
+            use sp_std::marker::PhantomData;
+
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
+            #[derive(Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
+            #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
             #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
             pub struct Struct<Ty: Types, $( $T $(: $TBound)?, )? > {
                 $(
                     pub $field: Ty::$field,
                 )+
-                pub _phantom: sp_std::marker::PhantomData<($($T,)?)>,
+                // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
+                // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
+                // That's why we import it above.
+                pub _phantom: PhantomData<($($T,)?)>,
             }
 
             impl<$( $T $(: $TBound)?, )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($T)?>
@@ -108,7 +115,6 @@ macro_rules! generate_module {
             {
                 type GetCurrentType = $struct$(<$T>)?;
             }
-
 
             pub type see_field_changelogs = see_field_changelogs_and_also<()>;
             pub struct see_field_changelogs_and_also<M>(M);
