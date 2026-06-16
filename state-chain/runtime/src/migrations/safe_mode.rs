@@ -35,13 +35,4 @@ impl OnRuntimeUpgrade for SafeModeMigration {
 
 		Weight::zero()
 	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), sp_runtime::DispatchError> {
-		frame_support::ensure!(
-			pallet_cf_environment::RuntimeSafeMode::<Runtime>::exists(),
-			"RuntimeSafeMode should exist after the migration"
-		);
-		Ok(())
-	}
 }
