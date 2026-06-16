@@ -123,10 +123,9 @@ cf-chains = { workspace = true, features = [
 ] }
 cf-traits = { workspace = true, features = ["mocks"] }
 
-# enable the `proptest` feature for all (required) dependency crates if we are buiding for a test
+# enable the `proptest` feature for dependencies if we are buiding for a test
 pallet-cf-swapping = { workspace = true, features = ["proptest"] }
 cf-primitives = { workspace = true, features = ["proptest"] }
-sp-core = { workspace = true, features = ["serde", "proptest"] }
 cf-utilities = { workspace = true, features = ["proptest"] }
 
 
