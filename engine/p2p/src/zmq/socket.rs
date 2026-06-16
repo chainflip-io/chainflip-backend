@@ -22,7 +22,7 @@ use blake2::{
 };
 use tracing::{debug, warn};
 
-use super::{PeerInfo, X25519KeyPair};
+use super::{X25519KeyPair, ZmqPeerInfo};
 use crate::XPublicKey;
 
 /// Wait this long until attempting to reconnect
@@ -122,7 +122,7 @@ impl OutgoingSocket {
 		self.socket.monitor(monitor_endpoint, flags as i32).unwrap();
 	}
 
-	pub fn connect(self, peer: PeerInfo) -> ConnectedOutgoingSocket {
+	pub fn connect(self, peer: ZmqPeerInfo) -> ConnectedOutgoingSocket {
 		let socket = self.socket;
 		socket.set_curve_serverkey(peer.pubkey.as_bytes()).unwrap();
 
@@ -137,7 +137,7 @@ impl OutgoingSocket {
 
 pub struct ConnectedOutgoingSocket {
 	socket: zmq::Socket,
-	peer: PeerInfo,
+	peer: ZmqPeerInfo,
 	// NOTE: ZMQ sockets can technically connect to more than
 	// one endpoints, so we need to provide a specific endpoint
 	// when disconnecting (even though we only connect to one

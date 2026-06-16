@@ -32,7 +32,7 @@ use tracing::{info, info_span, trace, warn};
 
 use super::socket::DO_NOT_LINGER;
 
-use super::{socket::OutgoingSocket, PeerInfo};
+use super::{socket::OutgoingSocket, ZmqPeerInfo};
 
 use cf_utilities::metrics::P2P_MONITOR_EVENT;
 /// Describes peer connection to start monitoring
@@ -62,7 +62,7 @@ pub enum MonitorEvent {
 }
 
 impl MonitorHandle {
-	pub fn start_monitoring_for(&mut self, socket_to_monitor: &OutgoingSocket, peer: &PeerInfo) {
+	pub fn start_monitoring_for(&mut self, socket_to_monitor: &OutgoingSocket, peer: &ZmqPeerInfo) {
 		use rand::RngCore;
 
 		// Generate a random id to prevent accidentally attempting
