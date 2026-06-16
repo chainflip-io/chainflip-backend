@@ -47,8 +47,12 @@ use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use crate::{
 	ed25519_public_key_to_x25519_public_key,
 	message::{AccountId, OutgoingMessage},
-	pk_to_string, EdPublicKey, P2PKey, X25519KeyPair, XPublicKey,
+	pk_to_string, P2PKey, X25519KeyPair, XPublicKey,
 };
+
+// Peer-identity types are shared across transports; ZMQ additionally derives the
+// x25519 (CURVE) key into its internal `ZmqPeerInfo`.
+pub use crate::peer::{PeerInfo, PeerUpdate};
 use monitor::MonitorEvent;
 
 use socket::{ConnectedOutgoingSocket, OutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
@@ -65,14 +69,10 @@ pub const MAX_INACTIVITY_THRESHOLD: Duration = Duration::from_secs(60 * 60);
 /// How often to check for "stale" connections
 pub const ACTIVITY_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 
-#[derive(Debug)]
-pub enum PeerUpdate {
-	Registered(PeerInfo),
-	Deregistered(AccountId, EdPublicKey),
-}
-
+/// ZMQ's internal peer representation. In addition to the shared [`PeerInfo`] fields it
+/// carries the x25519 (CURVE) public key derived from the peer's Ed25519 key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PeerInfo {
+pub struct ZmqPeerInfo {
 	pub account_id: AccountId,
 	pub ed_pubkey: [u8; 32],
 	pub pubkey: XPublicKey,
@@ -80,29 +80,37 @@ pub struct PeerInfo {
 	pub port: Port,
 }
 
-impl PeerInfo {
-	pub fn new(
-		account_id: AccountId,
-		ed_public_key: EdPublicKey,
-		ip: Ipv6Addr,
-		port: Port,
-	) -> Self {
-		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&ed_public_key.0).unwrap();
-		let x_public_key = ed25519_public_key_to_x25519_public_key(&ed_public_key);
-
-		PeerInfo { account_id, ed_pubkey: ed_public_key.to_bytes(), pubkey: x_public_key, ip, port }
-	}
-
+impl ZmqPeerInfo {
 	pub fn zmq_endpoint(&self) -> String {
 		format!("tcp://[{}]:{}", self.ip, self.port)
 	}
 }
 
-impl std::fmt::Display for PeerInfo {
+impl TryFrom<PeerInfo> for ZmqPeerInfo {
+	type Error = anyhow::Error;
+
+	/// Derives the x25519 CURVE key from the peer's Ed25519 key, failing (rather than
+	/// panicking) if the registered key is not a valid Ed25519 point.
+	fn try_from(peer: PeerInfo) -> Result<Self, Self::Error> {
+		let ed_public_key = ed25519_dalek::VerifyingKey::from_bytes(&peer.ed_pubkey)
+			.map_err(|e| anyhow::anyhow!("invalid Ed25519 key for {}: {e}", peer.account_id))?;
+		let pubkey = ed25519_public_key_to_x25519_public_key(&ed_public_key);
+
+		Ok(ZmqPeerInfo {
+			account_id: peer.account_id,
+			ed_pubkey: peer.ed_pubkey,
+			pubkey,
+			ip: peer.ip,
+			port: peer.port,
+		})
+	}
+}
+
+impl std::fmt::Display for ZmqPeerInfo {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(
 			f,
-			"PeerInfo {{ account_id: {}, pubkey: {}, ip: {}, port: {} }}",
+			"ZmqPeerInfo {{ account_id: {}, pubkey: {}, ip: {}, port: {} }}",
 			self.account_id,
 			pk_to_string(&self.pubkey),
 			self.ip,
@@ -184,7 +192,7 @@ struct ConnectionStateInfo {
 	// Last time we received an instruction to send a message
 	// to this node
 	last_activity: Cell<tokio::time::Instant>,
-	info: PeerInfo,
+	info: ZmqPeerInfo,
 }
 
 struct ActiveConnectionWrapper {
@@ -291,7 +299,10 @@ pub async fn start(
 
 	debug!("Registering peer info for {} peers", current_peers.len());
 	for peer_info in current_peers {
-		context.add_or_update_peer(peer_info);
+		match ZmqPeerInfo::try_from(peer_info) {
+			Ok(peer_info) => context.add_or_update_peer(peer_info),
+			Err(e) => warn!("Ignoring peer registration with invalid key: {e}"),
+		}
 	}
 
 	let incoming_message_receiver_ed25519 = context.start_listening_thread(port)?;
@@ -401,7 +412,10 @@ impl P2PContext {
 
 	fn on_peer_update(&mut self, update: PeerUpdate) {
 		match update {
-			PeerUpdate::Registered(peer_info) => self.add_or_update_peer(peer_info),
+			PeerUpdate::Registered(peer_info) => match ZmqPeerInfo::try_from(peer_info) {
+				Ok(peer_info) => self.add_or_update_peer(peer_info),
+				Err(e) => warn!("Ignoring peer registration with invalid key: {e}"),
+			},
 			PeerUpdate::Deregistered(account_id, _pubkey) =>
 				self.handle_peer_deregistration(account_id),
 		}
@@ -511,7 +525,7 @@ impl P2PContext {
 		}
 	}
 
-	fn connect_to_peer(&mut self, peer: PeerInfo, previous_activity: tokio::time::Instant) {
+	fn connect_to_peer(&mut self, peer: ZmqPeerInfo, previous_activity: tokio::time::Instant) {
 		let account_id = peer.account_id.clone();
 
 		let socket = OutgoingSocket::new(&self.zmq_context, &self.key);
@@ -538,7 +552,7 @@ impl P2PContext {
 		}
 	}
 
-	fn add_or_update_peer(&mut self, peer: PeerInfo) {
+	fn add_or_update_peer(&mut self, peer: ZmqPeerInfo) {
 		if peer.account_id == self.our_account_id {
 			// nothing to do
 			return

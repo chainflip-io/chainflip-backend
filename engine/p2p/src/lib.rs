@@ -27,11 +27,18 @@
 //!
 //! ## Transport Selection
 //!
-//! Two transports are available via feature flags (both can be enabled):
-//! - `zmq-transport` (default): ZeroMQ with CURVE encryption
-//! - `quic-transport`: QUIC with TLS 1.3 and Ed25519 certificates
+//! Two transports are available, both compiled in and selected at runtime via the
+//! [`Transport`] enum passed to [`start_transport`]:
+//! - [`Transport::Zmq`]: ZeroMQ with CURVE encryption
+//! - [`Transport::Quic`]: QUIC with TLS 1.3 and Ed25519 certificates
+//!
+//! The two are mutually unintelligible on the wire, so the choice must be coordinated
+//! network-wide.
 
 use sp_core::ed25519;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+use cf_utilities::Port;
 
 // Transport modules
 pub mod quic;
@@ -40,10 +47,59 @@ pub mod zmq;
 // Shared modules
 pub mod message;
 pub mod muxer;
+pub mod peer;
 
 // Re-export commonly used types
 pub use message::{AccountId, IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId};
 pub use muxer::{ProtocolHandle, Topic, TopicMuxer};
+pub use peer::{PeerInfo, PeerUpdate};
+
+/// Which P2P transport implementation to use. The transports are not interoperable, so
+/// this must be the same across the whole validator set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Transport {
+	Zmq,
+	Quic,
+}
+
+/// Start the selected P2P transport. The two transports share the same interface; this
+/// dispatches to the chosen one.
+#[allow(clippy::too_many_arguments)]
+pub async fn start_transport(
+	transport: Transport,
+	p2p_key: P2PKey,
+	port: Port,
+	current_peers: Vec<PeerInfo>,
+	our_account_id: AccountId,
+	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
+	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+) -> anyhow::Result<()> {
+	match transport {
+		Transport::Zmq =>
+			zmq::start(
+				p2p_key,
+				port,
+				current_peers,
+				our_account_id,
+				incoming_message_sender,
+				outgoing_message_receiver,
+				peer_update_receiver,
+			)
+			.await,
+		Transport::Quic =>
+			quic::start(
+				p2p_key,
+				port,
+				current_peers,
+				our_account_id,
+				incoming_message_sender,
+				outgoing_message_receiver,
+				peer_update_receiver,
+			)
+			.await,
+	}
+}
 
 pub type EdPublicKey = ed25519::Public;
 pub type XPublicKey = x25519_dalek::PublicKey;
