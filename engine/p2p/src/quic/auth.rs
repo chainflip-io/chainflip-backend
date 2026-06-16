@@ -53,10 +53,16 @@ impl AllowedPubkeysWrapper {
 		self.map.get(pubkey)
 	}
 
-	fn insert(&mut self, pubkey: [u8; 32], account_id: AccountId) -> Option<AccountId> {
-		let result = self.map.insert(pubkey, account_id);
+	fn insert(&mut self, pubkey: [u8; 32], account_id: AccountId) {
+		// Enforce one key per account: if this account previously registered a
+		// different key (e.g. a node-key rotation), revoke the old key so it can
+		// no longer authenticate.
+		self.map
+			.retain(|existing_pubkey, existing_account| {
+				*existing_account != account_id || *existing_pubkey == pubkey
+			});
+		self.map.insert(pubkey, account_id);
 		self.metric.set(self.map.len());
-		result
 	}
 
 	fn remove(&mut self, pubkey: &[u8; 32]) -> Option<AccountId> {
@@ -301,5 +307,53 @@ mod tests {
 
 		verifier.remove_peer(&pubkey);
 		assert!(!verifier.is_allowed(&pubkey));
+	}
+
+	#[test]
+	fn rotating_account_key_revokes_old_key() {
+		let verifier = AllowlistVerifier::new();
+		let account_id = AccountId::new([7; 32]);
+		let old_key = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+		let new_key = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+
+		verifier.add_peer(old_key, account_id.clone());
+		assert!(verifier.is_allowed(&old_key));
+
+		// The same account re-registers with a rotated key.
+		verifier.add_peer(new_key, account_id.clone());
+
+		assert!(verifier.is_allowed(&new_key), "new key must be allowed");
+		assert!(!verifier.is_allowed(&old_key), "old key must be revoked after rotation");
+		assert_eq!(verifier.get_account_id(&new_key), Some(account_id));
+	}
+
+	#[test]
+	fn re_registering_same_key_for_account_keeps_it() {
+		let verifier = AllowlistVerifier::new();
+		let account_id = AccountId::new([7; 32]);
+		let key = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+
+		verifier.add_peer(key, account_id.clone());
+		verifier.add_peer(key, account_id);
+
+		assert!(verifier.is_allowed(&key));
+	}
+
+	#[test]
+	fn rotating_one_account_does_not_affect_others() {
+		let verifier = AllowlistVerifier::new();
+		let account_a = AccountId::new([1; 32]);
+		let account_b = AccountId::new([2; 32]);
+		let key_a = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+		let key_b = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+		let key_a2 = SigningKey::generate(&mut OsRng).verifying_key().to_bytes();
+
+		verifier.add_peer(key_a, account_a.clone());
+		verifier.add_peer(key_b, account_b);
+		verifier.add_peer(key_a2, account_a);
+
+		assert!(verifier.is_allowed(&key_a2));
+		assert!(!verifier.is_allowed(&key_a), "account A's old key must be revoked");
+		assert!(verifier.is_allowed(&key_b), "account B's key must be unaffected");
 	}
 }
