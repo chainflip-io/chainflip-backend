@@ -3,7 +3,7 @@
 //
 // This command for setting up new assets
 
-import { runWithTimeoutAndExit, Asset, getWeb3 } from 'shared/utils';
+import { runWithTimeoutAndExit, Asset, getWeb3, getContractAddress } from 'shared/utils';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { globalLogger } from 'shared/utils/logger';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
@@ -12,10 +12,8 @@ import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity, registerLiquidityRefundAddressForChain } from 'shared/deposit_liquidity';
 import { rangeOrder } from 'shared/range_order';
 import { initializeBscChain, initializeBscContracts } from 'shared/initialize_new_chains';
-import { bscVaultAwaitingGovernanceActivation } from 'generated/events/bscVault/awaitingGovernanceActivation';
-import { validatorNewEpoch } from 'generated/events/validator/newEpoch';
-import { validatorRotationAborted } from 'generated/events/validator/rotationAborted';
-import { validatorRotationPhaseUpdated } from 'generated/events/validator/rotationPhaseUpdated';
+import { getKeyManagerAbi } from 'shared/contract_interfaces';
+import { bscVaultVaultRotatedExternally } from 'generated/events/bscVault/vaultRotatedExternally';
 
 async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up vaults for Bsc');
@@ -24,48 +22,30 @@ async function setupNewChain<A = []>(cf: ChainflipIO<A>): Promise<void> {
   // Step 1
   await initializeBscChain(cf.logger);
 
-  // Step 2
-  cf.info('Forcing rotation');
-  await cf.submitGovernance({ extrinsic: (api) => api.tx.validator.forceRotation() });
+  // Step 2: BSC shares EvmCrypto with Ethereum/Arbitrum, so instead of forcing a validator
+  // rotation to generate a brand-new aggregate key, we reuse the live EVM aggregate key. We
+  // read it from the Ethereum KeyManager (which always holds the current active key, even
+  // after rotations) and set it on the BSC KeyManager via the gov key.
+  cf.info('Setting Bsc vault key to the current EVM aggregate key');
+  const ethClient = getWeb3('Ethereum');
+  const ethKeyManager = new ethClient.eth.Contract(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (await getKeyManagerAbi()) as any,
+    getContractAddress('Ethereum', 'KEY_MANAGER'),
+  );
+  const aggKey = await ethKeyManager.methods.getAggregateKey().call();
 
-  const rotationEvent = await cf.stepUntilOneEventOf({
-    rotationPhaseUpdated: {
-      name: 'Validator.RotationPhaseUpdated',
-      schema: validatorRotationPhaseUpdated.refine(
-        (event) => event.newPhase.__kind === 'KeygensInProgress',
-      ),
-    },
-    rotationAborted: {
-      name: 'Validator.RotationAborted',
-      schema: validatorRotationAborted,
-    },
+  cf.info('Inserting BSC key in the contracts');
+  await initializeBscContracts(cf.logger, bscClient, {
+    pubKeyX: aggKey.pubKeyX,
+    pubKeyYParity: Number(aggKey.pubKeyYParity) === 1 ? 'Odd' : 'Even',
   });
-  if (rotationEvent.key === 'rotationAborted') {
-    throw new Error(
-      `Initial setup_vaults forced rotation was ABORTED. Cannot continue with the test, please check the node logs for possible reasons.`,
-    );
-  }
-
-  // Step 3
-  cf.info('Waiting for new keys');
-  const keyEvents = await cf.stepUntilAllEventsOf({
-    bsc: {
-      name: 'BscVault.AwaitingGovernanceActivation',
-      schema: bscVaultAwaitingGovernanceActivation,
-    },
-  });
-  const bscKey = keyEvents.bsc.data.newPublicKey;
-
-  // Step 4
-  cf.info('Setting up external chain (Bsc) with new keys');
-  cf.info('Inserting Bsc key in the contracts');
-  await initializeBscContracts(cf.logger, bscClient, bscKey);
   cf.debug('Bsc key inserted');
 
-  // Confirmation
-  cf.info('Waiting for new epoch...');
-  await cf.stepUntilEvent('Validator.NewEpoch', validatorNewEpoch);
-  cf.info('New Epoch');
+  // Step 3: the engine witnesses the gov-key set on the BSC KeyManager, which activates the
+  // Bsc vault on the state chain via `inner_vault_key_rotated_externally`. No rotation needed.
+  cf.info('Waiting for Bsc vault activation to be witnessed');
+  await cf.stepUntilEvent('BscVault.VaultRotatedExternally', bscVaultVaultRotatedExternally);
   cf.info('Vault Setup completed');
 
   // Setup swaps
