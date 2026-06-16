@@ -195,7 +195,9 @@ impl TopicMuxer {
 				},
 		};
 
-		self.all_outgoing_sender.send(outgoing).expect("receiver dropped")
+		if self.all_outgoing_sender.send(outgoing).is_err() {
+			trace!("Outgoing transport receiver dropped; discarding message");
+		}
 	}
 
 	pub async fn run(mut self) {
@@ -535,5 +537,39 @@ mod tests {
 			payload: [VERSION_PREFIX, &topic_prefix(TOPIC_DOT), DATA_2].concat(),
 		};
 		assert_eq!(received, expected);
+	}
+
+	/// If the downstream transport receiver is dropped (e.g. the transport task
+	/// exited), sending an outgoing message must not panic the muxer.
+	#[tokio::test]
+	async fn dropped_outgoing_receiver_does_not_crash_muxer() {
+		let (p2p_outgoing_sender, p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+		let (muxer_future, mut handles) =
+			TopicMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender, [ETH_TOPIC]);
+		let muxer_handle = tokio::task::spawn(muxer_future);
+
+		let mut eth_handle = handles.remove(&ETH_TOPIC).unwrap();
+
+		// The downstream transport goes away.
+		drop(p2p_outgoing_receiver);
+
+		// Sending an outgoing message must not panic the muxer task.
+		eth_handle
+			.outgoing_sender
+			.send(OutgoingMessage::Broadcast { recipients: vec![ACC_1], payload: DATA_1.to_vec() })
+			.unwrap();
+
+		// Give the muxer time to process the outgoing message (and, with the bug, panic).
+		tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+		// The muxer should still be alive and routing incoming messages.
+		let bytes = [VERSION_PREFIX, &topic_prefix(TOPIC_ETH), DATA_1].concat();
+		p2p_incoming_sender.send((ACC_1, bytes)).unwrap();
+		let received = expect_recv_with_timeout(&mut eth_handle.incoming_receiver).await;
+		assert_eq!(received.payload, DATA_1.to_vec());
+
+		assert!(!muxer_handle.is_finished(), "muxer task should still be running");
 	}
 }
