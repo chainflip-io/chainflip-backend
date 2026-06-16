@@ -237,6 +237,28 @@ pub async fn connect_to_peer(
 
 	let connection = endpoint.connect(addr, &server_name.to_str())?.await?;
 
+	// Pin the peer identity. The allowlist verifier only proves the server is *some*
+	// registered validator; ensure it is the exact peer we intended to reach, so this
+	// account's private messages can never be sent to a different (but allowlisted) node.
+	let presented_pubkey = {
+		let peer_identity = connection.peer_identity();
+		let certs = peer_identity
+			.as_ref()
+			.and_then(|id| id.downcast_ref::<Vec<rustls::pki_types::CertificateDer<'static>>>())
+			.ok_or_else(|| anyhow::anyhow!("peer presented no certificate"))?;
+		let cert = certs.first().ok_or_else(|| anyhow::anyhow!("empty peer certificate chain"))?;
+		CertificateIdentity::extract_pubkey_from_cert(cert)?
+	};
+	if presented_pubkey != peer.ed_pubkey {
+		connection.close(0u32.into(), b"unexpected peer identity");
+		anyhow::bail!(
+			"Connected to unexpected peer at {}: expected key {}, got {}",
+			addr,
+			hex::encode(peer.ed_pubkey),
+			hex::encode(presented_pubkey),
+		);
+	}
+
 	info!("Connected to peer {}", peer.account_id);
 
 	Ok(PeerConnection { connection })
