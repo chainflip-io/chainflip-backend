@@ -25,7 +25,7 @@ mod connection;
 #[cfg(test)]
 mod tests;
 
-use std::{cell::Cell, collections::BTreeMap, net::Ipv6Addr, sync::Arc};
+use std::{cell::Cell, net::Ipv6Addr, sync::Arc};
 
 use anyhow::Context;
 use cf_utilities::{make_periodic_tick, metrics::P2P_MSG_SENT, Port};
@@ -102,8 +102,6 @@ struct QuicContext {
 	endpoint: Endpoint,
 	allowlist: Arc<AllowlistVerifier>,
 	active_connections: ActiveConnectionWrapper,
-	/// Maps Ed25519 pubkey to account ID for incoming message handling
-	ed_pubkey_to_account_id: BTreeMap<[u8; 32], AccountId>,
 	reconnect_context: ReconnectContext,
 	our_account_id: AccountId,
 }
@@ -168,9 +166,9 @@ impl QuicContext {
 					return;
 				}
 
-				// Add to allowlist
+				// Add to allowlist (this also revokes any previously-registered key for
+				// this account, e.g. after a node-key rotation).
 				self.allowlist.add_peer(peer_info.ed_pubkey, account_id.clone());
-				self.ed_pubkey_to_account_id.insert(peer_info.ed_pubkey, account_id.clone());
 
 				// Remove any existing connection
 				let connections = &mut self.active_connections;
@@ -204,7 +202,6 @@ impl QuicContext {
 				}
 
 				self.allowlist.remove_peer(&ed_pubkey.0);
-				self.ed_pubkey_to_account_id.remove(&ed_pubkey.0);
 				self.reconnect_context.reset(&account_id);
 
 				if let Some(peer) = self.active_connections.remove(&account_id) {
@@ -325,7 +322,6 @@ pub async fn start(
 		endpoint: endpoint.clone(),
 		allowlist: allowlist.clone(),
 		active_connections: ActiveConnectionWrapper::new(),
-		ed_pubkey_to_account_id: BTreeMap::new(),
 		reconnect_context: ReconnectContext::new(reconnect_sender),
 		our_account_id: our_account_id.clone(),
 	};
