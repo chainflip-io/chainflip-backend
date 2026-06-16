@@ -56,9 +56,6 @@ pub struct PeerInfo {
 	pub account_id: AccountId,
 	/// The Ed25519 public key (used directly for TLS certificate verification)
 	pub ed_pubkey: [u8; 32],
-	/// X25519 public key (derived from Ed25519, not used by QUIC but kept for compatibility with
-	/// ZMQ)
-	pub pubkey: crate::XPublicKey,
 	pub ip: Ipv6Addr,
 	pub port: Port,
 }
@@ -70,9 +67,10 @@ impl PeerInfo {
 		ip: Ipv6Addr,
 		port: Port,
 	) -> Self {
-		let ed_verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&ed_public_key.0).unwrap();
-		let x_public_key = crate::ed25519_public_key_to_x25519_public_key(&ed_verifying_key);
-		PeerInfo { account_id, ed_pubkey: ed_public_key.0, pubkey: x_public_key, ip, port }
+		// The key is stored verbatim and only validated when it is used to verify a TLS
+		// handshake, so an invalid key from on-chain registration simply fails to connect
+		// rather than panicking here.
+		PeerInfo { account_id, ed_pubkey: ed_public_key.0, ip, port }
 	}
 }
 
@@ -80,10 +78,9 @@ impl std::fmt::Display for PeerInfo {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(
 			f,
-			"PeerInfo {{ account_id: {}, ed_pubkey: {}, pubkey: {}, ip: {}, port: {} }}",
+			"PeerInfo {{ account_id: {}, ed_pubkey: {}, ip: {}, port: {} }}",
 			self.account_id,
 			hex::encode(self.ed_pubkey),
-			hex::encode(self.pubkey.as_bytes()),
 			self.ip,
 			self.port,
 		)
