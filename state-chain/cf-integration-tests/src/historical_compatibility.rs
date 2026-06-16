@@ -99,9 +99,9 @@ fn check_incompatibilities(incompatibilities: Vec<TypeIncompatibilityInfo>) -> R
 	println!("{BLUE}# Explanation{RESET}");
 	println!("The listed types were changed but their changelog wasn't updated.");
 	println!("");
-	println!("The implementation of the trait `HasChangelog` for a type allows auto-generation of migrations, and also proptesting these \"historical\" types against actual historical metadata.");
-	println!("Since you see this message, an incompatibility was found. The Summary above lists all incompatibilities found and provides details:");
-	println!("the type, the runtime API call it is referenced in, the historical runtime version that was tested, and links to the full Diff between what was expected and what was encountered.");
+	println!("The implementation of the trait `HasChangelog` for a type allows auto-generation of migrations, and also fuzzy testing these \"historical\" types against actual historical metadata.");
+	println!("The summary above lists all incompatibilities that were found and provides details: the type, the runtime API call it is referenced in, the historical runtime version that was tested");
+	println!("and links to the full diff between what was expected and what was encountered.");
 	println!("");
 	println!("Please update the `HasChangelog` implementation for the types that are listed. See the documentation of `HasChangelog` for more information.");
 	println!("");

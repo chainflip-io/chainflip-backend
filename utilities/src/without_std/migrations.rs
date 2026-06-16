@@ -31,12 +31,12 @@ macro_rules! define_all_released_runtime_versions {
         /// This trait is the foundation of auto-generated migrations. It provides all the information
         /// required to refer to historical versions of a type, as well as migrating data forwards and backwards in time.
         ///
-        /// It has an associated for every release which describes the changes that happened in this release
+        /// It has an associated type for every release describing the changes that happened in that release
         ///  - `type in_20100`: the migration that transformed this type in release 2.1
         ///  - `type in_20000`: the migration that transformed this type in release 2.0
         ///  - ... and so on
         ///
-        /// Each of these entries has to implement `Migration<v{VERSION}`, {Type at this version}>`. This means
+        /// Each of these entries has to implement `Migration<{Type at this version}, v{VERSION}`>`. This means
         /// that the migration has to target the correct historical version of this type at that point in time.
         ///
         /// It also has the following associated type:
@@ -82,7 +82,7 @@ macro_rules! define_all_released_runtime_versions {
         ///  --[migration: Self::in_20000]-> `<Self as HasVersion<v20000>>::HistoricalType`
         ///  --[migration: Self::in_20100]-> `<Self as HasVersion<v20100>>::HistoricalType`
         ///  --[migration: Self::in_20200]-> `<Self as HasVersion<v20200>>::HistoricalType` (equal to `Self::GenericType`)
-        ///  --[migration: Self::GenericMigration]-> `Self`
+        ///  --[migration: Self::MigrationFromGeneric]-> `Self`
         ///
         /// In order to implement `HasChangelog` a type also has to implement `HasGenericVariant`.
         ///
