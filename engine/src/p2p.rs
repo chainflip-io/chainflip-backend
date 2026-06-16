@@ -41,7 +41,7 @@ use anyhow::Context;
 use futures::{Future, FutureExt, StreamExt};
 use sp_core::H256;
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
-use tracing::{error, info_span, Instrument};
+use tracing::{error, info, info_span, Instrument};
 use zeroize::Zeroizing;
 
 use cf_utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
@@ -98,6 +98,17 @@ where
 	let (multisig_channels, muxer_future) =
 		MultisigChannels::new(incoming_message_receiver, outgoing_message_sender);
 
+	// Read the network-wide P2P transport selection from the State Chain. If it later
+	// changes, the monitor task below shuts the engine down so it restarts on the new
+	// transport, keeping the whole validator set on a single (wire-incompatible) transport.
+	let initial_transport = state_chain_client
+		.storage_value::<pallet_cf_environment::P2pTransportValue<state_chain_runtime::Runtime>>(
+			initial_block_hash,
+		)
+		.await
+		.context("Failed to read the P2P transport setting from the State Chain")?;
+	info!("P2P transport selected by the State Chain: {initial_transport}");
+
 	let fut = task_scope(move |scope| {
 		async move {
 			scope.spawn({
@@ -115,10 +126,8 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
-					let transport = select_transport();
-					tracing::info!("Starting P2P transport: {transport:?}");
 					start_transport(
-						transport,
+						to_engine_transport(initial_transport),
 						node_key,
 						settings.port,
 						current_peers,
@@ -143,9 +152,9 @@ where
 					state_chain_client,
 					sc_block_stream,
 					peer_update_sender,
+					initial_transport,
 				)
-				.await;
-				Ok(())
+				.await
 			});
 
 			Ok(())
@@ -156,15 +165,11 @@ where
 	Ok((multisig_channels, p2p_ready_receiver, fut))
 }
 
-/// Selects which P2P transport to run.
-///
-/// TODO (Phase 2): source this from the on-chain `P2pTransport` governance flag so the
-/// choice is coordinated network-wide. For now it is an env override defaulting to ZMQ,
-/// which keeps the proven transport as the default while QUIC ships dormant.
-fn select_transport() -> engine_p2p::Transport {
-	match std::env::var("CF_P2P_TRANSPORT").as_deref().map(str::to_ascii_lowercase).as_deref() {
-		Ok("quic") => engine_p2p::Transport::Quic,
-		_ => engine_p2p::Transport::Zmq,
+/// Maps the on-chain transport selection to the engine's transport enum.
+fn to_engine_transport(transport: cf_primitives::P2pTransport) -> engine_p2p::Transport {
+	match transport {
+		cf_primitives::P2pTransport::Zmq => engine_p2p::Transport::Zmq,
+		cf_primitives::P2pTransport::Quic => engine_p2p::Transport::Quic,
 	}
 }
 
@@ -203,7 +208,9 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
-) where
+	initial_transport: cf_primitives::P2pTransport,
+) -> anyhow::Result<()>
+where
 	StateChainClient: StorageApi + 'static + Send + Sync,
 {
 	use state_chain_runtime::Runtime;
@@ -242,6 +249,23 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 						}
 					}
 				}
+
+				// If governance has changed the network-wide transport, shut down so the
+				// engine restarts on the new transport. We only act on a confirmed change;
+				// a transient read error leaves the engine running on the current transport.
+				if let Ok(current_transport) = state_chain_client
+					.storage_value::<pallet_cf_environment::P2pTransportValue<Runtime>>(
+						current_block.hash,
+					)
+					.await
+				{
+					if current_transport != initial_transport {
+						anyhow::bail!(
+							"P2P transport changed from {initial_transport} to {current_transport}; \
+							 restarting the engine to apply it"
+						);
+					}
+				}
 			},
 			None => {
 				error!("Exiting as State Chain block stream ended");
@@ -249,4 +273,5 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 			},
 		}
 	}
+	Ok(())
 }
