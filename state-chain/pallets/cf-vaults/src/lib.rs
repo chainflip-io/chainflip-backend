@@ -23,7 +23,7 @@ use cf_primitives::EpochIndex;
 use cf_runtime_utilities::EnumVariant;
 use cf_traits::{
 	AsyncResult, Broadcaster, CfeMultisigRequest, ChainflipWithTargetChain, CurrentEpochIndex,
-	EpochTransitionHandler, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
+	EpochInfo, GetBlockHeight, SafeMode, SetSafeMode, VaultKeyWitnessedHandler,
 };
 use cf_utilities::derive_common_traits_no_bounds;
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -117,7 +117,11 @@ pub mod pallet {
 
 	/// Pallet implements [`Hooks`] trait
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {}
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_idle(_n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+			Self::prune_expired_vault_start_block_numbers(remaining_weight)
+		}
+	}
 
 	/// A map of starting block number of vaults by epoch.
 	#[pallet::storage]
@@ -243,7 +247,43 @@ derive_common_traits_no_bounds! {
 	}
 }
 
+/// The maximum number of expired [`VaultStartBlockNumbers`] entries to prune in a single
+/// block. This bounds the one-off cost of draining a large backlog (e.g. for a chain that
+/// was previously not being pruned).
+const MAX_EXPIRED_VAULTS_PRUNED_PER_BLOCK: u64 = 10;
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Remove [`VaultStartBlockNumbers`] entries for epochs that have already expired.
+	///
+	/// Runs from the pallet's own `on_idle` hook.
+	fn prune_expired_vault_start_block_numbers(remaining_weight: Weight) -> Weight {
+		let db = T::DbWeight::get();
+		// Approximate worst case is ~1 read/write per entry.
+		if remaining_weight.any_lt(
+			db.reads_writes(
+				MAX_EXPIRED_VAULTS_PRUNED_PER_BLOCK,
+				MAX_EXPIRED_VAULTS_PRUNED_PER_BLOCK,
+			),
+		) {
+			return Weight::zero();
+		}
+		let mut reads = 0;
+		let mut writes = 0;
+		let last_expired_epoch = T::EpochInfo::last_expired_epoch();
+		let expired = VaultStartBlockNumbers::<T, I>::iter_keys()
+			.inspect(|_| {
+				reads += 1;
+			})
+			.filter(|epoch| *epoch <= last_expired_epoch)
+			.take(MAX_EXPIRED_VAULTS_PRUNED_PER_BLOCK as usize)
+			.collect::<Vec<EpochIndex>>();
+		for epoch in &expired {
+			VaultStartBlockNumbers::<T, I>::remove(epoch);
+			writes += 1;
+		}
+		db.reads_writes(reads, writes)
+	}
+
 	fn activate_new_key_for_chain(block_number: ChainBlockNumberFor<T, I>) {
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::Complete);
 		VaultStartBlockNumbers::<T, I>::insert(
@@ -284,17 +324,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::TargetChain> for Pall
 		PendingVaultActivation::<T, I>::put(VaultActivationStatus::<T, I>::AwaitingActivation {
 			new_public_key: cf_chains::benchmarking_value::BenchmarkValue::benchmark_value(),
 		});
-	}
-}
-
-impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
-	fn on_expired_epoch(expired_epoch: EpochIndex) {
-		for epoch in VaultStartBlockNumbers::<T, I>::iter_keys()
-			.filter(|epoch| *epoch <= expired_epoch)
-			.collect::<Vec<EpochIndex>>()
-		{
-			VaultStartBlockNumbers::<T, I>::remove(epoch);
-		}
 	}
 }
 

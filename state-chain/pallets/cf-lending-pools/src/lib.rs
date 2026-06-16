@@ -87,7 +87,7 @@ use sp_std::{
 
 pub use pallet::*;
 
-pub const STORAGE_VERSION_U16: u16 = 7;
+pub const STORAGE_VERSION_U16: u16 = 8;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
 
 use serde::{Deserialize, Serialize};
@@ -198,7 +198,6 @@ define_wrapper_type!(CorePoolId, u32);
 
 const MAX_PALLET_CONFIG_UPDATE: u32 = 100; // used to bound no. of updates per extrinsic
 
-// Rename this to LoanPurpose?
 #[derive(
 	Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo, PartialOrd, Ord,
 )]

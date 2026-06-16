@@ -367,6 +367,10 @@ decl_runtime_apis!(
 		fn cf_lending_pools(
 			asset: Option<Asset>,
 		) -> Vec<before_version_17::RpcLendingPool<AssetAmount>>;
+		#[changed_in(19)]
+		fn cf_lending_pools(
+			asset: Option<Asset>,
+		) -> Vec<before_version_19::RpcLendingPool<AssetAmount>>;
 		fn cf_lending_pools(asset: Option<Asset>) -> Vec<RpcLendingPool<AssetAmount>>;
 		#[changed_in(17)]
 		fn cf_loan_accounts(

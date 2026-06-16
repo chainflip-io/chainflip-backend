@@ -1876,7 +1876,16 @@ where
 		self.rpc_backend.with_versioned_runtime_api(at, |api, hash, version| {
 			if version < 17 {
 				#[expect(deprecated)]
-				api.cf_lending_pools_before_version_17(hash, asset)
+				api.cf_lending_pools_before_version_17(hash, asset).map(|lending_pools| {
+					lending_pools
+						.into_iter()
+						.map(state_chain_runtime::runtime_apis::custom_api::types::before_version_19::RpcLendingPool::from)
+						.map(Into::into)
+						.collect()
+				})
+			} else if version < 19 {
+				#[expect(deprecated)]
+				api.cf_lending_pools_before_version_19(hash, asset)
 					.map(|lending_pools| lending_pools.into_iter().map(Into::into).collect())
 			} else {
 				api.cf_lending_pools(hash, asset)
@@ -1888,7 +1897,6 @@ where
 						asset: pool.asset,
 						total_amount: pool.total_amount.into(),
 						available_amount: pool.available_amount.into(),
-						owed_to_network: pool.owed_to_network.into(),
 						utilisation_rate: pool.utilisation_rate,
 						utilisation_cap: pool.utilisation_cap,
 						current_interest_rate: pool.current_interest_rate,

@@ -1401,7 +1401,6 @@ fn lending_pools_serialization() {
 		asset: Asset::Usdc,
 		total_amount: 2_000u128.into(),
 		available_amount: 1_500u128.into(),
-		owed_to_network: 155u128.into(),
 		utilisation_rate: Permill::from_percent(90),
 		utilisation_cap: Permill::from_percent(95),
 		current_interest_rate: Permill::from_percent(8),
