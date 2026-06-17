@@ -41,7 +41,10 @@ use cf_utilities::{
 	Port,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	mpsc::{UnboundedReceiver, UnboundedSender},
+	oneshot,
+};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 
 use crate::{
@@ -262,6 +265,7 @@ impl Drop for P2PContext {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start(
 	p2p_key: P2PKey,
 	port: Port,
@@ -270,6 +274,7 @@ pub async fn start(
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+	shutdown: oneshot::Receiver<()>,
 ) -> anyhow::Result<()> {
 	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
@@ -314,10 +319,13 @@ pub async fn start(
 			peer_update_receiver,
 			monitor_event_receiver,
 			reconnect_receiver,
+			shutdown,
 		)
 		.instrument(info_span!("p2p"))
 		.await;
 
+	// `context` is dropped here, whose `Drop` stops the native listening thread and releases
+	// the ZMQ socket, so a subsequently-started transport can take over.
 	Ok(())
 }
 
@@ -333,11 +341,16 @@ impl P2PContext {
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
 		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
+		mut shutdown: oneshot::Receiver<()>,
 	) {
 		let mut check_activity_interval = make_periodic_tick(ACTIVITY_CHECK_INTERVAL, false);
 
 		loop {
 			tokio::select! {
+				_ = &mut shutdown => {
+					info!("Shutting down ZMQ transport");
+					break
+				}
 				Some(messages) = outgoing_message_receiver.recv() => {
 					self.send_messages(messages);
 				}
