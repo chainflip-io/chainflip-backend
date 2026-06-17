@@ -2,6 +2,12 @@
 
 All notable changes included in each Chainflip release will be documented in this file.
 
+## [2.2.4] - 2026-06-17
+
+### Fixes
+
+- Set ONLY_PREALLOCATE_FROM_POOL to true for Tron deposit channels.
+
 ## [2.2.3] - 2026-06-02
 
 ### Features
