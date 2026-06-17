@@ -40,6 +40,7 @@ import { throwError } from 'shared/utils/logger';
 import { swappingSwapDepositAddressReady } from 'generated/events/swapping/swapDepositAddressReady';
 import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
 import { swappingSwapEgressScheduled } from 'generated/events/swapping/swapEgressScheduled';
+import { cfPrimitivesChainsForeignChain, numberOrHex } from 'generated/events/common';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingSwapEgressIgnored } from 'generated/events/swapping/swapEgressIgnored';
 import z from 'zod';
@@ -366,6 +367,58 @@ async function waitForCcmExecution<A = []>(
   }
 }
 
+// Wait for the broadcast that fulfils the given (non-CCM) egress to either succeed or be aborted
+// on the state chain. This lets a swap fail fast on BroadcastAborted (e.g. an Assethub nonce
+// stall where all authorities failed to broadcast) instead of silently waiting out the
+// destination balance timeout
+async function waitForBroadcastOutcome<A = []>(
+  cf: ChainflipIO<A>,
+  destAsset: Asset,
+  egressId: z.infer<typeof swappingSwapEgressScheduled>['egressId'],
+): Promise<void> {
+  const destChain = chainFromAsset(destAsset);
+
+  // Map the egress to the broadcast that carries it
+  const { broadcastId } = await cf.stepUntilEvent(
+    `${destChain}IngressEgress.BatchBroadcastRequested`,
+    z
+      .object({
+        broadcastId: z.number(),
+        egressIds: z.array(z.tuple([cfPrimitivesChainsForeignChain, numberOrHex])),
+      })
+      .refine((event) =>
+        event.egressIds.some((e) => e[0] === egressId[0] && `${e[1]}` === `${egressId[1]}`),
+      ),
+  );
+  cf.debug(
+    `${destChain}IngressEgress.BatchBroadcastRequestedBroadcast found with broadcastId: ${broadcastId}`,
+  );
+
+  // Wait for the broadcaster to report success or give up (abort).
+  const outcome = await cf.stepUntilOneEventOf({
+    broadcastSuccess: {
+      name: `${destChain}Broadcaster.BroadcastSuccess`,
+      schema: z.object({ broadcastId: z.number() }).refine((e) => e.broadcastId === broadcastId),
+    },
+    broadcastAborted: {
+      name: `${destChain}Broadcaster.BroadcastAborted`,
+      schema: z.object({ broadcastId: z.number() }).refine((e) => e.broadcastId === broadcastId),
+    },
+  });
+
+  if (outcome.key === 'broadcastAborted') {
+    throwError(
+      cf.logger,
+      new Error(
+        `Broadcast ${broadcastId} to ${destChain} was ABORTED (egress ${JSON.stringify(
+          egressId,
+        )}). All authorities failed to broadcast — likely a stuck/burned nonce.`,
+      ),
+    );
+  }
+  cf.debug(`Broadcast ${broadcastId} to ${destChain} succeeded.`);
+}
+
 // Note: if using the swap context, the logger must contain the tag
 export async function doPerformSwap<A = []>(
   cf: ChainflipIO<A>,
@@ -416,6 +469,10 @@ export async function doPerformSwap<A = []>(
   const egressId = await waitForEgressScheduled(cf, swapRequestId, swapContext);
   if (messageMetadata) {
     await waitForCcmExecution(cf, destAsset, egressId);
+  } else {
+    // Fail fast on BroadcastAborted (e.g. a stuck Assethub nonce) instead of waiting out the
+    // balance timeout.
+    await waitForBroadcastOutcome(cf, destAsset, egressId);
   }
 
   try {
