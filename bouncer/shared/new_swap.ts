@@ -23,6 +23,20 @@ export type DcaParams = {
   chunkIntervalBlocks: number;
 };
 
+export function formatCcmDepositMetadata(
+  metadata: CcmDepositMetadata | undefined,
+  maxLength: number = 10,
+): string {
+  if (!metadata) {
+    return 'undefined';
+  }
+  return JSON.stringify({
+    ...metadata,
+    message:
+      metadata.message != null ? `${metadata.message.slice(0, maxLength)}...` : metadata.message,
+  });
+}
+
 export async function newSwap<A = []>(
   cf: ChainflipIO<A>,
   sourceAsset: Asset,

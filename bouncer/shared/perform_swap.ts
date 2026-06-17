@@ -1,5 +1,11 @@
 import { HDNodeWallet } from 'ethers';
-import { DcaParams, newSwap, FillOrKillParamsX128, CcmDepositMetadata } from 'shared/new_swap';
+import {
+  DcaParams,
+  newSwap,
+  FillOrKillParamsX128,
+  CcmDepositMetadata,
+  formatCcmDepositMetadata,
+} from 'shared/new_swap';
 import { send, sendViaCfTester } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
 import {
@@ -75,7 +81,7 @@ export async function requestNewSwap<A = []>(
   dcaParams?: DcaParams,
 ): Promise<SwapParams> {
   cf.debug(
-    `Requesting swap with sourceAsset ${sourceAsset}, destinationAsset ${destAsset}, destinationAddress ${destAddress} and metadata ${JSON.stringify(messageMetadata)}`,
+    `Requesting swap with sourceAsset ${sourceAsset}, destinationAsset ${destAsset}, destinationAddress ${destAddress} and metadata ${formatCcmDepositMetadata(messageMetadata)}`,
   );
   await newSwap(
     cf,
