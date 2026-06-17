@@ -235,6 +235,9 @@ build-localnet() {
   echo "📐 Updating event schemas ..."
   cd bouncer && ./commands/generate_event_schemas.ts && cd ..
 
+  echo "📐 Updating chaintypes ..."
+  cd bouncer && ./commands/generate_chaintypes.ts && cd ..
+
   print_success
 }
 

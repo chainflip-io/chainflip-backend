@@ -1,19 +1,17 @@
 import z from 'zod';
 import assert from 'assert';
 import {
-  amountToFineAmount,
-  assetDecimals,
   Assets,
   doBtcAddressesMatch,
   newAssetAddress,
-  shortChainFromAsset,
   Asset,
+  amountToFineAmountBigInt,
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { requestNewSwap } from 'shared/perform_swap';
 import { jsonRpc } from 'shared/json_rpc';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipClient } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import {
   lendingPoolsBoostFundsAdded,
@@ -32,7 +30,7 @@ import {
 import { bitcoinIngressEgressDepositBoostedEvent } from 'generated/events/bitcoinIngressEgress/depositBoosted';
 import { bitcoinIngressEgressDepositFinalisedEvent } from 'generated/events/bitcoinIngressEgress/depositFinalised';
 import { bitcoinIngressEgressInsufficientBoostLiquidityEvent } from 'generated/events/bitcoinIngressEgress/insufficientBoostLiquidity';
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { submitGovernanceExtrinsicDedot } from 'shared/cf_governance';
 import { boostPoolFee } from 'shared/setup_boost_pools';
 
 /// Stops boosting BTC at the 5bps tier and returns the StoppedBoosting event.
@@ -40,12 +38,8 @@ export async function stopBoosting(
   cf: ChainflipIO<WithLpAccount>,
 ): Promise<z.infer<typeof lendingPoolsStoppedBoosting> | undefined> {
   try {
-    return await cf.submitExtrinsic({
-      extrinsic: (api) =>
-        api.tx.lendingPools.stopBoosting(
-          shortChainFromAsset(Assets.Btc).toUpperCase(),
-          boostPoolFee,
-        ),
+    return await cf.submitExtrinsicDedot({
+      extrinsic: (api) => api.tx.lendingPools.stopBoosting(Assets.Btc, boostPoolFee),
       expectedEvent: lendingPoolsStoppedBoostingEvent.refine(
         (event) =>
           event.boosterId === cf.requirements.account.keypair.address &&
@@ -71,11 +65,11 @@ export async function addBoostFunds(
 ): Promise<z.infer<typeof lendingPoolsBoostFundsAdded>> {
   // Add funds to the boost pool
   cf.debug(`Adding boost funds of ${amount} Btc at ${boostPoolFee}bps`);
-  return cf.submitExtrinsic({
+  return cf.submitExtrinsicDedot({
     extrinsic: (api) =>
       api.tx.lendingPools.addBoostFunds(
-        shortChainFromAsset(Assets.Btc).toUpperCase(),
-        amountToFineAmount(amount.toString(), assetDecimals(Assets.Btc)),
+        Assets.Btc,
+        amountToFineAmountBigInt(amount.toString(), Assets.Btc),
         boostPoolFee,
       ),
     expectedEvent: lendingPoolsBoostFundsAddedEvent.refine(
@@ -176,15 +170,12 @@ async function doBoostingForBtcAssetTest<A extends WithLpAccount>(
 
 export async function testBoostingSwap(testContext: TestContext) {
   const parentCf = await newChainflipIO(testContext.logger, []);
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipClient();
 
   const lpUri = '//LP_BOOST';
   const cf = parentCf.with({ account: fullAccountFromUri(lpUri, 'LP') });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const boostPool: any = (
-    await chainflip.query.lendingPools.boostPools(Assets.Btc, boostPoolFee)
-  ).toJSON();
+  const boostPool = await chainflip.query.lendingPools.boostPools([Assets.Btc, boostPoolFee]);
 
   assert(boostPool?.feeBps, `Boost pool for tier ${boostPoolFee} does not exist`);
 
@@ -192,15 +183,14 @@ export async function testBoostingSwap(testContext: TestContext) {
   // Setting them to the same as the default values, Just in case they are different (eg. upgrade test).
   cf.info(`Setting boost pool config via governance`);
   const minimums: [Asset, string][] = [[Assets.Btc, '11000']];
-  await submitGovernanceExtrinsic((api) =>
+  await submitGovernanceExtrinsicDedot((api) =>
     api.tx.lendingPools.updatePalletConfig([
       {
-        SetBoostConfig: {
+        type: 'SetBoostConfig',
+        value: {
           config: {
             networkFeeDeductionFromBoostPercent: 50,
-            minimumAddFundsAmount: new Map(
-              minimums.map(([asset, amount]) => [{ [asset]: {} }, amount]),
-            ),
+            minimumAddFundsAmount: minimums.map(([asset, amount]) => [asset, BigInt(amount)]),
             minLendingPoolShare: 30,
           },
         },

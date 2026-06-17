@@ -1,7 +1,17 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import Keyring from 'polkadot/keyring';
 import { cfMutex, waitForExt } from 'shared/utils';
-import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
+import { DisposableApiPromise, getChainflipApi, getChainflipClient } from 'shared/utils/substrate';
+import {
+  ChainflipClient,
+  ChainflipExtrinsic,
+  formatDispatchError,
+  signSendAndFinalize,
+} from 'shared/utils/dedot';
+import type {
+  PalletCfGovernanceExecutionMode,
+  StateChainRuntimeRuntimeCallLike,
+} from 'generated/chaintypes/chainflip-node';
 import { Logger } from 'pino';
 import { globalLogger } from 'shared/utils/logger';
 import { findOneEventOfMany } from 'shared/utils/indexer';
@@ -69,4 +79,67 @@ export async function submitGovernanceExtrinsic(
 ): Promise<number> {
   await using api = await getChainflipApi();
   return submitExistingGovernanceExtrinsic(await call(api), logger, preAuthorise);
+}
+
+/**
+ * dedot variant of {@link submitGovernanceExtrinsic}: the inner extrinsic is built from the
+ * compile-time-typed dedot client (`client.tx.<pallet>.<call>(...)`) and proposed via dedot's
+ * `governance.proposeGovernanceExtrinsic`. Returns the proposal id once the `Governance.Proposed`
+ * event is found (via the indexer).
+ *
+ * NOTE: transitional — lives alongside the polkadot.js version while call sites are migrated.
+ */
+export async function submitGovernanceExtrinsicDedot(
+  call: (client: ChainflipClient) => ChainflipExtrinsic | Promise<ChainflipExtrinsic>,
+  logger: Logger = globalLogger,
+  preAuthorise = 0,
+): Promise<number> {
+  await using client = await getChainflipClient();
+  const inner = await call(client);
+
+  // The polkadot.js path passed `preAuthorise` as a number that SCALE-encoded the
+  // ExecutionMode enum (0 -> Automatic, 1 -> Manual). Translate to the typed dedot variant.
+  const execution: PalletCfGovernanceExecutionMode = preAuthorise === 0 ? 'Automatic' : 'Manual';
+
+  logger.debug(`Submitting governance extrinsic`);
+
+  // `inner.call` is the concrete RuntimeCall built inside the closure; the `ChainflipExtrinsic`
+  // supertype widens its type to `IRuntimeTxCall`, so narrow it back.
+  const proposal = client.tx.governance.proposeGovernanceExtrinsic(
+    inner.call as StateChainRuntimeRuntimeCallLike,
+    execution,
+  );
+  const result = await signSendAndFinalize(client, proposal, snowWhite, snowWhiteUri);
+
+  if (result.dispatchError) {
+    throw new Error(
+      `Governance extrinsic failed: ${formatDispatchError(client, result.dispatchError)}`,
+    );
+  }
+
+  // `result` only resolves on the Finalized status, so the block number is always present.
+  if (result.status.type !== 'Finalized') {
+    throw new Error(`Governance extrinsic did not finalize: ${result.status.type}`);
+  }
+  const txHash = `${result.txHash}`;
+  const txBlockNumber = result.status.value.blockNumber;
+  logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);
+
+  // Use the indexer to find the Governance.Proposed event. This avoids
+  // SCALE decoding of result.events which fails at runtime upgrade boundaries.
+  const event = await findOneEventOfMany(
+    logger,
+    {
+      event: {
+        name: 'Governance.Proposed',
+        schema: governanceProposed,
+        txHash,
+      },
+    },
+    { startFromBlock: txBlockNumber },
+  );
+
+  const proposalId = event.data;
+  logger.debug(`Governance extrinsic proposal ID: ${proposalId}`);
+  return proposalId;
 }

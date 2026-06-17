@@ -8,7 +8,14 @@ import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposedEvent } from 'generated/events/governance/proposed';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
 import { assertUnreachable } from '@polkadot/util';
-import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
+import { DisposableApiPromise, getChainflipApi, getChainflipClient } from 'shared/utils/substrate';
+import {
+  ChainflipClient,
+  ChainflipExtrinsic,
+  extrinsicToHumanReadable,
+  formatDispatchError,
+  signSendAndFinalize,
+} from 'shared/utils/dedot';
 import {
   OneOfEventsResult,
   EventName,
@@ -184,6 +191,80 @@ export class ChainflipIO<Requirements> {
       if (arg.expectedEvent) {
         const { name, schema } = arg.expectedEvent;
         const txHash = `${result.value.txHash}`;
+        this.debug(
+          `Searching for event ${name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
+        );
+        const event = await findOneEventOfMany(
+          this.logger,
+          {
+            event: {
+              name,
+              schema,
+              txHash,
+            },
+          },
+          {
+            startFromBlock: this.lastIoBlockHeight,
+            endBeforeBlock: this.lastIoBlockHeight + 1,
+          },
+        );
+        this.debug(
+          `Found event ${name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
+        );
+        return event.data;
+      }
+
+      return result;
+    });
+  }
+
+  /**
+   * dedot variant of {@link submitExtrinsic}: builds the extrinsic from a compile-time-typed
+   * dedot client (`client.tx.<pallet>.<call>(...)`) instead of the `any`-typed polkadot.js api.
+   *
+   * Behaves identically — submits, waits for finalization, advances `lastIoBlockHeight`, and
+   * (if an expected event is given) returns its well-typed data via the indexer.
+   *
+   * NOTE: transitional. Lives alongside {@link submitExtrinsic} while call sites are migrated
+   * incrementally; once everything is on dedot this replaces `submitExtrinsic` and the
+   * polkadot.js path is removed.
+   */
+  async submitExtrinsicDedot<
+    Data extends Requirements & { account: PartialAccount },
+    Schema extends z.ZodTypeAny,
+  >(
+    this: ChainflipIO<Data>,
+    arg: {
+      extrinsic: ExtrinsicFromClient;
+      expectedEvent?: EventDescriptor<EventName, Schema>;
+    },
+  ): Promise<z.infer<Schema>> {
+    return this.runExclusively('submitExtrinsicDedot', async () => {
+      await using client = await getChainflipClient();
+      const ext = await arg.extrinsic(client);
+
+      const readable = extrinsicToHumanReadable(ext);
+      const { account } = this.requirements;
+      this.debug(`Submitting extrinsic '${readable}' for ${account.uri}`);
+
+      const result = await signSendAndFinalize(client, ext, account.keypair, account.uri);
+
+      if (result.dispatchError) {
+        throw new Error(
+          `'${readable}' failed (${formatDispatchError(client, result.dispatchError)})`,
+        );
+      }
+
+      this.debug(`Successfully submitted extrinsic with hash ${result.txHash}`);
+
+      if (result.status.type === 'Finalized') {
+        this.lastIoBlockHeight = result.status.value.blockNumber;
+      }
+
+      // extract event data if expected
+      if (arg.expectedEvent) {
+        const { name, schema } = arg.expectedEvent;
+        const txHash = `${result.txHash}`;
         this.debug(
           `Searching for event ${name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
         );
@@ -631,6 +712,10 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
 export type ExtrinsicFromApi = (
   api: DisposableApiPromise,
 ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>;
+// dedot variant: builds the extrinsic from the compile-time-typed dedot client.
+export type ExtrinsicFromClient = (
+  client: ChainflipClient,
+) => ChainflipExtrinsic | Promise<ChainflipExtrinsic>;
 // ------------ Account types  ---------------
 
 export type AccountType = 'Broker' | 'LP';
