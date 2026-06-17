@@ -36,7 +36,10 @@
 //! network-wide.
 
 use sp_core::ed25519;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	mpsc::{UnboundedReceiver, UnboundedSender},
+	oneshot,
+};
 
 use cf_utilities::Port;
 
@@ -48,6 +51,7 @@ pub mod zmq;
 pub mod message;
 pub mod muxer;
 pub mod peer;
+pub mod supervisor;
 
 // Re-export commonly used types
 pub use message::{AccountId, IncomingMessage, OutgoingMessage, ProtocolVersion, TopicId};
@@ -64,6 +68,10 @@ pub enum Transport {
 
 /// Start the selected P2P transport. The two transports share the same interface; this
 /// dispatches to the chosen one.
+///
+/// The transport runs until `shutdown` fires, at which point it tears down (stopping its
+/// background threads/tasks and releasing its socket) and returns. This lets the
+/// [`supervisor`] restart it on a different transport without restarting the engine.
 #[allow(clippy::too_many_arguments)]
 pub async fn start_transport(
 	transport: Transport,
@@ -74,6 +82,7 @@ pub async fn start_transport(
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+	shutdown: oneshot::Receiver<()>,
 ) -> anyhow::Result<()> {
 	match transport {
 		Transport::Zmq =>
@@ -85,6 +94,7 @@ pub async fn start_transport(
 				incoming_message_sender,
 				outgoing_message_receiver,
 				peer_update_receiver,
+				shutdown,
 			)
 			.await,
 		Transport::Quic =>
@@ -96,6 +106,7 @@ pub async fn start_transport(
 				incoming_message_sender,
 				outgoing_message_receiver,
 				peer_update_receiver,
+				shutdown,
 			)
 			.await,
 	}
@@ -119,6 +130,10 @@ pub struct X25519KeyPair {
 ///
 /// Contains both the Ed25519 signing key (used for TLS identity in QUIC)
 /// and the derived X25519 encryption key (used for CURVE encryption in ZMQ).
+///
+/// Cloneable so the [`supervisor`] can hand the node identity to each transport
+/// incarnation across restarts.
+#[derive(Clone)]
 pub struct P2PKey {
 	pub signing_key: ed25519_dalek::SigningKey,
 	pub encryption_key: X25519KeyPair,

@@ -35,7 +35,10 @@ use connection::{
 	MAX_INACTIVITY_THRESHOLD,
 };
 use quinn::Endpoint;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+	mpsc::{UnboundedReceiver, UnboundedSender},
+	oneshot,
+};
 use tracing::{debug, info, info_span, trace, warn, Instrument};
 
 pub use auth::AllowlistVerifier;
@@ -247,7 +250,10 @@ impl QuicContext {
 
 /// Start the QUIC P2P transport.
 ///
-/// This function has the same interface as `core::start` for ZMQ transport.
+/// This function has the same interface as `core::start` for ZMQ transport. It runs until
+/// `shutdown` fires, then closes the endpoint and returns, releasing the UDP socket so a
+/// replacement transport can take over.
+#[allow(clippy::too_many_arguments)]
 pub async fn start(
 	p2p_key: P2PKey,
 	port: Port,
@@ -256,6 +262,7 @@ pub async fn start(
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	outgoing_message_receiver: UnboundedReceiver<OutgoingMessage>,
 	peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+	shutdown: oneshot::Receiver<()>,
 ) -> anyhow::Result<()> {
 	// Generate TLS certificate from Ed25519 signing key
 	let identity = CertificateIdentity::from_ed25519(&p2p_key.signing_key)
@@ -287,18 +294,24 @@ pub async fn start(
 		context.on_peer_update(PeerUpdate::Registered(peer_info));
 	}
 
-	// Spawn listener task
-	let listener_sender = incoming_message_sender;
-	let listener_allowlist = allowlist;
-	tokio::spawn(
-		run_listener(endpoint, listener_sender, listener_allowlist)
-			.instrument(info_span!("quic_listener")),
-	);
+	// Run the listener and control loop concurrently until we are asked to shut down. The
+	// listener is kept inside this future (rather than a detached `tokio::spawn`) so that
+	// dropping it on shutdown releases its `Endpoint` clone — otherwise the UDP socket would
+	// stay bound after the transport stops.
+	tokio::select! {
+		biased;
+		_ = shutdown => {
+			info!("Shutting down QUIC transport");
+		},
+		_ = run_listener(endpoint.clone(), incoming_message_sender, allowlist)
+			.instrument(info_span!("quic_listener")) => {},
+		_ = control_loop(context, outgoing_message_receiver, peer_update_receiver, reconnect_receiver)
+			.instrument(info_span!("quic")) => {},
+	}
 
-	// Run control loop
-	control_loop(context, outgoing_message_receiver, peer_update_receiver, reconnect_receiver)
-		.instrument(info_span!("quic"))
-		.await;
+	// Close the endpoint so peers see the connection go away promptly and the UDP socket is
+	// released once the (now-dropped) connection tasks finish.
+	endpoint.close(0u32.into(), b"transport shutdown");
 
 	Ok(())
 }

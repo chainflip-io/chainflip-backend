@@ -43,6 +43,9 @@ struct Node {
 	msg_sender: UnboundedSender<OutgoingMessage>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+	// Keeps the transport running for the lifetime of the node; dropping it shuts the
+	// transport down.
+	_shutdown_sender: tokio::sync::oneshot::Sender<()>,
 }
 
 fn spawn_node(
@@ -61,6 +64,8 @@ fn spawn_node(
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+
 	tokio::spawn({
 		super::start(
 			P2PKey::new(key.as_bytes()),
@@ -70,6 +75,7 @@ fn spawn_node(
 			incoming_message_sender,
 			outgoing_message_receiver,
 			peer_update_receiver,
+			shutdown_receiver,
 		)
 		.instrument(info_span!("node", idx = idx))
 	});
@@ -79,6 +85,7 @@ fn spawn_node(
 		msg_sender: outgoing_message_sender,
 		peer_update_sender,
 		msg_receiver: incoming_message_receiver,
+		_shutdown_sender: shutdown_sender,
 	}
 }
 
