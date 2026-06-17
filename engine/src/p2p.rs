@@ -92,6 +92,11 @@ where
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	// Carries the newly-selected transport from the monitor to the supervisor when governance
+	// changes the network-wide transport, so it can be restarted in-process.
+	let (transport_restart_sender, transport_restart_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	let (p2p_ready_sender, p2p_ready_receiver) = oneshot::channel();
 
 	// Create multisig channels with topic muxer
@@ -126,15 +131,20 @@ where
 
 					p2p_ready_sender.send(()).unwrap();
 
-					start_transport(
+					// The supervisor owns the muxer-facing channels and (re)starts the
+					// transport in-process whenever the monitor signals a change, so a
+					// transport switch does not disturb the muxer or the multisig ceremonies
+					// above it.
+					engine_p2p::supervisor::run_transport_supervisor(
 						to_engine_transport(initial_transport),
 						node_key,
 						settings.port,
-						current_peers,
 						our_account_id,
+						current_peers,
 						incoming_message_sender,
 						outgoing_message_receiver,
 						peer_update_receiver,
+						transport_restart_receiver,
 					)
 					.await?;
 
@@ -152,6 +162,7 @@ where
 					state_chain_client,
 					sc_block_stream,
 					peer_update_sender,
+					transport_restart_sender,
 					initial_transport,
 				)
 				.await
@@ -173,34 +184,6 @@ fn to_engine_transport(transport: cf_primitives::P2pTransport) -> engine_p2p::Tr
 	}
 }
 
-/// Start the P2P transport layer using the selected transport.
-#[allow(clippy::too_many_arguments)]
-async fn start_transport(
-	transport: engine_p2p::Transport,
-	node_key: engine_p2p::P2PKey,
-	port: cf_utilities::Port,
-	current_peers: Vec<PeerInfo>,
-	our_account_id: cf_primitives::AccountId,
-	incoming_message_sender: tokio::sync::mpsc::UnboundedSender<(
-		cf_primitives::AccountId,
-		Vec<u8>,
-	)>,
-	outgoing_message_receiver: tokio::sync::mpsc::UnboundedReceiver<engine_p2p::OutgoingMessage>,
-	peer_update_receiver: tokio::sync::mpsc::UnboundedReceiver<PeerUpdate>,
-) -> anyhow::Result<()> {
-	engine_p2p::start_transport(
-		transport,
-		node_key,
-		port,
-		current_peers,
-		our_account_id,
-		incoming_message_sender,
-		outgoing_message_receiver,
-		peer_update_receiver,
-	)
-	.await
-}
-
 /// Monitors the State Chain for peer registration events and sends them to the P2P client.
 /// This is done separate to the SC Observer because we do not want to process events in the initial
 /// block.
@@ -208,6 +191,7 @@ async fn monitor_p2p_registration_events<StateChainClient, BlockStream: StreamAp
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
+	transport_restart_sender: UnboundedSender<engine_p2p::Transport>,
 	initial_transport: cf_primitives::P2pTransport,
 ) -> anyhow::Result<()>
 where
@@ -216,6 +200,7 @@ where
 	use state_chain_runtime::Runtime;
 	type CfeEvent = pallet_cf_cfe_interface::CfeEvent<Runtime>;
 
+	let mut current_transport = initial_transport;
 	let mut sc_block_stream = Box::pin(sc_block_stream);
 	loop {
 		match sc_block_stream.next().await {
@@ -250,20 +235,25 @@ where
 					}
 				}
 
-				// If governance has changed the network-wide transport, shut down so the
-				// engine restarts on the new transport. We only act on a confirmed change;
-				// a transient read error leaves the engine running on the current transport.
-				if let Ok(current_transport) = state_chain_client
+				// If governance has changed the network-wide transport, ask the supervisor to
+				// restart the transport in-process on the new selection. We only act on a
+				// confirmed change; a transient read error leaves the current transport running.
+				if let Ok(on_chain_transport) = state_chain_client
 					.storage_value::<pallet_cf_environment::P2pTransportValue<Runtime>>(
 						current_block.hash,
 					)
 					.await
 				{
-					if current_transport != initial_transport {
-						anyhow::bail!(
-							"P2P transport changed from {initial_transport} to {current_transport}; \
-							 restarting the engine to apply it"
+					if on_chain_transport != current_transport {
+						info!(
+							"P2P transport changed from {current_transport} to {on_chain_transport}; \
+							 restarting the transport in-process"
 						);
+						// If the supervisor has gone away the engine is already shutting down,
+						// so a send error here is benign.
+						let _ = transport_restart_sender
+							.send(to_engine_transport(on_chain_transport));
+						current_transport = on_chain_transport;
 					}
 				}
 			},
