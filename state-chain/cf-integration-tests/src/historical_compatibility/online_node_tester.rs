@@ -32,11 +32,12 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
-		let Some(blockhash) =
-			(self.get_blockhash_from_spec_version)(V::LATEST_RUNTIME_PATCH_VERSION)
-		else {
-			return Vec::new();
-		};
+		let canonical_runtime_patch_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.expect(
+            "Encountered a runtime version with `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` in a compatibility test."
+        );
+		let blockhash =
+			(self.get_blockhash_from_spec_version)(canonical_runtime_patch_version)
+            .unwrap_or_else(|| panic!("No blockhash was specified for runtime version {canonical_runtime_patch_version} when trying to run compatibility test against online archive node."));
 
 		let client = reqwest::blocking::Client::new();
 		let call_method = format!("{}_{}", api_name, method_name);
@@ -127,7 +128,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				type_ref: TypeRef::RuntimeCall {
 					api_name,
 					method_name,
-					version: V::LATEST_RUNTIME_PATCH_VERSION,
+					version: canonical_runtime_patch_version,
 				},
 				type_diff: TypeDiff {
 					expected_encoding: match err.sub_type_details.location {

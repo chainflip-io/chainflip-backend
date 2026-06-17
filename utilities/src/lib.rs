@@ -24,6 +24,7 @@
 #![feature(trait_alias)]
 #![feature(lazy_type_alias)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(macro_metavar_expr)]
 #![allow(incomplete_features)]
 
 #[cfg(feature = "std")]
