@@ -47,6 +47,9 @@ struct Node {
 	msg_sender: UnboundedSender<OutgoingMessage>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+	// Keeps the transport running for the lifetime of the node; dropping the node shuts the
+	// transport down and releases its port.
+	_shutdown_sender: tokio::sync::oneshot::Sender<()>,
 }
 
 fn spawn_node(
@@ -65,6 +68,8 @@ fn spawn_node(
 
 	let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+	let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+
 	// Create P2PKey from the secret key bytes
 	let p2p_key = P2PKey::new(key.as_bytes());
 
@@ -81,6 +86,7 @@ fn spawn_node(
 				incoming_message_sender,
 				outgoing_message_receiver,
 				peer_update_receiver,
+				shutdown_receiver,
 			)
 			.await
 			.expect("QUIC transport failed");
@@ -93,6 +99,7 @@ fn spawn_node(
 		msg_sender: outgoing_message_sender,
 		peer_update_sender,
 		msg_receiver: incoming_message_receiver,
+		_shutdown_sender: shutdown_sender,
 	}
 }
 
@@ -494,4 +501,62 @@ async fn message_to_initially_unreachable_peer_is_delivered_once_it_starts() {
 	// The message should be delivered once the connection is established.
 	let received = recv_with_custom_timeout(&mut node2.msg_receiver, Duration::from_secs(5)).await;
 	assert_eq!(received, Some((node1.account_id.clone(), b"sent while down".to_vec())));
+}
+
+/// On shutdown the transport must return and release its UDP port, so a replacement
+/// transport can bind the same port in-process (this is what lets the supervisor switch
+/// transports without restarting the engine). Previously the listener was detached and held
+/// the endpoint open, leaking the port.
+#[tokio::test]
+async fn shutdown_returns_and_releases_the_port() {
+	let node_key = create_keypair();
+	let port: Port = 9110;
+	let pi = create_node_info(AccountId::new([1; 32]), &node_key, port);
+
+	// Start a transport on `port`, let it bind, then ask it to shut down.
+	let run = |shutdown| {
+		let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (peer_update_sender, peer_update_receiver) = tokio::sync::mpsc::unbounded_channel();
+		// Keep the muxer-facing counterpart ends alive for the duration of the run.
+		let keep_alive = (incoming_receiver, outgoing_sender, peer_update_sender);
+		let fut = start(
+			P2PKey::new(node_key.as_bytes()),
+			port,
+			vec![pi.clone()],
+			pi.account_id.clone(),
+			incoming_sender,
+			outgoing_receiver,
+			peer_update_receiver,
+			shutdown,
+		);
+		async move {
+			let result = fut.await;
+			drop(keep_alive);
+			result
+		}
+	};
+
+	let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
+	let first = tokio::spawn(run(shutdown_receiver));
+	tokio::time::sleep(Duration::from_millis(300)).await;
+	shutdown_sender.send(()).unwrap();
+
+	tokio::time::timeout(Duration::from_secs(5), first)
+		.await
+		.expect("transport did not return after shutdown")
+		.expect("transport task panicked")
+		.expect("transport returned an error");
+
+	// A replacement transport must be able to bind the now-released port.
+	let (shutdown_sender2, shutdown_receiver2) = tokio::sync::oneshot::channel();
+	let second = tokio::spawn(run(shutdown_receiver2));
+	tokio::time::sleep(Duration::from_millis(500)).await;
+	shutdown_sender2.send(()).unwrap();
+
+	tokio::time::timeout(Duration::from_secs(5), second)
+		.await
+		.expect("replacement transport did not return")
+		.expect("replacement transport task panicked")
+		.expect("replacement transport failed to bind the released port");
 }
