@@ -17,7 +17,6 @@ import {
   AssetAndChain,
   AssetSymbol,
 } from '@chainflip/utils/chainflip';
-import { hexToTronAddress } from '@chainflip/utils/tron';
 import Web3 from 'web3';
 import { TronWeb } from 'tronweb';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
@@ -530,17 +529,11 @@ export async function observeSwapEvents(
         case swapRequestedEvent: {
           const channel = data.origin.DepositChannel;
 
-          const eventAddressKind = channel
-            ? (Object.keys(channel.depositAddress)[0] as string)
-            : undefined;
           const eventDepositAddress = channel
             ? (Object.values(channel.depositAddress)[0] as string)
             : undefined;
           const depositAddressMatches =
-            eventDepositAddress !== undefined &&
-            (eventAddressKind === 'Tron'
-              ? hexToTronAddress(eventDepositAddress as `0x${string}`) === depositAddress
-              : eventDepositAddress === depositAddress);
+            eventDepositAddress !== undefined && eventDepositAddress === depositAddress;
 
           if (
             channel &&
