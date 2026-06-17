@@ -16,6 +16,7 @@
 
 //! Chainflip runtime storage migrations.
 
+pub mod delete_pre_allocated_tron_channels;
 pub mod housekeeping;
 pub mod safe_mode;
 pub mod tron_integration;
