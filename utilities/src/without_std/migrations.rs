@@ -53,12 +53,12 @@ macro_rules! define_all_released_runtime_versions {
         ///
         /// ## Macros
         ///
-        /// There's the macro `#[cf_utilities_proc_macros::generate_module]` that can be used to generate most of the
+        /// There's the macro `#[cf_proc_macros::generate_module]` that can be used to generate most of the
         /// pre-reqs of `HasChangelog`. For example, using that, the implementation for RpcAccountInfoCommonItems looks
         /// mostly like this:
         ///
         /// ```ignore
-        /// #[cf_utilities_proc_macros::generate_module]
+        /// #[cf_proc_macros::generate_module]
         /// pub struct RpcAccountInfoCommonItems<Balance> {
         ///     ...
         /// }
