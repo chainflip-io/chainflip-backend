@@ -490,7 +490,7 @@ impl pallet_cf_ingress_egress::Config<Instance6> for Runtime {
 impl pallet_cf_ingress_egress::Config<Instance7> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	const MANAGE_CHANNEL_LIFETIME: bool = true;
-	const ONLY_PREALLOCATE_FROM_POOL: bool = false;
+	const ONLY_PREALLOCATE_FROM_POOL: bool = true;
 	type IngressSource = DummyIngressSource<Tron, BlockNumberFor<Runtime>>;
 	type AddressDerivation = AddressDerivation;
 	type DepositChannelFreshness = AlwaysFresh;
