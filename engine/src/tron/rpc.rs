@@ -288,9 +288,9 @@ impl EvmRpcApi for TronRpcClient {
 #[async_trait::async_trait]
 impl TronRpcApi for TronRpcClient {
 	async fn get_transaction_info_by_id(&self, tx_id: H256) -> anyhow::Result<TransactionInfo> {
-		let tx_id = format!("{:x}", tx_id);
+		let tx_id_hex = format!("{:x}", tx_id);
 		let response = self
-			.call_http_api("/gettransactioninfobyid", Some(serde_json::json!({"value": tx_id})))
+			.call_http_api("/gettransactioninfobyid", Some(serde_json::json!({"value": tx_id_hex})))
 			.await?;
 
 		// If the transaction exists but is not yet included or has low number of confirmations it
@@ -299,7 +299,7 @@ impl TronRpcApi for TronRpcClient {
 		if let Some(obj) = response.as_object() {
 			if obj.is_empty() {
 				return Err(anyhow!(
-					"Transaction info not available yet for tx_id: {}. The transaction may still be processing or does not exist.",
+					"Transaction info not available yet for tx_id: {:#x}. The transaction may still be processing or does not exist.",
 					tx_id
 				));
 			}
@@ -312,11 +312,11 @@ impl TronRpcApi for TronRpcClient {
 	}
 
 	async fn get_transaction_by_id(&self, tx_id: H256) -> anyhow::Result<Transaction> {
-		let tx_id = format!("{:x}", tx_id);
+		let tx_id_hex = format!("{:x}", tx_id);
 		let response = self
 			.call_http_api(
 				"/gettransactionbyid",
-				Some(serde_json::json!({"value": tx_id, "visible": false})),
+				Some(serde_json::json!({"value": tx_id_hex, "visible": false})),
 			)
 			.await?;
 
@@ -326,7 +326,7 @@ impl TronRpcApi for TronRpcClient {
 		if let Some(obj) = response.as_object() {
 			if obj.is_empty() {
 				return Err(anyhow!(
-					"Transaction info not available yet for tx_id: {}. The transaction may still be processing or does not exist.",
+					"Transaction info not available yet for tx_id: {:#x}. The transaction may still be processing or does not exist.",
 					tx_id
 				));
 			}
