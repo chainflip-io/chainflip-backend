@@ -1,4 +1,6 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
+// eslint-disable-next-line no-restricted-imports -- type-only import; runtime init is handled by `polkadot/keyring`.
+import type { KeyringPair } from '@polkadot/keyring/types';
 import Keyring from 'polkadot/keyring';
 import { cfMutex, waitForExt } from 'shared/utils';
 import { DisposableApiPromise, getChainflipApi } from 'shared/utils/substrate';
@@ -14,6 +16,12 @@ const snowWhiteUri =
 const keyring = new Keyring({ type: 'sr25519' });
 
 export const snowWhite = keyring.createFromUri(snowWhiteUri);
+
+/// Secondary council member for tests that need a multi-member council.
+/// The account is materialised on first use via `inc_sufficients` when added
+/// by `new_membership_set`; governance members don't pay fees so it doesn't
+/// need funding.
+export const secondGovernanceMember = keyring.createFromUri('//cf-governance-2');
 
 export async function submitExistingGovernanceExtrinsic(
   extrinsic: SubmittableExtrinsic<'promise'>,
@@ -69,4 +77,29 @@ export async function submitGovernanceExtrinsic(
 ): Promise<number> {
   await using api = await getChainflipApi();
   return submitExistingGovernanceExtrinsic(await call(api), logger, preAuthorise);
+}
+
+/// Submit `governance.approve(proposalId)` signed by `approver`.
+export async function submitGovernanceApproval(
+  proposalId: number,
+  approver: KeyringPair,
+  logger: Logger = globalLogger,
+): Promise<void> {
+  await using api = await getChainflipApi();
+
+  logger.debug(
+    `Submitting governance approval for proposal ${proposalId} from ${approver.address}`,
+  );
+
+  const release = await cfMutex.acquire(approver.address);
+  const { promise, waiter } = waitForExt(api, logger, 'Finalized', release);
+
+  const nonce = (await api.rpc.system.accountNextIndex(approver.address)) as unknown as number;
+  const unsub = await api.tx.governance
+    .approve(proposalId)
+    .signAndSend(approver, { nonce }, waiter);
+
+  await promise;
+  unsub();
+  logger.debug(`Governance approval for proposal ${proposalId} finalised`);
 }

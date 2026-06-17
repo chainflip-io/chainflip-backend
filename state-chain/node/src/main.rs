@@ -21,6 +21,7 @@ mod benchmarking;
 mod chain_spec;
 mod cli;
 mod command;
+mod runtime_warmer;
 mod service;
 
 #[expect(clippy::result_large_err)]

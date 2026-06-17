@@ -14,7 +14,14 @@ import {
 } from 'shared/utils';
 import { bumpSpecVersionAgainstNetwork } from 'shared/utils/spec_version';
 import { compileBinaries } from 'shared/utils/compile_binaries';
+import {
+  secondGovernanceMember,
+  snowWhite,
+  submitGovernanceApproval,
+  submitGovernanceExtrinsic,
+} from 'shared/cf_governance';
 import { submitRuntimeUpgradeWithRestrictions } from 'shared/submit_runtime_upgrade';
+import { governanceNewGovernanceCouncil } from 'generated/events/governance/newGovernanceCouncil';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { clearChainflipApiCache, clearSubscribeHeadsCache } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
@@ -175,6 +182,10 @@ export async function restartDepositMonitorAndLpAndBrokerApi(
   logger.info('Started new deposit monitor.');
 }
 
+// Delay between the proposal and the second approval. Gives the node's runtime
+// warmer time to pre-compile the new wasm before `set_code` runs.
+const RUNTIME_WARMER_LEAD_TIME_MS = 30_000;
+
 async function upgradeNoBuild<A = []>(
   cf: ChainflipIO<A>,
   localnetInitPath: string,
@@ -184,7 +195,33 @@ async function upgradeNoBuild<A = []>(
 ) {
   await upgradeBinaries(cf, localnetInitPath, binaryPath, numberOfNodes);
 
-  await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true);
+  // Expand to a two-member council so the upgrade proposal sits in `Proposals`
+  // long enough for the warmer to pre-compile the new wasm.
+  cf.info(
+    `Expanding governance council to {snowWhite, ${secondGovernanceMember.address}} (threshold 2).`,
+  );
+  await cf.submitGovernance({
+    extrinsic: (api) =>
+      api.tx.governance.newMembershipSet([snowWhite.address, secondGovernanceMember.address], 2),
+    expectedEvent: { name: 'Governance.NewGovernanceCouncil' },
+  });
+
+  try {
+    await submitRuntimeUpgradeWithRestrictions(cf, runtimePath, undefined, undefined, true, {
+      account: secondGovernanceMember,
+      leadTimeMs: RUNTIME_WARMER_LEAD_TIME_MS,
+    });
+  } finally {
+    // Restore single-member council. `cf.submitGovernance` assumes 1/1 approvals
+    // so we drive the two-step approval by hand here.
+    cf.info('Restoring governance council to {snowWhite} (threshold 1).');
+    const restoreProposalId = await submitGovernanceExtrinsic(
+      (api) => api.tx.governance.newMembershipSet([snowWhite.address], 1),
+      cf.logger,
+    );
+    await submitGovernanceApproval(restoreProposalId, secondGovernanceMember, cf.logger);
+    await cf.stepUntilEvent('Governance.NewGovernanceCouncil', governanceNewGovernanceCouncil);
+  }
 
   await restartDepositMonitorAndLpAndBrokerApi(localnetInitPath, binaryPath, cf.logger);
 }
