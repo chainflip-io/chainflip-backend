@@ -126,6 +126,25 @@ define_wrapper_type!(SwapRequestId, u64, extra_derives: Serialize, Deserialize, 
 
 define_wrapper_type!(PrewitnessedDepositId, u64, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
 
+// EXPLORATORY (2.3) onboarding: identity HasChangelog for leaf/enum/newtype types that
+// never change wire shape. `generate_module` is struct-only, so these are treated as
+// atomic (no field-level changelog). Modelled on the `ShouldSweep` impls in the runtime.
+macro_rules! impl_identity_has_changelog {
+	($($ty:ty),* $(,)?) => { $(
+		impl cf_utilities::migrations::HasChangelog for $ty {
+			type if_unspecified = cf_utilities::migrations::basics::IdentityMigration;
+		}
+		impl cf_utilities::migrations::basics::HasGenericVariant for $ty {
+			type GenericType = Self;
+			type MigrationFromGeneric = cf_utilities::migrations::basics::IdentityMigration;
+		}
+		impl cf_utilities::migrations::basics::IsHistoricalType for $ty {
+			type GetCurrentType = Self;
+		}
+	)* };
+}
+impl_identity_has_changelog!(Asset, SwapRequestId, PrewitnessedDepositId);
+
 pub type BoostPoolTier = u16;
 
 define_wrapper_type!(AffiliateShortId, u8, extra_derives: Serialize, Deserialize, PartialOrd, Ord);
@@ -517,6 +536,19 @@ pub struct Beneficiary<Id> {
 	pub account: Id,
 	pub bps: BasisPoints,
 }
+// EXPLORATORY (2.3) onboarding: FINDING - generate_module does NOT compose with
+// #[n_functor::derive_n_functor] (conflicting generated type param `Id2`), so Beneficiary
+// can't get field-level migration. Onboarded atomically (identity) instead.
+impl<Id> cf_utilities::migrations::HasChangelog for Beneficiary<Id> {
+	type if_unspecified = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl<Id> cf_utilities::migrations::basics::HasGenericVariant for Beneficiary<Id> {
+	type GenericType = Self;
+	type MigrationFromGeneric = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl<Id> cf_utilities::migrations::basics::IsHistoricalType for Beneficiary<Id> {
+	type GetCurrentType = Self;
+}
 
 #[derive(
 	Encode,
@@ -611,11 +643,19 @@ impl<T> ApiWaitForResult<T> {
 	}
 }
 
+// EXPLORATORY (2.3) onboarding
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct AssetAndAmount<Amount> {
 	#[serde(flatten)]
 	pub asset: Asset,
 	pub amount: Amount,
+}
+// EXPLORATORY (2.3) onboarding
+impl<Amount: cf_utilities::migrations::HasChangelog> cf_utilities::migrations::HasChangelog
+	for AssetAndAmount<Amount>
+{
+	type if_unspecified = _AssetAndAmount::see_field_changelogs;
 }
 
 impl From<AssetAndAmount<AssetAmount>> for AssetAndAmount<U256> {

@@ -81,6 +81,8 @@ impl<AccountId: Clone> From<RpcLoanAccount<AccountId, AssetAmount>>
 				})
 				.collect(),
 			liquidation_status: acc.liquidation_status,
+			// EXPLORATORY (2.3) onboarding: legacy (<17) loan accounts predate this field.
+			outstanding_interest: Default::default(),
 		}
 	}
 }

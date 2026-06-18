@@ -48,7 +48,7 @@ use cf_rpc_apis::{
 	RefundParametersRpc, RpcApiError, RpcResult,
 };
 use cf_utilities::{
-	migrations::{basics::migrate_from_historical_type, v20000, v20100},
+	migrations::{basics::migrate_from_historical_type, v20000, v20100, v20200},
 	rpc::NumberOrHex,
 };
 use core::ops::Range;
@@ -1893,6 +1893,19 @@ where
 				#[expect(deprecated)]
 				api.cf_loan_accounts_before_version_17(hash, borrower_id.clone())
 					.map(|accounts| accounts.into_iter().map(Into::into).collect())
+			} else if api_version < 20 {
+				// NEW (2.3): the historical (2.2) value is migrated forward by the
+				// framework instead of a hand-written `From`. `migrate_from_historical_type`
+				// yields the *current* RpcLoanAccount<_, AssetAmount> (shape migration);
+				// the trailing `.into()` is the unrelated AssetAmount -> U256 conversion
+				// that the existing branches already do.
+				#[expect(deprecated)]
+				api.cf_loan_accounts_before_version_20(hash, borrower_id.clone()).map(|accounts| {
+					accounts
+						.into_iter()
+						.map(|acc| migrate_from_historical_type(v20200, acc).into())
+						.collect()
+				})
 			} else {
 				api.cf_loan_accounts(hash, borrower_id.clone())
 					.map(|accounts| accounts.into_iter().map(Into::into).collect())

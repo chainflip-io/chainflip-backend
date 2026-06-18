@@ -14,7 +14,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, HasChangelog};
+use cf_utilities::migrations::{basics::HasVersion, v20100, v20200, v20300, HasChangelog};
 
 use super::assets::*;
 
@@ -27,6 +27,8 @@ impl<T: HasChangelog> HasChangelog for hub::AssetMap<T> {
 impl<T: HasChangelog> HasChangelog for sol::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
+	// EXPLORATORY (2.3): a field added in 20100 must also be Default at 20300.
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = sol::_AssetMap::see_field_changelogs;
 	type in_20100 =
@@ -36,6 +38,8 @@ where
 impl<T: HasChangelog> HasChangelog for arb::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
+	// EXPLORATORY (2.3): a field added in 20100 must also be Default at 20300.
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = arb::_AssetMap::see_field_changelogs;
 	type in_20100 =
@@ -57,6 +61,8 @@ impl<T: HasChangelog> HasChangelog for tron::AssetMap<T> {
 impl<T: HasChangelog> HasChangelog for eth::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
+	// EXPLORATORY (2.3): a field added in 20100 must also be Default at 20300.
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = eth::_AssetMap::see_field_changelogs;
 	type in_20100 =
@@ -67,6 +73,8 @@ impl<T: HasChangelog + Default> HasChangelog for any::AssetMap<T>
 where
 	<T as HasVersion<v20100>>::HistoricalType: Default,
 	<T as HasVersion<v20200>>::HistoricalType: Default,
+	// EXPLORATORY (2.3): tron added in 20200 must also be Default at 20300.
+	<T as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = any::_AssetMap::see_field_changelogs;
 	type in_20200 =

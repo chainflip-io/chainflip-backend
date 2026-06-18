@@ -86,6 +86,19 @@ pub trait BoostApi {
 
 define_wrapper_type!(LoanId, u64, extra_derives: PartialOrd, Ord, Serialize, Deserialize);
 
+// EXPLORATORY (2.3) onboarding: identity HasChangelog for the LoanId newtype (atomic,
+// never changes wire shape). Modelled on the `ShouldSweep` impls in the runtime.
+impl cf_utilities::migrations::HasChangelog for LoanId {
+	type if_unspecified = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl cf_utilities::migrations::basics::HasGenericVariant for LoanId {
+	type GenericType = Self;
+	type MigrationFromGeneric = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl cf_utilities::migrations::basics::IsHistoricalType for LoanId {
+	type GetCurrentType = Self;
+}
+
 impl core::ops::Add<u64> for LoanId {
 	type Output = Self;
 

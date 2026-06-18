@@ -73,6 +73,20 @@ pub enum LiquidationType {
 	Hard,
 }
 
+// EXPLORATORY (2.3) onboarding: identity HasChangelog for the LiquidationType enum.
+// generate_module is struct-only, so enums are treated as atomic (no variant-level
+// changelog). Modelled on the `ShouldSweep` impls in the runtime.
+impl cf_utilities::migrations::HasChangelog for LiquidationType {
+	type if_unspecified = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl cf_utilities::migrations::basics::HasGenericVariant for LiquidationType {
+	type GenericType = Self;
+	type MigrationFromGeneric = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl cf_utilities::migrations::basics::IsHistoricalType for LiquidationType {
+	type GetCurrentType = Self;
+}
+
 /// Whether the account's collateral is being liquidated (and if so, stores ids of liquidation
 /// swaps)
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, DecodeWithMemTracking, TypeInfo)]
@@ -136,6 +150,19 @@ enum SurplusOrDeficit {
 pub enum LoanType<AccountId> {
 	User(AccountId),
 	Boost(PrewitnessedDepositId),
+}
+
+// EXPLORATORY (2.3) onboarding: identity HasChangelog for the (generic) LoanType enum.
+// Atomic — enums can't carry a field/variant-level changelog under generate_module.
+impl<AccountId> cf_utilities::migrations::HasChangelog for LoanType<AccountId> {
+	type if_unspecified = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl<AccountId> cf_utilities::migrations::basics::HasGenericVariant for LoanType<AccountId> {
+	type GenericType = Self;
+	type MigrationFromGeneric = cf_utilities::migrations::basics::IdentityMigration;
+}
+impl<AccountId> cf_utilities::migrations::basics::IsHistoricalType for LoanType<AccountId> {
+	type GetCurrentType = Self;
 }
 
 pub fn supply_funds<T: Config>(

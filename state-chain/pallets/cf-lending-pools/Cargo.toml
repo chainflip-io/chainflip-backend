@@ -28,11 +28,16 @@ cf-chains = { workspace = true }
 cf-traits = { workspace = true }
 cf-runtime-utilities = { workspace = true }
 cf-amm-math = { workspace = true }
+# EXPLORATORY (2.3) onboarding: migration framework + the generate_module proc macro.
+cf-utilities = { workspace = true }
+cf-proc-macros = { workspace = true }
 
 
 # Parity deps
 codec = { workspace = true, features = ["derive"] }
 scale-info = { workspace = true, features = ["derive"] }
+# EXPLORATORY (2.3) onboarding: generate_module's expansion references derive_where.
+derive-where = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 sp-core = { workspace = true }

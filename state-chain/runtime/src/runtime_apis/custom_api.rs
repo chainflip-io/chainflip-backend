@@ -79,7 +79,8 @@ use sp_api::decl_runtime_apis;
 // `#[renamed($OLD_NAME, $VERSION)]` attribute which will handle renaming
 // of apis automatically.
 decl_runtime_apis!(
-	#[api_version(19)]
+	// EXPLORATORY (2.3) onboarding: bumped 19 -> 20 for the new cf_loan_accounts shape.
+	#[api_version(20)]
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
@@ -355,6 +356,16 @@ decl_runtime_apis!(
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
 		) -> Vec<before_version_17::RpcLoanAccount<AccountId32, AssetAmount>>;
+		// NEW (2.3): the 2.2-era shape (before `outstanding_interest`). Note the
+		// historical return type is now a one-line alias auto-derived from the
+		// changelog (see types/before_version_20.rs) — no struct redefinition.
+		// NB: the runtime-API version here (20) is a SEPARATE counter from the
+		// release version constant (v20200) used in the migration; the developer
+		// must keep them aligned by hand.
+		#[changed_in(20)]
+		fn cf_loan_accounts(
+			borrower_id: Option<AccountId32>,
+		) -> Vec<before_version_20::RpcLoanAccount<AccountId32, AssetAmount>>;
 		fn cf_loan_accounts(
 			borrower_id: Option<AccountId32>,
 		) -> Vec<RpcLoanAccount<AccountId32, AssetAmount>>;

@@ -18,6 +18,10 @@
 #![feature(unsized_const_params)]
 #![feature(generic_const_items)]
 #![feature(adt_const_params)]
+// EXPLORATORY (2.3) onboarding: required to implement HasChangelog (defaulted assoc
+// types + trait-alias bounds) for LoanId in this crate.
+#![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod async_result;

@@ -206,4 +206,13 @@ define_all_released_runtime_versions! {
 		canonical_patch: 20203,
 		changelog_entry: in_20200,
 	},
+	// NEW (2.3): adding this single row is what the PR advertises as the only
+	// required change at a version bump. `canonical_patch` is a placeholder here;
+	// the real bump needs the actual released 2.3 patch version AND a matching
+	// `runtime_<patch>.scale` metadata file in cf-integration-tests/historical_metadata/.
+	{
+		release: v20300,
+		canonical_patch: 20300,
+		changelog_entry: in_20300,
+	},
 }

@@ -44,7 +44,9 @@ macro_rules! impl_identity_migrations {
     };
 }
 
-impl_identity_migrations! {(), u8, u128, }
+// EXPLORATORY (2.3) onboarding: added u16/u32/u64 (reached via created_at: u32,
+// BasisPoints = u16, and wrapper-type inners) on top of the original (), u8, u128.
+impl_identity_migrations! {(), u8, u16, u32, u64, u128, }
 
 // ----------- wrapped types -------------
 
@@ -127,6 +129,14 @@ impl_identity_migrations_with_wrapper! {
 	struct WrappedPermill(sp_arithmetic::Permill) where |x: u32| sp_arithmetic::Permill::from_parts(x);
 }
 
+// EXPLORATORY (2.3) onboarding: FixedU64 (used by RpcLoanAccount::ltv_ratio) is an
+// external sp_arithmetic type, so the orphan rule forces its HasChangelog impl to
+// live here, wrapped — exactly like Permill/H160 above.
+impl_identity_migrations_with_wrapper! {
+	#[derive(PartialOrd, PartialEq, Eq, Ord, Default)]
+	struct WrappedFixedU64(sp_arithmetic::FixedU64) where |x: u64| sp_arithmetic::FixedU64::from_inner(x);
+}
+
 // ----------- simple migration that introduces a new type -------------
 
 #[derive(codec::Encode, codec::Decode, scale_info::TypeInfo, PartialEq, Debug)]
@@ -175,6 +185,11 @@ impl<X: HasChangelog> HasChangelog for Option<X> {
 	type in_20000 = MapMigration<X::in_20000>;
 	type in_20100 = MapMigration<X::in_20100>;
 	type in_20200 = MapMigration<X::in_20200>;
+	// NEW (2.3): required here even though `HasChangelog::in_20300` has a default —
+	// the default (`Self::if_unspecified`) is an opaque projection the solver can't
+	// normalise through `MapMigration`. This is the line the PR's "only add a table
+	// row" claim overlooks; it must be repeated for EVERY container impl below.
+	type in_20300 = MapMigration<X::in_20300>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Option<X> {
 	type GenericType = Option<X::GenericType>;
@@ -207,6 +222,7 @@ impl<X: HasChangelog> HasChangelog for Vec<X> {
 	type in_20000 = MapMigration<X::in_20000>;
 	type in_20100 = MapMigration<X::in_20100>;
 	type in_20200 = MapMigration<X::in_20200>;
+	type in_20300 = MapMigration<X::in_20300>; // NEW (2.3) — see Option<X> note above
 }
 impl<X: HasGenericVariant> HasGenericVariant for Vec<X> {
 	type GenericType = Vec<X::GenericType>;
@@ -248,6 +264,7 @@ impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
 	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
 	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
 	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
+	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>; // NEW (2.3) — see Option<X> note above
 }
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
@@ -286,6 +303,7 @@ impl<A: HasChangelog, B: HasChangelog> HasChangelog for (A, B) {
 	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
 	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
 	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
+	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>; // NEW (2.3) — see Option<X> note above
 }
 impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for (A, B) {
 	type GenericType = (A::GenericType, B::GenericType);

@@ -16,6 +16,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(map_try_insert)]
+// EXPLORATORY (2.3) onboarding: required to implement HasChangelog / use generate_module.
+#![feature(trait_alias)]
+#![feature(associated_type_defaults)]
 
 mod boost;
 mod core_lending_pool;

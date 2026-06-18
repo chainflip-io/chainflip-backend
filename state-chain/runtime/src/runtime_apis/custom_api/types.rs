@@ -36,7 +36,7 @@ use cf_utilities::migrations::{
 		IsHistoricalType, Migration, NewFieldWithDefault,
 	},
 	primitives::NewTypeWithDefault,
-	v20100, v20200, HasChangelog,
+	v20100, v20200, v20300, HasChangelog,
 };
 use codec::{Decode, Encode};
 use ethereum_eip712::eip712::TypedData;
@@ -366,6 +366,7 @@ pub mod before_version_15;
 pub mod before_version_16;
 pub mod before_version_17;
 pub mod before_version_19;
+pub mod before_version_20;
 pub mod before_version_3;
 pub mod before_version_9;
 
@@ -783,6 +784,8 @@ where
 	Balance: Default,
 	<Balance as HasVersion<v20100>>::HistoricalType: Default,
 	<Balance as HasVersion<v20200>>::HistoricalType: Default,
+	// EXPLORATORY (2.3): account_id added in 20200 must also be Default at 20300.
+	<Balance as HasVersion<v20300>>::HistoricalType: Default,
 {
 	type if_unspecified = _RpcAccountInfoCommonItems::see_field_changelogs;
 	type in_20200 = _RpcAccountInfoCommonItems::see_field_changelogs_and_also<
