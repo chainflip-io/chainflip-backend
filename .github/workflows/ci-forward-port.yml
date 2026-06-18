@@ -126,6 +126,8 @@ jobs:
             Please review and merge if appropriate.
           branch: forward-port/${{ matrix.commit.sha }}
           base: main
-          reviewers: "${{ github.actor }}"
+          # No explicit reviewer request: `github.actor` can be a bot or the PR
+          # author, which makes create-pull-request fail. The PR body @-mentions
+          # the pusher, and normal review rules (CODEOWNERS) still apply.
           labels: cherry-pick
           delete-branch: true
