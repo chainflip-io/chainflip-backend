@@ -19,28 +19,41 @@
 //! These tests verify that the P2P layer correctly routes multisig messages
 //! through actual QUIC connections.
 
-use std::{net::Ipv4Addr, time::Duration};
+use std::{collections::BTreeSet, net::Ipv4Addr, sync::Arc, time::Duration};
 
-use cf_primitives::AccountId;
-use cf_utilities::Port;
+use cf_primitives::{AccountId, GENESIS_EPOCH};
+use cf_utilities::{testing::new_temp_directory_with_nonexistent_file, Port};
 use ed25519_dalek::SigningKey;
-use engine_p2p::{quic::PeerInfo, P2PKey, TopicMuxer};
-use multisig::{p2p::OutgoingMultisigStageMessages, ChainTag};
+use engine_p2p::{quic::PeerInfo, P2PKey, TopicMuxer, Transport};
+use futures::future::join_all;
+use multisig::{
+	client::MultisigClientApi,
+	eth::{EthSigning, EvmCryptoScheme},
+	p2p::OutgoingMultisigStageMessages,
+	ChainTag, CryptoScheme, KeyId, MultisigClient,
+};
 use rand::rngs::OsRng;
 use sp_core::ed25519::Public;
 use tokio::sync::mpsc;
 use tracing::{info, info_span, Instrument};
 
 use super::multisig_adapter::{create_multisig_channels, MultisigTopic};
+use crate::{
+	db::{KeyStore, PersistentKeyDB},
+	multisig::start_client,
+};
 
 const BASE_PORT: Port = 19000;
+/// A separate port range for the ceremony test so it never clashes with the routing test
+/// when the suite runs in parallel.
+const CEREMONY_BASE_PORT: Port = 19100;
 
 /// Create a P2P key and peer info for a test node.
-fn create_test_node_info(idx: usize) -> (SigningKey, PeerInfo, AccountId) {
+fn create_test_node_info(idx: usize, base_port: Port) -> (SigningKey, PeerInfo, AccountId) {
 	let signing_key = SigningKey::generate(&mut OsRng);
 	let account_id = AccountId::new([(idx + 1) as u8; 32]);
 	let ip = "127.0.0.1".parse::<Ipv4Addr>().unwrap().to_ipv6_mapped();
-	let port = BASE_PORT + idx as Port;
+	let port = base_port + idx as Port;
 	let pubkey = Public::from(signing_key.verifying_key().to_bytes());
 	let peer_info = PeerInfo::new(account_id.clone(), pubkey, ip, port);
 
@@ -58,7 +71,7 @@ async fn multisig_messages_over_quic_with_muxer() {
 	const NUM_NODES: usize = 3;
 
 	// Create peer infos for all nodes
-	let node_infos: Vec<_> = (0..NUM_NODES).map(create_test_node_info).collect();
+	let node_infos: Vec<_> = (0..NUM_NODES).map(|idx| create_test_node_info(idx, BASE_PORT)).collect();
 	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
 	let account_ids: Vec<_> = node_infos.iter().map(|(_, _, id)| id.clone()).collect();
 
@@ -66,11 +79,15 @@ async fn multisig_messages_over_quic_with_muxer() {
 	// We'll set up TopicMuxer for each node to test the full stack
 	let mut eth_senders = Vec::new();
 	let mut eth_receivers = Vec::new();
+	// Keep the shutdown senders alive so the transports keep running for the whole test.
+	let mut shutdown_senders = Vec::new();
 
 	for (idx, (signing_key, peer_info, account_id)) in node_infos.into_iter().enumerate() {
 		let (incoming_tx, incoming_rx) = mpsc::unbounded_channel();
 		let (outgoing_tx, outgoing_rx) = mpsc::unbounded_channel();
 		let (_peer_update_tx, peer_update_rx) = mpsc::unbounded_channel();
+		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+		shutdown_senders.push(shutdown_tx);
 
 		let p2p_key = P2PKey::new(signing_key.as_bytes());
 		let port = peer_info.port;
@@ -88,6 +105,7 @@ async fn multisig_messages_over_quic_with_muxer() {
 					incoming_tx,
 					outgoing_rx,
 					peer_update_rx,
+					shutdown_rx,
 				)
 				.await
 				.expect("QUIC transport failed");
@@ -142,9 +160,9 @@ async fn multisig_messages_over_quic_with_muxer() {
 		.unwrap();
 
 	// Both node 1 and node 2 should receive it
-	for i in 1..NUM_NODES {
+	for eth_receiver in &mut eth_receivers[1..NUM_NODES] {
 		let received =
-			tokio::time::timeout(Duration::from_secs(5), eth_receivers[i].receiver.recv())
+			tokio::time::timeout(Duration::from_secs(5), eth_receiver.receiver.recv())
 				.await
 				.expect("timeout waiting for broadcast")
 				.expect("channel closed");
@@ -156,14 +174,14 @@ async fn multisig_messages_over_quic_with_muxer() {
 
 	// Test 3: All-to-all communication (simulating a ceremony round)
 	// Each node sends a message to all other nodes
-	for sender_idx in 0..NUM_NODES {
+	for (sender_idx, eth_sender) in eth_senders.iter().enumerate() {
 		let payload = format!("from node {}", sender_idx).into_bytes();
 		let recipients: Vec<_> = (0..NUM_NODES)
 			.filter(|&i| i != sender_idx)
 			.map(|i| account_ids[i].clone())
 			.collect();
 
-		eth_senders[sender_idx]
+		eth_sender
 			.inner()
 			.send(OutgoingMultisigStageMessages::Broadcast(recipients, payload))
 			.unwrap();
@@ -197,4 +215,188 @@ async fn multisig_messages_over_quic_with_muxer() {
 		assert!(!received_from.contains(&account_ids[receiver_idx]));
 	}
 	info!("All-to-all communication works! (simulates ceremony round)");
+}
+
+/// A self-contained multisig node: a real `MultisigClient` wired to a real transport via the
+/// supervisor and topic muxer, with no engine or State Chain involved.
+struct CeremonyNode {
+	account_id: AccountId,
+	client: MultisigClient<EthSigning, KeyStore<EthSigning>>,
+	/// Send a transport here to make the supervisor switch to it in-process.
+	restart_sender: mpsc::UnboundedSender<Transport>,
+	// Kept alive for the lifetime of the node.
+	_peer_update_sender: mpsc::UnboundedSender<engine_p2p::PeerUpdate>,
+	_tempdir: tempfile::TempDir,
+}
+
+/// Assemble one node: transport supervisor (started on `initial_transport`) -> topic muxer ->
+/// Ethereum multisig client, all over a real loopback socket.
+fn spawn_ceremony_node(
+	idx: usize,
+	signing_key: SigningKey,
+	account_id: AccountId,
+	port: Port,
+	all_peers: Vec<PeerInfo>,
+	initial_transport: Transport,
+) -> CeremonyNode {
+	// Channels between the transport (owned by the supervisor) and the muxer.
+	let (to_muxer_sender, to_muxer_receiver) = mpsc::unbounded_channel();
+	let (from_muxer_sender, from_muxer_receiver) = mpsc::unbounded_channel();
+
+	// Topic muxer with a single Ethereum topic.
+	let (muxer_future, mut handles) =
+		TopicMuxer::start(to_muxer_receiver, from_muxer_sender, [MultisigTopic(ChainTag::Ethereum)]);
+	tokio::spawn(muxer_future.instrument(info_span!("muxer", idx = idx)));
+
+	let eth_handle = handles.remove(&MultisigTopic(ChainTag::Ethereum)).unwrap();
+	let (eth_sender, eth_receiver) =
+		create_multisig_channels::<cf_chains::evm::EvmCrypto>(eth_handle);
+
+	// Real multisig client backed by a temp on-disk key store.
+	let (tempdir, db_file) = new_temp_directory_with_nonexistent_file();
+	let key_store = KeyStore::<EthSigning>::new(Arc::new(
+		PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).expect("Failed to open database"),
+	));
+	let (client, client_future) =
+		start_client::<EthSigning>(account_id.clone(), key_store, eth_receiver, eth_sender, 0);
+	tokio::spawn(client_future.instrument(info_span!("multisig", idx = idx)));
+
+	// Transport supervisor (owns the restartable ZMQ/QUIC transport).
+	let (peer_update_sender, peer_update_receiver) = mpsc::unbounded_channel();
+	let (restart_sender, restart_receiver) = mpsc::unbounded_channel();
+	let p2p_key = P2PKey::new(signing_key.as_bytes());
+	let supervisor_account_id = account_id.clone();
+	tokio::spawn(
+		async move {
+			engine_p2p::supervisor::run_transport_supervisor(
+				initial_transport,
+				p2p_key,
+				port,
+				supervisor_account_id,
+				all_peers,
+				to_muxer_sender,
+				from_muxer_receiver,
+				peer_update_receiver,
+				restart_receiver,
+			)
+			.await
+			.expect("transport supervisor exited");
+		}
+		.instrument(info_span!("supervisor", idx = idx)),
+	);
+
+	CeremonyNode {
+		account_id,
+		client,
+		restart_sender,
+		_peer_update_sender: peer_update_sender,
+		_tempdir: tempdir,
+	}
+}
+
+/// End-to-end, engine-free test of the in-process transport switch: stand up real multisig
+/// clients over a real transport, run a keygen + signing on ZMQ, switch every node to QUIC in
+/// place, and run another signing — proving ceremonies resume on the new transport without
+/// restarting anything above the transport layer.
+#[tokio::test]
+async fn keygen_and_signing_survive_transport_switch() {
+	const NUM_NODES: usize = 3;
+
+	let node_infos: Vec<_> =
+		(0..NUM_NODES).map(|idx| create_test_node_info(idx, CEREMONY_BASE_PORT)).collect();
+	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
+
+	// Start every node on ZMQ (the network-wide default).
+	let nodes: Vec<CeremonyNode> = node_infos
+		.into_iter()
+		.enumerate()
+		.map(|(idx, (signing_key, peer_info, account_id))| {
+			spawn_ceremony_node(
+				idx,
+				signing_key,
+				account_id,
+				peer_info.port,
+				all_peer_infos.clone(),
+				Transport::Zmq,
+			)
+		})
+		.collect();
+
+	let participants: BTreeSet<AccountId> = nodes.iter().map(|n| n.account_id.clone()).collect();
+
+	// Give the ZMQ transports time to connect.
+	tokio::time::sleep(Duration::from_secs(3)).await;
+
+	// --- Keygen over ZMQ ---
+	let public_keys = with_timeout(
+		"keygen",
+		join_all(
+			nodes
+				.iter()
+				.map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, participants.clone())),
+		),
+	)
+	.await
+	.into_iter()
+	.map(|r| r.expect("keygen failed"))
+	.collect::<Vec<_>>();
+
+	let public_key = public_keys[0];
+	assert!(public_keys.iter().all(|pk| *pk == public_key), "all nodes must agree on the key");
+	let key_id = KeyId::new(GENESIS_EPOCH, public_key);
+	info!("Keygen succeeded over ZMQ");
+
+	let payload = EvmCryptoScheme::signing_payload_for_test();
+
+	// --- Signing over ZMQ ---
+	run_signing(&nodes, 2, &participants, &key_id, &payload, &public_key).await;
+	info!("Signing succeeded over ZMQ");
+
+	// --- Switch every node to QUIC in-process ---
+	for node in &nodes {
+		node.restart_sender.send(Transport::Quic).expect("supervisor still running");
+	}
+	// Allow the transports to tear down ZMQ and re-establish QUIC connections.
+	tokio::time::sleep(Duration::from_secs(5)).await;
+	info!("Switched all nodes to QUIC");
+
+	// --- Signing over QUIC, using the key generated before the switch ---
+	run_signing(&nodes, 3, &participants, &key_id, &payload, &public_key).await;
+	info!("Signing succeeded over QUIC after the in-process transport switch");
+}
+
+/// Run a signing ceremony across all nodes and assert every node produces a signature that
+/// verifies against the group public key.
+async fn run_signing(
+	nodes: &[CeremonyNode],
+	ceremony_id: cf_primitives::CeremonyId,
+	signers: &BTreeSet<AccountId>,
+	key_id: &KeyId,
+	payload: &<EvmCryptoScheme as CryptoScheme>::SigningPayload,
+	public_key: &<EvmCryptoScheme as CryptoScheme>::PublicKey,
+) {
+	let results = with_timeout(
+		"signing",
+		join_all(nodes.iter().map(|n| {
+			n.client.initiate_signing(
+				ceremony_id,
+				signers.clone(),
+				vec![(key_id.clone(), payload.clone())],
+			)
+		})),
+	)
+	.await;
+
+	for result in results {
+		let signatures = result.expect("signing failed");
+		EvmCryptoScheme::verify_signature(&signatures[0], public_key, payload)
+			.expect("produced signature must verify against the group key");
+	}
+}
+
+/// Await a future, failing the test with a clear message if a ceremony stalls.
+async fn with_timeout<F: std::future::Future>(what: &str, fut: F) -> F::Output {
+	tokio::time::timeout(Duration::from_secs(60), fut)
+		.await
+		.unwrap_or_else(|_| panic!("{what} timed out"))
 }
