@@ -47,6 +47,8 @@ const BASE_PORT: Port = 19000;
 /// A separate port range for the ceremony test so it never clashes with the routing test
 /// when the suite runs in parallel.
 const CEREMONY_BASE_PORT: Port = 19100;
+/// And another range for the mid-ceremony switch test.
+const MID_CEREMONY_BASE_PORT: Port = 19200;
 
 /// Create a P2P key and peer info for a test node.
 fn create_test_node_info(idx: usize, base_port: Port) -> (SigningKey, PeerInfo, AccountId) {
@@ -294,12 +296,14 @@ fn spawn_ceremony_node(
 	}
 }
 
-/// End-to-end, engine-free test of the in-process transport switch: stand up real multisig
-/// clients over a real transport, run a keygen + signing on ZMQ, switch every node to QUIC in
-/// place, and run another signing — proving ceremonies resume on the new transport without
-/// restarting anything above the transport layer.
+/// End-to-end, engine-free test that signing keeps working *after* an in-process transport
+/// switch: stand up real multisig clients over a real transport, run a keygen + signing on ZMQ,
+/// switch every node to QUIC in place (between ceremonies), and run another signing — proving
+/// the clients and the key survive the switch without restarting anything above the transport
+/// layer. (For what happens to a ceremony that is in flight *during* a switch, see
+/// `signing_fails_then_recovers_when_transport_switches_mid_ceremony`.)
 #[tokio::test]
-async fn keygen_and_signing_survive_transport_switch() {
+async fn signing_works_after_in_place_transport_switch() {
 	const NUM_NODES: usize = 3;
 
 	let node_infos: Vec<_> =
@@ -365,6 +369,96 @@ async fn keygen_and_signing_survive_transport_switch() {
 	info!("Signing succeeded over QUIC after the in-process transport switch");
 }
 
+/// Characterise what happens to a ceremony that is in flight *while* the transport changes —
+/// the scenario when QUIC has to be reverted to ZMQ (or vice versa) under us.
+///
+/// A network-wide switch is not atomic: nodes pick up the new transport at slightly different
+/// finalized blocks, so for a window the validators are split across two non-interoperable
+/// transports. We reproduce that split (one node on QUIC, the rest on ZMQ) and show:
+///
+///  1. A ceremony that needs a node on the far side of the split does **not** hang or panic —
+///     it self-times-out (MAX_STAGE_DURATION) and resolves to an error, which the State Chain
+///     would observe and retry.
+///  2. Once the nodes converge onto one transport, signing works again (here with the two
+///     nodes that ended up together, which meet the 2-of-3 success threshold) — so the switch
+///     is recoverable, not a dead end.
+#[tokio::test]
+async fn signing_fails_then_recovers_when_transport_switches_mid_ceremony() {
+	const NUM_NODES: usize = 3;
+
+	let node_infos: Vec<_> =
+		(0..NUM_NODES).map(|idx| create_test_node_info(idx, MID_CEREMONY_BASE_PORT)).collect();
+	let all_peer_infos: Vec<_> = node_infos.iter().map(|(_, pi, _)| pi.clone()).collect();
+
+	// Everyone starts on ZMQ.
+	let nodes: Vec<CeremonyNode> = node_infos
+		.into_iter()
+		.enumerate()
+		.map(|(idx, (signing_key, peer_info, account_id))| {
+			spawn_ceremony_node(
+				idx,
+				signing_key,
+				account_id,
+				peer_info.port,
+				all_peer_infos.clone(),
+				Transport::Zmq,
+			)
+		})
+		.collect();
+
+	let all_signers: BTreeSet<AccountId> = nodes.iter().map(|n| n.account_id.clone()).collect();
+
+	tokio::time::sleep(Duration::from_secs(3)).await;
+
+	// Generate a key while everyone is still on ZMQ.
+	let public_keys = with_timeout(
+		"keygen",
+		join_all(nodes.iter().map(|n| n.client.initiate_keygen(1, GENESIS_EPOCH, all_signers.clone()))),
+	)
+	.await
+	.into_iter()
+	.map(|r| r.expect("keygen failed"))
+	.collect::<Vec<_>>();
+	let public_key = public_keys[0];
+	let key_id = KeyId::new(GENESIS_EPOCH, public_key);
+	let payload = EvmCryptoScheme::signing_payload_for_test();
+
+	// Create the transient split: node 0 moves to QUIC while nodes 1 and 2 stay on ZMQ. The two
+	// transports cannot talk to each other, so node 0 is now isolated.
+	nodes[0].restart_sender.send(Transport::Quic).expect("supervisor running");
+	tokio::time::sleep(Duration::from_secs(3)).await;
+	info!("Node 0 switched to QUIC; nodes 1 and 2 still on ZMQ (split)");
+
+	// A signing ceremony that includes the isolated node cannot complete across the split. The
+	// important property: it fails (by self-timeout) rather than hanging or panicking.
+	let split_results = with_timeout(
+		"signing across the transport split",
+		join_all(nodes.iter().map(|n| {
+			n.client.initiate_signing(2, all_signers.clone(), vec![(key_id.clone(), payload.clone())])
+		})),
+	)
+	.await;
+	for result in split_results {
+		assert!(
+			result.is_err(),
+			"a ceremony spanning a transport split must fail cleanly, not hang"
+		);
+	}
+	info!("Ceremony failed cleanly while the nodes were split across transports");
+
+	// Converge nodes 1 and 2 onto QUIC. They were together on ZMQ throughout, so once both are
+	// on QUIC they can sign without the isolated node (success threshold is 2 of 3). This models
+	// the State Chain retrying the ceremony once the network has settled on one transport.
+	nodes[1].restart_sender.send(Transport::Quic).expect("supervisor running");
+	nodes[2].restart_sender.send(Transport::Quic).expect("supervisor running");
+	tokio::time::sleep(Duration::from_secs(5)).await;
+
+	let recovery_signers: BTreeSet<AccountId> =
+		nodes[1..3].iter().map(|n| n.account_id.clone()).collect();
+	run_signing(&nodes[1..3], 3, &recovery_signers, &key_id, &payload, &public_key).await;
+	info!("Signing recovered on QUIC after the mid-ceremony transport split");
+}
+
 /// Run a signing ceremony across all nodes and assert every node produces a signature that
 /// verifies against the group public key.
 async fn run_signing(
@@ -394,9 +488,11 @@ async fn run_signing(
 	}
 }
 
-/// Await a future, failing the test with a clear message if a ceremony stalls.
+/// Await a future, failing the test with a clear message if a ceremony stalls. The bound is
+/// generous enough to allow a ceremony to fail by self-timeout (MAX_STAGE_DURATION = 30s) while
+/// still catching a genuine hang.
 async fn with_timeout<F: std::future::Future>(what: &str, fut: F) -> F::Output {
-	tokio::time::timeout(Duration::from_secs(60), fut)
+	tokio::time::timeout(Duration::from_secs(90), fut)
 		.await
 		.unwrap_or_else(|_| panic!("{what} timed out"))
 }
