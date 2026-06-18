@@ -68,14 +68,8 @@ where
 
 	// Iterate over transaction balance traces
 	'transaction_loop: for tx_trace in block_balance.transaction_balance_trace {
-		// Skip transactions that are not successful, they should be successful since the balance
-		// changed
+		// Skip transactions that are not successful (reverted, out-of-gas, etc.).
 		if tx_trace.status != "SUCCESS" {
-			tracing::warn!(
-				"Skipping Tron transaction with non-success status, expected success: tx_id={}, status={}",
-				tx_trace.transaction_identifier,
-				tx_trace.status
-			);
 			continue;
 		}
 
