@@ -9,13 +9,16 @@
 // will wait until block number 3 has appeared on the state chain
 
 import { runWithTimeout, sleep } from 'shared/utils';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 
 async function main(): Promise<void> {
-  await using api = await getChainflipPolkadotApi();
-  const expectedBlock = process.argv[2];
-  while ((await api.rpc.chain.getBlockHash(expectedBlock)).every((e) => e === 0)) {
+  await using api = await getChainflipApi();
+  const expectedBlock = Number(process.argv[2]);
+  // chain_getBlockHash returns the all-zero hash (or null) until the block exists.
+  let hash = await api.rpc.chain_getBlockHash(expectedBlock);
+  while (!hash || /^0x0+$/.test(hash)) {
     await sleep(1000);
+    hash = await api.rpc.chain_getBlockHash(expectedBlock);
   }
   process.exit(0);
 }

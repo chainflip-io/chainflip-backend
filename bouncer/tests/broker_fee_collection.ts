@@ -17,9 +17,9 @@ import {
   Chains,
   Asset,
   Chain,
+  encodedAddress,
 } from 'shared/utils';
 import { getBalance } from 'shared/get_balance';
-import { encodedAddress } from 'shared/utils/dedot';
 import type { CfChainsRefundParametersChannelRefundParameters } from 'generated/chaintypes/chainflip-node';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';

@@ -10,7 +10,7 @@ import {
   Asset,
   Assets,
 } from 'shared/utils';
-import { getChainflipPolkadotApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { randomBytes } from 'crypto';
 import { TestContext } from 'shared/utils/test_context';
@@ -30,9 +30,8 @@ export interface Loan {
 }
 
 async function getLoanAccount(address: string) {
-  await using chainflip = await getChainflipPolkadotApi();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loanAccounts = (await chainflip.rpc('cf_loan_accounts', address)) as any[];
+  await using chainflip = await getChainflipApi();
+  const loanAccounts = (await chainflip.rpc.cf_loan_accounts(address)) as { loans: Loan[] }[];
   if (!loanAccounts) {
     throw new Error('Invalid loan accounts response');
   }
@@ -219,11 +218,8 @@ export async function lendingTest(testContext: TestContext): Promise<void> {
   const cf = await newChainflipIO(testContext.logger, []);
 
   // Check if the lending pool exists. This can be removed after the `upgrade_test` uses the new lending pool setup.
-  await using chainflip = await getChainflipPolkadotApi();
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const btcPool: any = (
-    await chainflip.query.lendingPools.generalLendingPools(Assets.Btc)
-  ).toJSON();
+  await using chainflip = await getChainflipApi();
+  const btcPool = await chainflip.query.lendingPools.generalLendingPools(Assets.Btc);
   if (!btcPool) {
     cf.info('Btc lending pool not found, running setupLendingPools');
     await setupLendingPools(cf);

@@ -17,7 +17,7 @@ import {
 import { getIsoTime, Logger } from 'shared/utils/logger';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
@@ -44,11 +44,11 @@ async function encodeAndSendDelegationApiCall(
   evmWallet: HDNodeWallet,
   call: DelegationApi,
 ): Promise<string> {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   logger.info(`Requesting EVM encoding for ${evmWallet.address} ${JSON.stringify(call)}`);
 
-  const payload = await chainflip.rpc('cf_evm_calldata', evmWallet.address, {
+  const payload = await chainflip.rpc.cf_evm_calldata(evmWallet.address, {
     API: 'Delegation',
     call,
   });
@@ -155,14 +155,14 @@ export async function testDelegate(testContext: TestContext) {
     ),
   });
 
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
     externalChainToScAccount(wallet.address),
   );
 
   // Redeem only if there are no other redemptions to prevent queuing issues when
   // running this test multiple times.
-  if (pendingRedemption.toString().length === 0) {
+  if (pendingRedemption === undefined) {
     cf.info('Redeeming funds');
 
     const redeemAddress = await newAddress('Flip', randomBytes(32).toString('hex'));

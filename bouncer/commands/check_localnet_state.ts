@@ -90,10 +90,10 @@ async function main() {
   // 3. Setup status — BTC lending pool exists only after setup_concurrent.ts.
   // Deferred import: shared/utils/substrate has top-level RPC side effects that
   // would crash the script if the localnet were down.
-  const { getChainflipPolkadotApi } = await import('shared/utils/substrate');
-  const api = await getChainflipPolkadotApi();
-  const btcPool = (await api.query.lendingPools.generalLendingPools('Btc')).toJSON();
-  const setupReady = btcPool !== null;
+  const { getChainflipApi } = await import('shared/utils/substrate');
+  const api = await getChainflipApi();
+  const btcPool = await api.query.lendingPools.generalLendingPools('Btc');
+  const setupReady = btcPool !== undefined;
   console.log(`Setup:    ${setupReady ? 'READY (btc lending pool present)' : 'NOT_SET_UP'}`);
 
   const state: State = setupReady ? 'READY' : 'UNREADY';

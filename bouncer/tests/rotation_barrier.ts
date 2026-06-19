@@ -1,5 +1,4 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { encodedAddress } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -9,6 +8,7 @@ import {
   Assets,
   newAssetAddress,
   observeBalanceIncrease,
+  encodedAddress,
 } from 'shared/utils';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderWithdrawalEgressScheduledEvent } from 'generated/events/liquidityProvider/withdrawalEgressScheduled';

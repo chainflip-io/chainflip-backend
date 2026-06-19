@@ -26,7 +26,7 @@ import {
   getTronWhaleKeyPair,
 } from 'shared/utils';
 import { SwapContext, SwapStatus } from 'shared/utils/swap_context';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi, getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
 import { buildAndSendBtcVaultSwap } from 'shared/vault_swap/btc_vault_swap';
@@ -161,7 +161,7 @@ export async function waitForEgressScheduled<A = []>(
   });
 
   if (resultEvent.key === 'egressIgnored') {
-    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipPolkadotApi());
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
     throwError(cf.logger, new Error(`Swap Egress was ignored reason: ${reason}`));
   }
 

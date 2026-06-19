@@ -20,7 +20,7 @@ import {
 import Web3 from 'web3';
 import { TronWeb } from 'tronweb';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { hexToU8a, u8aToHex, BN, assertUnreachable } from '@polkadot/util';
+import { hexToU8a, u8aToHex, assertUnreachable } from '@polkadot/util';
 import { Vector, bool, Struct, Enum, Bytes as TsBytes } from 'scale-ts';
 import BigNumber from 'bignumber.js';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
@@ -35,6 +35,7 @@ import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
 import { getChainflipPolkadotApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import type { CfChainsAddressEncodedAddress } from 'generated/chaintypes/chainflip-node';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -48,10 +49,12 @@ import {
   cfChainsSwapOrigin,
   cfTraitsSwappingSwapRequestTypeGeneric,
   spRuntimeDispatchError,
+  spRuntimeModuleError,
 } from 'generated/events/common';
 import z from 'zod';
 import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
+import type { ChainflipClient } from 'shared/utils/dedot';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
 import bitcoin from 'bitcoinjs-lib';
@@ -278,6 +281,15 @@ export function shortChainFromChain(chain: Chain) {
     default:
       throw new Error(`Unsupported chain: ${chain}`);
   }
+}
+
+/**
+ * Builds a typed `EncodedAddress` from a chain and a pre-encoded address value.
+ * `address` should already be in the chain's on-chain encoding (hex for EVM/Sol/Dot/Hub,
+ *  hex-encoded bytes for Btc).
+ */
+export function encodedAddress(chain: Chain, address: string): CfChainsAddressEncodedAddress {
+  return { type: shortChainFromChain(chain), value: address } as CfChainsAddressEncodedAddress;
 }
 
 export function shortChainFromAsset(asset: Asset) {
@@ -1342,20 +1354,24 @@ export function waitForExt(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function decodeModuleError(module: any, api: any): string {
-  const errorIndex = {
-    index: new BN(module.index),
-    error: new Uint8Array(Buffer.from(module.error.slice(2), 'hex')),
-  };
-  const { docs, name, section } = api.registry.findMetaError(errorIndex);
-  return `${section}.${name}: ${docs}`;
+export function decodeModuleError(
+  module: z.infer<typeof spRuntimeModuleError>,
+  api: ChainflipClient,
+): string {
+  const meta = api.registry.findErrorMeta({
+    type: 'Module',
+    value: { index: module.index, error: module.error },
+  });
+  if (!meta) {
+    return `Module(${module.index}, ${module.error})`;
+  }
+  const pallet = meta.pallet.charAt(0).toLowerCase() + meta.pallet.slice(1);
+  return `${pallet}.${meta.name}: ${meta.docs.join(' ')}`;
 }
 
 export function decodeDispatchError(
   reason: z.infer<typeof spRuntimeDispatchError>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  api: any,
+  api: ChainflipClient,
 ): string {
   if (reason.__kind === 'Module') {
     return decodeModuleError(reason.value, api);

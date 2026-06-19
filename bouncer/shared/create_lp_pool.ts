@@ -1,17 +1,14 @@
 import { Asset, assetPriceToInternalAssetPrice } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { Logger } from 'shared/utils/logger';
-import { getChainflipPolkadotApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 
 export async function createLpPool(logger: Logger, ccy: Asset, initialPrice: number) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   if (
-    (
-      await chainflip.query.liquidityPools.pools({
-        assets: { quote: 'usdc', base: ccy.toLowerCase() },
-      })
-    ).toJSON()! === null
+    (await chainflip.query.liquidityPools.pools({ assets: { base: ccy, quote: 'Usdc' } })) ===
+    undefined
   ) {
     const price = assetPriceToInternalAssetPrice(ccy, 'Usdc', initialPrice);
     logger.info(

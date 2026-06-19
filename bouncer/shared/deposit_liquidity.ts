@@ -9,12 +9,12 @@ import {
   runWithTimeout,
   doAddressesMatch,
   chainGasAsset,
+  encodedAddress,
   Chain,
   Asset,
 } from 'shared/utils';
 import { send } from 'shared/send';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
-import { encodedAddress } from 'shared/utils/dedot';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
@@ -30,11 +30,12 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
 
   // Check if the refund address is already registered for this chain. If so, return early.
   if (!forceRegister) {
-    await using chainflip = await getChainflipPolkadotApi();
-    const currentRefundAddress = (
-      await chainflip.query.liquidityProvider.liquidityRefundAddress(lp.address, chain)
-    ).toJSON();
-    if (currentRefundAddress !== null) {
+    await using chainflip = await getChainflipApi();
+    const currentRefundAddress = await chainflip.query.liquidityProvider.liquidityRefundAddress([
+      lp.address,
+      chain,
+    ]);
+    if (currentRefundAddress !== undefined) {
       cf.debug(`Liquidity Refund Address already registered for ${lpuri} chain: ${chain}`);
       return;
     }

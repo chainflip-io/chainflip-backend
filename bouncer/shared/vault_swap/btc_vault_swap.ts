@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { sendVaultTransaction } from 'shared/send_btc';
 import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'shared/utils';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistrationEvent } from 'generated/events/swapping/affiliateRegistration';
@@ -21,15 +21,14 @@ interface BtcVaultSwapExtraParameters {
 }
 
 async function getExistingPrivateBtcChannel(brokerAddress: string): Promise<number | undefined> {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
-  const existingPrivateChannel = Number(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.swapping.brokerPrivateBtcChannels(brokerAddress)) as any,
+  const existingPrivateChannel = await chainflip.query.swapping.brokerPrivateBtcChannels(
+    brokerAddress,
   );
 
   if (existingPrivateChannel) {
-    return existingPrivateChannel;
+    return Number(existingPrivateChannel);
   }
   return undefined;
 }
@@ -39,7 +38,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   fundAccountWithBrokerBond = false,
 ): Promise<number> {
   const broker = cf.requirements.account;
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   // Acquire mutex and check if broker already has private channel
   const releasePrivateBtcChannelMutex = await cfMutex.acquire(`${broker.uri}_PrivateBtcChannel`);
@@ -52,8 +51,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   if (fundAccountWithBrokerBond) {
     // Fund the broker the required bond amount for opening a private channel
     const fundAmount = fineAmountToAmount(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (await chainflip.query.swapping.brokerBond()) as any as string,
+      (await chainflip.query.swapping.brokerBond()).toString(),
       assetDecimals('Flip'),
     );
     await fundFlip(cf, broker.keypair.address, fundAmount);
@@ -101,7 +99,7 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
     bps: number;
   }[] = [],
 ) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   await openPrivateBtcChannel(cf);
   const broker = cf.requirements.account.keypair;
@@ -151,7 +149,7 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
     bps: number;
   }[] = [],
 ) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   await openPrivateBtcChannel(cf);
   const broker = cf.requirements.account.keypair;

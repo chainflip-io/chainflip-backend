@@ -1,6 +1,6 @@
 import { amountToFineAmount, Asset, Assets, assetDecimals, decodeModuleError } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipPolkadotApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri, WithLpAccount } from 'shared/utils/chainflip_io';
@@ -46,7 +46,7 @@ export async function createLendingPools(logger: Logger, newPools: LendingPoolId
   const lendingPoolEvents = await Promise.all(observeLendingPoolEvents);
   for (const event of lendingPoolEvents) {
     if (event.name.method !== 'LendingPoolCreated') {
-      const error = decodeModuleError(event.data[0].Module, await getChainflipPolkadotApi());
+      const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
       throwError(logger, new Error(`Failed to create lending pool: ${error}`));
     }
     logger.debug(`Lending pools created for ${event.data.asset}`);

@@ -1,4 +1,4 @@
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Chains, ingressEgressPalletForChain } from 'shared/utils';
 import { findAllEventsByName } from 'shared/utils/indexer';
@@ -26,11 +26,9 @@ async function isCcmBroadcast(
   palletQuery: any,
   broadcastId: number,
 ): Promise<boolean> {
-  const action = (await palletQuery.broadcastActions(broadcastId)).toJSON() as Record<
-    string,
-    unknown
-  > | null;
-  return action?.ccmBroadcast !== undefined;
+  // dedot decodes the BroadcastActions enum as a tagged `{ type, value }` union.
+  const action = (await palletQuery.broadcastActions(broadcastId)) as { type: string } | undefined;
+  return action?.type === 'CcmBroadcast';
 }
 
 export async function checkNoTransferFallbacks(testContext: TestContext) {
@@ -51,13 +49,13 @@ export async function checkNoTransferFallbacks(testContext: TestContext) {
     );
   }
 
-  const chainflipApi = await getChainflipPolkadotApi();
+  const chainflipApi = await getChainflipApi();
   for (const pallet of INGRESS_EGRESS_STORAGE_PALLETS) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const palletQuery = (chainflipApi.query as any)[pallet];
     const entries = await palletQuery.failedForeignChainCalls.entries();
-    const allCalls = (entries as [unknown, { toJSON(): { broadcastId: number }[] }][]).flatMap(
-      ([, calls]) => calls.toJSON(),
+    const allCalls = (entries as [unknown, { broadcastId: number }[]][]).flatMap(
+      ([, calls]) => calls,
     );
 
     const transferFallbackCalls = (

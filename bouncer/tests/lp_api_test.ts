@@ -12,13 +12,14 @@ import {
   createStateChainKeypair,
   getFreeBalance,
   Assets,
+  encodedAddress,
 } from 'shared/utils';
 import { lpApiRpc } from 'shared/json_rpc';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { signSendAndFinalize, encodedAddress } from 'shared/utils/dedot';
+import { signSendAndFinalize } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';

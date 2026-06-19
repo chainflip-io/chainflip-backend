@@ -5,24 +5,12 @@ import type {
   IRuntimeTxCall,
   ISubmittableResult as DedotSubmittableResult,
 } from 'dedot/types';
-import type {
-  ChainflipNodeApi,
-  CfChainsAddressEncodedAddress,
-} from 'generated/chaintypes/chainflip-node';
+import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { cfMutex, shortChainFromChain, type Chain } from 'shared/utils';
+import { cfMutex } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
-
-/**
- * Builds a typed `EncodedAddress` from a chain and a pre-encoded address value.
- * `address` should already be in the chain's on-chain encoding (hex for EVM/Sol/Dot/Hub,
- *  hex-encoded bytes for Btc).
- */
-export function encodedAddress(chain: Chain, address: string): CfChainsAddressEncodedAddress {
-  return { type: shortChainFromChain(chain), value: address } as CfChainsAddressEncodedAddress;
-}
 
 /**
  * A signed-or-unsigned extrinsic built from `client.tx.<pallet>.<call>(...)`.

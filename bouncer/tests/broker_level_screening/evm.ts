@@ -8,13 +8,12 @@ import {
   observeBalanceIncrease,
   observeCcmReceived,
   observeFetch,
-  getChainContractId,
   amountToFineAmount,
   assetDecimals,
   Chain,
   Asset,
 } from 'shared/utils';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBalance } from 'shared/get_balance';
@@ -249,7 +248,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   reportFunction: (txId: string) => Promise<void>,
 ) {
   // setup access to chainflip api and lp
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
   const cf = parentCf.withChildLogger(
     `${sourceAsset}_BrokerLevelScreening_testEvmLiquidityDeposit`,
   );
@@ -261,25 +260,17 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   const MAX_RETRIES = 120;
 
   // Get existing LP refund address of //LP_1 for `sourceAsset`
-  /* eslint-disable  @typescript-eslint/no-explicit-any */
-  const addressReponse = (
-    await chainflip.query.liquidityProvider.liquidityRefundAddress(
-      lp.address,
-      getChainContractId(chainFromAsset(sourceAsset)),
-    )
-  ).toJSON() as any;
-  if (addressReponse === undefined) {
+  const addressResponse = await chainflip.query.liquidityProvider.liquidityRefundAddress([
+    lp.address,
+    chainFromAsset(sourceAsset),
+  ]);
+  if (addressResponse === undefined) {
     throw new Error(`There was now refund address for ${sourceAsset} for the LP.`);
   }
-
-  let ethereumRefundAddress;
-  if (chain === 'Ethereum') {
-    ethereumRefundAddress = addressReponse.eth;
-  } else if (chain === 'Arbitrum') {
-    ethereumRefundAddress = addressReponse.arb;
-  } else {
+  if (addressResponse.type !== 'Eth' && addressResponse.type !== 'Arb') {
     throw new Error('Unsupported Evm chain');
   }
+  const ethereumRefundAddress = addressResponse.value;
   cf.debug(`refund address is: ${ethereumRefundAddress}`);
 
   // Create new LP deposit address for //LP_1

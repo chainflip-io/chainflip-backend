@@ -4,7 +4,7 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { decodeDispatchError, sleep } from 'shared/utils';
 import type { CfPrimitivesSemVer } from 'generated/chaintypes/chainflip-node';
 import { tryRuntimeUpgrade } from 'shared/try_runtime_upgrade';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { throwError } from 'shared/utils/logger';
 import { systemCodeUpdatedEvent } from 'generated/events/system/codeUpdated';
 import { governanceFailedExecutionEvent } from 'generated/events/governance/failedExecution';
@@ -69,7 +69,7 @@ export async function submitRuntimeUpgradeWithRestrictions<A = []>(
   });
 
   if (resultEvent.key === 'failedExecution') {
-    const reason = decodeDispatchError(resultEvent.data, await getChainflipPolkadotApi());
+    const reason = decodeDispatchError(resultEvent.data, await getChainflipApi());
     throwError(cf.logger, new Error(`Runtime upgrade failed: ${reason}`));
   }
 

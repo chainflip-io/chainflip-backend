@@ -16,7 +16,7 @@ import {
 import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
@@ -167,7 +167,7 @@ async function testMinPriceRefund<A = []>(
   });
 
   if (resultEvent.key === 'refundEgressIgnored') {
-    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipPolkadotApi());
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
     throwError(cf.logger, new Error(`Refund Egress was ignored reason: ${reason}`));
   }
 
@@ -195,13 +195,13 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
   // Check that all Arbitrum prices are up to date to ensure that oracle swaps
   // are not being refunded due to stale prices.
-  const chainflip = await getChainflipPolkadotApi();
-  const response = JSON.parse(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,
-  );
-  const chainState = response.chainStates.arbitrum.price;
-  for (const [asset, feed] of Object.entries(chainState) as [string, { priceStatus: string }][]) {
+  await using chainflip = await getChainflipApi();
+  const state = await chainflip.query.genericElections.electoralUnsynchronisedState();
+  if (!state) {
+    throwError(cf.logger, new Error('genericElections unsynchronised state not found'));
+  }
+  // `price` is a BTreeMap, which dedot decodes as an array of [asset, state] tuples.
+  for (const [asset, feed] of state.chainStates.arbitrum.price) {
     if (feed.priceStatus !== 'UpToDate') {
       throwError(
         cf.logger,

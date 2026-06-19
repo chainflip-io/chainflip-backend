@@ -1,21 +1,17 @@
 import assert from 'assert';
 import { createStateChainKeypair } from 'shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipPolkadotApi, getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { signSendAndFinalize } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
-import { Codec } from '@polkadot/types/types';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
 
 async function getGovernanceMembers(): Promise<string[]> {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
-  const { members } = (await chainflip.query.governance.members()) as unknown as {
-    members: Codec;
-    threshold: number;
-  };
-  return members.toPrimitive() as string[];
+  const { members } = await chainflip.query.governance.members();
+  return members.map((member) => member.address(2112));
 }
 
 const alice = createStateChainKeypair('//Alice');

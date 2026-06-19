@@ -3,23 +3,15 @@ import assert from 'assert';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { observeEvent, getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { observeEvent, getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 
-interface Utxo {
-  id: string;
-  amount: number;
-  depositAddress: string;
-}
-
 async function queryUtxos(): Promise<{ amount: number; count: number }> {
-  await using chainflip = await getChainflipPolkadotApi();
-  const utxos: Utxo[] = JSON.parse(
-    (await chainflip.query.environment.bitcoinAvailableUtxos()).toString(),
-  );
+  await using chainflip = await getChainflipApi();
+  const utxos = await chainflip.query.environment.bitcoinAvailableUtxos();
 
   return {
-    amount: utxos.reduce((acc, utxo) => acc + utxo.amount, 0),
+    amount: utxos.reduce((acc, utxo) => acc + Number(utxo.amount), 0),
     count: utxos.length,
   };
 }

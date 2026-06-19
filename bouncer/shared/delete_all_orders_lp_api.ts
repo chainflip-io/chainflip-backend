@@ -1,17 +1,17 @@
 import { lpApiRpc } from 'shared/json_rpc';
 import { Assets, createStateChainKeypair, stateChainAssetFromAsset } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 
 export async function logLpPoolOrders(logger: Logger, lpAddress: string) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   const allPoolAssets = Object.values(Assets).filter((asset) => asset !== 'Usdc');
 
   for (const asset of allPoolAssets) {
     const assetAndChain = stateChainAssetFromAsset(asset);
 
-    const orders = await chainflip.rpc('cf_pool_orders', assetAndChain, 'USDC', lpAddress);
+    const orders = await chainflip.rpc.cf_pool_orders(assetAndChain, 'USDC', lpAddress);
     logger.info(`${asset} pool: ${JSON.stringify(orders)}`);
   }
 }

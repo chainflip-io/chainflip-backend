@@ -24,7 +24,7 @@ import {
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 
 import { getSolanaSwapEndpointIdl } from 'shared/contract_interfaces';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { getBalance } from 'shared/get_balance';
 import { TestContext } from 'shared/utils/test_context';
 import { throwError } from 'shared/utils/logger';
@@ -88,7 +88,7 @@ export async function executeSolVaultSwap<A extends WithBrokerAccount>(
     assetDecimals(srcAsset),
   );
 
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   // This will be replaced in PRO-2228 when the SDK is used
   const refundParams: ChannelRefundParameters = {

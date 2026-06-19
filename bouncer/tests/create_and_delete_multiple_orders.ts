@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import type { PalletCfPoolsCloseOrder } from 'generated/chaintypes/chainflip-node';
 import { limitOrder } from 'shared/limit_order';
 import { rangeOrder } from 'shared/range_order';
@@ -14,18 +14,15 @@ import {
 } from 'shared/utils/chainflip_io';
 
 async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string) {
-  await using chainflip = await getChainflipPolkadotApi();
-  const orders = await chainflip.rpc('cf_pool_orders', baseAsset, quoteAsset, lp);
+  await using chainflip = await getChainflipApi();
+  const orders = await chainflip.rpc.cf_pool_orders(baseAsset, quoteAsset, lp);
   if (!orders) {
     throw Error('Rpc cf_pool_orders returned undefined');
   }
   let openOrders = 0;
 
-  // @ts-expect-error limit_orders does not exist on type AnyJson
   openOrders += orders?.limit_orders.asks.length || 0;
-  // @ts-expect-error limit_orders does not exist on type AnyJson
   openOrders += orders?.limit_orders.bids.length || 0;
-  // @ts-expect-error range_orders does not exist on type AnyJson
   openOrders += orders?.range_orders.length || 0;
 
   return openOrders;

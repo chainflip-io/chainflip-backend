@@ -20,7 +20,7 @@ import { testSwap } from 'shared/swapping';
 import { sendBtc } from 'shared/send_btc';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import { globalLogger } from 'shared/utils/logger';
 import { lpApiEndpoint } from 'shared/json_rpc';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -205,15 +205,11 @@ async function playLp<A = []>(cf: ChainflipIO<A>, asset: Asset, price: number, l
 }
 
 async function launchTornado<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipPolkadotApi();
-  const epoch = (
-    await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
-  ).toJSON()! as number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const thresholdKeys = (await chainflip.query.bitcoinThresholdSigner.keys(epoch)).toJSON() as any;
-  const pubkey = (thresholdKeys!.current as string).substring(2);
-  const salt =
-    ((await chainflip.query.bitcoinIngressEgress.channelIdCounter()).toJSON()! as number) + 1;
+  await using chainflip = await getChainflipApi();
+  const epoch = (await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch())!;
+  const thresholdKeys = await chainflip.query.bitcoinThresholdSigner.keys(epoch);
+  const pubkey = thresholdKeys!.current.substring(2);
+  const salt = Number(await chainflip.query.bitcoinIngressEgress.channelIdCounter()) + 1;
   const btcAddress = predictBtcAddress(pubkey, salt);
   // shuffle
   const assets: Asset[] = ['Eth', 'Usdc', 'Flip', 'Usdt', 'Wbtc', 'ArbEth', 'ArbUsdc', 'ArbUsdt'];
