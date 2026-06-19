@@ -4,7 +4,7 @@ import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { Logger, throwError } from 'shared/utils/logger';
 import { ChainflipIO, fullAccountFromUri, WithLpAccount } from 'shared/utils/chainflip_io';
-import { lendingPoolsLendingFundsAdded } from 'generated/events/lendingPools/lendingFundsAdded';
+import { lendingPoolsLendingFundsAddedEvent } from 'generated/events/lendingPools/lendingFundsAdded';
 
 export type LendingPoolId = {
   asset: Asset;
@@ -75,13 +75,10 @@ export async function addLenderFunds<A extends WithLpAccount>(
         asset,
         amountToFineAmount(amount.toString(), assetDecimals(asset)),
       ),
-    expectedEvent: {
-      name: 'LendingPools.LendingFundsAdded',
-      schema: lendingPoolsLendingFundsAdded.refine(
-        (event) =>
-          event.lenderId === cf.requirements.account.keypair.address && event.asset === asset,
-      ),
-    },
+    expectedEvent: lendingPoolsLendingFundsAddedEvent.refine(
+      (event) =>
+        event.lenderId === cf.requirements.account.keypair.address && event.asset === asset,
+    ),
   });
 
   cf.debug(

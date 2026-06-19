@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { accountId, cfChainsEvmAggKey, numberOrHex } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const evmThresholdSignerKeyHandoverRequest = z.object({
   ceremonyId: numberOrHex,
@@ -10,3 +11,8 @@ export const evmThresholdSignerKeyHandoverRequest = z.object({
   newKey: cfChainsEvmAggKey,
   toEpoch: z.number(),
 });
+
+export const evmThresholdSignerKeyHandoverRequestEvent = defineEvent(
+  'EvmThresholdSigner.KeyHandoverRequest',
+  evmThresholdSignerKeyHandoverRequest,
+);

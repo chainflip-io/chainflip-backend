@@ -20,8 +20,8 @@ import {
 import { DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { swappingSwapRequestCompleted } from 'generated/events/swapping/swapRequestCompleted';
-import { swappingSwapExecuted } from '../generated/events/swapping/swapExecuted';
+import { swappingSwapRequestCompletedEvent } from 'generated/events/swapping/swapRequestCompleted';
+import { swappingSwapExecutedEvent } from 'generated/events/swapping/swapExecuted';
 
 async function testDCASwap<A = []>(
   parentCf: ChainflipIO<A>,
@@ -119,8 +119,7 @@ async function testDCASwap<A = []>(
 
   // Find the `SwapExecuted` event of the first chunk
   await cf.stepUntilEvent(
-    `Swapping.SwapExecuted`,
-    swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
+    swappingSwapExecutedEvent.refine((event) => event.swapRequestId === swapRequestId),
   );
   cf.debug(`Chunk 1/${numberOfChunks} complete`);
 
@@ -129,16 +128,14 @@ async function testDCASwap<A = []>(
     // Exactly step chunkIntervalBlocks. This also checks that the chunk interval is correctly observed.
     await cf.stepNBlocks(chunkIntervalBlocks);
     await cf.expectEvent(
-      `Swapping.SwapExecuted`,
-      swappingSwapExecuted.refine((event) => event.swapRequestId === swapRequestId),
+      swappingSwapExecutedEvent.refine((event) => event.swapRequestId === swapRequestId),
     );
     cf.debug(`Chunk ${i}/${numberOfChunks} complete`);
   }
 
   // Wait for SwapRequestCompleted, usually it appears at the same block of the last chunk.
   await cf.stepUntilEvent(
-    `Swapping.SwapRequestCompleted`,
-    swappingSwapRequestCompleted.refine((event) => event.swapRequestId === swapRequestId),
+    swappingSwapRequestCompletedEvent.refine((event) => event.swapRequestId === swapRequestId),
   );
   cf.debug(`Chunk interval of ${chunkIntervalBlocks} verified for all ${numberOfChunks} chunks`);
 

@@ -22,8 +22,8 @@ import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
 import { updatePriceFeed } from 'shared/update_price_feed';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { swappingRefundEgressScheduled } from 'generated/events/swapping/refundEgressScheduled';
-import { swappingRefundEgressIgnored } from 'generated/events/swapping/refundEgressIgnored';
+import { swappingRefundEgressScheduledEvent } from 'generated/events/swapping/refundEgressScheduled';
+import { swappingRefundEgressIgnoredEvent } from 'generated/events/swapping/refundEgressIgnored';
 import { throwError } from 'shared/utils/logger';
 
 /// Do a swap with an unrealistic minimum price so it gets refunded.
@@ -158,16 +158,12 @@ async function testMinPriceRefund<A = []>(
   cf.debug(`${sourceAsset} swap requested, swapRequestId: ${swapRequestId}`);
 
   const resultEvent = await cf.stepUntilOneEventOf({
-    refundEgressScheduled: {
-      name: 'Swapping.RefundEgressScheduled',
-      schema: swappingRefundEgressScheduled.refine(
-        (event) => event.swapRequestId === swapRequestId,
-      ),
-    },
-    refundEgressIgnored: {
-      name: 'Swapping.RefundEgressIgnored',
-      schema: swappingRefundEgressIgnored.refine((event) => event.swapRequestId === swapRequestId),
-    },
+    refundEgressScheduled: swappingRefundEgressScheduledEvent.refine(
+      (event) => event.swapRequestId === swapRequestId,
+    ),
+    refundEgressIgnored: swappingRefundEgressIgnoredEvent.refine(
+      (event) => event.swapRequestId === swapRequestId,
+    ),
   });
 
   if (resultEvent.key === 'refundEgressIgnored') {

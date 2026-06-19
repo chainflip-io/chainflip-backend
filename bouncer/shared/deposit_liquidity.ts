@@ -15,10 +15,10 @@ import {
 } from 'shared/utils';
 import { send } from 'shared/send';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
-import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
+import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
-import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
+import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
 
 export async function registerLiquidityRefundAddressForChain<A extends WithLpAccount>(
   cf: ChainflipIO<A>,
@@ -51,13 +51,10 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
       api.tx.liquidityProvider.registerLiquidityRefundAddress({
         [shortChainFromChain(chain)]: refundAddress,
       }),
-    expectedEvent: {
-      name: 'LiquidityProvider.LiquidityRefundAddressRegistered',
-      schema: liquidityProviderLiquidityRefundAddressRegistered.refine(
-        (event) =>
-          doAddressesMatch(event.address, chain, refundAddress) && event.accountId === lp.address,
-      ),
-    },
+    expectedEvent: liquidityProviderLiquidityRefundAddressRegisteredEvent.refine(
+      (event) =>
+        doAddressesMatch(event.address, chain, refundAddress) && event.accountId === lp.address,
+    ),
   });
 
   cf.debug(
@@ -82,12 +79,9 @@ export async function depositLiquidity<A extends WithLpAccount>(
 
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
-    expectedEvent: {
-      name: 'LiquidityProvider.LiquidityDepositAddressReady',
-      schema: liquidityProviderLiquidityDepositAddressReady.refine(
-        (event) => event.asset === ccy && event.accountId === lp.address,
-      ),
-    },
+    expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
+      (event) => event.asset === ccy && event.accountId === lp.address,
+    ),
   });
   const ingressAddress = depositAddressReadyEvent.depositAddress.address;
 
@@ -101,8 +95,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   );
 
   await cf.stepUntilEvent(
-    'AssetBalances.AccountCredited',
-    assetBalancesAccountCredited.refine((event) => {
+    assetBalancesAccountCreditedEvent.refine((event) => {
       if (event.asset === ccy && event.accountId === lp.address) {
         if (
           isWithinOnePercent(

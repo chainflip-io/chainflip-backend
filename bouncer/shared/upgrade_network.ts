@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { reputationPenaltyUpdatedEvent } from 'generated/events/reputation/penaltyUpdated';
 import fs from 'fs/promises';
 import * as toml from 'toml';
 import path from 'path';
@@ -119,7 +120,7 @@ export async function upgradeBinaries<A = []>(
         reputation: 100,
         suspension: 0,
       }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+    expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
   // Kill engines first so they don't try to submit extrinsics while the node
@@ -149,7 +150,7 @@ export async function upgradeBinaries<A = []>(
         reputation: 120,
         suspension: 150,
       }),
-    expectedEvent: { name: 'Reputation.PenaltyUpdated' },
+    expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
   cf.info('Binary upgrade complete. binaries updated but on-chain runtime version is unchanged.');
