@@ -94,6 +94,9 @@ export async function requestNewSwap<A = []>(
   );
   const addressReady = await cf.expectEvent(
     swappingSwapDepositAddressReadyEvent.refine((event) => {
+      // This currently has to be done because the `destAddress` passed to us is in evm format,
+      // but event decoding for Tron addresses parses them into `T...` format.
+      // TODO: See PRO-2937 for an improvement plan
       const expectedAddress =
         chainFromAsset(destAsset) === 'Tron'
           ? hexToTronAddress(destAddress as `0x${string}`)
