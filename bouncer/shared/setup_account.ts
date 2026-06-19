@@ -3,7 +3,7 @@ import { fundFlip } from 'shared/fund_flip';
 // eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
 import { ChainflipIO, partialAccountFromUri } from 'shared/utils/chainflip_io';
-import { accountRolesAccountRoleRegistered } from 'generated/events/accountRoles/accountRoleRegistered';
+import { accountRolesAccountRoleRegisteredEvent } from 'generated/events/accountRoles/accountRoleRegistered';
 
 export enum AccountRole {
   Unregistered,
@@ -95,12 +95,9 @@ export async function setupAccount<A = []>(
           throw new Error(`Unsupported registration as account role: ${accountRole}`);
       }
     },
-    expectedEvent: {
-      name: 'AccountRoles.AccountRoleRegistered',
-      schema: accountRolesAccountRoleRegistered.refine(
-        (event) => event.accountId === account.address,
-      ),
-    },
+    expectedEvent: accountRolesAccountRoleRegisteredEvent.refine(
+      (event) => event.accountId === account.address,
+    ),
   });
 
   cf.debug(

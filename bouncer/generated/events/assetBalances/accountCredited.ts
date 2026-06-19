@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { accountId, cfPrimitivesChainsAssetsAnyAsset, numberOrHex } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const assetBalancesAccountCredited = z.object({
   accountId,
@@ -7,3 +8,8 @@ export const assetBalancesAccountCredited = z.object({
   amountCredited: numberOrHex,
   newBalance: numberOrHex,
 });
+
+export const assetBalancesAccountCreditedEvent = defineEvent(
+  'AssetBalances.AccountCredited',
+  assetBalancesAccountCredited,
+);

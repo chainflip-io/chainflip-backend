@@ -22,12 +22,12 @@ import { send } from 'shared/send';
 import { executeEvmVaultSwap } from 'shared/vault_swap/evm_vault_swap';
 import { newCcmMetadata } from 'shared/swapping';
 import { ChainflipIO, WithBrokerAccount, WithLpAccount } from 'shared/utils/chainflip_io';
-import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
-import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
-import { ethereumIngressEgressDepositFinalised } from 'generated/events/ethereumIngressEgress/depositFinalised';
-import { arbitrumIngressEgressDepositFinalised } from 'generated/events/arbitrumIngressEgress/depositFinalised';
-import { ethereumIngressEgressTransactionRejectedByBroker } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
-import { arbitrumIngressEgressTransactionRejectedByBroker } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
+import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
+import { ethereumIngressEgressDepositFinalisedEvent } from 'generated/events/ethereumIngressEgress/depositFinalised';
+import { arbitrumIngressEgressDepositFinalisedEvent } from 'generated/events/arbitrumIngressEgress/depositFinalised';
+import { ethereumIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/ethereumIngressEgress/transactionRejectedByBroker';
+import { arbitrumIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/arbitrumIngressEgress/transactionRejectedByBroker';
 
 /**
  * Wait for the Deposit contract to be deployed.
@@ -65,33 +65,21 @@ async function waitForEvmTransactionRejection<A = []>(
   let resultEvent;
   if (chain === 'Ethereum') {
     resultEvent = await cf.stepUntilOneEventOf({
-      transactionRejected: {
-        name: 'EthereumIngressEgress.TransactionRejectedByBroker',
-        schema: ethereumIngressEgressTransactionRejectedByBroker.refine(
-          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
-        ),
-      },
-      depositFinalized: {
-        name: 'EthereumIngressEgress.DepositFinalized',
-        schema: ethereumIngressEgressDepositFinalised.refine(
-          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-        ),
-      },
+      transactionRejected: ethereumIngressEgressTransactionRejectedByBrokerEvent.refine(
+        (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+      ),
+      depositFinalized: ethereumIngressEgressDepositFinalisedEvent.refine(
+        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+      ),
     });
   } else if (chain === 'Arbitrum') {
     resultEvent = await cf.stepUntilOneEventOf({
-      transactionRejected: {
-        name: 'ArbitrumIngressEgress.TransactionRejectedByBroker',
-        schema: arbitrumIngressEgressTransactionRejectedByBroker.refine(
-          (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
-        ),
-      },
-      depositFinalized: {
-        name: 'ArbitrumIngressEgress.DepositFinalized',
-        schema: arbitrumIngressEgressDepositFinalised.refine(
-          (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
-        ),
-      },
+      transactionRejected: arbitrumIngressEgressTransactionRejectedByBrokerEvent.refine(
+        (event) => event.txId.txHashes && event.txId.txHashes[0] === txHash,
+      ),
+      depositFinalized: arbitrumIngressEgressDepositFinalisedEvent.refine(
+        (event) => event.depositDetails.txHashes && event.depositDetails.txHashes[0] === txHash,
+      ),
     });
   } else {
     throw Error('Unsupported broker level screening EVM chain');
@@ -157,8 +145,7 @@ export async function testEvm<A = []>(
     cf.debug(`Sent initial ${sourceAsset} tx...`);
 
     await cf.stepUntilEvent(
-      'EthereumIngressEgress.DepositFinalised',
-      ethereumIngressEgressDepositFinalised.refine(
+      ethereumIngressEgressDepositFinalisedEvent.refine(
         (event) =>
           event.depositAddress === swapParams.depositAddress &&
           event.channelId === BigInt(swapParams.channelId),
@@ -299,12 +286,9 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   cf.debug('Requesting ' + sourceAsset + ' deposit address');
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, null),
-    expectedEvent: {
-      name: 'LiquidityProvider.LiquidityDepositAddressReady',
-      schema: liquidityProviderLiquidityDepositAddressReady.refine(
-        (event) => event.asset === sourceAsset && event.accountId === lp.address,
-      ),
-    },
+    expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
+      (event) => event.asset === sourceAsset && event.accountId === lp.address,
+    ),
   });
 
   const depositAddress = depositAddressReadyEvent.depositAddress.address;
@@ -323,16 +307,14 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
 
     if (chain === 'Ethereum') {
       await cf.stepUntilEvent(
-        'EthereumIngressEgress.DepositFinalised',
-        ethereumIngressEgressDepositFinalised.refine(
+        ethereumIngressEgressDepositFinalisedEvent.refine(
           (event) =>
             event.depositAddress === depositAddress && event.channelId === depositChannelId,
         ),
       );
     } else if (chain === 'Arbitrum') {
       await cf.stepUntilEvent(
-        'ArbitrumIngressEgress.DepositFinalised',
-        arbitrumIngressEgressDepositFinalised.refine(
+        arbitrumIngressEgressDepositFinalisedEvent.refine(
           (event) =>
             event.depositAddress === depositAddress && event.channelId === depositChannelId,
         ),
@@ -341,8 +323,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
     cf.debug(`Initial deposit ${sourceAsset} received...`);
 
     const observeAccountCreditedEvent = await cf.stepUntilEvent(
-      'AssetBalances.AccountCredited',
-      assetBalancesAccountCredited.refine(
+      assetBalancesAccountCreditedEvent.refine(
         (event) =>
           event.asset === sourceAsset &&
           event.accountId === lp.address &&

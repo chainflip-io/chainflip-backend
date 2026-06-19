@@ -22,10 +22,10 @@ import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
-import { liquidityProviderLiquidityRefundAddressRegistered } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
-import { liquidityProviderLiquidityDepositAddressReady } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
-import { assetBalancesAccountCredited } from 'generated/events/assetBalances/accountCredited';
-import { swappingCreditedOnChain } from 'generated/events/swapping/creditedOnChain';
+import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
+import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
+import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
+import { swappingCreditedOnChainEvent } from 'generated/events/swapping/creditedOnChain';
 
 const testAsset = Assets.Eth; // TODO: Make these tests work with any asset
 const testRpcAsset = stateChainAssetFromAsset(testAsset);
@@ -72,13 +72,10 @@ async function testRegisterLiquidityRefundAddress<A = []>(cf: ChainflipIO<A>) {
   ]);
   await cf.stepToTransactionIncluded({
     hash: txhash,
-    expectedEvent: {
-      name: 'LiquidityProvider.LiquidityRefundAddressRegistered',
-      schema: liquidityProviderLiquidityRefundAddressRegistered.refine(
-        (event) =>
-          event.address.__kind === 'Eth' && event.address.value === testAddress.toLowerCase(),
-      ),
-    },
+    expectedEvent: liquidityProviderLiquidityRefundAddressRegisteredEvent.refine(
+      (event) =>
+        event.address.__kind === 'Eth' && event.address.value === testAddress.toLowerCase(),
+    ),
   });
 
   // TODO: Check that the correct address is now set on the SC
@@ -100,13 +97,9 @@ async function testLiquidityDepositLegacy<A = []>(cf: ChainflipIO<A>) {
   const liquidityDepositAddress = rpcResult.tx_details.response.deposit_address;
   const liquidityDepositEvent = await cf.stepToTransactionIncluded({
     hash: rpcResult.tx_details.tx_hash,
-    expectedEvent: {
-      name: 'LiquidityProvider.LiquidityDepositAddressReady',
-      schema: liquidityProviderLiquidityDepositAddressReady.refine(
-        (event) =>
-          event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
-      ),
-    },
+    expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
+      (event) => event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
+    ),
   });
 
   assert.strictEqual(
@@ -127,8 +120,7 @@ async function testLiquidityDepositLegacy<A = []>(cf: ChainflipIO<A>) {
     String(testAmount),
   );
   await cf.stepUntilEvent(
-    'AssetBalances.AccountCredited',
-    assetBalancesAccountCredited.refine(
+    assetBalancesAccountCreditedEvent.refine(
       (event) =>
         event.asset === testAsset &&
         isWithinOnePercent(BigInt(event.amountCredited), BigInt(testAssetAmount)),
@@ -146,8 +138,7 @@ async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
 
   cf.ifYouCallThisYouHaveToRefactor_stepToBlockHeight(rpcResult.block_number);
   const liquidityDepositEvent = await cf.expectEvent(
-    'LiquidityProvider.LiquidityDepositAddressReady',
-    liquidityProviderLiquidityDepositAddressReady.refine(
+    liquidityProviderLiquidityDepositAddressReadyEvent.refine(
       (event) => event.depositAddress.chain === 'Ethereum' && event.accountId === lpAccount.address,
     ),
   );
@@ -170,8 +161,7 @@ async function testLiquidityDeposit<A = []>(cf: ChainflipIO<A>) {
     String(testAmount),
   );
   await cf.stepUntilEvent(
-    'AssetBalances.AccountCredited',
-    assetBalancesAccountCredited.refine(
+    assetBalancesAccountCreditedEvent.refine(
       (event) =>
         event.accountId === lpAccount.address &&
         event.asset === testAsset &&
@@ -484,8 +474,7 @@ async function testInternalSwap<A = []>(cf: ChainflipIO<A>) {
 
   // Wait for the swap to complete
   await cf.stepUntilEvent(
-    'Swapping.CreditedOnChain',
-    swappingCreditedOnChain.refine(
+    swappingCreditedOnChainEvent.refine(
       (event) => event.accountId === lp.address && Number(event.swapRequestId) === swapRequestId,
     ),
   );

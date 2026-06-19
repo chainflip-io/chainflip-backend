@@ -5,6 +5,7 @@ import {
   numberOrHex,
   palletCfLendingPoolsSupplyAddedActionType,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const lendingPoolsLendingFundsAdded = z.object({
   lenderId: accountId,
@@ -12,3 +13,8 @@ export const lendingPoolsLendingFundsAdded = z.object({
   amount: numberOrHex,
   actionType: palletCfLendingPoolsSupplyAddedActionType,
 });
+
+export const lendingPoolsLendingFundsAddedEvent = defineEvent(
+  'LendingPools.LendingFundsAdded',
+  lendingPoolsLendingFundsAdded,
+);

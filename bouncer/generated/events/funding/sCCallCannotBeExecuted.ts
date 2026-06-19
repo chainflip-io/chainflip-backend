@@ -5,6 +5,7 @@ import {
   spRuntimeDispatchErrorWithPostInfo,
   stateChainRuntimeChainflipEthereumScCallsEthereumSCApi,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const fundingSCCallCannotBeExecuted = z.object({
   caller: accountId,
@@ -12,3 +13,8 @@ export const fundingSCCallCannotBeExecuted = z.object({
   callError: spRuntimeDispatchErrorWithPostInfo,
   ethTxHash: hexString,
 });
+
+export const fundingSCCallCannotBeExecutedEvent = defineEvent(
+  'Funding.SCCallCannotBeExecuted',
+  fundingSCCallCannotBeExecuted,
+);

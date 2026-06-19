@@ -4,6 +4,7 @@ import {
   cfPrimitivesChainsForeignChain,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const swappingSwapEgressScheduled = z.object({
   swapRequestId: numberOrHex,
@@ -12,3 +13,8 @@ export const swappingSwapEgressScheduled = z.object({
   amount: numberOrHex,
   egressFee: z.tuple([numberOrHex, cfPrimitivesChainsAssetsAnyAsset]),
 });
+
+export const swappingSwapEgressScheduledEvent = defineEvent(
+  'Swapping.SwapEgressScheduled',
+  swappingSwapEgressScheduled,
+);

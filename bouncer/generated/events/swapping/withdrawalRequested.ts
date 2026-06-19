@@ -6,6 +6,7 @@ import {
   cfPrimitivesChainsForeignChain,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const swappingWithdrawalRequested = z.object({
   accountId,
@@ -15,3 +16,8 @@ export const swappingWithdrawalRequested = z.object({
   egressFee: numberOrHex,
   destinationAddress: cfChainsAddressEncodedAddress,
 });
+
+export const swappingWithdrawalRequestedEvent = defineEvent(
+  'Swapping.WithdrawalRequested',
+  swappingWithdrawalRequested,
+);

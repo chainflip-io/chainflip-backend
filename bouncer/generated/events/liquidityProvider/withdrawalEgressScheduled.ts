@@ -5,6 +5,7 @@ import {
   cfPrimitivesChainsForeignChain,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const liquidityProviderWithdrawalEgressScheduled = z.object({
   egressId: z.tuple([cfPrimitivesChainsForeignChain, numberOrHex]),
@@ -13,3 +14,8 @@ export const liquidityProviderWithdrawalEgressScheduled = z.object({
   destinationAddress: cfChainsAddressEncodedAddress,
   fee: numberOrHex,
 });
+
+export const liquidityProviderWithdrawalEgressScheduledEvent = defineEvent(
+  'LiquidityProvider.WithdrawalEgressScheduled',
+  liquidityProviderWithdrawalEgressScheduled,
+);

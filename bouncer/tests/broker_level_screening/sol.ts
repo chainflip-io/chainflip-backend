@@ -16,8 +16,8 @@ import { send } from 'shared/send';
 import { newCcmMetadata } from 'shared/swapping';
 import { executeSolVaultSwap } from 'shared/vault_swap/sol_vault_swap';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
-import { solanaIngressEgressTransactionRejectedByBroker } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
-import { solanaIngressEgressDepositFinalised } from 'generated/events/solanaIngressEgress/depositFinalised';
+import { solanaIngressEgressTransactionRejectedByBrokerEvent } from 'generated/events/solanaIngressEgress/transactionRejectedByBroker';
+import { solanaIngressEgressDepositFinalisedEvent } from 'generated/events/solanaIngressEgress/depositFinalised';
 
 export async function testSol<A = []>(
   parentCf: ChainflipIO<A>,
@@ -78,22 +78,16 @@ export async function testSol<A = []>(
   cf.debug(`Marked ${sourceAsset} ${txHash} for rejection. Awaiting refund.`);
 
   const resultEvent = await cf.stepUntilOneEventOf({
-    transactionRejected: {
-      name: 'SolanaIngressEgress.TransactionRejectedByBroker',
-      schema: solanaIngressEgressTransactionRejectedByBroker.refine(
-        (event) =>
-          event.txId.__kind === 'Channel' &&
-          event.txId.value === decodeSolAddress(swapParams.depositAddress),
-      ),
-    },
-    depositFinalized: {
-      name: 'SolanaIngressEgress.DepositFinalised',
-      schema: solanaIngressEgressDepositFinalised.refine(
-        (event) =>
-          event.depositDetails.__kind === 'Channel' &&
-          event.depositDetails.value === decodeSolAddress(swapParams.depositAddress),
-      ),
-    },
+    transactionRejected: solanaIngressEgressTransactionRejectedByBrokerEvent.refine(
+      (event) =>
+        event.txId.__kind === 'Channel' &&
+        event.txId.value === decodeSolAddress(swapParams.depositAddress),
+    ),
+    depositFinalized: solanaIngressEgressDepositFinalisedEvent.refine(
+      (event) =>
+        event.depositDetails.__kind === 'Channel' &&
+        event.depositDetails.value === decodeSolAddress(swapParams.depositAddress),
+    ),
   });
 
   if (resultEvent.key === 'depositFinalized') {
