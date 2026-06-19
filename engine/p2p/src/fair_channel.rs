@@ -73,11 +73,23 @@ impl<K: Eq + Hash + Clone, T> FairSender<K, T> {
 	pub fn try_send(&self, key: K, value: T) -> Result<(), FairSendError> {
 		{
 			let mut counts = self.counts.lock().unwrap();
-			let in_flight = counts.entry(key.clone()).or_insert(0);
-			if *in_flight >= self.per_peer_capacity {
-				return Err(FairSendError::PeerQuotaExceeded);
+			// Check the quota without cloning the key, so the over-limit drop
+			// path (the adversarial flood case) does no work beyond a lookup.
+			// Only a peer's *first* in-flight message has to insert (and so
+			// clone) a key.
+			match counts.get_mut(&key) {
+				Some(in_flight) => {
+					if *in_flight >= self.per_peer_capacity {
+						return Err(FairSendError::PeerQuotaExceeded);
+					}
+					*in_flight += 1;
+				},
+				// `per_peer_capacity` is always >= 1, so a peer's first
+				// in-flight message is always within quota.
+				None => {
+					counts.insert(key.clone(), 1);
+				},
 			}
-			*in_flight += 1;
 		}
 		// A leaked count here is harmless: `Closed` only happens once the
 		// receiver is gone, i.e. the whole channel is being torn down.
