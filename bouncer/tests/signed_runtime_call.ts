@@ -9,7 +9,7 @@ import {
   Asset,
 } from 'shared/utils';
 import { u8aToHex } from '@polkadot/util';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
 import { ApiPromise } from '@polkadot/api';
@@ -94,7 +94,7 @@ function getRegisterOperatorCall(chainflip: ApiPromise) {
 }
 
 async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   cf.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
@@ -159,7 +159,7 @@ async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
 
 // Submit the same call as EVM but using batch to test it out.
 async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   cf.info('Signing and submitting user-signed payload with Solana wallet');
 
@@ -231,7 +231,7 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
 }
 
 async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   cf.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -297,7 +297,7 @@ async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
 // that can be problematic between Rust and JS big ints. This can be removed once we
 // have more extensive tests in PRO-2584.
 async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
@@ -366,7 +366,7 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
 }
 
 async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Asset) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const initialFlipToBeSentToGateway = (
     await chainflip.query.swapping.flipToBeSentToGateway()
@@ -415,7 +415,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
   const broker = cf.requirements.account.keypair;
 
   cf.info('Opening special deposit channel and depositing..');
-  const accountCreationAddressReadyEvent = await cf.submitExtrinsic({
+  const accountCreationAddressReadyEvent = await cf.submitExtrinsicPolkadot({
     extrinsic: (api) =>
       api.tx.swapping.requestAccountCreationDepositAddress(
         {

@@ -20,7 +20,7 @@ import { testSwap } from 'shared/swapping';
 import { sendBtc } from 'shared/send_btc';
 import { createLpPool } from 'shared/create_lp_pool';
 import { depositLiquidity } from 'shared/deposit_liquidity';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { globalLogger } from 'shared/utils/logger';
 import { lpApiEndpoint } from 'shared/json_rpc';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -205,7 +205,7 @@ async function playLp<A = []>(cf: ChainflipIO<A>, asset: Asset, price: number, l
 }
 
 async function launchTornado<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const epoch = (
     await chainflip.query.bitcoinThresholdSigner.currentKeyEpoch()
   ).toJSON()! as number;

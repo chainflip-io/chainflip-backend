@@ -1,10 +1,10 @@
 import { lpApiRpc } from 'shared/json_rpc';
 import { Assets, createStateChainKeypair, stateChainAssetFromAsset } from 'shared/utils';
 import { Logger } from 'shared/utils/logger';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 
 export async function logLpPoolOrders(logger: Logger, lpAddress: string) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const allPoolAssets = Object.values(Assets).filter((asset) => asset !== 'Usdc');
 

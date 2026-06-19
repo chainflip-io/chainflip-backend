@@ -1,5 +1,5 @@
 import { amountToFineAmount, assetDecimals, Asset } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
 
 export async function rangeOrder<A extends WithLpAccount>(
@@ -9,7 +9,7 @@ export async function rangeOrder<A extends WithLpAccount>(
   orderId = 0,
 ) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals(ccy));
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const currentPools = (
@@ -24,9 +24,13 @@ export async function rangeOrder<A extends WithLpAccount>(
 
   await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.liquidityPools.setRangeOrder(ccy.toLowerCase(), 'usdc', orderId, [-887272, 887272], {
-        Liquidity: { Liquidity: liquidity },
-      }),
+      api.tx.liquidityPools.setRangeOrder(
+        ccy,
+        'Usdc',
+        BigInt(orderId),
+        { start: -887272, end: 887272 },
+        { type: 'Liquidity', value: { liquidity } },
+      ),
   });
 
   cf.debug(`Range order for ${ccy} with amount ${amount} successfully set up`);

@@ -12,15 +12,9 @@
  * Example:
  * ./commands/lp_schedule_swap.ts Eth Flip 20
  */
-import {
-  cfMutex,
-  amountToFineAmount,
-  assetDecimals,
-  Assets,
-  createStateChainKeypair,
-  handleSubstrateError,
-} from 'shared/utils';
+import { amountToFineAmount, assetDecimals, Assets, createStateChainKeypair } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { signSendAndFinalize } from 'shared/utils/dedot';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -56,19 +50,19 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 }).event;
 
 logger.info('Submitting on-chain swap extrinsic');
-await cfMutex.runExclusive(lpUri, async () => {
-  const nonce = await chainflip.rpc.system.accountNextIndex(lp.address);
-  await chainflip.tx.liquidityProvider
-    .scheduleSwap(
-      amountToFineAmount(amount.toString(), assetDecimals(inputAsset)),
-      inputAsset,
-      outputAsset,
-      0, // Retry duration
-      { min_price: '0x0', max_oracle_price_slippage: null },
-      undefined, // DCA params
-    )
-    .signAndSend(lp, { nonce }, handleSubstrateError(chainflip));
-});
+await signSendAndFinalize(
+  chainflip,
+  chainflip.tx.liquidityProvider.scheduleSwap(
+    BigInt(amountToFineAmount(amount.toString(), assetDecimals(inputAsset))),
+    inputAsset,
+    outputAsset,
+    0, // Retry duration
+    { minPrice: 0n, maxOraclePriceSlippage: undefined },
+    undefined, // DCA params
+  ),
+  lp,
+  lpUri,
+);
 
 await swapEvent;
 logger.info('✅ On-chain swap completed');

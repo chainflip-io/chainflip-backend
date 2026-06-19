@@ -1,4 +1,4 @@
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Chains, ingressEgressPalletForChain } from 'shared/utils';
 import { findAllEventsByName } from 'shared/utils/indexer';
@@ -51,7 +51,7 @@ export async function checkNoTransferFallbacks(testContext: TestContext) {
     );
   }
 
-  const chainflipApi = await getChainflipApi();
+  const chainflipApi = await getChainflipPolkadotApi();
   for (const pallet of INGRESS_EGRESS_STORAGE_PALLETS) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const palletQuery = (chainflipApi.query as any)[pallet];

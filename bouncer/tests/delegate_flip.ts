@@ -17,7 +17,7 @@ import {
 import { getIsoTime, Logger } from 'shared/utils/logger';
 import { approveErc20 } from 'shared/approve_erc20';
 import { newStatechainAddress } from 'shared/new_statechain_address';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { newCcmMetadata } from 'shared/swapping';
 import { requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
@@ -44,7 +44,7 @@ async function encodeAndSendDelegationApiCall(
   evmWallet: HDNodeWallet,
   call: DelegationApi,
 ): Promise<string> {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   logger.info(`Requesting EVM encoding for ${evmWallet.address} ${JSON.stringify(call)}`);
 
@@ -155,7 +155,7 @@ export async function testDelegate(testContext: TestContext) {
     ),
   });
 
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const pendingRedemption = await chainflip.query.flip.pendingRedemptionsReserve(
     externalChainToScAccount(wallet.address),
   );

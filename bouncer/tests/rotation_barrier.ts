@@ -1,4 +1,5 @@
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import { encodedAddress } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { observeEvent, observeBadEvent } from 'shared/utils/substrate';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -41,11 +42,9 @@ export async function testRotationBarrier(testContext: TestContext) {
   const depositAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.liquidityProvider.withdrawAsset(
-        amountToFineAmount('2', assetDecimals(Assets.ArbEth)),
+        BigInt(amountToFineAmount('2', assetDecimals(Assets.ArbEth))),
         Assets.ArbEth,
-        {
-          Arb: withdrawalAddress,
-        },
+        encodedAddress('Arbitrum', withdrawalAddress),
       ),
     expectedEvent: liquidityProviderWithdrawalEgressScheduledEvent.refine(
       (event) => event.asset === Assets.ArbEth,

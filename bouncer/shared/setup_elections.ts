@@ -1,5 +1,5 @@
-import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { submitGovernanceExtrinsicPolkadot } from 'shared/cf_governance';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 
 export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
@@ -7,7 +7,8 @@ export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
     extrinsic: (api) =>
       api.tx.solanaIngressEgress.updatePalletConfig([
         {
-          SetIngressDelaySolana: { delayBlocks: 10 },
+          type: 'SetIngressDelaySolana',
+          value: { delayBlocks: 10 },
         },
       ]),
   });
@@ -16,7 +17,7 @@ export async function setupIngressEgressPallet<A>(cf: ChainflipIO<A>) {
 export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> {
   cf.info('Setting up elections');
 
-  const chainflip = await getChainflipApi();
+  const chainflip = await getChainflipPolkadotApi();
 
   // get current bitcoin electoral settings
   // This is an array containing settings for
@@ -37,7 +38,7 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
     response[2].safetyMargin = ingressSafetyMargin;
 
     // update election settings
-    await submitGovernanceExtrinsic((api) =>
+    await submitGovernanceExtrinsicPolkadot((api) =>
       api.tx.bitcoinElections.updateSettings(response, null, 'Heed'),
     );
 
@@ -66,7 +67,7 @@ export async function setupElections<A = []>(cf: ChainflipIO<A>): Promise<void> 
     response.ethereum.maybeStaleTimeoutOverrides = [{ UsdcUsd: 300 }, { UsdtUsd: 300 }];
 
     // update election settings
-    await submitGovernanceExtrinsic((api) =>
+    await submitGovernanceExtrinsicPolkadot((api) =>
       api.tx.genericElections.updateSettings(response, null, 'Heed'),
     );
 

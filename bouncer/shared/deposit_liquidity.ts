@@ -7,14 +7,14 @@ import {
   decodeSolAddress,
   assetDecimals,
   runWithTimeout,
-  shortChainFromChain,
   doAddressesMatch,
   chainGasAsset,
   Chain,
   Asset,
 } from 'shared/utils';
 import { send } from 'shared/send';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { encodedAddress } from 'shared/utils/dedot';
 import { liquidityProviderLiquidityDepositAddressReadyEvent } from 'generated/events/liquidityProvider/liquidityDepositAddressReady';
 import { assetBalancesAccountCreditedEvent } from 'generated/events/assetBalances/accountCredited';
 import { ChainflipIO, WithLpAccount } from 'shared/utils/chainflip_io';
@@ -30,7 +30,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
 
   // Check if the refund address is already registered for this chain. If so, return early.
   if (!forceRegister) {
-    await using chainflip = await getChainflipApi();
+    await using chainflip = await getChainflipPolkadotApi();
     const currentRefundAddress = (
       await chainflip.query.liquidityProvider.liquidityRefundAddress(lp.address, chain)
     ).toJSON();
@@ -48,9 +48,7 @@ export async function registerLiquidityRefundAddressForChain<A extends WithLpAcc
 
   const refundAddressRegisteredEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
-      api.tx.liquidityProvider.registerLiquidityRefundAddress({
-        [shortChainFromChain(chain)]: refundAddress,
-      }),
+      api.tx.liquidityProvider.registerLiquidityRefundAddress(encodedAddress(chain, refundAddress)),
     expectedEvent: liquidityProviderLiquidityRefundAddressRegisteredEvent.refine(
       (event) =>
         doAddressesMatch(event.address, chain, refundAddress) && event.accountId === lp.address,
@@ -78,7 +76,7 @@ export async function depositLiquidity<A extends WithLpAccount>(
   cf.info(`Opening new liquidity deposit channel for ${lp.address}`);
 
   const depositAddressReadyEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, null),
+    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(ccy, 0),
     expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
       (event) => event.asset === ccy && event.accountId === lp.address,
     ),

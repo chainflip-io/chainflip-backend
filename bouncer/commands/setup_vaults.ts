@@ -15,6 +15,7 @@ import {
   deferredPromise,
   runWithTimeout,
   getTronWebClient,
+  decodeDotAddressForContract,
 } from 'shared/utils';
 import { aliceKeyringPair } from 'shared/polkadot_keyring';
 import {
@@ -241,25 +242,28 @@ async function main(): Promise<void> {
     (subcf) =>
       subcf.submitGovernance({
         extrinsic: (api) =>
-          api.tx.environment.witnessAssethubVaultCreation(hubVaultAddress, {
-            blockNumber: hubVaultEvent.block,
-            extrinsicIndex: hubVaultEvent.eventIndex,
-          }),
+          api.tx.environment.witnessAssethubVaultCreation(
+            decodeDotAddressForContract(hubVaultAddress as string),
+            {
+              blockNumber: hubVaultEvent.block,
+              extrinsicIndex: hubVaultEvent.eventIndex,
+            },
+          ),
         expectedEvent: assethubVaultVaultActivationCompletedEvent,
       }),
     (subcf) =>
       subcf.submitGovernance({
         extrinsic: async (api) =>
           api.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
-            await btcClient.getBlockCount(),
-            btcKey,
+            BigInt((await btcClient.getBlockCount()) as number),
+            { current: btcKey.current, previous: btcKey.previous ?? undefined },
           ),
         expectedEvent: environmentBitcoinBlockNumberSetForVaultEvent,
       }),
     (subcf) =>
       subcf.submitGovernance({
         extrinsic: async (api) =>
-          api.tx.environment.witnessInitializeSolanaVault(await solClient.getSlot()),
+          api.tx.environment.witnessInitializeSolanaVault(BigInt(await solClient.getSlot())),
         expectedEvent: environmentSolanaInitializedEvent,
       }),
   ]);

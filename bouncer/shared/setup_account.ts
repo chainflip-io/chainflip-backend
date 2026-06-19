@@ -1,4 +1,4 @@
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 // eslint-disable-next-line no-restricted-imports
 import { KeyringPair } from '@polkadot/keyring/types';
@@ -14,7 +14,7 @@ export enum AccountRole {
 }
 
 async function getAccountRole(address: string): Promise<AccountRole> {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const role = JSON.stringify(await chainflip.query.accountRoles.accountRoles(address)).replace(
     /"/g,

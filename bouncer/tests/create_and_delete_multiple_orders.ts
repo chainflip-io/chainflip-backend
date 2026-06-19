@@ -1,5 +1,6 @@
 import assert from 'assert';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import type { PalletCfPoolsCloseOrder } from 'generated/chaintypes/chainflip-node';
 import { limitOrder } from 'shared/limit_order';
 import { rangeOrder } from 'shared/range_order';
 import { depositLiquidity } from 'shared/deposit_liquidity';
@@ -13,7 +14,7 @@ import {
 } from 'shared/utils/chainflip_io';
 
 async function countOpenOrders(baseAsset: string, quoteAsset: string, lp: string) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const orders = await chainflip.rpc('cf_pool_orders', baseAsset, quoteAsset, lp);
   if (!orders) {
     throw Error('Rpc cf_pool_orders returned undefined');
@@ -57,27 +58,32 @@ export async function createAndDeleteMultipleOrders<A extends WithLpAccount>(
 
   // create a series of limit_order and save their info to delete them later on
   const promises: ((api: ChainflipIO<A>) => Promise<void>)[] = [];
-  const ordersToDelete: {
-    Limit?: { base_asset: string; quote_asset: string; side: string; id: number };
-    Range?: { base_asset: string; quote_asset: string; id: number };
-  }[] = [];
+  const ordersToDelete: PalletCfPoolsCloseOrder[] = [];
 
   for (let i = 1; i <= numberOfLimitOrders; i++) {
     promises.push((subcf) => limitOrder(subcf, 'Btc', 0.00000001, i, i));
-    ordersToDelete.push({ Limit: { base_asset: 'BTC', quote_asset: 'USDC', side: 'sell', id: i } });
+    ordersToDelete.push({
+      type: 'Limit',
+      value: { baseAsset: 'Btc', quoteAsset: 'Usdc', side: 'Sell', id: BigInt(i) },
+    });
   }
   for (let i = 1; i <= numberOfLimitOrders; i++) {
     promises.push((subcf) => limitOrder(subcf, 'Eth', 0.000000000000000001, i, i));
-    ordersToDelete.push({ Limit: { base_asset: 'ETH', quote_asset: 'USDC', side: 'sell', id: i } });
+    ordersToDelete.push({
+      type: 'Limit',
+      value: { baseAsset: 'Eth', quoteAsset: 'Usdc', side: 'Sell', id: BigInt(i) },
+    });
   }
 
   promises.push((subcf) => rangeOrder(subcf, 'Btc', 0.1, 0));
   ordersToDelete.push({
-    Range: { base_asset: 'BTC', quote_asset: 'USDC', id: 0 },
+    type: 'Range',
+    value: { baseAsset: 'Btc', quoteAsset: 'Usdc', id: 0n },
   });
   promises.push((subcf) => rangeOrder(subcf, 'Eth', 0.01, 0));
   ordersToDelete.push({
-    Range: { base_asset: 'ETH', quote_asset: 'USDC', id: 0 },
+    type: 'Range',
+    value: { baseAsset: 'Eth', quoteAsset: 'Usdc', id: 0n },
   });
 
   cf.debug('Submitting orders');

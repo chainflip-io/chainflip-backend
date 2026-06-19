@@ -7,8 +7,8 @@ import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 async function forceRecoverSolNonce(nonceAddress: string, nonceValue: string) {
   await submitGovernanceExtrinsic(async (chainflip) =>
     chainflip.tx.environment.forceRecoverSolNonce(
-      decodeSolAddress(new PublicKey(nonceAddress).toBase58()),
-      decodeSolAddress(new PublicKey(nonceValue).toBase58()),
+      decodeSolAddress(new PublicKey(nonceAddress).toBase58()) as `0x${string}`,
+      decodeSolAddress(new PublicKey(nonceValue).toBase58()) as `0x${string}`,
     ),
   );
 }

@@ -1,13 +1,12 @@
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import Keyring from 'polkadot/keyring';
 import { cfMutex, waitForExt } from 'shared/utils';
-import { DisposableApiPromise, getChainflipApi, getChainflipClient } from 'shared/utils/substrate';
 import {
-  ChainflipClient,
-  ChainflipExtrinsic,
-  formatDispatchError,
-  signSendAndFinalize,
-} from 'shared/utils/dedot';
+  DisposableApiPromise,
+  getChainflipPolkadotApi,
+  getChainflipApi,
+} from 'shared/utils/substrate';
+import { ChainflipClient, ChainflipExtrinsic, signSendAndFinalize } from 'shared/utils/dedot';
 import type {
   PalletCfGovernanceExecutionMode,
   StateChainRuntimeRuntimeCallLike,
@@ -30,7 +29,7 @@ export async function submitExistingGovernanceExtrinsic(
   logger: Logger = globalLogger,
   preAuthorise = 0,
 ): Promise<number> {
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
 
   logger.debug(`Submitting governance extrinsic`);
 
@@ -70,31 +69,31 @@ export async function submitExistingGovernanceExtrinsic(
   return proposalId;
 }
 
-export async function submitGovernanceExtrinsic(
+export async function submitGovernanceExtrinsicPolkadot(
   call: (
     api: DisposableApiPromise,
   ) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>,
   logger: Logger = globalLogger,
   preAuthorise = 0,
 ): Promise<number> {
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
   return submitExistingGovernanceExtrinsic(await call(api), logger, preAuthorise);
 }
 
 /**
- * dedot variant of {@link submitGovernanceExtrinsic}: the inner extrinsic is built from the
+ * dedot variant of {@link submitGovernanceExtrinsicPolkadot}: the inner extrinsic is built from the
  * compile-time-typed dedot client (`client.tx.<pallet>.<call>(...)`) and proposed via dedot's
  * `governance.proposeGovernanceExtrinsic`. Returns the proposal id once the `Governance.Proposed`
  * event is found (via the indexer).
  *
  * NOTE: transitional — lives alongside the polkadot.js version while call sites are migrated.
  */
-export async function submitGovernanceExtrinsicDedot(
+export async function submitGovernanceExtrinsic(
   call: (client: ChainflipClient) => ChainflipExtrinsic | Promise<ChainflipExtrinsic>,
   logger: Logger = globalLogger,
   preAuthorise = 0,
 ): Promise<number> {
-  await using client = await getChainflipClient();
+  await using client = await getChainflipApi();
   const inner = await call(client);
 
   // The polkadot.js path passed `preAuthorise` as a number that SCALE-encoded the
@@ -110,12 +109,6 @@ export async function submitGovernanceExtrinsicDedot(
     execution,
   );
   const result = await signSendAndFinalize(client, proposal, snowWhite, snowWhiteUri);
-
-  if (result.dispatchError) {
-    throw new Error(
-      `Governance extrinsic failed: ${formatDispatchError(client, result.dispatchError)}`,
-    );
-  }
 
   // `result` only resolves on the Finalized status, so the block number is always present.
   if (result.status.type !== 'Finalized') {

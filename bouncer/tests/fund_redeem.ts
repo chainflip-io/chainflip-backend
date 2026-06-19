@@ -11,7 +11,7 @@ import { getBalance } from 'shared/get_balance';
 import { fundFlip } from 'shared/fund_flip';
 import { redeemFlip, RedeemAmount } from 'shared/redeem_flip';
 import { newStatechainAddress } from 'shared/new_statechain_address';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { Logger } from 'shared/utils/logger';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -58,7 +58,7 @@ async function fundAndRedeem<A>(
 
 // Runs the exact and max redemption tests in parallel using separate accounts.
 async function main<A = []>(cf: ChainflipIO<A>, providedSeed?: string) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const redemptionTax = await chainflip.query.funding.redemptionTax();
   const redemptionTaxAmount = parseInt(
     fineAmountToAmount(redemptionTax.toString(), assetDecimals('Flip')),

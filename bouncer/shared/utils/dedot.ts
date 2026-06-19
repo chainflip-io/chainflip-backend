@@ -5,12 +5,24 @@ import type {
   IRuntimeTxCall,
   ISubmittableResult as DedotSubmittableResult,
 } from 'dedot/types';
-import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
+import type {
+  ChainflipNodeApi,
+  CfChainsAddressEncodedAddress,
+} from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { cfMutex } from 'shared/utils';
+import { cfMutex, shortChainFromChain, type Chain } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
+
+/**
+ * Builds a typed `EncodedAddress` from a chain and a pre-encoded address value.
+ * `address` should already be in the chain's on-chain encoding (hex for EVM/Sol/Dot/Hub,
+ *  hex-encoded bytes for Btc).
+ */
+export function encodedAddress(chain: Chain, address: string): CfChainsAddressEncodedAddress {
+  return { type: shortChainFromChain(chain), value: address } as CfChainsAddressEncodedAddress;
+}
 
 /**
  * A signed-or-unsigned extrinsic built from `client.tx.<pallet>.<call>(...)`.
@@ -66,8 +78,9 @@ export function formatDispatchError(client: ChainflipClient, err: DispatchError)
  * submission for the same key reads the correct (incremented) nonce; the mutex is released
  * early in the status callback and again on any exit.
  *
- * The returned result is the finalized one — the caller is responsible for inspecting
- * `result.dispatchError` and acting on `result.status.value.blockNumber`.
+ * Throws if the extrinsic was dropped/invalid or if its dispatch failed, so the returned
+ * result is always a successful, finalized one — the caller can use `result.status.value`
+ * and `result.events` without re-checking `dispatchError`.
  */
 export async function signSendAndFinalize(
   client: ChainflipClient,
@@ -86,7 +99,7 @@ export async function signSendAndFinalize(
 
   try {
     const nonce = await client.rpc.system_accountNextIndex(signer.address);
-    return await new Promise<DedotSubmittableResult>((resolve, reject) => {
+    const result = await new Promise<DedotSubmittableResult>((resolve, reject) => {
       ext
         .signAndSend(signer, { nonce }, (res: DedotSubmittableResult) => {
           switch (res.status.type) {
@@ -112,6 +125,14 @@ export async function signSendAndFinalize(
         })
         .catch(reject);
     });
+
+    if (result.dispatchError) {
+      throw new Error(
+        `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
+      );
+    }
+
+    return result;
   } finally {
     releaseOnce();
   }

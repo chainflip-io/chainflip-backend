@@ -1,10 +1,10 @@
 import { Asset, assetPriceToInternalAssetPrice } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { Logger } from 'shared/utils/logger';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi, observeEvent } from 'shared/utils/substrate';
 
 export async function createLpPool(logger: Logger, ccy: Asset, initialPrice: number) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   if (
     (
@@ -20,7 +20,9 @@ export async function createLpPool(logger: Logger, ccy: Asset, initialPrice: num
     const poolCreatedEvent = observeEvent(logger, 'liquidityPools:NewPoolCreated', {
       test: (event) => event.data.baseAsset === ccy,
     }).event;
-    await submitGovernanceExtrinsic((api) => api.tx.liquidityPools.newPool(ccy, 'usdc', 20, price));
+    await submitGovernanceExtrinsic((api) =>
+      api.tx.liquidityPools.newPool(ccy, 'Usdc', 20, BigInt(price)),
+    );
     await poolCreatedEvent;
   }
 }

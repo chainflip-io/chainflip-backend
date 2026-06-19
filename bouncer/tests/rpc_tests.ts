@@ -1,4 +1,4 @@
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { createStateChainKeypair } from 'shared/utils';
 import { type AssetAndChain } from '@chainflip/utils/chainflip';
 import { TestContext } from 'shared/utils/test_context';
@@ -11,7 +11,7 @@ type AccountWithRole = {
 };
 
 async function setupKnownAccounts<A = []>(cf: ChainflipIO<A>): Promise<AccountWithRole[]> {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
 
   const operatorAccount = await setupAccount(cf, '//Operator_1', AccountRole.Operator);
 
@@ -35,7 +35,7 @@ async function testRpcCallForAllAccounts<A = []>(
   rpcCallname: string,
   knownAccounts: AccountWithRole[],
 ) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
 
   for (const account of knownAccounts) {
     try {
@@ -60,7 +60,7 @@ type SupportedAssets = {
 };
 
 async function getRuntimeSupportedAssets(): Promise<SupportedAssets> {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
   // Here we use cf_swapping_environment and parse the result instead of cf_supported_assets, because
   // cf_supported_assets implementation doesn't work at upgrade boundaries
   const env = (await chainflipApi.rpc('cf_swapping_environment')) as {
@@ -92,7 +92,7 @@ async function testRpcCallForAssetPair<A = []>(
   asset1: AssetAndChain,
   asset2: AssetAndChain,
 ) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
   try {
     cf.info(
       `Calling ${rpcCallName} with asset1=${JSON.stringify(asset1)} asset2=${JSON.stringify(asset2)}`,
@@ -109,7 +109,7 @@ async function testRpcCallForAssetPair<A = []>(
 }
 
 async function testParameterlessRpcCall<A = []>(cf: ChainflipIO<A>, rpcCallName: string) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
   try {
     cf.info(`Calling ${rpcCallName}`);
     const result = await chainflipApi.rpc(rpcCallName);
@@ -120,7 +120,7 @@ async function testParameterlessRpcCall<A = []>(cf: ChainflipIO<A>, rpcCallName:
 }
 
 async function printNodeAndRuntimeVersions<A = []>(cf: ChainflipIO<A>) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
   const runtimeVersion = await chainflipApi.rpc('state_getRuntimeVersion');
   const nodeVersion = await chainflipApi.rpc('system_version');
   cf.info('-----------------------------------------------');

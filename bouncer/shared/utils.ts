@@ -34,7 +34,7 @@ import { CcmDepositMetadata } from 'shared/new_swap';
 import { getCFTesterAbi, getCfTesterIdl } from 'shared/contract_interfaces';
 import { SwapParams } from 'shared/perform_swap';
 import { newSolAddress } from 'shared/new_sol_address';
-import { getChainflipApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi, observeBadEvent, observeEvent } from 'shared/utils/substrate';
 import { execWithLog } from 'shared/utils/exec_with_log';
 import { send } from 'shared/send';
 import { TestContext } from 'shared/utils/test_context';
@@ -1415,7 +1415,7 @@ type SwapRate = {
   output: string;
 };
 export async function getSwapRate(from: Asset, to: Asset, fromAmount: string) {
-  await using chainflipApi = await getChainflipApi();
+  await using chainflipApi = await getChainflipPolkadotApi();
 
   const fineFromAmount = amountToFineAmount(fromAmount, assetDecimals(from));
   const hexPrice = (await chainflipApi.rpc(
@@ -1465,7 +1465,7 @@ export async function checkAvailabilityAllSolanaNonces(testContext: TestContext)
   testContext.info('Checking Solana Nonce Availability');
 
   // Check that all Solana nonces are available
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const maxRetries = 10; // 60 seconds
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const availableNonces = (await chainflip.query.environment.solanaAvailableNonceAccounts())
@@ -1580,7 +1580,7 @@ export async function retryRpcCall<T>(
 
 /// Returns the statechain "free balance" of an LP account for a specific asset.
 export async function getFreeBalance(accountAddress: string, asset: Asset): Promise<bigint> {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((await chainflip.query.assetBalances.freeBalances(accountAddress, asset)) as any).toBigInt()

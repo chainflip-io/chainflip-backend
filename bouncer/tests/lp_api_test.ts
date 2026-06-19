@@ -8,8 +8,6 @@ import {
   isWithinOnePercent,
   assetDecimals,
   stateChainAssetFromAsset,
-  handleSubstrateError,
-  shortChainFromAsset,
   newAssetAddress,
   createStateChainKeypair,
   getFreeBalance,
@@ -20,6 +18,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
+import { signSendAndFinalize, encodedAddress } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
@@ -200,12 +199,15 @@ async function testTransferAsset<A = []>(cf: ChainflipIO<A>) {
   const destinationLpAccount = createStateChainKeypair('//LP_2');
 
   // Destination account needs a refund address too.
-  const chain = shortChainFromAsset(testAsset);
   const refundAddress = await newAssetAddress(testAsset, '//LP_2');
-  const nonce = await chainflip.rpc.system.accountNextIndex(destinationLpAccount.address);
-  await chainflip.tx.liquidityProvider
-    .registerLiquidityRefundAddress({ [chain]: refundAddress })
-    .signAndSend(destinationLpAccount, { nonce }, handleSubstrateError(chainflip));
+  await signSendAndFinalize(
+    chainflip,
+    chainflip.tx.liquidityProvider.registerLiquidityRefundAddress(
+      encodedAddress(chainFromAsset(testAsset), refundAddress),
+    ),
+    destinationLpAccount,
+    destinationLpAccount.address,
+  );
 
   const oldBalanceSource = await getLpBalance(sourceLpAccount.address);
   const oldBalanceDestination = await getLpBalance(destinationLpAccount.address);

@@ -9,10 +9,10 @@
 // will wait until block number 3 has appeared on the state chain
 
 import { runWithTimeout, sleep } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 
 async function main(): Promise<void> {
-  await using api = await getChainflipApi();
+  await using api = await getChainflipPolkadotApi();
   const expectedBlock = process.argv[2];
   while ((await api.rpc.chain.getBlockHash(expectedBlock)).every((e) => e === 0)) {
     await sleep(1000);

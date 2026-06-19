@@ -16,7 +16,7 @@ import {
 import { executeVaultSwap, prepareVaultSwapSource, requestNewSwap } from 'shared/perform_swap';
 import { send } from 'shared/send';
 import { getBalance } from 'shared/get_balance';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { CcmDepositMetadata, FillOrKillParamsX128 } from 'shared/new_swap';
 import { TestContext } from 'shared/utils/test_context';
 import { newCcmMetadata, newVaultSwapCcmMetadata } from 'shared/swapping';
@@ -167,7 +167,7 @@ async function testMinPriceRefund<A = []>(
   });
 
   if (resultEvent.key === 'refundEgressIgnored') {
-    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipApi());
+    const reason = decodeDispatchError(resultEvent.data.reason, await getChainflipPolkadotApi());
     throwError(cf.logger, new Error(`Refund Egress was ignored reason: ${reason}`));
   }
 
@@ -195,7 +195,7 @@ async function testOracleSwapsFoK<A = []>(parentCf: ChainflipIO<A>): Promise<voi
 
   // Check that all Arbitrum prices are up to date to ensure that oracle swaps
   // are not being refunded due to stale prices.
-  const chainflip = await getChainflipApi();
+  const chainflip = await getChainflipPolkadotApi();
   const response = JSON.parse(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (await chainflip.query.genericElections.electoralUnsynchronisedState()) as any,

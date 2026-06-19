@@ -9,13 +9,14 @@
 
 import { runWithTimeoutAndExit } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
+import type { StateChainRuntimeRuntimeCallLike } from 'generated/chaintypes/chainflip-node';
 
 async function main(): Promise<void> {
   const signaturesCount = process.argv[2];
 
   await submitGovernanceExtrinsic((api) => {
-    const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
-    return api.tx.governance.callAsSudo(stressTest);
+    const stressTest = api.tx.ethereumBroadcaster.stressTest(Number(signaturesCount));
+    return api.tx.governance.callAsSudo(stressTest.call as StateChainRuntimeRuntimeCallLike);
   });
 
   console.log('Requesting ' + signaturesCount + ' ETH signatures');

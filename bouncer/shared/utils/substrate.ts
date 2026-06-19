@@ -142,8 +142,10 @@ const getCachedSubstrateApi = (endpoint: string) =>
     });
   });
 
-export const { cachedDisposableFactory: getChainflipApi, clearCache: clearChainflipApiCache } =
-  getCachedSubstrateApi(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
+export const {
+  cachedDisposableFactory: getChainflipPolkadotApi,
+  clearCache: clearChainflipApiCache,
+} = getCachedSubstrateApi(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
 export type DisposableChainflipClient = ChainflipClient & {
   [Symbol.asyncDispose](): Promise<void>;
@@ -189,7 +191,7 @@ const makeCachedDedotClientFactory = (endpoint: string) => {
   };
 };
 
-export const { getClient: getChainflipClient, clearCache: clearChainflipClientCache } =
+export const { getClient: getChainflipApi, clearCache: clearChainflipClientCache } =
   makeCachedDedotClientFactory(process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944');
 
 export const CHAINFLIP_HTTP_ENDPOINT = process.env.CF_NODE_HTTP_ENDPOINT ?? 'http://127.0.0.1:9944';
@@ -203,7 +205,7 @@ export const { cachedDisposableFactory: getAssethubApi } = getCachedSubstrateApi
 );
 
 const apiMap = {
-  chainflip: getChainflipApi,
+  chainflip: getChainflipPolkadotApi,
   polkadot: getPolkadotApi,
   assethub: getAssethubApi,
 } as const;

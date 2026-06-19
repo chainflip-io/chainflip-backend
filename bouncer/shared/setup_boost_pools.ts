@@ -1,7 +1,7 @@
 import { getInternalAsset } from '@chainflip/utils/chainflip';
 import { chainFromAsset, Asset, decodeModuleError, Chains, Assets } from 'shared/utils';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi, observeEvent } from 'shared/utils/substrate';
 import { addBoostFunds } from 'tests/boost';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { throwError } from 'shared/utils/logger';
@@ -57,7 +57,7 @@ export async function createBoostPools<A = []>(
   const boostPoolEvents = await Promise.all(observeBoostPoolEvents);
   for (const event of boostPoolEvents) {
     if (event.name.method !== 'BoostPoolCreated') {
-      const error = decodeModuleError(event.data[0].Module, await getChainflipApi());
+      const error = decodeModuleError(event.data[0].Module, await getChainflipPolkadotApi());
       throwError(cf.logger, new Error(`Failed to create boost pool: ${error}`));
     }
     cf.debug(

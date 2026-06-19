@@ -14,7 +14,7 @@ import {
   Chain,
   Asset,
 } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { requestNewSwap } from 'shared/perform_swap';
 import { FillOrKillParamsX128 } from 'shared/new_swap';
 import { getBalance } from 'shared/get_balance';
@@ -249,7 +249,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   reportFunction: (txId: string) => Promise<void>,
 ) {
   // setup access to chainflip api and lp
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
   const cf = parentCf.withChildLogger(
     `${sourceAsset}_BrokerLevelScreening_testEvmLiquidityDeposit`,
   );
@@ -285,7 +285,7 @@ export async function testEvmLiquidityDeposit<A extends WithLpAccount>(
   // Create new LP deposit address for //LP_1
   cf.debug('Requesting ' + sourceAsset + ' deposit address');
   const depositAddressReadyEvent = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, null),
+    extrinsic: (api) => api.tx.liquidityProvider.requestLiquidityDepositAddress(sourceAsset, 0),
     expectedEvent: liquidityProviderLiquidityDepositAddressReadyEvent.refine(
       (event) => event.asset === sourceAsset && event.accountId === lp.address,
     ),

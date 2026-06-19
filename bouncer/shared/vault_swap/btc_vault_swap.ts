@@ -1,7 +1,7 @@
 import assert from 'assert';
 import { sendVaultTransaction } from 'shared/send_btc';
 import { Asset, assetDecimals, Assets, cfMutex, fineAmountToAmount } from 'shared/utils';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { fundFlip } from 'shared/fund_flip';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { swappingAffiliateRegistrationEvent } from 'generated/events/swapping/affiliateRegistration';
@@ -21,7 +21,7 @@ interface BtcVaultSwapExtraParameters {
 }
 
 async function getExistingPrivateBtcChannel(brokerAddress: string): Promise<number | undefined> {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const existingPrivateChannel = Number(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +39,7 @@ export async function openPrivateBtcChannel<A extends WithBrokerAccount>(
   fundAccountWithBrokerBond = false,
 ): Promise<number> {
   const broker = cf.requirements.account;
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   // Acquire mutex and check if broker already has private channel
   const releasePrivateBtcChannelMutex = await cfMutex.acquire(`${broker.uri}_PrivateBtcChannel`);
@@ -101,7 +101,7 @@ export async function buildAndSendBtcVaultSwap<A extends WithBrokerAccount>(
     bps: number;
   }[] = [],
 ) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   await openPrivateBtcChannel(cf);
   const broker = cf.requirements.account.keypair;
@@ -151,7 +151,7 @@ export async function buildAndSendInvalidBtcVaultSwap<A extends WithBrokerAccoun
     bps: number;
   }[] = [],
 ) {
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   await openPrivateBtcChannel(cf);
   const broker = cf.requirements.account.keypair;
@@ -197,7 +197,7 @@ export async function registerAffiliate<A extends WithBrokerAccount>(
 
   cf.trace('Registering affiliate');
   const affiliateRegistration = await cf.submitExtrinsic({
-    extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress),
+    extrinsic: (api) => api.tx.swapping.registerAffiliate(withdrawalAddress as `0x${string}`),
     expectedEvent: swappingAffiliateRegistrationEvent.refine(
       (event) =>
         event.brokerId === cf.requirements.account.keypair.address &&

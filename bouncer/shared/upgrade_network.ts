@@ -116,10 +116,13 @@ export async function upgradeBinaries<A = []>(
   cf.info('Setting MissedAuthorshipSlot suspension to 0 before restarting nodes.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 100,
-        suspension: 0,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 100,
+          suspension: 0,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 
@@ -146,10 +149,13 @@ export async function upgradeBinaries<A = []>(
   cf.info('Restoring MissedAuthorshipSlot penalty to defaults after nodes are back up.');
   await cf.submitGovernance({
     extrinsic: (api) =>
-      api.tx.reputation.setPenalty('MissedAuthorshipSlot', {
-        reputation: 120,
-        suspension: 150,
-      }),
+      api.tx.reputation.setPenalty(
+        { type: 'MissedAuthorshipSlot' },
+        {
+          reputation: 120,
+          suspension: 150,
+        },
+      ),
     expectedEvent: reputationPenaltyUpdatedEvent,
   });
 

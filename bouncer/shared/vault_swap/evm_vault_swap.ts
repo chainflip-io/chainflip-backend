@@ -12,7 +12,7 @@ import {
   Asset,
 } from 'shared/utils';
 import { CcmDepositMetadata, DcaParams, FillOrKillParamsX128 } from 'shared/new_swap';
-import { getChainflipApi } from 'shared/utils/substrate';
+import { getChainflipPolkadotApi } from 'shared/utils/substrate';
 import { getErc20abi } from 'shared/contract_interfaces';
 import { ChainflipIO, WithBrokerAccount } from 'shared/utils/chainflip_io';
 import { signAndSendTxEvm } from 'shared/send_evm';
@@ -63,7 +63,7 @@ export async function encodeEvmVaultSwapParams<T>(
   };
   const fineAmount = amountToFineAmount(amountToSwap, assetDecimals(sourceAsset));
 
-  await using chainflip = await getChainflipApi();
+  await using chainflip = await getChainflipPolkadotApi();
 
   const refundParams: ChannelRefundParameters = {
     retry_duration: fokParams.retryDurationBlocks,
