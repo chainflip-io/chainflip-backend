@@ -20,7 +20,7 @@ use cf_primitives::AccountId;
 use futures::Future;
 use tokio::sync::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 
-use crate::fair_channel::{fair_channel, FairReceiver, FairSendError, FairSender};
+use crate::fair_channel::{fair_channel, FairReceiver, FairSender};
 use tracing::{info_span, trace, Instrument};
 
 use crate::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
@@ -236,18 +236,13 @@ impl P2PMuxer {
 							ChainTag::Bitcoin => &self.btc_incoming_sender,
 							ChainTag::Solana => &self.sol_incoming_sender,
 						};
-						match sender.try_send(account_id.clone(), message) {
-							Ok(()) => {},
-							Err(FairSendError::PeerQuotaExceeded) => {
-								P2P_BAD_MSG.inc(&["ceremony_per_peer_limit"]);
-								trace!(
-									"Dropping ceremony message from {account_id}: \
-									 over its in-flight limit",
-								);
-							},
-							// The receiver is dropped only when we are shutting down.
-							Err(FairSendError::Closed) => {},
-						}
+						sender.try_send_or_drop(account_id.clone(), message, || {
+							P2P_BAD_MSG.inc(&["ceremony_per_peer_limit"]);
+							trace!(
+								"Dropping ceremony message from {account_id}: \
+								 over its in-flight limit",
+							);
+						});
 					},
 					Err(e) => {
 						P2P_BAD_MSG.inc(&["deserialization_tagged_msg"]);

@@ -44,7 +44,7 @@ use cf_utilities::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::fair_channel::{fair_channel, FairReceiver, FairSender, FairSendError};
+use crate::fair_channel::{fair_channel, FairReceiver, FairSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use x25519_dalek::StaticSecret;
 
@@ -459,15 +459,10 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			// Drop rather than block the control loop. A peer over its in-flight
 			// limit can only crowd out its own messages.
-			match self.incoming_message_sender.try_send(acc_id.clone(), payload) {
-				Ok(()) => {},
-				Err(FairSendError::PeerQuotaExceeded) => {
-					P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
-					warn!("Dropping incoming p2p message from {acc_id}: over its in-flight limit");
-				},
-				// The receiver is dropped only when we are shutting down.
-				Err(FairSendError::Closed) => {},
-			}
+			self.incoming_message_sender.try_send_or_drop(acc_id.clone(), payload, || {
+				P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+				warn!("Dropping incoming p2p message from {acc_id}: over its in-flight limit");
+			});
 		} else {
 			P2P_BAD_MSG.inc(&["unknown_x25519_key"]);
 			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
@@ -715,17 +710,13 @@ impl P2PContext {
 				// Drop the message rather than block the listening thread. A peer
 				// over its in-flight limit can only crowd out its own messages; a
 				// `Closed` error just means we are shutting down.
-				match incoming_message_sender.try_send(pubkey, msg.to_vec()) {
-					Ok(()) => {},
-					Err(FairSendError::PeerQuotaExceeded) => {
-						P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
-						warn!(
-							"Dropping incoming p2p message: sender {} is over its in-flight limit",
-							pk_to_string(&pubkey),
-						);
-					},
-					Err(FairSendError::Closed) => {},
-				}
+				incoming_message_sender.try_send_or_drop(pubkey, msg.to_vec(), || {
+					P2P_BAD_MSG.inc(&["incoming_per_peer_limit"]);
+					warn!(
+						"Dropping incoming p2p message: sender {} is over its in-flight limit",
+						pk_to_string(&pubkey),
+					);
+				});
 			} else {
 				P2P_BAD_MSG.inc(&["bad_number_of_parts"]);
 				warn!(

@@ -95,6 +95,15 @@ impl<K: Eq + Hash + Clone, T> FairSender<K, T> {
 		// receiver is gone, i.e. the whole channel is being torn down.
 		self.sender.send((key, value)).map_err(|_| FairSendError::Closed)
 	}
+
+	/// Send a message attributed to peer `key`, running `on_dropped` if the
+	/// peer is over its in-flight limit.
+	pub fn try_send_or_drop(&self, key: K, value: T, on_dropped: impl FnOnce()) {
+		match self.try_send(key, value) {
+			Ok(()) | Err(FairSendError::Closed) => {},
+			Err(FairSendError::PeerQuotaExceeded) => on_dropped(),
+		}
+	}
 }
 
 /// Receiving half of a [`fair_channel`].
