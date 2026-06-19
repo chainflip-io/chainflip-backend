@@ -20,7 +20,7 @@ use cf_primitives::AccountId;
 use futures::Future;
 use tokio::sync::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 
-use crate::fair_channel::{fair_channel, FairReceiver, FairSender, FairSendError};
+use crate::fair_channel::{fair_channel, FairReceiver, FairSendError, FairSender};
 use tracing::{info_span, trace, Instrument};
 
 use crate::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
@@ -222,7 +222,7 @@ impl P2PMuxer {
 		)
 	}
 
-	async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
+	fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
 		if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
 			// only version 1 is expected/supported
 			if version == CURRENT_PROTOCOL_VERSION {
@@ -285,7 +285,7 @@ impl P2PMuxer {
 		loop {
 			tokio::select! {
 				Some((account_id, data)) = self.all_incoming_receiver.recv() => {
-					self.process_incoming(account_id, data).await;
+					self.process_incoming(account_id, data);
 				}
 				Some(data) = self.eth_outgoing_receiver.recv() => {
 					self.process_outgoing(ChainTag::Ethereum, data).await;
@@ -311,7 +311,10 @@ mod tests {
 
 	use super::*;
 
-	use crate::{core::INCOMING_MESSAGE_PER_PEER_LIMIT, fair_channel::fair_channel, OutgoingMultisigStageMessages};
+	use crate::{
+		core::INCOMING_MESSAGE_PER_PEER_LIMIT, fair_channel::fair_channel,
+		OutgoingMultisigStageMessages,
+	};
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);
