@@ -1,18 +1,13 @@
-import { cfMutex, createStateChainKeypair, isValidHexHash, sleep, waitForExt } from 'shared/utils';
+import { createStateChainKeypair, isValidHexHash, sleep } from 'shared/utils';
 import { z } from 'zod';
 import type { EventDescriptor } from '@chainflip/processor/event';
 // eslint-disable-next-line no-restricted-imports
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitGovernanceExtrinsic } from 'shared/cf_governance';
-import { SubmittableExtrinsic } from '@polkadot/api/types';
 import { governanceProposedEvent } from 'generated/events/governance/proposed';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
 import { assertUnreachable } from '@polkadot/util';
-import {
-  DisposableApiPromise,
-  getChainflipPolkadotApi,
-  getChainflipApi,
-} from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
 import {
   ChainflipClient,
   ChainflipExtrinsic,
@@ -30,33 +25,6 @@ import {
   highestBlock,
 } from 'shared/utils/indexer';
 import { Logger } from 'shared/utils/logger';
-import { ISubmittableResult } from '@polkadot/types/types';
-import { Err, Ok, Result } from 'shared/utils/result';
-
-async function toExtrinsicResult(
-  chainflipApi: DisposableApiPromise,
-  extrinsicResultPromise: Promise<ISubmittableResult>,
-): Promise<Result<ISubmittableResult, string>> {
-  try {
-    const extrinsicResult = await extrinsicResultPromise;
-
-    if (extrinsicResult.dispatchError) {
-      let error;
-      if (extrinsicResult.dispatchError.isModule) {
-        const { docs, name, section } = chainflipApi.registry.findMetaError(
-          extrinsicResult.dispatchError.asModule,
-        );
-        error = section + '.' + name + ': ' + docs;
-      } else {
-        error = extrinsicResult.dispatchError.toString();
-      }
-      return Err(`Extrinsic failed: ${error}`);
-    }
-    return Ok(extrinsicResult);
-  } catch (err) {
-    return Err(`${err}`);
-  }
-}
 
 export class ChainflipIO<Requirements> {
   /**
@@ -141,84 +109,10 @@ export class ChainflipIO<Requirements> {
     this.lastIoBlockHeight = newIoBlockHeight;
   }
 
-  /*
-  Deprecated
-  */
-  async submitExtrinsicPolkadot<
-    Data extends Requirements & { account: PartialAccount },
-    Schema extends z.ZodTypeAny,
-  >(
-    this: ChainflipIO<Data>,
-    arg: {
-      extrinsic: ExtrinsicFromApi;
-      expectedEvent?: EventDescriptor<EventName, Schema>;
-    },
-  ): Promise<z.infer<Schema>> {
-    return this.runExclusively('submitExtrinsicPolkadot', async () => {
-      await using chainflipApi = await getChainflipPolkadotApi();
-      const ext = await arg.extrinsic(chainflipApi);
-
-      // generate readable description for logging
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { section, method, args } = (ext as any).toHuman().method;
-      const readable = `${section}.${method}(${JSON.stringify(args)})`;
-
-      this.debug(`Submitting extrinsic '${readable}' for ${this.requirements.account.uri}`);
-
-      // submit
-      const release = await cfMutex.acquire(this.requirements.account.uri);
-      const { promise, waiter } = waitForExt(chainflipApi, this.logger, 'Finalized', release);
-      const nonce = (await chainflipApi.rpc.system.accountNextIndex(
-        this.requirements.account.keypair.address,
-      )) as unknown as number;
-      const unsub = await ext.signAndSend(this.requirements.account.keypair, { nonce }, waiter);
-      const result = await toExtrinsicResult(chainflipApi, promise);
-      unsub();
-
-      if (!result.ok) {
-        throw new Error(`'${readable}' failed (${result.error})`);
-      }
-
-      this.debug(`Successfully submitted extrinsic with hash ${result.value.txHash}`);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.lastIoBlockHeight = (result.value as any).blockNumber.toNumber();
-
-      // extract event data if expected
-      if (arg.expectedEvent) {
-        const { name, schema } = arg.expectedEvent;
-        const txHash = `${result.value.txHash}`;
-        this.debug(
-          `Searching for event ${name} caused by call to extrinsic ${readable} (tx hash: ${txHash})`,
-        );
-        const event = await findOneEventOfMany(
-          this.logger,
-          {
-            event: {
-              name,
-              schema,
-              txHash,
-            },
-          },
-          {
-            startFromBlock: this.lastIoBlockHeight,
-            endBeforeBlock: this.lastIoBlockHeight + 1,
-          },
-        );
-        this.debug(
-          `Found event ${name} caused by call to extrinsic ${readable}\nEvent data is: ${JSON.stringify(event)}`,
-        );
-        return event.data;
-      }
-
-      return result;
-    });
-  }
-
   /**
    * Submits an extrinsic and updates the `lastIoBlockHeight` to the block height were the extrinsic was included.
    * @param this Automatically provided by typescript when called as a method on a ChainflipIO object.
-   * @param arg.extrinsic Function that takes a `DisposableApiPromise` and builds the extrinsic that should be submitted.
+   * @param arg.extrinsic Function that takes the dedot `ChainflipClient` and builds the extrinsic that should be submitted.
    * @param arg.expectedEvent Optional description of the event expected to be emitted during
    * execution of the extrinsic.
    * @returns The well-typed event data of the expected event if one was provided. Otherwise the full, untyped result object
@@ -662,8 +556,8 @@ export class ChainflipIO<Requirements> {
  */
 export async function newChainflipIO<Requirements>(logger: Logger, requirements: Requirements) {
   // find out current block height
-  await using chainflipApi = await getChainflipPolkadotApi();
-  const currentBlockHeight = (await chainflipApi.rpc.chain.getHeader()).number.toNumber();
+  await using chainflipApi = await getChainflipApi();
+  const currentBlockHeight = Number(await chainflipApi.query.system.number());
 
   // initialize with this height, meaning that we'll only search for events from this height on
   return new ChainflipIO(logger, requirements, currentBlockHeight, (level: Severity) => {
@@ -686,10 +580,7 @@ export async function newChainflipIO<Requirements>(logger: Logger, requirements:
 }
 
 // ------------ Extrinsic types  ---------------
-export type ExtrinsicFromApi = (
-  api: DisposableApiPromise,
-) => SubmittableExtrinsic<'promise'> | Promise<SubmittableExtrinsic<'promise'>>;
-// dedot variant: builds the extrinsic from the compile-time-typed dedot client.
+// Builds the extrinsic from the compile-time-typed dedot client.
 export type ExtrinsicFromClient = (
   client: ChainflipClient,
 ) => ChainflipExtrinsic | Promise<ChainflipExtrinsic>;

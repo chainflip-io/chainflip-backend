@@ -5,14 +5,19 @@ import {
   externalChainToScAccount,
   newAssetAddress,
   shortChainFromAsset,
+  chainFromAsset,
+  encodedAddress,
   sleep,
   Asset,
 } from 'shared/utils';
-import { u8aToHex } from '@polkadot/util';
-import { getChainflipPolkadotApi } from 'shared/utils/substrate';
+import { getChainflipApi } from 'shared/utils/substrate';
+import type { ChainflipClient } from 'shared/utils/dedot';
+import type {
+  StateChainRuntimeRuntimeCall,
+  StateChainRuntimeRuntimeCallLike,
+} from 'generated/chaintypes/chainflip-node';
 import { fundFlip } from 'shared/fund_flip';
 import z from 'zod';
-import { ApiPromise } from '@polkadot/api';
 import { signBytes, getUtf8Encoder, generateKeyPairSigner } from '@solana/kit';
 import { send } from 'shared/send';
 import { AccountRole, setupAccount } from 'shared/setup_account';
@@ -83,7 +88,7 @@ async function observeNonNativeSignedCallAndRole<A = []>(cf: ChainflipIO<A>, scA
 // chainflip.tx.liquidityProvider.registerLpAccount();
 // chainflip.tx.swapping.registerAsBroker();
 // chainflip.tx.system.remark([]);
-function getRegisterOperatorCall(chainflip: ApiPromise) {
+function getRegisterOperatorCall(chainflip: ChainflipClient) {
   return chainflip.tx.validator.registerAsOperator(
     {
       feeBps: 2000,
@@ -94,7 +99,7 @@ function getRegisterOperatorCall(chainflip: ApiPromise) {
 }
 
 async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   cf.info('Signing and submitting user-signed payload with EVM wallet using EIP-712');
 
@@ -107,10 +112,9 @@ async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
 
   cf.info(`Registering EVM account as operator: ${evmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
-  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+  const hexRuntimeCall = call.callHex;
 
-  const response = await chainflip.rpc(
-    'cf_encode_non_native_call',
+  const response = await chainflip.rpc.cf_encode_non_native_call(
     hexRuntimeCall,
     blocksToExpiry,
     evmScAccount,
@@ -137,16 +141,17 @@ async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       {
-        call: hexRuntimeCall,
+        call: call.call as StateChainRuntimeRuntimeCall,
         transactionMetadata: {
           nonce: transactionMetadata.nonce,
           expiryBlock: transactionMetadata.expiry_block,
         },
       },
       {
-        Ethereum: {
-          signature: evmSignatureEip712,
-          signer: evmWallet.address,
+        type: 'Ethereum',
+        value: {
+          signature: evmSignatureEip712 as `0x${string}`,
+          signer: evmWallet.address as `0x${string}`,
           sigType: 'Eip712',
         },
       },
@@ -159,7 +164,7 @@ async function testEvmEip712<A = []>(cf: ChainflipIO<A>) {
 
 // Submit the same call as EVM but using batch to test it out.
 async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   cf.info('Signing and submitting user-signed payload with Solana wallet');
 
@@ -175,14 +180,11 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
 
   cf.info(`Registering SVM account as operator: ${svmScAccount}`);
   const call = getRegisterOperatorCall(chainflip);
-  const calls = [call];
 
-  const batchCall = chainflip.tx.environment.batch(calls);
-  const encodedBatchCall = chainflip.createType('Call', batchCall.method).toU8a();
-  const hexBatchRuntimeCall = u8aToHex(encodedBatchCall);
+  const batchCall = chainflip.tx.environment.batch([call.call as StateChainRuntimeRuntimeCallLike]);
+  const hexBatchRuntimeCall = batchCall.callHex;
 
-  const svmResponse = await chainflip.rpc(
-    'cf_encode_non_native_call',
+  const svmResponse = await chainflip.rpc.cf_encode_non_native_call(
     hexBatchRuntimeCall,
     blocksToExpiry,
     svmScAccount,
@@ -209,13 +211,17 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
     .nonNativeSignedCall(
       {
         // Solana prefix will be added in the SC previous to signature verification
-        call: hexBatchRuntimeCall,
-        transactionMetadata: svmTransactionMetadata,
+        call: batchCall.call as StateChainRuntimeRuntimeCall,
+        transactionMetadata: {
+          nonce: svmTransactionMetadata.nonce,
+          expiryBlock: svmTransactionMetadata.expiry_block,
+        },
       },
       {
-        Solana: {
-          signature: hexSignature,
-          signer: hexSigner,
+        type: 'Solana',
+        value: {
+          signature: hexSignature as `0x${string}`,
+          signer: hexSigner as `0x${string}`,
           sigType: 'Domain',
         },
       },
@@ -231,7 +237,7 @@ async function testSvmDomain<A = []>(cf: ChainflipIO<A>) {
 }
 
 async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   cf.info('Signing and submitting user-signed payload with EVM wallet using personal_sign');
 
@@ -241,13 +247,12 @@ async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
   cf.info(`Funding with FLIP to register the EVM account: ${evmScAccount}`);
   await fundFlip(cf, evmScAccount, '1000');
 
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
+  const evmNonce = await chainflip.rpc.system_accountNextIndex(evmScAccount);
 
   const call = getRegisterOperatorCall(chainflip);
-  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+  const hexRuntimeCall = call.callHex;
 
-  const personalSignResponse = await chainflip.rpc(
-    'cf_encode_non_native_call',
+  const personalSignResponse = await chainflip.rpc.cf_encode_non_native_call(
     hexRuntimeCall,
     blocksToExpiry,
     evmNonce,
@@ -276,14 +281,18 @@ async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
     .nonNativeSignedCall(
       // Ethereum prefix will be added in the SC previous to signature verification
       {
-        call: hexRuntimeCall,
-        transactionMetadata: personalSignMetadata,
+        call: call.call as StateChainRuntimeRuntimeCall,
+        transactionMetadata: {
+          nonce: personalSignMetadata.nonce,
+          expiryBlock: personalSignMetadata.expiry_block,
+        },
       },
       {
-        Ethereum: {
-          signature: evmSignature,
-          signer: evmWallet.address,
-          sig_type: 'PersonalSign',
+        type: 'Ethereum',
+        value: {
+          signature: evmSignature as `0x${string}`,
+          signer: evmWallet.address as `0x${string}`,
+          sigType: 'PersonalSign',
         },
       },
     )
@@ -297,27 +306,26 @@ async function testEvmPersonalSign<A = []>(cf: ChainflipIO<A>) {
 // that can be problematic between Rust and JS big ints. This can be removed once we
 // have more extensive tests in PRO-2584.
 async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
 
   const call = chainflip.tx.liquidityProvider.scheduleSwap(
-    '1000000000000000000000',
+    1000000000000000000000n,
     'Flip',
     'Usdc',
     50,
     {
-      maxOraclePriceSlippage: null,
-      minPrice: 1000000000000000,
+      maxOraclePriceSlippage: undefined,
+      minPrice: 1000000000000000n,
     },
-    null,
+    undefined,
   );
 
-  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+  const hexRuntimeCall = call.callHex;
 
-  const response = await chainflip.rpc(
-    'cf_encode_non_native_call',
+  const response = await chainflip.rpc.cf_encode_non_native_call(
     hexRuntimeCall,
     blocksToExpiry,
     evmScAccount,
@@ -348,16 +356,17 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
   await chainflip.tx.environment
     .nonNativeSignedCall(
       {
-        call: hexRuntimeCall,
+        call: call.call as StateChainRuntimeRuntimeCall,
         transactionMetadata: {
           nonce: transactionMetadata.nonce,
           expiryBlock: transactionMetadata.expiry_block,
         },
       },
       {
-        Ethereum: {
-          signature: evmSignatureEip712,
-          signer: evmWallet.address,
+        type: 'Ethereum',
+        value: {
+          signature: evmSignatureEip712 as `0x${string}`,
+          signer: evmWallet.address as `0x${string}`,
           sigType: 'Eip712',
         },
       },
@@ -366,11 +375,11 @@ async function testEvmEip712Encoding<A = []>(cf: ChainflipIO<A>) {
 }
 
 async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Asset) {
-  await using chainflip = await getChainflipPolkadotApi();
+  await using chainflip = await getChainflipApi();
 
-  const initialFlipToBeSentToGateway = (
-    await chainflip.query.swapping.flipToBeSentToGateway()
-  ).toJSON() as number;
+  const initialFlipToBeSentToGateway = Number(
+    await chainflip.query.swapping.flipToBeSentToGateway(),
+  );
 
   parentCf.info('Setting up a broker account');
   const brokerUri: `//${string}` = `//BROKER_SPECIAL_DEPOSIT_CHANNEL_${asset}`;
@@ -379,7 +388,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
   const evmWallet = await createEvmWallet();
   const evmScAccount = externalChainToScAccount(evmWallet.address);
   parentCf.info('evmScAccount for special LP deposit channel:', evmScAccount);
-  const evmNonce = (await chainflip.rpc.system.accountNextIndex(evmScAccount)).toNumber();
+  const evmNonce = await chainflip.rpc.system_accountNextIndex(evmScAccount);
   const refundAddress = await newAssetAddress(asset, brokerUri + Math.random() * 100);
 
   let addressBytes;
@@ -393,11 +402,10 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
 
   const remarkData = remarkDataCodec.enc({ tag: shortChainFromAsset(asset), value: addressBytes });
 
-  const call = chainflip.tx.system.remark(Array.from(remarkData));
-  const hexRuntimeCall = u8aToHex(chainflip.createType('Call', call.method).toU8a());
+  const call = chainflip.tx.system.remark(remarkData);
+  const hexRuntimeCall = call.callHex;
 
-  const response = await chainflip.rpc(
-    'cf_encode_non_native_call',
+  const response = await chainflip.rpc.cf_encode_non_native_call(
     hexRuntimeCall,
     blocksToExpiry,
     evmNonce,
@@ -415,13 +423,14 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
   const broker = cf.requirements.account.keypair;
 
   cf.info('Opening special deposit channel and depositing..');
-  const accountCreationAddressReadyEvent = await cf.submitExtrinsicPolkadot({
+  const accountCreationAddressReadyEvent = await cf.submitExtrinsic({
     extrinsic: (api) =>
       api.tx.swapping.requestAccountCreationDepositAddress(
         {
-          Ethereum: {
-            signature: evmSignatureEip712,
-            signer: evmWallet.address,
+          type: 'Ethereum',
+          value: {
+            signature: evmSignatureEip712 as `0x${string}`,
+            signer: evmWallet.address as `0x${string}`,
             sigType: 'Eip712',
           },
         },
@@ -431,7 +440,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
         },
         asset,
         0,
-        { [shortChainFromAsset(asset).toLowerCase()]: refundAddress },
+        encodedAddress(chainFromAsset(asset), refundAddress),
       ),
     expectedEvent: swappingAccountCreationDepositAddressReadyEvent.refine(
       (event) => event.requestedBy === broker.address && event.requestedFor === evmScAccount,
@@ -452,10 +461,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
   while (true) {
     // Check FLIP balance if not already credited
     if (!flipBalanceCredited) {
-      const account = (await chainflip.query.flip.account(evmScAccount)).toJSON() as {
-        balance: string;
-      };
-      const balance = BigInt(account.balance);
+      const balance = (await chainflip.query.flip.account(evmScAccount)).balance;
 
       if (balance > 0) {
         cf.info('FLIP balance credited successfully');
@@ -465,9 +471,7 @@ async function testSpecialLpDeposit<A = []>(parentCf: ChainflipIO<A>, asset: Ass
 
     // Check FLIP to be sent to Gateway if not already increased
     if (!flipToGatewayIncreased) {
-      const flipToBeSentToGateway = (
-        await chainflip.query.swapping.flipToBeSentToGateway()
-      ).toJSON() as number;
+      const flipToBeSentToGateway = Number(await chainflip.query.swapping.flipToBeSentToGateway());
 
       if (flipToBeSentToGateway > initialFlipToBeSentToGateway) {
         cf.info('FLIP to be sent to Gateway increased successfully');
