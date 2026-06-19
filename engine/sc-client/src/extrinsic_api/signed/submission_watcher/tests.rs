@@ -77,6 +77,21 @@ async fn should_update_version_on_bad_proof() {
 					Ok(new_runtime_version)
 				});
 
+				// The BadProof handler also refreshes the era anchor from the node.
+				mock_rpc_api
+					.expect_latest_finalized_block_hash()
+					.times(1)
+					.return_once(move || Ok(H256::from_low_u64_be(0xABCDEF)));
+				mock_rpc_api.expect_block_header().times(1).return_once(move |_| {
+					Ok(state_chain_runtime::Header {
+						parent_hash: H256::default(),
+						number: 1,
+						state_root: H256::default(),
+						extrinsics_root: H256::default(),
+						digest: Default::default(),
+					})
+				});
+
 				// On the retry, return a success.
 				mock_rpc_api.expect_next_account_nonce().return_once(move |_| Ok(1));
 
@@ -114,6 +129,7 @@ async fn should_remove_terminated_submission_from_tracking() {
 				INITIAL_NONCE,
 				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -240,6 +256,7 @@ async fn should_retry_after_dropped_on_next_finalized_block() {
 				0,
 				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -560,6 +577,7 @@ async fn dropped_submission_invalidates_nonce_so_next_submission_refills_gap() {
 				GAP_NONCE,
 				H256::default(),
 				0,
+				finalized_watch(0),
 				Default::default(),
 				H256::default(),
 				SIGNED_EXTRINSIC_LIFETIME,
@@ -637,6 +655,11 @@ async fn new_watcher_and_submit_test_extrinsic<'a, 'env>(
 	watcher
 }
 
+// A watch seeded with a finalized block at `number` (sender dropped; `borrow()` still returns it).
+fn finalized_watch(number: state_chain_runtime::BlockNumber) -> watch::Receiver<BlockInfo> {
+	watch::channel(BlockInfo { parent_hash: H256::default(), hash: H256::default(), number }).1
+}
+
 async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 	scope: &'a Scope<'env, anyhow::Error>,
 	mock_rpc_api: MockBaseRpcApi,
@@ -649,6 +672,7 @@ async fn new_watcher_with_mock_rpc_api<'a, 'env>(
 		finalized_nonce,
 		H256::default(),
 		finalized_block_number,
+		finalized_watch(finalized_block_number),
 		Default::default(),
 		H256::default(),
 		SIGNED_EXTRINSIC_LIFETIME,

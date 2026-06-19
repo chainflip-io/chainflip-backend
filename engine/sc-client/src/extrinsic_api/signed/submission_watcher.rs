@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use state_chain_runtime::{BlockNumber, Nonce, RuntimeEvent, UncheckedExtrinsic};
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 use tracing::{debug, error, info, warn};
 
 use cf_node_client::{error_decoder, signer, ExtrinsicData};
@@ -47,7 +47,7 @@ use crate::{
 	base_rpc_api,
 	extrinsic_api::common::{invalid_err_obj, POOL_ALREADY_IMPORTED, POOL_TOO_LOW_PRIORITY},
 	storage_api::{CheckBlockCompatibility, StorageApi},
-	SUBSTRATE_BEHAVIOUR,
+	BlockInfo, SUBSTRATE_BEHAVIOUR,
 };
 use futures::StreamExt;
 use jsonrpsee::{core::ClientError, types::ErrorObjectOwned};
@@ -156,6 +156,11 @@ pub struct SubmissionWatcher<
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
+	// Node's latest finalized block, kept fresh by a dedicated subscription task. Used only as
+	// the era (mortality) anchor when signing, so it can't go stale behind the contiguous
+	// `finalized_block_*` scan position above (which advances one block at a time and lags under
+	// back-pressure).
+	latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 	runtime_version: sp_version::RuntimeVersion,
 	genesis_hash: state_chain_runtime::Hash,
 	extrinsic_lifetime: BlockNumber,
@@ -273,6 +278,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		finalized_nonce: Nonce,
 		finalized_block_hash: state_chain_runtime::Hash,
 		finalized_block_number: BlockNumber,
+		latest_finalized_block_watcher: watch::Receiver<BlockInfo>,
 		runtime_version: sp_version::RuntimeVersion,
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: BlockNumber,
@@ -288,6 +294,7 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				finalized_nonce,
 				finalized_block_hash,
 				finalized_block_number,
+				latest_finalized_block_watcher,
 				runtime_version,
 				genesis_hash,
 				extrinsic_lifetime,
@@ -309,10 +316,9 @@ impl<'a, 'env, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		request: &mut Request,
 		nonce: Nonce,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
-		// The era block hash and number used as anchor when signing the extrinsic. Stored as
-		// local copies so we can overwrite them on AncientBirthBlock failure.
-		let mut era_block_hash = self.finalized_block_hash;
-		let mut era_block_number = self.finalized_block_number;
+		let latest_finalized = *self.latest_finalized_block_watcher.borrow();
+		let mut era_block_hash = latest_finalized.hash;
+		let mut era_block_number = latest_finalized.number;
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
 				request.call.clone(),
