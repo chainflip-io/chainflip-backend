@@ -6,6 +6,7 @@ import {
   cfTraitsLiquidityIncreaseOrDecreaseRangeOrderChange,
   numberOrHex,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const liquidityPoolsRangeOrderUpdated = z.object({
   lp: accountId,
@@ -17,3 +18,8 @@ export const liquidityPoolsRangeOrderUpdated = z.object({
   liquidityTotal: numberOrHex,
   collectedFees: cfAmmCommonPoolPairsMap,
 });
+
+export const liquidityPoolsRangeOrderUpdatedEvent = defineEvent(
+  'LiquidityPools.RangeOrderUpdated',
+  liquidityPoolsRangeOrderUpdated,
+);

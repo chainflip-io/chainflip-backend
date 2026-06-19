@@ -50,7 +50,7 @@ import {
   spRuntimeDispatchError,
 } from 'generated/events/common';
 import z from 'zod';
-import { swappingSwapRequested } from 'generated/events/swapping/swapRequested';
+import { swappingSwapRequestedEvent } from 'generated/events/swapping/swapRequested';
 import { ChainflipIO } from 'shared/utils/chainflip_io';
 import { randomBytes } from 'crypto';
 import { HexString } from '@polkadot/util/types';
@@ -529,10 +529,16 @@ export async function observeSwapEvents(
         case swapRequestedEvent: {
           const channel = data.origin.DepositChannel;
 
+          const eventDepositAddress = channel
+            ? (Object.values(channel.depositAddress)[0] as string)
+            : undefined;
+          const depositAddressMatches =
+            eventDepositAddress !== undefined && eventDepositAddress === depositAddress;
+
           if (
             channel &&
             Number(channel.channelId) === channelId &&
-            Object.values(channel.depositAddress)[0] === depositAddress &&
+            depositAddressMatches &&
             sourceAsset === (data.inputAsset as Asset) &&
             destAsset === (data.outputAsset as Asset)
           ) {
@@ -681,8 +687,7 @@ export async function observeSwapRequested<A = []>(
     `Observing SwapRequested sourceAsset: ${sourceAsset} -> destAsset: ${destAsset} transaction id: ${JSON.stringify(id)} swapRequestType: ${swapRequestType}`,
   );
   return cf.stepUntilEvent(
-    'Swapping.SwapRequested',
-    swappingSwapRequested.refine((event) => {
+    swappingSwapRequestedEvent.refine((event) => {
       const channelMatches = checkTransactionInMatches(event.origin, id);
       const sourceAssetMatches = sourceAsset === event.inputAsset;
       const destAssetMatches = destAsset === event.outputAsset;

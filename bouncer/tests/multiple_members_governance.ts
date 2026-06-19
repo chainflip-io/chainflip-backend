@@ -5,7 +5,7 @@ import { getChainflipApi } from 'shared/utils/substrate';
 import { TestContext } from 'shared/utils/test_context';
 import { Codec } from '@polkadot/types/types';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
-import { governanceExecuted } from '../generated/events/governance/executed';
+import { governanceExecutedEvent } from 'generated/events/governance/executed';
 
 async function getGovernanceMembers(): Promise<string[]> {
   await using chainflip = await getChainflipApi();
@@ -67,10 +67,7 @@ async function submitWithMultipleGovernanceMembers<A = []>(cf: ChainflipIO<A>) {
   await chainflip.tx.governance.approve(proposalId).signAndSend(alice, { nonce });
   cf.info(`Approved governance proposal with ID: ${proposalId}`);
 
-  await cf.stepUntilEvent(
-    'Governance.Executed',
-    governanceExecuted.refine((id) => id === proposalId),
-  );
+  await cf.stepUntilEvent(governanceExecutedEvent.refine((id) => id === proposalId));
 
   assert.strictEqual(
     (await getGovernanceMembers()).length,

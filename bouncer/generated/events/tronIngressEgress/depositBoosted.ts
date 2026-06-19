@@ -8,6 +8,7 @@ import {
   numberOrHex,
   palletCfTronIngressEgressDepositAction,
 } from '../common';
+import { defineEvent } from '@chainflip/processor/event';
 
 export const tronIngressEgressDepositBoosted = z.object({
   depositAddress: hexString.nullish(),
@@ -23,3 +24,8 @@ export const tronIngressEgressDepositBoosted = z.object({
   action: palletCfTronIngressEgressDepositAction,
   originType: cfChainsDepositOriginType,
 });
+
+export const tronIngressEgressDepositBoostedEvent = defineEvent(
+  'TronIngressEgress.DepositBoosted',
+  tronIngressEgressDepositBoosted,
+);
