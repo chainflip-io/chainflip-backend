@@ -61,8 +61,11 @@ where
 	// Pools present now but missing from the previous block can't yield a fill delta, so they're
 	// skipped below. Log why rather than dropping them silently: across a runtime upgrade the
 	// parent block's pool storage may not decode under the current `Pool` type.
-	let missing_prev_pools =
-		pools.keys().filter(|pair| !prev_pools.contains_key(*pair)).copied().collect::<Vec<_>>();
+	let missing_prev_pools = pools
+		.keys()
+		.filter(|pair| !prev_pools.contains_key(*pair))
+		.copied()
+		.collect::<Vec<_>>();
 	if !missing_prev_pools.is_empty() {
 		// Key present in the parent but value missing from `prev_pools` => decode failure;
 		// key absent => pool newly created. Only scan keys in this rare branch.
@@ -78,6 +81,8 @@ where
 					header.number,
 				);
 			} else {
+				// This should be almost impossible: requires creating the pool, adding and
+				// executing an order all within the same block.
 				log::debug!(
 					"order_fills: pool {pair:?} newly created at block #{}; no previous state, \
 					 skipping its order fills.",
