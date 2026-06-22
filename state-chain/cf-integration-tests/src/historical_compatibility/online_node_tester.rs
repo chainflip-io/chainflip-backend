@@ -144,15 +144,16 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 			outer_details,
 		);
 
-		result
+		let type_ref = TypeRef::RuntimeCall {
+			api_name,
+			method_name,
+			version: canonical_runtime_patch_version,
+		};
+		let incompatibilities: Vec<_> = result
 			.err()
 			.into_iter()
 			.map(|err| TypeIncompatibilityInfo {
-				type_ref: TypeRef::RuntimeCall {
-					api_name,
-					method_name,
-					version: canonical_runtime_patch_version,
-				},
+				type_ref: type_ref.clone(),
 				type_diff: TypeDiff {
 					expected_encoding: match err.sub_type_details.location {
 						SubTypeLocation::Input { .. } =>
@@ -163,6 +164,14 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 				},
 				sub_type_incompat: err,
 			})
-			.collect()
+			.collect();
+
+		if incompatibilities.is_empty() {
+			println!("{type_ref} passed");
+		} else {
+			println!("{type_ref} FAILED");
+		}
+
+		incompatibilities
 	}
 }
