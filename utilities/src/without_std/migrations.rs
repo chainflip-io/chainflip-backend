@@ -179,14 +179,14 @@ macro_rules! generate_migration_helpers {
     }
 }
 
-// All major runtime versions that have been released to at least one testnet.
+// All major runtime versions.
 // The table uses the following format:
 // 1. `release: vMajorMinor00`: this describes the chainflip release version. E.g. chainflip release
 //    2.1 is represented by v20100.
 // 2. `canonical_patch: Released(MajorMinorPatch) | Unreleased`: this is the exact patch of that
 //    chainflip release which should be used as canonical runtime providing the metadata which is
-//    tested against for historical type compatibility tests. For every canonical patch version >=
-//    20100 that's listed here, there should be a metadata file called
+//    tested against for historical type compatibility tests. For every canonical `Released(patch)`
+//    with `patch` >= 20100 that's listed here, there should be a metadata file called
 //    `runtime_{canonical_patch}.scale` located in
 //    `state-chain/cf-integration-tests/historical_metadata`. It can be downloaded using the script
 //    in `bouncer/commands/download_metadata.ts`. Use `Unreleased` if this version isn't released
