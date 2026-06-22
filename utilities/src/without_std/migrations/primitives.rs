@@ -222,7 +222,22 @@ impl_migrations_for_container! {
 	|x| (M1::backwards(x.0), M2::backwards(x.1)),
 }
 
-// btreemap (the bounds are quite messy and difficult to replicate with the macro)
+// ---- btreemap ----
+// the bounds are quite messy and difficult to replicate with the `impl_migrations_for_container`
+// macro, so we use a manual implementation:
+
+macro_rules! impl_changelog_for_btreemap {
+    ($($migration:ident,)*) => {
+        impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
+            type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
+
+            $(
+                type $migration = MapMigration<(A::$migration, B::$migration)>;
+            )*
+        }
+    };
+}
+with_all_runtime_migrations! {impl_changelog_for_btreemap}
 
 impl<
 		A: Ord,
@@ -243,19 +258,6 @@ impl<
 	}
 }
 
-impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
-	type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
-
-	// these have to be specified as otherwise the above
-	// default migration doesn't go through. Because rust
-	// is forced to work with arbitrary implementations for these,
-	// and so can't prove that the historical types are actually
-	// all of the shape `BTreeMap<...>`.
-	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
-	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
-	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
-	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>;
-}
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
 	A: HasGenericVariant<GenericType: Ord + IsHistoricalTypeOrd>,
