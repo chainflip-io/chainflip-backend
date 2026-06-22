@@ -14,7 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
+use cf_utilities::migrations::basics::{
+	CanonicalPatchVersion, HasGenericVariant, HasVersion, Version,
+};
 use codec::{Decode, Encode};
 use proptest::arbitrary::Arbitrary;
 use scale_info::TypeInfo;
@@ -48,9 +50,14 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 		api_name: &'static str,
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
-		let canonical_runtime_patch_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST.expect(
-            "Encountered a runtime version with `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` in a compatibility test."
-        );
+		let canonical_runtime_patch_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST
+            .and_then(|version| match version {
+                CanonicalPatchVersion::Unreleased => None,
+                CanonicalPatchVersion::Released(v) => Some(v),
+            })
+            .expect(
+                "Encountered a runtime version with `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` in a compatibility test."
+            );
 		let blockhash =
 			(self.get_blockhash_from_spec_version)(canonical_runtime_patch_version)
             .unwrap_or_else(|| panic!("No blockhash was specified for runtime version {canonical_runtime_patch_version} when trying to run compatibility test against online archive node."));

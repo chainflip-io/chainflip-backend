@@ -14,7 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use cf_utilities::migrations::basics::{HasGenericVariant, HasVersion, Version};
+use cf_utilities::migrations::basics::{
+	CanonicalPatchVersion, HasGenericVariant, HasVersion, Version,
+};
 use codec::{Decode, Encode};
 use frame_metadata::{v15::RuntimeMetadataV15, RuntimeMetadata, RuntimeMetadataPrefixed};
 use proptest::arbitrary::Arbitrary;
@@ -135,6 +137,10 @@ impl HistoricalCompatibilityTester for OfflineMetadataTester {
 		method_name: &'static str,
 	) -> Vec<TypeIncompatibilityInfo> {
 		let spec_version = V::CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST
+            .and_then(|version| match version {
+                CanonicalPatchVersion::Unreleased => None,
+                CanonicalPatchVersion::Released(v) => Some(v),
+            })
             .expect("encountered a runtime version with `CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST = None` in a compatibility test.");
 
 		// the metadata has to be loaded if it isn't already
