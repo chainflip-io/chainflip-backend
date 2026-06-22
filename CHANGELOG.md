@@ -7,6 +7,7 @@ All notable changes included in each Chainflip release will be documented in thi
 ### Fixes
 
 - Set ONLY_PREALLOCATE_FROM_POOL to true for Tron deposit channels.
+- Set Tron refund multiplier to 15.
 
 ## [2.2.3] - 2026-06-02
 
