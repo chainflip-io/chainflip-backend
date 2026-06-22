@@ -26,7 +26,10 @@ use cf_test_utilities::assert_has_event;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
 
-use crate::{mock::*, ExternalOwner, Liabilities, Pallet, WithheldAssets};
+use crate::{
+	mock::*, ExternalOwner, Liabilities, PalletConfigUpdate, Pallet, RefundFeeMultiple,
+	WithheldAssets,
+};
 
 fn payed_gas(chain: ForeignChain, amount: AssetAmount, account: ForeignChainAddress) {
 	Pallet::<Test>::record_liability(account, chain.gas_asset(), amount);
@@ -155,6 +158,99 @@ pub fn do_not_refund_if_amount_is_too_low() {
 		);
 
 		assert_egress(0, None);
+	});
+}
+
+#[test]
+fn governance_can_configure_refund_fee_multiple() {
+	new_test_ext().execute_with(|| {
+		// Defaults to 100 for any chain.
+		assert_eq!(RefundFeeMultiple::<Test>::get(ForeignChain::Ethereum), 100);
+
+		// Only governance can update the config.
+		assert_noop!(
+			Pallet::<Test>::update_pallet_config(
+				RuntimeOrigin::signed(AccountId::from([0; 32])),
+				PalletConfigUpdate::RefundFeeMultiple {
+					chain: ForeignChain::Ethereum,
+					multiple: Some(5),
+				},
+			),
+			sp_runtime::traits::BadOrigin
+		);
+
+		// Governance sets a new value, which is stored and announced via an event.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::RefundFeeMultiple {
+				chain: ForeignChain::Ethereum,
+				multiple: Some(5),
+			},
+		));
+		assert_eq!(RefundFeeMultiple::<Test>::get(ForeignChain::Ethereum), 5);
+		// Other chains keep the default.
+		assert_eq!(RefundFeeMultiple::<Test>::get(ForeignChain::Arbitrum), 100);
+		assert_has_event::<Test>(
+			Event::PalletConfigUpdated {
+				update: PalletConfigUpdate::RefundFeeMultiple {
+					chain: ForeignChain::Ethereum,
+					multiple: Some(5),
+				},
+			}
+			.into(),
+		);
+
+		// Clearing the value (None) resets it to the default.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::RefundFeeMultiple { chain: ForeignChain::Ethereum, multiple: None },
+		));
+		assert_eq!(RefundFeeMultiple::<Test>::get(ForeignChain::Ethereum), 100);
+	});
+}
+
+#[test]
+fn configured_refund_fee_multiple_is_respected() {
+	new_test_ext().execute_with(|| {
+		const REFUND_AMOUNT: u128 = 1_000;
+		const EGRESS_FEE: u128 = 20;
+
+		payed_gas(ForeignChain::Ethereum, REFUND_AMOUNT, ETH_ADDR_1.clone());
+		MockEgressHandler::<Ethereum>::set_fee(EGRESS_FEE);
+
+		// With the default multiple (100), the refundable amount (980) is below the
+		// 100 * 20 = 2000 threshold, so the refund is skipped.
+		Pallet::<Test>::trigger_reconciliation();
+		assert_has_event::<Test>(
+			Event::RefundSkipped {
+				reason: crate::Error::<Test>::RefundAmountTooLow.into(),
+				chain: ForeignChain::Ethereum,
+				address: ETH_ADDR_1,
+			}
+			.into(),
+		);
+		assert_egress(0, None);
+
+		// Lower the multiple so the threshold (1 * 20 = 20) is below the refundable amount.
+		assert_ok!(Pallet::<Test>::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::RefundFeeMultiple {
+				chain: ForeignChain::Ethereum,
+				multiple: Some(1),
+			},
+		));
+
+		// Now the refund goes through.
+		Pallet::<Test>::trigger_reconciliation();
+		assert_egress(
+			1,
+			Some(|egresses: Vec<MockEgressParameter<AnyChain>>| {
+				for egress in egresses {
+					assert_eq!(egress.amount(), REFUND_AMOUNT - EGRESS_FEE);
+				}
+			}),
+		);
+		assert!(Liabilities::<Test>::get(ForeignChain::Ethereum.gas_asset()).is_empty());
 	});
 }
 
