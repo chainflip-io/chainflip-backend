@@ -26,7 +26,7 @@ use cf_utilities::{
 	for_each_runtime_version,
 	migrations::{
 		basics::{CanonicalPatchVersion, Version},
-		v20000, v20100, v20200,
+		v20000, v20100, v20200, v20300,
 	},
 };
 use frame_support::sp_runtime::AccountId32;
@@ -63,6 +63,7 @@ pub fn online_test_historical_compatibility_of_runtime_api() -> Result<(), Strin
 			get_blockhash_from_spec_version: Box::new(|spec_version| match spec_version {
 				20012 => Some("0xc2068ad859fc5c3b3c7c5ecb3bd84033f1b5a0ce60e8c3b52cab4d22840eec37"),
 				20119 => Some("0x2ad1dd83839b13039d1a4ee85932b439e041068bd3bb91acf43455db97d71bd0"),
+				20203 => Some("0xb7ac402940505ac776988b01c41a1154e6b38a46c9f839edf74939a2c2fc1c74"),
 				_ => None,
 			}),
 			node_url: "https://mainnet-archive.chainflip.io",
