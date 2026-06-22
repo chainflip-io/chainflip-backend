@@ -27,7 +27,7 @@ use cf_traits::{mocks::egress_handler::MockEgressHandler, BalanceApi, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OnKilledAccount};
 
 use crate::{
-	mock::*, ExternalOwner, Liabilities, PalletConfigUpdate, Pallet, RefundFeeMultiple,
+	mock::*, ExternalOwner, Liabilities, Pallet, PalletConfigUpdate, RefundFeeMultiple,
 	WithheldAssets,
 };
 
