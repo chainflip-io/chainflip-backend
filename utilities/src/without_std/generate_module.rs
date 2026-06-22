@@ -76,7 +76,7 @@ macro_rules! generate_module {
             }
 
             // this extracts the From types (per field) from a CustomMigration
-            #[derive_where::derive_where(Debug; )]
+            #[derive_where::derive_where(Debug, Default; )]
             pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
             impl<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
                 $(

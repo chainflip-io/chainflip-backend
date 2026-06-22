@@ -21,12 +21,13 @@ pub mod primitives;
 
 use self::basics::*;
 use crate::migrations::basics::Version;
+use CanonicalPatchVersion::*;
 
-macro_rules! define_all_released_runtime_versions {
+macro_rules! define_all_runtime_versions {
 	($(
 		{
 			release: $version:ident,
-			canonical_patch: $canonical_patch_version:literal,
+			canonical_patch: $canonical_patch_version:expr,
 			changelog_entry: $Migration:ident,
 		},
 	)*) => {
@@ -36,7 +37,7 @@ macro_rules! define_all_released_runtime_versions {
 			#[allow(nonstandard_style)]
 			pub struct $version;
 			impl Version for $version {
-				const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<u32> = Some($canonical_patch_version);
+				const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion> = Some($canonical_patch_version);
 			}
 		)*
 
@@ -144,14 +145,14 @@ macro_rules! define_all_released_runtime_versions {
 		}
 
 		#[macro_export]
-		macro_rules! for_each_released_runtime_version {
+		macro_rules! for_each_runtime_version {
 			($$macro_name:ident) => {
 				$(
 					$$macro_name!{ $version }
 				)*
 			}
 		}
-		pub use for_each_released_runtime_version;
+		pub use for_each_runtime_version;
 	};
 }
 
@@ -178,32 +179,39 @@ macro_rules! generate_migration_helpers {
     }
 }
 
-// All major runtime versions that have been released to at least one testnet.
+// All major runtime versions.
 // The table uses the following format:
 // 1. `release: vMajorMinor00`: this describes the chainflip release version. E.g. chainflip release
 //    2.1 is represented by v20100.
-// 2. `canonical_patch: MajorMinorPatch`: this is the exact patch of that chainflip release which
-//    should be used as canonical runtime providing the metadata which is tested against for
-//    historical type compatibility tests. For every canonical patch version >= 20100 that's listed
-//    here, there should be a metadata file called `runtime_{canonical_patch}.scale` located in
+// 2. `canonical_patch: Released(MajorMinorPatch) | Unreleased`: this is the exact patch of that
+//    chainflip release which should be used as canonical runtime providing the metadata which is
+//    tested against for historical type compatibility tests. For every canonical `Released(patch)`
+//    with `patch` >= 20100 that's listed here, there should be a metadata file called
+//    `runtime_{canonical_patch}.scale` located in
 //    `state-chain/cf-integration-tests/historical_metadata`. It can be downloaded using the script
-//    in `bouncer/commands/download_metadata.ts`.
+//    in `bouncer/commands/download_metadata.ts`. Use `Unreleased` if this version isn't released
+//    yet.
 // 3. `changelog_entry: in_MajorMinor00`: this should match up with the first entry, and is the name
 //    of the changelog entry (in the `HasChangelog` type) for this release.
-define_all_released_runtime_versions! {
+define_all_runtime_versions! {
 	{
 		release: v20000,
-		canonical_patch: 20012,
+		canonical_patch: Released(20012),
 		changelog_entry: in_20000,
 	},
 	{
 		release: v20100,
-		canonical_patch: 20119,
+		canonical_patch: Released(20119),
 		changelog_entry: in_20100,
 	},
 	{
 		release: v20200,
-		canonical_patch: 20203,
+		canonical_patch: Released(20203),
 		changelog_entry: in_20200,
+	},
+	{
+		release: v20300,
+		canonical_patch: Unreleased,
+		changelog_entry: in_20300,
 	},
 }
