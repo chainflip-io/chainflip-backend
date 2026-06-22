@@ -1713,6 +1713,12 @@ export const cfChainsChainStateSolana = z.object({
   trackedData: cfChainsSolSolTrackedData,
 });
 
+export const palletCfAssetBalancesPalletConfigUpdate = z.object({
+  __kind: z.literal('RefundFeeMultiple'),
+  chain: cfPrimitivesChainsForeignChain,
+  multiple: z.number().nullish(),
+});
+
 export const cfChainsHubAssethubTrackedData = z.object({
   medianTip: numberOrHex,
   runtimeVersion: cfChainsDotRuntimeVersion,
