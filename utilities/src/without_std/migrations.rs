@@ -153,6 +153,14 @@ macro_rules! define_all_runtime_versions {
 			}
 		}
 		pub use for_each_runtime_version;
+
+		#[macro_export]
+		macro_rules! with_all_runtime_migrations {
+			($$macro_name:ident) => {
+                $$macro_name!{ $( $Migration, )* }
+			}
+		}
+		pub use with_all_runtime_migrations;
 	};
 }
 
