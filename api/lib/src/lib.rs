@@ -1140,29 +1140,48 @@ fn extract_account_creation_deposit_address(
 	)
 }
 
+/// The critical fields of a liquidity deposit channel that we requested. These are compared against
+/// the event before returning result to the user.
+#[derive(Clone)]
+struct ExpectedLiquidityDepositChannel {
+	asset: Asset,
+	account_id: AccountId32,
+}
+
 fn extract_liquidity_deposit_channel_details(
 	events: Vec<RuntimeEvent>,
+	expected: &ExpectedLiquidityDepositChannel,
 ) -> Result<(ChannelId, LiquidityDepositChannelDetails)> {
-	events
-		.into_iter()
-		.find_map(|event| match event {
-			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::LiquidityDepositAddressReady {
-					channel_id,
-					deposit_address,
-					deposit_chain_expiry_block,
-					..
-				},
-			) => Some((
+	for event in events {
+		if let RuntimeEvent::LiquidityProvider(
+			pallet_cf_lp::Event::LiquidityDepositAddressReady {
+				channel_id,
+				asset,
+				deposit_address,
+				account_id,
+				deposit_chain_expiry_block,
+				..
+			},
+		) = event
+		{
+			// Defence in depth (PRO-2926): the opened channel must be for the asset we requested
+			// and be credited to our own account.
+			ensure!(
+				asset == expected.asset && account_id == expected.account_id,
+				"Opened deposit channel (channel_id: {channel_id}) does not match the request",
+			);
+
+			return Ok((
 				channel_id,
 				LiquidityDepositChannelDetails {
-					deposit_address: AddressString::from_encoded_address(deposit_address),
+					deposit_address: AddressString::from_encoded_address(&deposit_address),
 					deposit_chain_expiry_block,
 				},
-			)),
-			_ => None,
-		})
-		.ok_or_else(|| anyhow!("No LiquidityDepositAddressReady event was found"))
+			));
+		}
+	}
+
+	bail!("No LiquidityDepositAddressReady event was found")
 }
 
 #[cfg(test)]
