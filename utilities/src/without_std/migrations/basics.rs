@@ -19,7 +19,12 @@
 use crate::migrations::HasChangelog;
 
 pub trait Version: Copy {
-	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<u32>;
+	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion>;
+}
+
+pub enum CanonicalPatchVersion {
+	Unreleased,
+	Released(u32),
 }
 
 pub trait Migration<To: ?Sized, V: Version> {
@@ -106,7 +111,8 @@ pub type GetMigrationToHistoricalType<X: IsHistoricalTypeAt<V>, V: Version> =
 pub struct vCurrent;
 impl Version for vCurrent {
 	// There's no released runtime version associated.
-	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<u32> = None;
+	const CANONICAL_RUNTIME_PATCH_VERSION_FOR_COMPATIBILITY_TEST: Option<CanonicalPatchVersion> =
+		None;
 }
 
 pub trait HasGenericVariant: Sized {

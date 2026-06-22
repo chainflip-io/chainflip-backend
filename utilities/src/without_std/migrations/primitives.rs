@@ -175,6 +175,7 @@ impl<X: HasChangelog> HasChangelog for Option<X> {
 	type in_20000 = MapMigration<X::in_20000>;
 	type in_20100 = MapMigration<X::in_20100>;
 	type in_20200 = MapMigration<X::in_20200>;
+	type in_20300 = MapMigration<X::in_20300>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Option<X> {
 	type GenericType = Option<X::GenericType>;
@@ -207,6 +208,7 @@ impl<X: HasChangelog> HasChangelog for Vec<X> {
 	type in_20000 = MapMigration<X::in_20000>;
 	type in_20100 = MapMigration<X::in_20100>;
 	type in_20200 = MapMigration<X::in_20200>;
+	type in_20300 = MapMigration<X::in_20300>;
 }
 impl<X: HasGenericVariant> HasGenericVariant for Vec<X> {
 	type GenericType = Vec<X::GenericType>;
@@ -248,6 +250,7 @@ impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
 	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
 	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
 	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
+	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>;
 }
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
@@ -286,6 +289,7 @@ impl<A: HasChangelog, B: HasChangelog> HasChangelog for (A, B) {
 	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
 	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
 	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
+	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>;
 }
 impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for (A, B) {
 	type GenericType = (A::GenericType, B::GenericType);
