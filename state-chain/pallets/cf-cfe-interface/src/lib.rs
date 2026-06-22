@@ -74,10 +74,23 @@ pub mod pallet {
 	#[pallet::unbounded]
 	pub type CfeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
 
+	/// Holding buffer for `CfeEvent`s emitted during `on_runtime_upgrade`. These would otherwise
+	/// be wiped by the `CfeEvents::kill()` in `on_initialize` (which runs *after*
+	/// `on_runtime_upgrade` in the same block) before the engine can observe them. Migrations that
+	/// need to emit engine-visible events (e.g. broadcasting a recovery transaction) stash them
+	/// here; `on_initialize` then re-instates them into `CfeEvents` after the kill.
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type RuntimeUpgradeEvents<T: Config> = StorageValue<_, Vec<CfeEvent<T>>, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_block_number: BlockNumberFor<T>) -> frame_support::weights::Weight {
 			CfeEvents::<T>::kill();
+
+			for event in RuntimeUpgradeEvents::<T>::take() {
+				CfeEvents::<T>::append(event);
+			}
 
 			T::WeightInfo::clear_events()
 		}
