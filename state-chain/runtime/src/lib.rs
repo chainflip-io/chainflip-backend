@@ -460,6 +460,7 @@ type PalletMigrations = (
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, AssethubInstance>,
 	pallet_cf_ingress_egress::migrations::PalletMigration<Runtime, TronInstance>,
 	pallet_cf_pools::migrations::PalletMigration<Runtime>,
+	pallet_cf_asset_balances::migrations::PalletMigration<Runtime>,
 	pallet_cf_cfe_interface::migrations::PalletMigration<Runtime>,
 	pallet_cf_trading_strategy::migrations::PalletMigration<Runtime>,
 	pallet_cf_lending_pools::migrations::PalletMigration<Runtime>,

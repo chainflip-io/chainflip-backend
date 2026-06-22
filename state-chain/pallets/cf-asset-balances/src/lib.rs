@@ -24,6 +24,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, AccountRoleRegistry, AssetWithholding, BalanceApi, Chainflip,
 	DeregistrationCheck, EgressApi, KeyProvider, LiabilityTracker, PoolApi, ScheduledEgressDetails,
 };
+use cf_utilities::derive_common_traits;
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::traits::{Saturating, Zero},
@@ -37,15 +38,14 @@ pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migrations;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub const STORAGE_VERSION_U16: u16 = 1;
+pub const STORAGE_VERSION_U16: u16 = 2;
 pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(STORAGE_VERSION_U16);
-
-pub const REFUND_FEE_MULTIPLE: AssetAmount = 100;
 
 #[derive(Encode, Decode, DecodeWithMemTracking, TypeInfo, Clone, PartialEq, Eq, RuntimeDebug)]
 pub enum ExternalOwner {
@@ -78,6 +78,13 @@ impl core::cmp::Ord for ExternalOwner {
 impl core::cmp::PartialOrd for ExternalOwner {
 	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
 		Some(self.cmp(other))
+	}
+}
+
+derive_common_traits! {
+	#[derive(TypeInfo)]
+	pub enum PalletConfigUpdate {
+		RefundFeeMultiple { chain: ForeignChain, multiple: Option<u32> },
 	}
 }
 
@@ -177,6 +184,10 @@ pub mod pallet {
 		AssetAmount,
 		ValueQuery,
 	>;
+
+	#[pallet::storage]
+	pub type RefundFeeMultiple<T> =
+		StorageMap<_, Twox64Concat, ForeignChain, u32, ValueQuery, ConstU32<100>>;
 }
 
 impl<T: Config> Pallet<T> {
@@ -190,7 +201,9 @@ impl<T: Config> Pallet<T> {
 				.map_err(Into::into)
 				.and_then(
 					|result @ ScheduledEgressDetails { egress_amount, fee_withheld, .. }| {
-						if egress_amount < REFUND_FEE_MULTIPLE * fee_withheld {
+						if egress_amount <
+							(RefundFeeMultiple::<T>::get(chain) as AssetAmount) * fee_withheld
+						{
 							Err(Error::<T>::RefundAmountTooLow.into())
 						} else {
 							Ok(result)
