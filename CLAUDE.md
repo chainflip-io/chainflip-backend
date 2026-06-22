@@ -46,13 +46,19 @@ Ethereum (ETH, FLIP, USDC, USDT, WBTC), Bitcoin (BTC), Arbitrum (ETH, USDC, USDT
 
 ## Code Style Guidelines
 
-- Follow Substrate code style (github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md)
-- Formatting: 100 char line width, hard tabs, vertical trailing commas
+- Formatting: All formatting rules are imposed by `cargo fmt --all`, run this before every commit.
 - Errors: Use `Err(anyhow!("message"))` at end of functions, `bail!()` for early returns
 - PRs: Keep small (<400 lines), organize meaningful commits
 - Prioritize readability and maintainability over cleverness
 - Commits: Use prefixes `feat:`, `fix:`, `refactor:`, `test:`, `doc:`, `chore:`
 - Run localnet with `./localnet/manage.sh` for testing
+
+### Comments and Doc Comments
+
+Keep comments and doc comments concise; use them to add context, rather than to explain what the code does (the code documents the implementation).
+
+- Explain *why* — rationale, non-obvious invariants, edge cases, links to specs/issues. Don't narrate *what* the code does or walk through control flow.
+- Don't reference external implementation details or superseded designs/decisions (e.g. "previously we…", "this used to…").
 
 ## Security
 
