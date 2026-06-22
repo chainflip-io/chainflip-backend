@@ -52,11 +52,11 @@ where
 			internal_error(format!("Could not fetch block header for block {:?}", hash))
 		})?;
 
-	let pools = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(hash)?;
+	let pools: BTreeMap<_, _> = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(hash)?;
 
-	let prev_pools = StorageQueryApi::new(client)
-		.collect_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, _>(header.parent_hash)?;
+	let prev_pools: BTreeMap<_, _> = StorageQueryApi::new(client)
+		.collect_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, _>(header.parent_hash)?;
 
 	// Pools present now but missing from the previous block can't yield a fill delta, so they're
 	// skipped below. Log why rather than dropping them silently: across a runtime upgrade the
@@ -70,7 +70,7 @@ where
 		// Key present in the parent but value missing from `prev_pools` => decode failure;
 		// key absent => pool newly created. Only scan keys in this rare branch.
 		let prev_pool_keys = StorageQueryApi::new(client)
-			.collect_keys_from_storage_map::<pallet_cf_pools::Pools<_>, _, _, HashSet<_>>(
+			.collect_keys_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, HashSet<_>>(
 				header.parent_hash,
 			)?;
 		for pair in missing_prev_pools {
