@@ -33,7 +33,7 @@ export function formatCcmDepositMetadata(
   return JSON.stringify({
     ...metadata,
     message:
-      metadata.message != null ? `${metadata.message.slice(0, maxLength)}...` : metadata.message,
+      `${metadata.message?.slice(0, maxLength)}...`,
   });
 }
 
