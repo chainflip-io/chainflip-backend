@@ -1,4 +1,5 @@
 import type { DedotClient } from 'dedot';
+import { InvalidTxError } from 'dedot';
 import type { DispatchError } from 'dedot/codecs';
 import type {
   IKeyringPair,
@@ -7,7 +8,7 @@ import type {
 } from 'dedot/types';
 import type { ChainflipNodeApi } from 'generated/chaintypes/chainflip-node';
 import type { ChainSubmittableExtrinsic } from 'generated/chaintypes/chainflip-node/tx';
-import { cfMutex } from 'shared/utils';
+import { cfMutex, sleep } from 'shared/utils';
 
 /** A fully-typed dedot client for the Chainflip state chain. */
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
@@ -100,6 +101,20 @@ export type IncludedResult = DedotSubmittableResult & {
   status: Extract<DedotSubmittableResult['status'], { value: { blockNumber: number } }>;
 };
 
+/** Waits until the finalized block has caught up to the current best block (bounded by `timeoutSeconds`). */
+async function waitForFinalizedToReachBest(
+  client: ChainflipClient,
+  timeoutSeconds: number,
+): Promise<void> {
+  const target = (await client.block.best()).number;
+  for (let i = 0; i < timeoutSeconds; i += 1) {
+    if ((await client.block.finalized()).number >= target) {
+      return;
+    }
+    await sleep(1000);
+  }
+}
+
 /**
  * Signs and submits `ext`, resolving once it is included in a best-chain block (the localnet best
  * chain is canonical and inclusion frees the broadcast slot sooner). Pass `waitForFinalize = true`
@@ -118,87 +133,99 @@ export async function signSendAndWait(
 ): Promise<IncludedResult> {
   // Bound concurrent in-flight broadcasts to stay under the node's broadcast limit.
   return broadcastLimit(async () => {
-    // Allocate a nonce under the mutex, then release immediately.
-    const release = await cfMutex.acquire(mutexKey);
-    let nonce: number;
-    try {
-      const onChain = Number(await client.rpc.system_accountNextIndex(signer.address));
-      nonce = Math.max(onChain, nextNonceByAccount.get(signer.address) ?? 0);
-      nextNonceByAccount.set(signer.address, nonce + 1);
-    } finally {
-      release();
-    }
+    // dedot validates each tx against the FINALIZED block before broadcasting, which can lag a
+    // state change the caller just observed via the indexer (best block) — e.g. a fresh funding,
+    // or a new governance membership that gates a fee waiver. On such a (transient) pre-validation
+    // failure, wait for finalization to catch up to the current best block and retry once.
+    for (let attempt = 0; ; attempt += 1) {
+      // Allocate a nonce under the mutex, then release immediately.
+      const release = await cfMutex.acquire(mutexKey);
+      let nonce: number;
+      try {
+        const onChain = Number(await client.rpc.system_accountNextIndex(signer.address));
+        nonce = Math.max(onChain, nextNonceByAccount.get(signer.address) ?? 0);
+        nextNonceByAccount.set(signer.address, nonce + 1);
+      } finally {
+        release();
+      }
 
-    // Whether the tx reached a block (nonce consumed on-chain). A dispatch failure still
-    // consumed the nonce; only a never-included tx leaves the cache ahead and needs a reset.
-    let included = false;
-    let stopBroadcast: (() => Promise<void>) | undefined;
-    try {
-      const result = await new Promise<IncludedResult>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          reject(
-            new Error(
-              `'${extrinsicToHumanReadable(ext)}' did not reach ${
-                waitForFinalize ? 'finalization' : 'a block'
-              } within ${timeoutSeconds}s`,
-            ),
-          );
-        }, timeoutSeconds * 1000);
+      // Whether the tx reached a block (nonce consumed on-chain). A dispatch failure still
+      // consumed the nonce; only a never-included tx leaves the cache ahead and needs a reset.
+      let included = false;
+      let stopBroadcast: (() => Promise<void>) | undefined;
+      try {
+        const result = await new Promise<IncludedResult>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(
+              new Error(
+                `'${extrinsicToHumanReadable(ext)}' did not reach ${
+                  waitForFinalize ? 'finalization' : 'a block'
+                } within ${timeoutSeconds}s`,
+              ),
+            );
+          }, timeoutSeconds * 1000);
 
-        ext
-          .signAndSend(signer, { nonce }, (res: DedotSubmittableResult) => {
-            switch (res.status.type) {
-              case 'BestChainBlockIncluded':
-                // The tx is in a block (nonce consumed) regardless of whether we keep waiting.
-                included = true;
-                if (!waitForFinalize) {
+          ext
+            .signAndSend(signer, { nonce }, (res: DedotSubmittableResult) => {
+              switch (res.status.type) {
+                case 'BestChainBlockIncluded':
+                  // The tx is in a block (nonce consumed) regardless of whether we keep waiting.
+                  included = true;
+                  if (!waitForFinalize) {
+                    clearTimeout(timer);
+                    resolve(res as IncludedResult);
+                  }
+                  break;
+                case 'Finalized':
+                  included = true;
                   clearTimeout(timer);
                   resolve(res as IncludedResult);
-                }
-                break;
-              case 'Finalized':
-                included = true;
-                clearTimeout(timer);
-                resolve(res as IncludedResult);
-                break;
-              case 'Invalid':
-              case 'Drop':
-                clearTimeout(timer);
-                reject(
-                  new Error(
-                    `Extrinsic failed with status ${res.status.type}: ${res.status.value.error}`,
-                  ),
-                );
-                break;
-              default:
-                break;
-            }
-          })
-          .then((unsub) => {
-            stopBroadcast = unsub;
-          })
-          .catch((err) => {
-            clearTimeout(timer);
-            reject(err);
-          });
-      });
+                  break;
+                case 'Invalid':
+                case 'Drop':
+                  clearTimeout(timer);
+                  reject(
+                    new Error(
+                      `Extrinsic failed with status ${res.status.type}: ${res.status.value.error}`,
+                    ),
+                  );
+                  break;
+                default:
+                  break;
+              }
+            })
+            .then((unsub) => {
+              stopBroadcast = unsub;
+            })
+            .catch((err) => {
+              clearTimeout(timer);
+              reject(err);
+            });
+        });
 
-      if (result.dispatchError) {
-        throw new Error(
-          `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
-        );
-      }
+        if (result.dispatchError) {
+          throw new Error(
+            `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
+          );
+        }
 
-      return result;
-    } catch (e) {
-      if (!included) {
-        nextNonceByAccount.delete(signer.address);
+        return result;
+      } catch (e) {
+        if (!included) {
+          nextNonceByAccount.delete(signer.address);
+        }
+        // Rethrow unless this is a transient finalized-block pre-validation failure we can retry
+        // once (see note at the top of the loop). Otherwise wait for finalization to catch up and
+        // fall through to the next loop iteration.
+        if (included || attempt > 0 || !(e instanceof InvalidTxError)) {
+          throw e;
+        }
+        await waitForFinalizedToReachBest(client, timeoutSeconds);
+      } finally {
+        // Stop the broadcast + block tracking so the node frees the broadcast slot immediately
+        // (dedot only auto-stops it at finalization).
+        await stopBroadcast?.().catch(() => undefined);
       }
-      throw e;
-    } finally {
-      // Stop the broadcast + block tracking so the node frees the broadcast slot immediately
-      // (dedot only auto-stops it at finalization).
-      await stopBroadcast?.().catch(() => undefined);
     }
   });
 }
