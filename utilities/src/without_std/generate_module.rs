@@ -270,7 +270,9 @@ macro_rules! generate_module {
             pub mod field {
                 $(
                     pub mod $field {
-                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, FieldCustomMigration, NewFieldWithDefault};
+                        use super::super::{OverrideMigrationWith, Version, HistoricalTypesAt, FieldCustomMigration, NewFieldWithDefault,
+                            HasVersion, Migration, RemovedFieldWithDefault
+                        };
 
                         #[derive(Debug)]
                         pub struct Added;
@@ -278,6 +280,16 @@ macro_rules! generate_module {
                             FieldCustomMigration<TargetFieldsTypes, V> for Added
                         {
                             type $field = OverrideMigrationWith<NewFieldWithDefault>;
+                        }
+
+                        #[derive(Debug)]
+                        pub struct Removed<T>(T);
+                        impl<V: Version, TargetFieldsTypes: HistoricalTypesAt<V, $field = ()>, T: HasVersion<V>>
+                            FieldCustomMigration<TargetFieldsTypes, V> for Removed<T>
+                        where
+	                        <T::HistoricalMigration as Migration<T::HistoricalType, V>>::From: Default,
+                        {
+                            type $field = OverrideMigrationWith<RemovedFieldWithDefault<T>>;
                         }
                     }
                 )*

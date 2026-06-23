@@ -285,6 +285,7 @@ proptest = [
 	"pallet-cf-swapping/proptest",
 	"cf-primitives/proptest",
 	"cf-utilities/proptest",
+	"pallet-cf-lending-pools/proptest",
 ]
 
 # IMPORTANT: These two are required to make sure that 'turbo bouncer' works and also

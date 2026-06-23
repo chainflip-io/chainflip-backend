@@ -160,6 +160,24 @@ impl<T, V: Version> Migration<T, V> for NewVariant {
 	}
 }
 
+// ----------- type wrapper for removed fields ------------
+
+pub struct RemovedFieldWithDefault<T>(sp_std::marker::PhantomData<T>);
+impl<T: HasVersion<V>, V: Version> Migration<(), V> for RemovedFieldWithDefault<T>
+where
+	<T::HistoricalMigration as Migration<T::HistoricalType, V>>::From: Default,
+{
+	type From = <T::HistoricalMigration as Migration<T::HistoricalType, V>>::From;
+
+	fn try_forwards(_x: Self::From) -> Result<(), Self::ForwardsError> {
+		Ok(())
+	}
+
+	fn try_backwards(_x: ()) -> Result<Self::From, Self::BackwardsError> {
+		Ok(Default::default())
+	}
+}
+
 // ----------- lookups ------------
 
 pub trait IsHistoricalType {
