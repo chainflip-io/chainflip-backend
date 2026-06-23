@@ -44,7 +44,7 @@ macro_rules! impl_identity_migrations {
     };
 }
 
-impl_identity_migrations! {(), u8, u128, }
+impl_identity_migrations! {(), u8, u16, u32, u64, u128, bool,}
 
 // ----------- wrapped types -------------
 
