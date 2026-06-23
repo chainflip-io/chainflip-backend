@@ -20,7 +20,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 use crate::migrations::{
 	basics::{IdentityMigration, Migration, Version},
-	HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
+	with_all_runtime_migrations, HasChangelog, HasGenericVariant, IsHistoricalType, OrdMigrations,
 };
 
 // ----------- identity migrations -------------
@@ -152,73 +152,92 @@ impl<V: Version, T: HasChangelog + Default> Migration<T, V> for NewTypeWithDefau
 // ----------- containers -------------
 
 pub struct MapMigration<X>(X);
-impl<A, V: Version, M: Migration<A, V>> Migration<Option<A>, V> for MapMigration<M> {
-	type From = Option<M::From>;
 
-	fn forwards(x: Self::From) -> Option<A> {
-		x.map(M::forwards)
-	}
+macro_rules! impl_migrations_for_container {
+    (
+        $container:ident<$($ty:ident $(: ($($ty_path:tt)*))?),+>,
+        $container_macro:ident,
+        [$($var_M:ident $(where From: ($($from_path:tt)*) )?),+],
+        |$var_f:ident| $expr_f:expr,
+        |$var_b:ident| $expr_b:expr,
+    ) => {
+        macro_rules! $container_macro {
+            ($$($$migration:ident, )*) => {
+                impl<$($ty: HasChangelog $(+ $($ty_path)*)?),+> HasChangelog for $container<$($ty),+> {
+                    type if_unspecified = MapMigration<( $($ty::if_unspecified, )+ )>;
 
-	fn backwards(x: Option<A>) -> Self::From {
-		x.map(M::backwards)
-	}
+                    $$(
+                        type $$migration = MapMigration<( $($ty::$$migration, )+ )>;
+                    )*
+                }
+            }
+        }
+        with_all_runtime_migrations!{ $container_macro }
+
+        impl<$($ty $(: $($ty_path)* )? ,)+  V: Version, $($var_M: Migration<$ty, V $(, From: $($from_path)*)?>),+> Migration<$container<$($ty),+>, V> for MapMigration<($($var_M, )+)> {
+            type From = $container<$($var_M::From),+>;
+
+            fn forwards($var_f: Self::From) -> $container<$($ty),+> {
+                $expr_f
+            }
+
+            fn backwards($var_b: $container<$($ty),+>) -> Self::From {
+                $expr_b
+            }
+        }
+
+        impl<$($ty: HasGenericVariant $(+ $($ty_path)*)?),+ > HasGenericVariant for $container<$($ty),+> {
+            type GenericType = $container<$($ty::GenericType),+>;
+            type MigrationFromGeneric = MapMigration<($($ty::MigrationFromGeneric, )+)>;
+        }
+        impl<$($ty: IsHistoricalType $(+ $($ty_path)*)?),+> IsHistoricalType for $container<$($ty),+> {
+            type GetCurrentType = $container<$($ty::GetCurrentType),+>;
+        }
+    };
 }
 
-impl<X: HasChangelog> HasChangelog for Option<X> {
-	type if_unspecified = MapMigration<X::if_unspecified>;
-
-	// these have to be specified as otherwise the above
-	// default migration doesn't go through. Because rust
-	// is forced to work with arbitrary implementations for these,
-	// and so can't prove that the historical types are actually
-	// all of the shape `Option<...>`.
-	type in_20000 = MapMigration<X::in_20000>;
-	type in_20100 = MapMigration<X::in_20100>;
-	type in_20200 = MapMigration<X::in_20200>;
-	type in_20300 = MapMigration<X::in_20300>;
-}
-impl<X: HasGenericVariant> HasGenericVariant for Option<X> {
-	type GenericType = Option<X::GenericType>;
-	type MigrationFromGeneric = MapMigration<X::MigrationFromGeneric>;
-}
-impl<X: IsHistoricalType> IsHistoricalType for Option<X> {
-	type GetCurrentType = Option<X::GetCurrentType>;
+impl_migrations_for_container! {
+	Option<X>,
+	impl_changelog_for_option,
+	[M],
+	|x| x.map(M::forwards),
+	|x| x.map(M::backwards),
 }
 
-impl<A, V: Version, M: Migration<A, V>> Migration<Vec<A>, V> for MapMigration<M> {
-	type From = Vec<M::From>;
-
-	fn forwards(x: Self::From) -> Vec<A> {
-		x.into_iter().map(M::forwards).collect()
-	}
-
-	fn backwards(x: Vec<A>) -> Self::From {
-		x.into_iter().map(M::backwards).collect()
-	}
+impl_migrations_for_container! {
+	Vec<X>,
+	impl_changelog_for_vector,
+	[M],
+	|x| x.into_iter().map(M::forwards).collect(),
+	|x| x.into_iter().map(M::backwards).collect(),
 }
 
-impl<X: HasChangelog> HasChangelog for Vec<X> {
-	type if_unspecified = MapMigration<X::if_unspecified>;
+pub type TupleWith2Entries<A, B> = (A, B);
 
-	// these have to be specified as otherwise the above
-	// default migration doesn't go through. Because rust
-	// is forced to work with arbitrary implementations for these,
-	// and so can't prove that the historical types are actually
-	// all of the shape `Vec<...>`.
-	type in_20000 = MapMigration<X::in_20000>;
-	type in_20100 = MapMigration<X::in_20100>;
-	type in_20200 = MapMigration<X::in_20200>;
-	type in_20300 = MapMigration<X::in_20300>;
-}
-impl<X: HasGenericVariant> HasGenericVariant for Vec<X> {
-	type GenericType = Vec<X::GenericType>;
-	type MigrationFromGeneric = MapMigration<X::MigrationFromGeneric>;
-}
-impl<X: IsHistoricalType> IsHistoricalType for Vec<X> {
-	type GetCurrentType = Vec<X::GetCurrentType>;
+impl_migrations_for_container! {
+	TupleWith2Entries<A,B>,
+	impl_changelog_for_tuple,
+	[M1,M2],
+	|x| (M1::forwards(x.0), M2::forwards(x.1)),
+	|x| (M1::backwards(x.0), M2::backwards(x.1)),
 }
 
-// btreemap
+// ---- btreemap ----
+// the bounds are quite messy and difficult to replicate with the `impl_migrations_for_container`
+// macro, so we use a manual implementation:
+
+macro_rules! impl_changelog_for_btreemap {
+    ($($migration:ident,)*) => {
+        impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
+            type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
+
+            $(
+                type $migration = MapMigration<(A::$migration, B::$migration)>;
+            )*
+        }
+    };
+}
+with_all_runtime_migrations! {impl_changelog_for_btreemap}
 
 impl<
 		A: Ord,
@@ -239,19 +258,6 @@ impl<
 	}
 }
 
-impl<A: OrdMigrations + Ord, B: HasChangelog> HasChangelog for BTreeMap<A, B> {
-	type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
-
-	// these have to be specified as otherwise the above
-	// default migration doesn't go through. Because rust
-	// is forced to work with arbitrary implementations for these,
-	// and so can't prove that the historical types are actually
-	// all of the shape `BTreeMap<...>`.
-	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
-	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
-	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
-	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>;
-}
 impl<A: HasGenericVariant + Ord, B: HasGenericVariant> HasGenericVariant for BTreeMap<A, B>
 where
 	A: HasGenericVariant<GenericType: Ord + IsHistoricalTypeOrd>,
@@ -266,35 +272,3 @@ impl<A: IsHistoricalType<GetCurrentType: OrdMigrations + Ord>, B: IsHistoricalTy
 }
 
 trait IsHistoricalTypeOrd = IsHistoricalType<GetCurrentType: OrdMigrations + Ord>;
-
-// tuple (A, B)
-
-impl<A, B, V: Version, M1: Migration<A, V>, M2: Migration<B, V>> Migration<(A, B), V>
-	for MapMigration<(M1, M2)>
-{
-	type From = (M1::From, M2::From);
-
-	fn forwards(x: Self::From) -> (A, B) {
-		(M1::forwards(x.0), M2::forwards(x.1))
-	}
-
-	fn backwards(x: (A, B)) -> Self::From {
-		(M1::backwards(x.0), M2::backwards(x.1))
-	}
-}
-
-impl<A: HasChangelog, B: HasChangelog> HasChangelog for (A, B) {
-	type if_unspecified = MapMigration<(A::if_unspecified, B::if_unspecified)>;
-
-	type in_20000 = MapMigration<(A::in_20000, B::in_20000)>;
-	type in_20100 = MapMigration<(A::in_20100, B::in_20100)>;
-	type in_20200 = MapMigration<(A::in_20200, B::in_20200)>;
-	type in_20300 = MapMigration<(A::in_20300, B::in_20300)>;
-}
-impl<A: HasGenericVariant, B: HasGenericVariant> HasGenericVariant for (A, B) {
-	type GenericType = (A::GenericType, B::GenericType);
-	type MigrationFromGeneric = MapMigration<(A::MigrationFromGeneric, B::MigrationFromGeneric)>;
-}
-impl<A: IsHistoricalType, B: IsHistoricalType> IsHistoricalType for (A, B) {
-	type GetCurrentType = (A::GetCurrentType, B::GetCurrentType);
-}
