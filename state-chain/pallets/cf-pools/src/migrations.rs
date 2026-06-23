@@ -15,13 +15,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Pallet, STORAGE_VERSION_U16};
-use cf_runtime_utilities::{NoopRuntimeUpgrade, PlaceholderMigration};
+use cf_runtime_utilities::PlaceholderMigration;
+use frame_support::migrations::VersionedMigration;
+
+mod set_minimum_limit_order_amounts;
 
 pub type PalletMigration<T> = (
-	frame_support::migrations::VersionedMigration<
+	VersionedMigration<
 		8,
 		9,
-		NoopRuntimeUpgrade,
+		set_minimum_limit_order_amounts::Migration<T>,
 		Pallet<T>,
 		<T as frame_system::Config>::DbWeight,
 	>,
