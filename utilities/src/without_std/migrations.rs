@@ -187,7 +187,7 @@ macro_rules! generate_migration_helpers {
     }
 }
 
-// All major runtime versions.
+// List of all major runtime versions.
 // The table uses the following format:
 // 1. `release: vMajorMinor00`: this describes the chainflip release version. E.g. chainflip release
 //    2.1 is represented by v20100.
