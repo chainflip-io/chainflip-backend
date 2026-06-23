@@ -410,6 +410,7 @@ pub struct AuctionState {
 	pub min_active_bid: Option<u128>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo)]
 pub struct LiquidityProviderBoostPoolInfo {
 	pub fee_tier: u16,
@@ -417,6 +418,10 @@ pub struct LiquidityProviderBoostPoolInfo {
 	pub available_balance: AssetAmount,
 	pub in_use_balance: AssetAmount,
 	pub is_withdrawing: bool,
+}
+
+impl HasChangelog for LiquidityProviderBoostPoolInfo {
+	type if_unspecified = _LiquidityProviderBoostPoolInfo::see_field_changelogs;
 }
 
 #[derive(Encode, Decode, Eq, PartialEq, TypeInfo, Default)]
@@ -611,10 +616,15 @@ pub struct TradingStrategyInfo<Amount> {
 	pub balance: Vec<(Asset, Amount)>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone)]
 pub struct TradingStrategyLimits {
 	pub minimum_deployment_amount: AssetMap<Option<AssetAmount>>,
 	pub minimum_added_funds_amount: AssetMap<Option<AssetAmount>>,
+}
+
+impl HasChangelog for TradingStrategyLimits {
+	type if_unspecified = _TradingStrategyLimits::see_field_changelogs;
 }
 
 #[cf_proc_macros::generate_module]
