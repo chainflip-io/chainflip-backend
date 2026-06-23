@@ -61,19 +61,19 @@ where
 	// Pools present now but missing from the previous block can't yield a fill delta, so they're
 	// skipped below. Log why rather than dropping them silently: across a runtime upgrade the
 	// parent block's pool storage may not decode under the current `Pool` type.
-	let missing_prev_pools = pools
+	let new_or_undecodable_pools = pools
 		.keys()
 		.filter(|pair| !prev_pools.contains_key(*pair))
 		.copied()
 		.collect::<Vec<_>>();
-	if !missing_prev_pools.is_empty() {
+	if !new_or_undecodable_pools.is_empty() {
 		// Key present in the parent but value missing from `prev_pools` => decode failure;
 		// key absent => pool newly created. Only scan keys in this rare branch.
 		let prev_pool_keys = StorageQueryApi::new(client)
 			.collect_keys_from_storage_map::<pallet_cf_pools::Pools<Runtime>, _, _, HashSet<_>>(
 				header.parent_hash,
 			)?;
-		for pair in missing_prev_pools {
+		for pair in new_or_undecodable_pools {
 			if prev_pool_keys.contains(&pair) {
 				log::warn!(
 					"order_fills: previous pool state for {pair:?} failed to decode at block #{} \
@@ -81,13 +81,10 @@ where
 					header.number,
 				);
 			} else {
-				// This should be almost impossible: requires creating the pool, adding and
-				// executing an order all within the same block.
-				log::debug!(
-					"order_fills: pool {pair:?} newly created at block #{}; no previous state, \
-					 skipping its order fills.",
-					header.number,
-				);
+				// Strictly speaking it might be logically possible that there are fills in the
+				// first block of a pool's existence, but is so unlikely that we can assume it won't
+				// happen in practice.
+				log::info!("order_fills: pool {pair:?} newly created at block #{}.", header.number,);
 			}
 		}
 	}
