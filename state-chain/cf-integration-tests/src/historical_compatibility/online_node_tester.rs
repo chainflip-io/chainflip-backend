@@ -153,7 +153,7 @@ impl HistoricalCompatibilityTester for OnlineNodeTester {
 			.err()
 			.into_iter()
 			.map(|err| TypeIncompatibilityInfo {
-				type_ref: type_ref.clone(),
+				type_ref,
 				type_diff: TypeDiff {
 					expected_encoding: match err.sub_type_details.location {
 						SubTypeLocation::Input { .. } =>
