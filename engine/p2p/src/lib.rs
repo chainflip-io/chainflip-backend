@@ -20,11 +20,12 @@ use cf_chains::ChainCrypto;
 use cf_primitives::AccountId;
 use multisig::p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage};
 use sp_core::ed25519;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{Receiver, UnboundedSender};
 
 use crate::core::{ed25519_secret_key_to_x25519_secret_key, X25519KeyPair};
 
 pub mod core;
+pub mod fair_channel;
 pub mod muxer;
 
 type EdPublicKey = ed25519::Public;
@@ -63,12 +64,12 @@ impl<C: ChainCrypto> MultisigMessageSender<C> {
 	}
 }
 pub struct MultisigMessageReceiver<C: ChainCrypto>(
-	pub UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
+	pub Receiver<(AccountId, VersionedCeremonyMessage)>,
 	PhantomData<C>,
 );
 
 impl<C: ChainCrypto> MultisigMessageReceiver<C> {
-	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
+	pub fn new(receiver: Receiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
 		MultisigMessageReceiver(receiver, PhantomData)
 	}
 }
