@@ -245,8 +245,10 @@ async function main(): Promise<void> {
           api.tx.environment.witnessAssethubVaultCreation(
             decodeDotAddressForContract(hubVaultAddress as string),
             {
-              blockNumber: hubVaultEvent.block,
-              extrinsicIndex: hubVaultEvent.eventIndex,
+              // `hubVaultEvent` comes from the polkadot.js `observeEvent`, whose numeric fields
+              // arrive as strings/BN. dedot's `CfPrimitivesTxId` requires plain `number`s, so coerce.
+              blockNumber: Number(hubVaultEvent.block),
+              extrinsicIndex: Number(hubVaultEvent.eventIndex),
             },
           ),
         expectedEvent: assethubVaultVaultActivationCompletedEvent,

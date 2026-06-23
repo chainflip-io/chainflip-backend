@@ -19,7 +19,7 @@ import { depositLiquidity } from 'shared/deposit_liquidity';
 import { sendEvmNative } from 'shared/send_evm';
 import { getBalance } from 'shared/get_balance';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { signSendAndFinalize } from 'shared/utils/dedot';
+import { signSendAndWait } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
 import { liquidityProviderLiquidityRefundAddressRegisteredEvent } from 'generated/events/liquidityProvider/liquidityRefundAddressRegistered';
@@ -201,7 +201,7 @@ async function testTransferAsset<A = []>(cf: ChainflipIO<A>) {
 
   // Destination account needs a refund address too.
   const refundAddress = await newAssetAddress(testAsset, '//LP_2');
-  await signSendAndFinalize(
+  await signSendAndWait(
     chainflip,
     chainflip.tx.liquidityProvider.registerLiquidityRefundAddress(
       encodedAddress(chainFromAsset(testAsset), refundAddress),

@@ -6,7 +6,7 @@ import {
   getChainflipPolkadotApi,
   getChainflipApi,
 } from 'shared/utils/substrate';
-import { ChainflipClient, ChainflipExtrinsic, signSendAndFinalize } from 'shared/utils/dedot';
+import { ChainflipClient, ChainflipExtrinsic, signSendAndWait } from 'shared/utils/dedot';
 import type {
   PalletCfGovernanceExecutionMode,
   StateChainRuntimeRuntimeCallLike,
@@ -108,12 +108,8 @@ export async function submitGovernanceExtrinsic(
     inner.call as StateChainRuntimeRuntimeCallLike,
     execution,
   );
-  const result = await signSendAndFinalize(client, proposal, snowWhite, snowWhiteUri);
+  const result = await signSendAndWait(client, proposal, snowWhite, snowWhiteUri);
 
-  // `result` only resolves on the Finalized status, so the block number is always present.
-  if (result.status.type !== 'Finalized') {
-    throw new Error(`Governance extrinsic did not finalize: ${result.status.type}`);
-  }
   const txHash = `${result.txHash}`;
   const txBlockNumber = result.status.value.blockNumber;
   logger.debug(`Governance extrinsic tx hash: ${txHash}, tx block: ${txBlockNumber}`);

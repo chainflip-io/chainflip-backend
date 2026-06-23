@@ -1181,7 +1181,7 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   return keyring.encodeAddress(hexPubkey);
 }
 
-export function decodeSolAddress(address: string): string {
+export function decodeSolAddress(address: string): `0x${string}` {
   return u8aToHex(base58Decode(address));
 }
 

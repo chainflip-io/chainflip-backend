@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   const expectedBlock = Number(process.argv[2]);
   // chain_getBlockHash returns the all-zero hash (or null) until the block exists.
   let hash = await api.rpc.chain_getBlockHash(expectedBlock);
-  while (!hash || /^0x0+$/.test(hash)) {
+  while (!hash || hash === '0x0000000000000000000000000000000000000000000000000000000000000000') {
     await sleep(1000);
     hash = await api.rpc.chain_getBlockHash(expectedBlock);
   }

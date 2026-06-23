@@ -2,7 +2,7 @@ import assert from 'assert';
 import { createStateChainKeypair } from 'shared/utils';
 import { snowWhite, submitGovernanceExtrinsic } from 'shared/cf_governance';
 import { getChainflipApi } from 'shared/utils/substrate';
-import { signSendAndFinalize } from 'shared/utils/dedot';
+import { signSendAndWait } from 'shared/utils/dedot';
 import { TestContext } from 'shared/utils/test_context';
 import { ChainflipIO, newChainflipIO } from 'shared/utils/chainflip_io';
 import { governanceExecutedEvent } from 'generated/events/governance/executed';
@@ -60,7 +60,7 @@ async function submitWithMultipleGovernanceMembers<A = []>(cf: ChainflipIO<A>) {
   await using chainflip = await getChainflipApi();
 
   // Note that with two members, we need to approve with the other account:
-  await signSendAndFinalize(
+  await signSendAndWait(
     chainflip,
     chainflip.tx.governance.approve(proposalId),
     alice,

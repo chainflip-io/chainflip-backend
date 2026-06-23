@@ -17,7 +17,7 @@ import {
   Assets,
 } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { signSendAndFinalize } from 'shared/utils/dedot';
+import { signSendAndWait } from 'shared/utils/dedot';
 import type { PalletCfFundingRedemptionAmount } from 'generated/chaintypes/chainflip-node';
 import { Logger } from 'shared/utils/logger';
 
@@ -71,7 +71,7 @@ export async function redeemFlip(
     flipperinoRedeemAmount === 'Max'
       ? { type: 'Max' }
       : { type: 'Exact', value: BigInt(flipperinoRedeemAmount.Exact) };
-  await signSendAndFinalize(
+  await signSendAndWait(
     chainflip,
     chainflip.tx.funding.redeem(redeemAmount, ethAddress, undefined),
     flipWallet,

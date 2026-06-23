@@ -81,7 +81,7 @@ async function submitTokenVaultSettingsGovernance(logger: Logger, settings: Vaul
       type: 'SetTokenSwapParameters',
       value: {
         minSwapAmount: BigInt(minTokenSwapAmount),
-        tokenMintPubkey: decodeSolAddress(tokenMintPubkey.toString()) as `0x${string}`,
+        tokenMintPubkey: decodeSolAddress(tokenMintPubkey.toString()),
       },
     }),
   );

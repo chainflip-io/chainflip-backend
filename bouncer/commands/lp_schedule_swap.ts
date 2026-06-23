@@ -14,7 +14,7 @@
  */
 import { amountToFineAmount, assetDecimals, Assets, createStateChainKeypair } from 'shared/utils';
 import { getChainflipApi, observeEvent } from 'shared/utils/substrate';
-import { signSendAndFinalize } from 'shared/utils/dedot';
+import { signSendAndWait } from 'shared/utils/dedot';
 import { globalLogger as logger } from 'shared/utils/logger';
 import { depositLiquidity } from 'shared/deposit_liquidity';
 import { fullAccountFromUri, newChainflipIO } from 'shared/utils/chainflip_io';
@@ -50,7 +50,7 @@ const swapEvent = observeEvent(logger, `swapping:CreditedOnChain`, {
 }).event;
 
 logger.info('Submitting on-chain swap extrinsic');
-await signSendAndFinalize(
+await signSendAndWait(
   chainflip,
   chainflip.tx.liquidityProvider.scheduleSwap(
     BigInt(amountToFineAmount(amount.toString(), assetDecimals(inputAsset))),

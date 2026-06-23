@@ -23,9 +23,8 @@ interface BtcVaultSwapExtraParameters {
 async function getExistingPrivateBtcChannel(brokerAddress: string): Promise<number | undefined> {
   await using chainflip = await getChainflipApi();
 
-  const existingPrivateChannel = await chainflip.query.swapping.brokerPrivateBtcChannels(
-    brokerAddress,
-  );
+  const existingPrivateChannel =
+    await chainflip.query.swapping.brokerPrivateBtcChannels(brokerAddress);
 
   if (existingPrivateChannel) {
     return Number(existingPrivateChannel);

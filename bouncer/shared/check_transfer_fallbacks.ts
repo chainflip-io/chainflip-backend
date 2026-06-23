@@ -19,7 +19,7 @@ const TRANSFER_FALLBACK_EVENTS = EVM_VAULT_CHAINS.map(
 const INGRESS_EGRESS_STORAGE_PALLETS = EVM_VAULT_CHAINS.map(ingressEgressPalletForChain);
 
 // FailedForeignChainCalls is shared between transfer fallbacks and failed CCM broadcasts.
-// BroadcastActions is set to { ccmBroadcast: null } for CCM broadcasts and absent for
+// BroadcastActions is set to ccmBroadcast for CCM broadcasts and absent for
 // transfer fallbacks, so we use it to distinguish the two.
 async function isCcmBroadcast(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

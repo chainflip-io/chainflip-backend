@@ -12,7 +12,7 @@ import {
   ChainflipClient,
   ChainflipExtrinsic,
   extrinsicToHumanReadable,
-  signSendAndFinalize,
+  signSendAndWait,
 } from 'shared/utils/dedot';
 import {
   OneOfEventsResult,
@@ -136,13 +136,11 @@ export class ChainflipIO<Requirements> {
       const { account } = this.requirements;
       this.debug(`Submitting extrinsic '${readable}' for ${account.uri}`);
 
-      const result = await signSendAndFinalize(client, ext, account.keypair, account.uri);
+      const result = await signSendAndWait(client, ext, account.keypair, account.uri);
 
       this.debug(`Successfully submitted extrinsic with hash ${result.txHash}`);
 
-      if (result.status.type === 'Finalized') {
-        this.lastIoBlockHeight = result.status.value.blockNumber;
-      }
+      this.lastIoBlockHeight = result.status.value.blockNumber;
 
       // extract event data if expected
       if (arg.expectedEvent) {

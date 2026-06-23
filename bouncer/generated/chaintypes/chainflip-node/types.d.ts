@@ -18868,7 +18868,6 @@ export type PalletCfLendingPoolsGeneralLendingGeneralLendingPoolLendingPool = {
   totalAmount: bigint;
   availableAmount: bigint;
   lenderShares: Array<[AccountId32, Perquintill]>;
-  owedToNetwork: bigint;
 };
 
 export type PalletCfLendingPoolsGeneralLendingConfigLendingConfiguration = {
@@ -20530,7 +20529,6 @@ export type PalletCfLendingPoolsGeneralLendingRpcRpcLendingPool = {
   asset: CfPrimitivesChainsAssetsAnyAsset;
   totalAmount: bigint;
   availableAmount: bigint;
-  owedToNetwork: bigint;
   utilisationRate: Permill;
   utilisationCap: Permill;
   currentInterestRate: Permill;

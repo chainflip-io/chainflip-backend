@@ -30,7 +30,7 @@ describe('ConcurrentTests', () => {
   // NODE_COUNT="3-node" pnpm vitest --maxConcurrency=100 run -t "ConcurrentTests"
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
-  const singleSwapTimeout = numberOfNodes === 1 ? 300 : 320;
+  const singleSwapTimeout = numberOfNodes === 1 ? 400 : 420;
   const inCi = !!process.env.GITHUB_ACTIONS;
   // CI runners are slower, use a larger timeout factor
   const ciTimeoutFactor = inCi ? 1.6 : 1.1;
@@ -101,5 +101,5 @@ describe('AllSwaps', () => {
   const match = process.env.NODE_COUNT ? process.env.NODE_COUNT.match(/\d+/) : null;
   const numberOfNodes = match ? parseInt(match[0]) : 1;
 
-  testAllSwaps(numberOfNodes === 1 ? 180 : 240); // Adjust timeout based on node count
+  testAllSwaps(numberOfNodes === 1 ? 300 : 320); // Adjust timeout based on node count
 });

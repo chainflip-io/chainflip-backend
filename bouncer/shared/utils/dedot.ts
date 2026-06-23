@@ -13,12 +13,8 @@ import { cfMutex } from 'shared/utils';
 export type ChainflipClient = DedotClient<ChainflipNodeApi>;
 
 /**
- * A signed-or-unsigned extrinsic built from `client.tx.<pallet>.<call>(...)`.
- *
- * The generated `client.tx.*.*()` calls each return `ChainSubmittableExtrinsic<<call-meta>,
- * ChainKnownTypes>`, invariant in the per-call metadata type. Using the base `IRuntimeTxCall`
- * constraint here makes this the common supertype every call return is assignable to, while
- * argument/call/pallet checking still happens inside the closure against the typed client.
+ * Common supertype for any `client.tx.<pallet>.<call>(...)` extrinsic. The per-call return type is
+ * invariant in its metadata, so the base `IRuntimeTxCall` makes them all assignable here.
  */
 export type ChainflipExtrinsic = ChainSubmittableExtrinsic<
   IRuntimeTxCall,
@@ -28,10 +24,7 @@ export type ChainflipExtrinsic = ChainSubmittableExtrinsic<
 const bigintReplacer = (_key: string, value: unknown) =>
   typeof value === 'bigint' ? value.toString() : value;
 
-/**
- * A human-readable `pallet.call(args)` description of a dedot extrinsic, for logging.
- * Mirrors the `section.method(args)` strings the polkadot.js path produced via `toHuman()`.
- */
+/** A human-readable `pallet.call(args)` description of a dedot extrinsic, for logging. */
 export function extrinsicToHumanReadable(ext: ChainflipExtrinsic): string {
   const { pallet, palletCall } = ext.call;
   if (typeof palletCall === 'string') {
@@ -44,10 +37,7 @@ export function extrinsicToHumanReadable(ext: ChainflipExtrinsic): string {
   return `${pallet}.${palletCall.name}(${JSON.stringify(params ?? {}, bigintReplacer)})`;
 }
 
-/**
- * Formats a dedot `DispatchError` into the same `pallet.Error: docs` string.
- * e.g. `lendingPools.AccountNotFoundInPool`.
- */
+/** Formats a dedot `DispatchError` as `pallet.Error: docs`. */
 export function formatDispatchError(client: ChainflipClient, err: DispatchError): string {
   if (err.type === 'Module') {
     const meta = client.registry.findErrorMeta(err);
@@ -60,87 +50,164 @@ export function formatDispatchError(client: ChainflipClient, err: DispatchError)
 }
 
 /**
- * Signs `ext` with `signer`, submits it, and resolves once it is in a finalized block.
- *
- * Holds the `cfMutex` keyed by `mutexKey` until the tx is in the pool, so a subsequent
- * submission for the same key reads the correct (incremented) nonce; the mutex is released
- * early in the status callback and again on any exit.
- *
- * Throws if the extrinsic was dropped/invalid or if its dispatch failed, so the returned
- * result is always a successful, finalized one — the caller can use `result.status.value`
- * and `result.events` without re-checking `dispatchError`.
+ * Per-account next-nonce cache. The node's `system_accountNextIndex` doesn't reflect pool-only txs,
+ * so concurrent reads collide and the later tx is rejected as `Stale`. Allocating `max(on-chain,
+ * cached)` and bumping the cache lets same-account submissions pipeline with sequential nonces.
  */
-export async function signSendAndFinalize(
+const nextNonceByAccount = new Map<string, number>();
+
+/** Minimal async concurrency limiter: `limit(fn)` runs at most `max` `fn`s at once. */
+function createConcurrencyLimiter(max: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  const release = () => {
+    const next = queue.shift();
+    if (next) {
+      next(); // transfer the slot to the next waiter; `active` is unchanged
+    } else {
+      active -= 1;
+    }
+  };
+  return async function limit<T>(fn: () => Promise<T>): Promise<T> {
+    if (active < max) {
+      active += 1;
+    } else {
+      await new Promise<void>((resolve) => {
+        queue.push(resolve);
+      });
+    }
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
+}
+
+/**
+ * Caps concurrent broadcasts process-wide. The node limits concurrent `transaction_v1_broadcast`
+ * operations per connection to 16 (`MAX_TRANSACTION_PER_CONNECTION`), and we share one connection;
+ * exceeding it throws "Maximum number of broadcasted transactions has been reached". Kept below 16
+ * (slots free at inclusion, so this rarely blocks).
+ */
+const broadcastLimit = createConcurrencyLimiter(12);
+
+/**
+ * A submission result guaranteed to be in a block, so `status.value.blockNumber`/`txIndex` are
+ * always present and callers can read them without re-checking the status.
+ */
+export type IncludedResult = DedotSubmittableResult & {
+  status: Extract<DedotSubmittableResult['status'], { value: { blockNumber: number } }>;
+};
+
+/**
+ * Signs and submits `ext`, resolving once it is included in a best-chain block (the localnet best
+ * chain is canonical and inclusion frees the broadcast slot sooner). Pass `waitForFinalize = true`
+ * to instead wait for finalization. Throws if the tx is dropped/invalid, its dispatch failed, or
+ * it isn't included within `timeoutSeconds` — so the returned result is always a successful,
+ * included one (no need to re-check `dispatchError`). The nonce is allocated under `cfMutex` keyed
+ * by `mutexKey`, then the lock is released so same-account submissions stay pipelined.
+ */
+export async function signSendAndWait(
   client: ChainflipClient,
   ext: ChainflipExtrinsic,
   signer: IKeyringPair,
   mutexKey: string,
-): Promise<DedotSubmittableResult> {
-  const release = await cfMutex.acquire(mutexKey);
-  let released = false;
-  const releaseOnce = () => {
-    if (!released) {
-      released = true;
+  timeoutSeconds = 20,
+  waitForFinalize = false,
+): Promise<IncludedResult> {
+  // Bound concurrent in-flight broadcasts to stay under the node's broadcast limit.
+  return broadcastLimit(async () => {
+    // Allocate a nonce under the mutex, then release immediately.
+    const release = await cfMutex.acquire(mutexKey);
+    let nonce: number;
+    try {
+      const onChain = Number(await client.rpc.system_accountNextIndex(signer.address));
+      nonce = Math.max(onChain, nextNonceByAccount.get(signer.address) ?? 0);
+      nextNonceByAccount.set(signer.address, nonce + 1);
+    } finally {
       release();
     }
-  };
 
-  try {
-    const nonce = await client.rpc.system_accountNextIndex(signer.address);
-    const result = await new Promise<DedotSubmittableResult>((resolve, reject) => {
-      ext
-        .signAndSend(signer, { nonce }, (res: DedotSubmittableResult) => {
-          switch (res.status.type) {
-            case 'Broadcasting':
-            case 'BestChainBlockIncluded':
-              releaseOnce();
-              break;
-            case 'Finalized':
-              releaseOnce();
-              resolve(res);
-              break;
-            case 'Invalid':
-            case 'Drop':
-              reject(
-                new Error(
-                  `Extrinsic failed with status ${res.status.type}: ${res.status.value.error}`,
-                ),
-              );
-              break;
-            default:
-              break;
-          }
-        })
-        .catch(reject);
-    });
+    // Whether the tx reached a block (nonce consumed on-chain). A dispatch failure still
+    // consumed the nonce; only a never-included tx leaves the cache ahead and needs a reset.
+    let included = false;
+    let stopBroadcast: (() => Promise<void>) | undefined;
+    try {
+      const result = await new Promise<IncludedResult>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(
+            new Error(
+              `'${extrinsicToHumanReadable(ext)}' did not reach ${
+                waitForFinalize ? 'finalization' : 'a block'
+              } within ${timeoutSeconds}s`,
+            ),
+          );
+        }, timeoutSeconds * 1000);
 
-    if (result.dispatchError) {
-      throw new Error(
-        `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
-      );
+        ext
+          .signAndSend(signer, { nonce }, (res: DedotSubmittableResult) => {
+            switch (res.status.type) {
+              case 'BestChainBlockIncluded':
+                // The tx is in a block (nonce consumed) regardless of whether we keep waiting.
+                included = true;
+                if (!waitForFinalize) {
+                  clearTimeout(timer);
+                  resolve(res as IncludedResult);
+                }
+                break;
+              case 'Finalized':
+                included = true;
+                clearTimeout(timer);
+                resolve(res as IncludedResult);
+                break;
+              case 'Invalid':
+              case 'Drop':
+                clearTimeout(timer);
+                reject(
+                  new Error(
+                    `Extrinsic failed with status ${res.status.type}: ${res.status.value.error}`,
+                  ),
+                );
+                break;
+              default:
+                break;
+            }
+          })
+          .then((unsub) => {
+            stopBroadcast = unsub;
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+
+      if (result.dispatchError) {
+        throw new Error(
+          `'${extrinsicToHumanReadable(ext)}' failed (${formatDispatchError(client, result.dispatchError)})`,
+        );
+      }
+
+      return result;
+    } catch (e) {
+      if (!included) {
+        nextNonceByAccount.delete(signer.address);
+      }
+      throw e;
+    } finally {
+      // Stop the broadcast + block tracking so the node frees the broadcast slot immediately
+      // (dedot only auto-stops it at finalization).
+      await stopBroadcast?.().catch(() => undefined);
     }
-
-    return result;
-  } finally {
-    releaseOnce();
-  }
+  });
 }
 
 /**
- * Closing dedot's "fallback" gap so misspelled pallet/call names fail at compile time.
- *
- * dedot's generated chain types carry two bare-`string` index signatures (from
- * `@dedot/codecs` `GenericChainTx`):
- *   - top level:   `[pallet: string]:   { ... }`           -> unknown pallets compile
- *   - per pallet:  `[callName: string]: GenericTxCall<...>` -> unknown calls compile
- *
- * There is no codegen flag to turn these off. But a mapped type with an `as` clause can
- * drop the bare `string` / `number` index keys while preserving every literal-named key
- * (and its precise argument types). Applying it at both levels yields a `client.tx` view
- * where a typo is a compile error instead of a runtime `Tx call spec not found`.
- *
- * This is purely type-level: `strictTx` is the identity function at runtime, so it has
- * zero cost and survives `dedot chaintypes` regeneration (we never edit generated files).
+ * dedot's generated `client.tx` carries bare-`string` index signatures, so misspelled pallet/call
+ * names compile and only fail at runtime. The types below drop those index keys (keeping every
+ * literal-named key and its arg types) so typos are compile errors. Type-level only — `strictTx`
+ * is the identity at runtime and survives chaintypes regeneration.
  */
 
 /** Drop bare `string`/`number` index signatures, keep literal-named keys. */
