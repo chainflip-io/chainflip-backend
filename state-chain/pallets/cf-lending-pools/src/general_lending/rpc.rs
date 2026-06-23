@@ -16,6 +16,10 @@
 use super::*;
 use cf_primitives::{AssetAmount, AssetAndAmount, Beneficiary, SwapRequestId};
 use cf_traits::lending::LoanId;
+use cf_utilities::migrations::{
+	basics::{HasVersion, Migration, RemovedFieldWithDefault},
+	HasChangelog,
+};
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
 
@@ -29,6 +33,7 @@ pub struct RpcLoan<AccountId, Amount> {
 	pub broker: Option<Beneficiary<AccountId>>,
 }
 
+#[cf_proc_macros::generate_module]
 #[derive(Encode, Decode, TypeInfo, Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct RpcLendingPool<Amount> {
 	pub asset: Asset,
@@ -38,6 +43,7 @@ pub struct RpcLendingPool<Amount> {
 	/// borrows" — the utilisation cap may restrict how much of this can actually be lent
 	/// out.
 	pub available_amount: Amount,
+	pub owed_to_network: (),
 	pub utilisation_rate: Permill,
 	/// Maximum utilisation allowed when opening new loans: borrows that would push utilisation
 	/// above this cap are rejected so the pool retains enough liquidity to liquidate the
@@ -46,6 +52,12 @@ pub struct RpcLendingPool<Amount> {
 	pub current_interest_rate: Permill,
 	#[serde(flatten)]
 	pub config: LendingPoolConfiguration,
+}
+impl<Amount: HasChangelog> HasChangelog for RpcLendingPool<Amount> {
+	type if_unspecified = _RpcLendingPool::see_field_changelogs;
+	type in_20200 = _RpcLendingPool::see_field_changelogs_and_also<
+		_RpcLendingPool::field::owed_to_network::Removed<Amount>,
+	>;
 }
 
 /// Total amount of funds (of some asset) owed by a lending pool to account `lp_id`.
@@ -218,6 +230,7 @@ fn build_rpc_lending_pool<T: Config>(
 		utilisation_cap,
 		current_interest_rate,
 		config: config.get_config_for_asset(asset).clone(),
+		owed_to_network: (),
 	}
 }
 
