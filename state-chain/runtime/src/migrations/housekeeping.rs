@@ -19,8 +19,10 @@ use crate::{
 	Runtime,
 };
 use cf_chains::{
-	assets, evm::EvmFetchId, sol::SolAddress, AllBatch, FetchAssetParams, ForeignChain,
-	TransferAssetParams,
+	assets,
+	evm::EvmFetchId,
+	sol::{SolAddress, SolanaDepositFetchId},
+	AllBatch, FetchAssetParams, ForeignChain, TransferAssetParams,
 };
 use cf_runtime_utilities::genesis_hashes;
 use core::str::FromStr;
@@ -57,18 +59,30 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 				// COM-113
 				// Deposit tx:
 				// 2vnQfVVCtLxXu2E4S7pmqZvD7Nq296V3E8vV5xbWZ1ZxtxruAV31W55oKDaSBd9ev4qBtUNpLY4mEuR6jK6vWJ6J
+				// The funds were never swept into the vault, so fetch them from deposit channel
+				// 107338 and transfer them to the channel's refund address.
 				log::info!("🧹 Solana USDT refund for Berghain housekeeping...");
 				// Amount: 10,000 USDT (10_000_000_000 base units, 6 dp)
-				// Destination: CmAuZetSJA17ZGCo7L1bsKPTvY1fy48MFempvvRfCzGC (original sender)
-				let Ok(mut res) =
+				// Destination: 8PebjHbmGomKQ3SJSFwyVRFuxDf9M6wfmTgqmbZY1Rkw (channel refund address)
+				let Ok(res) =
 					<cf_chains::sol::api::SolanaApi<SolEnvironment> as AllBatch<_>>::new_unsigned(
-						Default::default(),
+						vec![FetchAssetParams {
+							deposit_fetch_id: SolanaDepositFetchId {
+								channel_id: 107338,
+								address: SolAddress::from_str(
+									"Ea9DPpvasokfDKx3Bd9szQPyPLF22rFRDhZSXFiVEKkW",
+								)
+								.expect("valid address; qed"),
+								bump: 254,
+							},
+							asset: assets::sol::Asset::SolUsdt,
+						}],
 						(0..) // Dummy egress_ids: these aren't used.
 							.zip([TransferAssetParams {
 								asset: assets::sol::Asset::SolUsdt,
 								amount: 10_000_000_000,
 								to: SolAddress::from_str(
-									"CmAuZetSJA17ZGCo7L1bsKPTvY1fy48MFempvvRfCzGC",
+									"8PebjHbmGomKQ3SJSFwyVRFuxDf9M6wfmTgqmbZY1Rkw",
 								)
 								.expect("valid address; qed"),
 							}])
@@ -79,11 +93,11 @@ impl OnRuntimeUpgrade for NetworkSpecificHousekeeping {
 					log::error!("Failed to construct Solana batch for Berghain housekeeping.");
 					return Weight::zero();
 				};
-				let Some((api_call, _)) = res.pop() else {
-					log::info!("Unexpected error.");
-					return Weight::zero();
-				};
-				let _ = crate::SolanaBroadcaster::threshold_sign_and_broadcast(api_call);
+				// For Solana, new_unsigned returns separate fetch and transfer transactions; both
+				// must be broadcast.
+				for (api_call, _) in res {
+					let _ = crate::SolanaBroadcaster::threshold_sign_and_broadcast(api_call);
+				}
 
 				// COM-175
 				// Deposit tx: 0x0c8aa7d07e6151789710213294f058e09de6a053a9db93bfa9bf8d6b0a4c506f
