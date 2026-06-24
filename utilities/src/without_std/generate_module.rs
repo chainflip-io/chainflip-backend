@@ -16,6 +16,9 @@
 
 #[macro_export]
 macro_rules! generate_module {
+    // ///////////////////////////////////////////////////////////////////////////////////
+    // ////////////////////////////////// Struct /////////////////////////////////////////
+    // ///////////////////////////////////////////////////////////////////////////////////
     (
 		$(#[$($Attributes:tt)*])*
         $vis:vis struct $struct:ident$(< $($T:ident $(: $TBound:path)?),+ >)? {
@@ -53,11 +56,6 @@ macro_rules! generate_module {
                 $(
                     $field: IsHistoricalTypeAt<V>,
                 )*
-            >;
-            pub trait DebugTypes = Types<
-                $(
-                    $field: sp_std::fmt::Debug,
-                )+
             >;
 
             impl< $( $field,)* > Types for ( $($field,)* ) {
@@ -112,7 +110,7 @@ macro_rules! generate_module {
 
             /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
             /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
-            #[derive(Copy, Clone, PartialEq, Eq, Hash, Encode, Decode, codec::DecodeWithMemTracking, TypeInfo, codec::MaxEncodedLen, Default)]
+            #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen, Default)]
             #[derive_where::derive_where(Debug; $(Ty::$field: sp_std::fmt::Debug),*)]
             #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
             #[scale_info(skip_type_params(Ty))]
@@ -127,7 +125,7 @@ macro_rules! generate_module {
             }
 
             impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($field: IsHistoricalType,)*>> IsHistoricalType for Struct<Ty, $($($T,)+)?>
-            where $struct$(< $($T,)+ >)?: HasChangelog
+                where $struct$(< $($T,)+ >)?: HasChangelog
             {
                 type GetCurrentType = $struct$(< $($T,)+ >)?;
             }
@@ -158,7 +156,6 @@ macro_rules! generate_module {
                         _phantom: Default::default(),
                     }
                 }
-
             }
 
             // ----------------- predefined migrations ------------------ //
@@ -236,6 +233,200 @@ macro_rules! generate_module {
                 }
             }
         }
-    }
+    };
+
+    // ///////////////////////////////////////////////////////////////////////////////////
+    // /////////////////////////////////// Enum //////////////////////////////////////////
+    // ///////////////////////////////////////////////////////////////////////////////////
+    (
+		$(#[$($Attributes:tt)*])*
+        $vis:vis enum $enum:ident$(< $($T:ident $(: $TBound:path)?),+ >)? {
+            $(
+		        $(#[$($Variant_Attributes:tt)*])*
+                $variant:ident
+                    $( ( $($variant_ty:ty),* ) )?
+                    $( { $($variant_field:ident : $variant_field_ty:ty ,)* } )?
+                    ,
+            )*
+        }
+        mod $mod:ident { #![migrations] }
+    ) => {
+
+        $vis enum $enum$(< $($T $(: $TBound)?),+ >)? {
+            $(
+                $( #[$($Variant_Attributes)*])*
+                $variant
+                    $( ( $($variant_ty),* ) )?
+                    $( { $($variant_field : $variant_field_ty ,)* } )?
+                    ,
+            )*
+        }
+
+        pub mod $mod {
+            #![allow(nonstandard_style)]
+            #![allow(unused)]
+
+            use super::*;
+            use cf_utilities::migrations::*;
+            use cf_utilities::migrations::basics::*;
+
+            ///////////////
+            // start generic fibered type helpers
+            pub trait Types {
+                $(
+                    type $variant;
+                )*
+            }
+
+            pub trait HistoricalTypesAt<V: Version> = Types<
+                $(
+                    $variant: IsHistoricalTypeAt<V>,
+                )*
+            >;
+
+            impl< $( $variant,)* > Types for ( $($variant,)* ) {
+                $(
+                    type $variant = $variant;
+                )*
+            }
+
+            pub trait CustomMigration<
+                To: HistoricalTypesAt<V>,
+                V: Version,
+            > {
+                $(
+                    type $variant: MaybeMigration<To::$variant, V> = DefaultMigration;
+                )+
+            }
+
+
+            // this extracts the From types (per variant) from a CustomMigration
+            #[derive_where::derive_where(Debug, Default; )]
+            pub struct source_of_custom_migration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>>(sp_std::marker::PhantomData<(To, V, M)>);
+            impl<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> Types for source_of_custom_migration<To, V, M> {
+                $(
+                    type $variant = <
+                        <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>
+                        as Migration<To::$variant, V>
+                    >::From;
+                )+
+            }
+
+            type ResolveCustomMigration<To: HistoricalTypesAt<V>, V: Version, M: CustomMigration<To, V>> = (
+                $(
+                    <M::$variant as MaybeMigration<To::$variant, V>>::GetWithDefault<GetMigrationToHistoricalType<To::$variant, V>>,
+                )+
+            );
+
+            impl <
+                To: HistoricalTypesAt<V>,
+                V: Version
+            > CustomMigration<To, V> for () {}
+
+            impl<To: HistoricalTypesAt<V>, V: Version, M1: CustomMigration<To, V>, M2: CustomMigration<To, V>>
+            CustomMigration<To,V>
+            for (M1, M2)
+            {
+                $(
+                    type $variant = (M1::$variant, M2::$variant);
+                )+
+            }
+
+            // end generic fibered type helpers
+            ///////////////
+
+
+            // This has to be used here because of how the `proptest_derive::Arbitrary` derive macro works.
+            use sp_std::marker::PhantomData;
+
+            /// This is purely used for backwards compatibility with older runtimes, and won't be exposed on the
+            /// rpc layer. So there's intentionally no Serialize/Deserialize implementation
+            #[derive(Copy, Clone, PartialEq, Eq, Hash, codec::Encode, codec::Decode, codec::DecodeWithMemTracking, scale_info::TypeInfo, codec::MaxEncodedLen)]
+            #[derive_where::derive_where(Debug; $(Ty::$variant: sp_std::fmt::Debug),*)]
+            #[cfg_attr(any(test, all(feature = "proptest", feature = "std")), derive(proptest_derive::Arbitrary))]
+            #[scale_info(skip_type_params(Ty))]
+            pub enum Enum<Ty: Types, $( $($T $(: $TBound)?,)+ )? > {
+                $(
+                    $variant(Ty::$variant),
+                )*
+                // In order for `proptest_derive::Arbitrary` to work, we're not allowed to mention `sp_std` in the following type,
+                // since the macro has manual filters for `std::marker::PhantomData`, and `PhantomData`, but not for `sp_std::...`.
+                // That's why we import it above.
+                _phantom(PhantomData<($($($T,)+)?)>),
+            }
+
+            impl<$( $($T $(: $TBound)?,)+ )? Ty: Types<$($variant: IsHistoricalType,)*>> IsHistoricalType for Enum<Ty, $($($T,)+)?>
+                where $enum$(< $($T,)+ >)?: HasChangelog
+            {
+                type GetCurrentType = $enum$(< $($T,)+ >)?;
+            }
+
+            pub type see_variant_changelogs = see_variant_changelogs_and_also<()>;
+            pub struct see_variant_changelogs_and_also<M>(M);
+
+
+            impl<M: CustomMigration<To, V>, $( $($T $(: $TBound)?,)+ )? To: HistoricalTypesAt<V>, V: Version> Migration<Enum<To, $($($T,)+)?>, V> for see_variant_changelogs_and_also<M>
+            where
+                Enum< source_of_custom_migration<To, V, M> , $($($T,)+)?  >: IsHistoricalType
+            {
+                type From = Enum< source_of_custom_migration<To, V, M> , $($($T,)+)?  >;
+
+                fn forwards(x: Self::From) -> Enum<To, $($($T,)+)?> {
+                    match x {
+                        $(
+                            Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::forwards(val)),
+                        )*
+                        Enum::_phantom(_) => Enum::_phantom(Default::default()),
+                    }
+                }
+
+                fn backwards(x: Enum<To, $($($T,)+)?>) -> Self::From {
+                    match x {
+                        $(
+                            Enum::$variant(val) => Enum::$variant(<ResolveCustomMigration::<To, V, M> as Types>::$variant::backwards(val)),
+                        )*
+                        Enum::_phantom(_) => Enum::_phantom(Default::default()),
+                    }
+                }
+            }
+
+            // ----------------- predefined migrations ------------------ //
+
+
+            // ----------------- connection with default enum ------------------ //
+
+            $crate::macros::better_modules! {
+                mod $( $( ($T $(: $TBound)?) )+ )?
+                {
+                    pub mod variants {
+                        use super::*;
+                        $(
+                            pub struct $variant {
+                                value: $( ( $($variant_ty),* ),)?
+                                $(
+                                    $(
+                                        $variant_field: $variant_field_ty,
+                                    )*
+                                )?
+                            }
+                        )*
+                    }
+
+                    pub struct DefaultTypes {}
+
+                    impl Types for DefaultTypes$(< $($T,)+ >)? {
+                        $(
+                            type $variant = variants::$variant<Parameters>;
+                        )*
+                    }
+
+                }
+            }
+
+            // pub struct DefaultTypes$(< $($T $(: $TBound)?),+ >)?($($($T,)+)?);
+
+
+        }
+    };
 }
 pub use generate_module;

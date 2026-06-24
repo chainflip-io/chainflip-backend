@@ -249,3 +249,245 @@ macro_rules! cargo_fmt_ignore {
 		$($tokens)*
 	};
 }
+
+#[macro_export]
+macro_rules! or_else {
+    (() or ($($else:tt)*)) => {
+        $($else)*
+    };
+    (($($tt:tt)*) or ($($else:tt)*)) => {
+        $($tt)*
+    };
+}
+pub use or_else;
+
+pub macro eval_macro_expr {
+    (if () {$($true:tt)*} else {$($false:tt)*}) => {
+        $crate::macros::eval_macro_expr!{$($false)*}
+    },
+
+    (if ($($cond:tt)*) {$($true:tt)*} else {$($false:tt)*}) => {
+        $crate::macros::eval_macro_expr!{$($true)*}
+    },
+
+    ($($rest:tt)*) => {
+        $($rest)*
+    },
+}
+
+pub macro better_modules {
+
+    // ----------------------
+    // case 0: `type X = Y`
+    // ----------------------
+    (
+        next = {
+            $vis:vis type $name:ident = $ty:ty;
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        // add tele
+        $vis type $name<$($tele: $($tele_type)*),*> = $ty;
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 1: `struct X { ... }`
+    // ----------------------
+    (
+        next = {
+            $vis:vis struct $name:ident $(< $($T:ident $(: $TBound:path)?),+ >)? { $($content:tt)* }
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+
+        use sp_std::marker::PhantomData;
+
+        // define struct with additional tele bounds
+        $vis struct $name< $( $($T $(: $TBound)?,)+ )? $($tele: $($tele_type)*),* > {
+            $($content)*
+
+            // add phantom for tele types
+            _phantom: PhantomData<($($tele,)*)>,
+        }
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 2: `impl Trait for Type { ... }`
+    // ----------------------
+    (
+        next = {
+            impl $(< $($T:ident $(: $TBound:path)?),+ >)? $($trait_path:ident)::+ $(< $($trait_generic:ty),+ $(,)? >)? for $name:ty { $($content:tt)* }
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        impl< $( $($T $(: $TBound)?,)+ )? $($tele: $($tele_type)*),* > $($trait_path)::+ $(< $($trait_generic),+ >)? for $name {
+            duplicate::substitute! {
+                [
+                    Parameters [ $($tele, )* ]
+                ]
+                $($content)*
+            }
+        }
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 3: `mod name {}`
+    // ----------------------
+    (
+        next = {
+            $vis:vis mod $name:ident { $($content:tt)* }
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        // continue inside module
+        $vis mod $name {
+            $crate::macros::better_modules! {
+                next = { $($content)* }
+                tele = { $(($tele: $($tele_type)*))* }
+            }
+        }
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 4: `if () { ... } else { ... }`
+    // ----------------------
+    (
+        next = {
+            if () {$($true:tt)*} else {$($false:tt)*}
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        // pick false branch and continue inside
+        $crate::macros::better_modules! {
+            next = { $($false)* }
+            tele = { $(($tele: $($tele_type)*))* }
+        }
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 5: `if (something) { ... } else { ... }`
+    // ----------------------
+    (
+        next = {
+            if ($($cond:tt)+) {$($true:tt)*} else {$($false:tt)*}
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        // pick true branch and continue inside
+        $crate::macros::better_modules! {
+            next = { $($true)* }
+            tele = { $(($tele: $($tele_type)*))* }
+        }
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case 6: any other item is emitted as is
+    // ----------------------
+    (
+        next = {
+            $item:item
+            $($rest:tt)*
+        }
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {
+        // emit same item
+        $item
+
+        // recursive call:
+        $crate::macros::better_modules! {
+            next = {$($rest)*}
+            tele = {$(($tele: $($tele_type)*))*}
+        }
+    },
+
+    // ----------------------
+    // case n: empty
+    // ----------------------
+    (
+        next = {}
+        tele = {$(($tele:ident: $($tele_type:tt)*))*}
+    ) => {},
+
+    // ----------------------
+    // entry point: convert user-facing format to internal format
+    // ----------------------
+    (
+        mod $(($tele:ident: $($tele_type:tt)*))* {
+            $($content:tt)*
+        }
+    ) => {
+        $crate::macros::better_modules! {
+            next = { $($content)* }
+            tele = { $(($tele: $($tele_type)*))* }
+        }
+    },
+}
+
+pub trait Test {
+	type MyVal;
+}
+
+better_modules! {
+	mod (A: Test) (B: Test) {
+		if () {
+			pub struct X {
+				value: A::MyVal,
+			}
+		} else {
+			pub struct X {
+				#[allow(unused)]
+				field1: A::MyVal,
+				#[allow(unused)]
+				field2: B::MyVal,
+			}
+
+			impl sp_std::fmt::Debug for X<A,B> {
+				fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+					Ok(())
+				}
+			}
+		}
+	}
+}

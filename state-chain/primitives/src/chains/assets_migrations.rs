@@ -72,3 +72,31 @@ where
 	type in_20200 =
 		any::_AssetMap::see_field_changelogs_and_also<any::_AssetMap::field::tron::Added>;
 }
+
+// --------- testing ------------
+
+pub trait T1 {
+	type XY;
+}
+
+cf_utilities::generate_module! {
+	pub enum MyTestValues<T: T1> {
+		Variant1(T::XY),
+		// Variant2(u8,u16),
+		// Variant3(T::XY),
+		// Variant4 {
+		// 	myfield: u8,
+		// 	field2: (T::XY, T::XY, u16),
+		// },
+	}
+	mod _MyTestValues { #![migrations] }
+}
+
+type XX = _MyTestValues::variants::Variant1<u8>;
+
+// duplicate::substitute! {
+// 	[
+// 		typ1 [T: T1, T2: Copy];
+// 	]
+// 	type X<typ1> = T::XY;
+// }

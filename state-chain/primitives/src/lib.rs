@@ -18,6 +18,7 @@
 #![feature(int_roundings)]
 #![feature(associated_type_defaults)]
 #![feature(trait_alias)]
+#![feature(decl_macro)]
 
 //! Chainflip Primitives
 //!
